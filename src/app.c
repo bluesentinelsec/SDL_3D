@@ -1,12 +1,12 @@
 #define SDL_MAIN_HANDLED
-#include "sdl3d/app.h"
+#include "slayer3d/app.h"
 #include <SDL3/SDL.h>
 #include <string.h>
 
-#define SDL3D_APP_MAX_KEYS 512
+#define SLAYER3D_APP_MAX_KEYS 512
 
 static SDL_Window *s_window = NULL;
-static sdl3d_render_context *s_ctx = NULL;
+static slayer3d_render_context *s_ctx = NULL;
 static bool s_should_close = false;
 static int s_target_fps = 60;
 static Uint64 s_last_time = 0;
@@ -15,23 +15,23 @@ static int s_fps = 0;
 static int s_frame_count = 0;
 static Uint64 s_fps_timer = 0;
 static float s_mouse_dx = 0, s_mouse_dy = 0;
-static bool s_keys_down[SDL3D_APP_MAX_KEYS];
-static bool s_keys_pressed[SDL3D_APP_MAX_KEYS];
+static bool s_keys_down[SLAYER3D_APP_MAX_KEYS];
+static bool s_keys_pressed[SLAYER3D_APP_MAX_KEYS];
 
-bool sdl3d_init(int width, int height, const char *title)
+bool slayer3d_init(int width, int height, const char *title)
 {
     if (!SDL_Init(SDL_INIT_VIDEO))
     {
         return false;
     }
 
-    sdl3d_window_config wcfg;
-    sdl3d_init_window_config(&wcfg);
+    slayer3d_window_config wcfg;
+    slayer3d_init_window_config(&wcfg);
     wcfg.width = width;
     wcfg.height = height;
-    wcfg.title = title ? title : "SDL3D";
+    wcfg.title = title ? title : "SLAYER3D";
 
-    if (!sdl3d_create_window(&wcfg, &s_window, &s_ctx))
+    if (!slayer3d_create_window(&wcfg, &s_window, &s_ctx))
     {
         SDL_Quit();
         return false;
@@ -52,45 +52,45 @@ bool sdl3d_init(int width, int height, const char *title)
     return true;
 }
 
-void sdl3d_close(void)
+void slayer3d_close(void)
 {
-    sdl3d_destroy_window(s_window, s_ctx);
+    slayer3d_destroy_window(s_window, s_ctx);
     s_ctx = NULL;
     s_window = NULL;
     SDL_Quit();
 }
 
-bool sdl3d_should_close(void)
+bool slayer3d_should_close(void)
 {
     return s_should_close;
 }
 
-void sdl3d_set_target_fps(int fps)
+void slayer3d_set_target_fps(int fps)
 {
     s_target_fps = fps > 0 ? fps : 0;
 }
 
-float sdl3d_get_frame_time(void)
+float slayer3d_get_frame_time(void)
 {
     return s_dt;
 }
 
-int sdl3d_get_fps(void)
+int slayer3d_get_fps(void)
 {
     return s_fps;
 }
 
-sdl3d_render_context *sdl3d_get_context(void)
+slayer3d_render_context *slayer3d_get_context(void)
 {
     return s_ctx;
 }
 
-SDL_Window *sdl3d_get_window(void)
+SDL_Window *slayer3d_get_window(void)
 {
     return s_window;
 }
 
-void sdl3d_begin_frame(sdl3d_color clear_color)
+void slayer3d_begin_frame(slayer3d_color clear_color)
 {
     (void)clear_color;
 
@@ -111,7 +111,7 @@ void sdl3d_begin_frame(sdl3d_color clear_color)
             {
                 s_should_close = true;
             }
-            if (ev.key.scancode < SDL3D_APP_MAX_KEYS)
+            if (ev.key.scancode < SLAYER3D_APP_MAX_KEYS)
             {
                 if (!s_keys_down[ev.key.scancode])
                 {
@@ -121,7 +121,7 @@ void sdl3d_begin_frame(sdl3d_color clear_color)
             }
             break;
         case SDL_EVENT_KEY_UP:
-            if (ev.key.scancode < SDL3D_APP_MAX_KEYS)
+            if (ev.key.scancode < SLAYER3D_APP_MAX_KEYS)
             {
                 s_keys_down[ev.key.scancode] = false;
             }
@@ -141,11 +141,11 @@ void sdl3d_begin_frame(sdl3d_color clear_color)
     s_last_time = now;
 }
 
-void sdl3d_end_frame(void)
+void slayer3d_end_frame(void)
 {
     if (s_ctx)
     {
-        sdl3d_present_render_context(s_ctx);
+        slayer3d_present_render_context(s_ctx);
     }
 
     s_frame_count++;
@@ -171,25 +171,25 @@ void sdl3d_end_frame(void)
     }
 }
 
-bool sdl3d_is_key_down(int scancode)
+bool slayer3d_is_key_down(int scancode)
 {
-    if (scancode < 0 || scancode >= SDL3D_APP_MAX_KEYS)
+    if (scancode < 0 || scancode >= SLAYER3D_APP_MAX_KEYS)
     {
         return false;
     }
     return s_keys_down[scancode];
 }
 
-bool sdl3d_is_key_pressed(int scancode)
+bool slayer3d_is_key_pressed(int scancode)
 {
-    if (scancode < 0 || scancode >= SDL3D_APP_MAX_KEYS)
+    if (scancode < 0 || scancode >= SLAYER3D_APP_MAX_KEYS)
     {
         return false;
     }
     return s_keys_pressed[scancode];
 }
 
-void sdl3d_get_mouse_delta(float *dx, float *dy)
+void slayer3d_get_mouse_delta(float *dx, float *dy)
 {
     if (dx)
     {
@@ -201,7 +201,7 @@ void sdl3d_get_mouse_delta(float *dx, float *dy)
     }
 }
 
-void sdl3d_set_mouse_captured(bool captured)
+void slayer3d_set_mouse_captured(bool captured)
 {
     if (s_window)
     {

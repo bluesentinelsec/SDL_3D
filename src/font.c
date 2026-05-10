@@ -2,7 +2,7 @@
  * Font system implementation using stb_truetype.
  */
 
-#include "sdl3d/font.h"
+#include "slayer3d/font.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
@@ -11,17 +11,17 @@
 #include <stb_truetype.h>
 
 #include "render_context_internal.h"
-#include "sdl3d/camera.h"
-#include "sdl3d/drawing3d.h"
-#include "sdl3d/lighting.h"
-#include "sdl3d/render_context.h"
-#include "sdl3d/texture.h"
+#include "slayer3d/camera.h"
+#include "slayer3d/drawing3d.h"
+#include "slayer3d/lighting.h"
+#include "slayer3d/render_context.h"
+#include "slayer3d/texture.h"
 
 /* ------------------------------------------------------------------ */
 /* Font loading                                                        */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_size, sdl3d_font *out)
+bool slayer3d_load_font_from_memory(const void *data, int data_size, float pixel_size, slayer3d_font *out)
 {
     stbtt_fontinfo info;
     int atlas_w = 512, atlas_h = 512;
@@ -73,7 +73,7 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
 
     {
         stbtt_pack_context pc;
-        stbtt_packedchar packed[SDL3D_FONT_CHAR_COUNT];
+        stbtt_packedchar packed[SLAYER3D_FONT_CHAR_COUNT];
 
         if (!stbtt_PackBegin(&pc, atlas, atlas_w, atlas_h, 0, 1, NULL))
         {
@@ -82,13 +82,13 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
         }
 
         stbtt_PackSetOversampling(&pc, 2, 2);
-        stbtt_PackFontRange(&pc, (const unsigned char *)data, 0, pixel_size, SDL3D_FONT_FIRST_CHAR,
-                            SDL3D_FONT_CHAR_COUNT, packed);
+        stbtt_PackFontRange(&pc, (const unsigned char *)data, 0, pixel_size, SLAYER3D_FONT_FIRST_CHAR,
+                            SLAYER3D_FONT_CHAR_COUNT, packed);
         stbtt_PackEnd(&pc);
 
-        for (int i = 0; i < SDL3D_FONT_CHAR_COUNT; i++)
+        for (int i = 0; i < SLAYER3D_FONT_CHAR_COUNT; i++)
         {
-            sdl3d_glyph *g = &out->glyphs[i];
+            slayer3d_glyph *g = &out->glyphs[i];
             g->u0 = (float)packed[i].x0 / (float)atlas_w;
             g->v0 = (float)packed[i].y0 / (float)atlas_h;
             g->u1 = (float)packed[i].x1 / (float)atlas_w;
@@ -125,17 +125,17 @@ bool sdl3d_load_font_from_memory(const void *data, int data_size, float pixel_si
     out->atlas_texture.pixels = rgba;
     out->atlas_texture.width = atlas_w;
     out->atlas_texture.height = atlas_h;
-    out->atlas_texture.filter = SDL3D_TEXTURE_FILTER_BILINEAR;
-    out->atlas_texture.wrap_u = SDL3D_TEXTURE_WRAP_CLAMP;
-    out->atlas_texture.wrap_v = SDL3D_TEXTURE_WRAP_CLAMP;
+    out->atlas_texture.filter = SLAYER3D_TEXTURE_FILTER_BILINEAR;
+    out->atlas_texture.wrap_u = SLAYER3D_TEXTURE_WRAP_CLAMP;
+    out->atlas_texture.wrap_v = SLAYER3D_TEXTURE_WRAP_CLAMP;
     out->atlas_texture.generation = prev_generation ? prev_generation + 1U : 1U;
 
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w,
-                 atlas_h, SDL3D_FONT_CHAR_COUNT);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D font: %.0fpx, atlas %dx%d, %d glyphs", pixel_size, atlas_w,
+                 atlas_h, SLAYER3D_FONT_CHAR_COUNT);
     return true;
 }
 
-bool sdl3d_load_font(const char *path, float pixel_size, sdl3d_font *out)
+bool slayer3d_load_font(const char *path, float pixel_size, slayer3d_font *out)
 {
     size_t size = 0;
     void *data = SDL_LoadFile(path, &size);
@@ -146,18 +146,18 @@ bool sdl3d_load_font(const char *path, float pixel_size, sdl3d_font *out)
         return SDL_SetError("Failed to load font file '%s'", path);
     }
 
-    ok = sdl3d_load_font_from_memory(data, (int)size, pixel_size, out);
+    ok = slayer3d_load_font_from_memory(data, (int)size, pixel_size, out);
     SDL_free(data);
     return ok;
 }
 
-void sdl3d_free_font(sdl3d_font *font)
+void slayer3d_free_font(slayer3d_font *font)
 {
     if (font)
     {
         SDL_free(font->atlas_pixels);
         font->atlas_pixels = NULL;
-        sdl3d_free_texture(&font->atlas_texture);
+        slayer3d_free_texture(&font->atlas_texture);
         SDL_zero(font->glyphs);
         font->atlas_w = 0;
         font->atlas_h = 0;
@@ -172,7 +172,7 @@ void sdl3d_free_font(sdl3d_font *font)
 /* Text measurement                                                    */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_width, float *out_height)
+void slayer3d_measure_text(const slayer3d_font *font, const char *text, float *out_width, float *out_height)
 {
     float x = 0, max_x = 0;
     int lines = 1;
@@ -198,8 +198,8 @@ void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_wid
             lines++;
             continue;
         }
-        int ci = (int)*p - SDL3D_FONT_FIRST_CHAR;
-        if (ci >= 0 && ci < SDL3D_FONT_CHAR_COUNT)
+        int ci = (int)*p - SLAYER3D_FONT_FIRST_CHAR;
+        if (ci >= 0 && ci < SLAYER3D_FONT_CHAR_COUNT)
         {
             x += font->glyphs[ci].xadvance;
         }
@@ -236,14 +236,14 @@ void sdl3d_measure_text(const sdl3d_font *font, const char *text, float *out_wid
  * proportional xadvance, and is centered inside the cell. Non-digit
  * characters use their native advance.
  */
-static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
-                               float y, sdl3d_color color, float digit_cell_width, float scale)
+static bool draw_text_internal(struct slayer3d_render_context *context, const slayer3d_font *font, const char *text,
+                               float x, float y, slayer3d_color color, float digit_cell_width, float scale)
 {
     int ctx_w, ctx_h;
-    sdl3d_camera3d ortho;
-    sdl3d_shading_mode prev_shading;
+    slayer3d_camera3d ortho;
+    slayer3d_shading_mode prev_shading;
     bool prev_culling;
-    sdl3d_mat4 saved_view, saved_projection, saved_view_projection;
+    slayer3d_mat4 saved_view, saved_projection, saved_view_projection;
     bool ok = true;
 
     if (!context || !font || !text)
@@ -252,15 +252,15 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
     }
     if (font->atlas_texture.pixels == NULL)
     {
-        return SDL_SetError("sdl3d_draw_text: font atlas not initialized");
+        return SDL_SetError("slayer3d_draw_text: font atlas not initialized");
     }
-    if (sdl3d_is_in_mode_3d(context))
+    if (slayer3d_is_in_mode_3d(context))
     {
-        return SDL_SetError("sdl3d_draw_text must be called outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d");
+        return SDL_SetError("slayer3d_draw_text must be called outside slayer3d_begin_mode_3d / slayer3d_end_mode_3d");
     }
 
-    ctx_w = sdl3d_get_render_context_width(context);
-    ctx_h = sdl3d_get_render_context_height(context);
+    ctx_w = slayer3d_get_render_context_width(context);
+    ctx_h = slayer3d_get_render_context_height(context);
     if (ctx_w <= 0 || ctx_h <= 0)
     {
         return SDL_SetError("Invalid render context dimensions");
@@ -270,14 +270,14 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
         return true;
     }
 
-    ortho.position = sdl3d_vec3_make(0.0f, 0.0f, 1.0f);
-    ortho.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
-    ortho.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    ortho.position = slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    ortho.target = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    ortho.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
     ortho.fovy = (float)ctx_h;
-    ortho.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+    ortho.projection = SLAYER3D_CAMERA_ORTHOGRAPHIC;
 
-    prev_shading = sdl3d_get_shading_mode(context);
-    prev_culling = sdl3d_is_backface_culling_enabled(context);
+    prev_shading = slayer3d_get_shading_mode(context);
+    prev_culling = slayer3d_is_backface_culling_enabled(context);
     /* Preserve the scene's view/projection so that deferred backends
      * (e.g., GL replay) see the camera that rendered the scene, not the
      * ortho overlay camera. Only per-draw MVPs need the ortho matrix,
@@ -286,13 +286,13 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
     saved_projection = context->projection;
     saved_view_projection = context->view_projection;
 
-    sdl3d_set_shading_mode(context, SDL3D_SHADING_UNLIT);
-    sdl3d_set_backface_culling_enabled(context, false);
+    slayer3d_set_shading_mode(context, SLAYER3D_SHADING_UNLIT);
+    slayer3d_set_backface_culling_enabled(context, false);
 
-    if (!sdl3d_begin_mode_3d(context, ortho))
+    if (!slayer3d_begin_mode_3d(context, ortho))
     {
-        sdl3d_set_shading_mode(context, prev_shading);
-        sdl3d_set_backface_culling_enabled(context, prev_culling);
+        slayer3d_set_shading_mode(context, prev_shading);
+        slayer3d_set_backface_culling_enabled(context, prev_culling);
         return false;
     }
 
@@ -311,13 +311,13 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
             continue;
         }
 
-        int ci = (int)*p - SDL3D_FONT_FIRST_CHAR;
-        if (ci < 0 || ci >= SDL3D_FONT_CHAR_COUNT)
+        int ci = (int)*p - SLAYER3D_FONT_FIRST_CHAR;
+        if (ci < 0 || ci >= SLAYER3D_FONT_CHAR_COUNT)
         {
             continue;
         }
 
-        const sdl3d_glyph *g = &font->glyphs[ci];
+        const slayer3d_glyph *g = &font->glyphs[ci];
         /* Treat digits and spaces as monospace cells when the caller opts
          * in. Spaces need the same treatment so a right-aligned number
          * like "  60" occupies the same width as "120". */
@@ -358,14 +358,14 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
             g->u0, g->v0, g->u0, g->v1, g->u1, g->v1, g->u0, g->v0, g->u1, g->v1, g->u1, g->v0,
         };
 
-        sdl3d_mesh mesh;
+        slayer3d_mesh mesh;
         SDL_zero(mesh);
         mesh.positions = positions;
         mesh.uvs = uvs;
         mesh.vertex_count = 6;
         mesh.material_index = -1;
 
-        if (!sdl3d_draw_mesh(context, &mesh, &font->atlas_texture, color))
+        if (!slayer3d_draw_mesh(context, &mesh, &font->atlas_texture, color))
         {
             ok = false;
             break;
@@ -374,18 +374,18 @@ static bool draw_text_internal(struct sdl3d_render_context *context, const sdl3d
         cursor_x += advance * scale;
     }
 
-    sdl3d_end_mode_3d(context);
+    slayer3d_end_mode_3d(context);
     context->view = saved_view;
     context->projection = saved_projection;
     context->view_projection = saved_view_projection;
     context->model_view_projection = saved_view_projection;
-    sdl3d_set_shading_mode(context, prev_shading);
-    sdl3d_set_backface_culling_enabled(context, prev_culling);
+    slayer3d_set_shading_mode(context, prev_shading);
+    slayer3d_set_backface_culling_enabled(context, prev_culling);
     return ok;
 }
 
-bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x, float y,
-                     sdl3d_color color)
+bool slayer3d_draw_text(struct slayer3d_render_context *context, const slayer3d_font *font, const char *text, float x,
+                        float y, slayer3d_color color)
 {
     return draw_text_internal(context, font, text, x, y, color, 0.0f, 1.0f);
 }
@@ -394,12 +394,12 @@ bool sdl3d_draw_text(struct sdl3d_render_context *context, const sdl3d_font *fon
 /* Convenience wrappers                                                */
 /* ------------------------------------------------------------------ */
 
-static float font_max_digit_advance(const sdl3d_font *font)
+static float font_max_digit_advance(const slayer3d_font *font)
 {
     float max_adv = 0.0f;
     for (int c = '0'; c <= '9'; c++)
     {
-        int ci = c - SDL3D_FONT_FIRST_CHAR;
+        int ci = c - SLAYER3D_FONT_FIRST_CHAR;
         float a = font->glyphs[ci].xadvance;
         if (a > max_adv)
             max_adv = a;
@@ -407,8 +407,8 @@ static float font_max_digit_advance(const sdl3d_font *font)
     return max_adv;
 }
 
-bool sdl3d_draw_textfv(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
-                       sdl3d_color color, const char *fmt, va_list args)
+bool slayer3d_draw_textfv(struct slayer3d_render_context *context, const slayer3d_font *font, float x, float y,
+                          slayer3d_color color, const char *fmt, va_list args)
 {
     char buf[512];
     if (!fmt)
@@ -416,21 +416,21 @@ bool sdl3d_draw_textfv(struct sdl3d_render_context *context, const sdl3d_font *f
         return SDL_InvalidParamError("fmt");
     }
     SDL_vsnprintf(buf, sizeof(buf), fmt, args);
-    return sdl3d_draw_text(context, font, buf, x, y, color);
+    return slayer3d_draw_text(context, font, buf, x, y, color);
 }
 
-bool sdl3d_draw_textf(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y, sdl3d_color color,
-                      const char *fmt, ...)
+bool slayer3d_draw_textf(struct slayer3d_render_context *context, const slayer3d_font *font, float x, float y,
+                         slayer3d_color color, const char *fmt, ...)
 {
     va_list args;
     bool ok;
     va_start(args, fmt);
-    ok = sdl3d_draw_textfv(context, font, x, y, color, fmt, args);
+    ok = slayer3d_draw_textfv(context, font, x, y, color, fmt, args);
     va_end(args);
     return ok;
 }
 
-bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font, float dt)
+bool slayer3d_draw_fps(struct slayer3d_render_context *context, const slayer3d_font *font, float dt)
 {
     /* Exponential moving average on the instantaneous 1/dt, with the time
      * constant tied to real elapsed time so the smoothing behaves the same
@@ -461,12 +461,12 @@ bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font
      * width stays identical whether the reading is 7, 60, or 999. Missing
      * leading digits are emitted as spaces, which the internal path also
      * treats as monospace cells. */
-    const sdl3d_color color = {0, 255, 0, 255};
+    const slayer3d_color color = {0, 255, 0, 255};
     const float origin_x = 10.0f;
     const float origin_y = 10.0f;
     const char *prefix = "FPS: ";
     float prefix_w, prefix_h;
-    sdl3d_measure_text(font, prefix, &prefix_w, &prefix_h);
+    slayer3d_measure_text(font, prefix, &prefix_w, &prefix_h);
 
     if (!draw_text_internal(context, font, prefix, origin_x, origin_y, color, 0.0f, 1.0f))
     {
@@ -496,44 +496,44 @@ bool sdl3d_draw_fps(struct sdl3d_render_context *context, const sdl3d_font *font
 /* Built-in font catalog                                               */
 /* ------------------------------------------------------------------ */
 
-typedef struct sdl3d_builtin_font_entry
+typedef struct slayer3d_builtin_font_entry
 {
     const char *name;
     const char *filename;
-} sdl3d_builtin_font_entry;
+} slayer3d_builtin_font_entry;
 
-static const sdl3d_builtin_font_entry sdl3d_builtin_fonts[SDL3D_BUILTIN_FONT_COUNT] = {
-    [SDL3D_BUILTIN_FONT_ROBOTO] = {"Roboto", "Roboto.ttf"},
-    [SDL3D_BUILTIN_FONT_INTER] = {"Inter", "Inter-Regular.ttf"},
-    [SDL3D_BUILTIN_FONT_IBM_PLEX_SANS] = {"IBM Plex Sans", "IBMPlexSans-Regular.ttf"},
-    [SDL3D_BUILTIN_FONT_NOTO_SANS] = {"Noto Sans", "NotoSans-Regular.ttf"},
-    [SDL3D_BUILTIN_FONT_DM_SANS] = {"DM Sans", "DMSans-Regular.ttf"},
-    [SDL3D_BUILTIN_FONT_SOURCE_SANS_3] = {"Source Sans 3", "SourceSans3-Regular.ttf"},
-    [SDL3D_BUILTIN_FONT_EB_GARAMOND] = {"EB Garamond", "EBGaramond-Regular.ttf"},
-    [SDL3D_BUILTIN_FONT_MERRIWEATHER] = {"Merriweather", "Merriweather-Regular.ttf"},
-    [SDL3D_BUILTIN_FONT_SOURCE_SERIF_4] = {"Source Serif 4", "SourceSerif4-Regular.ttf"},
+static const slayer3d_builtin_font_entry slayer3d_builtin_fonts[SLAYER3D_BUILTIN_FONT_COUNT] = {
+    [SLAYER3D_BUILTIN_FONT_ROBOTO] = {"Roboto", "Roboto.ttf"},
+    [SLAYER3D_BUILTIN_FONT_INTER] = {"Inter", "Inter-Regular.ttf"},
+    [SLAYER3D_BUILTIN_FONT_IBM_PLEX_SANS] = {"IBM Plex Sans", "IBMPlexSans-Regular.ttf"},
+    [SLAYER3D_BUILTIN_FONT_NOTO_SANS] = {"Noto Sans", "NotoSans-Regular.ttf"},
+    [SLAYER3D_BUILTIN_FONT_DM_SANS] = {"DM Sans", "DMSans-Regular.ttf"},
+    [SLAYER3D_BUILTIN_FONT_SOURCE_SANS_3] = {"Source Sans 3", "SourceSans3-Regular.ttf"},
+    [SLAYER3D_BUILTIN_FONT_EB_GARAMOND] = {"EB Garamond", "EBGaramond-Regular.ttf"},
+    [SLAYER3D_BUILTIN_FONT_MERRIWEATHER] = {"Merriweather", "Merriweather-Regular.ttf"},
+    [SLAYER3D_BUILTIN_FONT_SOURCE_SERIF_4] = {"Source Serif 4", "SourceSerif4-Regular.ttf"},
 };
 
-static bool builtin_font_valid(sdl3d_builtin_font id)
+static bool builtin_font_valid(slayer3d_builtin_font id)
 {
-    return id >= 0 && id < SDL3D_BUILTIN_FONT_COUNT;
+    return id >= 0 && id < SLAYER3D_BUILTIN_FONT_COUNT;
 }
 
-const char *sdl3d_builtin_font_name(sdl3d_builtin_font id)
+const char *slayer3d_builtin_font_name(slayer3d_builtin_font id)
 {
-    return builtin_font_valid(id) ? sdl3d_builtin_fonts[id].name : NULL;
+    return builtin_font_valid(id) ? slayer3d_builtin_fonts[id].name : NULL;
 }
 
-const char *sdl3d_builtin_font_filename(sdl3d_builtin_font id)
+const char *slayer3d_builtin_font_filename(slayer3d_builtin_font id)
 {
-    return builtin_font_valid(id) ? sdl3d_builtin_fonts[id].filename : NULL;
+    return builtin_font_valid(id) ? slayer3d_builtin_fonts[id].filename : NULL;
 }
 
-bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float pixel_size, sdl3d_font *out)
+bool slayer3d_load_builtin_font(const char *media_dir, slayer3d_builtin_font id, float pixel_size, slayer3d_font *out)
 {
     if (!builtin_font_valid(id))
     {
-        return SDL_SetError("sdl3d_load_builtin_font: invalid font id %d", (int)id);
+        return SDL_SetError("slayer3d_load_builtin_font: invalid font id %d", (int)id);
     }
     if (!media_dir)
     {
@@ -547,15 +547,15 @@ bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float
     /* Compose "<media_dir>/fonts/<filename>". The engine convention is
      * that all bundled assets live under media_dir, with fonts in a
      * "fonts" subdirectory — the path the bundled LICENSE.md documents. */
-    const char *filename = sdl3d_builtin_fonts[id].filename;
+    const char *filename = slayer3d_builtin_fonts[id].filename;
     char path[1024];
     int needed = SDL_snprintf(path, sizeof(path), "%s/fonts/%s", media_dir, filename);
     if (needed < 0 || needed >= (int)sizeof(path))
     {
-        return SDL_SetError("sdl3d_load_builtin_font: path too long for media_dir='%s' filename='%s'", media_dir,
+        return SDL_SetError("slayer3d_load_builtin_font: path too long for media_dir='%s' filename='%s'", media_dir,
                             filename);
     }
-    return sdl3d_load_font(path, pixel_size, out);
+    return slayer3d_load_font(path, pixel_size, out);
 }
 
 /* ------------------------------------------------------------------ */
@@ -564,8 +564,8 @@ bool sdl3d_load_builtin_font(const char *media_dir, sdl3d_builtin_font id, float
 
 #include "gl_renderer.h"
 
-bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text,
-                                    float x, float y, float scale, sdl3d_color color)
+bool slayer3d_draw_text_overlay_scaled(struct slayer3d_render_context *context, const slayer3d_font *font,
+                                       const char *text, float x, float y, float scale, slayer3d_color color)
 {
     SDL_Rect scissor_rect = {0, 0, 0, 0};
     bool scissor_enabled = false;
@@ -573,7 +573,7 @@ bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const 
     if (!context || !font || !text)
         return SDL_InvalidParamError("context");
     if (!font->atlas_texture.pixels)
-        return SDL_SetError("sdl3d_draw_text_overlay: font atlas not initialized");
+        return SDL_SetError("slayer3d_draw_text_overlay: font atlas not initialized");
     if (scale <= 0.0f)
         return true;
 
@@ -586,23 +586,23 @@ bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const 
         return ok;
     }
 
-    int ctx_w = sdl3d_get_render_context_width(context);
-    int ctx_h = sdl3d_get_render_context_height(context);
+    int ctx_w = slayer3d_get_render_context_width(context);
+    int ctx_h = slayer3d_get_render_context_height(context);
     if (ctx_w <= 0 || ctx_h <= 0)
         return SDL_SetError("Invalid render context dimensions");
 
-    scissor_enabled = sdl3d_is_scissor_enabled(context);
-    if (scissor_enabled && !sdl3d_get_scissor_rect(context, &scissor_rect))
+    scissor_enabled = slayer3d_is_scissor_enabled(context);
+    if (scissor_enabled && !slayer3d_get_scissor_rect(context, &scissor_rect))
         return false;
 
     /* Count glyphs to size the batch. */
     int glyph_count = 0;
     for (const char *p = text; *p; p++)
     {
-        int ci = (int)*p - SDL3D_FONT_FIRST_CHAR;
-        if (*p == '\n' || ci < 0 || ci >= SDL3D_FONT_CHAR_COUNT)
+        int ci = (int)*p - SLAYER3D_FONT_FIRST_CHAR;
+        if (*p == '\n' || ci < 0 || ci >= SLAYER3D_FONT_CHAR_COUNT)
             continue;
-        const sdl3d_glyph *g = &font->glyphs[ci];
+        const slayer3d_glyph *g = &font->glyphs[ci];
         if ((g->xoff2 - g->xoff) > 0 && (g->yoff2 - g->yoff) > 0)
             glyph_count++;
     }
@@ -645,11 +645,11 @@ bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const 
             cursor_y += line_h;
             continue;
         }
-        int ci = (int)*p - SDL3D_FONT_FIRST_CHAR;
-        if (ci < 0 || ci >= SDL3D_FONT_CHAR_COUNT)
+        int ci = (int)*p - SLAYER3D_FONT_FIRST_CHAR;
+        if (ci < 0 || ci >= SLAYER3D_FONT_CHAR_COUNT)
             continue;
 
-        const sdl3d_glyph *g = &font->glyphs[ci];
+        const slayer3d_glyph *g = &font->glyphs[ci];
         float gw = g->xoff2 - g->xoff;
         float gh = g->yoff2 - g->yoff;
         if (gw <= 0 || gh <= 0)
@@ -705,32 +705,32 @@ bool sdl3d_draw_text_overlay_scaled(struct sdl3d_render_context *context, const 
         cursor_x += g->xadvance * scale;
     }
 
-    bool ok = sdl3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture, scissor_enabled,
-                                      scissor_enabled ? &scissor_rect : NULL, SDL3D_OVERLAY_EFFECT_NONE, 0.0f, 0u, NULL,
-                                      NULL);
+    bool ok = slayer3d_gl_append_overlay(context->gl, positions, uvs, vi, mvp, tint, &font->atlas_texture,
+                                         scissor_enabled, scissor_enabled ? &scissor_rect : NULL,
+                                         SLAYER3D_OVERLAY_EFFECT_NONE, 0.0f, 0u, NULL, NULL);
     SDL_free(positions);
     SDL_free(uvs);
     return ok;
 }
 
-bool sdl3d_draw_text_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, const char *text, float x,
-                             float y, sdl3d_color color)
+bool slayer3d_draw_text_overlay(struct slayer3d_render_context *context, const slayer3d_font *font, const char *text,
+                                float x, float y, slayer3d_color color)
 {
-    return sdl3d_draw_text_overlay_scaled(context, font, text, x, y, 1.0f, color);
+    return slayer3d_draw_text_overlay_scaled(context, font, text, x, y, 1.0f, color);
 }
 
-bool sdl3d_draw_textf_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float x, float y,
-                              sdl3d_color color, const char *fmt, ...)
+bool slayer3d_draw_textf_overlay(struct slayer3d_render_context *context, const slayer3d_font *font, float x, float y,
+                                 slayer3d_color color, const char *fmt, ...)
 {
     char buf[512];
     va_list args;
     va_start(args, fmt);
     SDL_vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    return sdl3d_draw_text_overlay(context, font, buf, x, y, color);
+    return slayer3d_draw_text_overlay(context, font, buf, x, y, color);
 }
 
-bool sdl3d_draw_fps_overlay(struct sdl3d_render_context *context, const sdl3d_font *font, float dt)
+bool slayer3d_draw_fps_overlay(struct slayer3d_render_context *context, const slayer3d_font *font, float dt)
 {
     static float smoothed = 0.0f;
     if (dt > 0.0f)
@@ -738,6 +738,6 @@ bool sdl3d_draw_fps_overlay(struct sdl3d_render_context *context, const sdl3d_fo
     int ival = (int)(smoothed + 0.5f);
     if (ival < 0)
         ival = 0;
-    sdl3d_color green = {0, 255, 0, 255};
-    return sdl3d_draw_textf_overlay(context, font, 10.0f, 10.0f, green, "FPS: %d", ival);
+    slayer3d_color green = {0, 255, 0, 255};
+    return slayer3d_draw_textf_overlay(context, font, 10.0f, 10.0f, green, "FPS: %d", ival);
 }

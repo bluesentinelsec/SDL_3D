@@ -1,7 +1,7 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": {
-    "name": "SDL3D FPS Template",
+    "name": "Slayer 3D FPS Template",
     "id": "template.fps",
     "version": "0.1.0"
   },
@@ -14,7 +14,7 @@
     { "path": "fragments/editor/fps_templates.json", "sections": ["editor"] }
   ],
   "app": {
-    "title": "SDL3D FPS Template",
+    "title": "Slayer 3D FPS Template",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",

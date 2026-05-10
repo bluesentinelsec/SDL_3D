@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": {
     "name": "Standard Options Minimal",
     "id": "test.standard_options_minimal",

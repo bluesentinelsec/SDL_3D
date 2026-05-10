@@ -58,7 +58,7 @@ jobs:
         run: >
           emcmake cmake -S . -B build/emscripten
           -DCMAKE_BUILD_TYPE=Release
-          -DSDL3D_BUILD_TESTS=ON
+          -DSLAYER3D_BUILD_TESTS=ON
 
       - name: Build
         run: cmake --build build/emscripten
@@ -115,7 +115,7 @@ jobs:
           -DANDROID_STL=c++_shared
           -DBUILD_SHARED_LIBS=ON
           -DCMAKE_BUILD_TYPE=Release
-          -DSDL3D_BUILD_TESTS=ON
+          -DSLAYER3D_BUILD_TESTS=ON
 
       - name: Build native libraries
         run: cmake --build build/android
@@ -198,10 +198,10 @@ jobs:
           -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO
           -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED=NO
           -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY=
-          -DSDL3D_BUILD_TESTS=ON
+          -DSLAYER3D_BUILD_TESTS=ON
 
       - name: Build iOS test app
-        run: cmake --build build/ios/${{ matrix.sdk }} --config Release --target sdl3d_ios_tests
+        run: cmake --build build/ios/${{ matrix.sdk }} --config Release --target slayer3d_ios_tests
 
       - name: Run tests on iOS simulator
         if: matrix.run_tests

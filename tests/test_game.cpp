@@ -4,10 +4,10 @@
 
 extern "C"
 {
-#include "sdl3d/game.h"
-#include "sdl3d/signal_bus.h"
-#include "sdl3d/time.h"
-#include "sdl3d/timer_pool.h"
+#include "slayer3d/game.h"
+#include "slayer3d/signal_bus.h"
+#include "slayer3d/time.h"
+#include "slayer3d/timer_pool.h"
 }
 
 #include <SDL3/SDL.h>
@@ -22,27 +22,28 @@ constexpr int kTestHeight = 64;
 constexpr float kFastFixedDt = 0.000001f;
 constexpr int kTimerSignal = 17;
 
-sdl3d_game_config test_config()
+slayer3d_game_config test_config()
 {
-    sdl3d_game_config config{};
-    config.title = "SDL3D Managed Game Loop Test";
+    slayer3d_game_config config{};
+    config.title = "SLAYER3D Managed Game Loop Test";
     config.width = kTestWidth;
     config.height = kTestHeight;
-    config.backend = SDL3D_BACKEND_SOFTWARE;
+    config.backend = SLAYER3D_BACKEND_SOFTWARE;
     config.tick_rate = kFastFixedDt;
     config.max_ticks_per_frame = 1;
     return config;
 }
 
-int run_test_game(const sdl3d_game_callbacks *callbacks, void *userdata)
+int run_test_game(const slayer3d_game_callbacks *callbacks, void *userdata)
 {
-    sdl3d_game_config config = test_config();
-    return sdl3d_run_game(&config, callbacks, userdata);
+    slayer3d_game_config config = test_config();
+    return slayer3d_run_game(&config, callbacks, userdata);
 }
 
-int run_test_game_with_config(const sdl3d_game_config *config, const sdl3d_game_callbacks *callbacks, void *userdata)
+int run_test_game_with_config(const slayer3d_game_config *config, const slayer3d_game_callbacks *callbacks,
+                              void *userdata)
 {
-    return sdl3d_run_game(config, callbacks, userdata);
+    return slayer3d_run_game(config, callbacks, userdata);
 }
 
 struct GameTestState
@@ -71,37 +72,37 @@ struct GameTestState
     float first_unpaused_alpha = -1.0f;
 };
 
-sdl3d_actor_registry *ctx_registry(sdl3d_game_context *ctx)
+slayer3d_actor_registry *ctx_registry(slayer3d_game_context *ctx)
 {
-    return sdl3d_game_session_get_registry(ctx != nullptr ? ctx->session : nullptr);
+    return slayer3d_game_session_get_registry(ctx != nullptr ? ctx->session : nullptr);
 }
 
-sdl3d_signal_bus *ctx_bus(sdl3d_game_context *ctx)
+slayer3d_signal_bus *ctx_bus(slayer3d_game_context *ctx)
 {
-    return sdl3d_game_session_get_signal_bus(ctx != nullptr ? ctx->session : nullptr);
+    return slayer3d_game_session_get_signal_bus(ctx != nullptr ? ctx->session : nullptr);
 }
 
-sdl3d_timer_pool *ctx_timers(sdl3d_game_context *ctx)
+slayer3d_timer_pool *ctx_timers(slayer3d_game_context *ctx)
 {
-    return sdl3d_game_session_get_timer_pool(ctx != nullptr ? ctx->session : nullptr);
+    return slayer3d_game_session_get_timer_pool(ctx != nullptr ? ctx->session : nullptr);
 }
 
-sdl3d_input_manager *ctx_input(sdl3d_game_context *ctx)
+slayer3d_input_manager *ctx_input(slayer3d_game_context *ctx)
 {
-    return sdl3d_game_session_get_input(ctx != nullptr ? ctx->session : nullptr);
+    return slayer3d_game_session_get_input(ctx != nullptr ? ctx->session : nullptr);
 }
 
-sdl3d_audio_engine *ctx_audio(sdl3d_game_context *ctx)
+slayer3d_audio_engine *ctx_audio(slayer3d_game_context *ctx)
 {
-    return sdl3d_game_session_get_audio(ctx != nullptr ? ctx->session : nullptr);
+    return slayer3d_game_session_get_audio(ctx != nullptr ? ctx->session : nullptr);
 }
 
-int ctx_tick_count(sdl3d_game_context *ctx)
+int ctx_tick_count(slayer3d_game_context *ctx)
 {
-    return sdl3d_game_session_get_tick_count(ctx != nullptr ? ctx->session : nullptr);
+    return slayer3d_game_session_get_tick_count(ctx != nullptr ? ctx->session : nullptr);
 }
 
-bool quit_in_init(sdl3d_game_context *ctx, void *userdata)
+bool quit_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->init_called = true;
@@ -109,7 +110,7 @@ bool quit_in_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
-bool fail_in_init(sdl3d_game_context *ctx, void *userdata)
+bool fail_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->init_called = true;
@@ -117,14 +118,14 @@ bool fail_in_init(sdl3d_game_context *ctx, void *userdata)
     return false;
 }
 
-void record_shutdown(sdl3d_game_context *ctx, void *userdata)
+void record_shutdown(slayer3d_game_context *ctx, void *userdata)
 {
     (void)ctx;
     auto *state = static_cast<GameTestState *>(userdata);
     state->shutdown_called = true;
 }
 
-bool validate_context_in_init(sdl3d_game_context *ctx, void *userdata)
+bool validate_context_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->saw_valid_context = ctx->window != nullptr && ctx->renderer != nullptr && ctx_registry(ctx) != nullptr &&
@@ -133,7 +134,7 @@ bool validate_context_in_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
-bool validate_audio_disabled_in_init(sdl3d_game_context *ctx, void *userdata)
+bool validate_audio_disabled_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->saw_audio_disabled = ctx_audio(ctx) == nullptr;
@@ -141,16 +142,16 @@ bool validate_audio_disabled_in_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
-bool validate_default_config_in_init(sdl3d_game_context *ctx, void *userdata)
+bool validate_default_config_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    state->saw_default_config =
-        sdl3d_get_render_context_width(ctx->renderer) == 1280 && sdl3d_get_render_context_height(ctx->renderer) == 720;
+    state->saw_default_config = slayer3d_get_render_context_width(ctx->renderer) == 1280 &&
+                                slayer3d_get_render_context_height(ctx->renderer) == 720;
     ctx->quit_requested = true;
     return true;
 }
 
-bool push_user_event_in_init(sdl3d_game_context *ctx, void *userdata)
+bool push_user_event_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     (void)ctx;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -162,7 +163,7 @@ bool push_user_event_in_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
-bool push_quit_event_in_init(sdl3d_game_context *ctx, void *userdata)
+bool push_quit_event_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     (void)ctx;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -174,7 +175,7 @@ bool push_quit_event_in_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
-bool event_returns_false(sdl3d_game_context *ctx, void *userdata, const SDL_Event *event)
+bool event_returns_false(slayer3d_game_context *ctx, void *userdata, const SDL_Event *event)
 {
     (void)ctx;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -187,7 +188,7 @@ bool event_returns_false(sdl3d_game_context *ctx, void *userdata, const SDL_Even
     return true;
 }
 
-bool consume_key_event_in_callback(sdl3d_game_context *ctx, void *userdata, const SDL_Event *event)
+bool consume_key_event_in_callback(slayer3d_game_context *ctx, void *userdata, const SDL_Event *event)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     if (event->type == SDL_EVENT_KEY_DOWN)
@@ -198,17 +199,17 @@ bool consume_key_event_in_callback(sdl3d_game_context *ctx, void *userdata, cons
     return true;
 }
 
-void quit_in_render(sdl3d_game_context *ctx, void *userdata, float alpha)
+void quit_in_render(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->render_called = true;
     state->render_count++;
     state->last_alpha = alpha;
-    state->saw_time_update = sdl3d_time_get_real_time() >= 0.0f;
+    state->saw_time_update = slayer3d_time_get_real_time() >= 0.0f;
     ctx->quit_requested = true;
 }
 
-void quit_after_tick(sdl3d_game_context *ctx, void *userdata, float dt)
+void quit_after_tick(slayer3d_game_context *ctx, void *userdata, float dt)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->tick_count++;
@@ -216,7 +217,7 @@ void quit_after_tick(sdl3d_game_context *ctx, void *userdata, float dt)
     ctx->quit_requested = true;
 }
 
-void timer_handler(void *userdata, int signal_id, const sdl3d_properties *payload)
+void timer_handler(void *userdata, int signal_id, const slayer3d_properties *payload)
 {
     (void)payload;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -226,15 +227,15 @@ void timer_handler(void *userdata, int signal_id, const sdl3d_properties *payloa
     }
 }
 
-bool start_timer_in_init(sdl3d_game_context *ctx, void *userdata)
+bool start_timer_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    sdl3d_signal_connect(ctx_bus(ctx), kTimerSignal, timer_handler, state);
-    sdl3d_timer_start(ctx_timers(ctx), kFastFixedDt, kTimerSignal, false, 0.0f);
+    slayer3d_signal_connect(ctx_bus(ctx), kTimerSignal, timer_handler, state);
+    slayer3d_timer_start(ctx_timers(ctx), kFastFixedDt, kTimerSignal, false, 0.0f);
     return true;
 }
 
-void quit_when_timer_fires(sdl3d_game_context *ctx, void *userdata, float dt)
+void quit_when_timer_fires(slayer3d_game_context *ctx, void *userdata, float dt)
 {
     (void)dt;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -245,11 +246,11 @@ void quit_when_timer_fires(sdl3d_game_context *ctx, void *userdata, float dt)
     }
 }
 
-bool bind_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
+bool bind_and_push_input_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    state->input_action = sdl3d_input_register_action(ctx_input(ctx), "jump");
-    sdl3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_SPACE);
+    state->input_action = slayer3d_input_register_action(ctx_input(ctx), "jump");
+    slayer3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_SPACE);
 
     SDL_Event event{};
     event.type = SDL_EVENT_KEY_DOWN;
@@ -258,60 +259,60 @@ bool bind_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
     return true;
 }
 
-bool bind_input_in_init(sdl3d_game_context *ctx, void *userdata)
+bool bind_input_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
-    state->input_action = sdl3d_input_register_action(ctx_input(ctx), "jump");
-    sdl3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_SPACE);
+    state->input_action = slayer3d_input_register_action(ctx_input(ctx), "jump");
+    slayer3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_SPACE);
     return true;
 }
 
-bool pause_in_init(sdl3d_game_context *ctx, void *userdata)
-{
-    auto *state = static_cast<GameTestState *>(userdata);
-    state->init_called = true;
-    ctx->paused = true;
-    return true;
-}
-
-bool pause_and_start_timer_in_init(sdl3d_game_context *ctx, void *userdata)
+bool pause_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->init_called = true;
     ctx->paused = true;
-    sdl3d_signal_connect(ctx_bus(ctx), kTimerSignal, timer_handler, state);
-    sdl3d_timer_start(ctx_timers(ctx), kFastFixedDt, kTimerSignal, false, 0.0f);
     return true;
 }
 
-bool pause_and_push_input_in_init(sdl3d_game_context *ctx, void *userdata)
+bool pause_and_start_timer_in_init(slayer3d_game_context *ctx, void *userdata)
+{
+    auto *state = static_cast<GameTestState *>(userdata);
+    state->init_called = true;
+    ctx->paused = true;
+    slayer3d_signal_connect(ctx_bus(ctx), kTimerSignal, timer_handler, state);
+    slayer3d_timer_start(ctx_timers(ctx), kFastFixedDt, kTimerSignal, false, 0.0f);
+    return true;
+}
+
+bool pause_and_push_input_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     bind_and_push_input_in_init(ctx, userdata);
     ctx->paused = true;
     return true;
 }
 
-bool pause_and_bind_pause_input_in_init(sdl3d_game_context *ctx, void *userdata)
+bool pause_and_bind_pause_input_in_init(slayer3d_game_context *ctx, void *userdata)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->init_called = true;
-    state->input_action = sdl3d_input_register_action(ctx_input(ctx), "pause");
-    sdl3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_RETURN);
+    state->input_action = slayer3d_input_register_action(ctx_input(ctx), "pause");
+    slayer3d_input_bind_key(ctx_input(ctx), state->input_action, SDL_SCANCODE_RETURN);
     ctx->paused = true;
     return true;
 }
 
-void quit_after_input_tick(sdl3d_game_context *ctx, void *userdata, float dt)
+void quit_after_input_tick(slayer3d_game_context *ctx, void *userdata, float dt)
 {
     (void)dt;
     auto *state = static_cast<GameTestState *>(userdata);
     state->tick_count++;
-    state->saw_input_action_in_tick = sdl3d_input_is_pressed(ctx_input(ctx), state->input_action) &&
-                                      sdl3d_input_is_held(ctx_input(ctx), state->input_action);
+    state->saw_input_action_in_tick = slayer3d_input_is_pressed(ctx_input(ctx), state->input_action) &&
+                                      slayer3d_input_is_held(ctx_input(ctx), state->input_action);
     ctx->quit_requested = true;
 }
 
-void quit_after_post_render_input_tick(sdl3d_game_context *ctx, void *userdata, float dt)
+void quit_after_post_render_input_tick(slayer3d_game_context *ctx, void *userdata, float dt)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     if (state->render_count == 0)
@@ -321,12 +322,12 @@ void quit_after_post_render_input_tick(sdl3d_game_context *ctx, void *userdata, 
     quit_after_input_tick(ctx, userdata, dt);
 }
 
-void count_input_pressed_ticks(sdl3d_game_context *ctx, void *userdata, float dt)
+void count_input_pressed_ticks(slayer3d_game_context *ctx, void *userdata, float dt)
 {
     (void)dt;
     auto *state = static_cast<GameTestState *>(userdata);
     state->tick_count++;
-    if (sdl3d_input_is_pressed(ctx_input(ctx), state->input_action))
+    if (slayer3d_input_is_pressed(ctx_input(ctx), state->input_action))
     {
         state->input_pressed_tick_count++;
     }
@@ -336,7 +337,7 @@ void count_input_pressed_ticks(sdl3d_game_context *ctx, void *userdata, float dt
     }
 }
 
-void stop_after_many_null_frames(sdl3d_game_context *ctx, void *userdata, float alpha)
+void stop_after_many_null_frames(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->render_count++;
@@ -347,7 +348,7 @@ void stop_after_many_null_frames(sdl3d_game_context *ctx, void *userdata, float 
     }
 }
 
-void push_input_on_first_render(sdl3d_game_context *ctx, void *userdata, float alpha)
+void push_input_on_first_render(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     (void)alpha;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -366,7 +367,7 @@ void push_input_on_first_render(sdl3d_game_context *ctx, void *userdata, float a
     }
 }
 
-void count_tick_without_quit(sdl3d_game_context *ctx, void *userdata, float dt)
+void count_tick_without_quit(slayer3d_game_context *ctx, void *userdata, float dt)
 {
     (void)ctx;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -374,7 +375,7 @@ void count_tick_without_quit(sdl3d_game_context *ctx, void *userdata, float dt)
     state->tick_dt = dt;
 }
 
-void count_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
+void count_pause_tick(slayer3d_game_context *ctx, void *userdata, float real_dt)
 {
     (void)ctx;
     auto *state = static_cast<GameTestState *>(userdata);
@@ -382,13 +383,13 @@ void count_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
     state->pause_dt = real_dt;
 }
 
-void unpause_after_one_pause_tick(sdl3d_game_context *ctx, void *userdata, float real_dt)
+void unpause_after_one_pause_tick(slayer3d_game_context *ctx, void *userdata, float real_dt)
 {
     count_pause_tick(ctx, userdata, real_dt);
     ctx->paused = false;
 }
 
-void push_pause_input_then_unpause_from_snapshot(sdl3d_game_context *ctx, void *userdata, float real_dt)
+void push_pause_input_then_unpause_from_snapshot(slayer3d_game_context *ctx, void *userdata, float real_dt)
 {
     count_pause_tick(ctx, userdata, real_dt);
     auto *state = static_cast<GameTestState *>(userdata);
@@ -402,14 +403,14 @@ void push_pause_input_then_unpause_from_snapshot(sdl3d_game_context *ctx, void *
         return;
     }
 
-    if (sdl3d_input_is_pressed(ctx_input(ctx), state->input_action))
+    if (slayer3d_input_is_pressed(ctx_input(ctx), state->input_action))
     {
         state->saw_input_action_in_tick = true;
         ctx->paused = false;
     }
 }
 
-void delay_then_unpause(sdl3d_game_context *ctx, void *userdata, float real_dt)
+void delay_then_unpause(slayer3d_game_context *ctx, void *userdata, float real_dt)
 {
     count_pause_tick(ctx, userdata, real_dt);
     if (static_cast<GameTestState *>(userdata)->pause_tick_count >= 4)
@@ -421,7 +422,7 @@ void delay_then_unpause(sdl3d_game_context *ctx, void *userdata, float real_dt)
     SDL_Delay(20);
 }
 
-void quit_after_three_paused_renders(sdl3d_game_context *ctx, void *userdata, float alpha)
+void quit_after_three_paused_renders(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->render_called = true;
@@ -434,7 +435,7 @@ void quit_after_three_paused_renders(sdl3d_game_context *ctx, void *userdata, fl
     }
 }
 
-void quit_after_first_unpaused_tick_render(sdl3d_game_context *ctx, void *userdata, float alpha)
+void quit_after_first_unpaused_tick_render(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->render_called = true;
@@ -451,7 +452,7 @@ void quit_after_first_unpaused_tick_render(sdl3d_game_context *ctx, void *userda
     }
 }
 
-void quit_after_first_unpaused_render(sdl3d_game_context *ctx, void *userdata, float alpha)
+void quit_after_first_unpaused_render(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     auto *state = static_cast<GameTestState *>(userdata);
     state->render_called = true;
@@ -469,19 +470,19 @@ void quit_after_first_unpaused_render(sdl3d_game_context *ctx, void *userdata, f
     }
 }
 
-void record_paused_input_snapshot(sdl3d_game_context *ctx, void *userdata, float alpha)
+void record_paused_input_snapshot(slayer3d_game_context *ctx, void *userdata, float alpha)
 {
     quit_after_three_paused_renders(ctx, userdata, alpha);
     auto *state = static_cast<GameTestState *>(userdata);
-    state->saw_input_action_while_paused = sdl3d_input_is_pressed(ctx_input(ctx), state->input_action) ||
-                                           sdl3d_input_is_held(ctx_input(ctx), state->input_action);
+    state->saw_input_action_while_paused = slayer3d_input_is_pressed(ctx_input(ctx), state->input_action) ||
+                                           slayer3d_input_is_held(ctx_input(ctx), state->input_action);
 }
 } // namespace
 
 TEST(ManagedGameLoop, InitCallbackIsCalled)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = quit_in_init;
 
     EXPECT_EQ(0, run_test_game(&callbacks, &state));
@@ -491,7 +492,7 @@ TEST(ManagedGameLoop, InitCallbackIsCalled)
 TEST(ManagedGameLoop, InitFailureReturnsOneAndSkipsShutdown)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = fail_in_init;
     callbacks.shutdown = record_shutdown;
 
@@ -503,7 +504,7 @@ TEST(ManagedGameLoop, InitFailureReturnsOneAndSkipsShutdown)
 TEST(ManagedGameLoop, ShutdownCallbackIsCalledAfterQuit)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = quit_in_init;
     callbacks.shutdown = record_shutdown;
 
@@ -514,7 +515,7 @@ TEST(ManagedGameLoop, ShutdownCallbackIsCalledAfterQuit)
 TEST(ManagedGameLoop, ContextHasValidSubsystems)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = validate_context_in_init;
 
     EXPECT_EQ(0, run_test_game(&callbacks, &state));
@@ -524,7 +525,7 @@ TEST(ManagedGameLoop, ContextHasValidSubsystems)
 TEST(ManagedGameLoop, AudioIsDisabledByDefault)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = validate_audio_disabled_in_init;
 
     EXPECT_EQ(0, run_test_game(&callbacks, &state));
@@ -534,7 +535,7 @@ TEST(ManagedGameLoop, AudioIsDisabledByDefault)
 TEST(ManagedGameLoop, EventCallbackReceivesUserEvents)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = push_user_event_in_init;
     callbacks.event = event_returns_false;
 
@@ -546,7 +547,7 @@ TEST(ManagedGameLoop, EventCallbackReceivesUserEvents)
 TEST(ManagedGameLoop, SDLQuitEventIsHandledInternally)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = push_quit_event_in_init;
     callbacks.event = event_returns_false;
     callbacks.shutdown = record_shutdown;
@@ -559,7 +560,7 @@ TEST(ManagedGameLoop, SDLQuitEventIsHandledInternally)
 TEST(ManagedGameLoop, TickCallbackReceivesFixedDt)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.tick = quit_after_tick;
     callbacks.render = stop_after_many_null_frames;
 
@@ -571,7 +572,7 @@ TEST(ManagedGameLoop, TickCallbackReceivesFixedDt)
 TEST(ManagedGameLoop, RenderCallbackIsCalledWithNormalizedAlpha)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.render = quit_in_render;
 
     EXPECT_EQ(0, run_test_game(&callbacks, &state));
@@ -584,7 +585,7 @@ TEST(ManagedGameLoop, RenderCallbackIsCalledWithNormalizedAlpha)
 TEST(ManagedGameLoop, TimerPoolIsTickedAutomatically)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = start_timer_in_init;
     callbacks.tick = quit_when_timer_fires;
     callbacks.render = stop_after_many_null_frames;
@@ -596,7 +597,7 @@ TEST(ManagedGameLoop, TimerPoolIsTickedAutomatically)
 TEST(ManagedGameLoop, InputManagerProcessesEventsBeforeTick)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = bind_and_push_input_in_init;
     callbacks.tick = quit_after_input_tick;
     callbacks.render = stop_after_many_null_frames;
@@ -609,7 +610,7 @@ TEST(ManagedGameLoop, InputManagerProcessesEventsBeforeTick)
 TEST(ManagedGameLoop, EventCallbackCanConsumeInputBeforeSnapshot)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = bind_and_push_input_in_init;
     callbacks.event = consume_key_event_in_callback;
     callbacks.tick = quit_after_input_tick;
@@ -624,10 +625,10 @@ TEST(ManagedGameLoop, EventCallbackCanConsumeInputBeforeSnapshot)
 TEST(ManagedGameLoop, InputPressedEdgeIsNotRepeatedAcrossCatchUpTicks)
 {
     GameTestState state;
-    sdl3d_game_config config = test_config();
+    slayer3d_game_config config = test_config();
     config.max_ticks_per_frame = 4;
 
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = bind_and_push_input_in_init;
     callbacks.tick = count_input_pressed_ticks;
     callbacks.render = stop_after_many_null_frames;
@@ -640,11 +641,11 @@ TEST(ManagedGameLoop, InputPressedEdgeIsNotRepeatedAcrossCatchUpTicks)
 TEST(ManagedGameLoop, InputPressedEdgeWaitsForNextFixedTick)
 {
     GameTestState state;
-    sdl3d_game_config config = test_config();
+    slayer3d_game_config config = test_config();
     config.tick_rate = 0.05f;
     config.max_ticks_per_frame = 1;
 
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = bind_input_in_init;
     callbacks.tick = quit_after_post_render_input_tick;
     callbacks.render = push_input_on_first_render;
@@ -658,7 +659,7 @@ TEST(ManagedGameLoop, InputPressedEdgeWaitsForNextFixedTick)
 TEST(ManagedGameLoop, QuitRequestedFromTickExitsAndRunsShutdown)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.tick = quit_after_tick;
     callbacks.shutdown = record_shutdown;
     callbacks.render = stop_after_many_null_frames;
@@ -676,25 +677,25 @@ TEST(ManagedGameLoop, NullCallbacksCanExitFromQueuedQuitEvent)
     event.type = SDL_EVENT_QUIT;
     ASSERT_TRUE(SDL_PushEvent(&event)) << SDL_GetError();
 
-    sdl3d_game_config config = test_config();
-    EXPECT_EQ(0, sdl3d_run_game(&config, nullptr, nullptr));
+    slayer3d_game_config config = test_config();
+    EXPECT_EQ(0, slayer3d_run_game(&config, nullptr, nullptr));
 }
 
 TEST(ManagedGameLoop, DefaultConfigValues)
 {
     GameTestState state;
-    sdl3d_game_config config{};
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_config config{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = validate_default_config_in_init;
 
-    EXPECT_EQ(0, sdl3d_run_game(&config, &callbacks, &state));
+    EXPECT_EQ(0, slayer3d_run_game(&config, &callbacks, &state));
     EXPECT_TRUE(state.saw_default_config);
 }
 
 TEST(ManagedGameLoop, PauseStopsTickingButStillRenders)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_in_init;
     callbacks.tick = count_tick_without_quit;
     callbacks.render = quit_after_three_paused_renders;
@@ -711,7 +712,7 @@ TEST(ManagedGameLoop, PauseStopsTickingButStillRenders)
 TEST(ManagedGameLoop, PauseTickRunsWithWallClockDelta)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_in_init;
     callbacks.pause_tick = count_pause_tick;
     callbacks.render = quit_after_three_paused_renders;
@@ -724,7 +725,7 @@ TEST(ManagedGameLoop, PauseTickRunsWithWallClockDelta)
 TEST(ManagedGameLoop, UnpauseResumesFixedTicks)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_in_init;
     callbacks.pause_tick = unpause_after_one_pause_tick;
     callbacks.tick = count_tick_without_quit;
@@ -739,11 +740,11 @@ TEST(ManagedGameLoop, UnpauseResumesFixedTicks)
 TEST(ManagedGameLoop, AccumulatorDoesNotCatchUpAfterPause)
 {
     GameTestState state;
-    sdl3d_game_config config = test_config();
+    slayer3d_game_config config = test_config();
     config.tick_rate = kFastFixedDt;
     config.max_ticks_per_frame = 8;
 
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_in_init;
     callbacks.pause_tick = delay_then_unpause;
     callbacks.tick = count_tick_without_quit;
@@ -760,7 +761,7 @@ TEST(ManagedGameLoop, AccumulatorDoesNotCatchUpAfterPause)
 TEST(ManagedGameLoop, TimersDoNotAdvanceWhilePaused)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_and_start_timer_in_init;
     callbacks.render = quit_after_three_paused_renders;
 
@@ -771,7 +772,7 @@ TEST(ManagedGameLoop, TimersDoNotAdvanceWhilePaused)
 TEST(ManagedGameLoop, InputSnapshotsUpdateWhilePaused)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_and_push_input_in_init;
     callbacks.render = record_paused_input_snapshot;
 
@@ -782,7 +783,7 @@ TEST(ManagedGameLoop, InputSnapshotsUpdateWhilePaused)
 TEST(ManagedGameLoop, PauseTickCanUnpauseFromActionSnapshot)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_and_bind_pause_input_in_init;
     callbacks.pause_tick = push_pause_input_then_unpause_from_snapshot;
     callbacks.render = quit_after_first_unpaused_render;
@@ -796,7 +797,7 @@ TEST(ManagedGameLoop, PauseTickCanUnpauseFromActionSnapshot)
 TEST(ManagedGameLoop, NullPauseTickIsSafe)
 {
     GameTestState state;
-    sdl3d_game_callbacks callbacks{};
+    slayer3d_game_callbacks callbacks{};
     callbacks.init = pause_in_init;
     callbacks.render = quit_after_three_paused_renders;
 

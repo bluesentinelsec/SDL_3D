@@ -1,4 +1,4 @@
-#include "sdl3d/image.h"
+#include "slayer3d/image.h"
 
 #include <limits.h>
 
@@ -9,9 +9,9 @@
 #include "stb_image.h"
 #include "stb_image_write.h"
 
-static const int SDL3D_IMAGE_FORCED_CHANNELS = 4;
+static const int SLAYER3D_IMAGE_FORCED_CHANNELS = 4;
 
-static bool sdl3d_image_populate(sdl3d_image *out, Uint8 *pixels, int width, int height)
+static bool slayer3d_image_populate(slayer3d_image *out, Uint8 *pixels, int width, int height)
 {
     if (pixels == NULL)
     {
@@ -29,7 +29,7 @@ static bool sdl3d_image_populate(sdl3d_image *out, Uint8 *pixels, int width, int
     return true;
 }
 
-bool sdl3d_load_image_from_file(const char *path, sdl3d_image *out)
+bool slayer3d_load_image_from_file(const char *path, slayer3d_image *out)
 {
     if (path == NULL)
     {
@@ -53,12 +53,12 @@ bool sdl3d_load_image_from_file(const char *path, sdl3d_image *out)
         return false;
     }
 
-    const bool ok = sdl3d_load_image_from_memory(data, bytes, out);
+    const bool ok = slayer3d_load_image_from_memory(data, bytes, out);
     SDL_free(data);
     return ok;
 }
 
-bool sdl3d_load_image_from_memory(const void *data, size_t size, sdl3d_image *out)
+bool slayer3d_load_image_from_memory(const void *data, size_t size, slayer3d_image *out)
 {
     if (data == NULL)
     {
@@ -77,11 +77,11 @@ bool sdl3d_load_image_from_memory(const void *data, size_t size, sdl3d_image *ou
     int h = 0;
     int channels = 0;
     Uint8 *pixels =
-        stbi_load_from_memory((const stbi_uc *)data, (int)size, &w, &h, &channels, SDL3D_IMAGE_FORCED_CHANNELS);
-    return sdl3d_image_populate(out, pixels, w, h);
+        stbi_load_from_memory((const stbi_uc *)data, (int)size, &w, &h, &channels, SLAYER3D_IMAGE_FORCED_CHANNELS);
+    return slayer3d_image_populate(out, pixels, w, h);
 }
 
-void sdl3d_free_image(sdl3d_image *image)
+void slayer3d_free_image(slayer3d_image *image)
 {
     if (image == NULL)
     {
@@ -96,7 +96,7 @@ void sdl3d_free_image(sdl3d_image *image)
     image->height = 0;
 }
 
-bool sdl3d_save_image_png(const sdl3d_image *image, const char *path)
+bool slayer3d_save_image_png(const slayer3d_image *image, const char *path)
 {
     if (image == NULL)
     {
@@ -108,12 +108,12 @@ bool sdl3d_save_image_png(const sdl3d_image *image, const char *path)
     }
     if (image->pixels == NULL || image->width <= 0 || image->height <= 0)
     {
-        return SDL_SetError("sdl3d_save_image_png called with an empty image.");
+        return SDL_SetError("slayer3d_save_image_png called with an empty image.");
     }
 
-    const int stride_bytes = image->width * SDL3D_IMAGE_FORCED_CHANNELS;
-    if (stbi_write_png(path, image->width, image->height, SDL3D_IMAGE_FORCED_CHANNELS, image->pixels, stride_bytes) ==
-        0)
+    const int stride_bytes = image->width * SLAYER3D_IMAGE_FORCED_CHANNELS;
+    if (stbi_write_png(path, image->width, image->height, SLAYER3D_IMAGE_FORCED_CHANNELS, image->pixels,
+                       stride_bytes) == 0)
     {
         return SDL_SetError("stbi_write_png failed to write '%s'.", path);
     }

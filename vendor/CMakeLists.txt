@@ -1,108 +1,108 @@
 # Vendored third-party libraries, all built from source and linked statically
-# into SDL3D. No additional runtime dependencies beyond SDL3 itself.
+# into SLAYER3D. No additional runtime dependencies beyond SDL3 itself.
 #
 # Each library is compiled as an OBJECT library so that its translation units
-# land inside libsdl3d and callers never need to link against it separately.
+# land inside libslayer3d and callers never need to link against it separately.
 
 include(FetchContent)
 
 FetchContent_Declare(
-    sdl3d_lua_source
+    slayer3d_lua_source
     GIT_REPOSITORY https://github.com/walterschell/Lua.git
     GIT_TAG v5.4.7
     GIT_SHALLOW TRUE
 )
-FetchContent_GetProperties(sdl3d_lua_source)
-if(NOT sdl3d_lua_source_POPULATED)
-    FetchContent_Populate(sdl3d_lua_source)
+FetchContent_GetProperties(slayer3d_lua_source)
+if(NOT slayer3d_lua_source_POPULATED)
+    FetchContent_Populate(slayer3d_lua_source)
 endif()
 
 FetchContent_Declare(
-    sdl3d_miniz_source
+    slayer3d_miniz_source
     GIT_REPOSITORY https://github.com/richgel999/miniz.git
     GIT_TAG 3.1.0
     GIT_SHALLOW TRUE
 )
-FetchContent_GetProperties(sdl3d_miniz_source)
-if(NOT sdl3d_miniz_source_POPULATED)
-    FetchContent_Populate(sdl3d_miniz_source)
+FetchContent_GetProperties(slayer3d_miniz_source)
+if(NOT slayer3d_miniz_source_POPULATED)
+    FetchContent_Populate(slayer3d_miniz_source)
 endif()
 
-set(SDL3D_MINIZ_HEADER "${sdl3d_miniz_source_SOURCE_DIR}/miniz.h")
-if(EXISTS "${SDL3D_MINIZ_HEADER}")
-    file(READ "${SDL3D_MINIZ_HEADER}" SDL3D_MINIZ_HEADER_CONTENTS)
-    if(NOT SDL3D_MINIZ_HEADER_CONTENTS MATCHES "\n$")
-        file(APPEND "${SDL3D_MINIZ_HEADER}" "\n")
+set(SLAYER3D_MINIZ_HEADER "${slayer3d_miniz_source_SOURCE_DIR}/miniz.h")
+if(EXISTS "${SLAYER3D_MINIZ_HEADER}")
+    file(READ "${SLAYER3D_MINIZ_HEADER}" SLAYER3D_MINIZ_HEADER_CONTENTS)
+    if(NOT SLAYER3D_MINIZ_HEADER_CONTENTS MATCHES "\n$")
+        file(APPEND "${SLAYER3D_MINIZ_HEADER}" "\n")
     endif()
 endif()
 
-set(SDL3D_LUA_ROOT "${sdl3d_lua_source_SOURCE_DIR}/lua-5.4.7")
+set(SLAYER3D_LUA_ROOT "${slayer3d_lua_source_SOURCE_DIR}/lua-5.4.7")
 add_library(
-    sdl3d_lua
+    slayer3d_lua
     OBJECT
-        "${SDL3D_LUA_ROOT}/src/lapi.c"
-        "${SDL3D_LUA_ROOT}/src/lcode.c"
-        "${SDL3D_LUA_ROOT}/src/lctype.c"
-        "${SDL3D_LUA_ROOT}/src/ldebug.c"
-        "${SDL3D_LUA_ROOT}/src/ldo.c"
-        "${SDL3D_LUA_ROOT}/src/ldump.c"
-        "${SDL3D_LUA_ROOT}/src/lfunc.c"
-        "${SDL3D_LUA_ROOT}/src/lgc.c"
-        "${SDL3D_LUA_ROOT}/src/llex.c"
-        "${SDL3D_LUA_ROOT}/src/lmem.c"
-        "${SDL3D_LUA_ROOT}/src/lobject.c"
-        "${SDL3D_LUA_ROOT}/src/lopcodes.c"
-        "${SDL3D_LUA_ROOT}/src/lparser.c"
-        "${SDL3D_LUA_ROOT}/src/lstate.c"
-        "${SDL3D_LUA_ROOT}/src/lstring.c"
-        "${SDL3D_LUA_ROOT}/src/ltable.c"
-        "${SDL3D_LUA_ROOT}/src/ltm.c"
-        "${SDL3D_LUA_ROOT}/src/lundump.c"
-        "${SDL3D_LUA_ROOT}/src/lvm.c"
-        "${SDL3D_LUA_ROOT}/src/lzio.c"
-        "${SDL3D_LUA_ROOT}/src/lauxlib.c"
-        "${SDL3D_LUA_ROOT}/src/lbaselib.c"
-        "${SDL3D_LUA_ROOT}/src/lmathlib.c"
-        "${SDL3D_LUA_ROOT}/src/lstrlib.c"
-        "${SDL3D_LUA_ROOT}/src/ltablib.c"
-        "${SDL3D_LUA_ROOT}/src/lutf8lib.c"
+        "${SLAYER3D_LUA_ROOT}/src/lapi.c"
+        "${SLAYER3D_LUA_ROOT}/src/lcode.c"
+        "${SLAYER3D_LUA_ROOT}/src/lctype.c"
+        "${SLAYER3D_LUA_ROOT}/src/ldebug.c"
+        "${SLAYER3D_LUA_ROOT}/src/ldo.c"
+        "${SLAYER3D_LUA_ROOT}/src/ldump.c"
+        "${SLAYER3D_LUA_ROOT}/src/lfunc.c"
+        "${SLAYER3D_LUA_ROOT}/src/lgc.c"
+        "${SLAYER3D_LUA_ROOT}/src/llex.c"
+        "${SLAYER3D_LUA_ROOT}/src/lmem.c"
+        "${SLAYER3D_LUA_ROOT}/src/lobject.c"
+        "${SLAYER3D_LUA_ROOT}/src/lopcodes.c"
+        "${SLAYER3D_LUA_ROOT}/src/lparser.c"
+        "${SLAYER3D_LUA_ROOT}/src/lstate.c"
+        "${SLAYER3D_LUA_ROOT}/src/lstring.c"
+        "${SLAYER3D_LUA_ROOT}/src/ltable.c"
+        "${SLAYER3D_LUA_ROOT}/src/ltm.c"
+        "${SLAYER3D_LUA_ROOT}/src/lundump.c"
+        "${SLAYER3D_LUA_ROOT}/src/lvm.c"
+        "${SLAYER3D_LUA_ROOT}/src/lzio.c"
+        "${SLAYER3D_LUA_ROOT}/src/lauxlib.c"
+        "${SLAYER3D_LUA_ROOT}/src/lbaselib.c"
+        "${SLAYER3D_LUA_ROOT}/src/lmathlib.c"
+        "${SLAYER3D_LUA_ROOT}/src/lstrlib.c"
+        "${SLAYER3D_LUA_ROOT}/src/ltablib.c"
+        "${SLAYER3D_LUA_ROOT}/src/lutf8lib.c"
 )
-target_include_directories(sdl3d_lua PUBLIC "${SDL3D_LUA_ROOT}/include")
-set_target_properties(sdl3d_lua PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(slayer3d_lua PUBLIC "${SLAYER3D_LUA_ROOT}/include")
+set_target_properties(slayer3d_lua PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(UNIX AND NOT EMSCRIPTEN)
-    target_compile_definitions(sdl3d_lua PRIVATE LUA_USE_POSIX)
+    target_compile_definitions(slayer3d_lua PRIVATE LUA_USE_POSIX)
 endif()
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_lua PRIVATE -w)
+    target_compile_options(slayer3d_lua PRIVATE -w)
 elseif(MSVC)
-    target_compile_options(sdl3d_lua PRIVATE /w)
-endif()
-
-add_library(sdl3d_cgltf OBJECT cgltf/cgltf_impl.c)
-target_include_directories(sdl3d_cgltf PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cgltf)
-set_target_properties(sdl3d_cgltf PROPERTIES POSITION_INDEPENDENT_CODE ON)
-if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_cgltf PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(sdl3d_cgltf PRIVATE /w)
+    target_compile_options(slayer3d_lua PRIVATE /w)
 endif()
 
-add_library(sdl3d_ufbx OBJECT ufbx/ufbx.c)
-target_include_directories(sdl3d_ufbx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ufbx)
-set_target_properties(sdl3d_ufbx PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(slayer3d_cgltf OBJECT cgltf/cgltf_impl.c)
+target_include_directories(slayer3d_cgltf PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cgltf)
+set_target_properties(slayer3d_cgltf PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_ufbx PRIVATE -w)
+    target_compile_options(slayer3d_cgltf PRIVATE -w)
 elseif(MSVC)
-    target_compile_options(sdl3d_ufbx PRIVATE /w)
+    target_compile_options(slayer3d_cgltf PRIVATE /w)
 endif()
 
-add_library(sdl3d_stb OBJECT stb/stb_impl.c stb/stb_truetype_impl.c)
-target_include_directories(sdl3d_stb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/stb)
-set_target_properties(sdl3d_stb PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(slayer3d_ufbx OBJECT ufbx/ufbx.c)
+target_include_directories(slayer3d_ufbx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ufbx)
+set_target_properties(slayer3d_ufbx PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_stb PRIVATE -w)
+    target_compile_options(slayer3d_ufbx PRIVATE -w)
 elseif(MSVC)
-    target_compile_options(sdl3d_stb PRIVATE /w)
+    target_compile_options(slayer3d_ufbx PRIVATE /w)
+endif()
+
+add_library(slayer3d_stb OBJECT stb/stb_impl.c stb/stb_truetype_impl.c)
+target_include_directories(slayer3d_stb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/stb)
+set_target_properties(slayer3d_stb PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(slayer3d_stb PRIVATE -w)
+elseif(MSVC)
+    target_compile_options(slayer3d_stb PRIVATE /w)
 endif()
 
 if(APPLE)
@@ -110,52 +110,52 @@ if(APPLE)
     set_source_files_properties(miniaudio/miniaudio.c PROPERTIES LANGUAGE OBJC)
 endif()
 
-add_library(sdl3d_miniaudio OBJECT miniaudio/miniaudio.c)
-target_include_directories(sdl3d_miniaudio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/miniaudio ${CMAKE_CURRENT_SOURCE_DIR}/stb)
-set_target_properties(sdl3d_miniaudio PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(slayer3d_miniaudio OBJECT miniaudio/miniaudio.c)
+target_include_directories(slayer3d_miniaudio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/miniaudio ${CMAKE_CURRENT_SOURCE_DIR}/stb)
+set_target_properties(slayer3d_miniaudio PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_miniaudio PRIVATE -w)
+    target_compile_options(slayer3d_miniaudio PRIVATE -w)
 elseif(MSVC)
-    target_compile_options(sdl3d_miniaudio PRIVATE /w)
+    target_compile_options(slayer3d_miniaudio PRIVATE /w)
 endif()
 
-add_library(sdl3d_yyjson OBJECT yyjson/yyjson.c)
-target_include_directories(sdl3d_yyjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/yyjson)
-set_target_properties(sdl3d_yyjson PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(slayer3d_yyjson OBJECT yyjson/yyjson.c)
+target_include_directories(slayer3d_yyjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/yyjson)
+set_target_properties(slayer3d_yyjson PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_yyjson PRIVATE -w)
+    target_compile_options(slayer3d_yyjson PRIVATE -w)
 elseif(MSVC)
-    target_compile_options(sdl3d_yyjson PRIVATE /w)
+    target_compile_options(slayer3d_yyjson PRIVATE /w)
 endif()
 
 add_library(
-    sdl3d_miniz
+    slayer3d_miniz
     OBJECT
-        "${sdl3d_miniz_source_SOURCE_DIR}/miniz.c"
-        "${sdl3d_miniz_source_SOURCE_DIR}/miniz_tdef.c"
-        "${sdl3d_miniz_source_SOURCE_DIR}/miniz_tinfl.c"
+        "${slayer3d_miniz_source_SOURCE_DIR}/miniz.c"
+        "${slayer3d_miniz_source_SOURCE_DIR}/miniz_tdef.c"
+        "${slayer3d_miniz_source_SOURCE_DIR}/miniz_tinfl.c"
 )
 target_include_directories(
-    sdl3d_miniz
+    slayer3d_miniz
     PUBLIC
-        ${sdl3d_miniz_source_SOURCE_DIR}
+        ${slayer3d_miniz_source_SOURCE_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/miniz
 )
-set_target_properties(sdl3d_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_compile_definitions(sdl3d_miniz PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
+set_target_properties(slayer3d_miniz PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_compile_definitions(slayer3d_miniz PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO_STDIO MINIZ_NO_TIME
                                                 MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_miniz PRIVATE -w)
+    target_compile_options(slayer3d_miniz PRIVATE -w)
 elseif(MSVC)
-    target_compile_options(sdl3d_miniz PRIVATE /w)
+    target_compile_options(slayer3d_miniz PRIVATE /w)
 endif()
 
-add_library(sdl3d_crypto OBJECT crypto/sdl3d_crypto.c)
-target_include_directories(sdl3d_crypto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/crypto)
-set_target_properties(sdl3d_crypto PROPERTIES POSITION_INDEPENDENT_CODE ON)
+add_library(slayer3d_crypto OBJECT crypto/slayer3d_crypto.c)
+target_include_directories(slayer3d_crypto PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/crypto)
+set_target_properties(slayer3d_crypto PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 add_library(
-    sdl3d_argtable3
+    slayer3d_argtable3
     STATIC
         argtable3/arg_cmd.c
         argtable3/arg_date.c
@@ -173,10 +173,10 @@ add_library(
         argtable3/arg_utils.c
         argtable3/argtable3.c
 )
-target_include_directories(sdl3d_argtable3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/argtable3)
-set_target_properties(sdl3d_argtable3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(slayer3d_argtable3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/argtable3)
+set_target_properties(slayer3d_argtable3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    target_compile_options(sdl3d_argtable3 PRIVATE -w)
+    target_compile_options(slayer3d_argtable3 PRIVATE -w)
 elseif(MSVC)
-    target_compile_options(sdl3d_argtable3 PRIVATE /w)
+    target_compile_options(slayer3d_argtable3 PRIVATE /w)
 endif()

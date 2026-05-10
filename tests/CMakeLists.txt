@@ -15,19 +15,19 @@ if(NOT TARGET GTest::gtest)
     # Build GoogleTest as a static library regardless of BUILD_SHARED_LIBS
     # so we don't have to ship libgtest.so alongside the test binaries
     # (needed for Android APK packaging in particular).
-    set(_sdl3d_saved_build_shared_libs ${BUILD_SHARED_LIBS})
+    set(_slayer3d_saved_build_shared_libs ${BUILD_SHARED_LIBS})
     set(BUILD_SHARED_LIBS OFF)
     FetchContent_MakeAvailable(googletest)
-    set(BUILD_SHARED_LIBS ${_sdl3d_saved_build_shared_libs})
+    set(BUILD_SHARED_LIBS ${_slayer3d_saved_build_shared_libs})
 endif()
 
-function(sdl3d_add_test target_name source_file test_label)
+function(slayer3d_add_test target_name source_file test_label)
     add_executable(${target_name} ${source_file})
 
     target_link_libraries(
         ${target_name}
         PRIVATE
-            SDL3D::sdl3d
+            Slayer3D::slayer3d
             GTest::gtest
             GTest::gtest_main
     )
@@ -36,11 +36,11 @@ function(sdl3d_add_test target_name source_file test_label)
     target_compile_definitions(
         ${target_name}
         PRIVATE
-            SDL3D_TEST_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
-            SDL3D_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
+            SLAYER3D_TEST_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
+            SLAYER3D_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
     )
 
-    sdl3d_enable_sanitizers(${target_name})
+    slayer3d_enable_sanitizers(${target_name})
 
     if(EMSCRIPTEN)
         # Produce an .html shell so emrun can host the page and capture
@@ -59,11 +59,11 @@ function(sdl3d_add_test target_name source_file test_label)
         )
     endif()
 
-    set(_sdl3d_test_timeout 15)
+    set(_slayer3d_test_timeout 15)
     if(test_label STREQUAL "render")
         # GPU/windowed tests are reliable locally but can stall briefly on
         # hosted macOS runners when creating hidden GL contexts.
-        set(_sdl3d_test_timeout 30)
+        set(_slayer3d_test_timeout 30)
     endif()
 
     gtest_discover_tests(
@@ -72,11 +72,11 @@ function(sdl3d_add_test target_name source_file test_label)
         DISCOVERY_MODE PRE_TEST
         PROPERTIES
             LABELS ${test_label}
-            TIMEOUT ${_sdl3d_test_timeout}
+            TIMEOUT ${_slayer3d_test_timeout}
     )
 endfunction()
 
-set(SDL3D_TEST_SOURCES
+set(SLAYER3D_TEST_SOURCES
     test_api.cpp
     test_actor_controller.cpp
     test_math.cpp
@@ -114,10 +114,10 @@ set(SDL3D_TEST_SOURCES
     test_teleporter.cpp
 )
 
-# Tests that read filesystem fixtures via SDL3D_TEST_ASSETS_DIR are desktop-only.
+# Tests that read filesystem fixtures via SLAYER3D_TEST_ASSETS_DIR are desktop-only.
 # The Android APK, iOS .app bundle, and Emscripten virtual FS don't expose the
 # host source tree, so we skip these tests on those platforms for now.
-set(SDL3D_DESKTOP_ONLY_TEST_SOURCES
+set(SLAYER3D_DESKTOP_ONLY_TEST_SOURCES
     test_image.cpp
     test_obj_loader.cpp
     test_m3_loaders.cpp
@@ -127,12 +127,12 @@ if(ANDROID)
     # SDLActivity expects libmain.so with an SDL_main entry point. Combine
     # all GoogleTest translation units into one shared library so a single
     # APK can run the entire suite.
-    add_library(main SHARED android_main.cpp ${SDL3D_TEST_SOURCES})
+    add_library(main SHARED android_main.cpp ${SLAYER3D_TEST_SOURCES})
 
     target_link_libraries(
         main
         PRIVATE
-            SDL3D::sdl3d
+            Slayer3D::slayer3d
             GTest::gtest
             log
             android
@@ -143,167 +143,167 @@ if(ANDROID)
     target_compile_definitions(
         main
         PRIVATE
-            SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
-            SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
+            SLAYER3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
+            SLAYER3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
     )
-    sdl3d_enable_sanitizers(main)
+    slayer3d_enable_sanitizers(main)
 elseif(IOS)
     # iOS apps must be bundled as .app directories and cannot launch bare
     # executables; as on Android we combine every test TU into a single
     # app bundle whose SDL_main runs the full suite. SDL's iOS bootstrap
     # creates UIApplication + a window and then calls into our SDL_main.
-    set(SDL3D_IOS_BUNDLE_ID "com.sdl3d.tests")
+    set(SLAYER3D_IOS_BUNDLE_ID "com.slayer3d.tests")
 
-    add_executable(sdl3d_ios_tests MACOSX_BUNDLE ios_main.cpp ${SDL3D_TEST_SOURCES})
+    add_executable(slayer3d_ios_tests MACOSX_BUNDLE ios_main.cpp ${SLAYER3D_TEST_SOURCES})
 
     target_link_libraries(
-        sdl3d_ios_tests
+        slayer3d_ios_tests
         PRIVATE
-            SDL3D::sdl3d
+            Slayer3D::slayer3d
             GTest::gtest
     )
 
-    target_compile_features(sdl3d_ios_tests PRIVATE cxx_std_17)
-    target_include_directories(sdl3d_ios_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    target_compile_features(slayer3d_ios_tests PRIVATE cxx_std_17)
+    target_include_directories(slayer3d_ios_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_definitions(
-        sdl3d_ios_tests
+        slayer3d_ios_tests
         PRIVATE
-            SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
-            SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
+            SLAYER3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
+            SLAYER3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
     )
-    sdl3d_enable_sanitizers(sdl3d_ios_tests)
+    slayer3d_enable_sanitizers(slayer3d_ios_tests)
 
     set_target_properties(
-        sdl3d_ios_tests
+        slayer3d_ios_tests
         PROPERTIES
             MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist.in"
-            MACOSX_BUNDLE_GUI_IDENTIFIER "${SDL3D_IOS_BUNDLE_ID}"
-            MACOSX_BUNDLE_BUNDLE_NAME "SDL3D Tests"
+            MACOSX_BUNDLE_GUI_IDENTIFIER "${SLAYER3D_IOS_BUNDLE_ID}"
+            MACOSX_BUNDLE_BUNDLE_NAME "SLAYER3D Tests"
             MACOSX_BUNDLE_BUNDLE_VERSION "1"
             MACOSX_BUNDLE_SHORT_VERSION_STRING "1.0"
-            XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${SDL3D_IOS_BUNDLE_ID}"
+            XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${SLAYER3D_IOS_BUNDLE_ID}"
             XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED "NO"
             XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY ""
             XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED "NO"
     )
 else()
-    sdl3d_add_test(sdl3d_api_test test_api.cpp unit)
-    sdl3d_add_test(sdl3d_app_test test_app.cpp unit)
-    sdl3d_add_test(sdl3d_math_test test_math.cpp unit)
-    sdl3d_add_test(sdl3d_rasterizer_test test_rasterizer.cpp unit)
-    target_include_directories(sdl3d_rasterizer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-    sdl3d_add_test(sdl3d_render_context_unit_test test_render_context_unit.cpp unit)
-    target_include_directories(sdl3d_render_context_unit_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-    sdl3d_add_test(sdl3d_render_context_test test_render_context.cpp render)
-    sdl3d_add_test(sdl3d_drawing3d_test test_drawing3d.cpp render)
-    sdl3d_add_test(sdl3d_door_test test_door.cpp unit)
-    sdl3d_add_test(sdl3d_render_loop_test test_render_loop.cpp render)
-    sdl3d_add_test(sdl3d_shapes_test test_shapes.cpp render)
-    sdl3d_add_test(sdl3d_vertex_color_test test_vertex_color.cpp render)
-    sdl3d_add_test(sdl3d_texture_test test_texture.cpp unit)
-    sdl3d_add_test(sdl3d_textured_rendering_test test_textured_rendering.cpp render)
-    sdl3d_add_test(sdl3d_lighting_test test_lighting.cpp render)
-    target_include_directories(sdl3d_lighting_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-    sdl3d_add_test(sdl3d_logic_test test_logic.cpp unit)
-    sdl3d_add_test(sdl3d_scene_test test_scene.cpp unit)
-    sdl3d_add_test(sdl3d_collision_test test_collision.cpp unit)
-    sdl3d_add_test(sdl3d_action_test test_action.cpp unit)
-    sdl3d_add_test(sdl3d_actor_controller_test test_actor_controller.cpp unit)
-    sdl3d_add_test(sdl3d_actor_registry_test test_actor_registry.cpp unit)
-    sdl3d_add_test(sdl3d_animation_test test_animation.cpp unit)
-    sdl3d_add_test(sdl3d_audio_test test_audio.cpp unit)
-    sdl3d_add_test(sdl3d_effects_test test_effects.cpp unit)
-    sdl3d_add_test(sdl3d_game_test test_game.cpp render)
-    sdl3d_add_test(sdl3d_game_session_test test_game_session.cpp unit)
-    if(SDL3D_ENABLE_NETWORKING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
-        sdl3d_add_test(sdl3d_network_test test_network.cpp unit)
+    slayer3d_add_test(slayer3d_api_test test_api.cpp unit)
+    slayer3d_add_test(slayer3d_app_test test_app.cpp unit)
+    slayer3d_add_test(slayer3d_math_test test_math.cpp unit)
+    slayer3d_add_test(slayer3d_rasterizer_test test_rasterizer.cpp unit)
+    target_include_directories(slayer3d_rasterizer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    slayer3d_add_test(slayer3d_render_context_unit_test test_render_context_unit.cpp unit)
+    target_include_directories(slayer3d_render_context_unit_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    slayer3d_add_test(slayer3d_render_context_test test_render_context.cpp render)
+    slayer3d_add_test(slayer3d_drawing3d_test test_drawing3d.cpp render)
+    slayer3d_add_test(slayer3d_door_test test_door.cpp unit)
+    slayer3d_add_test(slayer3d_render_loop_test test_render_loop.cpp render)
+    slayer3d_add_test(slayer3d_shapes_test test_shapes.cpp render)
+    slayer3d_add_test(slayer3d_vertex_color_test test_vertex_color.cpp render)
+    slayer3d_add_test(slayer3d_texture_test test_texture.cpp unit)
+    slayer3d_add_test(slayer3d_textured_rendering_test test_textured_rendering.cpp render)
+    slayer3d_add_test(slayer3d_lighting_test test_lighting.cpp render)
+    target_include_directories(slayer3d_lighting_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    slayer3d_add_test(slayer3d_logic_test test_logic.cpp unit)
+    slayer3d_add_test(slayer3d_scene_test test_scene.cpp unit)
+    slayer3d_add_test(slayer3d_collision_test test_collision.cpp unit)
+    slayer3d_add_test(slayer3d_action_test test_action.cpp unit)
+    slayer3d_add_test(slayer3d_actor_controller_test test_actor_controller.cpp unit)
+    slayer3d_add_test(slayer3d_actor_registry_test test_actor_registry.cpp unit)
+    slayer3d_add_test(slayer3d_animation_test test_animation.cpp unit)
+    slayer3d_add_test(slayer3d_audio_test test_audio.cpp unit)
+    slayer3d_add_test(slayer3d_effects_test test_effects.cpp unit)
+    slayer3d_add_test(slayer3d_game_test test_game.cpp render)
+    slayer3d_add_test(slayer3d_game_session_test test_game_session.cpp unit)
+    if(SLAYER3D_ENABLE_NETWORKING AND NOT EMSCRIPTEN AND NOT ANDROID AND NOT IOS)
+        slayer3d_add_test(slayer3d_network_test test_network.cpp unit)
     endif()
-    sdl3d_add_test(sdl3d_network_replication_test test_network_replication.cpp unit)
-    sdl3d_add_test(sdl3d_game_data_test test_game_data.cpp unit)
+    slayer3d_add_test(slayer3d_network_replication_test test_network_replication.cpp unit)
+    slayer3d_add_test(slayer3d_game_data_test test_game_data.cpp unit)
     if(EMSCRIPTEN)
         target_compile_definitions(
-            sdl3d_game_data_test
+            slayer3d_game_data_test
             PRIVATE
-                SDL3D_DEMOS_ROOT="/demos"
-                SDL3D_GAME_DATA_FIXTURE_DIR="/game_data"
+                SLAYER3D_DEMOS_ROOT="/demos"
+                SLAYER3D_GAME_DATA_FIXTURE_DIR="/game_data"
         )
         target_link_options(
-            sdl3d_game_data_test
+            slayer3d_game_data_test
             PRIVATE
                 "-sALLOW_MEMORY_GROWTH=1"
                 "-sINITIAL_MEMORY=134217728"
                 "-sMAXIMUM_MEMORY=536870912"
         )
-        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
-        sdl3d_target_preload_asset_directory(sdl3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
                                              "/game_data")
     else()
         target_compile_definitions(
-            sdl3d_game_data_test
+            slayer3d_game_data_test
             PRIVATE
-                SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
-                SDL3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
+                SLAYER3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
+                SLAYER3D_GAME_DATA_FIXTURE_DIR="${CMAKE_SOURCE_DIR}/tests/assets/game_data"
         )
     endif()
-    sdl3d_add_test(sdl3d_input_test test_input.cpp unit)
-    sdl3d_add_test(sdl3d_transition_test test_transition.cpp render)
-    sdl3d_add_test(sdl3d_level_test test_level.cpp unit)
-    target_include_directories(sdl3d_level_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-    sdl3d_add_test(sdl3d_properties_test test_properties.cpp unit)
-    sdl3d_add_test(sdl3d_signal_bus_test test_signal_bus.cpp unit)
-    sdl3d_add_test(sdl3d_storage_test test_storage.cpp unit)
-    sdl3d_add_test(sdl3d_trigger_test test_trigger.cpp unit)
-    sdl3d_add_test(sdl3d_timer_pool_test test_timer_pool.cpp unit)
-    sdl3d_add_test(sdl3d_fps_mover_test test_fps_mover.cpp unit)
-    sdl3d_add_test(sdl3d_sprite_asset_test test_sprite_asset.cpp unit)
+    slayer3d_add_test(slayer3d_input_test test_input.cpp unit)
+    slayer3d_add_test(slayer3d_transition_test test_transition.cpp render)
+    slayer3d_add_test(slayer3d_level_test test_level.cpp unit)
+    target_include_directories(slayer3d_level_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    slayer3d_add_test(slayer3d_properties_test test_properties.cpp unit)
+    slayer3d_add_test(slayer3d_signal_bus_test test_signal_bus.cpp unit)
+    slayer3d_add_test(slayer3d_storage_test test_storage.cpp unit)
+    slayer3d_add_test(slayer3d_trigger_test test_trigger.cpp unit)
+    slayer3d_add_test(slayer3d_timer_pool_test test_timer_pool.cpp unit)
+    slayer3d_add_test(slayer3d_fps_mover_test test_fps_mover.cpp unit)
+    slayer3d_add_test(slayer3d_sprite_asset_test test_sprite_asset.cpp unit)
     if(NOT EMSCRIPTEN)
-        sdl3d_add_test(sdl3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
+        slayer3d_add_test(slayer3d_pong_multiplayer_test test_pong_multiplayer.cpp unit)
         target_compile_definitions(
-            sdl3d_pong_multiplayer_test
+            slayer3d_pong_multiplayer_test
             PRIVATE
-                SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
+                SLAYER3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
         )
     endif()
-    sdl3d_add_test(game_data_json_test test_game_data_json.cpp unit)
+    slayer3d_add_test(game_data_json_test test_game_data_json.cpp unit)
     if(EMSCRIPTEN)
-        target_compile_definitions(game_data_json_test PRIVATE SDL3D_DEMOS_ROOT="/demos")
-        sdl3d_target_preload_asset_directory(game_data_json_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
+        target_compile_definitions(game_data_json_test PRIVATE SLAYER3D_DEMOS_ROOT="/demos")
+        slayer3d_target_preload_asset_directory(game_data_json_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
     else()
         target_compile_definitions(
             game_data_json_test
             PRIVATE
-                SDL3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
+                SLAYER3D_DEMOS_ROOT="${CMAKE_SOURCE_DIR}/demos"
         )
     endif()
     target_include_directories(game_data_json_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor)
-    sdl3d_add_test(sdl3d_sprite_actor_test test_sprite_actor.cpp unit)
-    sdl3d_add_test(sdl3d_teleporter_test test_teleporter.cpp unit)
-    sdl3d_add_test(sdl3d_ui_test test_ui.cpp unit)
-    sdl3d_add_test(sdl3d_parity_test test_parity.cpp render)
-    sdl3d_add_test(sdl3d_crypto_test test_crypto.cpp unit)
-    target_include_directories(sdl3d_crypto_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/crypto)
-    sdl3d_add_test(sdl3d_tool_cli_test test_tool_cli.cpp unit)
+    slayer3d_add_test(slayer3d_sprite_actor_test test_sprite_actor.cpp unit)
+    slayer3d_add_test(slayer3d_teleporter_test test_teleporter.cpp unit)
+    slayer3d_add_test(slayer3d_ui_test test_ui.cpp unit)
+    slayer3d_add_test(slayer3d_parity_test test_parity.cpp render)
+    slayer3d_add_test(slayer3d_crypto_test test_crypto.cpp unit)
+    target_include_directories(slayer3d_crypto_test PRIVATE ${CMAKE_SOURCE_DIR}/vendor/crypto)
+    slayer3d_add_test(slayer3d_tool_cli_test test_tool_cli.cpp unit)
     target_sources(
-        sdl3d_tool_cli_test
+        slayer3d_tool_cli_test
         PRIVATE
-            ${CMAKE_SOURCE_DIR}/tools/sdl3d_pack_cli.c
-            ${CMAKE_SOURCE_DIR}/tools/sdl3d_bundle_cli.c
-            ${CMAKE_SOURCE_DIR}/tools/sdl3d_fused.c
-            ${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_cli.c
-            ${CMAKE_SOURCE_DIR}/tools/sdl3d_runner_state.c
+            ${CMAKE_SOURCE_DIR}/tools/slayer3d_pack_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/slayer3d_bundle_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/slayer3d_fused.c
+            ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_state.c
     )
-    target_link_libraries(sdl3d_tool_cli_test PRIVATE sdl3d_argtable3)
-    target_include_directories(sdl3d_tool_cli_test PRIVATE ${CMAKE_SOURCE_DIR}/tools)
+    target_link_libraries(slayer3d_tool_cli_test PRIVATE slayer3d_argtable3)
+    target_include_directories(slayer3d_tool_cli_test PRIVATE ${CMAKE_SOURCE_DIR}/tools)
 
     if(NOT EMSCRIPTEN)
-        sdl3d_add_test(sdl3d_asset_test test_asset.cpp unit)
-        sdl3d_add_test(sdl3d_image_test test_image.cpp unit)
-        sdl3d_add_test(sdl3d_font_test test_font.cpp unit)
-        sdl3d_add_test(sdl3d_time_test test_time.cpp unit)
-        sdl3d_add_test(sdl3d_obj_loader_test test_obj_loader.cpp unit)
-        sdl3d_add_test(sdl3d_m3_loaders_test test_m3_loaders.cpp unit)
-        target_include_directories(sdl3d_m3_loaders_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
-        sdl3d_add_test(sdl3d_gl_renderer_test test_gl_renderer.cpp render)
-        target_include_directories(sdl3d_gl_renderer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+        slayer3d_add_test(slayer3d_asset_test test_asset.cpp unit)
+        slayer3d_add_test(slayer3d_image_test test_image.cpp unit)
+        slayer3d_add_test(slayer3d_font_test test_font.cpp unit)
+        slayer3d_add_test(slayer3d_time_test test_time.cpp unit)
+        slayer3d_add_test(slayer3d_obj_loader_test test_obj_loader.cpp unit)
+        slayer3d_add_test(slayer3d_m3_loaders_test test_m3_loaders.cpp unit)
+        target_include_directories(slayer3d_m3_loaders_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+        slayer3d_add_test(slayer3d_gl_renderer_test test_gl_renderer.cpp render)
+        target_include_directories(slayer3d_gl_renderer_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     endif()
 endif()

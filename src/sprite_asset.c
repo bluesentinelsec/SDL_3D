@@ -1,10 +1,10 @@
-#include "sdl3d/sprite_asset.h"
+#include "slayer3d/sprite_asset.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/image.h"
+#include "slayer3d/image.h"
 #include "yyjson.h"
 
 static void sprite_asset_set_error(char *buffer, int buffer_size, const char *message)
@@ -94,10 +94,10 @@ static bool sprite_asset_path_is_absolute(const char *path)
     return SDL_strlen(path) > 2 && path[1] == ':';
 }
 
-static bool sprite_asset_load_image(const sdl3d_asset_resolver *assets, const char *path, sdl3d_image *out_image,
+static bool sprite_asset_load_image(const slayer3d_asset_resolver *assets, const char *path, slayer3d_image *out_image,
                                     char *error_buffer, int error_buffer_size)
 {
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_buffer buffer;
     SDL_zero(buffer);
 
     if (path == NULL || out_image == NULL)
@@ -108,20 +108,20 @@ static bool sprite_asset_load_image(const sdl3d_asset_resolver *assets, const ch
 
     if (assets != NULL && (sprite_asset_path_uses_resolver(path) || !sprite_asset_path_is_absolute(path)))
     {
-        if (!sdl3d_asset_resolver_read_file(assets, path, &buffer, error_buffer, error_buffer_size))
+        if (!slayer3d_asset_resolver_read_file(assets, path, &buffer, error_buffer, error_buffer_size))
             return false;
-        const bool decoded = sdl3d_load_image_from_memory(buffer.data, buffer.size, out_image);
-        sdl3d_asset_buffer_free(&buffer);
+        const bool decoded = slayer3d_load_image_from_memory(buffer.data, buffer.size, out_image);
+        slayer3d_asset_buffer_free(&buffer);
         return decoded;
     }
 
-    return sdl3d_load_image_from_file(path, out_image);
+    return slayer3d_load_image_from_file(path, out_image);
 }
 
-static bool sprite_asset_load_text_source(const sdl3d_asset_resolver *assets, const char *path, char **out_text,
+static bool sprite_asset_load_text_source(const slayer3d_asset_resolver *assets, const char *path, char **out_text,
                                           char *error_buffer, int error_buffer_size)
 {
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_buffer buffer;
     char *copy;
 
     if (out_text != NULL)
@@ -135,20 +135,20 @@ static bool sprite_asset_load_text_source(const sdl3d_asset_resolver *assets, co
     }
 
     SDL_zero(buffer);
-    if (!sdl3d_asset_resolver_read_file(assets, path, &buffer, error_buffer, error_buffer_size))
+    if (!slayer3d_asset_resolver_read_file(assets, path, &buffer, error_buffer, error_buffer_size))
         return false;
 
     copy = (char *)SDL_malloc(buffer.size + 1u);
     if (copy == NULL)
     {
-        sdl3d_asset_buffer_free(&buffer);
+        slayer3d_asset_buffer_free(&buffer);
         sprite_asset_set_error(error_buffer, error_buffer_size, "failed to allocate sprite shader source");
         return SDL_OutOfMemory();
     }
     if (buffer.size > 0u)
         SDL_memcpy(copy, buffer.data, buffer.size);
     copy[buffer.size] = '\0';
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
 
     if (out_text != NULL)
         *out_text = copy;
@@ -157,16 +157,17 @@ static bool sprite_asset_load_text_source(const sdl3d_asset_resolver *assets, co
     return true;
 }
 
-static void sprite_asset_free_textures(sdl3d_texture2d *textures, int count)
+static void sprite_asset_free_textures(slayer3d_texture2d *textures, int count)
 {
     if (textures == NULL || count <= 0)
         return;
     for (int i = 0; i < count; ++i)
-        sdl3d_free_texture(&textures[i]);
+        slayer3d_free_texture(&textures[i]);
     SDL_free(textures);
 }
 
-static bool sprite_asset_copy_slice(const sdl3d_image *source, int x, int y, int width, int height, sdl3d_image *out)
+static bool sprite_asset_copy_slice(const slayer3d_image *source, int x, int y, int width, int height,
+                                    slayer3d_image *out)
 {
     const size_t bytes = (size_t)width * (size_t)height * 4u;
     Uint8 *pixels = (Uint8 *)SDL_malloc(bytes);
@@ -186,22 +187,22 @@ static bool sprite_asset_copy_slice(const sdl3d_image *source, int x, int y, int
     return true;
 }
 
-static bool sprite_asset_load_texture_slice(const sdl3d_image *source, int x, int y, int width, int height,
-                                            sdl3d_texture2d *out_texture)
+static bool sprite_asset_load_texture_slice(const slayer3d_image *source, int x, int y, int width, int height,
+                                            slayer3d_texture2d *out_texture)
 {
-    sdl3d_image slice;
+    slayer3d_image slice;
     SDL_zero(slice);
     if (!sprite_asset_copy_slice(source, x, y, width, height, &slice))
         return false;
 
-    const bool ok = sdl3d_create_texture_from_image(&slice, out_texture);
+    const bool ok = slayer3d_create_texture_from_image(&slice, out_texture);
     SDL_free(slice.pixels);
     SDL_zero(slice);
     return ok;
 }
 
-static bool sprite_asset_load_base_from_sheet(const sdl3d_image *sheet, const sdl3d_sprite_asset_source *source,
-                                              sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
+static bool sprite_asset_load_base_from_sheet(const slayer3d_image *sheet, const slayer3d_sprite_asset_source *source,
+                                              slayer3d_sprite_asset_runtime *out_sprite, char *error_buffer,
                                               int error_buffer_size)
 {
     for (int direction = 0; direction < source->direction_count; ++direction)
@@ -221,8 +222,9 @@ static bool sprite_asset_load_base_from_sheet(const sdl3d_image *sheet, const sd
     return true;
 }
 
-static bool sprite_asset_load_animation_from_sheet(const sdl3d_image *sheet, const sdl3d_sprite_asset_source *source,
-                                                   sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
+static bool sprite_asset_load_animation_from_sheet(const slayer3d_image *sheet,
+                                                   const slayer3d_sprite_asset_source *source,
+                                                   slayer3d_sprite_asset_runtime *out_sprite, char *error_buffer,
                                                    int error_buffer_size)
 {
     const int total_cells = source->frame_count * source->direction_count;
@@ -253,13 +255,13 @@ static bool sprite_asset_load_animation_from_sheet(const sdl3d_image *sheet, con
     return true;
 }
 
-static bool sprite_asset_load_textures_from_paths(const sdl3d_asset_resolver *assets, const char *const *paths,
-                                                  int count, sdl3d_texture2d *out_textures, char *error_buffer,
+static bool sprite_asset_load_textures_from_paths(const slayer3d_asset_resolver *assets, const char *const *paths,
+                                                  int count, slayer3d_texture2d *out_textures, char *error_buffer,
                                                   int error_buffer_size)
 {
     for (int i = 0; i < count; ++i)
     {
-        sdl3d_image image;
+        slayer3d_image image;
         SDL_zero(image);
         if (!sprite_asset_load_image(assets, paths[i], &image, error_buffer, error_buffer_size))
         {
@@ -267,25 +269,25 @@ static bool sprite_asset_load_textures_from_paths(const sdl3d_asset_resolver *as
             return false;
         }
 
-        if (!sdl3d_create_texture_from_image(&image, &out_textures[i]))
+        if (!slayer3d_create_texture_from_image(&image, &out_textures[i]))
         {
             sprite_asset_set_error(error_buffer, error_buffer_size, "failed to create sprite texture");
-            sdl3d_free_image(&image);
+            slayer3d_free_image(&image);
             return false;
         }
-        sdl3d_free_image(&image);
+        slayer3d_free_image(&image);
     }
     return true;
 }
 
-static void sprite_asset_assign_rotation_set(sdl3d_sprite_rotation_set *set, sdl3d_texture2d *textures, int count)
+static void sprite_asset_assign_rotation_set(slayer3d_sprite_rotation_set *set, slayer3d_texture2d *textures, int count)
 {
     SDL_zero(*set);
-    for (int i = 0; i < SDL3D_SPRITE_ROTATION_COUNT; ++i)
+    for (int i = 0; i < SLAYER3D_SPRITE_ROTATION_COUNT; ++i)
         set->frames[i] = (i < count) ? &textures[i] : NULL;
 }
 
-static bool sprite_asset_validate_source(const sdl3d_sprite_asset_source *source, char *error_buffer,
+static bool sprite_asset_validate_source(const slayer3d_sprite_asset_source *source, char *error_buffer,
                                          int error_buffer_size)
 {
     if (source == NULL)
@@ -315,12 +317,12 @@ static bool sprite_asset_validate_source(const sdl3d_sprite_asset_source *source
                                "sprite asset shader_vertex_path requires shader_fragment_path");
         return SDL_SetError("sprite asset shader_vertex_path requires shader_fragment_path");
     }
-    if (source->direction_count <= 0 || source->direction_count > SDL3D_SPRITE_ROTATION_COUNT)
+    if (source->direction_count <= 0 || source->direction_count > SLAYER3D_SPRITE_ROTATION_COUNT)
     {
         sprite_asset_set_error(error_buffer, error_buffer_size, "sprite direction count must be between 1 and 8");
         return SDL_SetError("sprite direction count must be between 1 and 8");
     }
-    if (source->kind == SDL3D_SPRITE_ASSET_SOURCE_SHEET)
+    if (source->kind == SLAYER3D_SPRITE_ASSET_SOURCE_SHEET)
     {
         if (source->sheet_path == NULL || source->sheet_path[0] == '\0' || source->frame_width <= 0 ||
             source->frame_height <= 0 || source->columns <= 0 || source->rows <= 0 || source->frame_count <= 0)
@@ -335,7 +337,7 @@ static bool sprite_asset_validate_source(const sdl3d_sprite_asset_source *source
             return SDL_SetError("sprite sheet dimensions do not cover all frames");
         }
     }
-    else if (source->kind == SDL3D_SPRITE_ASSET_SOURCE_FILES)
+    else if (source->kind == SLAYER3D_SPRITE_ASSET_SOURCE_FILES)
     {
         if (source->base_paths == NULL || source->frame_paths == NULL || source->frame_count <= 0)
         {
@@ -354,7 +356,7 @@ static bool sprite_asset_validate_source(const sdl3d_sprite_asset_source *source
 
 typedef struct sprite_asset_manifest
 {
-    sdl3d_sprite_asset_source source;
+    slayer3d_sprite_asset_source source;
     const char **asset_roots;
     int asset_root_count;
     const char **base_paths;
@@ -465,7 +467,7 @@ static bool sprite_asset_manifest_parse(yyjson_val *root, sprite_asset_manifest 
     }
 
     SDL_zero(manifest->source);
-    manifest->source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
+    manifest->source.kind = SLAYER3D_SPRITE_ASSET_SOURCE_SHEET;
     manifest->source.direction_count = 1;
     manifest->source.frame_count = 1;
     manifest->source.loop = true;
@@ -473,7 +475,7 @@ static bool sprite_asset_manifest_parse(yyjson_val *root, sprite_asset_manifest 
 
     if (SDL_strcmp(kind, "sheet") == 0)
     {
-        manifest->source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
+        manifest->source.kind = SLAYER3D_SPRITE_ASSET_SOURCE_SHEET;
         manifest->source.sheet_path = sprite_asset_manifest_get_string(root, "sheet_path", NULL);
         manifest->source.frame_width = sprite_asset_manifest_get_int(root, "frame_width", 0);
         manifest->source.frame_height = sprite_asset_manifest_get_int(root, "frame_height", 0);
@@ -485,7 +487,7 @@ static bool sprite_asset_manifest_parse(yyjson_val *root, sprite_asset_manifest 
     else if (SDL_strcmp(kind, "files") == 0)
     {
         yyjson_val *asset_roots = yyjson_obj_get(root, "asset_roots");
-        manifest->source.kind = SDL3D_SPRITE_ASSET_SOURCE_FILES;
+        manifest->source.kind = SLAYER3D_SPRITE_ASSET_SOURCE_FILES;
         if (asset_roots != NULL)
         {
             if (!sprite_asset_manifest_read_string_array(asset_roots, &manifest->asset_roots,
@@ -528,10 +530,10 @@ static bool sprite_asset_manifest_parse(yyjson_val *root, sprite_asset_manifest 
     return true;
 }
 
-bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_sprite_asset_source *source,
-                             sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer, int error_buffer_size)
+bool slayer3d_sprite_asset_load(const slayer3d_asset_resolver *assets, const slayer3d_sprite_asset_source *source,
+                                slayer3d_sprite_asset_runtime *out_sprite, char *error_buffer, int error_buffer_size)
 {
-    sdl3d_image sheet;
+    slayer3d_image sheet;
     SDL_zero(sheet);
 
     if (out_sprite != NULL)
@@ -557,14 +559,14 @@ bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_spr
                                        error_buffer, error_buffer_size))
         goto fail;
 
-    if (source->kind == SDL3D_SPRITE_ASSET_SOURCE_SHEET)
+    if (source->kind == SLAYER3D_SPRITE_ASSET_SOURCE_SHEET)
     {
         if (!sprite_asset_load_image(assets, source->sheet_path, &sheet, error_buffer, error_buffer_size))
             goto fail;
 
         out_sprite->base_texture_count = source->direction_count;
         out_sprite->base_textures =
-            (sdl3d_texture2d *)SDL_calloc((size_t)out_sprite->base_texture_count, sizeof(sdl3d_texture2d));
+            (slayer3d_texture2d *)SDL_calloc((size_t)out_sprite->base_texture_count, sizeof(slayer3d_texture2d));
         if (out_sprite->base_textures == NULL)
         {
             sprite_asset_set_error(error_buffer, error_buffer_size, "failed to allocate sprite base textures");
@@ -575,9 +577,9 @@ bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_spr
 
         out_sprite->animation_texture_count = source->frame_count * source->direction_count;
         out_sprite->animation_textures =
-            (sdl3d_texture2d *)SDL_calloc((size_t)out_sprite->animation_texture_count, sizeof(sdl3d_texture2d));
-        out_sprite->animation_frames =
-            (sdl3d_sprite_rotation_set *)SDL_calloc((size_t)source->frame_count, sizeof(sdl3d_sprite_rotation_set));
+            (slayer3d_texture2d *)SDL_calloc((size_t)out_sprite->animation_texture_count, sizeof(slayer3d_texture2d));
+        out_sprite->animation_frames = (slayer3d_sprite_rotation_set *)SDL_calloc((size_t)source->frame_count,
+                                                                                  sizeof(slayer3d_sprite_rotation_set));
         if (out_sprite->animation_textures == NULL || out_sprite->animation_frames == NULL)
         {
             sprite_asset_set_error(error_buffer, error_buffer_size, "failed to allocate sprite animation textures");
@@ -590,12 +592,12 @@ bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_spr
     {
         out_sprite->base_texture_count = source->direction_count;
         out_sprite->base_textures =
-            (sdl3d_texture2d *)SDL_calloc((size_t)out_sprite->base_texture_count, sizeof(sdl3d_texture2d));
+            (slayer3d_texture2d *)SDL_calloc((size_t)out_sprite->base_texture_count, sizeof(slayer3d_texture2d));
         out_sprite->animation_texture_count = source->frame_count * source->direction_count;
         out_sprite->animation_textures =
-            (sdl3d_texture2d *)SDL_calloc((size_t)out_sprite->animation_texture_count, sizeof(sdl3d_texture2d));
-        out_sprite->animation_frames =
-            (sdl3d_sprite_rotation_set *)SDL_calloc((size_t)source->frame_count, sizeof(sdl3d_sprite_rotation_set));
+            (slayer3d_texture2d *)SDL_calloc((size_t)out_sprite->animation_texture_count, sizeof(slayer3d_texture2d));
+        out_sprite->animation_frames = (slayer3d_sprite_rotation_set *)SDL_calloc((size_t)source->frame_count,
+                                                                                  sizeof(slayer3d_sprite_rotation_set));
         if (out_sprite->base_textures == NULL || out_sprite->animation_textures == NULL ||
             out_sprite->animation_frames == NULL)
         {
@@ -621,20 +623,20 @@ bool sdl3d_sprite_asset_load(const sdl3d_asset_resolver *assets, const sdl3d_spr
                                          source->direction_count);
     }
     out_sprite->animation_frame_count = source->frame_count;
-    sdl3d_free_image(&sheet);
+    slayer3d_free_image(&sheet);
     return true;
 
 fail:
-    sdl3d_free_image(&sheet);
-    sdl3d_sprite_asset_free(out_sprite);
+    slayer3d_free_image(&sheet);
+    slayer3d_sprite_asset_free(out_sprite);
     return false;
 }
 
-bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *out_sprite, char *error_buffer,
-                                  int error_buffer_size)
+bool slayer3d_sprite_asset_load_file(const char *path, slayer3d_sprite_asset_runtime *out_sprite, char *error_buffer,
+                                     int error_buffer_size)
 {
-    sdl3d_asset_resolver *assets = NULL;
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_resolver *assets = NULL;
+    slayer3d_asset_buffer buffer;
     yyjson_doc *doc = NULL;
     sprite_asset_manifest manifest;
     char *base_dir = NULL;
@@ -648,7 +650,7 @@ bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *
 
     base_dir = sprite_asset_path_dirname(path);
     file_name = sprite_asset_path_basename(path);
-    assets = sdl3d_asset_resolver_create();
+    assets = slayer3d_asset_resolver_create();
     SDL_zero(buffer);
     if (base_dir == NULL || file_name == NULL || assets == NULL)
     {
@@ -656,10 +658,10 @@ bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *
         goto done;
     }
 
-    if (!sdl3d_asset_resolver_mount_directory(assets, base_dir, error_buffer, error_buffer_size))
+    if (!slayer3d_asset_resolver_mount_directory(assets, base_dir, error_buffer, error_buffer_size))
         goto done;
 
-    if (!sdl3d_asset_resolver_read_file(assets, file_name, &buffer, error_buffer, error_buffer_size))
+    if (!slayer3d_asset_resolver_read_file(assets, file_name, &buffer, error_buffer, error_buffer_size))
         goto done;
 
     doc = yyjson_read(buffer.data, buffer.size, YYJSON_READ_NOFLAG);
@@ -685,7 +687,7 @@ bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *
             sprite_asset_set_error(error_buffer, error_buffer_size, "failed to resolve sprite manifest asset root");
             goto done;
         }
-        if (!sdl3d_asset_resolver_mount_directory(assets, resolved_root, error_buffer, error_buffer_size))
+        if (!slayer3d_asset_resolver_mount_directory(assets, resolved_root, error_buffer, error_buffer_size))
         {
             SDL_free(resolved_root);
             goto done;
@@ -693,13 +695,13 @@ bool sdl3d_sprite_asset_load_file(const char *path, sdl3d_sprite_asset_runtime *
         SDL_free(resolved_root);
     }
 
-    ok = sdl3d_sprite_asset_load(assets, &manifest.source, out_sprite, error_buffer, error_buffer_size);
+    ok = slayer3d_sprite_asset_load(assets, &manifest.source, out_sprite, error_buffer, error_buffer_size);
     sprite_asset_manifest_free(&manifest);
 
 done:
     yyjson_doc_free(doc);
-    sdl3d_asset_buffer_free(&buffer);
-    sdl3d_asset_resolver_destroy(assets);
+    slayer3d_asset_buffer_free(&buffer);
+    slayer3d_asset_resolver_destroy(assets);
     SDL_free(base_dir);
     SDL_free(file_name);
     if (!ok && out_sprite != NULL)
@@ -707,7 +709,7 @@ done:
     return ok;
 }
 
-void sdl3d_sprite_asset_free(sdl3d_sprite_asset_runtime *sprite)
+void slayer3d_sprite_asset_free(slayer3d_sprite_asset_runtime *sprite)
 {
     if (sprite == NULL)
         return;
@@ -722,30 +724,30 @@ void sdl3d_sprite_asset_free(sdl3d_sprite_asset_runtime *sprite)
     SDL_zero(*sprite);
 }
 
-const sdl3d_sprite_rotation_set *sdl3d_sprite_asset_base_rotations(const sdl3d_sprite_asset_runtime *sprite)
+const slayer3d_sprite_rotation_set *slayer3d_sprite_asset_base_rotations(const slayer3d_sprite_asset_runtime *sprite)
 {
     return sprite != NULL ? &sprite->base_rotations : NULL;
 }
 
-const sdl3d_sprite_rotation_set *sdl3d_sprite_asset_animation_frames(const sdl3d_sprite_asset_runtime *sprite)
+const slayer3d_sprite_rotation_set *slayer3d_sprite_asset_animation_frames(const slayer3d_sprite_asset_runtime *sprite)
 {
     return sprite != NULL ? sprite->animation_frames : NULL;
 }
 
-int sdl3d_sprite_asset_animation_frame_count(const sdl3d_sprite_asset_runtime *sprite)
+int slayer3d_sprite_asset_animation_frame_count(const slayer3d_sprite_asset_runtime *sprite)
 {
     return sprite != NULL ? sprite->animation_frame_count : 0;
 }
 
-void sdl3d_sprite_asset_apply_actor(sdl3d_sprite_actor *actor, const sdl3d_sprite_asset_runtime *sprite)
+void slayer3d_sprite_asset_apply_actor(slayer3d_sprite_actor *actor, const slayer3d_sprite_asset_runtime *sprite)
 {
     if (actor == NULL || sprite == NULL)
         return;
 
     actor->texture = sprite->base_texture_count > 0 ? sprite->base_textures : NULL;
-    actor->rotations = sdl3d_sprite_asset_base_rotations(sprite);
-    actor->animation_frames = sdl3d_sprite_asset_animation_frames(sprite);
-    actor->animation_frame_count = sdl3d_sprite_asset_animation_frame_count(sprite);
+    actor->rotations = slayer3d_sprite_asset_base_rotations(sprite);
+    actor->animation_frames = slayer3d_sprite_asset_animation_frames(sprite);
+    actor->animation_frame_count = slayer3d_sprite_asset_animation_frame_count(sprite);
     actor->animation_fps = sprite->fps;
     actor->animation_loop = sprite->loop;
     actor->lighting = sprite->lighting;

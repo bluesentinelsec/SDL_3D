@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "editor": {
     "display_name": "FPS Starter Templates",
     "description": "Project-agnostic sector/FPS authoring templates for controls, player setup, HUD, pickups, projectile pools, and common world mechanics.",

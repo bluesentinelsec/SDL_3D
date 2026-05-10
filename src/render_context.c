@@ -1,4 +1,4 @@
-#include "sdl3d/render_context.h"
+#include "slayer3d/render_context.h"
 
 #include <SDL3/SDL_cpuinfo.h>
 #include <SDL3/SDL_error.h>
@@ -7,17 +7,17 @@
 #include "gl_renderer.h"
 #include "rasterizer.h"
 #include "render_context_internal.h"
-#include "sdl3d/image.h"
+#include "slayer3d/image.h"
 #include "texture_internal.h"
 
-static const char *const SDL3D_BACKEND_ENV = "SDL3D_BACKEND";
-static const char *const SDL3D_DISABLE_PARALLEL_RASTERIZER_ENV = "SDL3D_DISABLE_PARALLEL_RASTERIZER";
-static const float SDL3D_DEFAULT_NEAR_PLANE = 0.01f;
-static const float SDL3D_DEFAULT_FAR_PLANE = 1000.0f;
+static const char *const SLAYER3D_BACKEND_ENV = "SLAYER3D_BACKEND";
+static const char *const SLAYER3D_DISABLE_PARALLEL_RASTERIZER_ENV = "SLAYER3D_DISABLE_PARALLEL_RASTERIZER";
+static const float SLAYER3D_DEFAULT_NEAR_PLANE = 0.01f;
+static const float SLAYER3D_DEFAULT_FAR_PLANE = 1000.0f;
 
-static bool sdl3d_parallel_rasterizer_disabled_by_environment(void)
+static bool slayer3d_parallel_rasterizer_disabled_by_environment(void)
 {
-    const char *value = SDL_getenv(SDL3D_DISABLE_PARALLEL_RASTERIZER_ENV);
+    const char *value = SDL_getenv(SLAYER3D_DISABLE_PARALLEL_RASTERIZER_ENV);
 
     if (value == NULL || *value == '\0')
     {
@@ -28,17 +28,17 @@ static bool sdl3d_parallel_rasterizer_disabled_by_environment(void)
            SDL_strcasecmp(value, "off") != 0;
 }
 
-static void sdl3d_try_create_parallel_rasterizer(sdl3d_render_context *context)
+static void slayer3d_try_create_parallel_rasterizer(slayer3d_render_context *context)
 {
     const int logical_cores = SDL_GetNumLogicalCPUCores();
 
-    if (context == NULL || logical_cores <= 1 || sdl3d_parallel_rasterizer_disabled_by_environment())
+    if (context == NULL || logical_cores <= 1 || slayer3d_parallel_rasterizer_disabled_by_environment())
     {
         return;
     }
 
-    sdl3d_parallel_rasterizer *parallel_rasterizer = NULL;
-    if (sdl3d_parallel_rasterizer_create(logical_cores - 1, &parallel_rasterizer))
+    slayer3d_parallel_rasterizer *parallel_rasterizer = NULL;
+    if (slayer3d_parallel_rasterizer_create(logical_cores - 1, &parallel_rasterizer))
     {
         context->parallel_rasterizer = parallel_rasterizer;
         return;
@@ -47,7 +47,7 @@ static void sdl3d_try_create_parallel_rasterizer(sdl3d_render_context *context)
     SDL_ClearError();
 }
 
-static bool sdl3d_parse_backend_name(const char *name, sdl3d_backend *backend)
+static bool slayer3d_parse_backend_name(const char *name, slayer3d_backend *backend)
 {
     if (name == NULL || backend == NULL)
     {
@@ -56,27 +56,27 @@ static bool sdl3d_parse_backend_name(const char *name, sdl3d_backend *backend)
 
     if (SDL_strcasecmp(name, "auto") == 0)
     {
-        *backend = SDL3D_BACKEND_AUTO;
+        *backend = SLAYER3D_BACKEND_AUTO;
         return true;
     }
 
     if (SDL_strcasecmp(name, "software") == 0)
     {
-        *backend = SDL3D_BACKEND_SOFTWARE;
+        *backend = SLAYER3D_BACKEND_SOFTWARE;
         return true;
     }
 
     if (SDL_strcasecmp(name, "opengl") == 0 || SDL_strcasecmp(name, "gl") == 0 || SDL_strcasecmp(name, "gpu") == 0)
     {
-        *backend = SDL3D_BACKEND_OPENGL;
+        *backend = SLAYER3D_BACKEND_OPENGL;
         return true;
     }
 
-    return SDL_SetError("Unsupported SDL3D backend override: %s", name);
+    return SDL_SetError("Unsupported SLAYER3D backend override: %s", name);
 }
 
-static bool sdl3d_resolve_backend(sdl3d_backend requested_backend, bool allow_backend_fallback,
-                                  sdl3d_backend *resolved_backend)
+static bool slayer3d_resolve_backend(slayer3d_backend requested_backend, bool allow_backend_fallback,
+                                     slayer3d_backend *resolved_backend)
 {
     if (resolved_backend == NULL)
     {
@@ -85,20 +85,20 @@ static bool sdl3d_resolve_backend(sdl3d_backend requested_backend, bool allow_ba
 
     switch (requested_backend)
     {
-    case SDL3D_BACKEND_AUTO:
-    case SDL3D_BACKEND_SOFTWARE:
-        *resolved_backend = SDL3D_BACKEND_SOFTWARE;
+    case SLAYER3D_BACKEND_AUTO:
+    case SLAYER3D_BACKEND_SOFTWARE:
+        *resolved_backend = SLAYER3D_BACKEND_SOFTWARE;
         return true;
-    case SDL3D_BACKEND_OPENGL:
+    case SLAYER3D_BACKEND_OPENGL:
         (void)allow_backend_fallback;
-        *resolved_backend = SDL3D_BACKEND_OPENGL;
+        *resolved_backend = SLAYER3D_BACKEND_OPENGL;
         return true;
     default:
-        return SDL_SetError("Unknown SDL3D backend value: %d", (int)requested_backend);
+        return SDL_SetError("Unknown SLAYER3D backend value: %d", (int)requested_backend);
     }
 }
 
-void sdl3d_init_render_context_config(sdl3d_render_context_config *config)
+void slayer3d_init_render_context_config(slayer3d_render_context_config *config)
 {
     if (config == NULL)
     {
@@ -106,47 +106,47 @@ void sdl3d_init_render_context_config(sdl3d_render_context_config *config)
         return;
     }
 
-    config->backend = SDL3D_BACKEND_AUTO;
+    config->backend = SLAYER3D_BACKEND_AUTO;
     config->allow_backend_fallback = true;
     config->logical_width = 0;
     config->logical_height = 0;
     config->logical_presentation = SDL_LOGICAL_PRESENTATION_STRETCH;
 }
 
-const char *sdl3d_get_backend_name(sdl3d_backend backend)
+const char *slayer3d_get_backend_name(slayer3d_backend backend)
 {
     switch (backend)
     {
-    case SDL3D_BACKEND_AUTO:
+    case SLAYER3D_BACKEND_AUTO:
         return "auto";
-    case SDL3D_BACKEND_SOFTWARE:
+    case SLAYER3D_BACKEND_SOFTWARE:
         return "software";
-    case SDL3D_BACKEND_OPENGL:
+    case SLAYER3D_BACKEND_OPENGL:
         return "opengl";
     default:
         return "unknown";
     }
 }
 
-bool sdl3d_get_backend_override_from_environment(sdl3d_backend *backend)
+bool slayer3d_get_backend_override_from_environment(slayer3d_backend *backend)
 {
-    const char *value = SDL_getenv(SDL3D_BACKEND_ENV);
+    const char *value = SDL_getenv(SLAYER3D_BACKEND_ENV);
 
     if (value == NULL || *value == '\0')
     {
         return false;
     }
 
-    return sdl3d_parse_backend_name(value, backend);
+    return slayer3d_parse_backend_name(value, backend);
 }
 
-bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, const sdl3d_render_context_config *config,
-                                 sdl3d_render_context **out_context)
+bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
+                                    const slayer3d_render_context_config *config, slayer3d_render_context **out_context)
 {
-    sdl3d_render_context_config local_config;
-    sdl3d_backend requested_backend;
-    sdl3d_backend resolved_backend = SDL3D_BACKEND_SOFTWARE;
-    sdl3d_render_context *context;
+    slayer3d_render_context_config local_config;
+    slayer3d_backend requested_backend;
+    slayer3d_backend resolved_backend = SLAYER3D_BACKEND_SOFTWARE;
+    slayer3d_render_context *context;
     const char *env_backend_name;
     int render_width;
     int render_height;
@@ -159,7 +159,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     }
 
     if (renderer == NULL &&
-        (config == NULL || config->backend == SDL3D_BACKEND_AUTO || config->backend == SDL3D_BACKEND_SOFTWARE))
+        (config == NULL || config->backend == SLAYER3D_BACKEND_AUTO || config->backend == SLAYER3D_BACKEND_SOFTWARE))
     {
         return SDL_InvalidParamError("renderer");
     }
@@ -169,10 +169,10 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
         return SDL_InvalidParamError("out_context");
     }
 
-    local_config = (config != NULL) ? *config : (sdl3d_render_context_config){0};
+    local_config = (config != NULL) ? *config : (slayer3d_render_context_config){0};
     if (config == NULL)
     {
-        sdl3d_init_render_context_config(&local_config);
+        slayer3d_init_render_context_config(&local_config);
     }
 
     if ((local_config.logical_width < 0) || (local_config.logical_height < 0))
@@ -186,16 +186,16 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     }
 
     requested_backend = local_config.backend;
-    env_backend_name = SDL_getenv(SDL3D_BACKEND_ENV);
+    env_backend_name = SDL_getenv(SLAYER3D_BACKEND_ENV);
     if (env_backend_name != NULL && *env_backend_name != '\0')
     {
-        if (!sdl3d_parse_backend_name(env_backend_name, &requested_backend))
+        if (!slayer3d_parse_backend_name(env_backend_name, &requested_backend))
         {
             return false;
         }
     }
 
-    if (!sdl3d_resolve_backend(requested_backend, local_config.allow_backend_fallback, &resolved_backend))
+    if (!slayer3d_resolve_backend(requested_backend, local_config.allow_backend_fallback, &resolved_backend))
     {
         return false;
     }
@@ -243,7 +243,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
         return SDL_OutOfMemory();
     }
 
-    if (resolved_backend == SDL3D_BACKEND_SOFTWARE)
+    if (resolved_backend == SLAYER3D_BACKEND_SOFTWARE)
     {
         context->color_texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_STREAMING,
                                                    render_width, render_height);
@@ -283,7 +283,7 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     else
     {
         /* GL backend: create OpenGL context and compile shaders. */
-        context->gl = sdl3d_gl_create(window, render_width, render_height);
+        context->gl = slayer3d_gl_create(window, render_width, render_height);
         if (context->gl == NULL)
         {
             SDL_free(context);
@@ -298,19 +298,19 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->backend = resolved_backend;
 
     /* Initialize the backend dispatch table. */
-    if (resolved_backend == SDL3D_BACKEND_OPENGL)
+    if (resolved_backend == SLAYER3D_BACKEND_OPENGL)
     {
-        sdl3d_gl_backend_init(&context->backend_iface);
+        slayer3d_gl_backend_init(&context->backend_iface);
     }
     else
     {
-        sdl3d_sw_backend_init(&context->backend_iface);
+        slayer3d_sw_backend_init(&context->backend_iface);
     }
 
     context->width = render_width;
     context->height = render_height;
-    context->near_plane = SDL3D_DEFAULT_NEAR_PLANE;
-    context->far_plane = SDL3D_DEFAULT_FAR_PLANE;
+    context->near_plane = SLAYER3D_DEFAULT_NEAR_PLANE;
+    context->far_plane = SLAYER3D_DEFAULT_FAR_PLANE;
     context->in_mode_3d = false;
     context->model_stack = NULL;
     context->model_stack_depth = 0;
@@ -319,12 +319,12 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->wireframe_enabled = false;
     context->scissor_enabled = false;
     context->scissor_rect = (SDL_Rect){0, 0, render_width, render_height};
-    context->model = sdl3d_mat4_identity();
-    context->view = sdl3d_mat4_identity();
-    context->projection = sdl3d_mat4_identity();
-    context->view_projection = sdl3d_mat4_identity();
-    context->model_view_projection = sdl3d_mat4_identity();
-    context->shading_mode = SDL3D_SHADING_UNLIT;
+    context->model = slayer3d_mat4_identity();
+    context->view = slayer3d_mat4_identity();
+    context->projection = slayer3d_mat4_identity();
+    context->view_projection = slayer3d_mat4_identity();
+    context->model_view_projection = slayer3d_mat4_identity();
+    context->shading_mode = SLAYER3D_SHADING_UNLIT;
     context->light_count = 0;
     context->ambient[0] = 0.03f;
     context->ambient[1] = 0.03f;
@@ -332,31 +332,31 @@ bool sdl3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer, con
     context->bloom_enabled = true;
     context->ssao_enabled = true;
     context->point_shadows_enabled = true;
-    context->fog.mode = SDL3D_FOG_NONE;
-    context->tonemap_mode = SDL3D_TONEMAP_NONE;
+    context->fog.mode = SLAYER3D_FOG_NONE;
+    context->tonemap_mode = SLAYER3D_TONEMAP_NONE;
     SDL_memset(context->shadow_depth, 0, sizeof(context->shadow_depth));
     SDL_memset(context->shadow_enabled, 0, sizeof(context->shadow_enabled));
     context->shadow_bias = 0.005f;
-    context->uv_mode = SDL3D_UV_PERSPECTIVE;
-    context->fog_eval = SDL3D_FOG_EVAL_FRAGMENT;
+    context->uv_mode = SLAYER3D_UV_PERSPECTIVE;
+    context->fog_eval = SLAYER3D_FOG_EVAL_FRAGMENT;
     context->vertex_snap = false;
     context->vertex_snap_precision = 1;
     context->color_quantize = false;
     context->color_depth = 0;
-    context->display_profile = SDL3D_DISPLAY_PROFILE_MODERN;
+    context->display_profile = SLAYER3D_DISPLAY_PROFILE_MODERN;
     context->display_width = 0;
     context->display_height = 0;
-    context->display_filter = SDL3D_DISPLAY_FILTER_LINEAR;
-    if (context->backend == SDL3D_BACKEND_SOFTWARE)
+    context->display_filter = SLAYER3D_DISPLAY_FILTER_LINEAR;
+    if (context->backend == SLAYER3D_BACKEND_SOFTWARE)
     {
-        sdl3d_try_create_parallel_rasterizer(context);
+        slayer3d_try_create_parallel_rasterizer(context);
     }
 
     *out_context = context;
     return true;
 }
 
-void sdl3d_destroy_render_context(sdl3d_render_context *context)
+void slayer3d_destroy_render_context(slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -370,27 +370,27 @@ void sdl3d_destroy_render_context(sdl3d_render_context *context)
     }
 
     /* Shared cleanup. */
-    sdl3d_texture_cache_destroy(context->texture_cache);
+    slayer3d_texture_cache_destroy(context->texture_cache);
     SDL_free(context->model_stack);
-    for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
+    for (int i = 0; i < SLAYER3D_MAX_LIGHTS; ++i)
     {
         SDL_free(context->shadow_depth[i]);
     }
     SDL_free(context);
 }
 
-sdl3d_backend sdl3d_get_render_context_backend(const sdl3d_render_context *context)
+slayer3d_backend slayer3d_get_render_context_backend(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
         SDL_InvalidParamError("context");
-        return SDL3D_BACKEND_AUTO;
+        return SLAYER3D_BACKEND_AUTO;
     }
 
     return context->backend;
 }
 
-int sdl3d_get_render_context_width(const sdl3d_render_context *context)
+int slayer3d_get_render_context_width(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -401,7 +401,7 @@ int sdl3d_get_render_context_width(const sdl3d_render_context *context)
     return context->width;
 }
 
-int sdl3d_get_render_context_height(const sdl3d_render_context *context)
+int slayer3d_get_render_context_height(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -412,7 +412,7 @@ int sdl3d_get_render_context_height(const sdl3d_render_context *context)
     return context->height;
 }
 
-bool sdl3d_clear_render_context(sdl3d_render_context *context, sdl3d_color color)
+bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color)
 {
     if (context == NULL)
     {
@@ -422,7 +422,7 @@ bool sdl3d_clear_render_context(sdl3d_render_context *context, sdl3d_color color
     return context->backend_iface.clear(context, color);
 }
 
-bool sdl3d_clear_render_context_rect(sdl3d_render_context *context, const SDL_Rect *rect, sdl3d_color color)
+bool slayer3d_clear_render_context_rect(slayer3d_render_context *context, const SDL_Rect *rect, slayer3d_color color)
 {
     if (context == NULL)
     {
@@ -437,12 +437,12 @@ bool sdl3d_clear_render_context_rect(sdl3d_render_context *context, const SDL_Re
         return SDL_SetError("Clear rect dimensions must be non-negative.");
     }
 
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_framebuffer_clear_rect(&framebuffer, rect, color, 1.0f);
+    slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
+    slayer3d_framebuffer_clear_rect(&framebuffer, rect, color, 1.0f);
     return true;
 }
 
-bool sdl3d_set_scissor_rect(sdl3d_render_context *context, const SDL_Rect *rect)
+bool slayer3d_set_scissor_rect(slayer3d_render_context *context, const SDL_Rect *rect)
 {
     if (context == NULL)
     {
@@ -509,7 +509,7 @@ bool sdl3d_set_scissor_rect(sdl3d_render_context *context, const SDL_Rect *rect)
     return true;
 }
 
-bool sdl3d_is_scissor_enabled(const sdl3d_render_context *context)
+bool slayer3d_is_scissor_enabled(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -520,7 +520,7 @@ bool sdl3d_is_scissor_enabled(const sdl3d_render_context *context)
     return context->scissor_enabled;
 }
 
-bool sdl3d_get_scissor_rect(const sdl3d_render_context *context, SDL_Rect *out_rect)
+bool slayer3d_get_scissor_rect(const slayer3d_render_context *context, SDL_Rect *out_rect)
 {
     if (context == NULL)
     {
@@ -539,7 +539,7 @@ bool sdl3d_get_scissor_rect(const sdl3d_render_context *context, SDL_Rect *out_r
     return true;
 }
 
-bool sdl3d_present_render_context(sdl3d_render_context *context)
+bool slayer3d_present_render_context(slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -553,7 +553,7 @@ bool sdl3d_present_render_context(sdl3d_render_context *context)
 /* High-level window/context API                                       */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_init_window_config(sdl3d_window_config *config)
+void slayer3d_init_window_config(slayer3d_window_config *config)
 {
     if (config == NULL)
     {
@@ -564,26 +564,26 @@ void sdl3d_init_window_config(sdl3d_window_config *config)
     config->height = 720;
     config->logical_width = 1280;
     config->logical_height = 720;
-    config->title = "SDL3D";
+    config->title = "SLAYER3D";
     config->icon_path = NULL;
-    config->backend = SDL3D_BACKEND_AUTO;
+    config->backend = SLAYER3D_BACKEND_AUTO;
     config->allow_backend_fallback = true;
-    config->display_mode = SDL3D_WINDOW_MODE_WINDOWED;
+    config->display_mode = SLAYER3D_WINDOW_MODE_WINDOWED;
     config->vsync = true;
     config->maximized = false;
     config->resizable = true;
 }
 
-static void sdl3d_apply_window_icon(SDL_Window *window, const char *icon_path)
+static void slayer3d_apply_window_icon(SDL_Window *window, const char *icon_path)
 {
     if (window == NULL || icon_path == NULL || icon_path[0] == '\0')
         return;
 
-    sdl3d_image icon;
+    slayer3d_image icon;
     SDL_zero(icon);
-    if (!sdl3d_load_image_from_file(icon_path, &icon))
+    if (!slayer3d_load_image_from_file(icon_path, &icon))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window icon load failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D window icon load failed: %s", SDL_GetError());
         SDL_ClearError();
         return;
     }
@@ -597,40 +597,40 @@ static void sdl3d_apply_window_icon(SDL_Window *window, const char *icon_path)
     }
     else
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window icon surface creation failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D window icon surface creation failed: %s", SDL_GetError());
         SDL_ClearError();
     }
-    sdl3d_free_image(&icon);
+    slayer3d_free_image(&icon);
 }
 
-static const char *sdl3d_window_mode_name(sdl3d_window_mode mode)
+static const char *slayer3d_window_mode_name(slayer3d_window_mode mode)
 {
     switch (mode)
     {
-    case SDL3D_WINDOW_MODE_WINDOWED:
+    case SLAYER3D_WINDOW_MODE_WINDOWED:
         return "windowed";
-    case SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE:
+    case SLAYER3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE:
         return "fullscreen_exclusive";
-    case SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS:
+    case SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS:
         return "fullscreen_borderless";
-    case SDL3D_WINDOW_MODE_DEFAULT:
+    case SLAYER3D_WINDOW_MODE_DEFAULT:
     default:
         return "default";
     }
 }
 
-static bool sdl3d_apply_window_mode(SDL_Window *window, sdl3d_window_mode mode)
+static bool slayer3d_apply_window_mode(SDL_Window *window, slayer3d_window_mode mode)
 {
     if (window == NULL)
         return SDL_InvalidParamError("window");
 
-    if (mode == SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS)
+    if (mode == SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS)
     {
         if (!SDL_SetWindowFullscreenMode(window, NULL))
             return false;
         return SDL_SetWindowFullscreen(window, true);
     }
-    else if (mode == SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE)
+    else if (mode == SLAYER3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE)
     {
         SDL_DisplayID display = SDL_GetDisplayForWindow(window);
         const SDL_DisplayMode *desktop = display != 0 ? SDL_GetDesktopDisplayMode(display) : NULL;
@@ -644,24 +644,24 @@ static bool sdl3d_apply_window_mode(SDL_Window *window, sdl3d_window_mode mode)
     return SDL_SetWindowFullscreen(window, false);
 }
 
-static bool sdl3d_apply_context_vsync(sdl3d_render_context *context, bool vsync)
+static bool slayer3d_apply_context_vsync(slayer3d_render_context *context, bool vsync)
 {
     if (context == NULL)
         return SDL_InvalidParamError("context");
-    if (context->backend == SDL3D_BACKEND_OPENGL)
+    if (context->backend == SLAYER3D_BACKEND_OPENGL)
         return SDL_GL_SetSwapInterval(vsync ? 1 : 0);
     if (context->renderer != NULL)
         return SDL_SetRenderVSync(context->renderer, vsync ? 1 : 0);
     return true;
 }
 
-static bool sdl3d_get_context_vsync(const sdl3d_render_context *context, int *out_interval)
+static bool slayer3d_get_context_vsync(const slayer3d_render_context *context, int *out_interval)
 {
     if (context == NULL)
         return SDL_InvalidParamError("context");
     if (out_interval == NULL)
         return SDL_InvalidParamError("out_interval");
-    if (context->backend == SDL3D_BACKEND_OPENGL)
+    if (context->backend == SLAYER3D_BACKEND_OPENGL)
         return SDL_GL_GetSwapInterval(out_interval);
     if (context->renderer != NULL)
         return SDL_GetRenderVSync(context->renderer, out_interval);
@@ -670,21 +670,22 @@ static bool sdl3d_get_context_vsync(const sdl3d_render_context *context, int *ou
     return true;
 }
 
-static const char *sdl3d_actual_window_mode_name(SDL_Window *window)
+static const char *slayer3d_actual_window_mode_name(SDL_Window *window)
 {
     if (window == NULL || (SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN) == 0)
         return "windowed";
     return SDL_GetWindowFullscreenMode(window) == NULL ? "fullscreen_borderless" : "fullscreen_exclusive";
 }
 
-bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_window, sdl3d_render_context **out_context)
+bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **out_window,
+                            slayer3d_render_context **out_context)
 {
-    sdl3d_window_config local;
+    slayer3d_window_config local;
     SDL_Window *window = NULL;
     SDL_Renderer *renderer = NULL;
-    sdl3d_render_context *context = NULL;
-    sdl3d_render_context_config rcfg;
-    sdl3d_backend resolved = SDL3D_BACKEND_SOFTWARE;
+    slayer3d_render_context *context = NULL;
+    slayer3d_render_context_config rcfg;
+    slayer3d_backend resolved = SLAYER3D_BACKEND_SOFTWARE;
 
     if (out_window == NULL || out_context == NULL)
     {
@@ -699,7 +700,7 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     }
     else
     {
-        sdl3d_init_window_config(&local);
+        slayer3d_init_window_config(&local);
     }
 
     if (local.width <= 0)
@@ -711,12 +712,12 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     if (local.logical_height <= 0)
         local.logical_height = local.height;
     if (local.title == NULL)
-        local.title = "SDL3D";
-    if (local.display_mode == SDL3D_WINDOW_MODE_DEFAULT)
-        local.display_mode = SDL3D_WINDOW_MODE_WINDOWED;
+        local.title = "SLAYER3D";
+    if (local.display_mode == SLAYER3D_WINDOW_MODE_DEFAULT)
+        local.display_mode = SLAYER3D_WINDOW_MODE_WINDOWED;
 
     /* Resolve which backend we'll actually use. */
-    if (!sdl3d_resolve_backend(local.backend, local.allow_backend_fallback, &resolved))
+    if (!slayer3d_resolve_backend(local.backend, local.allow_backend_fallback, &resolved))
     {
         return false;
     }
@@ -728,7 +729,7 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     if (local.maximized)
         flags |= SDL_WINDOW_MAXIMIZED;
 
-    if (resolved == SDL3D_BACKEND_OPENGL)
+    if (resolved == SLAYER3D_BACKEND_OPENGL)
     {
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -743,15 +744,15 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
     {
         return false;
     }
-    sdl3d_apply_window_icon(window, local.icon_path);
-    if (!sdl3d_apply_window_mode(window, local.display_mode))
+    slayer3d_apply_window_icon(window, local.icon_path);
+    if (!slayer3d_apply_window_mode(window, local.display_mode))
     {
         SDL_DestroyWindow(window);
         return false;
     }
 
     /* Software backend needs an SDL_Renderer; GL does not. */
-    if (resolved != SDL3D_BACKEND_OPENGL)
+    if (resolved != SLAYER3D_BACKEND_OPENGL)
     {
         renderer = SDL_CreateRenderer(window, NULL);
         if (renderer == NULL)
@@ -761,19 +762,19 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
         }
         if (!SDL_SetRenderVSync(renderer, local.vsync ? 1 : 0))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D renderer vsync request failed: %s", SDL_GetError());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D renderer vsync request failed: %s", SDL_GetError());
             SDL_ClearError();
         }
     }
 
-    sdl3d_init_render_context_config(&rcfg);
+    slayer3d_init_render_context_config(&rcfg);
     rcfg.backend = resolved;
     rcfg.allow_backend_fallback = false; /* already resolved */
     rcfg.logical_width = local.logical_width;
     rcfg.logical_height = local.logical_height;
     rcfg.logical_presentation = SDL_LOGICAL_PRESENTATION_LETTERBOX;
 
-    if (!sdl3d_create_render_context(window, renderer, &rcfg, &context))
+    if (!slayer3d_create_render_context(window, renderer, &rcfg, &context))
     {
         if (renderer != NULL)
             SDL_DestroyRenderer(renderer);
@@ -781,111 +782,112 @@ bool sdl3d_create_window(const sdl3d_window_config *config, SDL_Window **out_win
         return false;
     }
 
-    if (resolved == SDL3D_BACKEND_OPENGL && !SDL_GL_SetSwapInterval(local.vsync ? 1 : 0))
+    if (resolved == SLAYER3D_BACKEND_OPENGL && !SDL_GL_SetSwapInterval(local.vsync ? 1 : 0))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D GL vsync request failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL vsync request failed: %s", SDL_GetError());
         SDL_ClearError();
     }
 
     int actual_vsync = 0;
-    bool have_actual_vsync = sdl3d_get_context_vsync(context, &actual_vsync);
+    bool have_actual_vsync = slayer3d_get_context_vsync(context, &actual_vsync);
     if (!have_actual_vsync)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D vsync query failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D vsync query failed: %s", SDL_GetError());
         SDL_ClearError();
     }
 
     *out_window = window;
     *out_context = context;
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SDL3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d",
-                sdl3d_window_mode_name(local.display_mode), sdl3d_get_backend_name(resolved),
+                "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d",
+                slayer3d_window_mode_name(local.display_mode), slayer3d_get_backend_name(resolved),
                 local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height);
     return true;
 }
 
-bool sdl3d_apply_window_config(SDL_Window **window, sdl3d_render_context **context, const sdl3d_window_config *config)
+bool slayer3d_apply_window_config(SDL_Window **window, slayer3d_render_context **context,
+                                  const slayer3d_window_config *config)
 {
-    sdl3d_window_config local;
-    sdl3d_backend requested_backend = SDL3D_BACKEND_SOFTWARE;
-    sdl3d_backend current_backend = SDL3D_BACKEND_SOFTWARE;
+    slayer3d_window_config local;
+    slayer3d_backend requested_backend = SLAYER3D_BACKEND_SOFTWARE;
+    slayer3d_backend current_backend = SLAYER3D_BACKEND_SOFTWARE;
 
     if (window == NULL || context == NULL || *window == NULL || *context == NULL || config == NULL)
         return SDL_InvalidParamError("window/context/config");
 
     local = *config;
-    if (local.display_mode == SDL3D_WINDOW_MODE_DEFAULT)
-        local.display_mode = SDL3D_WINDOW_MODE_WINDOWED;
+    if (local.display_mode == SLAYER3D_WINDOW_MODE_DEFAULT)
+        local.display_mode = SLAYER3D_WINDOW_MODE_WINDOWED;
     if (local.title == NULL)
         local.title = SDL_GetWindowTitle(*window);
     if (local.width <= 0 || local.height <= 0)
         SDL_GetWindowSize(*window, &local.width, &local.height);
     if (local.logical_width <= 0)
-        local.logical_width = sdl3d_get_render_context_width(*context);
+        local.logical_width = slayer3d_get_render_context_width(*context);
     if (local.logical_height <= 0)
-        local.logical_height = sdl3d_get_render_context_height(*context);
+        local.logical_height = slayer3d_get_render_context_height(*context);
 
-    if (!sdl3d_resolve_backend(local.backend, local.allow_backend_fallback, &requested_backend))
+    if (!slayer3d_resolve_backend(local.backend, local.allow_backend_fallback, &requested_backend))
         return false;
-    current_backend = sdl3d_get_render_context_backend(*context);
+    current_backend = slayer3d_get_render_context_backend(*context);
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D applying window settings: mode=%s backend=%s vsync=%s",
-                sdl3d_window_mode_name(local.display_mode), sdl3d_get_backend_name(requested_backend),
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D applying window settings: mode=%s backend=%s vsync=%s",
+                slayer3d_window_mode_name(local.display_mode), slayer3d_get_backend_name(requested_backend),
                 local.vsync ? "on" : "off");
 
     if (requested_backend != current_backend)
     {
         SDL_Window *new_window = NULL;
-        sdl3d_render_context *new_context = NULL;
+        slayer3d_render_context *new_context = NULL;
         local.backend = requested_backend;
         local.allow_backend_fallback = false;
-        if (!sdl3d_create_window(&local, &new_window, &new_context))
+        if (!slayer3d_create_window(&local, &new_window, &new_context))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D backend switch failed, keeping current window: %s",
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D backend switch failed, keeping current window: %s",
                         SDL_GetError());
             return false;
         }
 
-        sdl3d_destroy_window(*window, *context);
+        slayer3d_destroy_window(*window, *context);
         *window = new_window;
         *context = new_context;
     }
     else
     {
-        if (!sdl3d_apply_window_mode(*window, local.display_mode))
+        if (!slayer3d_apply_window_mode(*window, local.display_mode))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D display mode apply failed: %s", SDL_GetError());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D display mode apply failed: %s", SDL_GetError());
             return false;
         }
-        if (!sdl3d_apply_context_vsync(*context, local.vsync))
+        if (!slayer3d_apply_context_vsync(*context, local.vsync))
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D vsync apply failed: %s", SDL_GetError());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D vsync apply failed: %s", SDL_GetError());
             SDL_ClearError();
         }
     }
 
     int actual_vsync = 0;
-    bool have_actual_vsync = sdl3d_get_context_vsync(*context, &actual_vsync);
+    bool have_actual_vsync = slayer3d_get_context_vsync(*context, &actual_vsync);
     if (!have_actual_vsync)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D vsync query failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D vsync query failed: %s", SDL_GetError());
         SDL_ClearError();
     }
 
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SDL3D window settings applied: requested_mode=%s actual_mode=%s backend=%s requested_vsync=%s "
+                "SLAYER3D window settings applied: requested_mode=%s actual_mode=%s backend=%s requested_vsync=%s "
                 "actual_vsync=%d",
-                sdl3d_window_mode_name(local.display_mode), sdl3d_actual_window_mode_name(*window),
-                sdl3d_get_backend_name(sdl3d_get_render_context_backend(*context)), local.vsync ? "on" : "off",
+                slayer3d_window_mode_name(local.display_mode), slayer3d_actual_window_mode_name(*window),
+                slayer3d_get_backend_name(slayer3d_get_render_context_backend(*context)), local.vsync ? "on" : "off",
                 have_actual_vsync ? actual_vsync : -999);
     return true;
 }
 
-void sdl3d_destroy_window(SDL_Window *window, sdl3d_render_context *context)
+void slayer3d_destroy_window(SDL_Window *window, slayer3d_render_context *context)
 {
     SDL_Renderer *renderer = context != NULL ? context->renderer : NULL;
 
-    sdl3d_destroy_render_context(context);
+    slayer3d_destroy_render_context(context);
 
     if (renderer != NULL)
     {
@@ -898,11 +900,11 @@ void sdl3d_destroy_window(SDL_Window *window, sdl3d_render_context *context)
     }
 }
 
-bool sdl3d_switch_backend(SDL_Window **window, sdl3d_render_context **context, sdl3d_backend new_backend)
+bool slayer3d_switch_backend(SDL_Window **window, slayer3d_render_context **context, slayer3d_backend new_backend)
 {
     int w, h;
     char title_buf[256];
-    sdl3d_window_config wcfg;
+    slayer3d_window_config wcfg;
 
     if (window == NULL || context == NULL)
     {
@@ -922,42 +924,42 @@ bool sdl3d_switch_backend(SDL_Window **window, sdl3d_render_context **context, s
     }
 
     /* Tear down old context and window. */
-    sdl3d_destroy_window(*window, *context);
+    slayer3d_destroy_window(*window, *context);
     *window = NULL;
     *context = NULL;
 
     /* Create fresh window + context with the new backend. */
-    sdl3d_init_window_config(&wcfg);
+    slayer3d_init_window_config(&wcfg);
     wcfg.width = w;
     wcfg.height = h;
-    wcfg.title = title_buf[0] ? title_buf : "SDL3D";
+    wcfg.title = title_buf[0] ? title_buf : "SLAYER3D";
     wcfg.backend = new_backend;
     wcfg.allow_backend_fallback = false;
     wcfg.resizable = true;
 
-    return sdl3d_create_window(&wcfg, window, context);
+    return slayer3d_create_window(&wcfg, window, context);
 }
 
 /* ------------------------------------------------------------------ */
 /* Feature queries                                                     */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_is_feature_available(const sdl3d_render_context *context, sdl3d_feature feature)
+bool slayer3d_is_feature_available(const slayer3d_render_context *context, slayer3d_feature feature)
 {
     if (context == NULL)
     {
         return false;
     }
 
-    bool is_gl = (context->backend == SDL3D_BACKEND_OPENGL);
+    bool is_gl = (context->backend == SLAYER3D_BACKEND_OPENGL);
 
     switch (feature)
     {
-    case SDL3D_FEATURE_BLOOM:
-    case SDL3D_FEATURE_SSAO:
-    case SDL3D_FEATURE_SHADOWS:
-    case SDL3D_FEATURE_IBL:
-    case SDL3D_FEATURE_POST_PROCESSING:
+    case SLAYER3D_FEATURE_BLOOM:
+    case SLAYER3D_FEATURE_SSAO:
+    case SLAYER3D_FEATURE_SHADOWS:
+    case SLAYER3D_FEATURE_IBL:
+    case SLAYER3D_FEATURE_POST_PROCESSING:
         return is_gl;
     default:
         return false;

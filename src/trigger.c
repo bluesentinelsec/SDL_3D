@@ -3,18 +3,18 @@
  * @brief Trigger implementation — condition detection and edge-based emission.
  */
 
-#include "sdl3d/trigger.h"
+#include "slayer3d/trigger.h"
 
 /* ================================================================== */
 /* Spatial: point-in-AABB                                             */
 /* ================================================================== */
 
-void sdl3d_trigger_test_spatial(sdl3d_trigger *trigger, sdl3d_vec3 point)
+void slayer3d_trigger_test_spatial(slayer3d_trigger *trigger, slayer3d_vec3 point)
 {
-    if (trigger == NULL || !trigger->enabled || trigger->type != SDL3D_TRIGGER_SPATIAL)
+    if (trigger == NULL || !trigger->enabled || trigger->type != SLAYER3D_TRIGGER_SPATIAL)
         return;
 
-    const sdl3d_bounding_box *z = &trigger->spatial.zone;
+    const slayer3d_bounding_box *z = &trigger->spatial.zone;
     trigger->active = (point.x >= z->min.x && point.x <= z->max.x && point.y >= z->min.y && point.y <= z->max.y &&
                        point.z >= z->min.z && point.z <= z->max.z);
 }
@@ -23,29 +23,29 @@ void sdl3d_trigger_test_spatial(sdl3d_trigger *trigger, sdl3d_vec3 point)
 /* Property: numeric comparison                                       */
 /* ================================================================== */
 
-static bool compare_float(float value, sdl3d_compare_op op, float threshold)
+static bool compare_float(float value, slayer3d_compare_op op, float threshold)
 {
     switch (op)
     {
-    case SDL3D_CMP_EQ:
+    case SLAYER3D_CMP_EQ:
         return value == threshold;
-    case SDL3D_CMP_NE:
+    case SLAYER3D_CMP_NE:
         return value != threshold;
-    case SDL3D_CMP_LT:
+    case SLAYER3D_CMP_LT:
         return value < threshold;
-    case SDL3D_CMP_LE:
+    case SLAYER3D_CMP_LE:
         return value <= threshold;
-    case SDL3D_CMP_GT:
+    case SLAYER3D_CMP_GT:
         return value > threshold;
-    case SDL3D_CMP_GE:
+    case SLAYER3D_CMP_GE:
         return value >= threshold;
     }
     return false;
 }
 
-void sdl3d_trigger_test_property(sdl3d_trigger *trigger)
+void slayer3d_trigger_test_property(slayer3d_trigger *trigger)
 {
-    if (trigger == NULL || !trigger->enabled || trigger->type != SDL3D_TRIGGER_PROPERTY)
+    if (trigger == NULL || !trigger->enabled || trigger->type != SLAYER3D_TRIGGER_PROPERTY)
         return;
 
     if (trigger->property.source == NULL || trigger->property.key == NULL)
@@ -62,13 +62,13 @@ void sdl3d_trigger_test_property(sdl3d_trigger *trigger)
      * return false for the "missing" case.
      */
     float value =
-        sdl3d_properties_get_float(trigger->property.source, trigger->property.key, trigger->property.threshold);
+        slayer3d_properties_get_float(trigger->property.source, trigger->property.key, trigger->property.threshold);
 
     /*
      * If the key doesn't exist at all, the fallback equals the threshold.
      * For EQ that would incorrectly return true. Check existence explicitly.
      */
-    if (!sdl3d_properties_has(trigger->property.source, trigger->property.key))
+    if (!slayer3d_properties_has(trigger->property.source, trigger->property.key))
     {
         trigger->active = false;
         return;
@@ -81,9 +81,9 @@ void sdl3d_trigger_test_property(sdl3d_trigger *trigger)
 /* Signal: pulse activation                                           */
 /* ================================================================== */
 
-void sdl3d_trigger_activate_signal(sdl3d_trigger *trigger)
+void slayer3d_trigger_activate_signal(slayer3d_trigger *trigger)
 {
-    if (trigger == NULL || !trigger->enabled || trigger->type != SDL3D_TRIGGER_SIGNAL)
+    if (trigger == NULL || !trigger->enabled || trigger->type != SLAYER3D_TRIGGER_SIGNAL)
         return;
     trigger->active = true;
 }
@@ -92,7 +92,7 @@ void sdl3d_trigger_activate_signal(sdl3d_trigger *trigger)
 /* Evaluation: edge detection and emission                            */
 /* ================================================================== */
 
-void sdl3d_trigger_evaluate(sdl3d_trigger *trigger, sdl3d_signal_bus *bus)
+void slayer3d_trigger_evaluate(slayer3d_trigger *trigger, slayer3d_signal_bus *bus)
 {
     if (trigger == NULL || !trigger->enabled || bus == NULL)
         return;
@@ -101,28 +101,28 @@ void sdl3d_trigger_evaluate(sdl3d_trigger *trigger, sdl3d_signal_bus *bus)
 
     switch (trigger->edge)
     {
-    case SDL3D_TRIGGER_EDGE_ENTER:
+    case SLAYER3D_TRIGGER_EDGE_ENTER:
         should_fire = trigger->active && !trigger->was_active;
         break;
-    case SDL3D_TRIGGER_EDGE_EXIT:
+    case SLAYER3D_TRIGGER_EDGE_EXIT:
         should_fire = !trigger->active && trigger->was_active;
         break;
-    case SDL3D_TRIGGER_EDGE_BOTH:
+    case SLAYER3D_TRIGGER_EDGE_BOTH:
         should_fire = trigger->active != trigger->was_active;
         break;
-    case SDL3D_TRIGGER_LEVEL:
+    case SLAYER3D_TRIGGER_LEVEL:
         should_fire = trigger->active;
         break;
     }
 
     if (should_fire)
-        sdl3d_signal_emit(bus, trigger->emit_signal_id, NULL);
+        slayer3d_signal_emit(bus, trigger->emit_signal_id, NULL);
 
     trigger->was_active = trigger->active;
 
     /* Signal triggers are pulse-based: reset active after evaluation so
      * they require a fresh activation each cycle. */
-    if (trigger->type == SDL3D_TRIGGER_SIGNAL)
+    if (trigger->type == SLAYER3D_TRIGGER_SIGNAL)
         trigger->active = false;
 }
 
@@ -130,7 +130,7 @@ void sdl3d_trigger_evaluate(sdl3d_trigger *trigger, sdl3d_signal_bus *bus)
 /* Reset                                                              */
 /* ================================================================== */
 
-void sdl3d_trigger_reset(sdl3d_trigger *trigger)
+void slayer3d_trigger_reset(slayer3d_trigger *trigger)
 {
     if (trigger == NULL)
         return;

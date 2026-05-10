@@ -3,7 +3,7 @@
  * @brief Embedded Lua scripting runtime implementation.
  */
 
-#include "sdl3d/script.h"
+#include "slayer3d/script.h"
 
 #include <SDL3/SDL_stdinc.h>
 
@@ -12,7 +12,7 @@
 #include "lualib.h"
 #include "script_internal.h"
 
-struct sdl3d_script_engine
+struct slayer3d_script_engine
 {
     lua_State *lua;
 };
@@ -25,9 +25,9 @@ static void set_script_error(char *buffer, int buffer_size, const char *message)
     }
 }
 
-static bool push_module_table(lua_State *lua, sdl3d_script_ref module_ref)
+static bool push_module_table(lua_State *lua, slayer3d_script_ref module_ref)
 {
-    if (lua == NULL || module_ref == SDL3D_SCRIPT_REF_INVALID)
+    if (lua == NULL || module_ref == SLAYER3D_SCRIPT_REF_INVALID)
     {
         return false;
     }
@@ -104,9 +104,9 @@ static bool publish_module_global(lua_State *lua, const char *module_name)
     return true;
 }
 
-sdl3d_script_engine *sdl3d_script_engine_create(void)
+slayer3d_script_engine *slayer3d_script_engine_create(void)
 {
-    sdl3d_script_engine *engine = (sdl3d_script_engine *)SDL_calloc(1, sizeof(*engine));
+    slayer3d_script_engine *engine = (slayer3d_script_engine *)SDL_calloc(1, sizeof(*engine));
     if (engine == NULL)
     {
         return NULL;
@@ -132,7 +132,7 @@ sdl3d_script_engine *sdl3d_script_engine_create(void)
     return engine;
 }
 
-void sdl3d_script_engine_destroy(sdl3d_script_engine *engine)
+void slayer3d_script_engine_destroy(slayer3d_script_engine *engine)
 {
     if (engine == NULL)
     {
@@ -146,8 +146,8 @@ void sdl3d_script_engine_destroy(sdl3d_script_engine *engine)
     SDL_free(engine);
 }
 
-bool sdl3d_script_engine_load_file(sdl3d_script_engine *engine, const char *path, char *error_buffer,
-                                   int error_buffer_size)
+bool slayer3d_script_engine_load_file(slayer3d_script_engine *engine, const char *path, char *error_buffer,
+                                      int error_buffer_size)
 {
     if (engine == NULL || engine->lua == NULL || path == NULL || path[0] == '\0')
     {
@@ -166,12 +166,13 @@ bool sdl3d_script_engine_load_file(sdl3d_script_engine *engine, const char *path
     return true;
 }
 
-bool sdl3d_script_engine_load_module_file(sdl3d_script_engine *engine, const char *path, const char *module_name,
-                                          sdl3d_script_ref *out_module_ref, char *error_buffer, int error_buffer_size)
+bool slayer3d_script_engine_load_module_file(slayer3d_script_engine *engine, const char *path, const char *module_name,
+                                             slayer3d_script_ref *out_module_ref, char *error_buffer,
+                                             int error_buffer_size)
 {
     if (out_module_ref != NULL)
     {
-        *out_module_ref = SDL3D_SCRIPT_REF_INVALID;
+        *out_module_ref = SLAYER3D_SCRIPT_REF_INVALID;
     }
     if (engine == NULL || engine->lua == NULL || path == NULL || path[0] == '\0' || module_name == NULL ||
         module_name[0] == '\0' || out_module_ref == NULL)
@@ -207,7 +208,7 @@ bool sdl3d_script_engine_load_module_file(sdl3d_script_engine *engine, const cha
     *out_module_ref = luaL_ref(engine->lua, LUA_REGISTRYINDEX);
     if (*out_module_ref == LUA_NOREF || *out_module_ref == LUA_REFNIL)
     {
-        *out_module_ref = SDL3D_SCRIPT_REF_INVALID;
+        *out_module_ref = SLAYER3D_SCRIPT_REF_INVALID;
         set_script_error(error_buffer, error_buffer_size, "failed to store Lua module reference");
         return false;
     }
@@ -215,12 +216,13 @@ bool sdl3d_script_engine_load_module_file(sdl3d_script_engine *engine, const cha
     return true;
 }
 
-bool sdl3d_script_engine_load_module_buffer(sdl3d_script_engine *engine, const void *source, size_t source_size,
-                                            const char *chunk_name, const char *module_name,
-                                            sdl3d_script_ref *out_module_ref, char *error_buffer, int error_buffer_size)
+bool slayer3d_script_engine_load_module_buffer(slayer3d_script_engine *engine, const void *source, size_t source_size,
+                                               const char *chunk_name, const char *module_name,
+                                               slayer3d_script_ref *out_module_ref, char *error_buffer,
+                                               int error_buffer_size)
 {
     if (out_module_ref != NULL)
-        *out_module_ref = SDL3D_SCRIPT_REF_INVALID;
+        *out_module_ref = SLAYER3D_SCRIPT_REF_INVALID;
     if (engine == NULL || engine->lua == NULL || source == NULL || source_size == 0u || module_name == NULL ||
         module_name[0] == '\0' || out_module_ref == NULL)
     {
@@ -256,7 +258,7 @@ bool sdl3d_script_engine_load_module_buffer(sdl3d_script_engine *engine, const v
     *out_module_ref = luaL_ref(engine->lua, LUA_REGISTRYINDEX);
     if (*out_module_ref == LUA_NOREF || *out_module_ref == LUA_REFNIL)
     {
-        *out_module_ref = SDL3D_SCRIPT_REF_INVALID;
+        *out_module_ref = SLAYER3D_SCRIPT_REF_INVALID;
         set_script_error(error_buffer, error_buffer_size, "failed to store Lua module reference");
         return false;
     }
@@ -264,13 +266,13 @@ bool sdl3d_script_engine_load_module_buffer(sdl3d_script_engine *engine, const v
     return true;
 }
 
-bool sdl3d_script_engine_ref_module_function(sdl3d_script_engine *engine, sdl3d_script_ref module_ref,
-                                             const char *function_name, sdl3d_script_ref *out_function_ref,
-                                             char *error_buffer, int error_buffer_size)
+bool slayer3d_script_engine_ref_module_function(slayer3d_script_engine *engine, slayer3d_script_ref module_ref,
+                                                const char *function_name, slayer3d_script_ref *out_function_ref,
+                                                char *error_buffer, int error_buffer_size)
 {
     if (out_function_ref != NULL)
     {
-        *out_function_ref = SDL3D_SCRIPT_REF_INVALID;
+        *out_function_ref = SLAYER3D_SCRIPT_REF_INVALID;
     }
     if (engine == NULL || engine->lua == NULL || function_name == NULL || function_name[0] == '\0' ||
         out_function_ref == NULL || !push_module_table(engine->lua, module_ref))
@@ -307,7 +309,7 @@ bool sdl3d_script_engine_ref_module_function(sdl3d_script_engine *engine, sdl3d_
     *out_function_ref = luaL_ref(engine->lua, LUA_REGISTRYINDEX);
     if (*out_function_ref == LUA_NOREF || *out_function_ref == LUA_REFNIL)
     {
-        *out_function_ref = SDL3D_SCRIPT_REF_INVALID;
+        *out_function_ref = SLAYER3D_SCRIPT_REF_INVALID;
         set_script_error(error_buffer, error_buffer_size, "failed to store Lua function reference");
         return false;
     }
@@ -315,23 +317,23 @@ bool sdl3d_script_engine_ref_module_function(sdl3d_script_engine *engine, sdl3d_
     return true;
 }
 
-void sdl3d_script_engine_unref(sdl3d_script_engine *engine, sdl3d_script_ref ref)
+void slayer3d_script_engine_unref(slayer3d_script_engine *engine, slayer3d_script_ref ref)
 {
-    if (engine == NULL || engine->lua == NULL || ref == SDL3D_SCRIPT_REF_INVALID)
+    if (engine == NULL || engine->lua == NULL || ref == SLAYER3D_SCRIPT_REF_INVALID)
     {
         return;
     }
     luaL_unref(engine->lua, LUA_REGISTRYINDEX, ref);
 }
 
-lua_State *sdl3d_script_engine_lua_state(sdl3d_script_engine *engine)
+lua_State *slayer3d_script_engine_lua_state(slayer3d_script_engine *engine)
 {
     return engine != NULL ? engine->lua : NULL;
 }
 
-bool sdl3d_script_engine_push_ref(sdl3d_script_engine *engine, sdl3d_script_ref ref)
+bool slayer3d_script_engine_push_ref(slayer3d_script_engine *engine, slayer3d_script_ref ref)
 {
-    if (engine == NULL || engine->lua == NULL || ref == SDL3D_SCRIPT_REF_INVALID)
+    if (engine == NULL || engine->lua == NULL || ref == SLAYER3D_SCRIPT_REF_INVALID)
     {
         return false;
     }

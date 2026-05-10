@@ -1,4 +1,4 @@
-#include "sdl3d/drawing3d.h"
+#include "slayer3d/drawing3d.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_stdinc.h>
@@ -9,11 +9,11 @@
 
 #include "gl_renderer.h"
 #include "lighting_internal.h"
-#include "sdl3d/level.h"
+#include "slayer3d/level.h"
 
-static const int SDL3D_MODEL_STACK_INITIAL_CAPACITY = 8;
+static const int SLAYER3D_MODEL_STACK_INITIAL_CAPACITY = 8;
 
-static float sdl3d_clamp01(float value)
+static float slayer3d_clamp01(float value)
 {
     if (value <= 0.0f)
     {
@@ -26,7 +26,7 @@ static float sdl3d_clamp01(float value)
     return value;
 }
 
-static Uint8 sdl3d_color_channel_clamp(float value)
+static Uint8 slayer3d_color_channel_clamp(float value)
 {
     if (value <= 0.0f)
     {
@@ -39,7 +39,7 @@ static Uint8 sdl3d_color_channel_clamp(float value)
     return (Uint8)(value + 0.5f);
 }
 
-static float sdl3d_overlay_melt_column_random(Uint32 seed, int column)
+static float slayer3d_overlay_melt_column_random(Uint32 seed, int column)
 {
     Uint32 x = seed ^ (Uint32)column * 0x9E3779B9u;
     x ^= x >> 16;
@@ -50,8 +50,8 @@ static float sdl3d_overlay_melt_column_random(Uint32 seed, int column)
     return (float)x / 4294967295.0f;
 }
 
-static bool sdl3d_overlay_melt_sample(float u, float v, float progress, Uint32 seed, int columns, float *out_u,
-                                      float *out_v)
+static bool slayer3d_overlay_melt_sample(float u, float v, float progress, Uint32 seed, int columns, float *out_u,
+                                         float *out_v)
 {
     if (out_u == NULL || out_v == NULL)
     {
@@ -63,9 +63,9 @@ static bool sdl3d_overlay_melt_sample(float u, float v, float progress, Uint32 s
     }
 
     const int column = SDL_clamp((int)(u * (float)columns), 0, columns - 1);
-    const float rnd = sdl3d_overlay_melt_column_random(seed, column);
+    const float rnd = slayer3d_overlay_melt_column_random(seed, column);
     const float delay = rnd * 0.45f;
-    const float melt = sdl3d_clamp01((progress - delay) / 0.55f);
+    const float melt = slayer3d_clamp01((progress - delay) / 0.55f);
     const float wobble = (rnd - 0.5f) * 0.025f * melt;
     const float y_shift = melt * (1.05f + rnd * 0.6f);
 
@@ -74,9 +74,9 @@ static bool sdl3d_overlay_melt_sample(float u, float v, float progress, Uint32 s
     return true;
 }
 
-static sdl3d_vec4 sdl3d_color_to_modulate(sdl3d_color color)
+static slayer3d_vec4 slayer3d_color_to_modulate(slayer3d_color color)
 {
-    sdl3d_vec4 out;
+    slayer3d_vec4 out;
     out.x = (float)color.r / 255.0f;
     out.y = (float)color.g / 255.0f;
     out.z = (float)color.b / 255.0f;
@@ -84,24 +84,26 @@ static sdl3d_vec4 sdl3d_color_to_modulate(sdl3d_color color)
     return out;
 }
 
-static bool sdl3d_overlay_capture_scissor(const sdl3d_render_context *context, bool *out_enabled, SDL_Rect *out_rect)
+static bool slayer3d_overlay_capture_scissor(const slayer3d_render_context *context, bool *out_enabled,
+                                             SDL_Rect *out_rect)
 {
     if (!out_enabled || !out_rect)
     {
         return SDL_InvalidParamError("out_enabled");
     }
 
-    *out_enabled = sdl3d_is_scissor_enabled(context);
+    *out_enabled = slayer3d_is_scissor_enabled(context);
     if (*out_enabled)
     {
-        return sdl3d_get_scissor_rect(context, out_rect);
+        return slayer3d_get_scissor_rect(context, out_rect);
     }
 
     *out_rect = (SDL_Rect){0, 0, 0, 0};
     return true;
 }
 
-static SDL_Rect sdl3d_rect_overlay_intersect_scissor(SDL_Rect rect, bool scissor_enabled, const SDL_Rect *scissor_rect)
+static SDL_Rect slayer3d_rect_overlay_intersect_scissor(SDL_Rect rect, bool scissor_enabled,
+                                                        const SDL_Rect *scissor_rect)
 {
     if (!scissor_enabled || !scissor_rect)
     {
@@ -127,7 +129,7 @@ static SDL_Rect sdl3d_rect_overlay_intersect_scissor(SDL_Rect rect, bool scissor
     return rect;
 }
 
-static bool sdl3d_ensure_model_stack_capacity(sdl3d_render_context *context, int required_depth)
+static bool slayer3d_ensure_model_stack_capacity(slayer3d_render_context *context, int required_depth)
 {
     if (context->model_stack_capacity >= required_depth)
     {
@@ -137,7 +139,7 @@ static bool sdl3d_ensure_model_stack_capacity(sdl3d_render_context *context, int
     int new_capacity = context->model_stack_capacity;
     if (new_capacity <= 0)
     {
-        new_capacity = SDL3D_MODEL_STACK_INITIAL_CAPACITY;
+        new_capacity = SLAYER3D_MODEL_STACK_INITIAL_CAPACITY;
     }
 
     while (new_capacity < required_depth)
@@ -145,7 +147,8 @@ static bool sdl3d_ensure_model_stack_capacity(sdl3d_render_context *context, int
         new_capacity *= 2;
     }
 
-    sdl3d_mat4 *new_stack = (sdl3d_mat4 *)SDL_realloc(context->model_stack, (size_t)new_capacity * sizeof(*new_stack));
+    slayer3d_mat4 *new_stack =
+        (slayer3d_mat4 *)SDL_realloc(context->model_stack, (size_t)new_capacity * sizeof(*new_stack));
     if (new_stack == NULL)
     {
         return SDL_OutOfMemory();
@@ -161,7 +164,7 @@ static bool sdl3d_ensure_model_stack_capacity(sdl3d_render_context *context, int
  * sets context->frustum_planes_valid. Used by both the camera frustum
  * (begin_mode_3d) and the shadow-light frustum (begin_shadow_pass) so
  * actor and mesh culling work in shadow passes too. */
-void sdl3d_internal_extract_frustum_planes(sdl3d_render_context *context, sdl3d_mat4 view_projection)
+void slayer3d_internal_extract_frustum_planes(slayer3d_render_context *context, slayer3d_mat4 view_projection)
 {
     const float *m = view_projection.m;
     float raw[6][4] = {
@@ -193,21 +196,21 @@ void sdl3d_internal_extract_frustum_planes(sdl3d_render_context *context, sdl3d_
     context->frustum_planes_valid = true;
 }
 
-static void sdl3d_update_current_model_matrices(sdl3d_render_context *context)
+static void slayer3d_update_current_model_matrices(slayer3d_render_context *context)
 {
     if (context->model_stack_depth <= 0)
     {
-        context->model = sdl3d_mat4_identity();
+        context->model = slayer3d_mat4_identity();
     }
     else
     {
         context->model = context->model_stack[context->model_stack_depth - 1];
     }
 
-    context->model_view_projection = sdl3d_mat4_multiply(context->view_projection, context->model);
+    context->model_view_projection = slayer3d_mat4_multiply(context->view_projection, context->model);
 }
 
-bool sdl3d_begin_mode_3d(sdl3d_render_context *context, sdl3d_camera3d camera)
+bool slayer3d_begin_mode_3d(slayer3d_render_context *context, slayer3d_camera3d camera)
 {
     if (context == NULL)
     {
@@ -216,33 +219,33 @@ bool sdl3d_begin_mode_3d(sdl3d_render_context *context, sdl3d_camera3d camera)
 
     if (context->in_mode_3d)
     {
-        return SDL_SetError("sdl3d_begin_mode_3d called while already in 3D mode.");
+        return SDL_SetError("slayer3d_begin_mode_3d called while already in 3D mode.");
     }
 
-    if (!sdl3d_camera3d_compute_matrices(&camera, context->width, context->height, context->near_plane,
-                                         context->far_plane, &context->view, &context->projection))
+    if (!slayer3d_camera3d_compute_matrices(&camera, context->width, context->height, context->near_plane,
+                                            context->far_plane, &context->view, &context->projection))
     {
         return false;
     }
 
-    context->view_projection = sdl3d_mat4_multiply(context->projection, context->view);
-    if (!sdl3d_ensure_model_stack_capacity(context, 1))
+    context->view_projection = slayer3d_mat4_multiply(context->projection, context->view);
+    if (!slayer3d_ensure_model_stack_capacity(context, 1))
     {
         return false;
     }
 
     context->model_stack_depth = 1;
-    context->model_stack[0] = sdl3d_mat4_identity();
-    sdl3d_update_current_model_matrices(context);
+    context->model_stack[0] = slayer3d_mat4_identity();
+    slayer3d_update_current_model_matrices(context);
 
     /* Cache frustum planes once per frame so per-mesh culling is cheap. */
-    sdl3d_internal_extract_frustum_planes(context, context->view_projection);
+    slayer3d_internal_extract_frustum_planes(context, context->view_projection);
 
     context->in_mode_3d = true;
     return true;
 }
 
-bool sdl3d_end_mode_3d(sdl3d_render_context *context)
+bool slayer3d_end_mode_3d(slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -251,18 +254,18 @@ bool sdl3d_end_mode_3d(sdl3d_render_context *context)
 
     if (!context->in_mode_3d)
     {
-        return SDL_SetError("sdl3d_end_mode_3d called while not in 3D mode.");
+        return SDL_SetError("slayer3d_end_mode_3d called while not in 3D mode.");
     }
 
     context->in_mode_3d = false;
     context->frustum_planes_valid = false;
     context->model_stack_depth = 0;
-    context->model = sdl3d_mat4_identity();
+    context->model = slayer3d_mat4_identity();
     context->model_view_projection = context->view_projection;
     return true;
 }
 
-bool sdl3d_is_in_mode_3d(const sdl3d_render_context *context)
+bool slayer3d_is_in_mode_3d(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -271,7 +274,7 @@ bool sdl3d_is_in_mode_3d(const sdl3d_render_context *context)
     return context->in_mode_3d;
 }
 
-bool sdl3d_set_backface_culling_enabled(sdl3d_render_context *context, bool enabled)
+bool slayer3d_set_backface_culling_enabled(slayer3d_render_context *context, bool enabled)
 {
     if (context == NULL)
     {
@@ -282,7 +285,7 @@ bool sdl3d_set_backface_culling_enabled(sdl3d_render_context *context, bool enab
     return true;
 }
 
-bool sdl3d_is_backface_culling_enabled(const sdl3d_render_context *context)
+bool slayer3d_is_backface_culling_enabled(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -293,7 +296,7 @@ bool sdl3d_is_backface_culling_enabled(const sdl3d_render_context *context)
     return context->backface_culling_enabled;
 }
 
-bool sdl3d_set_wireframe_enabled(sdl3d_render_context *context, bool enabled)
+bool slayer3d_set_wireframe_enabled(slayer3d_render_context *context, bool enabled)
 {
     if (context == NULL)
     {
@@ -304,7 +307,7 @@ bool sdl3d_set_wireframe_enabled(sdl3d_render_context *context, bool enabled)
     return true;
 }
 
-bool sdl3d_is_wireframe_enabled(const sdl3d_render_context *context)
+bool slayer3d_is_wireframe_enabled(const slayer3d_render_context *context)
 {
     if (context == NULL)
     {
@@ -315,7 +318,7 @@ bool sdl3d_is_wireframe_enabled(const sdl3d_render_context *context)
     return context->wireframe_enabled;
 }
 
-bool sdl3d_set_depth_planes(sdl3d_render_context *context, float near_plane, float far_plane)
+bool slayer3d_set_depth_planes(slayer3d_render_context *context, float near_plane, float far_plane)
 {
     if (context == NULL)
     {
@@ -337,7 +340,7 @@ bool sdl3d_set_depth_planes(sdl3d_render_context *context, float near_plane, flo
     return true;
 }
 
-static bool sdl3d_require_mode_3d(const sdl3d_render_context *context, const char *function_name)
+static bool slayer3d_require_mode_3d(const slayer3d_render_context *context, const char *function_name)
 {
     if (context == NULL)
     {
@@ -345,12 +348,12 @@ static bool sdl3d_require_mode_3d(const sdl3d_render_context *context, const cha
     }
     if (!context->in_mode_3d)
     {
-        return SDL_SetError("%s called outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d.", function_name);
+        return SDL_SetError("%s called outside slayer3d_begin_mode_3d / slayer3d_end_mode_3d.", function_name);
     }
     return true;
 }
 
-static bool sdl3d_validate_texture_for_draw(const sdl3d_texture2d *texture)
+static bool slayer3d_validate_texture_for_draw(const slayer3d_texture2d *texture)
 {
     if (texture == NULL)
     {
@@ -363,47 +366,48 @@ static bool sdl3d_validate_texture_for_draw(const sdl3d_texture2d *texture)
     return true;
 }
 
-static sdl3d_vec4 sdl3d_mesh_vertex_modulate(const sdl3d_mesh *mesh, unsigned int vertex_index, sdl3d_vec4 base)
+static slayer3d_vec4 slayer3d_mesh_vertex_modulate(const slayer3d_mesh *mesh, unsigned int vertex_index,
+                                                   slayer3d_vec4 base)
 {
-    sdl3d_vec4 out = base;
+    slayer3d_vec4 out = base;
 
     if (mesh->colors != NULL)
     {
         const float *color = &mesh->colors[(size_t)vertex_index * 4U];
-        out.x = sdl3d_clamp01(base.x * color[0]);
-        out.y = sdl3d_clamp01(base.y * color[1]);
-        out.z = sdl3d_clamp01(base.z * color[2]);
-        out.w = sdl3d_clamp01(base.w * color[3]);
+        out.x = slayer3d_clamp01(base.x * color[0]);
+        out.y = slayer3d_clamp01(base.y * color[1]);
+        out.z = slayer3d_clamp01(base.z * color[2]);
+        out.w = slayer3d_clamp01(base.w * color[3]);
     }
 
     return out;
 }
 
-static sdl3d_vec3 sdl3d_mesh_position(const sdl3d_mesh *mesh, unsigned int vertex_index)
+static slayer3d_vec3 slayer3d_mesh_position(const slayer3d_mesh *mesh, unsigned int vertex_index)
 {
     const float *position = &mesh->positions[(size_t)vertex_index * 3U];
-    return sdl3d_vec3_make(position[0], position[1], position[2]);
+    return slayer3d_vec3_make(position[0], position[1], position[2]);
 }
 
-static sdl3d_vec2 sdl3d_mesh_uv(const sdl3d_mesh *mesh, unsigned int vertex_index)
+static slayer3d_vec2 slayer3d_mesh_uv(const slayer3d_mesh *mesh, unsigned int vertex_index)
 {
     const float *uv = &mesh->uvs[(size_t)vertex_index * 2U];
-    sdl3d_vec2 out;
+    slayer3d_vec2 out;
     out.x = uv[0];
     out.y = uv[1];
     return out;
 }
 
-static sdl3d_vec3 sdl3d_mesh_normal(const sdl3d_mesh *mesh, unsigned int vertex_index)
+static slayer3d_vec3 slayer3d_mesh_normal(const slayer3d_mesh *mesh, unsigned int vertex_index)
 {
     const float *n = &mesh->normals[(size_t)vertex_index * 3U];
-    return sdl3d_vec3_make(n[0], n[1], n[2]);
+    return slayer3d_vec3_make(n[0], n[1], n[2]);
 }
 
 /* Apply vertex skinning: transform a position or normal by the weighted
  * sum of up to 4 joint matrices. */
-static sdl3d_vec3 sdl3d_skin_position(const sdl3d_mesh *mesh, unsigned int vi, const sdl3d_mat4 *joint_matrices,
-                                      sdl3d_vec3 pos)
+static slayer3d_vec3 slayer3d_skin_position(const slayer3d_mesh *mesh, unsigned int vi,
+                                            const slayer3d_mat4 *joint_matrices, slayer3d_vec3 pos)
 {
     const unsigned short *ji = &mesh->joint_indices[vi * 4];
     const float *jw = &mesh->joint_weights[vi * 4];
@@ -414,16 +418,16 @@ static sdl3d_vec3 sdl3d_skin_position(const sdl3d_mesh *mesh, unsigned int vi, c
         {
             continue;
         }
-        sdl3d_vec4 tp = sdl3d_mat4_transform_vec4(joint_matrices[ji[i]], sdl3d_vec4_from_vec3(pos, 1.0f));
+        slayer3d_vec4 tp = slayer3d_mat4_transform_vec4(joint_matrices[ji[i]], slayer3d_vec4_from_vec3(pos, 1.0f));
         rx += tp.x * jw[i];
         ry += tp.y * jw[i];
         rz += tp.z * jw[i];
     }
-    return sdl3d_vec3_make(rx, ry, rz);
+    return slayer3d_vec3_make(rx, ry, rz);
 }
 
-static sdl3d_vec3 sdl3d_skin_normal(const sdl3d_mesh *mesh, unsigned int vi, const sdl3d_mat4 *joint_matrices,
-                                    sdl3d_vec3 n)
+static slayer3d_vec3 slayer3d_skin_normal(const slayer3d_mesh *mesh, unsigned int vi,
+                                          const slayer3d_mat4 *joint_matrices, slayer3d_vec3 n)
 {
     const unsigned short *ji = &mesh->joint_indices[vi * 4];
     const float *jw = &mesh->joint_weights[vi * 4];
@@ -434,17 +438,17 @@ static sdl3d_vec3 sdl3d_skin_normal(const sdl3d_mesh *mesh, unsigned int vi, con
         {
             continue;
         }
-        const sdl3d_mat4 *m = &joint_matrices[ji[i]];
+        const slayer3d_mat4 *m = &joint_matrices[ji[i]];
         rx += (m->m[0] * n.x + m->m[4] * n.y + m->m[8] * n.z) * jw[i];
         ry += (m->m[1] * n.x + m->m[5] * n.y + m->m[9] * n.z) * jw[i];
         rz += (m->m[2] * n.x + m->m[6] * n.y + m->m[10] * n.z) * jw[i];
     }
-    return sdl3d_vec3_normalize(sdl3d_vec3_make(rx, ry, rz));
+    return slayer3d_vec3_normalize(slayer3d_vec3_make(rx, ry, rz));
 }
 
 /* Build lighting params from render context state. Material fields
  * (metallic, roughness, emissive) are set by the caller. */
-static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl3d_lighting_params *lp)
+static void slayer3d_build_lighting_params(const slayer3d_render_context *context, slayer3d_lighting_params *lp)
 {
     SDL_zerop(lp);
     lp->lights = context->lights;
@@ -458,14 +462,14 @@ static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl
     lp->fog = context->fog;
     lp->tonemap_mode = context->tonemap_mode;
     lp->shadow_bias = context->shadow_bias;
-    for (int i = 0; i < SDL3D_MAX_LIGHTS; ++i)
+    for (int i = 0; i < SLAYER3D_MAX_LIGHTS; ++i)
     {
         lp->shadow_depth[i] = context->shadow_depth[i];
         lp->shadow_vp[i] = context->shadow_vp[i];
         lp->shadow_enabled[i] = context->shadow_enabled[i];
     }
     {
-        const sdl3d_mat4 v = context->view;
+        const slayer3d_mat4 v = context->view;
         lp->camera_pos.x = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
         lp->camera_pos.y = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
         lp->camera_pos.z = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
@@ -479,20 +483,20 @@ static void sdl3d_build_lighting_params(const sdl3d_render_context *context, sdl
 }
 
 /* Transform an object-space normal to world space via the model matrix upper-left 3x3. */
-static sdl3d_vec3 sdl3d_transform_normal(sdl3d_mat4 m, sdl3d_vec3 n)
+static slayer3d_vec3 slayer3d_transform_normal(slayer3d_mat4 m, slayer3d_vec3 n)
 {
-    sdl3d_vec3 out;
+    slayer3d_vec3 out;
     out.x = m.m[0] * n.x + m.m[4] * n.y + m.m[8] * n.z;
     out.y = m.m[1] * n.x + m.m[5] * n.y + m.m[9] * n.z;
     out.z = m.m[2] * n.x + m.m[6] * n.y + m.m[10] * n.z;
-    return sdl3d_vec3_normalize(out);
+    return slayer3d_vec3_normalize(out);
 }
 
 /* Transform an object-space position to world space. */
-static sdl3d_vec3 sdl3d_transform_position(sdl3d_mat4 m, sdl3d_vec3 p)
+static slayer3d_vec3 slayer3d_transform_position(slayer3d_mat4 m, slayer3d_vec3 p)
 {
-    sdl3d_vec4 w = sdl3d_mat4_transform_vec4(m, sdl3d_vec4_from_vec3(p, 1.0f));
-    return sdl3d_vec3_make(w.x, w.y, w.z);
+    slayer3d_vec4 w = slayer3d_mat4_transform_vec4(m, slayer3d_vec4_from_vec3(p, 1.0f));
+    return slayer3d_vec3_make(w.x, w.y, w.z);
 }
 
 typedef struct
@@ -501,28 +505,29 @@ typedef struct
     float b;
     float c;
     float d;
-} sdl3d_frustum_plane;
+} slayer3d_frustum_plane;
 
-static sdl3d_bounding_box sdl3d_transform_bounding_box(sdl3d_mat4 transform, sdl3d_bounding_box local_bounds)
+static slayer3d_bounding_box slayer3d_transform_bounding_box(slayer3d_mat4 transform,
+                                                             slayer3d_bounding_box local_bounds)
 {
-    const sdl3d_vec3 corners[8] = {
-        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.min.z),
-        sdl3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.max.z),
-        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.min.z),
-        sdl3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.max.z),
-        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.min.z),
-        sdl3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.max.z),
-        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.min.z),
-        sdl3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.max.z),
+    const slayer3d_vec3 corners[8] = {
+        slayer3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.min.z),
+        slayer3d_vec3_make(local_bounds.min.x, local_bounds.min.y, local_bounds.max.z),
+        slayer3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.min.z),
+        slayer3d_vec3_make(local_bounds.min.x, local_bounds.max.y, local_bounds.max.z),
+        slayer3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.min.z),
+        slayer3d_vec3_make(local_bounds.max.x, local_bounds.min.y, local_bounds.max.z),
+        slayer3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.min.z),
+        slayer3d_vec3_make(local_bounds.max.x, local_bounds.max.y, local_bounds.max.z),
     };
-    sdl3d_bounding_box world_bounds;
-    sdl3d_vec3 p = sdl3d_transform_position(transform, corners[0]);
+    slayer3d_bounding_box world_bounds;
+    slayer3d_vec3 p = slayer3d_transform_position(transform, corners[0]);
     world_bounds.min = p;
     world_bounds.max = p;
 
     for (int i = 1; i < 8; ++i)
     {
-        p = sdl3d_transform_position(transform, corners[i]);
+        p = slayer3d_transform_position(transform, corners[i]);
         if (p.x < world_bounds.min.x)
             world_bounds.min.x = p.x;
         if (p.y < world_bounds.min.y)
@@ -540,11 +545,11 @@ static sdl3d_bounding_box sdl3d_transform_bounding_box(sdl3d_mat4 transform, sdl
     return world_bounds;
 }
 
-static bool sdl3d_box_intersects_frustum(sdl3d_bounding_box bounds, const sdl3d_frustum_plane planes[6])
+static bool slayer3d_box_intersects_frustum(slayer3d_bounding_box bounds, const slayer3d_frustum_plane planes[6])
 {
     for (int i = 0; i < 6; ++i)
     {
-        const sdl3d_frustum_plane plane = planes[i];
+        const slayer3d_frustum_plane plane = planes[i];
         const float px = plane.a >= 0.0f ? bounds.max.x : bounds.min.x;
         const float py = plane.b >= 0.0f ? bounds.max.y : bounds.min.y;
         const float pz = plane.c >= 0.0f ? bounds.max.z : bounds.min.z;
@@ -557,9 +562,9 @@ static bool sdl3d_box_intersects_frustum(sdl3d_bounding_box bounds, const sdl3d_
     return true;
 }
 
-static bool sdl3d_mesh_is_visible(const sdl3d_render_context *context, const sdl3d_mesh *mesh)
+static bool slayer3d_mesh_is_visible(const slayer3d_render_context *context, const slayer3d_mesh *mesh)
 {
-    sdl3d_bounding_box world_bounds;
+    slayer3d_bounding_box world_bounds;
 
     if (context == NULL || mesh == NULL || !mesh->has_local_bounds)
     {
@@ -571,7 +576,7 @@ static bool sdl3d_mesh_is_visible(const sdl3d_render_context *context, const sdl
         return true;
     }
 
-    sdl3d_frustum_plane planes[6];
+    slayer3d_frustum_plane planes[6];
     for (int i = 0; i < 6; ++i)
     {
         planes[i].a = context->frustum_planes[i][0];
@@ -580,87 +585,88 @@ static bool sdl3d_mesh_is_visible(const sdl3d_render_context *context, const sdl
         planes[i].d = context->frustum_planes[i][3];
     }
 
-    world_bounds = sdl3d_transform_bounding_box(context->model, mesh->local_bounds);
-    return sdl3d_box_intersects_frustum(world_bounds, planes);
+    world_bounds = slayer3d_transform_bounding_box(context->model, mesh->local_bounds);
+    return slayer3d_box_intersects_frustum(world_bounds, planes);
 }
 
-/* Evaluate PBR shading at a single point and return the result as an sdl3d_color.
+/* Evaluate PBR shading at a single point and return the result as an slayer3d_color.
  * Used by FLAT (once per triangle) and GOURAUD (once per vertex). */
-static sdl3d_color sdl3d_shade_point(const sdl3d_lighting_params *lp, float albedo_r, float albedo_g, float albedo_b,
-                                     float albedo_a, sdl3d_vec3 world_normal, sdl3d_vec3 world_pos)
+static slayer3d_color slayer3d_shade_point(const slayer3d_lighting_params *lp, float albedo_r, float albedo_g,
+                                           float albedo_b, float albedo_a, slayer3d_vec3 world_normal,
+                                           slayer3d_vec3 world_pos)
 {
     float lit_r, lit_g, lit_b;
-    sdl3d_color c;
-    sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, world_normal.x, world_normal.y, world_normal.z,
-                             world_pos.x, world_pos.y, world_pos.z, &lit_r, &lit_g, &lit_b);
+    slayer3d_color c;
+    slayer3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, world_normal.x, world_normal.y, world_normal.z,
+                                world_pos.x, world_pos.y, world_pos.z, &lit_r, &lit_g, &lit_b);
 
     /* Fog in linear space, then tonemap+gamma. */
-    if (lp->tonemap_mode != SDL3D_TONEMAP_NONE)
+    if (lp->tonemap_mode != SLAYER3D_TONEMAP_NONE)
     {
-        if (lp->fog.mode != SDL3D_FOG_NONE)
+        if (lp->fog.mode != SLAYER3D_FOG_NONE)
         {
             float dx = world_pos.x - lp->camera_pos.x;
             float dy = world_pos.y - lp->camera_pos.y;
             float dz = world_pos.z - lp->camera_pos.z;
             float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-            float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+            float fog_f = slayer3d_compute_fog_factor(&lp->fog, dist);
             lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
             lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
             lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
         }
-        sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+        slayer3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
     }
     else
     {
-        sdl3d_tonemap(SDL3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
-        if (lp->fog.mode != SDL3D_FOG_NONE)
+        slayer3d_tonemap(SLAYER3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
+        if (lp->fog.mode != SLAYER3D_FOG_NONE)
         {
             float dx = world_pos.x - lp->camera_pos.x;
             float dy = world_pos.y - lp->camera_pos.y;
             float dz = world_pos.z - lp->camera_pos.z;
             float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-            float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+            float fog_f = slayer3d_compute_fog_factor(&lp->fog, dist);
             lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
             lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
             lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
         }
     }
 
-    c.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
-    c.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
-    c.b = sdl3d_color_channel_clamp(lit_b * 255.0f);
-    c.a = sdl3d_color_channel_clamp(albedo_a * 255.0f);
+    c.r = slayer3d_color_channel_clamp(lit_r * 255.0f);
+    c.g = slayer3d_color_channel_clamp(lit_g * 255.0f);
+    c.b = slayer3d_color_channel_clamp(lit_b * 255.0f);
+    c.a = slayer3d_color_channel_clamp(albedo_a * 255.0f);
     return c;
 }
 
-static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d_vec4 base_color,
-                                          sdl3d_vec3 world_normal, sdl3d_vec3 world_pos)
+static slayer3d_vec4 slayer3d_shade_point_retro(const slayer3d_lighting_params *lp, slayer3d_vec4 base_color,
+                                                slayer3d_vec3 world_normal, slayer3d_vec3 world_pos)
 {
-    sdl3d_vec3 n = sdl3d_vec3_normalize(world_normal);
+    slayer3d_vec3 n = slayer3d_vec3_normalize(world_normal);
     float lit_r = lp->ambient[0];
     float lit_g = lp->ambient[1];
     float lit_b = lp->ambient[2];
-    sdl3d_vec4 out;
+    slayer3d_vec4 out;
 
     for (int i = 0; i < lp->light_count; ++i)
     {
-        const sdl3d_light *light = &lp->lights[i];
-        sdl3d_vec3 l;
+        const slayer3d_light *light = &lp->lights[i];
+        slayer3d_vec3 l;
         float attenuation = 1.0f;
 
-        if (light->type == SDL3D_LIGHT_DIRECTIONAL)
+        if (light->type == SLAYER3D_LIGHT_DIRECTIONAL)
         {
-            l = sdl3d_vec3_normalize(sdl3d_vec3_scale(light->direction, -1.0f));
+            l = slayer3d_vec3_normalize(slayer3d_vec3_scale(light->direction, -1.0f));
         }
         else
         {
-            sdl3d_vec3 to_light = sdl3d_vec3_sub(light->position, world_pos);
-            float dist = sdl3d_vec3_length(to_light);
+            slayer3d_vec3 to_light = slayer3d_vec3_sub(light->position, world_pos);
+            float dist = slayer3d_vec3_length(to_light);
             if (dist <= 1e-6f)
             {
                 continue;
             }
-            l = sdl3d_vec3_scale(to_light, 1.0f / dist);
+            l = slayer3d_vec3_scale(to_light, 1.0f / dist);
 
             if (light->range > 0.0f)
             {
@@ -672,10 +678,10 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
                 attenuation = 1.0f / (dist * dist + 1e-4f);
             }
 
-            if (light->type == SDL3D_LIGHT_SPOT)
+            if (light->type == SLAYER3D_LIGHT_SPOT)
             {
-                sdl3d_vec3 spot_dir = sdl3d_vec3_normalize(light->direction);
-                float cos_angle = sdl3d_vec3_dot(sdl3d_vec3_scale(l, -1.0f), spot_dir);
+                slayer3d_vec3 spot_dir = slayer3d_vec3_normalize(light->direction);
+                float cos_angle = slayer3d_vec3_dot(slayer3d_vec3_scale(l, -1.0f), spot_dir);
                 float epsilon = light->inner_cutoff - light->outer_cutoff;
                 if (SDL_fabsf(epsilon) < 1e-6f)
                 {
@@ -683,7 +689,7 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
                 }
                 else
                 {
-                    float spot_intensity = sdl3d_clamp01((cos_angle - light->outer_cutoff) / epsilon);
+                    float spot_intensity = slayer3d_clamp01((cos_angle - light->outer_cutoff) / epsilon);
                     spot_intensity = spot_intensity * spot_intensity * (3.0f - 2.0f * spot_intensity);
                     attenuation *= spot_intensity;
                 }
@@ -691,7 +697,7 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
         }
 
         {
-            float n_dot_l = SDL_max(sdl3d_vec3_dot(n, l), 0.0f);
+            float n_dot_l = SDL_max(slayer3d_vec3_dot(n, l), 0.0f);
             if (n_dot_l <= 0.0f)
             {
                 continue;
@@ -710,15 +716,15 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
     /* Apply gamma to the lit color BEFORE fog mixing.  The fog color is
      * specified in sRGB space (to match the visible sky), so it must not
      * be gamma-encoded again. */
-    sdl3d_tonemap(SDL3D_TONEMAP_NONE, &out.x, &out.y, &out.z);
+    slayer3d_tonemap(SLAYER3D_TONEMAP_NONE, &out.x, &out.y, &out.z);
 
-    if (lp->fog.mode != SDL3D_FOG_NONE)
+    if (lp->fog.mode != SLAYER3D_FOG_NONE)
     {
         float dx = world_pos.x - lp->camera_pos.x;
         float dy = world_pos.y - lp->camera_pos.y;
         float dz = world_pos.z - lp->camera_pos.z;
         float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-        float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+        float fog_f = slayer3d_compute_fog_factor(&lp->fog, dist);
         out.x = out.x * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
         out.y = out.y * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
         out.z = out.z * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
@@ -727,30 +733,30 @@ static sdl3d_vec4 sdl3d_shade_point_retro(const sdl3d_lighting_params *lp, sdl3d
     return out;
 }
 
-static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_mesh *mesh,
-                                     const sdl3d_texture2d *texture, const sdl3d_texture2d *lightmap_texture,
-                                     sdl3d_vec4 base_modulate, const sdl3d_lighting_params *lighting,
-                                     const sdl3d_mat4 *joint_matrices, bool static_geometry,
-                                     const char *shader_vertex_source, const char *shader_fragment_source)
+static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const slayer3d_mesh *mesh,
+                                        const slayer3d_texture2d *texture, const slayer3d_texture2d *lightmap_texture,
+                                        slayer3d_vec4 base_modulate, const slayer3d_lighting_params *lighting,
+                                        const slayer3d_mat4 *joint_matrices, bool static_geometry,
+                                        const char *shader_vertex_source, const char *shader_fragment_source)
 {
     bool indexed;
     int triangle_count;
     bool software_baked_static;
     bool lit;
     bool skinned;
-    sdl3d_framebuffer framebuffer;
+    slayer3d_framebuffer framebuffer;
     float *skinned_positions = NULL;
     float *skinned_normals = NULL;
 
 /* Macro to read a position with optional skinning applied. */
 #define SKIN_POS(idx)                                                                                                  \
-    (skinned ? sdl3d_skin_position(mesh, (idx), joint_matrices, sdl3d_mesh_position(mesh, (idx)))                      \
-             : sdl3d_mesh_position(mesh, (idx)))
+    (skinned ? slayer3d_skin_position(mesh, (idx), joint_matrices, slayer3d_mesh_position(mesh, (idx)))                \
+             : slayer3d_mesh_position(mesh, (idx)))
 #define SKIN_NORM(idx)                                                                                                 \
-    (skinned ? sdl3d_skin_normal(mesh, (idx), joint_matrices, sdl3d_mesh_normal(mesh, (idx)))                          \
-             : sdl3d_mesh_normal(mesh, (idx)))
+    (skinned ? slayer3d_skin_normal(mesh, (idx), joint_matrices, slayer3d_mesh_normal(mesh, (idx)))                    \
+             : slayer3d_mesh_normal(mesh, (idx)))
 
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_mesh"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_mesh"))
     {
         return false;
     }
@@ -765,14 +771,14 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
 
     indexed = mesh->indices != NULL;
     triangle_count = indexed ? (mesh->index_count / 3) : (mesh->vertex_count / 3);
-    software_baked_static = context->backend == SDL3D_BACKEND_SOFTWARE && lighting != NULL &&
+    software_baked_static = context->backend == SLAYER3D_BACKEND_SOFTWARE && lighting != NULL &&
                             mesh->colors_are_baked_light && lighting->light_count == 0 &&
-                            lighting->fog.mode == SDL3D_FOG_NONE;
+                            lighting->fog.mode == SLAYER3D_FOG_NONE;
     lit = lighting != NULL && !software_baked_static &&
-          (context->shading_mode == SDL3D_SHADING_FLAT || mesh->normals != NULL);
+          (context->shading_mode == SLAYER3D_SHADING_FLAT || mesh->normals != NULL);
     skinned = joint_matrices != NULL && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
 
-    if (!sdl3d_validate_texture_for_draw(texture))
+    if (!slayer3d_validate_texture_for_draw(texture))
     {
         return false;
     }
@@ -811,16 +817,16 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
 
         for (int i = 0; i < mesh->vertex_count; ++i)
         {
-            sdl3d_vec3 p =
-                sdl3d_skin_position(mesh, (unsigned int)i, joint_matrices, sdl3d_mesh_position(mesh, (unsigned int)i));
+            slayer3d_vec3 p = slayer3d_skin_position(mesh, (unsigned int)i, joint_matrices,
+                                                     slayer3d_mesh_position(mesh, (unsigned int)i));
             skinned_positions[i * 3 + 0] = p.x;
             skinned_positions[i * 3 + 1] = p.y;
             skinned_positions[i * 3 + 2] = p.z;
 
             if (skinned_normals != NULL)
             {
-                sdl3d_vec3 n =
-                    sdl3d_skin_normal(mesh, (unsigned int)i, joint_matrices, sdl3d_mesh_normal(mesh, (unsigned int)i));
+                slayer3d_vec3 n = slayer3d_skin_normal(mesh, (unsigned int)i, joint_matrices,
+                                                       slayer3d_mesh_normal(mesh, (unsigned int)i));
                 skinned_normals[i * 3 + 0] = n.x;
                 skinned_normals[i * 3 + 1] = n.y;
                 skinned_normals[i * 3 + 2] = n.z;
@@ -832,7 +838,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
      * fall through to the per-triangle loop below. */
     if (lit)
     {
-        sdl3d_draw_params_lit lp;
+        slayer3d_draw_params_lit lp;
         SDL_zero(lp);
         lp.positions = (skinned_positions != NULL) ? skinned_positions : mesh->positions;
         lp.normals = (skinned_normals != NULL) ? skinned_normals : mesh->normals;
@@ -870,7 +876,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
             }
             else
             {
-                const sdl3d_mat4 v = context->view;
+                const slayer3d_mat4 v = context->view;
                 lp.camera_pos[0] = -(v.m[0] * v.m[12] + v.m[1] * v.m[13] + v.m[2] * v.m[14]);
                 lp.camera_pos[1] = -(v.m[4] * v.m[12] + v.m[5] * v.m[13] + v.m[6] * v.m[14]);
                 lp.camera_pos[2] = -(v.m[8] * v.m[12] + v.m[9] * v.m[13] + v.m[10] * v.m[14]);
@@ -939,7 +945,7 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
     }
     else
     {
-        sdl3d_draw_params_unlit up;
+        slayer3d_draw_params_unlit up;
         SDL_zero(up);
         up.positions = (skinned_positions != NULL) ? skinned_positions : mesh->positions;
         up.uvs = mesh->uvs;
@@ -966,16 +972,16 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
         }
     }
 
-    framebuffer = sdl3d_framebuffer_from_context(context);
+    framebuffer = slayer3d_framebuffer_from_context(context);
 
     for (int triangle = 0; triangle < triangle_count; ++triangle)
     {
         const unsigned int i0 = indexed ? mesh->indices[triangle * 3 + 0] : (unsigned int)(triangle * 3 + 0);
         const unsigned int i1 = indexed ? mesh->indices[triangle * 3 + 1] : (unsigned int)(triangle * 3 + 1);
         const unsigned int i2 = indexed ? mesh->indices[triangle * 3 + 2] : (unsigned int)(triangle * 3 + 2);
-        sdl3d_vec2 uv0 = {0.0f, 0.0f};
-        sdl3d_vec2 uv1 = {0.0f, 0.0f};
-        sdl3d_vec2 uv2 = {0.0f, 0.0f};
+        slayer3d_vec2 uv0 = {0.0f, 0.0f};
+        slayer3d_vec2 uv1 = {0.0f, 0.0f};
+        slayer3d_vec2 uv2 = {0.0f, 0.0f};
 
         if ((int)i0 >= mesh->vertex_count || (int)i1 >= mesh->vertex_count || (int)i2 >= mesh->vertex_count)
         {
@@ -984,90 +990,93 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
 
         if (texture != NULL)
         {
-            uv0 = sdl3d_mesh_uv(mesh, i0);
-            uv1 = sdl3d_mesh_uv(mesh, i1);
-            uv2 = sdl3d_mesh_uv(mesh, i2);
+            uv0 = slayer3d_mesh_uv(mesh, i0);
+            uv1 = slayer3d_mesh_uv(mesh, i1);
+            uv2 = slayer3d_mesh_uv(mesh, i2);
         }
 
-        if (lit && context->shading_mode == SDL3D_SHADING_FLAT)
+        if (lit && context->shading_mode == SLAYER3D_SHADING_FLAT)
         {
             /* FLAT: use lit rasterizer with face normal for all three vertices.
              * The lit rasterizer handles tonemapping, fog, and color quantization. */
-            sdl3d_vec3 p0 = SKIN_POS(i0);
-            sdl3d_vec3 p1 = SKIN_POS(i1);
-            sdl3d_vec3 p2 = SKIN_POS(i2);
-            sdl3d_vec3 edge1 = sdl3d_vec3_sub(p1, p0);
-            sdl3d_vec3 edge2 = sdl3d_vec3_sub(p2, p0);
-            sdl3d_vec3 fn = sdl3d_vec3_normalize(sdl3d_vec3_cross(edge1, edge2));
-            sdl3d_vec3 wn = sdl3d_transform_normal(context->model, fn);
-            sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, p0);
-            sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, p1);
-            sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, p2);
-            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, wn,
-                                         wn, wn, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
-                                         sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
-                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
-                                         context->backface_culling_enabled, context->wireframe_enabled);
+            slayer3d_vec3 p0 = SKIN_POS(i0);
+            slayer3d_vec3 p1 = SKIN_POS(i1);
+            slayer3d_vec3 p2 = SKIN_POS(i2);
+            slayer3d_vec3 edge1 = slayer3d_vec3_sub(p1, p0);
+            slayer3d_vec3 edge2 = slayer3d_vec3_sub(p2, p0);
+            slayer3d_vec3 fn = slayer3d_vec3_normalize(slayer3d_vec3_cross(edge1, edge2));
+            slayer3d_vec3 wn = slayer3d_transform_normal(context->model, fn);
+            slayer3d_vec3 wp0 = slayer3d_transform_position(context->model, p0);
+            slayer3d_vec3 wp1 = slayer3d_transform_position(context->model, p1);
+            slayer3d_vec3 wp2 = slayer3d_transform_position(context->model, p2);
+            slayer3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, wn,
+                                            wn, wn, wp0, wp1, wp2,
+                                            slayer3d_mesh_vertex_modulate(mesh, i0, base_modulate),
+                                            slayer3d_mesh_vertex_modulate(mesh, i1, base_modulate),
+                                            slayer3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
+                                            context->backface_culling_enabled, context->wireframe_enabled);
         }
-        else if (lit && context->shading_mode == SDL3D_SHADING_GOURAUD)
+        else if (lit && context->shading_mode == SLAYER3D_SHADING_GOURAUD)
         {
             /* GOURAUD: shade vertices once, then rasterize with the active
              * retro/profile rules (affine UVs, vertex snap, quantization). */
-            sdl3d_vec3 p0 = SKIN_POS(i0);
-            sdl3d_vec3 p1 = SKIN_POS(i1);
-            sdl3d_vec3 p2 = SKIN_POS(i2);
-            sdl3d_vec3 wn0, wn1, wn2;
-            sdl3d_vec4 m0 = sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate);
-            sdl3d_vec4 m1 = sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate);
-            sdl3d_vec4 m2 = sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate);
+            slayer3d_vec3 p0 = SKIN_POS(i0);
+            slayer3d_vec3 p1 = SKIN_POS(i1);
+            slayer3d_vec3 p2 = SKIN_POS(i2);
+            slayer3d_vec3 wn0, wn1, wn2;
+            slayer3d_vec4 m0 = slayer3d_mesh_vertex_modulate(mesh, i0, base_modulate);
+            slayer3d_vec4 m1 = slayer3d_mesh_vertex_modulate(mesh, i1, base_modulate);
+            slayer3d_vec4 m2 = slayer3d_mesh_vertex_modulate(mesh, i2, base_modulate);
             if (mesh->normals != NULL)
             {
-                wn0 = sdl3d_transform_normal(context->model, SKIN_NORM(i0));
-                wn1 = sdl3d_transform_normal(context->model, SKIN_NORM(i1));
-                wn2 = sdl3d_transform_normal(context->model, SKIN_NORM(i2));
+                wn0 = slayer3d_transform_normal(context->model, SKIN_NORM(i0));
+                wn1 = slayer3d_transform_normal(context->model, SKIN_NORM(i1));
+                wn2 = slayer3d_transform_normal(context->model, SKIN_NORM(i2));
             }
             else
             {
-                sdl3d_vec3 fn = sdl3d_vec3_normalize(sdl3d_vec3_cross(sdl3d_vec3_sub(p1, p0), sdl3d_vec3_sub(p2, p0)));
-                wn0 = wn1 = wn2 = sdl3d_transform_normal(context->model, fn);
+                slayer3d_vec3 fn =
+                    slayer3d_vec3_normalize(slayer3d_vec3_cross(slayer3d_vec3_sub(p1, p0), slayer3d_vec3_sub(p2, p0)));
+                wn0 = wn1 = wn2 = slayer3d_transform_normal(context->model, fn);
             }
-            sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, p0);
-            sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, p1);
-            sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, p2);
-            sdl3d_rasterize_triangle_textured_profiled(
+            slayer3d_vec3 wp0 = slayer3d_transform_position(context->model, p0);
+            slayer3d_vec3 wp1 = slayer3d_transform_position(context->model, p1);
+            slayer3d_vec3 wp2 = slayer3d_transform_position(context->model, p2);
+            slayer3d_rasterize_triangle_textured_profiled(
                 &framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2,
-                sdl3d_shade_point_retro(lighting, m0, wn0, wp0), sdl3d_shade_point_retro(lighting, m1, wn1, wp1),
-                sdl3d_shade_point_retro(lighting, m2, wn2, wp2), texture, lighting, context->backface_culling_enabled,
-                context->wireframe_enabled);
+                slayer3d_shade_point_retro(lighting, m0, wn0, wp0), slayer3d_shade_point_retro(lighting, m1, wn1, wp1),
+                slayer3d_shade_point_retro(lighting, m2, wn2, wp2), texture, lighting,
+                context->backface_culling_enabled, context->wireframe_enabled);
         }
         else if (lit)
         {
             /* PHONG: per-fragment PBR with interpolated normals. */
-            const sdl3d_mat4 m = context->model;
-            sdl3d_vec3 rn0 = sdl3d_transform_normal(m, SKIN_NORM(i0));
-            sdl3d_vec3 rn1 = sdl3d_transform_normal(m, SKIN_NORM(i1));
-            sdl3d_vec3 rn2 = sdl3d_transform_normal(m, SKIN_NORM(i2));
-            sdl3d_vec3 p0 = SKIN_POS(i0);
-            sdl3d_vec3 p1 = SKIN_POS(i1);
-            sdl3d_vec3 p2 = SKIN_POS(i2);
-            sdl3d_vec3 wp0 = sdl3d_transform_position(m, p0);
-            sdl3d_vec3 wp1 = sdl3d_transform_position(m, p1);
-            sdl3d_vec3 wp2 = sdl3d_transform_position(m, p2);
+            const slayer3d_mat4 m = context->model;
+            slayer3d_vec3 rn0 = slayer3d_transform_normal(m, SKIN_NORM(i0));
+            slayer3d_vec3 rn1 = slayer3d_transform_normal(m, SKIN_NORM(i1));
+            slayer3d_vec3 rn2 = slayer3d_transform_normal(m, SKIN_NORM(i2));
+            slayer3d_vec3 p0 = SKIN_POS(i0);
+            slayer3d_vec3 p1 = SKIN_POS(i1);
+            slayer3d_vec3 p2 = SKIN_POS(i2);
+            slayer3d_vec3 wp0 = slayer3d_transform_position(m, p0);
+            slayer3d_vec3 wp1 = slayer3d_transform_position(m, p1);
+            slayer3d_vec3 wp2 = slayer3d_transform_position(m, p2);
 
-            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2, rn0,
-                                         rn1, rn2, wp0, wp1, wp2, sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
-                                         sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
-                                         sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
-                                         context->backface_culling_enabled, context->wireframe_enabled);
+            slayer3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, p0, p1, p2, uv0, uv1, uv2,
+                                            rn0, rn1, rn2, wp0, wp1, wp2,
+                                            slayer3d_mesh_vertex_modulate(mesh, i0, base_modulate),
+                                            slayer3d_mesh_vertex_modulate(mesh, i1, base_modulate),
+                                            slayer3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture, lighting,
+                                            context->backface_culling_enabled, context->wireframe_enabled);
         }
         else
         {
-            sdl3d_rasterize_triangle_textured(&framebuffer, context->model_view_projection, SKIN_POS(i0), SKIN_POS(i1),
-                                              SKIN_POS(i2), uv0, uv1, uv2,
-                                              sdl3d_mesh_vertex_modulate(mesh, i0, base_modulate),
-                                              sdl3d_mesh_vertex_modulate(mesh, i1, base_modulate),
-                                              sdl3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture,
-                                              context->backface_culling_enabled, context->wireframe_enabled);
+            slayer3d_rasterize_triangle_textured(&framebuffer, context->model_view_projection, SKIN_POS(i0),
+                                                 SKIN_POS(i1), SKIN_POS(i2), uv0, uv1, uv2,
+                                                 slayer3d_mesh_vertex_modulate(mesh, i0, base_modulate),
+                                                 slayer3d_mesh_vertex_modulate(mesh, i1, base_modulate),
+                                                 slayer3d_mesh_vertex_modulate(mesh, i2, base_modulate), texture,
+                                                 context->backface_culling_enabled, context->wireframe_enabled);
         }
     }
 
@@ -1078,95 +1087,95 @@ static bool sdl3d_draw_mesh_internal(sdl3d_render_context *context, const sdl3d_
     return true;
 }
 
-bool sdl3d_push_matrix(sdl3d_render_context *context)
+bool slayer3d_push_matrix(slayer3d_render_context *context)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_push_matrix"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_push_matrix"))
     {
         return false;
     }
 
-    if (!sdl3d_ensure_model_stack_capacity(context, context->model_stack_depth + 1))
+    if (!slayer3d_ensure_model_stack_capacity(context, context->model_stack_depth + 1))
     {
         return false;
     }
 
     context->model_stack[context->model_stack_depth] = context->model_stack[context->model_stack_depth - 1];
     context->model_stack_depth += 1;
-    sdl3d_update_current_model_matrices(context);
+    slayer3d_update_current_model_matrices(context);
     return true;
 }
 
-bool sdl3d_pop_matrix(sdl3d_render_context *context)
+bool slayer3d_pop_matrix(slayer3d_render_context *context)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_pop_matrix"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_pop_matrix"))
     {
         return false;
     }
 
     if (context->model_stack_depth <= 1)
     {
-        return SDL_SetError("sdl3d_pop_matrix cannot pop the root model matrix.");
+        return SDL_SetError("slayer3d_pop_matrix cannot pop the root model matrix.");
     }
 
     context->model_stack_depth -= 1;
-    sdl3d_update_current_model_matrices(context);
+    slayer3d_update_current_model_matrices(context);
     return true;
 }
 
-bool sdl3d_translate(sdl3d_render_context *context, float x, float y, float z)
+bool slayer3d_translate(slayer3d_render_context *context, float x, float y, float z)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_translate"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_translate"))
     {
         return false;
     }
 
-    const sdl3d_mat4 translation = sdl3d_mat4_translate(sdl3d_vec3_make(x, y, z));
+    const slayer3d_mat4 translation = slayer3d_mat4_translate(slayer3d_vec3_make(x, y, z));
     context->model_stack[context->model_stack_depth - 1] =
-        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], translation);
-    sdl3d_update_current_model_matrices(context);
+        slayer3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], translation);
+    slayer3d_update_current_model_matrices(context);
     return true;
 }
 
-bool sdl3d_rotate(sdl3d_render_context *context, sdl3d_vec3 axis, float angle_radians)
+bool slayer3d_rotate(slayer3d_render_context *context, slayer3d_vec3 axis, float angle_radians)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_rotate"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_rotate"))
     {
         return false;
     }
 
-    if (!(sdl3d_vec3_length_squared(axis) > 0.0f))
+    if (!(slayer3d_vec3_length_squared(axis) > 0.0f))
     {
-        return SDL_SetError("sdl3d_rotate requires a non-zero rotation axis.");
+        return SDL_SetError("slayer3d_rotate requires a non-zero rotation axis.");
     }
 
-    const sdl3d_mat4 rotation = sdl3d_mat4_rotate(axis, angle_radians);
+    const slayer3d_mat4 rotation = slayer3d_mat4_rotate(axis, angle_radians);
     context->model_stack[context->model_stack_depth - 1] =
-        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], rotation);
-    sdl3d_update_current_model_matrices(context);
+        slayer3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], rotation);
+    slayer3d_update_current_model_matrices(context);
     return true;
 }
 
-bool sdl3d_scale(sdl3d_render_context *context, float x, float y, float z)
+bool slayer3d_scale(slayer3d_render_context *context, float x, float y, float z)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_scale"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_scale"))
     {
         return false;
     }
 
-    const sdl3d_mat4 scale = sdl3d_mat4_scale(sdl3d_vec3_make(x, y, z));
+    const slayer3d_mat4 scale = slayer3d_mat4_scale(slayer3d_vec3_make(x, y, z));
     context->model_stack[context->model_stack_depth - 1] =
-        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], scale);
-    sdl3d_update_current_model_matrices(context);
+        slayer3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], scale);
+    slayer3d_update_current_model_matrices(context);
     return true;
 }
 
-bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2,
-                            sdl3d_color color)
+bool slayer3d_draw_triangle_3d(slayer3d_render_context *context, slayer3d_vec3 v0, slayer3d_vec3 v1, slayer3d_vec3 v2,
+                               slayer3d_color color)
 {
-    sdl3d_framebuffer framebuffer;
-    sdl3d_shading_mode mode;
+    slayer3d_framebuffer framebuffer;
+    slayer3d_shading_mode mode;
 
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_triangle_3d"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_triangle_3d"))
     {
         return false;
     }
@@ -1177,17 +1186,17 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
     {
         float positions[9] = {v0.x, v0.y, v0.z, v1.x, v1.y, v1.z, v2.x, v2.y, v2.z};
 
-        if (mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
+        if (mode != SLAYER3D_SHADING_UNLIT && context->light_count > 0)
         {
-            sdl3d_vec3 edge1 = sdl3d_vec3_sub(v1, v0);
-            sdl3d_vec3 edge2 = sdl3d_vec3_sub(v2, v0);
-            sdl3d_vec3 face_normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(edge1, edge2));
+            slayer3d_vec3 edge1 = slayer3d_vec3_sub(v1, v0);
+            slayer3d_vec3 edge2 = slayer3d_vec3_sub(v2, v0);
+            slayer3d_vec3 face_normal = slayer3d_vec3_normalize(slayer3d_vec3_cross(edge1, edge2));
             float normals[9] = {face_normal.x, face_normal.y, face_normal.z, face_normal.x, face_normal.y,
                                 face_normal.z, face_normal.x, face_normal.y, face_normal.z};
-            sdl3d_lighting_params lighting;
-            sdl3d_draw_params_lit lp;
+            slayer3d_lighting_params lighting;
+            slayer3d_draw_params_lit lp;
 
-            sdl3d_build_lighting_params(context, &lighting);
+            slayer3d_build_lighting_params(context, &lighting);
             lighting.roughness = 1.0f;
 
             SDL_zero(lp);
@@ -1243,7 +1252,7 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
         }
         else
         {
-            sdl3d_draw_params_unlit up;
+            slayer3d_draw_params_unlit up;
 
             SDL_zero(up);
             up.positions = positions;
@@ -1262,74 +1271,77 @@ bool sdl3d_draw_triangle_3d(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_
         }
     }
 
-    framebuffer = sdl3d_framebuffer_from_context(context);
+    framebuffer = slayer3d_framebuffer_from_context(context);
 
-    if (mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
+    if (mode != SLAYER3D_SHADING_UNLIT && context->light_count > 0)
     {
-        sdl3d_vec3 edge1 = sdl3d_vec3_sub(v1, v0);
-        sdl3d_vec3 edge2 = sdl3d_vec3_sub(v2, v0);
-        sdl3d_vec3 face_normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(edge1, edge2));
-        sdl3d_vec3 wn = sdl3d_transform_normal(context->model, face_normal);
-        sdl3d_vec3 wp0 = sdl3d_transform_position(context->model, v0);
-        sdl3d_vec3 wp1 = sdl3d_transform_position(context->model, v1);
-        sdl3d_vec3 wp2 = sdl3d_transform_position(context->model, v2);
-        sdl3d_vec4 modulate = sdl3d_color_to_modulate(color);
+        slayer3d_vec3 edge1 = slayer3d_vec3_sub(v1, v0);
+        slayer3d_vec3 edge2 = slayer3d_vec3_sub(v2, v0);
+        slayer3d_vec3 face_normal = slayer3d_vec3_normalize(slayer3d_vec3_cross(edge1, edge2));
+        slayer3d_vec3 wn = slayer3d_transform_normal(context->model, face_normal);
+        slayer3d_vec3 wp0 = slayer3d_transform_position(context->model, v0);
+        slayer3d_vec3 wp1 = slayer3d_transform_position(context->model, v1);
+        slayer3d_vec3 wp2 = slayer3d_transform_position(context->model, v2);
+        slayer3d_vec4 modulate = slayer3d_color_to_modulate(color);
 
-        sdl3d_lighting_params lp;
-        sdl3d_build_lighting_params(context, &lp);
+        slayer3d_lighting_params lp;
+        slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
 
-        if (mode == SDL3D_SHADING_FLAT)
+        if (mode == SLAYER3D_SHADING_FLAT)
         {
             /* One PBR eval at centroid with face normal. */
-            sdl3d_vec3 centroid = sdl3d_vec3_scale(sdl3d_vec3_add(sdl3d_vec3_add(wp0, wp1), wp2), 1.0f / 3.0f);
-            sdl3d_color lit = sdl3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, centroid);
-            sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, lit,
-                                     context->backface_culling_enabled, context->wireframe_enabled);
+            slayer3d_vec3 centroid =
+                slayer3d_vec3_scale(slayer3d_vec3_add(slayer3d_vec3_add(wp0, wp1), wp2), 1.0f / 3.0f);
+            slayer3d_color lit =
+                slayer3d_shade_point(&lp, modulate.x, modulate.y, modulate.z, modulate.w, wn, centroid);
+            slayer3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, lit,
+                                        context->backface_culling_enabled, context->wireframe_enabled);
         }
-        else if (mode == SDL3D_SHADING_GOURAUD)
+        else if (mode == SLAYER3D_SHADING_GOURAUD)
         {
-            sdl3d_vec2 uv0 = {0.0f, 0.0f};
-            sdl3d_rasterize_triangle_textured_profiled(&framebuffer, context->model_view_projection, v0, v1, v2, uv0,
-                                                       uv0, uv0, sdl3d_shade_point_retro(&lp, modulate, wn, wp0),
-                                                       sdl3d_shade_point_retro(&lp, modulate, wn, wp1),
-                                                       sdl3d_shade_point_retro(&lp, modulate, wn, wp2), NULL, &lp,
-                                                       context->backface_culling_enabled, context->wireframe_enabled);
+            slayer3d_vec2 uv0 = {0.0f, 0.0f};
+            slayer3d_rasterize_triangle_textured_profiled(
+                &framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0,
+                slayer3d_shade_point_retro(&lp, modulate, wn, wp0), slayer3d_shade_point_retro(&lp, modulate, wn, wp1),
+                slayer3d_shade_point_retro(&lp, modulate, wn, wp2), NULL, &lp, context->backface_culling_enabled,
+                context->wireframe_enabled);
         }
-        else /* SDL3D_SHADING_PHONG */
+        else /* SLAYER3D_SHADING_PHONG */
         {
-            sdl3d_vec2 uv0 = {0.0f, 0.0f};
-            sdl3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0, wn,
-                                         wn, wn, wp0, wp1, wp2, modulate, modulate, modulate, NULL, &lp,
-                                         context->backface_culling_enabled, context->wireframe_enabled);
+            slayer3d_vec2 uv0 = {0.0f, 0.0f};
+            slayer3d_rasterize_triangle_lit(&framebuffer, context->model_view_projection, v0, v1, v2, uv0, uv0, uv0, wn,
+                                            wn, wn, wp0, wp1, wp2, modulate, modulate, modulate, NULL, &lp,
+                                            context->backface_culling_enabled, context->wireframe_enabled);
         }
     }
     else
     {
-        sdl3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, color,
-                                 context->backface_culling_enabled, context->wireframe_enabled);
+        slayer3d_rasterize_triangle(&framebuffer, context->model_view_projection, v0, v1, v2, color,
+                                    context->backface_culling_enabled, context->wireframe_enabled);
     }
 
     return true;
 }
 
-bool sdl3d_draw_triangle_3d_ex(sdl3d_render_context *context, sdl3d_vec3 v0, sdl3d_vec3 v1, sdl3d_vec3 v2,
-                               sdl3d_color c0, sdl3d_color c1, sdl3d_color c2)
+bool slayer3d_draw_triangle_3d_ex(slayer3d_render_context *context, slayer3d_vec3 v0, slayer3d_vec3 v1,
+                                  slayer3d_vec3 v2, slayer3d_color c0, slayer3d_color c1, slayer3d_color c2)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_triangle_3d_ex"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_triangle_3d_ex"))
     {
         return false;
     }
 
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_triangle_colored(&framebuffer, context->model_view_projection, v0, v1, v2, c0, c1, c2,
-                                     context->backface_culling_enabled, context->wireframe_enabled);
+    slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
+    slayer3d_rasterize_triangle_colored(&framebuffer, context->model_view_projection, v0, v1, v2, c0, c1, c2,
+                                        context->backface_culling_enabled, context->wireframe_enabled);
     return true;
 }
 
-bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_vec3 end, sdl3d_color color)
+bool slayer3d_draw_line_3d(slayer3d_render_context *context, slayer3d_vec3 start, slayer3d_vec3 end,
+                           slayer3d_color color)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_line_3d"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_line_3d"))
     {
         return false;
     }
@@ -1340,58 +1352,59 @@ bool sdl3d_draw_line_3d(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_v
         const float c = 1.0f / 255.0f;
         const float colors[8] = {color.r * c, color.g * c, color.b * c, color.a * c,
                                  color.r * c, color.g * c, color.b * c, color.a * c};
-        return sdl3d_gl_append_line(context->gl, positions, colors, context->model_view_projection.m);
+        return slayer3d_gl_append_line(context->gl, positions, colors, context->model_view_projection.m);
     }
 
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_line(&framebuffer, context->model_view_projection, start, end, color);
+    slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
+    slayer3d_rasterize_line(&framebuffer, context->model_view_projection, start, end, color);
     return true;
 }
 
-bool sdl3d_draw_point_3d(sdl3d_render_context *context, sdl3d_vec3 position, sdl3d_color color)
+bool slayer3d_draw_point_3d(slayer3d_render_context *context, slayer3d_vec3 position, slayer3d_color color)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_point_3d"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_point_3d"))
     {
         return false;
     }
 
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_rasterize_point(&framebuffer, context->model_view_projection, position, color);
+    slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
+    slayer3d_rasterize_point(&framebuffer, context->model_view_projection, position, color);
     return true;
 }
 
-static sdl3d_vec3 sdl3d_view_camera_right(const sdl3d_render_context *context)
+static slayer3d_vec3 slayer3d_view_camera_right(const slayer3d_render_context *context)
 {
-    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[0], context->view.m[4], context->view.m[8]));
+    return slayer3d_vec3_normalize(slayer3d_vec3_make(context->view.m[0], context->view.m[4], context->view.m[8]));
 }
 
-static sdl3d_vec3 sdl3d_view_camera_up(const sdl3d_render_context *context)
+static slayer3d_vec3 slayer3d_view_camera_up(const slayer3d_render_context *context)
 {
-    return sdl3d_vec3_normalize(sdl3d_vec3_make(context->view.m[1], context->view.m[5], context->view.m[9]));
+    return slayer3d_vec3_normalize(slayer3d_vec3_make(context->view.m[1], context->view.m[5], context->view.m[9]));
 }
 
-static sdl3d_vec3 sdl3d_view_camera_forward(const sdl3d_render_context *context)
+static slayer3d_vec3 slayer3d_view_camera_forward(const slayer3d_render_context *context)
 {
-    return sdl3d_vec3_normalize(sdl3d_vec3_make(-context->view.m[2], -context->view.m[6], -context->view.m[10]));
+    return slayer3d_vec3_normalize(slayer3d_vec3_make(-context->view.m[2], -context->view.m[6], -context->view.m[10]));
 }
 
-bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
-                             sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint)
+bool slayer3d_draw_billboard_ex(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                                slayer3d_vec3 position, slayer3d_vec2 size, slayer3d_vec2 anchor,
+                                slayer3d_billboard_mode mode, slayer3d_color tint)
 {
-    sdl3d_vec3 right;
-    sdl3d_vec3 up;
-    sdl3d_vec3 normal;
+    slayer3d_vec3 right;
+    slayer3d_vec3 up;
+    slayer3d_vec3 normal;
     const float left = -anchor.x * size.x;
     const float bottom = -anchor.y * size.y;
     const float sprite_right = left + size.x;
     const float sprite_top = bottom + size.y;
-    sdl3d_mesh mesh;
+    slayer3d_mesh mesh;
     float positions[12];
     float normals[12];
     float uvs[8];
     unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
 
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_billboard_ex"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_billboard_ex"))
     {
         return false;
     }
@@ -1412,43 +1425,43 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
         return SDL_SetError("Billboard anchor must be in [0, 1] for both axes.");
     }
 
-    right = sdl3d_view_camera_right(context);
-    if (mode == SDL3D_BILLBOARD_SPHERICAL)
+    right = slayer3d_view_camera_right(context);
+    if (mode == SLAYER3D_BILLBOARD_SPHERICAL)
     {
-        up = sdl3d_view_camera_up(context);
+        up = slayer3d_view_camera_up(context);
     }
     else
     {
-        const sdl3d_vec3 world_up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-        sdl3d_vec3 forward = sdl3d_view_camera_forward(context);
+        const slayer3d_vec3 world_up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+        slayer3d_vec3 forward = slayer3d_view_camera_forward(context);
         forward.y = 0.0f;
-        if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
+        if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
         {
-            forward = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+            forward = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
         }
         else
         {
-            forward = sdl3d_vec3_normalize(forward);
+            forward = slayer3d_vec3_normalize(forward);
         }
-        right = sdl3d_vec3_normalize(sdl3d_vec3_cross(forward, world_up));
-        if (sdl3d_vec3_length_squared(right) <= 0.000001f)
+        right = slayer3d_vec3_normalize(slayer3d_vec3_cross(forward, world_up));
+        if (slayer3d_vec3_length_squared(right) <= 0.000001f)
         {
-            right = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+            right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
         }
         up = world_up;
     }
-    normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(right, up));
+    normal = slayer3d_vec3_normalize(slayer3d_vec3_cross(right, up));
 
     {
-        const sdl3d_vec3 bl =
-            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, bottom)));
-        const sdl3d_vec3 tl =
-            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, sprite_top)));
-        const sdl3d_vec3 br = sdl3d_vec3_add(
-            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, bottom)));
-        const sdl3d_vec3 tr = sdl3d_vec3_add(
-            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, sprite_top)));
-        const sdl3d_vec3 verts[4] = {bl, tl, br, tr};
+        const slayer3d_vec3 bl = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, left), slayer3d_vec3_scale(up, bottom)));
+        const slayer3d_vec3 tl = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, left), slayer3d_vec3_scale(up, sprite_top)));
+        const slayer3d_vec3 br = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, sprite_right), slayer3d_vec3_scale(up, bottom)));
+        const slayer3d_vec3 tr = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, sprite_right), slayer3d_vec3_scale(up, sprite_top)));
+        const slayer3d_vec3 verts[4] = {bl, tl, br, tr};
 
         for (int i = 0; i < 4; ++i)
         {
@@ -1478,40 +1491,41 @@ bool sdl3d_draw_billboard_ex(sdl3d_render_context *context, const sdl3d_texture2
     mesh.indices = indices;
     mesh.index_count = 12;
 
-    if (context->shading_mode != SDL3D_SHADING_UNLIT && context->light_count > 0)
+    if (context->shading_mode != SLAYER3D_SHADING_UNLIT && context->light_count > 0)
     {
-        sdl3d_lighting_params lp;
-        sdl3d_build_lighting_params(context, &lp);
+        slayer3d_lighting_params lp;
+        slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false,
-                                        NULL, NULL);
+        return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
+                                           false, NULL, NULL);
     }
 
-    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false,
-                                    NULL, NULL);
+    return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL,
+                                       false, NULL, NULL);
 }
 
-bool sdl3d_draw_billboard_shader_ex(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
-                                    sdl3d_vec2 size, sdl3d_vec2 anchor, sdl3d_billboard_mode mode, sdl3d_color tint,
-                                    bool lighting, const char *shader_vertex_source, const char *shader_fragment_source)
+bool slayer3d_draw_billboard_shader_ex(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                                       slayer3d_vec3 position, slayer3d_vec2 size, slayer3d_vec2 anchor,
+                                       slayer3d_billboard_mode mode, slayer3d_color tint, bool lighting,
+                                       const char *shader_vertex_source, const char *shader_fragment_source)
 {
-    sdl3d_vec3 right;
-    sdl3d_vec3 up;
-    sdl3d_vec3 normal;
-    sdl3d_lighting_params lp;
+    slayer3d_vec3 right;
+    slayer3d_vec3 up;
+    slayer3d_vec3 normal;
+    slayer3d_lighting_params lp;
     const float left = -anchor.x * size.x;
     const float bottom = -anchor.y * size.y;
     const float sprite_right = left + size.x;
     const float sprite_top = bottom + size.y;
-    sdl3d_mesh mesh;
+    slayer3d_mesh mesh;
     float positions[12];
     float normals[12];
     float uvs[8];
     unsigned int indices[12] = {0, 1, 2, 2, 1, 3, 2, 1, 0, 3, 1, 2};
 
     if (shader_fragment_source == NULL || shader_fragment_source[0] == '\0')
-        return sdl3d_draw_billboard_ex(context, texture, position, size, anchor, mode, tint);
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_billboard_shader_ex"))
+        return slayer3d_draw_billboard_ex(context, texture, position, size, anchor, mode, tint);
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_billboard_shader_ex"))
         return false;
     if (texture == NULL)
         return SDL_InvalidParamError("texture");
@@ -1522,37 +1536,37 @@ bool sdl3d_draw_billboard_shader_ex(sdl3d_render_context *context, const sdl3d_t
     if (anchor.x < 0.0f || anchor.x > 1.0f || anchor.y < 0.0f || anchor.y > 1.0f)
         return SDL_SetError("Billboard anchor must be in [0, 1] for both axes.");
 
-    right = sdl3d_view_camera_right(context);
-    if (mode == SDL3D_BILLBOARD_SPHERICAL)
+    right = slayer3d_view_camera_right(context);
+    if (mode == SLAYER3D_BILLBOARD_SPHERICAL)
     {
-        up = sdl3d_view_camera_up(context);
+        up = slayer3d_view_camera_up(context);
     }
     else
     {
-        const sdl3d_vec3 world_up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-        sdl3d_vec3 forward = sdl3d_view_camera_forward(context);
+        const slayer3d_vec3 world_up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+        slayer3d_vec3 forward = slayer3d_view_camera_forward(context);
         forward.y = 0.0f;
-        if (sdl3d_vec3_length_squared(forward) <= 0.000001f)
-            forward = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+        if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
+            forward = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
         else
-            forward = sdl3d_vec3_normalize(forward);
-        right = sdl3d_vec3_normalize(sdl3d_vec3_cross(forward, world_up));
-        if (sdl3d_vec3_length_squared(right) <= 0.000001f)
-            right = sdl3d_vec3_make(1.0f, 0.0f, 0.0f);
+            forward = slayer3d_vec3_normalize(forward);
+        right = slayer3d_vec3_normalize(slayer3d_vec3_cross(forward, world_up));
+        if (slayer3d_vec3_length_squared(right) <= 0.000001f)
+            right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
         up = world_up;
     }
-    normal = sdl3d_vec3_normalize(sdl3d_vec3_cross(right, up));
+    normal = slayer3d_vec3_normalize(slayer3d_vec3_cross(right, up));
 
     {
-        const sdl3d_vec3 bl =
-            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, bottom)));
-        const sdl3d_vec3 tl =
-            sdl3d_vec3_add(position, sdl3d_vec3_add(sdl3d_vec3_scale(right, left), sdl3d_vec3_scale(up, sprite_top)));
-        const sdl3d_vec3 br = sdl3d_vec3_add(
-            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, bottom)));
-        const sdl3d_vec3 tr = sdl3d_vec3_add(
-            position, sdl3d_vec3_add(sdl3d_vec3_scale(right, sprite_right), sdl3d_vec3_scale(up, sprite_top)));
-        const sdl3d_vec3 verts[4] = {bl, tl, br, tr};
+        const slayer3d_vec3 bl = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, left), slayer3d_vec3_scale(up, bottom)));
+        const slayer3d_vec3 tl = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, left), slayer3d_vec3_scale(up, sprite_top)));
+        const slayer3d_vec3 br = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, sprite_right), slayer3d_vec3_scale(up, bottom)));
+        const slayer3d_vec3 tr = slayer3d_vec3_add(
+            position, slayer3d_vec3_add(slayer3d_vec3_scale(right, sprite_right), slayer3d_vec3_scale(up, sprite_top)));
+        const slayer3d_vec3 verts[4] = {bl, tl, br, tr};
 
         for (int i = 0; i < 4; ++i)
         {
@@ -1584,65 +1598,65 @@ bool sdl3d_draw_billboard_shader_ex(sdl3d_render_context *context, const sdl3d_t
 
     if (lighting)
     {
-        sdl3d_build_lighting_params(context, &lp);
+        slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false,
-                                        shader_vertex_source, shader_fragment_source);
+        return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
+                                           false, shader_vertex_source, shader_fragment_source);
     }
 
-    return sdl3d_draw_mesh_internal(context, &mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false,
-                                    shader_vertex_source, shader_fragment_source);
+    return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL,
+                                       false, shader_vertex_source, shader_fragment_source);
 }
 
-bool sdl3d_draw_billboard(sdl3d_render_context *context, const sdl3d_texture2d *texture, sdl3d_vec3 position,
-                          sdl3d_vec2 size, sdl3d_color tint)
+bool slayer3d_draw_billboard(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                             slayer3d_vec3 position, slayer3d_vec2 size, slayer3d_color tint)
 {
-    return sdl3d_draw_billboard_ex(context, texture, position, size, (sdl3d_vec2){0.5f, 0.0f}, SDL3D_BILLBOARD_UPRIGHT,
-                                   tint);
+    return slayer3d_draw_billboard_ex(context, texture, position, size, (slayer3d_vec2){0.5f, 0.0f},
+                                      SLAYER3D_BILLBOARD_UPRIGHT, tint);
 }
 
-bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
-                     sdl3d_color tint)
+bool slayer3d_draw_mesh(slayer3d_render_context *context, const slayer3d_mesh *mesh, const slayer3d_texture2d *texture,
+                        slayer3d_color tint)
 {
-    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL)
+    if (context != NULL && context->shading_mode != SLAYER3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL)
     {
-        sdl3d_lighting_params lp;
-        sdl3d_build_lighting_params(context, &lp);
+        slayer3d_lighting_params lp;
+        slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, false,
-                                        NULL, NULL);
+        return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
+                                           false, NULL, NULL);
     }
-    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, false,
-                                    NULL, NULL);
+    return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL,
+                                       false, NULL, NULL);
 }
 
-bool sdl3d_draw_static_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
-                            sdl3d_color tint)
+bool slayer3d_draw_static_mesh(slayer3d_render_context *context, const slayer3d_mesh *mesh,
+                               const slayer3d_texture2d *texture, slayer3d_color tint)
 {
-    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL)
+    if (context != NULL && context->shading_mode != SLAYER3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL)
     {
-        sdl3d_lighting_params lp;
-        sdl3d_build_lighting_params(context, &lp);
+        slayer3d_lighting_params lp;
+        slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, true,
-                                        NULL, NULL);
+        return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
+                                           true, NULL, NULL);
     }
-    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, true, NULL,
-                                    NULL);
+    return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL, true,
+                                       NULL, NULL);
 }
 
 /* ------------------------------------------------------------------ */
 /* Model node hierarchy helpers                                        */
 /* ------------------------------------------------------------------ */
 
-static sdl3d_mat4 sdl3d_mat4_from_trs_node(const float *t, const float *r, const float *s)
+static slayer3d_mat4 slayer3d_mat4_from_trs_node(const float *t, const float *r, const float *s)
 {
     float x = r[0], y = r[1], z = r[2], w = r[3];
     float x2 = x + x, y2 = y + y, z2 = z + z;
     float xx = x * x2, xy = x * y2, xz = x * z2;
     float yy = y * y2, yz = y * z2, zz = z * z2;
     float wx = w * x2, wy = w * y2, wz = w * z2;
-    sdl3d_mat4 m;
+    slayer3d_mat4 m;
     m.m[0] = (1.0f - (yy + zz)) * s[0];
     m.m[1] = (xy + wz) * s[0];
     m.m[2] = (xz - wy) * s[0];
@@ -1666,17 +1680,18 @@ static sdl3d_mat4 sdl3d_mat4_from_trs_node(const float *t, const float *r, const
  * Draw a single mesh by index, resolving material/texture/lighting.
  * joint_matrices may be NULL for non-skinned draws.
  */
-static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
-                                  const sdl3d_model *model, int mesh_index, const sdl3d_texture2d *lightmap_texture,
-                                  sdl3d_vec4 tint_modulate, const sdl3d_mat4 *joint_matrices)
+static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
+                                     const slayer3d_model *model, int mesh_index,
+                                     const slayer3d_texture2d *lightmap_texture, slayer3d_vec4 tint_modulate,
+                                     const slayer3d_mat4 *joint_matrices)
 {
-    const sdl3d_mesh *mesh = &model->meshes[mesh_index];
-    const sdl3d_texture2d *texture = NULL;
-    const sdl3d_material *material = NULL;
-    sdl3d_vec4 mesh_modulate = tint_modulate;
+    const slayer3d_mesh *mesh = &model->meshes[mesh_index];
+    const slayer3d_texture2d *texture = NULL;
+    const slayer3d_material *material = NULL;
+    slayer3d_vec4 mesh_modulate = tint_modulate;
     bool ok = true;
 
-    if (!sdl3d_mesh_is_visible(context, mesh))
+    if (!slayer3d_mesh_is_visible(context, mesh))
     {
         return true;
     }
@@ -1695,10 +1710,10 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_ass
         }
 
         material = &model->materials[mesh->material_index];
-        mesh_modulate.x = sdl3d_clamp01(mesh_modulate.x * material->albedo[0]);
-        mesh_modulate.y = sdl3d_clamp01(mesh_modulate.y * material->albedo[1]);
-        mesh_modulate.z = sdl3d_clamp01(mesh_modulate.z * material->albedo[2]);
-        mesh_modulate.w = sdl3d_clamp01(mesh_modulate.w * material->albedo[3]);
+        mesh_modulate.x = slayer3d_clamp01(mesh_modulate.x * material->albedo[0]);
+        mesh_modulate.y = slayer3d_clamp01(mesh_modulate.y * material->albedo[1]);
+        mesh_modulate.z = slayer3d_clamp01(mesh_modulate.z * material->albedo[2]);
+        mesh_modulate.w = slayer3d_clamp01(mesh_modulate.w * material->albedo[3]);
 
         if (material->albedo_map != NULL && material->albedo_map[0] != '\0')
         {
@@ -1708,7 +1723,7 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_ass
                 if (tex_idx >= 0 && tex_idx < model->embedded_texture_count &&
                     model->embedded_textures[tex_idx].pixels != NULL)
                 {
-                    sdl3d_texture_cache_entry *entry = NULL;
+                    slayer3d_texture_cache_entry *entry = NULL;
                     for (entry = context->texture_cache; entry != NULL; entry = entry->next)
                     {
                         if (SDL_strcmp(entry->path, material->albedo_map) == 0)
@@ -1719,11 +1734,11 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_ass
                     }
                     if (texture == NULL)
                     {
-                        entry = (sdl3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
+                        entry = (slayer3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
                         if (entry != NULL)
                         {
                             entry->path = SDL_strdup(material->albedo_map);
-                            if (sdl3d_create_texture_from_image(&model->embedded_textures[tex_idx], &entry->texture))
+                            if (slayer3d_create_texture_from_image(&model->embedded_textures[tex_idx], &entry->texture))
                             {
                                 entry->next = context->texture_cache;
                                 context->texture_cache = entry;
@@ -1740,8 +1755,8 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_ass
             }
             else
             {
-                ok = sdl3d_texture_cache_get_or_load_asset(&context->texture_cache, assets, model->source_path,
-                                                           material->albedo_map, &texture);
+                ok = slayer3d_texture_cache_get_or_load_asset(&context->texture_cache, assets, model->source_path,
+                                                              material->albedo_map, &texture);
                 if (!ok)
                 {
                     return false;
@@ -1751,12 +1766,12 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_ass
     }
 
     {
-        sdl3d_lighting_params lp_storage;
-        const sdl3d_lighting_params *lp_ptr = NULL;
+        slayer3d_lighting_params lp_storage;
+        const slayer3d_lighting_params *lp_ptr = NULL;
 
-        if (context->shading_mode != SDL3D_SHADING_UNLIT && mesh->normals != NULL)
+        if (context->shading_mode != SLAYER3D_SHADING_UNLIT && mesh->normals != NULL)
         {
-            sdl3d_build_lighting_params(context, &lp_storage);
+            slayer3d_build_lighting_params(context, &lp_storage);
             lp_storage.baked_light_mode = mesh->colors_are_baked_light;
             if (material != NULL)
             {
@@ -1773,8 +1788,8 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_ass
             lp_ptr = &lp_storage;
         }
 
-        ok = sdl3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr, joint_matrices,
-                                      true, NULL, NULL);
+        ok = slayer3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr,
+                                         joint_matrices, true, NULL, NULL);
     }
     return ok;
 }
@@ -1783,51 +1798,51 @@ static bool sdl3d_draw_model_mesh(sdl3d_render_context *context, const sdl3d_ass
  * Recursively draw a node and its children, applying local TRS transforms
  * via the matrix stack.
  */
-static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
-                                  const sdl3d_model *model, int node_index, sdl3d_vec4 tint_modulate,
-                                  const sdl3d_mat4 *joint_matrices)
+static bool slayer3d_draw_model_node(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
+                                     const slayer3d_model *model, int node_index, slayer3d_vec4 tint_modulate,
+                                     const slayer3d_mat4 *joint_matrices)
 {
     if (node_index < 0 || node_index >= model->node_count)
     {
         return true;
     }
 
-    const sdl3d_model_node *node = &model->nodes[node_index];
+    const slayer3d_model_node *node = &model->nodes[node_index];
 
-    if (!sdl3d_push_matrix(context))
+    if (!slayer3d_push_matrix(context))
     {
         return false;
     }
 
     /* Apply this node's local TRS transform. */
-    sdl3d_mat4 local;
+    slayer3d_mat4 local;
     if (node->has_matrix)
     {
         SDL_memcpy(local.m, node->local_matrix, sizeof(local.m));
     }
     else
     {
-        local = sdl3d_mat4_from_trs_node(node->translation, node->rotation, node->scale);
+        local = slayer3d_mat4_from_trs_node(node->translation, node->rotation, node->scale);
     }
     context->model_stack[context->model_stack_depth - 1] =
-        sdl3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], local);
-    sdl3d_update_current_model_matrices(context);
+        slayer3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], local);
+    slayer3d_update_current_model_matrices(context);
 
     bool ok = true;
 
     /* Draw this node's mesh if it has one. */
     if (node->mesh_index >= 0 && node->mesh_index < model->mesh_count)
     {
-        ok = sdl3d_draw_model_mesh(context, assets, model, node->mesh_index, NULL, tint_modulate, joint_matrices);
+        ok = slayer3d_draw_model_mesh(context, assets, model, node->mesh_index, NULL, tint_modulate, joint_matrices);
     }
 
     /* Recurse into children. */
     for (int c = 0; ok && c < node->child_count; ++c)
     {
-        ok = sdl3d_draw_model_node(context, assets, model, node->children[c], tint_modulate, joint_matrices);
+        ok = slayer3d_draw_model_node(context, assets, model, node->children[c], tint_modulate, joint_matrices);
     }
 
-    if (!sdl3d_pop_matrix(context))
+    if (!slayer3d_pop_matrix(context))
     {
         return false;
     }
@@ -1835,28 +1850,30 @@ static bool sdl3d_draw_model_node(sdl3d_render_context *context, const sdl3d_ass
     return ok;
 }
 
-bool sdl3d_draw_model(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position, float scale,
-                      sdl3d_color tint)
+bool slayer3d_draw_model(slayer3d_render_context *context, const slayer3d_model *model, slayer3d_vec3 position,
+                         float scale, slayer3d_color tint)
 {
-    return sdl3d_draw_model_ex(context, model, position, sdl3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f,
-                               sdl3d_vec3_make(scale, scale, scale), tint);
+    return slayer3d_draw_model_ex(context, model, position, slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f,
+                                  slayer3d_vec3_make(scale, scale, scale), tint);
 }
 
-bool sdl3d_draw_model_ex(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
-                         sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint)
+bool slayer3d_draw_model_ex(slayer3d_render_context *context, const slayer3d_model *model, slayer3d_vec3 position,
+                            slayer3d_vec3 rotation_axis, float rotation_angle_radians, slayer3d_vec3 scale,
+                            slayer3d_color tint)
 {
-    return sdl3d_draw_model_ex_with_assets(context, NULL, model, position, rotation_axis, rotation_angle_radians, scale,
-                                           tint);
+    return slayer3d_draw_model_ex_with_assets(context, NULL, model, position, rotation_axis, rotation_angle_radians,
+                                              scale, tint);
 }
 
-bool sdl3d_draw_model_ex_with_assets(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
-                                     const sdl3d_model *model, sdl3d_vec3 position, sdl3d_vec3 rotation_axis,
-                                     float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint)
+bool slayer3d_draw_model_ex_with_assets(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
+                                        const slayer3d_model *model, slayer3d_vec3 position,
+                                        slayer3d_vec3 rotation_axis, float rotation_angle_radians, slayer3d_vec3 scale,
+                                        slayer3d_color tint)
 {
-    const sdl3d_vec4 tint_modulate = sdl3d_color_to_modulate(tint);
+    const slayer3d_vec4 tint_modulate = slayer3d_color_to_modulate(tint);
     bool ok = false;
 
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_model_ex"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_model_ex"))
     {
         return false;
     }
@@ -1869,37 +1886,37 @@ bool sdl3d_draw_model_ex_with_assets(sdl3d_render_context *context, const sdl3d_
         return SDL_SetError("Model draw requires at least one mesh.");
     }
 
-    if (!sdl3d_push_matrix(context))
+    if (!slayer3d_push_matrix(context))
     {
         return false;
     }
 
-    ok = sdl3d_translate(context, position.x, position.y, position.z);
+    ok = slayer3d_translate(context, position.x, position.y, position.z);
     if (ok && rotation_angle_radians != 0.0f)
     {
-        ok = sdl3d_rotate(context, rotation_axis, rotation_angle_radians);
+        ok = slayer3d_rotate(context, rotation_axis, rotation_angle_radians);
     }
     if (ok)
     {
-        ok = sdl3d_scale(context, scale.x, scale.y, scale.z);
+        ok = slayer3d_scale(context, scale.x, scale.y, scale.z);
     }
 
     if (ok && model->nodes != NULL && model->root_count > 0)
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = sdl3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL);
+            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL);
+            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL);
         }
     }
 
-    if (!sdl3d_pop_matrix(context))
+    if (!slayer3d_pop_matrix(context))
     {
         return false;
     }
@@ -1907,28 +1924,29 @@ bool sdl3d_draw_model_ex_with_assets(sdl3d_render_context *context, const sdl3d_
     return ok;
 }
 
-bool sdl3d_draw_model_skinned(sdl3d_render_context *context, const sdl3d_model *model, sdl3d_vec3 position,
-                              sdl3d_vec3 rotation_axis, float rotation_angle_radians, sdl3d_vec3 scale,
-                              sdl3d_color tint, const sdl3d_mat4 *joint_matrices)
+bool slayer3d_draw_model_skinned(slayer3d_render_context *context, const slayer3d_model *model, slayer3d_vec3 position,
+                                 slayer3d_vec3 rotation_axis, float rotation_angle_radians, slayer3d_vec3 scale,
+                                 slayer3d_color tint, const slayer3d_mat4 *joint_matrices)
 {
-    return sdl3d_draw_model_skinned_with_assets(context, NULL, model, position, rotation_axis, rotation_angle_radians,
-                                                scale, tint, joint_matrices);
+    return slayer3d_draw_model_skinned_with_assets(context, NULL, model, position, rotation_axis,
+                                                   rotation_angle_radians, scale, tint, joint_matrices);
 }
 
-bool sdl3d_draw_model_skinned_with_assets(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
-                                          const sdl3d_model *model, sdl3d_vec3 position, sdl3d_vec3 rotation_axis,
-                                          float rotation_angle_radians, sdl3d_vec3 scale, sdl3d_color tint,
-                                          const sdl3d_mat4 *joint_matrices)
+bool slayer3d_draw_model_skinned_with_assets(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
+                                             const slayer3d_model *model, slayer3d_vec3 position,
+                                             slayer3d_vec3 rotation_axis, float rotation_angle_radians,
+                                             slayer3d_vec3 scale, slayer3d_color tint,
+                                             const slayer3d_mat4 *joint_matrices)
 {
     /* Re-use draw_model_ex logic but pass joint_matrices through.
      * For now, call draw_model_ex for the non-skinned parts and
      * handle skinning by replacing the NULL. */
     /* This is a simplified version — we duplicate the draw_model_ex
      * body but pass joint_matrices to draw_mesh_internal. */
-    const sdl3d_vec4 tint_modulate = sdl3d_color_to_modulate(tint);
+    const slayer3d_vec4 tint_modulate = slayer3d_color_to_modulate(tint);
     bool ok = false;
 
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_model_skinned"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_model_skinned"))
     {
         return false;
     }
@@ -1941,37 +1959,37 @@ bool sdl3d_draw_model_skinned_with_assets(sdl3d_render_context *context, const s
         return SDL_SetError("Model draw requires at least one mesh.");
     }
 
-    if (!sdl3d_push_matrix(context))
+    if (!slayer3d_push_matrix(context))
     {
         return false;
     }
 
-    ok = sdl3d_translate(context, position.x, position.y, position.z);
+    ok = slayer3d_translate(context, position.x, position.y, position.z);
     if (ok && rotation_angle_radians != 0.0f)
     {
-        ok = sdl3d_rotate(context, rotation_axis, rotation_angle_radians);
+        ok = slayer3d_rotate(context, rotation_axis, rotation_angle_radians);
     }
     if (ok)
     {
-        ok = sdl3d_scale(context, scale.x, scale.y, scale.z);
+        ok = slayer3d_scale(context, scale.x, scale.y, scale.z);
     }
 
     if (ok && model->nodes != NULL && model->root_count > 0)
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = sdl3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, joint_matrices);
+            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, joint_matrices);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = sdl3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, joint_matrices);
+            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, joint_matrices);
         }
     }
 
-    if (!sdl3d_pop_matrix(context))
+    if (!slayer3d_pop_matrix(context))
     {
         return false;
     }
@@ -1979,7 +1997,8 @@ bool sdl3d_draw_model_skinned_with_assets(sdl3d_render_context *context, const s
     return ok;
 }
 
-bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, float w, float h, sdl3d_color color)
+bool slayer3d_draw_rect_overlay(slayer3d_render_context *context, float x, float y, float w, float h,
+                                slayer3d_color color)
 {
     SDL_Rect scissor_rect = {0, 0, 0, 0};
     bool scissor_enabled = false;
@@ -1992,11 +2011,12 @@ bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, fl
     {
         return true;
     }
-    if (sdl3d_is_in_mode_3d(context))
+    if (slayer3d_is_in_mode_3d(context))
     {
-        return SDL_SetError("sdl3d_draw_rect_overlay must be called outside sdl3d_begin_mode_3d / sdl3d_end_mode_3d");
+        return SDL_SetError(
+            "slayer3d_draw_rect_overlay must be called outside slayer3d_begin_mode_3d / slayer3d_end_mode_3d");
     }
-    if (!sdl3d_overlay_capture_scissor(context, &scissor_enabled, &scissor_rect))
+    if (!slayer3d_overlay_capture_scissor(context, &scissor_enabled, &scissor_rect))
     {
         return false;
     }
@@ -2004,16 +2024,16 @@ bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, fl
     if (!context->gl)
     {
         SDL_Rect rect = {(int)x, (int)y, (int)w, (int)h};
-        rect = sdl3d_rect_overlay_intersect_scissor(rect, scissor_enabled, &scissor_rect);
+        rect = slayer3d_rect_overlay_intersect_scissor(rect, scissor_enabled, &scissor_rect);
         if (rect.w <= 0 || rect.h <= 0)
         {
             return true;
         }
-        return sdl3d_clear_render_context_rect(context, &rect, color);
+        return slayer3d_clear_render_context_rect(context, &rect, color);
     }
 
-    const int ctx_w = sdl3d_get_render_context_width(context);
-    const int ctx_h = sdl3d_get_render_context_height(context);
+    const int ctx_w = slayer3d_get_render_context_width(context);
+    const int ctx_h = slayer3d_get_render_context_height(context);
     if (ctx_w <= 0 || ctx_h <= 0)
     {
         return SDL_SetError("Invalid render context dimensions");
@@ -2039,9 +2059,9 @@ bool sdl3d_draw_rect_overlay(sdl3d_render_context *context, float x, float y, fl
     mvp[10] = -1.0f;
     mvp[15] = 1.0f;
 
-    return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, tint, NULL, scissor_enabled,
-                                   scissor_enabled ? &scissor_rect : NULL, SDL3D_OVERLAY_EFFECT_NONE, 0.0f, 0u, NULL,
-                                   NULL);
+    return slayer3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, tint, NULL, scissor_enabled,
+                                      scissor_enabled ? &scissor_rect : NULL, SLAYER3D_OVERLAY_EFFECT_NONE, 0.0f, 0u,
+                                      NULL, NULL);
 }
 
 static Uint8 overlay_to_u8(float value)
@@ -2049,7 +2069,7 @@ static Uint8 overlay_to_u8(float value)
     return (Uint8)SDL_clamp((int)(value * 255.0f + 0.5f), 0, 255);
 }
 
-static void overlay_blend_pixel(Uint8 *pixel, sdl3d_color color)
+static void overlay_blend_pixel(Uint8 *pixel, slayer3d_color color)
 {
     if (pixel == NULL || color.a == 0)
     {
@@ -2085,13 +2105,13 @@ static void overlay_blend_pixel(Uint8 *pixel, sdl3d_color color)
     pixel[3] = (Uint8)SDL_clamp((int)(out_a * 255.0f + 0.5f), 0, 255);
 }
 
-static bool draw_texture_overlay_software(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x,
-                                          float y, float w, float h, sdl3d_color tint, bool scissor_enabled,
-                                          const SDL_Rect *scissor_rect, sdl3d_overlay_effect effect,
+static bool draw_texture_overlay_software(slayer3d_render_context *context, const slayer3d_texture2d *texture, float x,
+                                          float y, float w, float h, slayer3d_color tint, bool scissor_enabled,
+                                          const SDL_Rect *scissor_rect, slayer3d_overlay_effect effect,
                                           float effect_progress, Uint32 effect_seed)
 {
     SDL_Rect rect = {(int)x, (int)y, (int)w, (int)h};
-    rect = sdl3d_rect_overlay_intersect_scissor(rect, scissor_enabled, scissor_rect);
+    rect = slayer3d_rect_overlay_intersect_scissor(rect, scissor_enabled, scissor_rect);
     if (rect.w <= 0 || rect.h <= 0)
     {
         return true;
@@ -2110,11 +2130,11 @@ static bool draw_texture_overlay_software(sdl3d_render_context *context, const s
             float a = 0.0f;
             float u = ((float)px + 0.5f - x) * inv_w;
             float v = ((float)py + 0.5f - y) * inv_h;
-            if (effect == SDL3D_OVERLAY_EFFECT_MELT)
+            if (effect == SLAYER3D_OVERLAY_EFFECT_MELT)
             {
                 float melt_u = u;
                 float melt_v = v;
-                if (!sdl3d_overlay_melt_sample(u, v, effect_progress, effect_seed, columns, &melt_u, &melt_v))
+                if (!slayer3d_overlay_melt_sample(u, v, effect_progress, effect_seed, columns, &melt_u, &melt_v))
                 {
                     continue;
                 }
@@ -2125,8 +2145,8 @@ static bool draw_texture_overlay_software(sdl3d_render_context *context, const s
                     continue;
                 }
             }
-            sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &r, &g, &b, &a);
-            const sdl3d_color color = {
+            slayer3d_texture_sample_rgba(texture, u, v, 0.0f, &r, &g, &b, &a);
+            const slayer3d_color color = {
                 overlay_to_u8(r * ((float)tint.r / 255.0f)),
                 overlay_to_u8(g * ((float)tint.g / 255.0f)),
                 overlay_to_u8(b * ((float)tint.b / 255.0f)),
@@ -2138,18 +2158,18 @@ static bool draw_texture_overlay_software(sdl3d_render_context *context, const s
     return true;
 }
 
-bool sdl3d_draw_texture_overlay(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
-                                float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect, float effect_progress,
-                                Uint32 effect_seed)
+bool slayer3d_draw_texture_overlay(slayer3d_render_context *context, const slayer3d_texture2d *texture, float x,
+                                   float y, float w, float h, slayer3d_color tint, slayer3d_overlay_effect effect,
+                                   float effect_progress, Uint32 effect_seed)
 {
-    return sdl3d_draw_texture_overlay_shader(context, texture, x, y, w, h, tint, effect, effect_progress, effect_seed,
-                                             NULL, NULL);
+    return slayer3d_draw_texture_overlay_shader(context, texture, x, y, w, h, tint, effect, effect_progress,
+                                                effect_seed, NULL, NULL);
 }
 
-bool sdl3d_draw_texture_overlay_shader(sdl3d_render_context *context, const sdl3d_texture2d *texture, float x, float y,
-                                       float w, float h, sdl3d_color tint, sdl3d_overlay_effect effect,
-                                       float effect_progress, Uint32 effect_seed, const char *shader_vertex_source,
-                                       const char *shader_fragment_source)
+bool slayer3d_draw_texture_overlay_shader(slayer3d_render_context *context, const slayer3d_texture2d *texture, float x,
+                                          float y, float w, float h, slayer3d_color tint,
+                                          slayer3d_overlay_effect effect, float effect_progress, Uint32 effect_seed,
+                                          const char *shader_vertex_source, const char *shader_fragment_source)
 {
     SDL_Rect scissor_rect = {0, 0, 0, 0};
     bool scissor_enabled = false;
@@ -2166,12 +2186,12 @@ bool sdl3d_draw_texture_overlay_shader(sdl3d_render_context *context, const sdl3
     {
         return true;
     }
-    if (sdl3d_is_in_mode_3d(context))
+    if (slayer3d_is_in_mode_3d(context))
     {
-        return SDL_SetError("sdl3d_draw_texture_overlay must be called outside sdl3d_begin_mode_3d / "
-                            "sdl3d_end_mode_3d");
+        return SDL_SetError("slayer3d_draw_texture_overlay must be called outside slayer3d_begin_mode_3d / "
+                            "slayer3d_end_mode_3d");
     }
-    if (!sdl3d_overlay_capture_scissor(context, &scissor_enabled, &scissor_rect))
+    if (!slayer3d_overlay_capture_scissor(context, &scissor_enabled, &scissor_rect))
     {
         return false;
     }
@@ -2182,8 +2202,8 @@ bool sdl3d_draw_texture_overlay_shader(sdl3d_render_context *context, const sdl3
                                              effect_progress, effect_seed);
     }
 
-    const int ctx_w = sdl3d_get_render_context_width(context);
-    const int ctx_h = sdl3d_get_render_context_height(context);
+    const int ctx_w = slayer3d_get_render_context_width(context);
+    const int ctx_h = slayer3d_get_render_context_height(context);
     if (ctx_w <= 0 || ctx_h <= 0)
     {
         return SDL_SetError("Invalid render context dimensions");
@@ -2210,12 +2230,12 @@ bool sdl3d_draw_texture_overlay_shader(sdl3d_render_context *context, const sdl3
     mvp[10] = -1.0f;
     mvp[15] = 1.0f;
 
-    return sdl3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, gl_tint, texture, scissor_enabled,
-                                   scissor_enabled ? &scissor_rect : NULL, effect, effect_progress, effect_seed,
-                                   shader_vertex_source, shader_fragment_source);
+    return slayer3d_gl_append_overlay(context->gl, positions, uvs, 6, mvp, gl_tint, texture, scissor_enabled,
+                                      scissor_enabled ? &scissor_rect : NULL, effect, effect_progress, effect_seed,
+                                      shader_vertex_source, shader_fragment_source);
 }
 
-bool sdl3d_get_framebuffer_pixel(const sdl3d_render_context *context, int x, int y, sdl3d_color *out_color)
+bool slayer3d_get_framebuffer_pixel(const slayer3d_render_context *context, int x, int y, slayer3d_color *out_color)
 {
     if (context == NULL)
     {
@@ -2240,7 +2260,7 @@ bool sdl3d_get_framebuffer_pixel(const sdl3d_render_context *context, int x, int
     return true;
 }
 
-bool sdl3d_get_framebuffer_depth(const sdl3d_render_context *context, int x, int y, float *out_depth)
+bool slayer3d_get_framebuffer_depth(const slayer3d_render_context *context, int x, int y, float *out_depth)
 {
     if (context == NULL)
     {
@@ -2264,25 +2284,26 @@ bool sdl3d_get_framebuffer_depth(const sdl3d_render_context *context, int x, int
 /* Level drawing with portal visibility                                */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_draw_level(sdl3d_render_context *context, const sdl3d_level *level, const sdl3d_visibility_result *vis,
-                      sdl3d_color tint)
+bool slayer3d_draw_level(slayer3d_render_context *context, const slayer3d_level *level,
+                         const slayer3d_visibility_result *vis, slayer3d_color tint)
 {
-    return sdl3d_draw_level_with_assets(context, NULL, level, vis, tint);
+    return slayer3d_draw_level_with_assets(context, NULL, level, vis, tint);
 }
 
-bool sdl3d_draw_level_with_assets(sdl3d_render_context *context, const sdl3d_asset_resolver *assets,
-                                  const sdl3d_level *level, const sdl3d_visibility_result *vis, sdl3d_color tint)
+bool slayer3d_draw_level_with_assets(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
+                                     const slayer3d_level *level, const slayer3d_visibility_result *vis,
+                                     slayer3d_color tint)
 {
-    if (!sdl3d_require_mode_3d(context, "sdl3d_draw_level"))
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_level"))
         return false;
     if (!level)
         return SDL_InvalidParamError("level");
 
-    const sdl3d_model *model = &level->model;
+    const slayer3d_model *model = &level->model;
     if (!model->meshes || model->mesh_count <= 0)
         return SDL_SetError("Level has no meshes.");
 
-    const sdl3d_vec4 tint_modulate = sdl3d_color_to_modulate(tint);
+    const slayer3d_vec4 tint_modulate = slayer3d_color_to_modulate(tint);
     bool ok = true;
 
     for (int i = 0; ok && i < model->mesh_count; ++i)
@@ -2294,9 +2315,9 @@ bool sdl3d_draw_level_with_assets(sdl3d_render_context *context, const sdl3d_ass
             if (sid >= 0 && sid < level->sector_count && !vis->sector_visible[sid])
                 continue;
         }
-        ok = sdl3d_draw_model_mesh(context, assets, model, i,
-                                   level->lightmap_texture.pixels != NULL ? &level->lightmap_texture : NULL,
-                                   tint_modulate, NULL);
+        ok = slayer3d_draw_model_mesh(context, assets, model, i,
+                                      level->lightmap_texture.pixels != NULL ? &level->lightmap_texture : NULL,
+                                      tint_modulate, NULL);
     }
 
     return ok;

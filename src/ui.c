@@ -1,111 +1,111 @@
 /*
- * SDL_3D immediate-mode UI core.
+ * Slayer3D immediate-mode UI core.
  *
  * Phase 1 implementation of issue #62: context, event routing, theme,
  * screen-space draw primitives, and the label widget.
  *
  * Rendering model: widget calls append commands into a per-frame draw
- * list. sdl3d_ui_render walks the list in order and submits everything
- * through the dedicated overlay layer (rects via sdl3d_draw_rect_overlay,
- * text via sdl3d_draw_text_overlay). This keeps UI rendering outside the
+ * list. slayer3d_ui_render walks the list in order and submits everything
+ * through the dedicated overlay layer (rects via slayer3d_draw_rect_overlay,
+ * text via slayer3d_draw_text_overlay). This keeps UI rendering outside the
  * main 3D pipeline and post-processing path, which is critical for crisp
  * editor/UI output and for avoiding deferred-draw lifetime bugs.
  */
 
-#include "sdl3d/ui.h"
+#include "slayer3d/ui.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/camera.h"
-#include "sdl3d/drawing3d.h"
-#include "sdl3d/font.h"
-#include "sdl3d/lighting.h"
-#include "sdl3d/math.h"
-#include "sdl3d/render_context.h"
-#include "sdl3d/types.h"
+#include "slayer3d/camera.h"
+#include "slayer3d/drawing3d.h"
+#include "slayer3d/font.h"
+#include "slayer3d/lighting.h"
+#include "slayer3d/math.h"
+#include "slayer3d/render_context.h"
+#include "slayer3d/types.h"
 
 /* ------------------------------------------------------------------ */
 /* Draw command model                                                  */
 /* ------------------------------------------------------------------ */
 
-typedef enum sdl3d_ui_cmd_kind
+typedef enum slayer3d_ui_cmd_kind
 {
-    SDL3D_UI_CMD_RECT = 0,
-    SDL3D_UI_CMD_TEXT,
-    SDL3D_UI_CMD_CLIP_PUSH,
-    SDL3D_UI_CMD_CLIP_POP,
-} sdl3d_ui_cmd_kind;
+    SLAYER3D_UI_CMD_RECT = 0,
+    SLAYER3D_UI_CMD_TEXT,
+    SLAYER3D_UI_CMD_CLIP_PUSH,
+    SLAYER3D_UI_CMD_CLIP_POP,
+} slayer3d_ui_cmd_kind;
 
-typedef struct sdl3d_ui_cmd
+typedef struct slayer3d_ui_cmd
 {
-    sdl3d_ui_cmd_kind kind;
+    slayer3d_ui_cmd_kind kind;
     float x, y, w, h;
-    sdl3d_color color;
+    slayer3d_color color;
     int text_offset; /* byte offset into ctx->text_arena (-1 if none) */
-} sdl3d_ui_cmd;
+} slayer3d_ui_cmd;
 
 /* ------------------------------------------------------------------ */
 /* Clip stack                                                          */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_MAX_CLIP_DEPTH 16
+#define SLAYER3D_UI_MAX_CLIP_DEPTH 16
 
-typedef struct sdl3d_ui_clip_rect
+typedef struct slayer3d_ui_clip_rect
 {
     float x, y, w, h;
-} sdl3d_ui_clip_rect;
+} slayer3d_ui_clip_rect;
 
 /* ------------------------------------------------------------------ */
 /* Layout types                                                        */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_MAX_LAYOUT_DEPTH 16
+#define SLAYER3D_UI_MAX_LAYOUT_DEPTH 16
 
-typedef enum sdl3d_ui_layout_dir
+typedef enum slayer3d_ui_layout_dir
 {
-    SDL3D_UI_LAYOUT_VBOX = 0,
-    SDL3D_UI_LAYOUT_HBOX = 1
-} sdl3d_ui_layout_dir;
+    SLAYER3D_UI_LAYOUT_VBOX = 0,
+    SLAYER3D_UI_LAYOUT_HBOX = 1
+} slayer3d_ui_layout_dir;
 
-typedef struct sdl3d_ui_layout_entry
+typedef struct slayer3d_ui_layout_entry
 {
-    sdl3d_ui_layout_dir direction;
+    slayer3d_ui_layout_dir direction;
     float x, y, w, h; /* bounding region */
     float cursor;     /* current position along the layout axis */
     float cross_max;  /* tallest child (vbox) or widest child (hbox); tracked for future use */
     float spacing;    /* gap between items */
     bool first_item;  /* suppress spacing before the first item */
-} sdl3d_ui_layout_entry;
+} slayer3d_ui_layout_entry;
 
 /* ------------------------------------------------------------------ */
 /* Context                                                             */
 /* ------------------------------------------------------------------ */
 
-struct sdl3d_ui_context
+struct slayer3d_ui_context
 {
-    const sdl3d_font *font;
-    sdl3d_ui_theme theme;
+    const slayer3d_font *font;
+    slayer3d_ui_theme theme;
 
     int screen_w, screen_h;
     float mouse_scale_x, mouse_scale_y; /* window-to-logical coordinate mapping */
     float mouse_offset_x, mouse_offset_y;
     bool frame_open;
 
-    sdl3d_ui_input_state input;
-    sdl3d_ui_id hovered_id;
-    sdl3d_ui_id active_id;
-    sdl3d_ui_id focused_id;
+    slayer3d_ui_input_state input;
+    slayer3d_ui_id hovered_id;
+    slayer3d_ui_id active_id;
+    slayer3d_ui_id focused_id;
 
     /* Growable command buffer. */
-    sdl3d_ui_cmd *cmds;
+    slayer3d_ui_cmd *cmds;
     int cmd_count;
     int cmd_capacity;
 
     /* Popup command buffer. Popups render after the main UI command list
      * so dropdowns and future menus appear above ordinary widgets. */
-    sdl3d_ui_cmd *popup_cmds;
+    slayer3d_ui_cmd *popup_cmds;
     int popup_cmd_count;
     int popup_cmd_capacity;
 
@@ -117,28 +117,28 @@ struct sdl3d_ui_context
 
     /* Clip stack, tracked at command-submission time so later queries
      * (e.g., hit testing) could also respect it in future phases. */
-    sdl3d_ui_clip_rect clip_stack[SDL3D_UI_MAX_CLIP_DEPTH];
+    slayer3d_ui_clip_rect clip_stack[SLAYER3D_UI_MAX_CLIP_DEPTH];
     int clip_depth;
 
     /* Active popup capture region. While a popup is open, widgets other
      * than its owner must not react to pointer input that lands within
      * the popup's bounds. */
-    sdl3d_ui_id popup_owner_id;
-    sdl3d_ui_clip_rect popup_rect;
+    slayer3d_ui_id popup_owner_id;
+    slayer3d_ui_clip_rect popup_rect;
 
     /* Active scroll region — set by begin_scroll, consumed by end_scroll. */
-#define SDL3D_UI_MAX_SCROLL_DEPTH 8
+#define SLAYER3D_UI_MAX_SCROLL_DEPTH 8
     struct
     {
         float x, y, w, h;
         float *offset;
         float content_height;
-    } scroll_stack[SDL3D_UI_MAX_SCROLL_DEPTH];
+    } scroll_stack[SLAYER3D_UI_MAX_SCROLL_DEPTH];
     int scroll_depth;
 
     /* Layout stack — panels and containers push layout entries that
      * auto-position child widgets. */
-    sdl3d_ui_layout_entry layout_stack[SDL3D_UI_MAX_LAYOUT_DEPTH];
+    slayer3d_ui_layout_entry layout_stack[SLAYER3D_UI_MAX_LAYOUT_DEPTH];
     int layout_depth;
 
     /* Tree view indent level (incremented by tree_push, decremented by tree_pop). */
@@ -154,7 +154,7 @@ struct sdl3d_ui_context
  * Doubles capacity each time. Operates via pointer indirection so the
  * same function serves both ui->cmds and ui->popup_cmds.
  */
-static bool ui_ensure_cmd_capacity(sdl3d_ui_cmd **cmds, int *capacity, int needed)
+static bool ui_ensure_cmd_capacity(slayer3d_ui_cmd **cmds, int *capacity, int needed)
 {
     if (needed <= *capacity)
     {
@@ -165,7 +165,7 @@ static bool ui_ensure_cmd_capacity(sdl3d_ui_cmd **cmds, int *capacity, int neede
     {
         new_cap *= 2;
     }
-    sdl3d_ui_cmd *new_cmds = (sdl3d_ui_cmd *)SDL_realloc(*cmds, (size_t)new_cap * sizeof(*new_cmds));
+    slayer3d_ui_cmd *new_cmds = (slayer3d_ui_cmd *)SDL_realloc(*cmds, (size_t)new_cap * sizeof(*new_cmds));
     if (!new_cmds)
     {
         SDL_OutOfMemory();
@@ -181,7 +181,7 @@ static bool ui_ensure_cmd_capacity(sdl3d_ui_cmd **cmds, int *capacity, int neede
  * into ui->text_arena where the NUL-terminated copy starts, or -1 on
  * failure. The arena is shared by both main and popup command buffers.
  */
-static int ui_push_text(sdl3d_ui_context *ui, const char *text)
+static int ui_push_text(slayer3d_ui_context *ui, const char *text)
 {
     if (!text)
     {
@@ -213,13 +213,13 @@ static int ui_push_text(sdl3d_ui_context *ui, const char *text)
 }
 
 /* Append a command to the main draw list (rendered first). */
-static sdl3d_ui_cmd *ui_push_cmd(sdl3d_ui_context *ui)
+static slayer3d_ui_cmd *ui_push_cmd(slayer3d_ui_context *ui)
 {
     if (!ui_ensure_cmd_capacity(&ui->cmds, &ui->cmd_capacity, ui->cmd_count + 1))
     {
         return NULL;
     }
-    sdl3d_ui_cmd *cmd = &ui->cmds[ui->cmd_count++];
+    slayer3d_ui_cmd *cmd = &ui->cmds[ui->cmd_count++];
     SDL_zerop(cmd);
     cmd->text_offset = -1;
     return cmd;
@@ -227,30 +227,30 @@ static sdl3d_ui_cmd *ui_push_cmd(sdl3d_ui_context *ui)
 
 /* Append a command to the popup draw list (rendered after main, so
  * dropdown menus and future popups appear above ordinary widgets). */
-static sdl3d_ui_cmd *ui_push_popup_cmd(sdl3d_ui_context *ui)
+static slayer3d_ui_cmd *ui_push_popup_cmd(slayer3d_ui_context *ui)
 {
     if (!ui_ensure_cmd_capacity(&ui->popup_cmds, &ui->popup_cmd_capacity, ui->popup_cmd_count + 1))
     {
         return NULL;
     }
-    sdl3d_ui_cmd *cmd = &ui->popup_cmds[ui->popup_cmd_count++];
+    slayer3d_ui_cmd *cmd = &ui->popup_cmds[ui->popup_cmd_count++];
     SDL_zerop(cmd);
     cmd->text_offset = -1;
     return cmd;
 }
 
-static void ui_popup_draw_rect(sdl3d_ui_context *ui, float x, float y, float w, float h, sdl3d_color color)
+static void ui_popup_draw_rect(slayer3d_ui_context *ui, float x, float y, float w, float h, slayer3d_color color)
 {
     if (!ui || !ui->frame_open || w <= 0.0f || h <= 0.0f)
     {
         return;
     }
-    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    slayer3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
     if (!cmd)
     {
         return;
     }
-    cmd->kind = SDL3D_UI_CMD_RECT;
+    cmd->kind = SLAYER3D_UI_CMD_RECT;
     cmd->x = x;
     cmd->y = y;
     cmd->w = w;
@@ -258,8 +258,8 @@ static void ui_popup_draw_rect(sdl3d_ui_context *ui, float x, float y, float w, 
     cmd->color = color;
 }
 
-static void ui_popup_draw_rect_outline(sdl3d_ui_context *ui, float x, float y, float w, float h, float thickness,
-                                       sdl3d_color color)
+static void ui_popup_draw_rect_outline(slayer3d_ui_context *ui, float x, float y, float w, float h, float thickness,
+                                       slayer3d_color color)
 {
     if (!ui || w <= 0.0f || h <= 0.0f || thickness <= 0.0f)
     {
@@ -271,54 +271,54 @@ static void ui_popup_draw_rect_outline(sdl3d_ui_context *ui, float x, float y, f
     ui_popup_draw_rect(ui, x + w - thickness, y + thickness, thickness, h - 2.0f * thickness, color);
 }
 
-static void ui_popup_draw_text(sdl3d_ui_context *ui, float x, float y, const char *text, sdl3d_color color)
+static void ui_popup_draw_text(slayer3d_ui_context *ui, float x, float y, const char *text, slayer3d_color color)
 {
     if (!ui || !ui->frame_open || !text || !*text)
     {
         return;
     }
-    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    slayer3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
     if (!cmd)
     {
         return;
     }
-    cmd->kind = SDL3D_UI_CMD_TEXT;
+    cmd->kind = SLAYER3D_UI_CMD_TEXT;
     cmd->x = x;
     cmd->y = y;
     cmd->color = color;
     cmd->text_offset = ui_push_text(ui, text);
 }
 
-static void ui_popup_push_clip(sdl3d_ui_context *ui, float x, float y, float w, float h)
+static void ui_popup_push_clip(slayer3d_ui_context *ui, float x, float y, float w, float h)
 {
     if (!ui || !ui->frame_open)
     {
         return;
     }
-    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    slayer3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
     if (!cmd)
     {
         return;
     }
-    cmd->kind = SDL3D_UI_CMD_CLIP_PUSH;
+    cmd->kind = SLAYER3D_UI_CMD_CLIP_PUSH;
     cmd->x = x;
     cmd->y = y;
     cmd->w = w;
     cmd->h = h;
 }
 
-static void ui_popup_pop_clip(sdl3d_ui_context *ui)
+static void ui_popup_pop_clip(slayer3d_ui_context *ui)
 {
     if (!ui || !ui->frame_open)
     {
         return;
     }
-    sdl3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
+    slayer3d_ui_cmd *cmd = ui_push_popup_cmd(ui);
     if (!cmd)
     {
         return;
     }
-    cmd->kind = SDL3D_UI_CMD_CLIP_POP;
+    cmd->kind = SLAYER3D_UI_CMD_CLIP_POP;
 }
 
 /*
@@ -327,7 +327,8 @@ static void ui_popup_pop_clip(sdl3d_ui_context *ui)
  * ID doesn't match `owner_id` when the mouse is inside this region.
  * Cleared automatically at the start of each frame in begin_frame.
  */
-static void ui_activate_popup_capture(sdl3d_ui_context *ui, sdl3d_ui_id owner_id, float x, float y, float w, float h)
+static void ui_activate_popup_capture(slayer3d_ui_context *ui, slayer3d_ui_id owner_id, float x, float y, float w,
+                                      float h)
 {
     if (!ui)
     {
@@ -346,49 +347,49 @@ static void ui_activate_popup_capture(sdl3d_ui_context *ui, sdl3d_ui_id owner_id
  * Pass id=0 for non-interactive queries (e.g., scroll hover checks).
  * The popup owner's own ID always passes through.
  */
-static bool ui_is_hovering_for_id(const sdl3d_ui_context *ui, sdl3d_ui_id id, float x, float y, float w, float h)
+static bool ui_is_hovering_for_id(const slayer3d_ui_context *ui, slayer3d_ui_id id, float x, float y, float w, float h)
 {
     if (!ui)
     {
         return false;
     }
     if (ui->popup_owner_id != 0 && id != ui->popup_owner_id &&
-        sdl3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, ui->popup_rect.x, ui->popup_rect.y,
-                               ui->popup_rect.w, ui->popup_rect.h))
+        slayer3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, ui->popup_rect.x, ui->popup_rect.y,
+                                  ui->popup_rect.w, ui->popup_rect.h))
     {
         return false;
     }
-    return sdl3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, x, y, w, h);
+    return slayer3d_ui_point_in_rect(ui->input.mouse_x, ui->input.mouse_y, x, y, w, h);
 }
 
 /* ------------------------------------------------------------------ */
 /* Theme                                                               */
 /* ------------------------------------------------------------------ */
 
-sdl3d_ui_theme sdl3d_ui_default_theme(void)
+slayer3d_ui_theme slayer3d_ui_default_theme(void)
 {
-    sdl3d_ui_theme t;
-    t.text = (sdl3d_color){230, 230, 235, 255};
-    t.text_muted = (sdl3d_color){150, 150, 160, 255};
-    t.panel_bg = (sdl3d_color){36, 40, 48, 235};
-    t.panel_border = (sdl3d_color){18, 20, 24, 255};
-    t.widget_bg = (sdl3d_color){60, 66, 78, 255};
-    t.widget_hover = (sdl3d_color){82, 92, 108, 255};
-    t.widget_active = (sdl3d_color){110, 130, 170, 255};
-    t.widget_border = (sdl3d_color){24, 26, 30, 255};
-    t.focus_ring = (sdl3d_color){120, 170, 255, 255};
+    slayer3d_ui_theme t;
+    t.text = (slayer3d_color){230, 230, 235, 255};
+    t.text_muted = (slayer3d_color){150, 150, 160, 255};
+    t.panel_bg = (slayer3d_color){36, 40, 48, 235};
+    t.panel_border = (slayer3d_color){18, 20, 24, 255};
+    t.widget_bg = (slayer3d_color){60, 66, 78, 255};
+    t.widget_hover = (slayer3d_color){82, 92, 108, 255};
+    t.widget_active = (slayer3d_color){110, 130, 170, 255};
+    t.widget_border = (slayer3d_color){24, 26, 30, 255};
+    t.focus_ring = (slayer3d_color){120, 170, 255, 255};
     t.padding = 6.0f;
     t.spacing = 4.0f;
     t.border_width = 1.0f;
     return t;
 }
 
-const sdl3d_ui_theme *sdl3d_ui_get_theme(const sdl3d_ui_context *ui)
+const slayer3d_ui_theme *slayer3d_ui_get_theme(const slayer3d_ui_context *ui)
 {
     return ui ? &ui->theme : NULL;
 }
 
-void sdl3d_ui_set_theme(sdl3d_ui_context *ui, const sdl3d_ui_theme *theme)
+void slayer3d_ui_set_theme(slayer3d_ui_context *ui, const slayer3d_ui_theme *theme)
 {
     if (ui && theme)
     {
@@ -396,12 +397,12 @@ void sdl3d_ui_set_theme(sdl3d_ui_context *ui, const sdl3d_ui_theme *theme)
     }
 }
 
-const sdl3d_font *sdl3d_ui_get_font(const sdl3d_ui_context *ui)
+const slayer3d_font *slayer3d_ui_get_font(const slayer3d_ui_context *ui)
 {
     return ui ? ui->font : NULL;
 }
 
-void sdl3d_ui_set_font(sdl3d_ui_context *ui, const sdl3d_font *font)
+void slayer3d_ui_set_font(slayer3d_ui_context *ui, const slayer3d_font *font)
 {
     if (ui)
     {
@@ -413,24 +414,24 @@ void sdl3d_ui_set_font(sdl3d_ui_context *ui, const sdl3d_font *font)
 /* Lifecycle                                                           */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_ui_create(const sdl3d_font *font, sdl3d_ui_context **out_ui)
+bool slayer3d_ui_create(const slayer3d_font *font, slayer3d_ui_context **out_ui)
 {
     if (!out_ui)
     {
         return SDL_InvalidParamError("out_ui");
     }
-    sdl3d_ui_context *ui = (sdl3d_ui_context *)SDL_calloc(1, sizeof(*ui));
+    slayer3d_ui_context *ui = (slayer3d_ui_context *)SDL_calloc(1, sizeof(*ui));
     if (!ui)
     {
         return SDL_OutOfMemory();
     }
     ui->font = font;
-    ui->theme = sdl3d_ui_default_theme();
+    ui->theme = slayer3d_ui_default_theme();
     *out_ui = ui;
     return true;
 }
 
-void sdl3d_ui_destroy(sdl3d_ui_context *ui)
+void slayer3d_ui_destroy(slayer3d_ui_context *ui)
 {
     if (!ui)
     {
@@ -442,7 +443,7 @@ void sdl3d_ui_destroy(sdl3d_ui_context *ui)
     SDL_free(ui);
 }
 
-void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
+void slayer3d_ui_begin_frame(slayer3d_ui_context *ui, int screen_w, int screen_h)
 {
     if (!ui)
     {
@@ -464,7 +465,7 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     ui->frame_open = true;
     ui->hovered_id = 0;
     ui->popup_owner_id = 0;
-    ui->popup_rect = (sdl3d_ui_clip_rect){0, 0, 0, 0};
+    ui->popup_rect = (slayer3d_ui_clip_rect){0, 0, 0, 0};
 
     /* Edge-triggered flags are cleared at frame start; process_event
      * raises them during the frame, and they're consumed by widgets in
@@ -482,7 +483,8 @@ void sdl3d_ui_begin_frame(sdl3d_ui_context *ui, int screen_w, int screen_h)
     ui->input.key_escape = false;
 }
 
-void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float scale_y, float offset_x, float offset_y)
+void slayer3d_ui_set_mouse_transform(slayer3d_ui_context *ui, float scale_x, float scale_y, float offset_x,
+                                     float offset_y)
 {
     if (!ui)
         return;
@@ -492,14 +494,14 @@ void sdl3d_ui_set_mouse_transform(sdl3d_ui_context *ui, float scale_x, float sca
     ui->mouse_offset_y = offset_y;
 }
 
-void sdl3d_ui_begin_frame_ex(sdl3d_ui_context *ui, sdl3d_render_context *context, SDL_Window *window)
+void slayer3d_ui_begin_frame_ex(slayer3d_ui_context *ui, slayer3d_render_context *context, SDL_Window *window)
 {
     if (!ui || !context || !window)
         return;
 
-    int lw = sdl3d_get_render_context_width(context);
-    int lh = sdl3d_get_render_context_height(context);
-    sdl3d_ui_begin_frame(ui, lw, lh);
+    int lw = slayer3d_get_render_context_width(context);
+    int lh = slayer3d_get_render_context_height(context);
+    slayer3d_ui_begin_frame(ui, lw, lh);
 
     /* Compute letterbox mouse mapping from window points to logical coords. */
     int win_w = 0, win_h = 0;
@@ -513,11 +515,11 @@ void sdl3d_ui_begin_frame_ex(sdl3d_ui_context *ui, sdl3d_render_context *context
         float vp_h = (float)lh * s;
         float vp_x = ((float)win_w - vp_w) * 0.5f;
         float vp_y = ((float)win_h - vp_h) * 0.5f;
-        sdl3d_ui_set_mouse_transform(ui, (float)lw / vp_w, (float)lh / vp_h, vp_x, vp_y);
+        slayer3d_ui_set_mouse_transform(ui, (float)lw / vp_w, (float)lh / vp_h, vp_x, vp_y);
     }
 }
 
-void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
+void slayer3d_ui_end_frame(slayer3d_ui_context *ui)
 {
     if (!ui)
     {
@@ -525,13 +527,13 @@ void sdl3d_ui_end_frame(sdl3d_ui_context *ui)
     }
     if (ui->clip_depth != 0)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_frame: clip stack not fully popped (depth=%d)",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "slayer3d_ui_end_frame: clip stack not fully popped (depth=%d)",
                     ui->clip_depth);
         ui->clip_depth = 0;
     }
     if (ui->layout_depth != 0)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_frame: layout stack not fully popped (depth=%d)",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "slayer3d_ui_end_frame: layout stack not fully popped (depth=%d)",
                     ui->layout_depth);
         ui->layout_depth = 0;
     }
@@ -559,17 +561,17 @@ static int ui_button_index(Uint8 sdl_button)
     }
 }
 
-static float ui_map_mouse_x(const sdl3d_ui_context *ui, float wx)
+static float ui_map_mouse_x(const slayer3d_ui_context *ui, float wx)
 {
     return (wx - ui->mouse_offset_x) * ui->mouse_scale_x;
 }
 
-static float ui_map_mouse_y(const sdl3d_ui_context *ui, float wy)
+static float ui_map_mouse_y(const slayer3d_ui_context *ui, float wy)
 {
     return (wy - ui->mouse_offset_y) * ui->mouse_scale_y;
 }
 
-bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
+bool slayer3d_ui_process_event(slayer3d_ui_context *ui, const SDL_Event *event)
 {
     if (!ui || !event)
     {
@@ -580,7 +582,7 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
     case SDL_EVENT_MOUSE_MOTION:
         ui->input.mouse_x = ui_map_mouse_x(ui, event->motion.x);
         ui->input.mouse_y = ui_map_mouse_y(ui, event->motion.y);
-        return sdl3d_ui_wants_mouse(ui);
+        return slayer3d_ui_wants_mouse(ui);
     case SDL_EVENT_MOUSE_BUTTON_DOWN: {
         int idx = ui_button_index(event->button.button);
         if (idx >= 0)
@@ -590,7 +592,7 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
         }
         ui->input.mouse_x = ui_map_mouse_x(ui, event->button.x);
         ui->input.mouse_y = ui_map_mouse_y(ui, event->button.y);
-        return sdl3d_ui_wants_mouse(ui);
+        return slayer3d_ui_wants_mouse(ui);
     }
     case SDL_EVENT_MOUSE_BUTTON_UP: {
         int idx = ui_button_index(event->button.button);
@@ -601,7 +603,7 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
         }
         ui->input.mouse_x = ui_map_mouse_x(ui, event->button.x);
         ui->input.mouse_y = ui_map_mouse_y(ui, event->button.y);
-        return sdl3d_ui_wants_mouse(ui);
+        return slayer3d_ui_wants_mouse(ui);
     }
     case SDL_EVENT_KEY_DOWN:
         if (event->key.scancode == SDL_SCANCODE_BACKSPACE)
@@ -610,7 +612,7 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
             ui->input.key_enter = true;
         else if (event->key.scancode == SDL_SCANCODE_ESCAPE)
             ui->input.key_escape = true;
-        return sdl3d_ui_wants_keyboard(ui);
+        return slayer3d_ui_wants_keyboard(ui);
     case SDL_EVENT_TEXT_INPUT: {
         const char *text = event->text.text;
         if (text)
@@ -628,7 +630,7 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
                 ui->input.text_input[ui->input.text_input_len] = '\0';
             }
         }
-        return sdl3d_ui_wants_keyboard(ui);
+        return slayer3d_ui_wants_keyboard(ui);
     }
     case SDL_EVENT_MOUSE_WHEEL: {
         float dy = event->wheel.y;
@@ -637,28 +639,28 @@ bool sdl3d_ui_process_event(sdl3d_ui_context *ui, const SDL_Event *event)
         ui->input.scroll_y += dy;
         ui->input.mouse_x = ui_map_mouse_x(ui, event->wheel.mouse_x);
         ui->input.mouse_y = ui_map_mouse_y(ui, event->wheel.mouse_y);
-        return sdl3d_ui_wants_mouse(ui);
+        return slayer3d_ui_wants_mouse(ui);
     }
     default:
         return false;
     }
 }
 
-bool sdl3d_ui_wants_mouse(const sdl3d_ui_context *ui)
+bool slayer3d_ui_wants_mouse(const slayer3d_ui_context *ui)
 {
     if (!ui)
         return false;
     return ui->hovered_id != 0 || ui->active_id != 0;
 }
 
-bool sdl3d_ui_wants_keyboard(const sdl3d_ui_context *ui)
+bool slayer3d_ui_wants_keyboard(const slayer3d_ui_context *ui)
 {
     /* Same as above — no focused text widgets yet, so keyboard passes
      * through. Revisit when text fields land in Phase 3. */
     return ui && ui->focused_id != 0;
 }
 
-const sdl3d_ui_input_state *sdl3d_ui_get_input(const sdl3d_ui_context *ui)
+const slayer3d_ui_input_state *slayer3d_ui_get_input(const slayer3d_ui_context *ui)
 {
     return ui ? &ui->input : NULL;
 }
@@ -667,37 +669,37 @@ const sdl3d_ui_input_state *sdl3d_ui_get_input(const sdl3d_ui_context *ui)
 /* IDs and hit testing                                                 */
 /* ------------------------------------------------------------------ */
 
-static sdl3d_ui_id ui_hash_string(const char *s)
+static slayer3d_ui_id ui_hash_string(const char *s)
 {
     /* FNV-1a 32-bit. Good enough for widget IDs; collisions within a
      * single frame are extremely unlikely at UI scale, and IDs are
      * scoped per frame / per context. */
-    sdl3d_ui_id h = 2166136261u;
+    slayer3d_ui_id h = 2166136261u;
     if (!s)
     {
         return h;
     }
     for (const unsigned char *p = (const unsigned char *)s; *p; p++)
     {
-        h ^= (sdl3d_ui_id)(*p);
+        h ^= (slayer3d_ui_id)(*p);
         h *= 16777619u;
     }
     /* Reserve 0 as the "none" sentinel. */
     return h ? h : 1u;
 }
 
-sdl3d_ui_id sdl3d_ui_make_id(sdl3d_ui_context *ui, const char *label)
+slayer3d_ui_id slayer3d_ui_make_id(slayer3d_ui_context *ui, const char *label)
 {
     (void)ui;
     return ui_hash_string(label);
 }
 
-bool sdl3d_ui_point_in_rect(float px, float py, float x, float y, float w, float h)
+bool slayer3d_ui_point_in_rect(float px, float py, float x, float y, float w, float h)
 {
     return px >= x && px < x + w && py >= y && py < y + h;
 }
 
-bool sdl3d_ui_is_hovering(const sdl3d_ui_context *ui, float x, float y, float w, float h)
+bool slayer3d_ui_is_hovering(const slayer3d_ui_context *ui, float x, float y, float w, float h)
 {
     return ui_is_hovering_for_id(ui, 0, x, y, w, h);
 }
@@ -706,18 +708,18 @@ bool sdl3d_ui_is_hovering(const sdl3d_ui_context *ui, float x, float y, float w,
 /* Draw primitives                                                     */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_ui_draw_rect(sdl3d_ui_context *ui, float x, float y, float w, float h, sdl3d_color color)
+void slayer3d_ui_draw_rect(slayer3d_ui_context *ui, float x, float y, float w, float h, slayer3d_color color)
 {
     if (!ui || !ui->frame_open || w <= 0.0f || h <= 0.0f)
     {
         return;
     }
-    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    slayer3d_ui_cmd *c = ui_push_cmd(ui);
     if (!c)
     {
         return;
     }
-    c->kind = SDL3D_UI_CMD_RECT;
+    c->kind = SLAYER3D_UI_CMD_RECT;
     c->x = x;
     c->y = y;
     c->w = w;
@@ -725,8 +727,8 @@ void sdl3d_ui_draw_rect(sdl3d_ui_context *ui, float x, float y, float w, float h
     c->color = color;
 }
 
-void sdl3d_ui_draw_rect_outline(sdl3d_ui_context *ui, float x, float y, float w, float h, float thickness,
-                                sdl3d_color color)
+void slayer3d_ui_draw_rect_outline(slayer3d_ui_context *ui, float x, float y, float w, float h, float thickness,
+                                   slayer3d_color color)
 {
     if (!ui || w <= 0.0f || h <= 0.0f || thickness <= 0.0f)
     {
@@ -734,46 +736,46 @@ void sdl3d_ui_draw_rect_outline(sdl3d_ui_context *ui, float x, float y, float w,
     }
     /* Four bordering rects. This is cheaper than submitting a stroked
      * primitive and composes cleanly with the solid-rect path. */
-    sdl3d_ui_draw_rect(ui, x, y, w, thickness, color);                                                /* top */
-    sdl3d_ui_draw_rect(ui, x, y + h - thickness, w, thickness, color);                                /* bottom */
-    sdl3d_ui_draw_rect(ui, x, y + thickness, thickness, h - 2.0f * thickness, color);                 /* left */
-    sdl3d_ui_draw_rect(ui, x + w - thickness, y + thickness, thickness, h - 2.0f * thickness, color); /* right */
+    slayer3d_ui_draw_rect(ui, x, y, w, thickness, color);                                                /* top */
+    slayer3d_ui_draw_rect(ui, x, y + h - thickness, w, thickness, color);                                /* bottom */
+    slayer3d_ui_draw_rect(ui, x, y + thickness, thickness, h - 2.0f * thickness, color);                 /* left */
+    slayer3d_ui_draw_rect(ui, x + w - thickness, y + thickness, thickness, h - 2.0f * thickness, color); /* right */
 }
 
-void sdl3d_ui_draw_text(sdl3d_ui_context *ui, float x, float y, const char *text, sdl3d_color color)
+void slayer3d_ui_draw_text(slayer3d_ui_context *ui, float x, float y, const char *text, slayer3d_color color)
 {
     if (!ui || !ui->frame_open || !text || !*text)
     {
         return;
     }
-    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    slayer3d_ui_cmd *c = ui_push_cmd(ui);
     if (!c)
     {
         return;
     }
-    c->kind = SDL3D_UI_CMD_TEXT;
+    c->kind = SLAYER3D_UI_CMD_TEXT;
     c->x = x;
     c->y = y;
     c->color = color;
     c->text_offset = ui_push_text(ui, text);
 }
 
-void sdl3d_ui_push_clip(sdl3d_ui_context *ui, float x, float y, float w, float h)
+void slayer3d_ui_push_clip(slayer3d_ui_context *ui, float x, float y, float w, float h)
 {
     if (!ui || !ui->frame_open)
     {
         return;
     }
-    if (ui->clip_depth >= SDL3D_UI_MAX_CLIP_DEPTH)
+    if (ui->clip_depth >= SLAYER3D_UI_MAX_CLIP_DEPTH)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_push_clip: clip stack full");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "slayer3d_ui_push_clip: clip stack full");
         return;
     }
     /* Intersect with parent so nested pushes can only shrink the clip. */
     float ix = x, iy = y, iw = w, ih = h;
     if (ui->clip_depth > 0)
     {
-        sdl3d_ui_clip_rect parent = ui->clip_stack[ui->clip_depth - 1];
+        slayer3d_ui_clip_rect parent = ui->clip_stack[ui->clip_depth - 1];
         float px1 = parent.x + parent.w;
         float py1 = parent.y + parent.h;
         float cx1 = x + w;
@@ -797,10 +799,10 @@ void sdl3d_ui_push_clip(sdl3d_ui_context *ui, float x, float y, float w, float h
     ui->clip_stack[ui->clip_depth].h = ih;
     ui->clip_depth++;
 
-    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    slayer3d_ui_cmd *c = ui_push_cmd(ui);
     if (c)
     {
-        c->kind = SDL3D_UI_CMD_CLIP_PUSH;
+        c->kind = SLAYER3D_UI_CMD_CLIP_PUSH;
         c->x = ix;
         c->y = iy;
         c->w = iw;
@@ -808,21 +810,21 @@ void sdl3d_ui_push_clip(sdl3d_ui_context *ui, float x, float y, float w, float h
     }
 }
 
-void sdl3d_ui_pop_clip(sdl3d_ui_context *ui)
+void slayer3d_ui_pop_clip(slayer3d_ui_context *ui)
 {
     if (!ui || !ui->frame_open || ui->clip_depth <= 0)
     {
         return;
     }
     ui->clip_depth--;
-    sdl3d_ui_cmd *c = ui_push_cmd(ui);
+    slayer3d_ui_cmd *c = ui_push_cmd(ui);
     if (c)
     {
-        c->kind = SDL3D_UI_CMD_CLIP_POP;
+        c->kind = SLAYER3D_UI_CMD_CLIP_POP;
     }
 }
 
-void sdl3d_ui_measure_text(const sdl3d_ui_context *ui, const char *text, float *out_w, float *out_h)
+void slayer3d_ui_measure_text(const slayer3d_ui_context *ui, const char *text, float *out_w, float *out_h)
 {
     if (!ui || !ui->font)
     {
@@ -832,28 +834,28 @@ void sdl3d_ui_measure_text(const sdl3d_ui_context *ui, const char *text, float *
             *out_h = 0;
         return;
     }
-    sdl3d_measure_text(ui->font, text, out_w, out_h);
+    slayer3d_measure_text(ui->font, text, out_w, out_h);
 }
 
 /* ------------------------------------------------------------------ */
 /* Widgets                                                             */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_ui_label(sdl3d_ui_context *ui, float x, float y, const char *text)
+void slayer3d_ui_label(slayer3d_ui_context *ui, float x, float y, const char *text)
 {
     if (!ui)
     {
         return;
     }
-    sdl3d_ui_draw_text(ui, x, y, text, ui->theme.text);
+    slayer3d_ui_draw_text(ui, x, y, text, ui->theme.text);
 }
 
-void sdl3d_ui_label_colored(sdl3d_ui_context *ui, float x, float y, sdl3d_color color, const char *text)
+void slayer3d_ui_label_colored(slayer3d_ui_context *ui, float x, float y, slayer3d_color color, const char *text)
 {
-    sdl3d_ui_draw_text(ui, x, y, text, color);
+    slayer3d_ui_draw_text(ui, x, y, text, color);
 }
 
-void sdl3d_ui_labelfv(sdl3d_ui_context *ui, float x, float y, const char *fmt, va_list args)
+void slayer3d_ui_labelfv(slayer3d_ui_context *ui, float x, float y, const char *fmt, va_list args)
 {
     if (!ui || !fmt)
     {
@@ -861,14 +863,14 @@ void sdl3d_ui_labelfv(sdl3d_ui_context *ui, float x, float y, const char *fmt, v
     }
     char buf[512];
     SDL_vsnprintf(buf, sizeof(buf), fmt, args);
-    sdl3d_ui_label(ui, x, y, buf);
+    slayer3d_ui_label(ui, x, y, buf);
 }
 
-void sdl3d_ui_labelf(sdl3d_ui_context *ui, float x, float y, const char *fmt, ...)
+void slayer3d_ui_labelf(slayer3d_ui_context *ui, float x, float y, const char *fmt, ...)
 {
     va_list args;
     va_start(args, fmt);
-    sdl3d_ui_labelfv(ui, x, y, fmt, args);
+    slayer3d_ui_labelfv(ui, x, y, fmt, args);
     va_end(args);
 }
 
@@ -876,12 +878,13 @@ void sdl3d_ui_labelf(sdl3d_ui_context *ui, float x, float y, const char *fmt, ..
 /* Layout containers                                                   */
 /* ------------------------------------------------------------------ */
 
-static void ui_push_layout(sdl3d_ui_context *ui, sdl3d_ui_layout_dir direction, float x, float y, float w, float h)
+static void ui_push_layout(slayer3d_ui_context *ui, slayer3d_ui_layout_dir direction, float x, float y, float w,
+                           float h)
 {
-    if (ui->layout_depth >= SDL3D_UI_MAX_LAYOUT_DEPTH)
+    if (ui->layout_depth >= SLAYER3D_UI_MAX_LAYOUT_DEPTH)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui: layout stack overflow (max %d)",
-                    SDL3D_UI_MAX_LAYOUT_DEPTH);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "slayer3d_ui: layout stack overflow (max %d)",
+                    SLAYER3D_UI_MAX_LAYOUT_DEPTH);
         return;
     }
     int d = ui->layout_depth++;
@@ -890,7 +893,7 @@ static void ui_push_layout(sdl3d_ui_context *ui, sdl3d_ui_layout_dir direction, 
     ui->layout_stack[d].y = y;
     ui->layout_stack[d].w = w;
     ui->layout_stack[d].h = h;
-    ui->layout_stack[d].cursor = (direction == SDL3D_UI_LAYOUT_VBOX) ? y : x;
+    ui->layout_stack[d].cursor = (direction == SLAYER3D_UI_LAYOUT_VBOX) ? y : x;
     ui->layout_stack[d].cross_max = 0.0f;
     ui->layout_stack[d].spacing = ui->theme.spacing;
     ui->layout_stack[d].first_item = true;
@@ -901,7 +904,7 @@ static void ui_push_layout(sdl3d_ui_context *ui, sdl3d_ui_layout_dir direction, 
  * is active. On success, fills out_x/out_y with the widget position.
  * `item_w` and `item_h` are the desired widget size.
  */
-static bool ui_layout_alloc(sdl3d_ui_context *ui, float item_w, float item_h, float *out_x, float *out_y)
+static bool ui_layout_alloc(slayer3d_ui_context *ui, float item_w, float item_h, float *out_x, float *out_y)
 {
     if (ui->layout_depth <= 0)
         return false;
@@ -910,7 +913,7 @@ static bool ui_layout_alloc(sdl3d_ui_context *ui, float item_w, float item_h, fl
     float gap = ui->layout_stack[d].first_item ? 0.0f : ui->layout_stack[d].spacing;
     ui->layout_stack[d].first_item = false;
 
-    if (ui->layout_stack[d].direction == SDL3D_UI_LAYOUT_VBOX)
+    if (ui->layout_stack[d].direction == SLAYER3D_UI_LAYOUT_VBOX)
     {
         *out_x = ui->layout_stack[d].x;
         *out_y = ui->layout_stack[d].cursor + gap;
@@ -929,62 +932,62 @@ static bool ui_layout_alloc(sdl3d_ui_context *ui, float item_w, float item_h, fl
     return true;
 }
 
-void sdl3d_ui_begin_panel(sdl3d_ui_context *ui, float x, float y, float w, float h)
+void slayer3d_ui_begin_panel(slayer3d_ui_context *ui, float x, float y, float w, float h)
 {
     if (!ui || !ui->frame_open)
         return;
-    const sdl3d_ui_theme *t = &ui->theme;
-    sdl3d_ui_draw_rect(ui, x, y, w, h, t->panel_bg);
-    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->panel_border);
-    sdl3d_ui_push_clip(ui, x, y, w, h);
+    const slayer3d_ui_theme *t = &ui->theme;
+    slayer3d_ui_draw_rect(ui, x, y, w, h, t->panel_bg);
+    slayer3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->panel_border);
+    slayer3d_ui_push_clip(ui, x, y, w, h);
 }
 
-void sdl3d_ui_end_panel(sdl3d_ui_context *ui)
+void slayer3d_ui_end_panel(slayer3d_ui_context *ui)
 {
     if (!ui)
         return;
-    sdl3d_ui_pop_clip(ui);
+    slayer3d_ui_pop_clip(ui);
 }
 
-void sdl3d_ui_begin_vbox(sdl3d_ui_context *ui, float x, float y, float w, float h)
+void slayer3d_ui_begin_vbox(slayer3d_ui_context *ui, float x, float y, float w, float h)
 {
     if (!ui || !ui->frame_open)
         return;
-    ui_push_layout(ui, SDL3D_UI_LAYOUT_VBOX, x, y, w, h);
+    ui_push_layout(ui, SLAYER3D_UI_LAYOUT_VBOX, x, y, w, h);
 }
 
-void sdl3d_ui_end_vbox(sdl3d_ui_context *ui)
+void slayer3d_ui_end_vbox(slayer3d_ui_context *ui)
 {
     if (!ui || ui->layout_depth <= 0)
         return;
-    if (ui->layout_stack[ui->layout_depth - 1].direction != SDL3D_UI_LAYOUT_VBOX)
+    if (ui->layout_stack[ui->layout_depth - 1].direction != SLAYER3D_UI_LAYOUT_VBOX)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_vbox: top of layout stack is not a vbox");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "slayer3d_ui_end_vbox: top of layout stack is not a vbox");
         return;
     }
     ui->layout_depth--;
 }
 
-void sdl3d_ui_begin_hbox(sdl3d_ui_context *ui, float x, float y, float w, float h)
+void slayer3d_ui_begin_hbox(slayer3d_ui_context *ui, float x, float y, float w, float h)
 {
     if (!ui || !ui->frame_open)
         return;
-    ui_push_layout(ui, SDL3D_UI_LAYOUT_HBOX, x, y, w, h);
+    ui_push_layout(ui, SLAYER3D_UI_LAYOUT_HBOX, x, y, w, h);
 }
 
-void sdl3d_ui_end_hbox(sdl3d_ui_context *ui)
+void slayer3d_ui_end_hbox(slayer3d_ui_context *ui)
 {
     if (!ui || ui->layout_depth <= 0)
         return;
-    if (ui->layout_stack[ui->layout_depth - 1].direction != SDL3D_UI_LAYOUT_HBOX)
+    if (ui->layout_stack[ui->layout_depth - 1].direction != SLAYER3D_UI_LAYOUT_HBOX)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "sdl3d_ui_end_hbox: top of layout stack is not an hbox");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "slayer3d_ui_end_hbox: top of layout stack is not an hbox");
         return;
     }
     ui->layout_depth--;
 }
 
-void sdl3d_ui_separator(sdl3d_ui_context *ui)
+void slayer3d_ui_separator(slayer3d_ui_context *ui)
 {
     if (!ui || !ui->frame_open || ui->layout_depth <= 0)
         return;
@@ -993,17 +996,17 @@ void sdl3d_ui_separator(sdl3d_ui_context *ui)
     float gap = ui->layout_stack[d].first_item ? 0.0f : ui->layout_stack[d].spacing;
     ui->layout_stack[d].first_item = false;
 
-    sdl3d_color sep_color = ui->theme.panel_border;
-    if (ui->layout_stack[d].direction == SDL3D_UI_LAYOUT_VBOX)
+    slayer3d_color sep_color = ui->theme.panel_border;
+    if (ui->layout_stack[d].direction == SLAYER3D_UI_LAYOUT_VBOX)
     {
         float sy = ui->layout_stack[d].cursor + gap;
-        sdl3d_ui_draw_rect(ui, ui->layout_stack[d].x, sy, ui->layout_stack[d].w, 1.0f, sep_color);
+        slayer3d_ui_draw_rect(ui, ui->layout_stack[d].x, sy, ui->layout_stack[d].w, 1.0f, sep_color);
         ui->layout_stack[d].cursor = sy + 1.0f;
     }
     else
     {
         float sx = ui->layout_stack[d].cursor + gap;
-        sdl3d_ui_draw_rect(ui, sx, ui->layout_stack[d].y, 1.0f, ui->layout_stack[d].h, sep_color);
+        slayer3d_ui_draw_rect(ui, sx, ui->layout_stack[d].y, 1.0f, ui->layout_stack[d].h, sep_color);
         ui->layout_stack[d].cursor = sx + 1.0f;
     }
 }
@@ -1012,10 +1015,10 @@ void sdl3d_ui_separator(sdl3d_ui_context *ui)
 /* Scroll region                                                       */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_SCROLL_SPEED 30.0f /* logical pixels per mouse wheel tick */
+#define SLAYER3D_UI_SCROLL_SPEED 30.0f /* logical pixels per mouse wheel tick */
 
-void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, float h, float *scroll_offset,
-                           float content_height)
+void slayer3d_ui_begin_scroll(slayer3d_ui_context *ui, float x, float y, float w, float h, float *scroll_offset,
+                              float content_height)
 {
     if (!ui || !ui->frame_open || !scroll_offset)
         return;
@@ -1023,7 +1026,7 @@ void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, floa
     /* Apply mouse wheel if hovering this region. */
     if (ui_is_hovering_for_id(ui, 0, x, y, w, h) && ui->input.scroll_y != 0.0f)
     {
-        *scroll_offset -= ui->input.scroll_y * SDL3D_UI_SCROLL_SPEED;
+        *scroll_offset -= ui->input.scroll_y * SLAYER3D_UI_SCROLL_SPEED;
     }
 
     /* Clamp scroll offset. */
@@ -1036,7 +1039,7 @@ void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, floa
         *scroll_offset = max_scroll;
 
     /* Push onto scroll stack. */
-    if (ui->scroll_depth < SDL3D_UI_MAX_SCROLL_DEPTH)
+    if (ui->scroll_depth < SLAYER3D_UI_MAX_SCROLL_DEPTH)
     {
         int d = ui->scroll_depth++;
         ui->scroll_stack[d].x = x;
@@ -1047,14 +1050,14 @@ void sdl3d_ui_begin_scroll(sdl3d_ui_context *ui, float x, float y, float w, floa
         ui->scroll_stack[d].content_height = content_height;
     }
 
-    sdl3d_ui_push_clip(ui, x, y, w, h);
+    slayer3d_ui_push_clip(ui, x, y, w, h);
 }
 
-void sdl3d_ui_end_scroll(sdl3d_ui_context *ui)
+void slayer3d_ui_end_scroll(slayer3d_ui_context *ui)
 {
     if (!ui)
         return;
-    sdl3d_ui_pop_clip(ui);
+    slayer3d_ui_pop_clip(ui);
     if (ui->scroll_depth > 0)
         ui->scroll_depth--;
 }
@@ -1063,19 +1066,19 @@ void sdl3d_ui_end_scroll(sdl3d_ui_context *ui)
 /* Auto-layout widgets                                                 */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_ui_layout_label(sdl3d_ui_context *ui, const char *text)
+void slayer3d_ui_layout_label(slayer3d_ui_context *ui, const char *text)
 {
     if (!ui || !ui->frame_open || !text)
         return;
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, text, &tw, &th);
+    slayer3d_ui_measure_text(ui, text, &tw, &th);
     float x, y;
     if (!ui_layout_alloc(ui, tw, th, &x, &y))
         return;
-    sdl3d_ui_label(ui, x, y, text);
+    slayer3d_ui_label(ui, x, y, text);
 }
 
-void sdl3d_ui_layout_labelf(sdl3d_ui_context *ui, const char *fmt, ...)
+void slayer3d_ui_layout_labelf(slayer3d_ui_context *ui, const char *fmt, ...)
 {
     if (!ui || !ui->frame_open || !fmt)
         return;
@@ -1084,10 +1087,10 @@ void sdl3d_ui_layout_labelf(sdl3d_ui_context *ui, const char *fmt, ...)
     va_start(args, fmt);
     SDL_vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    sdl3d_ui_layout_label(ui, buf);
+    slayer3d_ui_layout_label(ui, buf);
 }
 
-bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label)
+bool slayer3d_ui_layout_button(slayer3d_ui_context *ui, const char *label)
 {
     if (!ui || !ui->frame_open || !label || ui->layout_depth <= 0)
         return false;
@@ -1095,10 +1098,10 @@ bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label)
     int d = ui->layout_depth - 1;
     float bw, bh;
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
+    slayer3d_ui_measure_text(ui, label, &tw, &th);
     float pad = ui->theme.padding;
 
-    if (ui->layout_stack[d].direction == SDL3D_UI_LAYOUT_VBOX)
+    if (ui->layout_stack[d].direction == SLAYER3D_UI_LAYOUT_VBOX)
     {
         bw = ui->layout_stack[d].w;
         bh = th + pad * 2.0f;
@@ -1112,15 +1115,15 @@ bool sdl3d_ui_layout_button(sdl3d_ui_context *ui, const char *label)
     float x, y;
     if (!ui_layout_alloc(ui, bw, bh, &x, &y))
         return false;
-    return sdl3d_ui_button(ui, x, y, bw, bh, label);
+    return slayer3d_ui_button(ui, x, y, bw, bh, label);
 }
 
 /* ------------------------------------------------------------------ */
 /* Checkbox                                                            */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_CHECKBOX_SIZE 16.0f
-#define SDL3D_UI_CHECKBOX_GAP 6.0f
+#define SLAYER3D_UI_CHECKBOX_SIZE 16.0f
+#define SLAYER3D_UI_CHECKBOX_GAP 6.0f
 
 static const char *ui_visible_label_text(const char *label, char *buffer, size_t buffer_size)
 {
@@ -1153,21 +1156,21 @@ static const char *ui_visible_label_text(const char *label, char *buffer, size_t
     return buffer;
 }
 
-bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label, bool *value)
+bool slayer3d_ui_checkbox(slayer3d_ui_context *ui, float x, float y, const char *label, bool *value)
 {
     if (!ui || !ui->frame_open || !label || !value)
         return false;
 
-    sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
-    const sdl3d_ui_theme *t = &ui->theme;
-    float box_size = SDL3D_UI_CHECKBOX_SIZE;
+    slayer3d_ui_id id = slayer3d_ui_make_id(ui, label);
+    const slayer3d_ui_theme *t = &ui->theme;
+    float box_size = SLAYER3D_UI_CHECKBOX_SIZE;
     char display_buf[256];
     const char *display = ui_visible_label_text(label, display_buf, sizeof(display_buf));
 
     /* Hit test the full row (box + label). */
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, display, &tw, &th);
-    float row_w = box_size + SDL3D_UI_CHECKBOX_GAP + tw;
+    slayer3d_ui_measure_text(ui, display, &tw, &th);
+    float row_w = box_size + SLAYER3D_UI_CHECKBOX_GAP + tw;
     float row_h = (th > box_size) ? th : box_size;
 
     bool hovering = ui_is_hovering_for_id(ui, id, x, y, row_w, row_h);
@@ -1191,60 +1194,61 @@ bool sdl3d_ui_checkbox(sdl3d_ui_context *ui, float x, float y, const char *label
 
     /* Draw box. */
     float box_y = y + (row_h - box_size) * 0.5f;
-    sdl3d_color bg = (hovering) ? t->widget_hover : t->widget_bg;
-    sdl3d_ui_draw_rect(ui, x, box_y, box_size, box_size, bg);
-    sdl3d_ui_draw_rect_outline(ui, x, box_y, box_size, box_size, t->border_width, t->widget_border);
+    slayer3d_color bg = (hovering) ? t->widget_hover : t->widget_bg;
+    slayer3d_ui_draw_rect(ui, x, box_y, box_size, box_size, bg);
+    slayer3d_ui_draw_rect_outline(ui, x, box_y, box_size, box_size, t->border_width, t->widget_border);
 
     /* Draw check mark (filled inner rect). */
     if (*value)
     {
         float inset = 3.0f;
-        sdl3d_ui_draw_rect(ui, x + inset, box_y + inset, box_size - inset * 2, box_size - inset * 2, t->widget_active);
+        slayer3d_ui_draw_rect(ui, x + inset, box_y + inset, box_size - inset * 2, box_size - inset * 2,
+                              t->widget_active);
     }
 
     /* Draw label. */
-    float label_x = x + box_size + SDL3D_UI_CHECKBOX_GAP;
+    float label_x = x + box_size + SLAYER3D_UI_CHECKBOX_GAP;
     float label_y = y + (row_h - th) * 0.5f;
     if (display[0] != '\0')
-        sdl3d_ui_draw_text(ui, label_x, label_y, display, t->text);
+        slayer3d_ui_draw_text(ui, label_x, label_y, display, t->text);
 
     return changed;
 }
 
-bool sdl3d_ui_layout_checkbox(sdl3d_ui_context *ui, const char *label, bool *value)
+bool slayer3d_ui_layout_checkbox(slayer3d_ui_context *ui, const char *label, bool *value)
 {
     if (!ui || !ui->frame_open || !label || !value || ui->layout_depth <= 0)
         return false;
 
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
-    float row_h = (th > SDL3D_UI_CHECKBOX_SIZE) ? th : SDL3D_UI_CHECKBOX_SIZE;
-    float row_w = (ui->layout_stack[ui->layout_depth - 1].direction == SDL3D_UI_LAYOUT_VBOX)
+    slayer3d_ui_measure_text(ui, label, &tw, &th);
+    float row_h = (th > SLAYER3D_UI_CHECKBOX_SIZE) ? th : SLAYER3D_UI_CHECKBOX_SIZE;
+    float row_w = (ui->layout_stack[ui->layout_depth - 1].direction == SLAYER3D_UI_LAYOUT_VBOX)
                       ? ui->layout_stack[ui->layout_depth - 1].w
-                      : SDL3D_UI_CHECKBOX_SIZE + SDL3D_UI_CHECKBOX_GAP + tw;
+                      : SLAYER3D_UI_CHECKBOX_SIZE + SLAYER3D_UI_CHECKBOX_GAP + tw;
 
     float x, y;
     if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
         return false;
-    return sdl3d_ui_checkbox(ui, x, y, label, value);
+    return slayer3d_ui_checkbox(ui, x, y, label, value);
 }
 
 /* ------------------------------------------------------------------ */
 /* Slider                                                              */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_SLIDER_TRACK_H 6.0f
-#define SDL3D_UI_SLIDER_HANDLE_W 12.0f
-#define SDL3D_UI_SLIDER_ROW_H 20.0f
+#define SLAYER3D_UI_SLIDER_TRACK_H 6.0f
+#define SLAYER3D_UI_SLIDER_HANDLE_W 12.0f
+#define SLAYER3D_UI_SLIDER_ROW_H 20.0f
 
-bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char *label, float *value, float min,
-                     float max)
+bool slayer3d_ui_slider(slayer3d_ui_context *ui, float x, float y, float w, const char *label, float *value, float min,
+                        float max)
 {
     if (!ui || !ui->frame_open || !label || !value || max <= min)
         return false;
 
-    sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
-    const sdl3d_ui_theme *t = &ui->theme;
+    slayer3d_ui_id id = slayer3d_ui_make_id(ui, label);
+    const slayer3d_ui_theme *t = &ui->theme;
     bool changed = false;
     char display_buf[256];
     const char *display = ui_visible_label_text(label, display_buf, sizeof(display_buf));
@@ -1252,7 +1256,7 @@ bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char
     /* Track with centered "Label: value" text overlay. */
     float track_y = y;
     float track_w = w;
-    float track_h = SDL3D_UI_SLIDER_ROW_H;
+    float track_h = SLAYER3D_UI_SLIDER_ROW_H;
 
     bool hovering = ui_is_hovering_for_id(ui, id, x, y, track_w, track_h);
 
@@ -1293,21 +1297,21 @@ bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char
         *value = max;
 
     /* Draw track background. */
-    float ty = track_y + (track_h - SDL3D_UI_SLIDER_TRACK_H) * 0.5f;
-    sdl3d_ui_draw_rect(ui, x, ty, track_w, SDL3D_UI_SLIDER_TRACK_H, t->widget_bg);
-    sdl3d_ui_draw_rect_outline(ui, x, ty, track_w, SDL3D_UI_SLIDER_TRACK_H, 1.0f, t->widget_border);
+    float ty = track_y + (track_h - SLAYER3D_UI_SLIDER_TRACK_H) * 0.5f;
+    slayer3d_ui_draw_rect(ui, x, ty, track_w, SLAYER3D_UI_SLIDER_TRACK_H, t->widget_bg);
+    slayer3d_ui_draw_rect_outline(ui, x, ty, track_w, SLAYER3D_UI_SLIDER_TRACK_H, 1.0f, t->widget_border);
 
     /* Draw filled portion. */
     float frac = (*value - min) / (max - min);
     float fill_w = frac * track_w;
     if (fill_w > 0.0f)
-        sdl3d_ui_draw_rect(ui, x, ty, fill_w, SDL3D_UI_SLIDER_TRACK_H, t->widget_active);
+        slayer3d_ui_draw_rect(ui, x, ty, fill_w, SLAYER3D_UI_SLIDER_TRACK_H, t->widget_active);
 
     /* Draw handle. */
-    float hx = x + frac * (track_w - SDL3D_UI_SLIDER_HANDLE_W);
-    sdl3d_color handle_color = (ui->active_id == id) ? t->widget_active : (hovering ? t->widget_hover : t->text);
-    sdl3d_ui_draw_rect(ui, hx, track_y, SDL3D_UI_SLIDER_HANDLE_W, track_h, handle_color);
-    sdl3d_ui_draw_rect_outline(ui, hx, track_y, SDL3D_UI_SLIDER_HANDLE_W, track_h, 1.0f, t->widget_border);
+    float hx = x + frac * (track_w - SLAYER3D_UI_SLIDER_HANDLE_W);
+    slayer3d_color handle_color = (ui->active_id == id) ? t->widget_active : (hovering ? t->widget_hover : t->text);
+    slayer3d_ui_draw_rect(ui, hx, track_y, SLAYER3D_UI_SLIDER_HANDLE_W, track_h, handle_color);
+    slayer3d_ui_draw_rect_outline(ui, hx, track_y, SLAYER3D_UI_SLIDER_HANDLE_W, track_h, 1.0f, t->widget_border);
 
     /* Draw label + value text. */
     char buf[128];
@@ -1316,37 +1320,37 @@ bool sdl3d_ui_slider(sdl3d_ui_context *ui, float x, float y, float w, const char
     else
         SDL_snprintf(buf, sizeof(buf), "%.2f", (double)*value);
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, buf, &tw, &th);
-    sdl3d_ui_draw_text(ui, x + (track_w - tw) * 0.5f, track_y + (track_h - th) * 0.5f, buf, t->text);
+    slayer3d_ui_measure_text(ui, buf, &tw, &th);
+    slayer3d_ui_draw_text(ui, x + (track_w - tw) * 0.5f, track_y + (track_h - th) * 0.5f, buf, t->text);
 
     return changed;
 }
 
-bool sdl3d_ui_layout_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max)
+bool slayer3d_ui_layout_slider(slayer3d_ui_context *ui, const char *label, float *value, float min, float max)
 {
     if (!ui || !ui->frame_open || !label || !value || ui->layout_depth <= 0)
         return false;
 
     int d = ui->layout_depth - 1;
     float w = ui->layout_stack[d].w;
-    float h = SDL3D_UI_SLIDER_ROW_H;
+    float h = SLAYER3D_UI_SLIDER_ROW_H;
 
     float x, y;
     if (!ui_layout_alloc(ui, w, h, &x, &y))
         return false;
-    return sdl3d_ui_slider(ui, x, y, w, label, value, min, max);
+    return slayer3d_ui_slider(ui, x, y, w, label, value, min, max);
 }
 
 /* ------------------------------------------------------------------ */
 /* Button                                                              */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *label)
+bool slayer3d_ui_button(slayer3d_ui_context *ui, float x, float y, float w, float h, const char *label)
 {
     if (!ui || !ui->frame_open || !label)
         return false;
 
-    sdl3d_ui_id id = sdl3d_ui_make_id(ui, label);
+    slayer3d_ui_id id = slayer3d_ui_make_id(ui, label);
     bool hovering = ui_is_hovering_for_id(ui, id, x, y, w, h);
     bool pressed = false;
 
@@ -1367,8 +1371,8 @@ bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, c
     }
 
     /* Choose visual state. */
-    const sdl3d_ui_theme *t = &ui->theme;
-    sdl3d_color bg;
+    const slayer3d_ui_theme *t = &ui->theme;
+    slayer3d_color bg;
     if (ui->active_id == id && hovering)
         bg = t->widget_active;
     else if (hovering)
@@ -1377,8 +1381,8 @@ bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, c
         bg = t->widget_bg;
 
     /* Draw background + border. */
-    sdl3d_ui_draw_rect(ui, x, y, w, h, bg);
-    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+    slayer3d_ui_draw_rect(ui, x, y, w, h, bg);
+    slayer3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
 
     /* Center label text. Strip "##id" suffix for display. */
     const char *display = label;
@@ -1395,10 +1399,10 @@ bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, c
     }
 
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, display, &tw, &th);
+    slayer3d_ui_measure_text(ui, display, &tw, &th);
     float tx = x + (w - tw) * 0.5f;
     float ty = y + (h - th) * 0.5f;
-    sdl3d_ui_draw_text(ui, tx, ty, display, t->text);
+    slayer3d_ui_draw_text(ui, tx, ty, display, t->text);
 
     return pressed;
 }
@@ -1407,15 +1411,15 @@ bool sdl3d_ui_button(sdl3d_ui_context *ui, float x, float y, float w, float h, c
 /* Text field                                                          */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_ui_text_field(sdl3d_ui_context *ui, float x, float y, float w, float h, char *buf, int buf_size)
+bool slayer3d_ui_text_field(slayer3d_ui_context *ui, float x, float y, float w, float h, char *buf, int buf_size)
 {
     if (!ui || !ui->frame_open || !buf || buf_size <= 0)
         return false;
 
     char id_buf[32];
     SDL_snprintf(id_buf, sizeof(id_buf), "##tf_%p", (const void *)buf);
-    sdl3d_ui_id id = sdl3d_ui_make_id(ui, id_buf);
-    const sdl3d_ui_theme *t = &ui->theme;
+    slayer3d_ui_id id = slayer3d_ui_make_id(ui, id_buf);
+    const slayer3d_ui_theme *t = &ui->theme;
     bool hovering = ui_is_hovering_for_id(ui, id, x, y, w, h);
     bool focused = (ui->focused_id == id);
     bool committed = false;
@@ -1467,27 +1471,27 @@ bool sdl3d_ui_text_field(sdl3d_ui_context *ui, float x, float y, float w, float 
     }
 
     /* Draw. */
-    sdl3d_color bg = (ui->focused_id == id) ? t->widget_active : (hovering ? t->widget_hover : t->widget_bg);
-    sdl3d_ui_draw_rect(ui, x, y, w, h, bg);
-    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+    slayer3d_color bg = (ui->focused_id == id) ? t->widget_active : (hovering ? t->widget_hover : t->widget_bg);
+    slayer3d_ui_draw_rect(ui, x, y, w, h, bg);
+    slayer3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
     if (ui->focused_id == id)
-        sdl3d_ui_draw_rect_outline(ui, x - 1, y - 1, w + 2, h + 2, 1.0f, t->focus_ring);
+        slayer3d_ui_draw_rect_outline(ui, x - 1, y - 1, w + 2, h + 2, 1.0f, t->focus_ring);
 
     /* Text + cursor. */
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, buf, &tw, &th);
+    slayer3d_ui_measure_text(ui, buf, &tw, &th);
     float tx = x + t->padding;
     float ty = y + (h - th) * 0.5f;
-    sdl3d_ui_push_clip(ui, x + 1, y, w - 2, h);
-    sdl3d_ui_draw_text(ui, tx, ty, buf, t->text);
+    slayer3d_ui_push_clip(ui, x + 1, y, w - 2, h);
+    slayer3d_ui_draw_text(ui, tx, ty, buf, t->text);
     if (ui->focused_id == id)
-        sdl3d_ui_draw_rect(ui, tx + tw, ty, 1.0f, th, t->text); /* cursor */
-    sdl3d_ui_pop_clip(ui);
+        slayer3d_ui_draw_rect(ui, tx + tw, ty, 1.0f, th, t->text); /* cursor */
+    slayer3d_ui_pop_clip(ui);
 
     return committed;
 }
 
-bool sdl3d_ui_layout_text_field(sdl3d_ui_context *ui, char *buf, int buf_size)
+bool slayer3d_ui_layout_text_field(slayer3d_ui_context *ui, char *buf, int buf_size)
 {
     if (!ui || !ui->frame_open || ui->layout_depth <= 0)
         return false;
@@ -1497,15 +1501,15 @@ bool sdl3d_ui_layout_text_field(sdl3d_ui_context *ui, char *buf, int buf_size)
     float x, y;
     if (!ui_layout_alloc(ui, w, h, &x, &y))
         return false;
-    return sdl3d_ui_text_field(ui, x, y, w, h, buf, buf_size);
+    return slayer3d_ui_text_field(ui, x, y, w, h, buf, buf_size);
 }
 
 /* ------------------------------------------------------------------ */
 /* Dropdown                                                            */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
-                       int item_count, int *selected)
+bool slayer3d_ui_dropdown(slayer3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
+                          int item_count, int *selected)
 {
     if (!ui || !ui->frame_open || !items || item_count <= 0 || !selected)
         return false;
@@ -1513,8 +1517,8 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
     /* Use a stable ID from the pointer address of selected. */
     char id_buf[32];
     SDL_snprintf(id_buf, sizeof(id_buf), "##dd_%p", (const void *)selected);
-    sdl3d_ui_id id = sdl3d_ui_make_id(ui, id_buf);
-    const sdl3d_ui_theme *t = &ui->theme;
+    slayer3d_ui_id id = slayer3d_ui_make_id(ui, id_buf);
+    const slayer3d_ui_theme *t = &ui->theme;
     bool hovering = ui_is_hovering_for_id(ui, id, x, y, w, h);
     bool open = (ui->focused_id == id);
     bool changed = false;
@@ -1529,16 +1533,16 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
     }
 
     /* Draw button showing current selection. */
-    sdl3d_color bg = hovering ? t->widget_hover : t->widget_bg;
-    sdl3d_ui_draw_rect(ui, x, y, w, h, bg);
-    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+    slayer3d_color bg = hovering ? t->widget_hover : t->widget_bg;
+    slayer3d_ui_draw_rect(ui, x, y, w, h, bg);
+    slayer3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
 
     const char *label = (*selected >= 0 && *selected < item_count) ? items[*selected] : "";
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
-    sdl3d_ui_draw_text(ui, x + t->padding, y + (h - th) * 0.5f, label, t->text);
+    slayer3d_ui_measure_text(ui, label, &tw, &th);
+    slayer3d_ui_draw_text(ui, x + t->padding, y + (h - th) * 0.5f, label, t->text);
     /* Down arrow indicator. */
-    sdl3d_ui_draw_text(ui, x + w - t->padding - 8, y + (h - th) * 0.5f, "v", t->text_muted);
+    slayer3d_ui_draw_text(ui, x + w - t->padding - 8, y + (h - th) * 0.5f, "v", t->text_muted);
 
     /* Draw dropdown list when open. */
     if (open)
@@ -1549,7 +1553,7 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
         ui_activate_popup_capture(ui, id, x, y, w, h + list_h);
         if (ui->clip_depth > 0)
         {
-            const sdl3d_ui_clip_rect clip = ui->clip_stack[ui->clip_depth - 1];
+            const slayer3d_ui_clip_rect clip = ui->clip_stack[ui->clip_depth - 1];
             ui_popup_push_clip(ui, clip.x, clip.y, clip.w, clip.h);
         }
         ui_popup_draw_rect(ui, x, list_y, w, list_h, t->panel_bg);
@@ -1575,7 +1579,7 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
                 ui_popup_draw_rect(ui, x, iy, w, item_h, t->widget_active);
 
             float itw = 0, ith = 0;
-            sdl3d_ui_measure_text(ui, items[i], &itw, &ith);
+            slayer3d_ui_measure_text(ui, items[i], &itw, &ith);
             ui_popup_draw_text(ui, x + t->padding, iy + (item_h - ith) * 0.5f, items[i], t->text);
         }
 
@@ -1594,7 +1598,7 @@ bool sdl3d_ui_dropdown(sdl3d_ui_context *ui, float x, float y, float w, float h,
     return changed;
 }
 
-bool sdl3d_ui_layout_dropdown(sdl3d_ui_context *ui, const char *const *items, int item_count, int *selected)
+bool slayer3d_ui_layout_dropdown(slayer3d_ui_context *ui, const char *const *items, int item_count, int *selected)
 {
     if (!ui || !ui->frame_open || ui->layout_depth <= 0)
         return false;
@@ -1604,25 +1608,25 @@ bool sdl3d_ui_layout_dropdown(sdl3d_ui_context *ui, const char *const *items, in
     float x, y;
     if (!ui_layout_alloc(ui, w, h, &x, &y))
         return false;
-    return sdl3d_ui_dropdown(ui, x, y, w, h, items, item_count, selected);
+    return slayer3d_ui_dropdown(ui, x, y, w, h, items, item_count, selected);
 }
 
 /* ------------------------------------------------------------------ */
 /* Tab strip                                                           */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *tabs,
-                        int tab_count, int *selected)
+bool slayer3d_ui_tab_strip(slayer3d_ui_context *ui, float x, float y, float w, float h, const char *const *tabs,
+                           int tab_count, int *selected)
 {
     if (!ui || !ui->frame_open || !tabs || tab_count <= 0 || !selected)
         return false;
 
-    const sdl3d_ui_theme *t = &ui->theme;
+    const slayer3d_ui_theme *t = &ui->theme;
     bool changed = false;
     float tab_w = w / (float)tab_count;
 
     /* Background. */
-    sdl3d_ui_draw_rect(ui, x, y, w, h, t->panel_bg);
+    slayer3d_ui_draw_rect(ui, x, y, w, h, t->panel_bg);
 
     for (int i = 0; i < tab_count; i++)
     {
@@ -1630,7 +1634,7 @@ bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h
         bool hovering = ui_is_hovering_for_id(ui, 0, tx, y, tab_w, h);
         bool active = (i == *selected);
 
-        sdl3d_color bg;
+        slayer3d_color bg;
         if (active)
             bg = t->widget_active;
         else if (hovering)
@@ -1638,12 +1642,12 @@ bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h
         else
             bg = t->panel_bg;
 
-        sdl3d_ui_draw_rect(ui, tx, y, tab_w, h, bg);
-        sdl3d_ui_draw_rect_outline(ui, tx, y, tab_w, h, 1.0f, t->widget_border);
+        slayer3d_ui_draw_rect(ui, tx, y, tab_w, h, bg);
+        slayer3d_ui_draw_rect_outline(ui, tx, y, tab_w, h, 1.0f, t->widget_border);
 
         float tw = 0, th = 0;
-        sdl3d_ui_measure_text(ui, tabs[i], &tw, &th);
-        sdl3d_ui_draw_text(ui, tx + (tab_w - tw) * 0.5f, y + (h - th) * 0.5f, tabs[i], t->text);
+        slayer3d_ui_measure_text(ui, tabs[i], &tw, &th);
+        slayer3d_ui_draw_text(ui, tx + (tab_w - tw) * 0.5f, y + (h - th) * 0.5f, tabs[i], t->text);
 
         if (hovering && ui->input.mouse_pressed[0] && !active)
         {
@@ -1655,7 +1659,7 @@ bool sdl3d_ui_tab_strip(sdl3d_ui_context *ui, float x, float y, float w, float h
     return changed;
 }
 
-bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, int tab_count, int *selected)
+bool slayer3d_ui_layout_tab_strip(slayer3d_ui_context *ui, const char *const *tabs, int tab_count, int *selected)
 {
     if (!ui || !ui->frame_open || ui->layout_depth <= 0)
         return false;
@@ -1665,23 +1669,23 @@ bool sdl3d_ui_layout_tab_strip(sdl3d_ui_context *ui, const char *const *tabs, in
     float x, y;
     if (!ui_layout_alloc(ui, w, h, &x, &y))
         return false;
-    return sdl3d_ui_tab_strip(ui, x, y, w, h, tabs, tab_count, selected);
+    return slayer3d_ui_tab_strip(ui, x, y, w, h, tabs, tab_count, selected);
 }
 
 /* ------------------------------------------------------------------ */
 /* Inspector row                                                       */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_ROW_HEIGHT 24.0f
+#define SLAYER3D_UI_ROW_HEIGHT 24.0f
 
-void sdl3d_ui_begin_row(sdl3d_ui_context *ui, const char *label, float label_fraction)
+void slayer3d_ui_begin_row(slayer3d_ui_context *ui, const char *label, float label_fraction)
 {
     if (!ui || !ui->frame_open || !label || ui->layout_depth <= 0)
         return;
 
     int d = ui->layout_depth - 1;
     float row_w = ui->layout_stack[d].w;
-    float row_h = SDL3D_UI_ROW_HEIGHT;
+    float row_h = SLAYER3D_UI_ROW_HEIGHT;
     float x, y;
     if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
         return;
@@ -1689,35 +1693,35 @@ void sdl3d_ui_begin_row(sdl3d_ui_context *ui, const char *label, float label_fra
     /* Draw label on the left portion. */
     float label_w = row_w * label_fraction;
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
-    sdl3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
+    slayer3d_ui_measure_text(ui, label, &tw, &th);
+    slayer3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
 
     /* Push an hbox for the value widget on the right portion. */
-    sdl3d_ui_begin_hbox(ui, x + label_w, y, row_w - label_w, row_h);
+    slayer3d_ui_begin_hbox(ui, x + label_w, y, row_w - label_w, row_h);
 }
 
-void sdl3d_ui_end_row(sdl3d_ui_context *ui)
+void slayer3d_ui_end_row(slayer3d_ui_context *ui)
 {
     if (!ui)
         return;
-    sdl3d_ui_end_hbox(ui);
+    slayer3d_ui_end_hbox(ui);
 }
 
-bool sdl3d_ui_row_text_field(sdl3d_ui_context *ui, const char *label, char *buf, int buf_size)
+bool slayer3d_ui_row_text_field(slayer3d_ui_context *ui, const char *label, char *buf, int buf_size)
 {
-    sdl3d_ui_begin_row(ui, label, 0.35f);
-    bool r = sdl3d_ui_layout_text_field(ui, buf, buf_size);
-    sdl3d_ui_end_row(ui);
+    slayer3d_ui_begin_row(ui, label, 0.35f);
+    bool r = slayer3d_ui_layout_text_field(ui, buf, buf_size);
+    slayer3d_ui_end_row(ui);
     return r;
 }
 
-bool sdl3d_ui_row_slider(sdl3d_ui_context *ui, const char *label, float *value, float min, float max)
+bool slayer3d_ui_row_slider(slayer3d_ui_context *ui, const char *label, float *value, float min, float max)
 {
-    sdl3d_ui_begin_row(ui, label, 0.35f);
+    slayer3d_ui_begin_row(ui, label, 0.35f);
     /* Use a label-less slider ID so the row label serves as the label. */
     if (!ui || !ui->frame_open || !value || ui->layout_depth <= 0 || max <= min)
     {
-        sdl3d_ui_end_row(ui);
+        slayer3d_ui_end_row(ui);
         return false;
     }
     int d = ui->layout_depth - 1;
@@ -1726,18 +1730,18 @@ bool sdl3d_ui_row_slider(sdl3d_ui_context *ui, const char *label, float *value, 
     float x, y;
     if (!ui_layout_alloc(ui, w, h, &x, &y))
     {
-        sdl3d_ui_end_row(ui);
+        slayer3d_ui_end_row(ui);
         return false;
     }
     /* Inline slider without the centered label (the row label covers it). */
     char id_buf[64];
     SDL_snprintf(id_buf, sizeof(id_buf), "##rs_%s", label);
-    bool r = sdl3d_ui_slider(ui, x, y, w, id_buf, value, min, max);
-    sdl3d_ui_end_row(ui);
+    bool r = slayer3d_ui_slider(ui, x, y, w, id_buf, value, min, max);
+    slayer3d_ui_end_row(ui);
     return r;
 }
 
-bool sdl3d_ui_row_checkbox(sdl3d_ui_context *ui, const char *label, bool *value)
+bool slayer3d_ui_row_checkbox(slayer3d_ui_context *ui, const char *label, bool *value)
 {
     /* Checkbox already draws its own label, so use begin_row with a
      * small fraction just for alignment, then draw a label-less checkbox. */
@@ -1746,79 +1750,79 @@ bool sdl3d_ui_row_checkbox(sdl3d_ui_context *ui, const char *label, bool *value)
 
     int d = ui->layout_depth - 1;
     float row_w = ui->layout_stack[d].w;
-    float row_h = SDL3D_UI_ROW_HEIGHT;
+    float row_h = SLAYER3D_UI_ROW_HEIGHT;
     float x, y;
     if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
         return false;
 
     /* Draw label on left. */
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
-    sdl3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
+    slayer3d_ui_measure_text(ui, label, &tw, &th);
+    slayer3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
 
     /* Draw checkbox box on right (no label text on the checkbox itself). */
     float box_x = x + row_w * 0.35f;
     char id_buf[128];
     SDL_snprintf(id_buf, sizeof(id_buf), "##rc_%s", label);
-    return sdl3d_ui_checkbox(ui, box_x, y, id_buf, value);
+    return slayer3d_ui_checkbox(ui, box_x, y, id_buf, value);
 }
 
-void sdl3d_ui_row_label(sdl3d_ui_context *ui, const char *label, const char *value)
+void slayer3d_ui_row_label(slayer3d_ui_context *ui, const char *label, const char *value)
 {
     if (!ui || !ui->frame_open || !label || !value || ui->layout_depth <= 0)
         return;
 
     int d = ui->layout_depth - 1;
     float row_w = ui->layout_stack[d].w;
-    float row_h = SDL3D_UI_ROW_HEIGHT;
+    float row_h = SLAYER3D_UI_ROW_HEIGHT;
     float x, y;
     if (!ui_layout_alloc(ui, row_w, row_h, &x, &y))
         return;
 
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
-    sdl3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
-    sdl3d_ui_draw_text(ui, x + row_w * 0.35f, y + (row_h - th) * 0.5f, value, ui->theme.text);
+    slayer3d_ui_measure_text(ui, label, &tw, &th);
+    slayer3d_ui_draw_text(ui, x, y + (row_h - th) * 0.5f, label, ui->theme.text_muted);
+    slayer3d_ui_draw_text(ui, x + row_w * 0.35f, y + (row_h - th) * 0.5f, value, ui->theme.text);
 }
 
 /* ------------------------------------------------------------------ */
 /* List view                                                           */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_LIST_ITEM_H 22.0f
+#define SLAYER3D_UI_LIST_ITEM_H 22.0f
 
-bool sdl3d_ui_list_view(sdl3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
-                        int item_count, int *selected, float *scroll_offset)
+bool slayer3d_ui_list_view(slayer3d_ui_context *ui, float x, float y, float w, float h, const char *const *items,
+                           int item_count, int *selected, float *scroll_offset)
 {
     if (!ui || !ui->frame_open || !items || item_count <= 0 || !selected || !scroll_offset)
         return false;
 
-    const sdl3d_ui_theme *t = &ui->theme;
-    float content_h = SDL3D_UI_LIST_ITEM_H * (float)item_count;
+    const slayer3d_ui_theme *t = &ui->theme;
+    float content_h = SLAYER3D_UI_LIST_ITEM_H * (float)item_count;
     bool changed = false;
 
     /* Background. */
-    sdl3d_ui_draw_rect(ui, x, y, w, h, t->widget_bg);
-    sdl3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
+    slayer3d_ui_draw_rect(ui, x, y, w, h, t->widget_bg);
+    slayer3d_ui_draw_rect_outline(ui, x, y, w, h, t->border_width, t->widget_border);
 
     /* Scroll. */
-    sdl3d_ui_begin_scroll(ui, x, y, w, h, scroll_offset, content_h);
+    slayer3d_ui_begin_scroll(ui, x, y, w, h, scroll_offset, content_h);
 
     for (int i = 0; i < item_count; i++)
     {
-        float iy = y - *scroll_offset + SDL3D_UI_LIST_ITEM_H * (float)i;
+        float iy = y - *scroll_offset + SLAYER3D_UI_LIST_ITEM_H * (float)i;
 
         /* Skip items outside visible range. */
-        if (iy + SDL3D_UI_LIST_ITEM_H < y || iy > y + h)
+        if (iy + SLAYER3D_UI_LIST_ITEM_H < y || iy > y + h)
             continue;
 
         bool is_selected = (i == *selected);
-        bool hovering = sdl3d_ui_is_hovering(ui, x, iy, w, SDL3D_UI_LIST_ITEM_H);
+        bool hovering = slayer3d_ui_is_hovering(ui, x, iy, w, SLAYER3D_UI_LIST_ITEM_H);
 
         if (is_selected)
-            sdl3d_ui_draw_rect(ui, x + 1, iy, w - 2, SDL3D_UI_LIST_ITEM_H, t->widget_active);
+            slayer3d_ui_draw_rect(ui, x + 1, iy, w - 2, SLAYER3D_UI_LIST_ITEM_H, t->widget_active);
         else if (hovering)
-            sdl3d_ui_draw_rect(ui, x + 1, iy, w - 2, SDL3D_UI_LIST_ITEM_H, t->widget_hover);
+            slayer3d_ui_draw_rect(ui, x + 1, iy, w - 2, SLAYER3D_UI_LIST_ITEM_H, t->widget_hover);
 
         if (hovering && ui->input.mouse_pressed[0] && !is_selected)
         {
@@ -1827,16 +1831,16 @@ bool sdl3d_ui_list_view(sdl3d_ui_context *ui, float x, float y, float w, float h
         }
 
         float tw = 0, th = 0;
-        sdl3d_ui_measure_text(ui, items[i], &tw, &th);
-        sdl3d_ui_draw_text(ui, x + t->padding, iy + (SDL3D_UI_LIST_ITEM_H - th) * 0.5f, items[i], t->text);
+        slayer3d_ui_measure_text(ui, items[i], &tw, &th);
+        slayer3d_ui_draw_text(ui, x + t->padding, iy + (SLAYER3D_UI_LIST_ITEM_H - th) * 0.5f, items[i], t->text);
     }
 
-    sdl3d_ui_end_scroll(ui);
+    slayer3d_ui_end_scroll(ui);
     return changed;
 }
 
-bool sdl3d_ui_layout_list_view(sdl3d_ui_context *ui, float h, const char *const *items, int item_count, int *selected,
-                               float *scroll_offset)
+bool slayer3d_ui_layout_list_view(slayer3d_ui_context *ui, float h, const char *const *items, int item_count,
+                                  int *selected, float *scroll_offset)
 {
     if (!ui || !ui->frame_open || ui->layout_depth <= 0)
         return false;
@@ -1845,56 +1849,56 @@ bool sdl3d_ui_layout_list_view(sdl3d_ui_context *ui, float h, const char *const 
     float x, y;
     if (!ui_layout_alloc(ui, w, h, &x, &y))
         return false;
-    return sdl3d_ui_list_view(ui, x, y, w, h, items, item_count, selected, scroll_offset);
+    return slayer3d_ui_list_view(ui, x, y, w, h, items, item_count, selected, scroll_offset);
 }
 
 /* ------------------------------------------------------------------ */
 /* Tree view                                                           */
 /* ------------------------------------------------------------------ */
 
-#define SDL3D_UI_TREE_INDENT 16.0f
-#define SDL3D_UI_TREE_ROW_H 22.0f
-#define SDL3D_UI_TREE_ARROW_W 14.0f
+#define SLAYER3D_UI_TREE_INDENT 16.0f
+#define SLAYER3D_UI_TREE_ROW_H 22.0f
+#define SLAYER3D_UI_TREE_ARROW_W 14.0f
 
-bool sdl3d_ui_tree_node(sdl3d_ui_context *ui, const char *label, int node_id, bool *expanded, int *selected_id)
+bool slayer3d_ui_tree_node(slayer3d_ui_context *ui, const char *label, int node_id, bool *expanded, int *selected_id)
 {
     if (!ui || !ui->frame_open || !label || !expanded || !selected_id || ui->layout_depth <= 0)
         return false;
 
     int d = ui->layout_depth - 1;
     float row_w = ui->layout_stack[d].w;
-    float indent = SDL3D_UI_TREE_INDENT * (float)ui->tree_indent;
+    float indent = SLAYER3D_UI_TREE_INDENT * (float)ui->tree_indent;
     float x, y;
-    if (!ui_layout_alloc(ui, row_w, SDL3D_UI_TREE_ROW_H, &x, &y))
+    if (!ui_layout_alloc(ui, row_w, SLAYER3D_UI_TREE_ROW_H, &x, &y))
         return false;
 
-    const sdl3d_ui_theme *t = &ui->theme;
+    const slayer3d_ui_theme *t = &ui->theme;
     float ix = x + indent;
     float avail_w = row_w - indent;
     bool is_selected = (*selected_id == node_id);
-    bool hovering = sdl3d_ui_is_hovering(ui, ix, y, avail_w, SDL3D_UI_TREE_ROW_H);
+    bool hovering = slayer3d_ui_is_hovering(ui, ix, y, avail_w, SLAYER3D_UI_TREE_ROW_H);
     bool selection_changed = false;
 
     /* Highlight. */
     if (is_selected)
-        sdl3d_ui_draw_rect(ui, ix, y, avail_w, SDL3D_UI_TREE_ROW_H, t->widget_active);
+        slayer3d_ui_draw_rect(ui, ix, y, avail_w, SLAYER3D_UI_TREE_ROW_H, t->widget_active);
     else if (hovering)
-        sdl3d_ui_draw_rect(ui, ix, y, avail_w, SDL3D_UI_TREE_ROW_H, t->widget_hover);
+        slayer3d_ui_draw_rect(ui, ix, y, avail_w, SLAYER3D_UI_TREE_ROW_H, t->widget_hover);
 
     /* Arrow toggle. */
     float arrow_x = ix;
-    bool arrow_hover = sdl3d_ui_is_hovering(ui, arrow_x, y, SDL3D_UI_TREE_ARROW_W, SDL3D_UI_TREE_ROW_H);
+    bool arrow_hover = slayer3d_ui_is_hovering(ui, arrow_x, y, SLAYER3D_UI_TREE_ARROW_W, SLAYER3D_UI_TREE_ROW_H);
     const char *arrow = *expanded ? "v" : ">";
     float aw = 0, ah = 0;
-    sdl3d_ui_measure_text(ui, arrow, &aw, &ah);
-    sdl3d_ui_draw_text(ui, arrow_x + (SDL3D_UI_TREE_ARROW_W - aw) * 0.5f, y + (SDL3D_UI_TREE_ROW_H - ah) * 0.5f, arrow,
-                       arrow_hover ? t->text : t->text_muted);
+    slayer3d_ui_measure_text(ui, arrow, &aw, &ah);
+    slayer3d_ui_draw_text(ui, arrow_x + (SLAYER3D_UI_TREE_ARROW_W - aw) * 0.5f,
+                          y + (SLAYER3D_UI_TREE_ROW_H - ah) * 0.5f, arrow, arrow_hover ? t->text : t->text_muted);
 
     /* Label. */
-    float lx = ix + SDL3D_UI_TREE_ARROW_W;
+    float lx = ix + SLAYER3D_UI_TREE_ARROW_W;
     float tw = 0, th = 0;
-    sdl3d_ui_measure_text(ui, label, &tw, &th);
-    sdl3d_ui_draw_text(ui, lx, y + (SDL3D_UI_TREE_ROW_H - th) * 0.5f, label, t->text);
+    slayer3d_ui_measure_text(ui, label, &tw, &th);
+    slayer3d_ui_draw_text(ui, lx, y + (SLAYER3D_UI_TREE_ROW_H - th) * 0.5f, label, t->text);
 
     /* Click handling. */
     if (hovering && ui->input.mouse_pressed[0])
@@ -1913,13 +1917,13 @@ bool sdl3d_ui_tree_node(sdl3d_ui_context *ui, const char *label, int node_id, bo
     return selection_changed;
 }
 
-void sdl3d_ui_tree_push(sdl3d_ui_context *ui)
+void slayer3d_ui_tree_push(slayer3d_ui_context *ui)
 {
     if (ui)
         ui->tree_indent++;
 }
 
-void sdl3d_ui_tree_pop(sdl3d_ui_context *ui)
+void slayer3d_ui_tree_pop(slayer3d_ui_context *ui)
 {
     if (ui && ui->tree_indent > 0)
         ui->tree_indent--;
@@ -1929,41 +1933,41 @@ void sdl3d_ui_tree_pop(sdl3d_ui_context *ui)
 /* Rendering                                                           */
 /* ------------------------------------------------------------------ */
 
-static bool ui_render_cmd_buffer(const sdl3d_ui_context *ui, sdl3d_render_context *context, const sdl3d_ui_cmd *cmds,
-                                 int cmd_count)
+static bool ui_render_cmd_buffer(const slayer3d_ui_context *ui, slayer3d_render_context *context,
+                                 const slayer3d_ui_cmd *cmds, int cmd_count)
 {
     bool ok = true;
     for (int i = 0; i < cmd_count && ok; i++)
     {
-        const sdl3d_ui_cmd *cmd = &cmds[i];
+        const slayer3d_ui_cmd *cmd = &cmds[i];
         switch (cmd->kind)
         {
-        case SDL3D_UI_CMD_RECT:
-            ok = sdl3d_draw_rect_overlay(context, cmd->x, cmd->y, cmd->w, cmd->h, cmd->color);
+        case SLAYER3D_UI_CMD_RECT:
+            ok = slayer3d_draw_rect_overlay(context, cmd->x, cmd->y, cmd->w, cmd->h, cmd->color);
             break;
-        case SDL3D_UI_CMD_TEXT: {
+        case SLAYER3D_UI_CMD_TEXT: {
             if (!ui->font)
             {
                 break;
             }
             const char *text = (cmd->text_offset >= 0) ? ui->text_arena + cmd->text_offset : "";
-            ok = sdl3d_draw_text_overlay(context, ui->font, text, cmd->x, cmd->y, cmd->color);
+            ok = slayer3d_draw_text_overlay(context, ui->font, text, cmd->x, cmd->y, cmd->color);
             break;
         }
-        case SDL3D_UI_CMD_CLIP_PUSH: {
+        case SLAYER3D_UI_CMD_CLIP_PUSH: {
             SDL_Rect r = {(int)cmd->x, (int)cmd->y, (int)cmd->w, (int)cmd->h};
-            sdl3d_set_scissor_rect(context, &r);
+            slayer3d_set_scissor_rect(context, &r);
             break;
         }
-        case SDL3D_UI_CMD_CLIP_POP:
-            sdl3d_set_scissor_rect(context, NULL);
+        case SLAYER3D_UI_CMD_CLIP_POP:
+            slayer3d_set_scissor_rect(context, NULL);
             break;
         }
     }
     return ok;
 }
 
-bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
+bool slayer3d_ui_render(slayer3d_ui_context *ui, slayer3d_render_context *context)
 {
     if (!ui)
     {
@@ -1975,15 +1979,15 @@ bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
     }
     if (ui->frame_open)
     {
-        return SDL_SetError("sdl3d_ui_render called before sdl3d_ui_end_frame");
+        return SDL_SetError("slayer3d_ui_render called before slayer3d_ui_end_frame");
     }
 
     /* Remember the caller's scissor state so we can leave it undisturbed. */
-    bool had_scissor = sdl3d_is_scissor_enabled(context);
+    bool had_scissor = slayer3d_is_scissor_enabled(context);
     SDL_Rect saved_scissor = {0, 0, 0, 0};
     if (had_scissor)
     {
-        sdl3d_get_scissor_rect(context, &saved_scissor);
+        slayer3d_get_scissor_rect(context, &saved_scissor);
     }
 
     bool ok = ui_render_cmd_buffer(ui, context, ui->cmds, ui->cmd_count);
@@ -1994,11 +1998,11 @@ bool sdl3d_ui_render(sdl3d_ui_context *ui, sdl3d_render_context *context)
 
     if (had_scissor)
     {
-        sdl3d_set_scissor_rect(context, &saved_scissor);
+        slayer3d_set_scissor_rect(context, &saved_scissor);
     }
     else
     {
-        sdl3d_set_scissor_rect(context, NULL);
+        slayer3d_set_scissor_rect(context, NULL);
     }
 
     return ok;

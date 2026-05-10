@@ -3,10 +3,10 @@ plugins {
 }
 
 android {
-    namespace = "com.sdl3d.tests"
+    namespace = "com.slayer3d.tests"
     compileSdk 35
     defaultConfig {
-        applicationId "com.sdl3d.tests"
+        applicationId "com.slayer3d.tests"
         minSdk 21
         targetSdk 35
         versionCode 1

@@ -15,34 +15,34 @@
  * Subpixel precision: 8 bits (256 subpixel positions per pixel).
  * Sample point is pixel center at (x + 0.5, y + 0.5).
  */
-static const int SDL3D_SUBPIXEL_BITS = 8;
-static const int SDL3D_SUBPIXEL_UNIT = 1 << 8;       /* 256 */
-static const int SDL3D_SUBPIXEL_HALF = 1 << (8 - 1); /* 128 */
+static const int SLAYER3D_SUBPIXEL_BITS = 8;
+static const int SLAYER3D_SUBPIXEL_UNIT = 1 << 8;       /* 256 */
+static const int SLAYER3D_SUBPIXEL_HALF = 1 << (8 - 1); /* 128 */
 
 /*
  * Clipping scratch capacity. A triangle clipped against 6 planes can
  * produce at most 3 + 6 = 9 vertices. Round up to 10 for safety.
  */
-#define SDL3D_CLIP_MAX_VERTICES 10
+#define SLAYER3D_CLIP_MAX_VERTICES 10
 
 /*
  * Fixed tile width/height for the parallel solid-triangle path. Tiles own
  * disjoint pixel rectangles, so workers never contend on a framebuffer write
  * and the output remains byte-identical to the single-threaded reference.
  */
-static const int SDL3D_RASTER_TILE_SIZE = 32;
+static const int SLAYER3D_RASTER_TILE_SIZE = 32;
 
-typedef void (*sdl3d_parallel_tile_function)(void *userdata, int tile_index);
+typedef void (*slayer3d_parallel_tile_function)(void *userdata, int tile_index);
 
-typedef struct sdl3d_parallel_job
+typedef struct slayer3d_parallel_job
 {
-    sdl3d_parallel_tile_function run_tile;
+    slayer3d_parallel_tile_function run_tile;
     void *userdata;
     int tile_count;
     SDL_AtomicInt next_tile_index;
-} sdl3d_parallel_job;
+} slayer3d_parallel_job;
 
-struct sdl3d_parallel_rasterizer
+struct slayer3d_parallel_rasterizer
 {
     int worker_count;
     SDL_Thread **threads;
@@ -54,43 +54,43 @@ struct sdl3d_parallel_rasterizer
 
 /* --- Helpers -------------------------------------------------------------- */
 
-static int sdl3d_round_subpixel(float value)
+static int slayer3d_round_subpixel(float value)
 {
     /* SDL_lroundf rounds half-away-from-zero which matches our requirements. */
-    return (int)SDL_lroundf(value * (float)SDL3D_SUBPIXEL_UNIT);
+    return (int)SDL_lroundf(value * (float)SLAYER3D_SUBPIXEL_UNIT);
 }
 
-static int sdl3d_max_int(int a, int b)
+static int slayer3d_max_int(int a, int b)
 {
     return (a > b) ? a : b;
 }
 
-static int sdl3d_min_int(int a, int b)
+static int slayer3d_min_int(int a, int b)
 {
     return (a < b) ? a : b;
 }
 
-static bool sdl3d_parallel_triangle_job_is_worthwhile(const sdl3d_parallel_rasterizer *rasterizer, int tile_count,
-                                                      int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+static bool slayer3d_parallel_triangle_job_is_worthwhile(const slayer3d_parallel_rasterizer *rasterizer, int tile_count,
+                                                         int min_px_x, int max_px_x, int min_px_y, int max_px_y)
 {
-    static const int SDL3D_PARALLEL_MIN_TILE_COUNT = 4;
-    static const int SDL3D_PARALLEL_MIN_PIXEL_AREA = 64 * 64;
+    static const int SLAYER3D_PARALLEL_MIN_TILE_COUNT = 4;
+    static const int SLAYER3D_PARALLEL_MIN_PIXEL_AREA = 64 * 64;
     const int worker_count = rasterizer != NULL ? rasterizer->worker_count : 0;
     const int width = max_px_x - min_px_x + 1;
     const int height = max_px_y - min_px_y + 1;
     const int pixel_area = width * height;
 
-    if (worker_count <= 0 || tile_count < SDL3D_PARALLEL_MIN_TILE_COUNT)
+    if (worker_count <= 0 || tile_count < SLAYER3D_PARALLEL_MIN_TILE_COUNT)
     {
         return false;
     }
 
-    if (pixel_area < SDL3D_PARALLEL_MIN_PIXEL_AREA)
+    if (pixel_area < SLAYER3D_PARALLEL_MIN_PIXEL_AREA)
     {
         return false;
     }
 
-    if (tile_count < worker_count && pixel_area < (SDL3D_PARALLEL_MIN_PIXEL_AREA * 2))
+    if (tile_count < worker_count && pixel_area < (SLAYER3D_PARALLEL_MIN_PIXEL_AREA * 2))
     {
         return false;
     }
@@ -98,7 +98,7 @@ static bool sdl3d_parallel_triangle_job_is_worthwhile(const sdl3d_parallel_raste
     return true;
 }
 
-static void sdl3d_parallel_run_job(sdl3d_parallel_job *job)
+static void slayer3d_parallel_run_job(slayer3d_parallel_job *job)
 {
     if (job == NULL || job->run_tile == NULL)
     {
@@ -117,9 +117,9 @@ static void sdl3d_parallel_run_job(sdl3d_parallel_job *job)
     }
 }
 
-static int sdl3d_parallel_rasterizer_thread_main(void *userdata)
+static int slayer3d_parallel_rasterizer_thread_main(void *userdata)
 {
-    sdl3d_parallel_rasterizer *rasterizer = (sdl3d_parallel_rasterizer *)userdata;
+    slayer3d_parallel_rasterizer *rasterizer = (slayer3d_parallel_rasterizer *)userdata;
 
     for (;;)
     {
@@ -130,17 +130,17 @@ static int sdl3d_parallel_rasterizer_thread_main(void *userdata)
             return 0;
         }
 
-        sdl3d_parallel_job *job = (sdl3d_parallel_job *)SDL_GetAtomicPointer(&rasterizer->current_job);
-        sdl3d_parallel_run_job(job);
+        slayer3d_parallel_job *job = (slayer3d_parallel_job *)SDL_GetAtomicPointer(&rasterizer->current_job);
+        slayer3d_parallel_run_job(job);
         SDL_SignalSemaphore(rasterizer->work_complete);
     }
 }
 
-static void sdl3d_parallel_rasterizer_execute(sdl3d_parallel_rasterizer *rasterizer, sdl3d_parallel_job *job)
+static void slayer3d_parallel_rasterizer_execute(slayer3d_parallel_rasterizer *rasterizer, slayer3d_parallel_job *job)
 {
     if (rasterizer == NULL || rasterizer->worker_count <= 0 || job == NULL || job->tile_count <= 0)
     {
-        sdl3d_parallel_run_job(job);
+        slayer3d_parallel_run_job(job);
         return;
     }
 
@@ -152,7 +152,7 @@ static void sdl3d_parallel_rasterizer_execute(sdl3d_parallel_rasterizer *rasteri
         SDL_SignalSemaphore(rasterizer->work_ready);
     }
 
-    sdl3d_parallel_run_job(job);
+    slayer3d_parallel_run_job(job);
 
     for (int i = 0; i < rasterizer->worker_count; ++i)
     {
@@ -162,7 +162,7 @@ static void sdl3d_parallel_rasterizer_execute(sdl3d_parallel_rasterizer *rasteri
     SDL_SetAtomicPointer(&rasterizer->current_job, NULL);
 }
 
-static bool sdl3d_scissor_contains(const sdl3d_framebuffer *framebuffer, int x, int y)
+static bool slayer3d_scissor_contains(const slayer3d_framebuffer *framebuffer, int x, int y)
 {
     if (!framebuffer->scissor_enabled)
     {
@@ -174,11 +174,11 @@ static bool sdl3d_scissor_contains(const sdl3d_framebuffer *framebuffer, int x, 
            (y < framebuffer->scissor_rect.y + framebuffer->scissor_rect.h);
 }
 
-static void sdl3d_write_pixel(sdl3d_framebuffer *framebuffer, int x, int y, float depth, sdl3d_color color)
+static void slayer3d_write_pixel(slayer3d_framebuffer *framebuffer, int x, int y, float depth, slayer3d_color color)
 {
     const int index = (y * framebuffer->width) + x;
 
-    if (!sdl3d_scissor_contains(framebuffer, x, y))
+    if (!slayer3d_scissor_contains(framebuffer, x, y))
     {
         return;
     }
@@ -231,36 +231,36 @@ static void sdl3d_write_pixel(sdl3d_framebuffer *framebuffer, int x, int y, floa
 
 /* --- Clip-space plane tests ---------------------------------------------- */
 
-typedef enum sdl3d_clip_plane
+typedef enum slayer3d_clip_plane
 {
-    SDL3D_CLIP_LEFT = 0,
-    SDL3D_CLIP_RIGHT = 1,
-    SDL3D_CLIP_BOTTOM = 2,
-    SDL3D_CLIP_TOP = 3,
-    SDL3D_CLIP_NEAR = 4,
-    SDL3D_CLIP_FAR = 5
-} sdl3d_clip_plane;
+    SLAYER3D_CLIP_LEFT = 0,
+    SLAYER3D_CLIP_RIGHT = 1,
+    SLAYER3D_CLIP_BOTTOM = 2,
+    SLAYER3D_CLIP_TOP = 3,
+    SLAYER3D_CLIP_NEAR = 4,
+    SLAYER3D_CLIP_FAR = 5
+} slayer3d_clip_plane;
 
 /*
  * Signed distance from a clip-space vertex to the given plane. Positive
  * means "inside" (the half-space retained by clipping). The six planes
  * enforce: -w <= x <= w, -w <= y <= w, -w <= z <= w.
  */
-static float sdl3d_clip_distance(sdl3d_vec4 v, sdl3d_clip_plane plane)
+static float slayer3d_clip_distance(slayer3d_vec4 v, slayer3d_clip_plane plane)
 {
     switch (plane)
     {
-    case SDL3D_CLIP_LEFT:
+    case SLAYER3D_CLIP_LEFT:
         return v.x + v.w;
-    case SDL3D_CLIP_RIGHT:
+    case SLAYER3D_CLIP_RIGHT:
         return v.w - v.x;
-    case SDL3D_CLIP_BOTTOM:
+    case SLAYER3D_CLIP_BOTTOM:
         return v.y + v.w;
-    case SDL3D_CLIP_TOP:
+    case SLAYER3D_CLIP_TOP:
         return v.w - v.y;
-    case SDL3D_CLIP_NEAR:
+    case SLAYER3D_CLIP_NEAR:
         return v.z + v.w;
-    case SDL3D_CLIP_FAR:
+    case SLAYER3D_CLIP_FAR:
         return v.w - v.z;
     default:
         SDL_assert(0 && "unreachable: unknown clip plane");
@@ -273,7 +273,8 @@ static float sdl3d_clip_distance(sdl3d_vec4 v, sdl3d_clip_plane plane)
  * vertices from `in`, writes the clipped polygon to `out`, returns the new
  * vertex count.
  */
-static int sdl3d_clip_polygon_against_plane(const sdl3d_vec4 *in, int count_in, sdl3d_vec4 *out, sdl3d_clip_plane plane)
+static int slayer3d_clip_polygon_against_plane(const slayer3d_vec4 *in, int count_in, slayer3d_vec4 *out,
+                                               slayer3d_clip_plane plane)
 {
     if (count_in < 3)
     {
@@ -281,13 +282,13 @@ static int sdl3d_clip_polygon_against_plane(const sdl3d_vec4 *in, int count_in, 
     }
 
     int count_out = 0;
-    sdl3d_vec4 prev = in[count_in - 1];
-    float prev_distance = sdl3d_clip_distance(prev, plane);
+    slayer3d_vec4 prev = in[count_in - 1];
+    float prev_distance = slayer3d_clip_distance(prev, plane);
 
     for (int i = 0; i < count_in; ++i)
     {
-        const sdl3d_vec4 curr = in[i];
-        const float curr_distance = sdl3d_clip_distance(curr, plane);
+        const slayer3d_vec4 curr = in[i];
+        const float curr_distance = slayer3d_clip_distance(curr, plane);
 
         const bool prev_inside = prev_distance >= 0.0f;
         const bool curr_inside = curr_distance >= 0.0f;
@@ -301,15 +302,15 @@ static int sdl3d_clip_polygon_against_plane(const sdl3d_vec4 *in, int count_in, 
              * coordinates.
              */
             const float t = prev_distance / (prev_distance - curr_distance);
-            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            if (count_out < SLAYER3D_CLIP_MAX_VERTICES)
             {
-                out[count_out++] = sdl3d_vec4_lerp(prev, curr, t);
+                out[count_out++] = slayer3d_vec4_lerp(prev, curr, t);
             }
         }
 
         if (curr_inside)
         {
-            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            if (count_out < SLAYER3D_CLIP_MAX_VERTICES)
             {
                 out[count_out++] = curr;
             }
@@ -324,30 +325,30 @@ static int sdl3d_clip_polygon_against_plane(const sdl3d_vec4 *in, int count_in, 
 
 /*
  * Clip a triangle against all six frustum planes. Writes the resulting
- * polygon into `out` (max SDL3D_CLIP_MAX_VERTICES vertices) and returns
+ * polygon into `out` (max SLAYER3D_CLIP_MAX_VERTICES vertices) and returns
  * the vertex count (0, 3, 4, ...).
  */
-static int sdl3d_clip_triangle(sdl3d_vec4 v0, sdl3d_vec4 v1, sdl3d_vec4 v2, sdl3d_vec4 *out)
+static int slayer3d_clip_triangle(slayer3d_vec4 v0, slayer3d_vec4 v1, slayer3d_vec4 v2, slayer3d_vec4 *out)
 {
-    sdl3d_vec4 buffer_a[SDL3D_CLIP_MAX_VERTICES];
-    sdl3d_vec4 buffer_b[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_vec4 buffer_a[SLAYER3D_CLIP_MAX_VERTICES];
+    slayer3d_vec4 buffer_b[SLAYER3D_CLIP_MAX_VERTICES];
 
     buffer_a[0] = v0;
     buffer_a[1] = v1;
     buffer_a[2] = v2;
     int count = 3;
 
-    sdl3d_vec4 *src = buffer_a;
-    sdl3d_vec4 *dst = buffer_b;
+    slayer3d_vec4 *src = buffer_a;
+    slayer3d_vec4 *dst = buffer_b;
 
     for (int plane = 0; plane < 6; ++plane)
     {
-        count = sdl3d_clip_polygon_against_plane(src, count, dst, (sdl3d_clip_plane)plane);
+        count = slayer3d_clip_polygon_against_plane(src, count, dst, (slayer3d_clip_plane)plane);
         if (count == 0)
         {
             return 0;
         }
-        sdl3d_vec4 *swap = src;
+        slayer3d_vec4 *swap = src;
         src = dst;
         dst = swap;
     }
@@ -364,12 +365,12 @@ static int sdl3d_clip_triangle(sdl3d_vec4 v0, sdl3d_vec4 v1, sdl3d_vec4 v2, sdl3
  * each plane produces at most one intersection, so we just trim the segment
  * at each plane. Returns false if the segment is entirely outside.
  */
-static bool sdl3d_clip_line(sdl3d_vec4 *a, sdl3d_vec4 *b)
+static bool slayer3d_clip_line(slayer3d_vec4 *a, slayer3d_vec4 *b)
 {
     for (int plane = 0; plane < 6; ++plane)
     {
-        const float da = sdl3d_clip_distance(*a, (sdl3d_clip_plane)plane);
-        const float db = sdl3d_clip_distance(*b, (sdl3d_clip_plane)plane);
+        const float da = slayer3d_clip_distance(*a, (slayer3d_clip_plane)plane);
+        const float db = slayer3d_clip_distance(*b, (slayer3d_clip_plane)plane);
         const bool a_inside = da >= 0.0f;
         const bool b_inside = db >= 0.0f;
 
@@ -381,7 +382,7 @@ static bool sdl3d_clip_line(sdl3d_vec4 *a, sdl3d_vec4 *b)
         if (a_inside != b_inside)
         {
             const float t = da / (da - db);
-            const sdl3d_vec4 intersection = sdl3d_vec4_lerp(*a, *b, t);
+            const slayer3d_vec4 intersection = slayer3d_vec4_lerp(*a, *b, t);
             if (!a_inside)
             {
                 *a = intersection;
@@ -397,52 +398,52 @@ static bool sdl3d_clip_line(sdl3d_vec4 *a, sdl3d_vec4 *b)
 
 /* --- Viewport transform --------------------------------------------------- */
 
-typedef struct sdl3d_screen_vertex
+typedef struct slayer3d_screen_vertex
 {
     int x_fx;   /* fixed-point screen x, 8 subpixel bits */
     int y_fx;   /* fixed-point screen y, 8 subpixel bits */
     float z;    /* NDC depth in [-1, 1] */
     float x_px; /* floating-point screen x, for line/point raster */
     float y_px;
-} sdl3d_screen_vertex;
+} slayer3d_screen_vertex;
 
-typedef struct sdl3d_triangle_bounds
+typedef struct slayer3d_triangle_bounds
 {
     int min_px_x;
     int max_px_x;
     int min_px_y;
     int max_px_y;
-} sdl3d_triangle_bounds;
+} slayer3d_triangle_bounds;
 
-typedef struct sdl3d_prepared_triangle
+typedef struct slayer3d_prepared_triangle
 {
-    sdl3d_screen_vertex a;
-    sdl3d_screen_vertex b;
-    sdl3d_screen_vertex c;
+    slayer3d_screen_vertex a;
+    slayer3d_screen_vertex b;
+    slayer3d_screen_vertex c;
     Sint64 area;
     int bias_ab;
     int bias_bc;
     int bias_ca;
     float inverse_area;
-    sdl3d_triangle_bounds bounds;
-} sdl3d_prepared_triangle;
+    slayer3d_triangle_bounds bounds;
+} slayer3d_prepared_triangle;
 
-typedef struct sdl3d_parallel_triangle_job
+typedef struct slayer3d_parallel_triangle_job
 {
-    sdl3d_framebuffer *framebuffer;
-    sdl3d_prepared_triangle triangle;
-    sdl3d_color color;
+    slayer3d_framebuffer *framebuffer;
+    slayer3d_prepared_triangle triangle;
+    slayer3d_color color;
     int first_tile_x;
     int first_tile_y;
     int tiles_w;
-} sdl3d_parallel_triangle_job;
+} slayer3d_parallel_triangle_job;
 
-static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex start,
-                                        sdl3d_screen_vertex end, sdl3d_color color);
+static void slayer3d_rasterize_screen_line(slayer3d_framebuffer *framebuffer, slayer3d_screen_vertex start,
+                                           slayer3d_screen_vertex end, slayer3d_color color);
 
-static sdl3d_screen_vertex sdl3d_viewport_transform(sdl3d_vec4 clip, int width, int height)
+static slayer3d_screen_vertex slayer3d_viewport_transform(slayer3d_vec4 clip, int width, int height)
 {
-    sdl3d_screen_vertex out;
+    slayer3d_screen_vertex out;
     const float inverse_w = 1.0f / clip.w;
     const float ndc_x = clip.x * inverse_w;
     const float ndc_y = clip.y * inverse_w;
@@ -452,8 +453,8 @@ static sdl3d_screen_vertex sdl3d_viewport_transform(sdl3d_vec4 clip, int width, 
     const float screen_x = (ndc_x + 1.0f) * 0.5f * (float)width;
     const float screen_y = (1.0f - ndc_y) * 0.5f * (float)height;
 
-    out.x_fx = sdl3d_round_subpixel(screen_x);
-    out.y_fx = sdl3d_round_subpixel(screen_y);
+    out.x_fx = slayer3d_round_subpixel(screen_x);
+    out.y_fx = slayer3d_round_subpixel(screen_y);
     out.x_px = screen_x;
     out.y_px = screen_y;
     out.z = ndc_z;
@@ -463,27 +464,28 @@ static sdl3d_screen_vertex sdl3d_viewport_transform(sdl3d_vec4 clip, int width, 
 /* --- Edge function + fill rule ------------------------------------------- */
 
 /*
- * 2D cross product in fixed-point. For subpixel precision SDL3D_SUBPIXEL_BITS
+ * 2D cross product in fixed-point. For subpixel precision SLAYER3D_SUBPIXEL_BITS
  * with coordinates up to ~2^20, products fit in int64 with headroom.
  */
-static Sint64 sdl3d_edge_function(int ax, int ay, int bx, int by, int px, int py)
+static Sint64 slayer3d_edge_function(int ax, int ay, int bx, int by, int px, int py)
 {
     return (Sint64)(bx - ax) * (Sint64)(py - ay) - (Sint64)(by - ay) * (Sint64)(px - ax);
 }
 
-static Sint64 sdl3d_screen_triangle_signed_area(sdl3d_screen_vertex a, sdl3d_screen_vertex b, sdl3d_screen_vertex c)
+static Sint64 slayer3d_screen_triangle_signed_area(slayer3d_screen_vertex a, slayer3d_screen_vertex b,
+                                                   slayer3d_screen_vertex c)
 {
-    return sdl3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, c.x_fx, c.y_fx);
+    return slayer3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, c.x_fx, c.y_fx);
 }
 
-static Sint64 sdl3d_screen_polygon_signed_area(const sdl3d_screen_vertex *vertices, int count)
+static Sint64 slayer3d_screen_polygon_signed_area(const slayer3d_screen_vertex *vertices, int count)
 {
     Sint64 area_twice = 0;
 
     for (int i = 0; i < count; ++i)
     {
-        const sdl3d_screen_vertex current = vertices[i];
-        const sdl3d_screen_vertex next = vertices[(i + 1) % count];
+        const slayer3d_screen_vertex current = vertices[i];
+        const slayer3d_screen_vertex next = vertices[(i + 1) % count];
         area_twice += ((Sint64)current.x_fx * (Sint64)next.y_fx) - ((Sint64)next.x_fx * (Sint64)current.y_fx);
     }
 
@@ -497,7 +499,7 @@ static Sint64 sdl3d_screen_polygon_signed_area(const sdl3d_screen_vertex *vertic
  * others (exclusive boundary). Top edge: dy == 0 AND dx > 0. Left edge:
  * dy < 0 (in y-down screen space with positive-area winding).
  */
-static int sdl3d_fill_bias(int ax, int ay, int bx, int by)
+static int slayer3d_fill_bias(int ax, int ay, int bx, int by)
 {
     const int dx = bx - ax;
     const int dy = by - ay;
@@ -508,34 +510,34 @@ static int sdl3d_fill_bias(int ax, int ay, int bx, int by)
 
 /* --- Triangle rasterization --------------------------------------------- */
 
-static bool sdl3d_prepare_screen_triangle(const sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex a,
-                                          sdl3d_screen_vertex b, sdl3d_screen_vertex c,
-                                          sdl3d_prepared_triangle *out_triangle)
+static bool slayer3d_prepare_screen_triangle(const slayer3d_framebuffer *framebuffer, slayer3d_screen_vertex a,
+                                             slayer3d_screen_vertex b, slayer3d_screen_vertex c,
+                                             slayer3d_prepared_triangle *out_triangle)
 {
     /* 2x signed area in fixed-point. If negative, swap winding. Zero means degenerate. */
-    Sint64 area = sdl3d_screen_triangle_signed_area(a, b, c);
+    Sint64 area = slayer3d_screen_triangle_signed_area(a, b, c);
     if (area == 0)
     {
         return false;
     }
     if (area < 0)
     {
-        sdl3d_screen_vertex tmp = b;
+        slayer3d_screen_vertex tmp = b;
         b = c;
         c = tmp;
         area = -area;
     }
 
     /* Pixel-aligned bounding box, clipped to the framebuffer. */
-    const int min_fx = sdl3d_min_int(a.x_fx, sdl3d_min_int(b.x_fx, c.x_fx));
-    const int max_fx = sdl3d_max_int(a.x_fx, sdl3d_max_int(b.x_fx, c.x_fx));
-    const int min_fy = sdl3d_min_int(a.y_fx, sdl3d_min_int(b.y_fx, c.y_fx));
-    const int max_fy = sdl3d_max_int(a.y_fx, sdl3d_max_int(b.y_fx, c.y_fx));
+    const int min_fx = slayer3d_min_int(a.x_fx, slayer3d_min_int(b.x_fx, c.x_fx));
+    const int max_fx = slayer3d_max_int(a.x_fx, slayer3d_max_int(b.x_fx, c.x_fx));
+    const int min_fy = slayer3d_min_int(a.y_fx, slayer3d_min_int(b.y_fx, c.y_fx));
+    const int max_fy = slayer3d_max_int(a.y_fx, slayer3d_max_int(b.y_fx, c.y_fx));
 
-    const int min_px_x = sdl3d_max_int(0, min_fx >> SDL3D_SUBPIXEL_BITS);
-    const int max_px_x = sdl3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SDL3D_SUBPIXEL_BITS);
-    const int min_px_y = sdl3d_max_int(0, min_fy >> SDL3D_SUBPIXEL_BITS);
-    const int max_px_y = sdl3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SDL3D_SUBPIXEL_BITS);
+    const int min_px_x = slayer3d_max_int(0, min_fx >> SLAYER3D_SUBPIXEL_BITS);
+    const int max_px_x = slayer3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SLAYER3D_SUBPIXEL_BITS);
+    const int min_px_y = slayer3d_max_int(0, min_fy >> SLAYER3D_SUBPIXEL_BITS);
+    const int max_px_y = slayer3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SLAYER3D_SUBPIXEL_BITS);
 
     if (min_px_x > max_px_x || min_px_y > max_px_y)
     {
@@ -546,9 +548,9 @@ static bool sdl3d_prepare_screen_triangle(const sdl3d_framebuffer *framebuffer, 
     out_triangle->b = b;
     out_triangle->c = c;
     out_triangle->area = area;
-    out_triangle->bias_ab = sdl3d_fill_bias(a.x_fx, a.y_fx, b.x_fx, b.y_fx);
-    out_triangle->bias_bc = sdl3d_fill_bias(b.x_fx, b.y_fx, c.x_fx, c.y_fx);
-    out_triangle->bias_ca = sdl3d_fill_bias(c.x_fx, c.y_fx, a.x_fx, a.y_fx);
+    out_triangle->bias_ab = slayer3d_fill_bias(a.x_fx, a.y_fx, b.x_fx, b.y_fx);
+    out_triangle->bias_bc = slayer3d_fill_bias(b.x_fx, b.y_fx, c.x_fx, c.y_fx);
+    out_triangle->bias_ca = slayer3d_fill_bias(c.x_fx, c.y_fx, a.x_fx, a.y_fx);
     out_triangle->inverse_area = 1.0f / (float)area;
     out_triangle->bounds.min_px_x = min_px_x;
     out_triangle->bounds.max_px_x = max_px_x;
@@ -557,27 +559,28 @@ static bool sdl3d_prepare_screen_triangle(const sdl3d_framebuffer *framebuffer, 
     return true;
 }
 
-static void sdl3d_rasterize_prepared_triangle_region(sdl3d_framebuffer *framebuffer,
-                                                     const sdl3d_prepared_triangle *triangle, sdl3d_color color,
-                                                     int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+static void slayer3d_rasterize_prepared_triangle_region(slayer3d_framebuffer *framebuffer,
+                                                        const slayer3d_prepared_triangle *triangle,
+                                                        slayer3d_color color, int min_px_x, int max_px_x, int min_px_y,
+                                                        int max_px_y)
 {
-    const sdl3d_screen_vertex a = triangle->a;
-    const sdl3d_screen_vertex b = triangle->b;
-    const sdl3d_screen_vertex c = triangle->c;
+    const slayer3d_screen_vertex a = triangle->a;
+    const slayer3d_screen_vertex b = triangle->b;
+    const slayer3d_screen_vertex c = triangle->c;
 
     for (int py = min_px_y; py <= max_px_y; ++py)
     {
-        const int sample_y = (py << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+        const int sample_y = (py << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
         for (int px = min_px_x; px <= max_px_x; ++px)
         {
-            const int sample_x = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+            const int sample_x = (px << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
 
             const Sint64 w_ab =
-                sdl3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, sample_x, sample_y) + triangle->bias_ab;
+                slayer3d_edge_function(a.x_fx, a.y_fx, b.x_fx, b.y_fx, sample_x, sample_y) + triangle->bias_ab;
             const Sint64 w_bc =
-                sdl3d_edge_function(b.x_fx, b.y_fx, c.x_fx, c.y_fx, sample_x, sample_y) + triangle->bias_bc;
+                slayer3d_edge_function(b.x_fx, b.y_fx, c.x_fx, c.y_fx, sample_x, sample_y) + triangle->bias_bc;
             const Sint64 w_ca =
-                sdl3d_edge_function(c.x_fx, c.y_fx, a.x_fx, a.y_fx, sample_x, sample_y) + triangle->bias_ca;
+                slayer3d_edge_function(c.x_fx, c.y_fx, a.x_fx, a.y_fx, sample_x, sample_y) + triangle->bias_ca;
 
             if ((w_ab | w_bc | w_ca) < 0)
             {
@@ -595,55 +598,58 @@ static void sdl3d_rasterize_prepared_triangle_region(sdl3d_framebuffer *framebuf
             const float bary_c = (float)w_ab * triangle->inverse_area;
             const float depth = (bary_a * a.z) + (bary_b * b.z) + (bary_c * c.z);
 
-            sdl3d_write_pixel(framebuffer, px, py, depth, color);
+            slayer3d_write_pixel(framebuffer, px, py, depth, color);
         }
     }
 }
 
-static void sdl3d_parallel_triangle_job_run_tile(void *userdata, int tile_index)
+static void slayer3d_parallel_triangle_job_run_tile(void *userdata, int tile_index)
 {
-    sdl3d_parallel_triangle_job *job = (sdl3d_parallel_triangle_job *)userdata;
+    slayer3d_parallel_triangle_job *job = (slayer3d_parallel_triangle_job *)userdata;
     const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
     const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
 
-    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
-    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_x = slayer3d_max_int(job->triangle.bounds.min_px_x, tile_x * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x =
+        slayer3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = slayer3d_max_int(job->triangle.bounds.min_px_y, tile_y * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y =
+        slayer3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
 
     if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_region(job->framebuffer, &job->triangle, job->color, tile_min_px_x, tile_max_px_x,
-                                             tile_min_px_y, tile_max_px_y);
+    slayer3d_rasterize_prepared_triangle_region(job->framebuffer, &job->triangle, job->color, tile_min_px_x,
+                                                tile_max_px_x, tile_min_px_y, tile_max_px_y);
 }
 
-static bool sdl3d_try_rasterize_prepared_triangle_parallel(sdl3d_framebuffer *framebuffer,
-                                                           const sdl3d_prepared_triangle *triangle, sdl3d_color color)
+static bool slayer3d_try_rasterize_prepared_triangle_parallel(slayer3d_framebuffer *framebuffer,
+                                                              const slayer3d_prepared_triangle *triangle,
+                                                              slayer3d_color color)
 {
     if (framebuffer->parallel_rasterizer == NULL)
     {
         return false;
     }
 
-    const int first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
-    const int last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
-    const int first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
-    const int last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int first_tile_x = triangle->bounds.min_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    const int last_tile_x = triangle->bounds.max_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    const int first_tile_y = triangle->bounds.min_px_y / SLAYER3D_RASTER_TILE_SIZE;
+    const int last_tile_y = triangle->bounds.max_px_y / SLAYER3D_RASTER_TILE_SIZE;
     const int tiles_w = last_tile_x - first_tile_x + 1;
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
-                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
-                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
+    if (!slayer3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                      triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                      triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
 
-    sdl3d_parallel_triangle_job triangle_job;
+    slayer3d_parallel_triangle_job triangle_job;
     triangle_job.framebuffer = framebuffer;
     triangle_job.triangle = *triangle;
     triangle_job.color = color;
@@ -651,63 +657,64 @@ static bool sdl3d_try_rasterize_prepared_triangle_parallel(sdl3d_framebuffer *fr
     triangle_job.first_tile_y = first_tile_y;
     triangle_job.tiles_w = tiles_w;
 
-    sdl3d_parallel_job job;
-    job.run_tile = sdl3d_parallel_triangle_job_run_tile;
+    slayer3d_parallel_job job;
+    job.run_tile = slayer3d_parallel_triangle_job_run_tile;
     job.userdata = &triangle_job;
     job.tile_count = tile_count;
     SDL_SetAtomicInt(&job.next_tile_index, 0);
 
-    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
+    slayer3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
     return true;
 }
 
-static void sdl3d_rasterize_screen_triangle(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex a,
-                                            sdl3d_screen_vertex b, sdl3d_screen_vertex c, sdl3d_color color)
+static void slayer3d_rasterize_screen_triangle(slayer3d_framebuffer *framebuffer, slayer3d_screen_vertex a,
+                                               slayer3d_screen_vertex b, slayer3d_screen_vertex c, slayer3d_color color)
 {
-    sdl3d_prepared_triangle triangle;
-    if (!sdl3d_prepare_screen_triangle(framebuffer, a, b, c, &triangle))
+    slayer3d_prepared_triangle triangle;
+    if (!slayer3d_prepare_screen_triangle(framebuffer, a, b, c, &triangle))
     {
         return;
     }
 
-    if (sdl3d_try_rasterize_prepared_triangle_parallel(framebuffer, &triangle, color))
+    if (slayer3d_try_rasterize_prepared_triangle_parallel(framebuffer, &triangle, color))
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_region(framebuffer, &triangle, color, triangle.bounds.min_px_x,
-                                             triangle.bounds.max_px_x, triangle.bounds.min_px_y,
-                                             triangle.bounds.max_px_y);
+    slayer3d_rasterize_prepared_triangle_region(framebuffer, &triangle, color, triangle.bounds.min_px_x,
+                                                triangle.bounds.max_px_x, triangle.bounds.min_px_y,
+                                                triangle.bounds.max_px_y);
 }
 
 /* --- Public: triangle, line, point --------------------------------------- */
 
-void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
-                              sdl3d_vec3 v2, sdl3d_color color, bool backface_culling_enabled, bool wireframe_enabled)
+void slayer3d_rasterize_triangle(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mvp, slayer3d_vec3 v0,
+                                 slayer3d_vec3 v1, slayer3d_vec3 v2, slayer3d_color color,
+                                 bool backface_culling_enabled, bool wireframe_enabled)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
         return;
     }
 
-    const sdl3d_vec4 clip0 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v0, 1.0f));
-    const sdl3d_vec4 clip1 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v1, 1.0f));
-    const sdl3d_vec4 clip2 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v2, 1.0f));
+    const slayer3d_vec4 clip0 = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v0, 1.0f));
+    const slayer3d_vec4 clip1 = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v1, 1.0f));
+    const slayer3d_vec4 clip2 = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v2, 1.0f));
 
-    sdl3d_vec4 clipped[SDL3D_CLIP_MAX_VERTICES];
-    const int clipped_count = sdl3d_clip_triangle(clip0, clip1, clip2, clipped);
+    slayer3d_vec4 clipped[SLAYER3D_CLIP_MAX_VERTICES];
+    const int clipped_count = slayer3d_clip_triangle(clip0, clip1, clip2, clipped);
     if (clipped_count < 3)
     {
         return;
     }
 
-    sdl3d_screen_vertex screen[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_screen_vertex screen[SLAYER3D_CLIP_MAX_VERTICES];
     for (int i = 0; i < clipped_count; ++i)
     {
-        screen[i] = sdl3d_viewport_transform(clipped[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform(clipped[i], framebuffer->width, framebuffer->height);
     }
 
-    const Sint64 polygon_area = sdl3d_screen_polygon_signed_area(screen, clipped_count);
+    const Sint64 polygon_area = slayer3d_screen_polygon_signed_area(screen, clipped_count);
     if (polygon_area == 0)
     {
         return;
@@ -722,7 +729,7 @@ void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sd
     {
         for (int i = 0; i < clipped_count; ++i)
         {
-            sdl3d_rasterize_screen_line(framebuffer, screen[i], screen[(i + 1) % clipped_count], color);
+            slayer3d_rasterize_screen_line(framebuffer, screen[i], screen[(i + 1) % clipped_count], color);
         }
         return;
     }
@@ -730,7 +737,7 @@ void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sd
     /* Fan-triangulate the clipped polygon around vertex 0. */
     for (int i = 1; i + 1 < clipped_count; ++i)
     {
-        sdl3d_rasterize_screen_triangle(framebuffer, screen[0], screen[i], screen[i + 1], color);
+        slayer3d_rasterize_screen_triangle(framebuffer, screen[0], screen[i], screen[i + 1], color);
     }
 }
 
@@ -738,25 +745,25 @@ void sdl3d_rasterize_triangle(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sd
 
 /*
  * Clip-space vertex carrying per-vertex color as a float RGBA attribute.
- * Colors are in [0, 255] (matching sdl3d_color) so no separate scale is
+ * Colors are in [0, 255] (matching slayer3d_color) so no separate scale is
  * needed when converting back to the framebuffer. During Sutherland-Hodgman
  * clipping the color is interpolated linearly in the clip-space edge
  * parameter `t`, which is the same parameter used for positions.
  */
-typedef struct sdl3d_clip_vertex_colored
+typedef struct slayer3d_clip_vertex_colored
 {
-    sdl3d_vec4 position;
+    slayer3d_vec4 position;
     float r;
     float g;
     float b;
     float a;
-} sdl3d_clip_vertex_colored;
+} slayer3d_clip_vertex_colored;
 
-static sdl3d_clip_vertex_colored sdl3d_clip_vertex_colored_lerp(sdl3d_clip_vertex_colored a,
-                                                                sdl3d_clip_vertex_colored b, float t)
+static slayer3d_clip_vertex_colored slayer3d_clip_vertex_colored_lerp(slayer3d_clip_vertex_colored a,
+                                                                      slayer3d_clip_vertex_colored b, float t)
 {
-    sdl3d_clip_vertex_colored out;
-    out.position = sdl3d_vec4_lerp(a.position, b.position, t);
+    slayer3d_clip_vertex_colored out;
+    out.position = slayer3d_vec4_lerp(a.position, b.position, t);
     out.r = a.r + (b.r - a.r) * t;
     out.g = a.g + (b.g - a.g) * t;
     out.b = a.b + (b.b - a.b) * t;
@@ -764,8 +771,8 @@ static sdl3d_clip_vertex_colored sdl3d_clip_vertex_colored_lerp(sdl3d_clip_verte
     return out;
 }
 
-static int sdl3d_clip_polygon_against_plane_colored(const sdl3d_clip_vertex_colored *in, int count_in,
-                                                    sdl3d_clip_vertex_colored *out, sdl3d_clip_plane plane)
+static int slayer3d_clip_polygon_against_plane_colored(const slayer3d_clip_vertex_colored *in, int count_in,
+                                                       slayer3d_clip_vertex_colored *out, slayer3d_clip_plane plane)
 {
     if (count_in < 3)
     {
@@ -773,13 +780,13 @@ static int sdl3d_clip_polygon_against_plane_colored(const sdl3d_clip_vertex_colo
     }
 
     int count_out = 0;
-    sdl3d_clip_vertex_colored prev = in[count_in - 1];
-    float prev_distance = sdl3d_clip_distance(prev.position, plane);
+    slayer3d_clip_vertex_colored prev = in[count_in - 1];
+    float prev_distance = slayer3d_clip_distance(prev.position, plane);
 
     for (int i = 0; i < count_in; ++i)
     {
-        const sdl3d_clip_vertex_colored curr = in[i];
-        const float curr_distance = sdl3d_clip_distance(curr.position, plane);
+        const slayer3d_clip_vertex_colored curr = in[i];
+        const float curr_distance = slayer3d_clip_distance(curr.position, plane);
 
         const bool prev_inside = prev_distance >= 0.0f;
         const bool curr_inside = curr_distance >= 0.0f;
@@ -787,15 +794,15 @@ static int sdl3d_clip_polygon_against_plane_colored(const sdl3d_clip_vertex_colo
         if (prev_inside != curr_inside)
         {
             const float t = prev_distance / (prev_distance - curr_distance);
-            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            if (count_out < SLAYER3D_CLIP_MAX_VERTICES)
             {
-                out[count_out++] = sdl3d_clip_vertex_colored_lerp(prev, curr, t);
+                out[count_out++] = slayer3d_clip_vertex_colored_lerp(prev, curr, t);
             }
         }
 
         if (curr_inside)
         {
-            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            if (count_out < SLAYER3D_CLIP_MAX_VERTICES)
             {
                 out[count_out++] = curr;
             }
@@ -808,28 +815,28 @@ static int sdl3d_clip_polygon_against_plane_colored(const sdl3d_clip_vertex_colo
     return count_out;
 }
 
-static int sdl3d_clip_triangle_colored(sdl3d_clip_vertex_colored v0, sdl3d_clip_vertex_colored v1,
-                                       sdl3d_clip_vertex_colored v2, sdl3d_clip_vertex_colored *out)
+static int slayer3d_clip_triangle_colored(slayer3d_clip_vertex_colored v0, slayer3d_clip_vertex_colored v1,
+                                          slayer3d_clip_vertex_colored v2, slayer3d_clip_vertex_colored *out)
 {
-    sdl3d_clip_vertex_colored buffer_a[SDL3D_CLIP_MAX_VERTICES];
-    sdl3d_clip_vertex_colored buffer_b[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_clip_vertex_colored buffer_a[SLAYER3D_CLIP_MAX_VERTICES];
+    slayer3d_clip_vertex_colored buffer_b[SLAYER3D_CLIP_MAX_VERTICES];
 
     buffer_a[0] = v0;
     buffer_a[1] = v1;
     buffer_a[2] = v2;
     int count = 3;
 
-    sdl3d_clip_vertex_colored *src = buffer_a;
-    sdl3d_clip_vertex_colored *dst = buffer_b;
+    slayer3d_clip_vertex_colored *src = buffer_a;
+    slayer3d_clip_vertex_colored *dst = buffer_b;
 
     for (int plane = 0; plane < 6; ++plane)
     {
-        count = sdl3d_clip_polygon_against_plane_colored(src, count, dst, (sdl3d_clip_plane)plane);
+        count = slayer3d_clip_polygon_against_plane_colored(src, count, dst, (slayer3d_clip_plane)plane);
         if (count == 0)
         {
             return 0;
         }
-        sdl3d_clip_vertex_colored *swap = src;
+        slayer3d_clip_vertex_colored *swap = src;
         src = dst;
         dst = swap;
     }
@@ -848,20 +855,21 @@ static int sdl3d_clip_triangle_colored(sdl3d_clip_vertex_colored v0, sdl3d_clip_
  * screen space, followed by division by the interpolated 1/w, yields the
  * perspective-correct attribute at each pixel.
  */
-typedef struct sdl3d_screen_vertex_colored
+typedef struct slayer3d_screen_vertex_colored
 {
-    sdl3d_screen_vertex base;
+    slayer3d_screen_vertex base;
     float inverse_w;
     float r_over_w;
     float g_over_w;
     float b_over_w;
     float a_over_w;
-} sdl3d_screen_vertex_colored;
+} slayer3d_screen_vertex_colored;
 
-static sdl3d_screen_vertex_colored sdl3d_viewport_transform_colored(sdl3d_clip_vertex_colored v, int width, int height)
+static slayer3d_screen_vertex_colored slayer3d_viewport_transform_colored(slayer3d_clip_vertex_colored v, int width,
+                                                                          int height)
 {
-    sdl3d_screen_vertex_colored out;
-    out.base = sdl3d_viewport_transform(v.position, width, height);
+    slayer3d_screen_vertex_colored out;
+    out.base = slayer3d_viewport_transform(v.position, width, height);
     const float inv_w = 1.0f / v.position.w;
     out.inverse_w = inv_w;
     out.r_over_w = v.r * inv_w;
@@ -871,54 +879,55 @@ static sdl3d_screen_vertex_colored sdl3d_viewport_transform_colored(sdl3d_clip_v
     return out;
 }
 
-typedef struct sdl3d_prepared_triangle_colored
+typedef struct slayer3d_prepared_triangle_colored
 {
-    sdl3d_screen_vertex_colored a;
-    sdl3d_screen_vertex_colored b;
-    sdl3d_screen_vertex_colored c;
+    slayer3d_screen_vertex_colored a;
+    slayer3d_screen_vertex_colored b;
+    slayer3d_screen_vertex_colored c;
     Sint64 area;
     int bias_ab;
     int bias_bc;
     int bias_ca;
     float inverse_area;
-    sdl3d_triangle_bounds bounds;
-} sdl3d_prepared_triangle_colored;
+    slayer3d_triangle_bounds bounds;
+} slayer3d_prepared_triangle_colored;
 
-typedef struct sdl3d_parallel_triangle_colored_job
+typedef struct slayer3d_parallel_triangle_colored_job
 {
-    sdl3d_framebuffer *framebuffer;
-    sdl3d_prepared_triangle_colored triangle;
+    slayer3d_framebuffer *framebuffer;
+    slayer3d_prepared_triangle_colored triangle;
     int first_tile_x;
     int first_tile_y;
     int tiles_w;
-} sdl3d_parallel_triangle_colored_job;
+} slayer3d_parallel_triangle_colored_job;
 
-static bool sdl3d_prepare_screen_triangle_colored(const sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_colored a,
-                                                  sdl3d_screen_vertex_colored b, sdl3d_screen_vertex_colored c,
-                                                  sdl3d_prepared_triangle_colored *out_triangle)
+static bool slayer3d_prepare_screen_triangle_colored(const slayer3d_framebuffer *framebuffer,
+                                                     slayer3d_screen_vertex_colored a, slayer3d_screen_vertex_colored b,
+                                                     slayer3d_screen_vertex_colored c,
+                                                     slayer3d_prepared_triangle_colored *out_triangle)
 {
-    Sint64 area = sdl3d_screen_triangle_signed_area(a.base, b.base, c.base);
+    Sint64 area = slayer3d_screen_triangle_signed_area(a.base, b.base, c.base);
     if (area == 0)
     {
         return false;
     }
     if (area < 0)
     {
-        sdl3d_screen_vertex_colored tmp = b;
+        slayer3d_screen_vertex_colored tmp = b;
         b = c;
         c = tmp;
         area = -area;
     }
 
-    const int min_fx = sdl3d_min_int(a.base.x_fx, sdl3d_min_int(b.base.x_fx, c.base.x_fx));
-    const int max_fx = sdl3d_max_int(a.base.x_fx, sdl3d_max_int(b.base.x_fx, c.base.x_fx));
-    const int min_fy = sdl3d_min_int(a.base.y_fx, sdl3d_min_int(b.base.y_fx, c.base.y_fx));
-    const int max_fy = sdl3d_max_int(a.base.y_fx, sdl3d_max_int(b.base.y_fx, c.base.y_fx));
+    const int min_fx = slayer3d_min_int(a.base.x_fx, slayer3d_min_int(b.base.x_fx, c.base.x_fx));
+    const int max_fx = slayer3d_max_int(a.base.x_fx, slayer3d_max_int(b.base.x_fx, c.base.x_fx));
+    const int min_fy = slayer3d_min_int(a.base.y_fx, slayer3d_min_int(b.base.y_fx, c.base.y_fx));
+    const int max_fy = slayer3d_max_int(a.base.y_fx, slayer3d_max_int(b.base.y_fx, c.base.y_fx));
 
-    const int min_px_x = sdl3d_max_int(0, min_fx >> SDL3D_SUBPIXEL_BITS);
-    const int max_px_x = sdl3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SDL3D_SUBPIXEL_BITS);
-    const int min_px_y = sdl3d_max_int(0, min_fy >> SDL3D_SUBPIXEL_BITS);
-    const int max_px_y = sdl3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SDL3D_SUBPIXEL_BITS);
+    const int min_px_x = slayer3d_max_int(0, min_fx >> SLAYER3D_SUBPIXEL_BITS);
+    const int max_px_x = slayer3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SLAYER3D_SUBPIXEL_BITS);
+    const int min_px_y = slayer3d_max_int(0, min_fy >> SLAYER3D_SUBPIXEL_BITS);
+    const int max_px_y = slayer3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SLAYER3D_SUBPIXEL_BITS);
 
     if (min_px_x > max_px_x || min_px_y > max_px_y)
     {
@@ -929,9 +938,9 @@ static bool sdl3d_prepare_screen_triangle_colored(const sdl3d_framebuffer *frame
     out_triangle->b = b;
     out_triangle->c = c;
     out_triangle->area = area;
-    out_triangle->bias_ab = sdl3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
-    out_triangle->bias_bc = sdl3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
-    out_triangle->bias_ca = sdl3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
+    out_triangle->bias_ab = slayer3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
+    out_triangle->bias_bc = slayer3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    out_triangle->bias_ca = slayer3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
     out_triangle->inverse_area = 1.0f / (float)area;
     out_triangle->bounds.min_px_x = min_px_x;
     out_triangle->bounds.max_px_x = max_px_x;
@@ -940,7 +949,7 @@ static bool sdl3d_prepare_screen_triangle_colored(const sdl3d_framebuffer *frame
     return true;
 }
 
-static Uint8 sdl3d_color_channel_clamp(float value)
+static Uint8 slayer3d_color_channel_clamp(float value)
 {
     if (value <= 0.0f)
     {
@@ -953,29 +962,29 @@ static Uint8 sdl3d_color_channel_clamp(float value)
     return (Uint8)SDL_lroundf(value);
 }
 
-static void sdl3d_rasterize_prepared_triangle_colored_region(sdl3d_framebuffer *framebuffer,
-                                                             const sdl3d_prepared_triangle_colored *triangle,
-                                                             int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+static void slayer3d_rasterize_prepared_triangle_colored_region(slayer3d_framebuffer *framebuffer,
+                                                                const slayer3d_prepared_triangle_colored *triangle,
+                                                                int min_px_x, int max_px_x, int min_px_y, int max_px_y)
 {
-    const sdl3d_screen_vertex_colored a = triangle->a;
-    const sdl3d_screen_vertex_colored b = triangle->b;
-    const sdl3d_screen_vertex_colored c = triangle->c;
+    const slayer3d_screen_vertex_colored a = triangle->a;
+    const slayer3d_screen_vertex_colored b = triangle->b;
+    const slayer3d_screen_vertex_colored c = triangle->c;
 
     for (int py = min_px_y; py <= max_px_y; ++py)
     {
-        const int sample_y = (py << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+        const int sample_y = (py << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
         for (int px = min_px_x; px <= max_px_x; ++px)
         {
-            const int sample_x = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+            const int sample_x = (px << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
 
             const Sint64 w_ab =
-                sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sample_x, sample_y) +
+                slayer3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sample_x, sample_y) +
                 triangle->bias_ab;
             const Sint64 w_bc =
-                sdl3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sample_x, sample_y) +
+                slayer3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sample_x, sample_y) +
                 triangle->bias_bc;
             const Sint64 w_ca =
-                sdl3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sample_x, sample_y) +
+                slayer3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sample_x, sample_y) +
                 triangle->bias_ca;
 
             if ((w_ab | w_bc | w_ca) < 0)
@@ -1000,94 +1009,98 @@ static void sdl3d_rasterize_prepared_triangle_colored_region(sdl3d_framebuffer *
             const float blue = ((bary_a * a.b_over_w) + (bary_b * b.b_over_w) + (bary_c * c.b_over_w)) * w_pixel;
             const float alpha = ((bary_a * a.a_over_w) + (bary_b * b.a_over_w) + (bary_c * c.a_over_w)) * w_pixel;
 
-            sdl3d_color color;
-            color.r = sdl3d_color_channel_clamp(r);
-            color.g = sdl3d_color_channel_clamp(g);
-            color.b = sdl3d_color_channel_clamp(blue);
-            color.a = sdl3d_color_channel_clamp(alpha);
+            slayer3d_color color;
+            color.r = slayer3d_color_channel_clamp(r);
+            color.g = slayer3d_color_channel_clamp(g);
+            color.b = slayer3d_color_channel_clamp(blue);
+            color.a = slayer3d_color_channel_clamp(alpha);
 
-            sdl3d_write_pixel(framebuffer, px, py, depth, color);
+            slayer3d_write_pixel(framebuffer, px, py, depth, color);
         }
     }
 }
 
-static void sdl3d_parallel_triangle_colored_job_run_tile(void *userdata, int tile_index)
+static void slayer3d_parallel_triangle_colored_job_run_tile(void *userdata, int tile_index)
 {
-    sdl3d_parallel_triangle_colored_job *job = (sdl3d_parallel_triangle_colored_job *)userdata;
+    slayer3d_parallel_triangle_colored_job *job = (slayer3d_parallel_triangle_colored_job *)userdata;
     const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
     const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
 
-    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
-    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_x = slayer3d_max_int(job->triangle.bounds.min_px_x, tile_x * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x =
+        slayer3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = slayer3d_max_int(job->triangle.bounds.min_px_y, tile_y * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y =
+        slayer3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
 
     if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_colored_region(job->framebuffer, &job->triangle, tile_min_px_x, tile_max_px_x,
-                                                     tile_min_px_y, tile_max_px_y);
+    slayer3d_rasterize_prepared_triangle_colored_region(job->framebuffer, &job->triangle, tile_min_px_x, tile_max_px_x,
+                                                        tile_min_px_y, tile_max_px_y);
 }
 
-static bool sdl3d_try_rasterize_prepared_triangle_colored_parallel(sdl3d_framebuffer *framebuffer,
-                                                                   const sdl3d_prepared_triangle_colored *triangle)
+static bool slayer3d_try_rasterize_prepared_triangle_colored_parallel(
+    slayer3d_framebuffer *framebuffer, const slayer3d_prepared_triangle_colored *triangle)
 {
     if (framebuffer->parallel_rasterizer == NULL)
     {
         return false;
     }
 
-    const int first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
-    const int last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
-    const int first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
-    const int last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int first_tile_x = triangle->bounds.min_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    const int last_tile_x = triangle->bounds.max_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    const int first_tile_y = triangle->bounds.min_px_y / SLAYER3D_RASTER_TILE_SIZE;
+    const int last_tile_y = triangle->bounds.max_px_y / SLAYER3D_RASTER_TILE_SIZE;
     const int tiles_w = last_tile_x - first_tile_x + 1;
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
-                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
-                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
+    if (!slayer3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                      triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                      triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
 
-    sdl3d_parallel_triangle_colored_job triangle_job;
+    slayer3d_parallel_triangle_colored_job triangle_job;
     triangle_job.framebuffer = framebuffer;
     triangle_job.triangle = *triangle;
     triangle_job.first_tile_x = first_tile_x;
     triangle_job.first_tile_y = first_tile_y;
     triangle_job.tiles_w = tiles_w;
 
-    sdl3d_parallel_job job;
-    job.run_tile = sdl3d_parallel_triangle_colored_job_run_tile;
+    slayer3d_parallel_job job;
+    job.run_tile = slayer3d_parallel_triangle_colored_job_run_tile;
     job.userdata = &triangle_job;
     job.tile_count = tile_count;
     SDL_SetAtomicInt(&job.next_tile_index, 0);
 
-    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
+    slayer3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
     return true;
 }
 
-static void sdl3d_rasterize_screen_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_colored a,
-                                                    sdl3d_screen_vertex_colored b, sdl3d_screen_vertex_colored c)
+static void slayer3d_rasterize_screen_triangle_colored(slayer3d_framebuffer *framebuffer,
+                                                       slayer3d_screen_vertex_colored a,
+                                                       slayer3d_screen_vertex_colored b,
+                                                       slayer3d_screen_vertex_colored c)
 {
-    sdl3d_prepared_triangle_colored triangle;
-    if (!sdl3d_prepare_screen_triangle_colored(framebuffer, a, b, c, &triangle))
+    slayer3d_prepared_triangle_colored triangle;
+    if (!slayer3d_prepare_screen_triangle_colored(framebuffer, a, b, c, &triangle))
     {
         return;
     }
 
-    if (sdl3d_try_rasterize_prepared_triangle_colored_parallel(framebuffer, &triangle))
+    if (slayer3d_try_rasterize_prepared_triangle_colored_parallel(framebuffer, &triangle))
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_colored_region(framebuffer, &triangle, triangle.bounds.min_px_x,
-                                                     triangle.bounds.max_px_x, triangle.bounds.min_px_y,
-                                                     triangle.bounds.max_px_y);
+    slayer3d_rasterize_prepared_triangle_colored_region(framebuffer, &triangle, triangle.bounds.min_px_x,
+                                                        triangle.bounds.max_px_x, triangle.bounds.min_px_y,
+                                                        triangle.bounds.max_px_y);
 }
 
 /*
@@ -1096,8 +1109,9 @@ static void sdl3d_rasterize_screen_triangle_colored(sdl3d_framebuffer *framebuff
  * correct (lines have no meaningful barycentric area), which is acceptable
  * for wireframe visualization.
  */
-static void sdl3d_rasterize_screen_line_colored(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_colored start,
-                                                sdl3d_screen_vertex_colored end)
+static void slayer3d_rasterize_screen_line_colored(slayer3d_framebuffer *framebuffer,
+                                                   slayer3d_screen_vertex_colored start,
+                                                   slayer3d_screen_vertex_colored end)
 {
     const float dx = end.base.x_px - start.base.x_px;
     const float dy = end.base.y_px - start.base.y_px;
@@ -1112,12 +1126,12 @@ static void sdl3d_rasterize_screen_line_colored(sdl3d_framebuffer *framebuffer, 
         if (px >= 0 && px < framebuffer->width && py >= 0 && py < framebuffer->height)
         {
             const float w_start = 1.0f / start.inverse_w;
-            sdl3d_color color;
-            color.r = sdl3d_color_channel_clamp(start.r_over_w * w_start);
-            color.g = sdl3d_color_channel_clamp(start.g_over_w * w_start);
-            color.b = sdl3d_color_channel_clamp(start.b_over_w * w_start);
-            color.a = sdl3d_color_channel_clamp(start.a_over_w * w_start);
-            sdl3d_write_pixel(framebuffer, px, py, start.base.z, color);
+            slayer3d_color color;
+            color.r = slayer3d_color_channel_clamp(start.r_over_w * w_start);
+            color.g = slayer3d_color_channel_clamp(start.g_over_w * w_start);
+            color.b = slayer3d_color_channel_clamp(start.b_over_w * w_start);
+            color.a = slayer3d_color_channel_clamp(start.a_over_w * w_start);
+            slayer3d_write_pixel(framebuffer, px, py, start.base.z, color);
         }
         return;
     }
@@ -1158,12 +1172,12 @@ static void sdl3d_rasterize_screen_line_colored(sdl3d_framebuffer *framebuffer, 
         const int py = (int)SDL_lroundf(y);
         if (px >= 0 && px < framebuffer->width && py >= 0 && py < framebuffer->height)
         {
-            sdl3d_color color;
-            color.r = sdl3d_color_channel_clamp(r);
-            color.g = sdl3d_color_channel_clamp(g);
-            color.b = sdl3d_color_channel_clamp(blue);
-            color.a = sdl3d_color_channel_clamp(alpha);
-            sdl3d_write_pixel(framebuffer, px, py, z, color);
+            slayer3d_color color;
+            color.r = slayer3d_color_channel_clamp(r);
+            color.g = slayer3d_color_channel_clamp(g);
+            color.b = slayer3d_color_channel_clamp(blue);
+            color.a = slayer3d_color_channel_clamp(alpha);
+            slayer3d_write_pixel(framebuffer, px, py, z, color);
         }
         x += step_x;
         y += step_y;
@@ -1175,48 +1189,48 @@ static void sdl3d_rasterize_screen_line_colored(sdl3d_framebuffer *framebuffer, 
     }
 }
 
-void sdl3d_rasterize_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
-                                      sdl3d_vec3 v2, sdl3d_color c0, sdl3d_color c1, sdl3d_color c2,
-                                      bool backface_culling_enabled, bool wireframe_enabled)
+void slayer3d_rasterize_triangle_colored(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mvp, slayer3d_vec3 v0,
+                                         slayer3d_vec3 v1, slayer3d_vec3 v2, slayer3d_color c0, slayer3d_color c1,
+                                         slayer3d_color c2, bool backface_culling_enabled, bool wireframe_enabled)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
         return;
     }
 
-    sdl3d_clip_vertex_colored clip[3];
-    clip[0].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v0, 1.0f));
+    slayer3d_clip_vertex_colored clip[3];
+    clip[0].position = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v0, 1.0f));
     clip[0].r = (float)c0.r;
     clip[0].g = (float)c0.g;
     clip[0].b = (float)c0.b;
     clip[0].a = (float)c0.a;
-    clip[1].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v1, 1.0f));
+    clip[1].position = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v1, 1.0f));
     clip[1].r = (float)c1.r;
     clip[1].g = (float)c1.g;
     clip[1].b = (float)c1.b;
     clip[1].a = (float)c1.a;
-    clip[2].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v2, 1.0f));
+    clip[2].position = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v2, 1.0f));
     clip[2].r = (float)c2.r;
     clip[2].g = (float)c2.g;
     clip[2].b = (float)c2.b;
     clip[2].a = (float)c2.a;
 
-    sdl3d_clip_vertex_colored clipped[SDL3D_CLIP_MAX_VERTICES];
-    const int clipped_count = sdl3d_clip_triangle_colored(clip[0], clip[1], clip[2], clipped);
+    slayer3d_clip_vertex_colored clipped[SLAYER3D_CLIP_MAX_VERTICES];
+    const int clipped_count = slayer3d_clip_triangle_colored(clip[0], clip[1], clip[2], clipped);
     if (clipped_count < 3)
     {
         return;
     }
 
-    sdl3d_screen_vertex_colored screen[SDL3D_CLIP_MAX_VERTICES];
-    sdl3d_screen_vertex screen_positions[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_screen_vertex_colored screen[SLAYER3D_CLIP_MAX_VERTICES];
+    slayer3d_screen_vertex screen_positions[SLAYER3D_CLIP_MAX_VERTICES];
     for (int i = 0; i < clipped_count; ++i)
     {
-        screen[i] = sdl3d_viewport_transform_colored(clipped[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform_colored(clipped[i], framebuffer->width, framebuffer->height);
         screen_positions[i] = screen[i].base;
     }
 
-    const Sint64 polygon_area = sdl3d_screen_polygon_signed_area(screen_positions, clipped_count);
+    const Sint64 polygon_area = slayer3d_screen_polygon_signed_area(screen_positions, clipped_count);
     if (polygon_area == 0)
     {
         return;
@@ -1231,35 +1245,35 @@ void sdl3d_rasterize_triangle_colored(sdl3d_framebuffer *framebuffer, sdl3d_mat4
     {
         for (int i = 0; i < clipped_count; ++i)
         {
-            sdl3d_rasterize_screen_line_colored(framebuffer, screen[i], screen[(i + 1) % clipped_count]);
+            slayer3d_rasterize_screen_line_colored(framebuffer, screen[i], screen[(i + 1) % clipped_count]);
         }
         return;
     }
 
     for (int i = 1; i + 1 < clipped_count; ++i)
     {
-        sdl3d_rasterize_screen_triangle_colored(framebuffer, screen[0], screen[i], screen[i + 1]);
+        slayer3d_rasterize_screen_triangle_colored(framebuffer, screen[0], screen[i], screen[i + 1]);
     }
 }
 
 /* --- Textured triangle rasterization ------------------------------------ */
 
-typedef struct sdl3d_clip_vertex_textured
+typedef struct slayer3d_clip_vertex_textured
 {
-    sdl3d_vec4 position;
+    slayer3d_vec4 position;
     float u;
     float v;
     float modulate_r;
     float modulate_g;
     float modulate_b;
     float modulate_a;
-} sdl3d_clip_vertex_textured;
+} slayer3d_clip_vertex_textured;
 
-static sdl3d_clip_vertex_textured sdl3d_clip_vertex_textured_lerp(sdl3d_clip_vertex_textured a,
-                                                                  sdl3d_clip_vertex_textured b, float t)
+static slayer3d_clip_vertex_textured slayer3d_clip_vertex_textured_lerp(slayer3d_clip_vertex_textured a,
+                                                                        slayer3d_clip_vertex_textured b, float t)
 {
-    sdl3d_clip_vertex_textured out;
-    out.position = sdl3d_vec4_lerp(a.position, b.position, t);
+    slayer3d_clip_vertex_textured out;
+    out.position = slayer3d_vec4_lerp(a.position, b.position, t);
     out.u = a.u + (b.u - a.u) * t;
     out.v = a.v + (b.v - a.v) * t;
     out.modulate_r = a.modulate_r + (b.modulate_r - a.modulate_r) * t;
@@ -1269,8 +1283,8 @@ static sdl3d_clip_vertex_textured sdl3d_clip_vertex_textured_lerp(sdl3d_clip_ver
     return out;
 }
 
-static int sdl3d_clip_polygon_against_plane_textured(const sdl3d_clip_vertex_textured *in, int count_in,
-                                                     sdl3d_clip_vertex_textured *out, sdl3d_clip_plane plane)
+static int slayer3d_clip_polygon_against_plane_textured(const slayer3d_clip_vertex_textured *in, int count_in,
+                                                        slayer3d_clip_vertex_textured *out, slayer3d_clip_plane plane)
 {
     if (count_in < 3)
     {
@@ -1278,28 +1292,28 @@ static int sdl3d_clip_polygon_against_plane_textured(const sdl3d_clip_vertex_tex
     }
 
     int count_out = 0;
-    sdl3d_clip_vertex_textured prev = in[count_in - 1];
-    float prev_distance = sdl3d_clip_distance(prev.position, plane);
+    slayer3d_clip_vertex_textured prev = in[count_in - 1];
+    float prev_distance = slayer3d_clip_distance(prev.position, plane);
 
     for (int i = 0; i < count_in; ++i)
     {
-        const sdl3d_clip_vertex_textured curr = in[i];
-        const float curr_distance = sdl3d_clip_distance(curr.position, plane);
+        const slayer3d_clip_vertex_textured curr = in[i];
+        const float curr_distance = slayer3d_clip_distance(curr.position, plane);
         const bool prev_inside = prev_distance >= 0.0f;
         const bool curr_inside = curr_distance >= 0.0f;
 
         if (prev_inside != curr_inside)
         {
             const float t = prev_distance / (prev_distance - curr_distance);
-            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            if (count_out < SLAYER3D_CLIP_MAX_VERTICES)
             {
-                out[count_out++] = sdl3d_clip_vertex_textured_lerp(prev, curr, t);
+                out[count_out++] = slayer3d_clip_vertex_textured_lerp(prev, curr, t);
             }
         }
 
         if (curr_inside)
         {
-            if (count_out < SDL3D_CLIP_MAX_VERTICES)
+            if (count_out < SLAYER3D_CLIP_MAX_VERTICES)
             {
                 out[count_out++] = curr;
             }
@@ -1312,28 +1326,28 @@ static int sdl3d_clip_polygon_against_plane_textured(const sdl3d_clip_vertex_tex
     return count_out;
 }
 
-static int sdl3d_clip_triangle_textured(sdl3d_clip_vertex_textured v0, sdl3d_clip_vertex_textured v1,
-                                        sdl3d_clip_vertex_textured v2, sdl3d_clip_vertex_textured *out)
+static int slayer3d_clip_triangle_textured(slayer3d_clip_vertex_textured v0, slayer3d_clip_vertex_textured v1,
+                                           slayer3d_clip_vertex_textured v2, slayer3d_clip_vertex_textured *out)
 {
-    sdl3d_clip_vertex_textured buffer_a[SDL3D_CLIP_MAX_VERTICES];
-    sdl3d_clip_vertex_textured buffer_b[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_clip_vertex_textured buffer_a[SLAYER3D_CLIP_MAX_VERTICES];
+    slayer3d_clip_vertex_textured buffer_b[SLAYER3D_CLIP_MAX_VERTICES];
 
     buffer_a[0] = v0;
     buffer_a[1] = v1;
     buffer_a[2] = v2;
     int count = 3;
 
-    sdl3d_clip_vertex_textured *src = buffer_a;
-    sdl3d_clip_vertex_textured *dst = buffer_b;
+    slayer3d_clip_vertex_textured *src = buffer_a;
+    slayer3d_clip_vertex_textured *dst = buffer_b;
 
     for (int plane = 0; plane < 6; ++plane)
     {
-        count = sdl3d_clip_polygon_against_plane_textured(src, count, dst, (sdl3d_clip_plane)plane);
+        count = slayer3d_clip_polygon_against_plane_textured(src, count, dst, (slayer3d_clip_plane)plane);
         if (count == 0)
         {
             return 0;
         }
-        sdl3d_clip_vertex_textured *swap = src;
+        slayer3d_clip_vertex_textured *swap = src;
         src = dst;
         dst = swap;
     }
@@ -1345,9 +1359,9 @@ static int sdl3d_clip_triangle_textured(sdl3d_clip_vertex_textured v0, sdl3d_cli
     return count;
 }
 
-typedef struct sdl3d_screen_vertex_textured
+typedef struct slayer3d_screen_vertex_textured
 {
-    sdl3d_screen_vertex base;
+    slayer3d_screen_vertex base;
     float inverse_w;
     float u_over_w;
     float v_over_w;
@@ -1355,15 +1369,15 @@ typedef struct sdl3d_screen_vertex_textured
     float modulate_g_over_w;
     float modulate_b_over_w;
     float modulate_a_over_w;
-} sdl3d_screen_vertex_textured;
+} slayer3d_screen_vertex_textured;
 
-static sdl3d_screen_vertex_textured sdl3d_viewport_transform_textured(sdl3d_clip_vertex_textured v, int width,
-                                                                      int height)
+static slayer3d_screen_vertex_textured slayer3d_viewport_transform_textured(slayer3d_clip_vertex_textured v, int width,
+                                                                            int height)
 {
-    sdl3d_screen_vertex_textured out;
+    slayer3d_screen_vertex_textured out;
     const float inverse_w = 1.0f / v.position.w;
 
-    out.base = sdl3d_viewport_transform(v.position, width, height);
+    out.base = slayer3d_viewport_transform(v.position, width, height);
     out.inverse_w = inverse_w;
     out.u_over_w = v.u * inverse_w;
     out.v_over_w = v.v * inverse_w;
@@ -1374,56 +1388,58 @@ static sdl3d_screen_vertex_textured sdl3d_viewport_transform_textured(sdl3d_clip
     return out;
 }
 
-typedef struct sdl3d_prepared_triangle_textured
+typedef struct slayer3d_prepared_triangle_textured
 {
-    sdl3d_screen_vertex_textured a;
-    sdl3d_screen_vertex_textured b;
-    sdl3d_screen_vertex_textured c;
+    slayer3d_screen_vertex_textured a;
+    slayer3d_screen_vertex_textured b;
+    slayer3d_screen_vertex_textured c;
     Sint64 area;
     int bias_ab;
     int bias_bc;
     int bias_ca;
     float inverse_area;
-    sdl3d_triangle_bounds bounds;
-} sdl3d_prepared_triangle_textured;
+    slayer3d_triangle_bounds bounds;
+} slayer3d_prepared_triangle_textured;
 
-typedef struct sdl3d_parallel_triangle_textured_job
+typedef struct slayer3d_parallel_triangle_textured_job
 {
-    sdl3d_framebuffer *framebuffer;
-    sdl3d_prepared_triangle_textured triangle;
-    const sdl3d_texture2d *texture;
-    const struct sdl3d_lighting_params *lighting_params;
+    slayer3d_framebuffer *framebuffer;
+    slayer3d_prepared_triangle_textured triangle;
+    const slayer3d_texture2d *texture;
+    const struct slayer3d_lighting_params *lighting_params;
     int first_tile_x;
     int first_tile_y;
     int tiles_w;
-} sdl3d_parallel_triangle_textured_job;
+} slayer3d_parallel_triangle_textured_job;
 
-static bool sdl3d_prepare_screen_triangle_textured(const sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_textured a,
-                                                   sdl3d_screen_vertex_textured b, sdl3d_screen_vertex_textured c,
-                                                   sdl3d_prepared_triangle_textured *out_triangle)
+static bool slayer3d_prepare_screen_triangle_textured(const slayer3d_framebuffer *framebuffer,
+                                                      slayer3d_screen_vertex_textured a,
+                                                      slayer3d_screen_vertex_textured b,
+                                                      slayer3d_screen_vertex_textured c,
+                                                      slayer3d_prepared_triangle_textured *out_triangle)
 {
-    Sint64 area = sdl3d_screen_triangle_signed_area(a.base, b.base, c.base);
+    Sint64 area = slayer3d_screen_triangle_signed_area(a.base, b.base, c.base);
     if (area == 0)
     {
         return false;
     }
     if (area < 0)
     {
-        sdl3d_screen_vertex_textured tmp = b;
+        slayer3d_screen_vertex_textured tmp = b;
         b = c;
         c = tmp;
         area = -area;
     }
 
-    const int min_fx = sdl3d_min_int(a.base.x_fx, sdl3d_min_int(b.base.x_fx, c.base.x_fx));
-    const int max_fx = sdl3d_max_int(a.base.x_fx, sdl3d_max_int(b.base.x_fx, c.base.x_fx));
-    const int min_fy = sdl3d_min_int(a.base.y_fx, sdl3d_min_int(b.base.y_fx, c.base.y_fx));
-    const int max_fy = sdl3d_max_int(a.base.y_fx, sdl3d_max_int(b.base.y_fx, c.base.y_fx));
+    const int min_fx = slayer3d_min_int(a.base.x_fx, slayer3d_min_int(b.base.x_fx, c.base.x_fx));
+    const int max_fx = slayer3d_max_int(a.base.x_fx, slayer3d_max_int(b.base.x_fx, c.base.x_fx));
+    const int min_fy = slayer3d_min_int(a.base.y_fx, slayer3d_min_int(b.base.y_fx, c.base.y_fx));
+    const int max_fy = slayer3d_max_int(a.base.y_fx, slayer3d_max_int(b.base.y_fx, c.base.y_fx));
 
-    const int min_px_x = sdl3d_max_int(0, min_fx >> SDL3D_SUBPIXEL_BITS);
-    const int max_px_x = sdl3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SDL3D_SUBPIXEL_BITS);
-    const int min_px_y = sdl3d_max_int(0, min_fy >> SDL3D_SUBPIXEL_BITS);
-    const int max_px_y = sdl3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SDL3D_SUBPIXEL_BITS);
+    const int min_px_x = slayer3d_max_int(0, min_fx >> SLAYER3D_SUBPIXEL_BITS);
+    const int max_px_x = slayer3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SLAYER3D_SUBPIXEL_BITS);
+    const int min_px_y = slayer3d_max_int(0, min_fy >> SLAYER3D_SUBPIXEL_BITS);
+    const int max_px_y = slayer3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SLAYER3D_SUBPIXEL_BITS);
 
     if (min_px_x > max_px_x || min_px_y > max_px_y)
     {
@@ -1434,9 +1450,9 @@ static bool sdl3d_prepare_screen_triangle_textured(const sdl3d_framebuffer *fram
     out_triangle->b = b;
     out_triangle->c = c;
     out_triangle->area = area;
-    out_triangle->bias_ab = sdl3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
-    out_triangle->bias_bc = sdl3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
-    out_triangle->bias_ca = sdl3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
+    out_triangle->bias_ab = slayer3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
+    out_triangle->bias_bc = slayer3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    out_triangle->bias_ca = slayer3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
     out_triangle->inverse_area = 1.0f / (float)area;
     out_triangle->bounds.min_px_x = min_px_x;
     out_triangle->bounds.max_px_x = max_px_x;
@@ -1445,19 +1461,19 @@ static bool sdl3d_prepare_screen_triangle_textured(const sdl3d_framebuffer *fram
     return true;
 }
 
-static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer *framebuffer,
-                                                              const sdl3d_prepared_triangle_textured *triangle,
-                                                              const sdl3d_texture2d *texture,
-                                                              const struct sdl3d_lighting_params *lighting_params,
-                                                              int min_px_x, int max_px_x, int min_px_y, int max_px_y)
+static void slayer3d_rasterize_prepared_triangle_textured_region(slayer3d_framebuffer *framebuffer,
+                                                                 const slayer3d_prepared_triangle_textured *triangle,
+                                                                 const slayer3d_texture2d *texture,
+                                                                 const struct slayer3d_lighting_params *lighting_params,
+                                                                 int min_px_x, int max_px_x, int min_px_y, int max_px_y)
 {
-    const sdl3d_screen_vertex_textured a = triangle->a;
-    const sdl3d_screen_vertex_textured b = triangle->b;
-    const sdl3d_screen_vertex_textured c = triangle->c;
+    const slayer3d_screen_vertex_textured a = triangle->a;
+    const slayer3d_screen_vertex_textured b = triangle->b;
+    const slayer3d_screen_vertex_textured c = triangle->c;
 
     for (int py = min_px_y; py <= max_px_y; ++py)
     {
-        const int sample_y = (py << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+        const int sample_y = (py << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
         for (int px = min_px_x; px <= max_px_x; ++px)
         {
             float texture_r = 1.0f;
@@ -1469,15 +1485,15 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
             float output_b = 0.0f;
             float output_a = 0.0f;
 
-            const int sample_x = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+            const int sample_x = (px << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
             const Sint64 w_ab =
-                sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sample_x, sample_y) +
+                slayer3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sample_x, sample_y) +
                 triangle->bias_ab;
             const Sint64 w_bc =
-                sdl3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sample_x, sample_y) +
+                slayer3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sample_x, sample_y) +
                 triangle->bias_bc;
             const Sint64 w_ca =
-                sdl3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sample_x, sample_y) +
+                slayer3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sample_x, sample_y) +
                 triangle->bias_ca;
 
             if ((w_ab | w_bc | w_ca) < 0)
@@ -1506,7 +1522,7 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
                 ((bary_a * a.modulate_a_over_w) + (bary_b * b.modulate_a_over_w) + (bary_c * c.modulate_a_over_w)) *
                 pixel_w;
 
-            if (lighting_params != NULL && lighting_params->uv_mode == SDL3D_UV_AFFINE)
+            if (lighting_params != NULL && lighting_params->uv_mode == SLAYER3D_UV_AFFINE)
             {
                 const float aw = a.inverse_w > 0.0f ? 1.0f / a.inverse_w : 1.0f;
                 const float bw = b.inverse_w > 0.0f ? 1.0f / b.inverse_w : 1.0f;
@@ -1522,7 +1538,7 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
 
             if (texture != NULL)
             {
-                sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &texture_r, &texture_g, &texture_b, &texture_a);
+                slayer3d_texture_sample_rgba(texture, u, v, 0.0f, &texture_r, &texture_g, &texture_b, &texture_a);
             }
 
             output_r = texture_r * modulate_r;
@@ -1561,64 +1577,65 @@ static void sdl3d_rasterize_prepared_triangle_textured_region(sdl3d_framebuffer 
                 }
             }
 
-            sdl3d_color color;
-            color.r = sdl3d_color_channel_clamp(output_r * 255.0f);
-            color.g = sdl3d_color_channel_clamp(output_g * 255.0f);
-            color.b = sdl3d_color_channel_clamp(output_b * 255.0f);
-            color.a = sdl3d_color_channel_clamp(output_a * 255.0f);
+            slayer3d_color color;
+            color.r = slayer3d_color_channel_clamp(output_r * 255.0f);
+            color.g = slayer3d_color_channel_clamp(output_g * 255.0f);
+            color.b = slayer3d_color_channel_clamp(output_b * 255.0f);
+            color.a = slayer3d_color_channel_clamp(output_a * 255.0f);
 
-            sdl3d_write_pixel(framebuffer, px, py, depth, color);
+            slayer3d_write_pixel(framebuffer, px, py, depth, color);
         }
     }
 }
 
-static void sdl3d_parallel_triangle_textured_job_run_tile(void *userdata, int tile_index)
+static void slayer3d_parallel_triangle_textured_job_run_tile(void *userdata, int tile_index)
 {
-    sdl3d_parallel_triangle_textured_job *job = (sdl3d_parallel_triangle_textured_job *)userdata;
+    slayer3d_parallel_triangle_textured_job *job = (slayer3d_parallel_triangle_textured_job *)userdata;
     const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
     const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
 
-    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
-    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_x = slayer3d_max_int(job->triangle.bounds.min_px_x, tile_x * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x =
+        slayer3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = slayer3d_max_int(job->triangle.bounds.min_px_y, tile_y * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y =
+        slayer3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
 
     if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_textured_region(job->framebuffer, &job->triangle, job->texture,
-                                                      job->lighting_params, tile_min_px_x, tile_max_px_x, tile_min_px_y,
-                                                      tile_max_px_y);
+    slayer3d_rasterize_prepared_triangle_textured_region(job->framebuffer, &job->triangle, job->texture,
+                                                         job->lighting_params, tile_min_px_x, tile_max_px_x,
+                                                         tile_min_px_y, tile_max_px_y);
 }
 
-static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_framebuffer *framebuffer,
-                                                                    const sdl3d_prepared_triangle_textured *triangle,
-                                                                    const sdl3d_texture2d *texture,
-                                                                    const struct sdl3d_lighting_params *lighting_params)
+static bool slayer3d_try_rasterize_prepared_triangle_textured_parallel(
+    slayer3d_framebuffer *framebuffer, const slayer3d_prepared_triangle_textured *triangle,
+    const slayer3d_texture2d *texture, const struct slayer3d_lighting_params *lighting_params)
 {
     if (framebuffer->parallel_rasterizer == NULL)
     {
         return false;
     }
 
-    const int first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
-    const int last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
-    const int first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
-    const int last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    const int first_tile_x = triangle->bounds.min_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    const int last_tile_x = triangle->bounds.max_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    const int first_tile_y = triangle->bounds.min_px_y / SLAYER3D_RASTER_TILE_SIZE;
+    const int last_tile_y = triangle->bounds.max_px_y / SLAYER3D_RASTER_TILE_SIZE;
     const int tiles_w = last_tile_x - first_tile_x + 1;
     const int tiles_h = last_tile_y - first_tile_y + 1;
     const int tile_count = tiles_w * tiles_h;
 
-    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
-                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
-                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
+    if (!slayer3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                      triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                      triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
 
-    sdl3d_parallel_triangle_textured_job triangle_job;
+    slayer3d_parallel_triangle_textured_job triangle_job;
     triangle_job.framebuffer = framebuffer;
     triangle_job.triangle = *triangle;
     triangle_job.texture = texture;
@@ -1627,65 +1644,68 @@ static bool sdl3d_try_rasterize_prepared_triangle_textured_parallel(sdl3d_frameb
     triangle_job.first_tile_y = first_tile_y;
     triangle_job.tiles_w = tiles_w;
 
-    sdl3d_parallel_job job;
-    job.run_tile = sdl3d_parallel_triangle_textured_job_run_tile;
+    slayer3d_parallel_job job;
+    job.run_tile = slayer3d_parallel_triangle_textured_job_run_tile;
     job.userdata = &triangle_job;
     job.tile_count = tile_count;
     SDL_SetAtomicInt(&job.next_tile_index, 0);
 
-    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
+    slayer3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
     return true;
 }
 
-static void sdl3d_rasterize_screen_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex_textured a,
-                                                     sdl3d_screen_vertex_textured b, sdl3d_screen_vertex_textured c,
-                                                     const sdl3d_texture2d *texture,
-                                                     const struct sdl3d_lighting_params *lighting_params)
+static void slayer3d_rasterize_screen_triangle_textured(slayer3d_framebuffer *framebuffer,
+                                                        slayer3d_screen_vertex_textured a,
+                                                        slayer3d_screen_vertex_textured b,
+                                                        slayer3d_screen_vertex_textured c,
+                                                        const slayer3d_texture2d *texture,
+                                                        const struct slayer3d_lighting_params *lighting_params)
 {
-    sdl3d_prepared_triangle_textured triangle;
-    if (!sdl3d_prepare_screen_triangle_textured(framebuffer, a, b, c, &triangle))
+    slayer3d_prepared_triangle_textured triangle;
+    if (!slayer3d_prepare_screen_triangle_textured(framebuffer, a, b, c, &triangle))
     {
         return;
     }
 
-    if (sdl3d_try_rasterize_prepared_triangle_textured_parallel(framebuffer, &triangle, texture, lighting_params))
+    if (slayer3d_try_rasterize_prepared_triangle_textured_parallel(framebuffer, &triangle, texture, lighting_params))
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_textured_region(framebuffer, &triangle, texture, lighting_params,
-                                                      triangle.bounds.min_px_x, triangle.bounds.max_px_x,
-                                                      triangle.bounds.min_px_y, triangle.bounds.max_px_y);
+    slayer3d_rasterize_prepared_triangle_textured_region(framebuffer, &triangle, texture, lighting_params,
+                                                         triangle.bounds.min_px_x, triangle.bounds.max_px_x,
+                                                         triangle.bounds.min_px_y, triangle.bounds.max_px_y);
 }
 
-void sdl3d_rasterize_triangle_textured_profiled(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0,
-                                                sdl3d_vec3 v1, sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1,
-                                                sdl3d_vec2 uv2, sdl3d_vec4 modulate0, sdl3d_vec4 modulate1,
-                                                sdl3d_vec4 modulate2, const sdl3d_texture2d *texture,
-                                                const struct sdl3d_lighting_params *lighting_params,
-                                                bool backface_culling_enabled, bool wireframe_enabled)
+void slayer3d_rasterize_triangle_textured_profiled(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mvp,
+                                                   slayer3d_vec3 v0, slayer3d_vec3 v1, slayer3d_vec3 v2,
+                                                   slayer3d_vec2 uv0, slayer3d_vec2 uv1, slayer3d_vec2 uv2,
+                                                   slayer3d_vec4 modulate0, slayer3d_vec4 modulate1,
+                                                   slayer3d_vec4 modulate2, const slayer3d_texture2d *texture,
+                                                   const struct slayer3d_lighting_params *lighting_params,
+                                                   bool backface_culling_enabled, bool wireframe_enabled)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
         return;
     }
 
-    sdl3d_clip_vertex_textured clip[3];
-    clip[0].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v0, 1.0f));
+    slayer3d_clip_vertex_textured clip[3];
+    clip[0].position = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v0, 1.0f));
     clip[0].u = uv0.x;
     clip[0].v = uv0.y;
     clip[0].modulate_r = modulate0.x;
     clip[0].modulate_g = modulate0.y;
     clip[0].modulate_b = modulate0.z;
     clip[0].modulate_a = modulate0.w;
-    clip[1].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v1, 1.0f));
+    clip[1].position = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v1, 1.0f));
     clip[1].u = uv1.x;
     clip[1].v = uv1.y;
     clip[1].modulate_r = modulate1.x;
     clip[1].modulate_g = modulate1.y;
     clip[1].modulate_b = modulate1.z;
     clip[1].modulate_a = modulate1.w;
-    clip[2].position = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v2, 1.0f));
+    clip[2].position = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v2, 1.0f));
     clip[2].u = uv2.x;
     clip[2].v = uv2.y;
     clip[2].modulate_r = modulate2.x;
@@ -1693,18 +1713,18 @@ void sdl3d_rasterize_triangle_textured_profiled(sdl3d_framebuffer *framebuffer, 
     clip[2].modulate_b = modulate2.z;
     clip[2].modulate_a = modulate2.w;
 
-    sdl3d_clip_vertex_textured clipped[SDL3D_CLIP_MAX_VERTICES];
-    const int clipped_count = sdl3d_clip_triangle_textured(clip[0], clip[1], clip[2], clipped);
+    slayer3d_clip_vertex_textured clipped[SLAYER3D_CLIP_MAX_VERTICES];
+    const int clipped_count = slayer3d_clip_triangle_textured(clip[0], clip[1], clip[2], clipped);
     if (clipped_count < 3)
     {
         return;
     }
 
-    sdl3d_screen_vertex_textured screen[SDL3D_CLIP_MAX_VERTICES];
-    sdl3d_screen_vertex screen_positions[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_screen_vertex_textured screen[SLAYER3D_CLIP_MAX_VERTICES];
+    slayer3d_screen_vertex screen_positions[SLAYER3D_CLIP_MAX_VERTICES];
     for (int i = 0; i < clipped_count; ++i)
     {
-        screen[i] = sdl3d_viewport_transform_textured(clipped[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform_textured(clipped[i], framebuffer->width, framebuffer->height);
         if (lighting_params != NULL && lighting_params->vertex_snap)
         {
             const int prec = lighting_params->vertex_snap_precision > 0 ? lighting_params->vertex_snap_precision : 1;
@@ -1712,13 +1732,13 @@ void sdl3d_rasterize_triangle_textured_profiled(sdl3d_framebuffer *framebuffer, 
             const float snapped_y = SDL_roundf(screen[i].base.y_px / (float)prec) * (float)prec;
             screen[i].base.x_px = snapped_x;
             screen[i].base.y_px = snapped_y;
-            screen[i].base.x_fx = sdl3d_round_subpixel(snapped_x);
-            screen[i].base.y_fx = sdl3d_round_subpixel(snapped_y);
+            screen[i].base.x_fx = slayer3d_round_subpixel(snapped_x);
+            screen[i].base.y_fx = slayer3d_round_subpixel(snapped_y);
         }
         screen_positions[i] = screen[i].base;
     }
 
-    const Sint64 polygon_area = sdl3d_screen_polygon_signed_area(screen_positions, clipped_count);
+    const Sint64 polygon_area = slayer3d_screen_polygon_signed_area(screen_positions, clipped_count);
     if (polygon_area == 0)
     {
         return;
@@ -1733,8 +1753,8 @@ void sdl3d_rasterize_triangle_textured_profiled(sdl3d_framebuffer *framebuffer, 
     {
         for (int i = 0; i < clipped_count; ++i)
         {
-            sdl3d_screen_vertex_colored line_start;
-            sdl3d_screen_vertex_colored line_end;
+            slayer3d_screen_vertex_colored line_start;
+            slayer3d_screen_vertex_colored line_end;
             const float start_w = 1.0f / screen[i].inverse_w;
             const float end_w = 1.0f / screen[(i + 1) % clipped_count].inverse_w;
 
@@ -1756,32 +1776,33 @@ void sdl3d_rasterize_triangle_textured_profiled(sdl3d_framebuffer *framebuffer, 
             line_end.a_over_w = (screen[(i + 1) % clipped_count].modulate_a_over_w * end_w) *
                                 screen[(i + 1) % clipped_count].inverse_w * 255.0f;
 
-            sdl3d_rasterize_screen_line_colored(framebuffer, line_start, line_end);
+            slayer3d_rasterize_screen_line_colored(framebuffer, line_start, line_end);
         }
         return;
     }
 
     for (int i = 1; i + 1 < clipped_count; ++i)
     {
-        sdl3d_rasterize_screen_triangle_textured(framebuffer, screen[0], screen[i], screen[i + 1], texture,
-                                                 lighting_params);
+        slayer3d_rasterize_screen_triangle_textured(framebuffer, screen[0], screen[i], screen[i + 1], texture,
+                                                    lighting_params);
     }
 }
 
-void sdl3d_rasterize_triangle_textured(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
-                                       sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2,
-                                       sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
-                                       const sdl3d_texture2d *texture, bool backface_culling_enabled,
-                                       bool wireframe_enabled)
+void slayer3d_rasterize_triangle_textured(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mvp, slayer3d_vec3 v0,
+                                          slayer3d_vec3 v1, slayer3d_vec3 v2, slayer3d_vec2 uv0, slayer3d_vec2 uv1,
+                                          slayer3d_vec2 uv2, slayer3d_vec4 modulate0, slayer3d_vec4 modulate1,
+                                          slayer3d_vec4 modulate2, const slayer3d_texture2d *texture,
+                                          bool backface_culling_enabled, bool wireframe_enabled)
 {
-    sdl3d_rasterize_triangle_textured_profiled(framebuffer, mvp, v0, v1, v2, uv0, uv1, uv2, modulate0, modulate1,
-                                               modulate2, texture, NULL, backface_culling_enabled, wireframe_enabled);
+    slayer3d_rasterize_triangle_textured_profiled(framebuffer, mvp, v0, v1, v2, uv0, uv1, uv2, modulate0, modulate1,
+                                                  modulate2, texture, NULL, backface_culling_enabled,
+                                                  wireframe_enabled);
 }
 
 /* --- Line rasterization -------------------------------------------------- */
 
-static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_screen_vertex start,
-                                        sdl3d_screen_vertex end, sdl3d_color color)
+static void slayer3d_rasterize_screen_line(slayer3d_framebuffer *framebuffer, slayer3d_screen_vertex start,
+                                           slayer3d_screen_vertex end, slayer3d_color color)
 {
     const float dx = end.x_px - start.x_px;
     const float dy = end.y_px - start.y_px;
@@ -1796,7 +1817,7 @@ static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_sc
         const int py = (int)SDL_lroundf(start.y_px);
         if (px >= 0 && px < framebuffer->width && py >= 0 && py < framebuffer->height)
         {
-            sdl3d_write_pixel(framebuffer, px, py, start.z, color);
+            slayer3d_write_pixel(framebuffer, px, py, start.z, color);
         }
         return;
     }
@@ -1821,7 +1842,7 @@ static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_sc
         const int py = (int)SDL_lroundf(y);
         if (px >= 0 && px < framebuffer->width && py >= 0 && py < framebuffer->height)
         {
-            sdl3d_write_pixel(framebuffer, px, py, z, color);
+            slayer3d_write_pixel(framebuffer, px, py, z, color);
         }
         x += step_x;
         y += step_y;
@@ -1833,20 +1854,21 @@ static void sdl3d_rasterize_screen_line(sdl3d_framebuffer *framebuffer, sdl3d_sc
 /* Lit textured triangle: normals + world positions through clipping   */
 /* ------------------------------------------------------------------ */
 
-typedef struct sdl3d_clip_vertex_lit
+typedef struct slayer3d_clip_vertex_lit
 {
-    sdl3d_vec4 position;
+    slayer3d_vec4 position;
     float u, v;
     float mod_r, mod_g, mod_b, mod_a;
     float nx, ny, nz;
     float wx, wy, wz;
     float fog_factor;
-} sdl3d_clip_vertex_lit;
+} slayer3d_clip_vertex_lit;
 
-static sdl3d_clip_vertex_lit sdl3d_clip_vertex_lit_lerp(sdl3d_clip_vertex_lit a, sdl3d_clip_vertex_lit b, float t)
+static slayer3d_clip_vertex_lit slayer3d_clip_vertex_lit_lerp(slayer3d_clip_vertex_lit a, slayer3d_clip_vertex_lit b,
+                                                              float t)
 {
-    sdl3d_clip_vertex_lit out;
-    out.position = sdl3d_vec4_lerp(a.position, b.position, t);
+    slayer3d_clip_vertex_lit out;
+    out.position = slayer3d_vec4_lerp(a.position, b.position, t);
     out.u = a.u + (b.u - a.u) * t;
     out.v = a.v + (b.v - a.v) * t;
     out.mod_r = a.mod_r + (b.mod_r - a.mod_r) * t;
@@ -1863,20 +1885,20 @@ static sdl3d_clip_vertex_lit sdl3d_clip_vertex_lit_lerp(sdl3d_clip_vertex_lit a,
     return out;
 }
 
-static int sdl3d_clip_polygon_against_plane_lit(const sdl3d_clip_vertex_lit *in_verts, int in_count,
-                                                sdl3d_clip_vertex_lit *out_verts, sdl3d_clip_plane plane)
+static int slayer3d_clip_polygon_against_plane_lit(const slayer3d_clip_vertex_lit *in_verts, int in_count,
+                                                   slayer3d_clip_vertex_lit *out_verts, slayer3d_clip_plane plane)
 {
     int out_count = 0;
     if (in_count < 1)
     {
         return 0;
     }
-    sdl3d_clip_vertex_lit prev = in_verts[in_count - 1];
-    float prev_dist = sdl3d_clip_distance(prev.position, plane);
+    slayer3d_clip_vertex_lit prev = in_verts[in_count - 1];
+    float prev_dist = slayer3d_clip_distance(prev.position, plane);
     for (int i = 0; i < in_count; ++i)
     {
-        sdl3d_clip_vertex_lit curr = in_verts[i];
-        float curr_dist = sdl3d_clip_distance(curr.position, plane);
+        slayer3d_clip_vertex_lit curr = in_verts[i];
+        float curr_dist = slayer3d_clip_distance(curr.position, plane);
         if (prev_dist >= 0.0f)
         {
             if (curr_dist >= 0.0f)
@@ -1886,13 +1908,13 @@ static int sdl3d_clip_polygon_against_plane_lit(const sdl3d_clip_vertex_lit *in_
             else
             {
                 float t = prev_dist / (prev_dist - curr_dist);
-                out_verts[out_count++] = sdl3d_clip_vertex_lit_lerp(prev, curr, t);
+                out_verts[out_count++] = slayer3d_clip_vertex_lit_lerp(prev, curr, t);
             }
         }
         else if (curr_dist >= 0.0f)
         {
             float t = prev_dist / (prev_dist - curr_dist);
-            out_verts[out_count++] = sdl3d_clip_vertex_lit_lerp(prev, curr, t);
+            out_verts[out_count++] = slayer3d_clip_vertex_lit_lerp(prev, curr, t);
             out_verts[out_count++] = curr;
         }
         prev = curr;
@@ -1901,16 +1923,16 @@ static int sdl3d_clip_polygon_against_plane_lit(const sdl3d_clip_vertex_lit *in_
     return out_count;
 }
 
-static int sdl3d_clip_triangle_lit(sdl3d_clip_vertex_lit *verts)
+static int slayer3d_clip_triangle_lit(slayer3d_clip_vertex_lit *verts)
 {
-    sdl3d_clip_vertex_lit buf_a[SDL3D_CLIP_MAX_VERTICES];
-    sdl3d_clip_vertex_lit buf_b[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_clip_vertex_lit buf_a[SLAYER3D_CLIP_MAX_VERTICES];
+    slayer3d_clip_vertex_lit buf_b[SLAYER3D_CLIP_MAX_VERTICES];
     int count = 3;
-    sdl3d_clip_vertex_lit *src = verts;
-    sdl3d_clip_vertex_lit *dst = buf_a;
+    slayer3d_clip_vertex_lit *src = verts;
+    slayer3d_clip_vertex_lit *dst = buf_a;
     for (int p = 0; p < 6; ++p)
     {
-        count = sdl3d_clip_polygon_against_plane_lit(src, count, dst, (sdl3d_clip_plane)p);
+        count = slayer3d_clip_polygon_against_plane_lit(src, count, dst, (slayer3d_clip_plane)p);
         if (count < 3)
         {
             return 0;
@@ -1928,22 +1950,22 @@ static int sdl3d_clip_triangle_lit(sdl3d_clip_vertex_lit *verts)
     return count;
 }
 
-typedef struct sdl3d_screen_vertex_lit
+typedef struct slayer3d_screen_vertex_lit
 {
-    sdl3d_screen_vertex base;
+    slayer3d_screen_vertex base;
     float inverse_w;
     float u_over_w, v_over_w;
     float mod_r_over_w, mod_g_over_w, mod_b_over_w, mod_a_over_w;
     float nx_over_w, ny_over_w, nz_over_w;
     float wx_over_w, wy_over_w, wz_over_w;
     float fog_over_w;
-} sdl3d_screen_vertex_lit;
+} slayer3d_screen_vertex_lit;
 
-static sdl3d_screen_vertex_lit sdl3d_viewport_transform_lit(sdl3d_clip_vertex_lit v, int width, int height)
+static slayer3d_screen_vertex_lit slayer3d_viewport_transform_lit(slayer3d_clip_vertex_lit v, int width, int height)
 {
-    sdl3d_screen_vertex_lit out;
+    slayer3d_screen_vertex_lit out;
     float iw = 1.0f / v.position.w;
-    out.base = sdl3d_viewport_transform(v.position, width, height);
+    out.base = slayer3d_viewport_transform(v.position, width, height);
     out.inverse_w = iw;
     out.u_over_w = v.u * iw;
     out.v_over_w = v.v * iw;
@@ -1961,38 +1983,39 @@ static sdl3d_screen_vertex_lit sdl3d_viewport_transform_lit(sdl3d_clip_vertex_li
     return out;
 }
 
-typedef struct sdl3d_prepared_triangle_lit
+typedef struct slayer3d_prepared_triangle_lit
 {
-    sdl3d_screen_vertex_lit a, b, c;
+    slayer3d_screen_vertex_lit a, b, c;
     Sint64 area;
     int bias_ab, bias_bc, bias_ca;
     float inverse_area;
-    sdl3d_triangle_bounds bounds;
-} sdl3d_prepared_triangle_lit;
+    slayer3d_triangle_bounds bounds;
+} slayer3d_prepared_triangle_lit;
 
-static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *framebuffer,
-                                                         const sdl3d_prepared_triangle_lit *tri,
-                                                         const sdl3d_texture2d *texture,
-                                                         const sdl3d_lighting_params *lp, int min_px_x, int max_px_x,
-                                                         int min_px_y, int max_px_y)
+static void slayer3d_rasterize_prepared_triangle_lit_region(slayer3d_framebuffer *framebuffer,
+                                                            const slayer3d_prepared_triangle_lit *tri,
+                                                            const slayer3d_texture2d *texture,
+                                                            const slayer3d_lighting_params *lp, int min_px_x,
+                                                            int max_px_x, int min_px_y, int max_px_y)
 {
-    const sdl3d_screen_vertex_lit a = tri->a;
-    const sdl3d_screen_vertex_lit b = tri->b;
-    const sdl3d_screen_vertex_lit c = tri->c;
-    const bool baked_static_fast_path = lp->baked_light_mode && lp->light_count == 0 && lp->fog.mode == SDL3D_FOG_NONE;
+    const slayer3d_screen_vertex_lit a = tri->a;
+    const slayer3d_screen_vertex_lit b = tri->b;
+    const slayer3d_screen_vertex_lit c = tri->c;
+    const bool baked_static_fast_path =
+        lp->baked_light_mode && lp->light_count == 0 && lp->fog.mode == SLAYER3D_FOG_NONE;
 
     for (int py = min_px_y; py <= max_px_y; ++py)
     {
-        const int sy = (py << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+        const int sy = (py << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
         for (int px = min_px_x; px <= max_px_x; ++px)
         {
-            const int sx = (px << SDL3D_SUBPIXEL_BITS) + SDL3D_SUBPIXEL_HALF;
+            const int sx = (px << SLAYER3D_SUBPIXEL_BITS) + SLAYER3D_SUBPIXEL_HALF;
             const Sint64 w_ab =
-                sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sx, sy) + tri->bias_ab;
+                slayer3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, sx, sy) + tri->bias_ab;
             const Sint64 w_bc =
-                sdl3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sx, sy) + tri->bias_bc;
+                slayer3d_edge_function(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx, sx, sy) + tri->bias_bc;
             const Sint64 w_ca =
-                sdl3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sx, sy) + tri->bias_ca;
+                slayer3d_edge_function(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx, sx, sy) + tri->bias_ca;
             if ((w_ab | w_bc | w_ca) < 0)
             {
                 continue;
@@ -2019,7 +2042,7 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
 
                 float u, v, mr, mg, mb, ma;
 
-                if (lp->uv_mode == SDL3D_UV_AFFINE)
+                if (lp->uv_mode == SLAYER3D_UV_AFFINE)
                 {
                     /* Affine: linear interpolation in screen space (no /w correction). */
                     float aw = a.inverse_w > 0.0f ? 1.0f / a.inverse_w : 1.0f;
@@ -2044,11 +2067,11 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                     float albedo_r, albedo_g, albedo_b, out_a;
                     float nx, ny, nz, n_len, wpx, wpy, wpz;
                     float lit_r, lit_g, lit_b;
-                    sdl3d_color color;
+                    slayer3d_color color;
 
                     if (texture != NULL)
                     {
-                        sdl3d_texture_sample_rgba(texture, u, v, 0.0f, &tr, &tg, &tb, &ta);
+                        slayer3d_texture_sample_rgba(texture, u, v, 0.0f, &tr, &tg, &tb, &ta);
                     }
 
                     albedo_r = tr * mr;
@@ -2085,21 +2108,21 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                             nz *= inv;
                         }
 
-                        sdl3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
-                                                 &lit_g, &lit_b);
+                        slayer3d_shade_fragment_pbr(lp, albedo_r, albedo_g, albedo_b, nx, ny, nz, wpx, wpy, wpz, &lit_r,
+                                                    &lit_g, &lit_b);
                     }
 
                     if (lp->baked_light_mode)
                     {
                         /* Baked mode: skip tonemapping and gamma to match GL.
                          * Just apply fog and clamp. */
-                        if (lp->fog.mode != SDL3D_FOG_NONE)
+                        if (lp->fog.mode != SLAYER3D_FOG_NONE)
                         {
                             float dx = wpx - lp->camera_pos.x;
                             float dy = wpy - lp->camera_pos.y;
                             float dz = wpz - lp->camera_pos.z;
                             float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                            float fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                            float fog_f = slayer3d_compute_fog_factor(&lp->fog, dist);
                             lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
                             lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
                             lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
@@ -2116,12 +2139,12 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                          * operator compresses the range.  With TONEMAP_NONE the fog
                          * color is already sRGB (matches the sky), so we gamma-encode
                          * the lit color first, then mix fog to avoid brightening it. */
-                        if (lp->tonemap_mode != SDL3D_TONEMAP_NONE)
+                        if (lp->tonemap_mode != SLAYER3D_TONEMAP_NONE)
                         {
-                            if (lp->fog.mode != SDL3D_FOG_NONE)
+                            if (lp->fog.mode != SLAYER3D_FOG_NONE)
                             {
                                 float fog_f;
-                                if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                                if (lp->fog_eval == SLAYER3D_FOG_EVAL_VERTEX)
                                 {
                                     fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
                                     if (fog_f < 0.0f)
@@ -2139,21 +2162,21 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                                     float dy = wpy - lp->camera_pos.y;
                                     float dz = wpz - lp->camera_pos.z;
                                     float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                                    fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                                    fog_f = slayer3d_compute_fog_factor(&lp->fog, dist);
                                 }
                                 lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
                                 lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
                                 lit_b = lit_b * (1.0f - fog_f) + lp->fog.color[2] * fog_f;
                             }
-                            sdl3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
+                            slayer3d_tonemap(lp->tonemap_mode, &lit_r, &lit_g, &lit_b);
                         }
                         else
                         {
-                            sdl3d_tonemap(SDL3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
-                            if (lp->fog.mode != SDL3D_FOG_NONE)
+                            slayer3d_tonemap(SLAYER3D_TONEMAP_NONE, &lit_r, &lit_g, &lit_b);
+                            if (lp->fog.mode != SLAYER3D_FOG_NONE)
                             {
                                 float fog_f;
-                                if (lp->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+                                if (lp->fog_eval == SLAYER3D_FOG_EVAL_VERTEX)
                                 {
                                     fog_f = (ba * a.fog_over_w + bb * b.fog_over_w + bc * c.fog_over_w) * pw;
                                     if (fog_f < 0.0f)
@@ -2171,7 +2194,7 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                                     float dy = wpy - lp->camera_pos.y;
                                     float dz = wpz - lp->camera_pos.z;
                                     float dist = SDL_sqrtf(dx * dx + dy * dy + dz * dz);
-                                    fog_f = sdl3d_compute_fog_factor(&lp->fog, dist);
+                                    fog_f = slayer3d_compute_fog_factor(&lp->fog, dist);
                                 }
                                 lit_r = lit_r * (1.0f - fog_f) + lp->fog.color[0] * fog_f;
                                 lit_g = lit_g * (1.0f - fog_f) + lp->fog.color[1] * fog_f;
@@ -2208,29 +2231,29 @@ static void sdl3d_rasterize_prepared_triangle_lit_region(sdl3d_framebuffer *fram
                         }
                     }
 
-                    color.r = sdl3d_color_channel_clamp(lit_r * 255.0f);
-                    color.g = sdl3d_color_channel_clamp(lit_g * 255.0f);
-                    color.b = sdl3d_color_channel_clamp(lit_b * 255.0f);
-                    color.a = sdl3d_color_channel_clamp(out_a * 255.0f);
-                    sdl3d_write_pixel(framebuffer, px, py, depth, color);
+                    color.r = slayer3d_color_channel_clamp(lit_r * 255.0f);
+                    color.g = slayer3d_color_channel_clamp(lit_g * 255.0f);
+                    color.b = slayer3d_color_channel_clamp(lit_b * 255.0f);
+                    color.a = slayer3d_color_channel_clamp(out_a * 255.0f);
+                    slayer3d_write_pixel(framebuffer, px, py, depth, color);
                 }
             }
         }
     }
 }
 
-static bool sdl3d_prepare_triangle_lit(sdl3d_screen_vertex_lit sv0, sdl3d_screen_vertex_lit sv1,
-                                       sdl3d_screen_vertex_lit sv2, sdl3d_framebuffer *framebuffer,
-                                       sdl3d_prepared_triangle_lit *out)
+static bool slayer3d_prepare_triangle_lit(slayer3d_screen_vertex_lit sv0, slayer3d_screen_vertex_lit sv1,
+                                          slayer3d_screen_vertex_lit sv2, slayer3d_framebuffer *framebuffer,
+                                          slayer3d_prepared_triangle_lit *out)
 {
-    sdl3d_screen_vertex_lit a = sv0, b = sv1, c = sv2;
-    Sint64 area = sdl3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    slayer3d_screen_vertex_lit a = sv0, b = sv1, c = sv2;
+    Sint64 area = slayer3d_edge_function(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
     int min_fx, max_fx, min_fy, max_fy;
     int min_px_x, max_px_x, min_px_y, max_px_y;
 
     if (area < 0)
     {
-        sdl3d_screen_vertex_lit tmp = b;
+        slayer3d_screen_vertex_lit tmp = b;
         b = c;
         c = tmp;
         area = -area;
@@ -2240,24 +2263,24 @@ static bool sdl3d_prepare_triangle_lit(sdl3d_screen_vertex_lit sv0, sdl3d_screen
         return false;
     }
 
-    min_fx = sdl3d_min_int(a.base.x_fx, sdl3d_min_int(b.base.x_fx, c.base.x_fx));
-    max_fx = sdl3d_max_int(a.base.x_fx, sdl3d_max_int(b.base.x_fx, c.base.x_fx));
-    min_fy = sdl3d_min_int(a.base.y_fx, sdl3d_min_int(b.base.y_fx, c.base.y_fx));
-    max_fy = sdl3d_max_int(a.base.y_fx, sdl3d_max_int(b.base.y_fx, c.base.y_fx));
+    min_fx = slayer3d_min_int(a.base.x_fx, slayer3d_min_int(b.base.x_fx, c.base.x_fx));
+    max_fx = slayer3d_max_int(a.base.x_fx, slayer3d_max_int(b.base.x_fx, c.base.x_fx));
+    min_fy = slayer3d_min_int(a.base.y_fx, slayer3d_min_int(b.base.y_fx, c.base.y_fx));
+    max_fy = slayer3d_max_int(a.base.y_fx, slayer3d_max_int(b.base.y_fx, c.base.y_fx));
 
     if (framebuffer->scissor_enabled)
     {
         const SDL_Rect *sr = &framebuffer->scissor_rect;
-        min_fx = sdl3d_max_int(min_fx, sr->x << SDL3D_SUBPIXEL_BITS);
-        max_fx = sdl3d_min_int(max_fx, ((sr->x + sr->w) << SDL3D_SUBPIXEL_BITS) - 1);
-        min_fy = sdl3d_max_int(min_fy, sr->y << SDL3D_SUBPIXEL_BITS);
-        max_fy = sdl3d_min_int(max_fy, ((sr->y + sr->h) << SDL3D_SUBPIXEL_BITS) - 1);
+        min_fx = slayer3d_max_int(min_fx, sr->x << SLAYER3D_SUBPIXEL_BITS);
+        max_fx = slayer3d_min_int(max_fx, ((sr->x + sr->w) << SLAYER3D_SUBPIXEL_BITS) - 1);
+        min_fy = slayer3d_max_int(min_fy, sr->y << SLAYER3D_SUBPIXEL_BITS);
+        max_fy = slayer3d_min_int(max_fy, ((sr->y + sr->h) << SLAYER3D_SUBPIXEL_BITS) - 1);
     }
 
-    min_px_x = sdl3d_max_int(0, min_fx >> SDL3D_SUBPIXEL_BITS);
-    max_px_x = sdl3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SDL3D_SUBPIXEL_BITS);
-    min_px_y = sdl3d_max_int(0, min_fy >> SDL3D_SUBPIXEL_BITS);
-    max_px_y = sdl3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SDL3D_SUBPIXEL_BITS);
+    min_px_x = slayer3d_max_int(0, min_fx >> SLAYER3D_SUBPIXEL_BITS);
+    max_px_x = slayer3d_min_int(framebuffer->width - 1, (max_fx - 1) >> SLAYER3D_SUBPIXEL_BITS);
+    min_px_y = slayer3d_max_int(0, min_fy >> SLAYER3D_SUBPIXEL_BITS);
+    max_px_y = slayer3d_min_int(framebuffer->height - 1, (max_fy - 1) >> SLAYER3D_SUBPIXEL_BITS);
 
     if (min_px_x > max_px_x || min_px_y > max_px_y)
     {
@@ -2269,9 +2292,9 @@ static bool sdl3d_prepare_triangle_lit(sdl3d_screen_vertex_lit sv0, sdl3d_screen
     out->c = c;
     out->area = area;
     out->inverse_area = 1.0f / (float)area;
-    out->bias_ab = sdl3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
-    out->bias_bc = sdl3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
-    out->bias_ca = sdl3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
+    out->bias_ab = slayer3d_fill_bias(a.base.x_fx, a.base.y_fx, b.base.x_fx, b.base.y_fx);
+    out->bias_bc = slayer3d_fill_bias(b.base.x_fx, b.base.y_fx, c.base.x_fx, c.base.y_fx);
+    out->bias_ca = slayer3d_fill_bias(c.base.x_fx, c.base.y_fx, a.base.x_fx, a.base.y_fx);
     out->bounds.min_px_x = min_px_x;
     out->bounds.max_px_x = max_px_x;
     out->bounds.min_px_y = min_px_y;
@@ -2279,63 +2302,65 @@ static bool sdl3d_prepare_triangle_lit(sdl3d_screen_vertex_lit sv0, sdl3d_screen
     return true;
 }
 
-typedef struct sdl3d_parallel_triangle_lit_job
+typedef struct slayer3d_parallel_triangle_lit_job
 {
-    sdl3d_framebuffer *framebuffer;
-    sdl3d_prepared_triangle_lit triangle;
-    const sdl3d_texture2d *texture;
-    const sdl3d_lighting_params *lp;
+    slayer3d_framebuffer *framebuffer;
+    slayer3d_prepared_triangle_lit triangle;
+    const slayer3d_texture2d *texture;
+    const slayer3d_lighting_params *lp;
     int first_tile_x;
     int first_tile_y;
     int tiles_w;
-} sdl3d_parallel_triangle_lit_job;
+} slayer3d_parallel_triangle_lit_job;
 
-static void sdl3d_parallel_triangle_lit_job_run_tile(void *userdata, int tile_index)
+static void slayer3d_parallel_triangle_lit_job_run_tile(void *userdata, int tile_index)
 {
-    sdl3d_parallel_triangle_lit_job *job = (sdl3d_parallel_triangle_lit_job *)userdata;
+    slayer3d_parallel_triangle_lit_job *job = (slayer3d_parallel_triangle_lit_job *)userdata;
     const int tile_x = job->first_tile_x + (tile_index % job->tiles_w);
     const int tile_y = job->first_tile_y + (tile_index / job->tiles_w);
 
-    const int tile_min_px_x = sdl3d_max_int(job->triangle.bounds.min_px_x, tile_x * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_x = sdl3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
-    const int tile_min_px_y = sdl3d_max_int(job->triangle.bounds.min_px_y, tile_y * SDL3D_RASTER_TILE_SIZE);
-    const int tile_max_px_y = sdl3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SDL3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_x = slayer3d_max_int(job->triangle.bounds.min_px_x, tile_x * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_x =
+        slayer3d_min_int(job->triangle.bounds.max_px_x, ((tile_x + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
+    const int tile_min_px_y = slayer3d_max_int(job->triangle.bounds.min_px_y, tile_y * SLAYER3D_RASTER_TILE_SIZE);
+    const int tile_max_px_y =
+        slayer3d_min_int(job->triangle.bounds.max_px_y, ((tile_y + 1) * SLAYER3D_RASTER_TILE_SIZE) - 1);
 
     if (tile_min_px_x > tile_max_px_x || tile_min_px_y > tile_max_px_y)
     {
         return;
     }
 
-    sdl3d_rasterize_prepared_triangle_lit_region(job->framebuffer, &job->triangle, job->texture, job->lp, tile_min_px_x,
-                                                 tile_max_px_x, tile_min_px_y, tile_max_px_y);
+    slayer3d_rasterize_prepared_triangle_lit_region(job->framebuffer, &job->triangle, job->texture, job->lp,
+                                                    tile_min_px_x, tile_max_px_x, tile_min_px_y, tile_max_px_y);
 }
 
-static bool sdl3d_try_rasterize_prepared_triangle_lit_parallel(sdl3d_framebuffer *framebuffer,
-                                                               const sdl3d_prepared_triangle_lit *triangle,
-                                                               const sdl3d_texture2d *texture,
-                                                               const sdl3d_lighting_params *lp)
+static bool slayer3d_try_rasterize_prepared_triangle_lit_parallel(slayer3d_framebuffer *framebuffer,
+                                                                  const slayer3d_prepared_triangle_lit *triangle,
+                                                                  const slayer3d_texture2d *texture,
+                                                                  const slayer3d_lighting_params *lp)
 {
     int first_tile_x, last_tile_x, first_tile_y, last_tile_y;
     int tiles_w, tiles_h, tile_count;
-    sdl3d_parallel_triangle_lit_job triangle_job;
-    sdl3d_parallel_job job;
+    slayer3d_parallel_triangle_lit_job triangle_job;
+    slayer3d_parallel_job job;
 
     if (framebuffer->parallel_rasterizer == NULL)
     {
         return false;
     }
 
-    first_tile_x = triangle->bounds.min_px_x / SDL3D_RASTER_TILE_SIZE;
-    last_tile_x = triangle->bounds.max_px_x / SDL3D_RASTER_TILE_SIZE;
-    first_tile_y = triangle->bounds.min_px_y / SDL3D_RASTER_TILE_SIZE;
-    last_tile_y = triangle->bounds.max_px_y / SDL3D_RASTER_TILE_SIZE;
+    first_tile_x = triangle->bounds.min_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    last_tile_x = triangle->bounds.max_px_x / SLAYER3D_RASTER_TILE_SIZE;
+    first_tile_y = triangle->bounds.min_px_y / SLAYER3D_RASTER_TILE_SIZE;
+    last_tile_y = triangle->bounds.max_px_y / SLAYER3D_RASTER_TILE_SIZE;
     tiles_w = last_tile_x - first_tile_x + 1;
     tiles_h = last_tile_y - first_tile_y + 1;
     tile_count = tiles_w * tiles_h;
 
-    if (!sdl3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
-                                                   triangle->bounds.min_px_x, triangle->bounds.max_px_x,
-                                                   triangle->bounds.min_px_y, triangle->bounds.max_px_y))
+    if (!slayer3d_parallel_triangle_job_is_worthwhile(framebuffer->parallel_rasterizer, tile_count,
+                                                      triangle->bounds.min_px_x, triangle->bounds.max_px_x,
+                                                      triangle->bounds.min_px_y, triangle->bounds.max_px_y))
     {
         return false;
     }
@@ -2348,24 +2373,25 @@ static bool sdl3d_try_rasterize_prepared_triangle_lit_parallel(sdl3d_framebuffer
     triangle_job.first_tile_y = first_tile_y;
     triangle_job.tiles_w = tiles_w;
 
-    job.run_tile = sdl3d_parallel_triangle_lit_job_run_tile;
+    job.run_tile = slayer3d_parallel_triangle_lit_job_run_tile;
     job.userdata = &triangle_job;
     job.tile_count = tile_count;
     SDL_SetAtomicInt(&job.next_tile_index, 0);
 
-    sdl3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
+    slayer3d_parallel_rasterizer_execute(framebuffer->parallel_rasterizer, &job);
     return true;
 }
 
-void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 v0, sdl3d_vec3 v1,
-                                  sdl3d_vec3 v2, sdl3d_vec2 uv0, sdl3d_vec2 uv1, sdl3d_vec2 uv2, sdl3d_vec3 n0,
-                                  sdl3d_vec3 n1, sdl3d_vec3 n2, sdl3d_vec3 wp0, sdl3d_vec3 wp1, sdl3d_vec3 wp2,
-                                  sdl3d_vec4 modulate0, sdl3d_vec4 modulate1, sdl3d_vec4 modulate2,
-                                  const sdl3d_texture2d *texture, const sdl3d_lighting_params *lighting_params,
-                                  bool backface_culling_enabled, bool wireframe_enabled)
+void slayer3d_rasterize_triangle_lit(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mvp, slayer3d_vec3 v0,
+                                     slayer3d_vec3 v1, slayer3d_vec3 v2, slayer3d_vec2 uv0, slayer3d_vec2 uv1,
+                                     slayer3d_vec2 uv2, slayer3d_vec3 n0, slayer3d_vec3 n1, slayer3d_vec3 n2,
+                                     slayer3d_vec3 wp0, slayer3d_vec3 wp1, slayer3d_vec3 wp2, slayer3d_vec4 modulate0,
+                                     slayer3d_vec4 modulate1, slayer3d_vec4 modulate2,
+                                     const slayer3d_texture2d *texture, const slayer3d_lighting_params *lighting_params,
+                                     bool backface_culling_enabled, bool wireframe_enabled)
 {
-    sdl3d_clip_vertex_lit clip[SDL3D_CLIP_MAX_VERTICES];
-    sdl3d_screen_vertex_lit screen[SDL3D_CLIP_MAX_VERTICES];
+    slayer3d_clip_vertex_lit clip[SLAYER3D_CLIP_MAX_VERTICES];
+    slayer3d_screen_vertex_lit screen[SLAYER3D_CLIP_MAX_VERTICES];
     int count;
     Sint64 signed_area;
 
@@ -2375,9 +2401,9 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
     }
 
     /* Build clip vertices with all attributes. */
-    sdl3d_vec4 p0 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v0, 1.0f));
-    sdl3d_vec4 p1 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v1, 1.0f));
-    sdl3d_vec4 p2 = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(v2, 1.0f));
+    slayer3d_vec4 p0 = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v0, 1.0f));
+    slayer3d_vec4 p1 = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v1, 1.0f));
+    slayer3d_vec4 p2 = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(v2, 1.0f));
 
     clip[0].position = p0;
     clip[0].u = uv0.x;
@@ -2425,22 +2451,22 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
     clip[2].fog_factor = 0.0f;
 
     /* Compute per-vertex fog factors for vertex fog mode. */
-    if (lighting_params != NULL && lighting_params->fog.mode != SDL3D_FOG_NONE &&
-        lighting_params->fog_eval == SDL3D_FOG_EVAL_VERTEX)
+    if (lighting_params != NULL && lighting_params->fog.mode != SLAYER3D_FOG_NONE &&
+        lighting_params->fog_eval == SLAYER3D_FOG_EVAL_VERTEX)
     {
-        sdl3d_vec3 cam = lighting_params->camera_pos;
+        slayer3d_vec3 cam = lighting_params->camera_pos;
         float d0 = SDL_sqrtf((wp0.x - cam.x) * (wp0.x - cam.x) + (wp0.y - cam.y) * (wp0.y - cam.y) +
                              (wp0.z - cam.z) * (wp0.z - cam.z));
         float d1 = SDL_sqrtf((wp1.x - cam.x) * (wp1.x - cam.x) + (wp1.y - cam.y) * (wp1.y - cam.y) +
                              (wp1.z - cam.z) * (wp1.z - cam.z));
         float d2 = SDL_sqrtf((wp2.x - cam.x) * (wp2.x - cam.x) + (wp2.y - cam.y) * (wp2.y - cam.y) +
                              (wp2.z - cam.z) * (wp2.z - cam.z));
-        clip[0].fog_factor = sdl3d_compute_fog_factor(&lighting_params->fog, d0);
-        clip[1].fog_factor = sdl3d_compute_fog_factor(&lighting_params->fog, d1);
-        clip[2].fog_factor = sdl3d_compute_fog_factor(&lighting_params->fog, d2);
+        clip[0].fog_factor = slayer3d_compute_fog_factor(&lighting_params->fog, d0);
+        clip[1].fog_factor = slayer3d_compute_fog_factor(&lighting_params->fog, d1);
+        clip[2].fog_factor = slayer3d_compute_fog_factor(&lighting_params->fog, d2);
     }
 
-    count = sdl3d_clip_triangle_lit(clip);
+    count = slayer3d_clip_triangle_lit(clip);
     if (count < 3)
     {
         return;
@@ -2448,7 +2474,7 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
 
     for (int i = 0; i < count; ++i)
     {
-        screen[i] = sdl3d_viewport_transform_lit(clip[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform_lit(clip[i], framebuffer->width, framebuffer->height);
 
         /* Vertex snap: quantize screen coordinates to a grid. */
         if (lighting_params != NULL && lighting_params->vertex_snap)
@@ -2458,14 +2484,14 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
             float sy = SDL_roundf(screen[i].base.y_px / (float)prec) * (float)prec;
             screen[i].base.x_px = sx;
             screen[i].base.y_px = sy;
-            screen[i].base.x_fx = sdl3d_round_subpixel(sx);
-            screen[i].base.y_fx = sdl3d_round_subpixel(sy);
+            screen[i].base.x_fx = slayer3d_round_subpixel(sx);
+            screen[i].base.y_fx = slayer3d_round_subpixel(sy);
         }
     }
 
     /* Backface culling: positive signed area = CW screen winding = backface. */
-    signed_area = sdl3d_edge_function(screen[0].base.x_fx, screen[0].base.y_fx, screen[1].base.x_fx,
-                                      screen[1].base.y_fx, screen[2].base.x_fx, screen[2].base.y_fx);
+    signed_area = slayer3d_edge_function(screen[0].base.x_fx, screen[0].base.y_fx, screen[1].base.x_fx,
+                                         screen[1].base.y_fx, screen[2].base.x_fx, screen[2].base.y_fx);
     if (signed_area == 0)
     {
         return;
@@ -2482,7 +2508,7 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
             int j = (i + 1) % count;
             float iw_i = screen[i].inverse_w > 0.0f ? screen[i].inverse_w : 1.0f;
             float iw_j = screen[j].inverse_w > 0.0f ? screen[j].inverse_w : 1.0f;
-            sdl3d_screen_vertex_colored sa, sb;
+            slayer3d_screen_vertex_colored sa, sb;
             sa.base = screen[i].base;
             sa.inverse_w = screen[i].inverse_w;
             sa.r_over_w = screen[i].mod_r_over_w;
@@ -2497,7 +2523,7 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
             sb.a_over_w = screen[j].mod_a_over_w;
             (void)iw_i;
             (void)iw_j;
-            sdl3d_rasterize_screen_line_colored(framebuffer, sa, sb);
+            slayer3d_rasterize_screen_line_colored(framebuffer, sa, sb);
         }
         return;
     }
@@ -2505,57 +2531,59 @@ void sdl3d_rasterize_triangle_lit(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp
     /* Fan-triangulate and rasterize. */
     for (int i = 1; i + 1 < count; ++i)
     {
-        sdl3d_prepared_triangle_lit prepared;
-        if (!sdl3d_prepare_triangle_lit(screen[0], screen[i], screen[i + 1], framebuffer, &prepared))
+        slayer3d_prepared_triangle_lit prepared;
+        if (!slayer3d_prepare_triangle_lit(screen[0], screen[i], screen[i + 1], framebuffer, &prepared))
         {
             continue;
         }
-        if (!sdl3d_try_rasterize_prepared_triangle_lit_parallel(framebuffer, &prepared, texture, lighting_params))
+        if (!slayer3d_try_rasterize_prepared_triangle_lit_parallel(framebuffer, &prepared, texture, lighting_params))
         {
-            sdl3d_rasterize_prepared_triangle_lit_region(framebuffer, &prepared, texture, lighting_params,
-                                                         prepared.bounds.min_px_x, prepared.bounds.max_px_x,
-                                                         prepared.bounds.min_px_y, prepared.bounds.max_px_y);
+            slayer3d_rasterize_prepared_triangle_lit_region(framebuffer, &prepared, texture, lighting_params,
+                                                            prepared.bounds.min_px_x, prepared.bounds.max_px_x,
+                                                            prepared.bounds.min_px_y, prepared.bounds.max_px_y);
         }
     }
 }
 
-void sdl3d_rasterize_line(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 start, sdl3d_vec3 end,
-                          sdl3d_color color)
+void slayer3d_rasterize_line(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mvp, slayer3d_vec3 start,
+                             slayer3d_vec3 end, slayer3d_color color)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
         return;
     }
 
-    sdl3d_vec4 clip_start = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(start, 1.0f));
-    sdl3d_vec4 clip_end = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(end, 1.0f));
+    slayer3d_vec4 clip_start = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(start, 1.0f));
+    slayer3d_vec4 clip_end = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(end, 1.0f));
 
-    if (!sdl3d_clip_line(&clip_start, &clip_end))
+    if (!slayer3d_clip_line(&clip_start, &clip_end))
     {
         return;
     }
 
-    const sdl3d_screen_vertex screen_start =
-        sdl3d_viewport_transform(clip_start, framebuffer->width, framebuffer->height);
-    const sdl3d_screen_vertex screen_end = sdl3d_viewport_transform(clip_end, framebuffer->width, framebuffer->height);
-    sdl3d_rasterize_screen_line(framebuffer, screen_start, screen_end, color);
+    const slayer3d_screen_vertex screen_start =
+        slayer3d_viewport_transform(clip_start, framebuffer->width, framebuffer->height);
+    const slayer3d_screen_vertex screen_end =
+        slayer3d_viewport_transform(clip_end, framebuffer->width, framebuffer->height);
+    slayer3d_rasterize_screen_line(framebuffer, screen_start, screen_end, color);
 }
 
 /* --- Point rasterization ------------------------------------------------- */
 
-void sdl3d_rasterize_point(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d_vec3 position, sdl3d_color color)
+void slayer3d_rasterize_point(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mvp, slayer3d_vec3 position,
+                              slayer3d_color color)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
         return;
     }
 
-    const sdl3d_vec4 clip = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(position, 1.0f));
+    const slayer3d_vec4 clip = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(position, 1.0f));
 
     /* Reject if outside any plane. */
     for (int plane = 0; plane < 6; ++plane)
     {
-        if (sdl3d_clip_distance(clip, (sdl3d_clip_plane)plane) < 0.0f)
+        if (slayer3d_clip_distance(clip, (slayer3d_clip_plane)plane) < 0.0f)
         {
             return;
         }
@@ -2566,17 +2594,17 @@ void sdl3d_rasterize_point(sdl3d_framebuffer *framebuffer, sdl3d_mat4 mvp, sdl3d
         return;
     }
 
-    const sdl3d_screen_vertex sv = sdl3d_viewport_transform(clip, framebuffer->width, framebuffer->height);
+    const slayer3d_screen_vertex sv = slayer3d_viewport_transform(clip, framebuffer->width, framebuffer->height);
     const int px = (int)SDL_lroundf(sv.x_px);
     const int py = (int)SDL_lroundf(sv.y_px);
     if (px < 0 || px >= framebuffer->width || py < 0 || py >= framebuffer->height)
     {
         return;
     }
-    sdl3d_write_pixel(framebuffer, px, py, sv.z, color);
+    slayer3d_write_pixel(framebuffer, px, py, sv.z, color);
 }
 
-bool sdl3d_parallel_rasterizer_create(int worker_count, sdl3d_parallel_rasterizer **out_rasterizer)
+bool slayer3d_parallel_rasterizer_create(int worker_count, slayer3d_parallel_rasterizer **out_rasterizer)
 {
     if (out_rasterizer == NULL)
     {
@@ -2589,7 +2617,7 @@ bool sdl3d_parallel_rasterizer_create(int worker_count, sdl3d_parallel_rasterize
 
     *out_rasterizer = NULL;
 
-    sdl3d_parallel_rasterizer *rasterizer = (sdl3d_parallel_rasterizer *)SDL_calloc(1, sizeof(*rasterizer));
+    slayer3d_parallel_rasterizer *rasterizer = (slayer3d_parallel_rasterizer *)SDL_calloc(1, sizeof(*rasterizer));
     if (rasterizer == NULL)
     {
         return SDL_OutOfMemory();
@@ -2626,12 +2654,12 @@ bool sdl3d_parallel_rasterizer_create(int worker_count, sdl3d_parallel_rasterize
     for (int i = 0; i < worker_count; ++i)
     {
         char thread_name[32];
-        (void)SDL_snprintf(thread_name, sizeof(thread_name), "sdl3d-rast-%d", i);
-        rasterizer->threads[i] = SDL_CreateThread(sdl3d_parallel_rasterizer_thread_main, thread_name, rasterizer);
+        (void)SDL_snprintf(thread_name, sizeof(thread_name), "slayer3d-rast-%d", i);
+        rasterizer->threads[i] = SDL_CreateThread(slayer3d_parallel_rasterizer_thread_main, thread_name, rasterizer);
         if (rasterizer->threads[i] == NULL)
         {
             rasterizer->worker_count = i;
-            sdl3d_parallel_rasterizer_destroy(rasterizer);
+            slayer3d_parallel_rasterizer_destroy(rasterizer);
             return false;
         }
     }
@@ -2640,7 +2668,7 @@ bool sdl3d_parallel_rasterizer_create(int worker_count, sdl3d_parallel_rasterize
     return true;
 }
 
-void sdl3d_parallel_rasterizer_destroy(sdl3d_parallel_rasterizer *rasterizer)
+void slayer3d_parallel_rasterizer_destroy(slayer3d_parallel_rasterizer *rasterizer)
 {
     if (rasterizer == NULL)
     {
@@ -2667,7 +2695,7 @@ void sdl3d_parallel_rasterizer_destroy(sdl3d_parallel_rasterizer *rasterizer)
     SDL_free(rasterizer);
 }
 
-int sdl3d_parallel_rasterizer_get_worker_count(const sdl3d_parallel_rasterizer *rasterizer)
+int slayer3d_parallel_rasterizer_get_worker_count(const slayer3d_parallel_rasterizer *rasterizer)
 {
     if (rasterizer == NULL)
     {
@@ -2679,7 +2707,7 @@ int sdl3d_parallel_rasterizer_get_worker_count(const sdl3d_parallel_rasterizer *
 
 /* --- Framebuffer utilities ---------------------------------------------- */
 
-void sdl3d_framebuffer_clear(sdl3d_framebuffer *framebuffer, sdl3d_color color, float depth)
+void slayer3d_framebuffer_clear(slayer3d_framebuffer *framebuffer, slayer3d_color color, float depth)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL)
     {
@@ -2698,7 +2726,8 @@ void sdl3d_framebuffer_clear(sdl3d_framebuffer *framebuffer, sdl3d_color color, 
     }
 }
 
-void sdl3d_framebuffer_clear_rect(sdl3d_framebuffer *framebuffer, const SDL_Rect *rect, sdl3d_color color, float depth)
+void slayer3d_framebuffer_clear_rect(slayer3d_framebuffer *framebuffer, const SDL_Rect *rect, slayer3d_color color,
+                                     float depth)
 {
     if (framebuffer == NULL || framebuffer->color_pixels == NULL || framebuffer->depth_pixels == NULL || rect == NULL)
     {
@@ -2747,7 +2776,7 @@ void sdl3d_framebuffer_clear_rect(sdl3d_framebuffer *framebuffer, const SDL_Rect
     }
 }
 
-bool sdl3d_framebuffer_get_pixel(const sdl3d_framebuffer *framebuffer, int x, int y, sdl3d_color *out_color)
+bool slayer3d_framebuffer_get_pixel(const slayer3d_framebuffer *framebuffer, int x, int y, slayer3d_color *out_color)
 {
     if (framebuffer == NULL || out_color == NULL)
     {
@@ -2767,7 +2796,7 @@ bool sdl3d_framebuffer_get_pixel(const sdl3d_framebuffer *framebuffer, int x, in
     return true;
 }
 
-bool sdl3d_framebuffer_get_depth(const sdl3d_framebuffer *framebuffer, int x, int y, float *out_depth)
+bool slayer3d_framebuffer_get_depth(const slayer3d_framebuffer *framebuffer, int x, int y, float *out_depth)
 {
     if (framebuffer == NULL || out_depth == NULL)
     {

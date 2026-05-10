@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "assets": {
     "images": [
       { "id": "image.doom.radioactive_crate", "path": "asset://textures/radioactive-crate.png" }

@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "render": {
     "clear_color": [1, 3, 12, 255],
     "lighting": true,

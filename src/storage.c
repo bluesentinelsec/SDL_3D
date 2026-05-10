@@ -3,7 +3,7 @@
  * @brief Persistent storage implementation.
  */
 
-#include "sdl3d/storage.h"
+#include "slayer3d/storage.h"
 
 #include <stdint.h>
 
@@ -12,9 +12,9 @@
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 
-struct sdl3d_storage
+struct slayer3d_storage
 {
-    char *roots[SDL3D_STORAGE_ROOT_COUNT];
+    char *roots[SLAYER3D_STORAGE_ROOT_COUNT];
 };
 
 static void set_storage_error(char *buffer, int buffer_size, const char *message)
@@ -100,14 +100,14 @@ static bool has_uri_scheme(const char *path)
     return path != NULL && SDL_strstr(path, "://") != NULL;
 }
 
-static bool root_from_virtual_path(const char *virtual_path, sdl3d_storage_root *out_root, const char **out_relative)
+static bool root_from_virtual_path(const char *virtual_path, slayer3d_storage_root *out_root, const char **out_relative)
 {
     if (virtual_path == NULL)
         return false;
     if (SDL_strncmp(virtual_path, "user://", 7) == 0)
     {
         if (out_root != NULL)
-            *out_root = SDL3D_STORAGE_ROOT_USER;
+            *out_root = SLAYER3D_STORAGE_ROOT_USER;
         if (out_relative != NULL)
             *out_relative = virtual_path + 7;
         return true;
@@ -115,7 +115,7 @@ static bool root_from_virtual_path(const char *virtual_path, sdl3d_storage_root 
     if (SDL_strncmp(virtual_path, "cache://", 8) == 0)
     {
         if (out_root != NULL)
-            *out_root = SDL3D_STORAGE_ROOT_CACHE;
+            *out_root = SLAYER3D_STORAGE_ROOT_CACHE;
         if (out_relative != NULL)
             *out_relative = virtual_path + 8;
         return true;
@@ -231,25 +231,26 @@ static bool write_all(SDL_IOStream *stream, const void *data, size_t size)
     return true;
 }
 
-void sdl3d_storage_config_init(sdl3d_storage_config *config)
+void slayer3d_storage_config_init(slayer3d_storage_config *config)
 {
     if (config == NULL)
         return;
     SDL_zero(*config);
-    config->organization = "SDL3D";
-    config->application = "SDL3D";
+    config->organization = "SLAYER3D";
+    config->application = "SLAYER3D";
 }
 
-bool sdl3d_storage_build_root_path(const sdl3d_storage_config *config, sdl3d_storage_platform platform,
-                                   sdl3d_storage_root root, const char *base_path, char *out_path, int out_path_size)
+bool slayer3d_storage_build_root_path(const slayer3d_storage_config *config, slayer3d_storage_platform platform,
+                                      slayer3d_storage_root root, const char *base_path, char *out_path,
+                                      int out_path_size)
 {
     (void)platform;
-    if (root < 0 || root >= SDL3D_STORAGE_ROOT_COUNT || !copy_root(base_path, out_path, out_path_size))
+    if (root < 0 || root >= SLAYER3D_STORAGE_ROOT_COUNT || !copy_root(base_path, out_path, out_path_size))
         return false;
 
     size_t used = SDL_strlen(out_path);
-    const char *organization = non_empty_or_default(config != NULL ? config->organization : NULL, "SDL3D");
-    const char *application = non_empty_or_default(config != NULL ? config->application : NULL, "SDL3D");
+    const char *organization = non_empty_or_default(config != NULL ? config->organization : NULL, "SLAYER3D");
+    const char *application = non_empty_or_default(config != NULL ? config->application : NULL, "SLAYER3D");
     if (!append_segment(out_path, out_path_size, &used, organization) ||
         !append_segment(out_path, out_path_size, &used, application))
     {
@@ -266,13 +267,13 @@ bool sdl3d_storage_build_root_path(const sdl3d_storage_config *config, sdl3d_sto
         }
     }
 
-    if (root == SDL3D_STORAGE_ROOT_CACHE && !append_segment(out_path, out_path_size, &used, "cache"))
+    if (root == SLAYER3D_STORAGE_ROOT_CACHE && !append_segment(out_path, out_path_size, &used, "cache"))
         return false;
     return true;
 }
 
-bool sdl3d_storage_create(const sdl3d_storage_config *config, sdl3d_storage **out_storage, char *error_buffer,
-                          int error_buffer_size)
+bool slayer3d_storage_create(const slayer3d_storage_config *config, slayer3d_storage **out_storage, char *error_buffer,
+                             int error_buffer_size)
 {
     if (out_storage == NULL)
     {
@@ -281,12 +282,12 @@ bool sdl3d_storage_create(const sdl3d_storage_config *config, sdl3d_storage **ou
     }
     *out_storage = NULL;
 
-    sdl3d_storage_config defaults;
-    sdl3d_storage_config_init(&defaults);
+    slayer3d_storage_config defaults;
+    slayer3d_storage_config_init(&defaults);
     if (config != NULL)
         defaults = *config;
-    defaults.organization = non_empty_or_default(defaults.organization, "SDL3D");
-    defaults.application = non_empty_or_default(defaults.application, "SDL3D");
+    defaults.organization = non_empty_or_default(defaults.organization, "SLAYER3D");
+    defaults.application = non_empty_or_default(defaults.application, "SLAYER3D");
 
     if (!is_valid_segment(defaults.organization) || !is_valid_segment(defaults.application) ||
         (defaults.profile != NULL && defaults.profile[0] != '\0' && !is_valid_segment(defaults.profile)))
@@ -295,7 +296,7 @@ bool sdl3d_storage_create(const sdl3d_storage_config *config, sdl3d_storage **ou
         return false;
     }
 
-    sdl3d_storage *storage = (sdl3d_storage *)SDL_calloc(1u, sizeof(*storage));
+    slayer3d_storage *storage = (slayer3d_storage *)SDL_calloc(1u, sizeof(*storage));
     if (storage == NULL)
     {
         set_storage_error(error_buffer, error_buffer_size, "failed to allocate storage context");
@@ -304,7 +305,7 @@ bool sdl3d_storage_create(const sdl3d_storage_config *config, sdl3d_storage **ou
 
     if (defaults.user_root_override != NULL && defaults.user_root_override[0] != '\0')
     {
-        storage->roots[SDL3D_STORAGE_ROOT_USER] = SDL_strdup(defaults.user_root_override);
+        storage->roots[SLAYER3D_STORAGE_ROOT_USER] = SDL_strdup(defaults.user_root_override);
     }
     else
     {
@@ -312,32 +313,32 @@ bool sdl3d_storage_create(const sdl3d_storage_config *config, sdl3d_storage **ou
         if (pref != NULL && defaults.profile != NULL && defaults.profile[0] != '\0')
         {
             char *profiles = join_alloc(pref, "profiles");
-            storage->roots[SDL3D_STORAGE_ROOT_USER] = join_alloc(profiles, defaults.profile);
+            storage->roots[SLAYER3D_STORAGE_ROOT_USER] = join_alloc(profiles, defaults.profile);
             SDL_free(profiles);
         }
         else
         {
-            storage->roots[SDL3D_STORAGE_ROOT_USER] = SDL_strdup(pref);
+            storage->roots[SLAYER3D_STORAGE_ROOT_USER] = SDL_strdup(pref);
         }
         SDL_free(pref);
     }
 
     if (defaults.cache_root_override != NULL && defaults.cache_root_override[0] != '\0')
-        storage->roots[SDL3D_STORAGE_ROOT_CACHE] = SDL_strdup(defaults.cache_root_override);
+        storage->roots[SLAYER3D_STORAGE_ROOT_CACHE] = SDL_strdup(defaults.cache_root_override);
     else
-        storage->roots[SDL3D_STORAGE_ROOT_CACHE] = join_alloc(storage->roots[SDL3D_STORAGE_ROOT_USER], "cache");
+        storage->roots[SLAYER3D_STORAGE_ROOT_CACHE] = join_alloc(storage->roots[SLAYER3D_STORAGE_ROOT_USER], "cache");
 
-    if (storage->roots[SDL3D_STORAGE_ROOT_USER] == NULL || storage->roots[SDL3D_STORAGE_ROOT_CACHE] == NULL)
+    if (storage->roots[SLAYER3D_STORAGE_ROOT_USER] == NULL || storage->roots[SLAYER3D_STORAGE_ROOT_CACHE] == NULL)
     {
-        sdl3d_storage_destroy(storage);
+        slayer3d_storage_destroy(storage);
         set_storage_error(error_buffer, error_buffer_size, "failed to resolve storage roots");
         return false;
     }
 
-    if (!make_directory_recursive(storage->roots[SDL3D_STORAGE_ROOT_USER]) ||
-        !make_directory_recursive(storage->roots[SDL3D_STORAGE_ROOT_CACHE]))
+    if (!make_directory_recursive(storage->roots[SLAYER3D_STORAGE_ROOT_USER]) ||
+        !make_directory_recursive(storage->roots[SLAYER3D_STORAGE_ROOT_CACHE]))
     {
-        sdl3d_storage_destroy(storage);
+        slayer3d_storage_destroy(storage);
         set_storage_error(error_buffer, error_buffer_size, "failed to create storage roots");
         return false;
     }
@@ -346,26 +347,26 @@ bool sdl3d_storage_create(const sdl3d_storage_config *config, sdl3d_storage **ou
     return true;
 }
 
-void sdl3d_storage_destroy(sdl3d_storage *storage)
+void slayer3d_storage_destroy(slayer3d_storage *storage)
 {
     if (storage == NULL)
         return;
-    for (int i = 0; i < SDL3D_STORAGE_ROOT_COUNT; ++i)
+    for (int i = 0; i < SLAYER3D_STORAGE_ROOT_COUNT; ++i)
         SDL_free(storage->roots[i]);
     SDL_free(storage);
 }
 
-const char *sdl3d_storage_get_root(const sdl3d_storage *storage, sdl3d_storage_root root)
+const char *slayer3d_storage_get_root(const slayer3d_storage *storage, slayer3d_storage_root root)
 {
-    if (storage == NULL || root < 0 || root >= SDL3D_STORAGE_ROOT_COUNT)
+    if (storage == NULL || root < 0 || root >= SLAYER3D_STORAGE_ROOT_COUNT)
         return NULL;
     return storage->roots[root];
 }
 
-bool sdl3d_storage_resolve_path(const sdl3d_storage *storage, const char *virtual_path, char *out_path,
-                                int out_path_size)
+bool slayer3d_storage_resolve_path(const slayer3d_storage *storage, const char *virtual_path, char *out_path,
+                                   int out_path_size)
 {
-    sdl3d_storage_root root;
+    slayer3d_storage_root root;
     const char *relative = NULL;
     if (storage == NULL || out_path == NULL || out_path_size <= 0 ||
         !root_from_virtual_path(virtual_path, &root, &relative) || !validate_relative_path(relative))
@@ -391,11 +392,11 @@ bool sdl3d_storage_resolve_path(const sdl3d_storage *storage, const char *virtua
     return true;
 }
 
-bool sdl3d_storage_create_directory(sdl3d_storage *storage, const char *virtual_path, char *error_buffer,
-                                    int error_buffer_size)
+bool slayer3d_storage_create_directory(slayer3d_storage *storage, const char *virtual_path, char *error_buffer,
+                                       int error_buffer_size)
 {
     char path[4096];
-    if (!sdl3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
+    if (!slayer3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
     {
         set_storage_error(error_buffer, error_buffer_size, "invalid storage directory path");
         return false;
@@ -408,16 +409,16 @@ bool sdl3d_storage_create_directory(sdl3d_storage *storage, const char *virtual_
     return true;
 }
 
-bool sdl3d_storage_exists(const sdl3d_storage *storage, const char *virtual_path)
+bool slayer3d_storage_exists(const slayer3d_storage *storage, const char *virtual_path)
 {
     char path[4096];
     SDL_PathInfo info;
     SDL_zero(info);
-    return sdl3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)) && SDL_GetPathInfo(path, &info);
+    return slayer3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)) && SDL_GetPathInfo(path, &info);
 }
 
-bool sdl3d_storage_read_file(const sdl3d_storage *storage, const char *virtual_path, sdl3d_storage_buffer *out_buffer,
-                             char *error_buffer, int error_buffer_size)
+bool slayer3d_storage_read_file(const slayer3d_storage *storage, const char *virtual_path,
+                                slayer3d_storage_buffer *out_buffer, char *error_buffer, int error_buffer_size)
 {
     if (out_buffer == NULL)
     {
@@ -428,7 +429,7 @@ bool sdl3d_storage_read_file(const sdl3d_storage *storage, const char *virtual_p
     out_buffer->size = 0u;
 
     char path[4096];
-    if (!sdl3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
+    if (!slayer3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
     {
         set_storage_error(error_buffer, error_buffer_size, "invalid storage read path");
         return false;
@@ -446,8 +447,8 @@ bool sdl3d_storage_read_file(const sdl3d_storage *storage, const char *virtual_p
     return true;
 }
 
-bool sdl3d_storage_write_file(sdl3d_storage *storage, const char *virtual_path, const void *data, size_t size,
-                              char *error_buffer, int error_buffer_size)
+bool slayer3d_storage_write_file(slayer3d_storage *storage, const char *virtual_path, const void *data, size_t size,
+                                 char *error_buffer, int error_buffer_size)
 {
     if (data == NULL && size > 0u)
     {
@@ -456,7 +457,7 @@ bool sdl3d_storage_write_file(sdl3d_storage *storage, const char *virtual_path, 
     }
 
     char path[4096];
-    if (!sdl3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
+    if (!slayer3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
     {
         set_storage_error(error_buffer, error_buffer_size, "invalid storage write path");
         return false;
@@ -504,10 +505,11 @@ bool sdl3d_storage_write_file(sdl3d_storage *storage, const char *virtual_path, 
     return true;
 }
 
-bool sdl3d_storage_delete(sdl3d_storage *storage, const char *virtual_path, char *error_buffer, int error_buffer_size)
+bool slayer3d_storage_delete(slayer3d_storage *storage, const char *virtual_path, char *error_buffer,
+                             int error_buffer_size)
 {
     char path[4096];
-    if (!sdl3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
+    if (!slayer3d_storage_resolve_path(storage, virtual_path, path, sizeof(path)))
     {
         set_storage_error(error_buffer, error_buffer_size, "invalid storage delete path");
         return false;
@@ -520,7 +522,7 @@ bool sdl3d_storage_delete(sdl3d_storage *storage, const char *virtual_path, char
     return true;
 }
 
-void sdl3d_storage_buffer_free(sdl3d_storage_buffer *buffer)
+void slayer3d_storage_buffer_free(slayer3d_storage_buffer *buffer)
 {
     if (buffer == NULL)
         return;

@@ -13,15 +13,15 @@
  * boilerplate). Sizes are byte-precise; callers do the stride math.
  * -------------------------------------------------------------------- */
 
-typedef struct sdl3d_obj_buffer
+typedef struct slayer3d_obj_buffer
 {
     void *data;
     size_t count;    /* number of elements */
     size_t capacity; /* capacity in elements */
     size_t stride;
-} sdl3d_obj_buffer;
+} slayer3d_obj_buffer;
 
-static void sdl3d_obj_buffer_init(sdl3d_obj_buffer *buf, size_t stride)
+static void slayer3d_obj_buffer_init(slayer3d_obj_buffer *buf, size_t stride)
 {
     buf->data = NULL;
     buf->count = 0;
@@ -29,7 +29,7 @@ static void sdl3d_obj_buffer_init(sdl3d_obj_buffer *buf, size_t stride)
     buf->stride = stride;
 }
 
-static bool sdl3d_obj_buffer_reserve(sdl3d_obj_buffer *buf, size_t required)
+static bool slayer3d_obj_buffer_reserve(slayer3d_obj_buffer *buf, size_t required)
 {
     if (buf->capacity >= required)
     {
@@ -50,9 +50,9 @@ static bool sdl3d_obj_buffer_reserve(sdl3d_obj_buffer *buf, size_t required)
     return true;
 }
 
-static bool sdl3d_obj_buffer_push(sdl3d_obj_buffer *buf, const void *element)
+static bool slayer3d_obj_buffer_push(slayer3d_obj_buffer *buf, const void *element)
 {
-    if (!sdl3d_obj_buffer_reserve(buf, buf->count + 1))
+    if (!slayer3d_obj_buffer_reserve(buf, buf->count + 1))
     {
         return false;
     }
@@ -61,7 +61,7 @@ static bool sdl3d_obj_buffer_push(sdl3d_obj_buffer *buf, const void *element)
     return true;
 }
 
-static void sdl3d_obj_buffer_free(sdl3d_obj_buffer *buf)
+static void slayer3d_obj_buffer_free(slayer3d_obj_buffer *buf)
 {
     SDL_free(buf->data);
     buf->data = NULL;
@@ -75,7 +75,7 @@ static void sdl3d_obj_buffer_free(sdl3d_obj_buffer *buf)
  * can release every string uniformly.
  * -------------------------------------------------------------------- */
 
-static char *sdl3d_obj_strdup_range(const char *begin, const char *end)
+static char *slayer3d_obj_strdup_range(const char *begin, const char *end)
 {
     const size_t len = (size_t)(end - begin);
     char *out = (char *)SDL_malloc(len + 1);
@@ -92,28 +92,28 @@ static char *sdl3d_obj_strdup_range(const char *begin, const char *end)
     return out;
 }
 
-static char *sdl3d_obj_strdup(const char *s)
+static char *slayer3d_obj_strdup(const char *s)
 {
-    return sdl3d_obj_strdup_range(s, s + SDL_strlen(s));
+    return slayer3d_obj_strdup_range(s, s + SDL_strlen(s));
 }
 
-static bool sdl3d_obj_is_space(char c)
+static bool slayer3d_obj_is_space(char c)
 {
     return c == ' ' || c == '\t' || c == '\r';
 }
 
-static const char *sdl3d_obj_skip_spaces(const char *p, const char *end)
+static const char *slayer3d_obj_skip_spaces(const char *p, const char *end)
 {
-    while (p < end && sdl3d_obj_is_space(*p))
+    while (p < end && slayer3d_obj_is_space(*p))
     {
         ++p;
     }
     return p;
 }
 
-static const char *sdl3d_obj_find_space(const char *p, const char *end)
+static const char *slayer3d_obj_find_space(const char *p, const char *end)
 {
-    while (p < end && !sdl3d_obj_is_space(*p) && *p != '\n')
+    while (p < end && !slayer3d_obj_is_space(*p) && *p != '\n')
     {
         ++p;
     }
@@ -126,7 +126,7 @@ static const char *sdl3d_obj_find_space(const char *p, const char *end)
  * rule without dragging in a full path library.
  * -------------------------------------------------------------------- */
 
-static char *sdl3d_obj_dirname_dup(const char *path)
+static char *slayer3d_obj_dirname_dup(const char *path)
 {
     const char *slash = NULL;
     for (const char *p = path; *p != '\0'; ++p)
@@ -145,10 +145,10 @@ static char *sdl3d_obj_dirname_dup(const char *path)
         }
         return empty;
     }
-    return sdl3d_obj_strdup_range(path, slash + 1);
+    return slayer3d_obj_strdup_range(path, slash + 1);
 }
 
-static char *sdl3d_obj_join_path(const char *dir, const char *relative)
+static char *slayer3d_obj_join_path(const char *dir, const char *relative)
 {
     const size_t dl = SDL_strlen(dir);
     const size_t rl = SDL_strlen(relative);
@@ -164,7 +164,7 @@ static char *sdl3d_obj_join_path(const char *dir, const char *relative)
     return out;
 }
 
-static char *sdl3d_obj_load_text(const char *path, size_t *out_size)
+static char *slayer3d_obj_load_text(const char *path, size_t *out_size)
 {
     size_t bytes = 0;
     void *data = SDL_LoadFile(path, &bytes);
@@ -188,44 +188,44 @@ static char *sdl3d_obj_load_text(const char *path, size_t *out_size)
  * OBJ face vertex + working state.
  * -------------------------------------------------------------------- */
 
-typedef struct sdl3d_obj_face_vertex
+typedef struct slayer3d_obj_face_vertex
 {
     int v;  /* 1-based into positions; required */
     int vt; /* 1-based into uvs; 0 when absent */
     int vn; /* 1-based into normals; 0 when absent */
-} sdl3d_obj_face_vertex;
+} slayer3d_obj_face_vertex;
 
-typedef struct sdl3d_obj_face
+typedef struct slayer3d_obj_face
 {
     int first;           /* index into face_vertices */
     int count;           /* number of vertices */
     int material;        /* into materials, or -1 */
     int group_signature; /* changes trigger a new mesh */
-} sdl3d_obj_face;
+} slayer3d_obj_face;
 
-typedef struct sdl3d_obj_material_scratch
+typedef struct slayer3d_obj_material_scratch
 {
-    sdl3d_material m;
-} sdl3d_obj_material_scratch;
+    slayer3d_material m;
+} slayer3d_obj_material_scratch;
 
-typedef struct sdl3d_obj_state
+typedef struct slayer3d_obj_state
 {
-    sdl3d_obj_buffer positions;     /* vec3 */
-    sdl3d_obj_buffer normals;       /* vec3 */
-    sdl3d_obj_buffer uvs;           /* vec2 */
-    sdl3d_obj_buffer face_vertices; /* sdl3d_obj_face_vertex */
-    sdl3d_obj_buffer faces;         /* sdl3d_obj_face */
-    sdl3d_obj_buffer materials;     /* sdl3d_material */
+    slayer3d_obj_buffer positions;     /* vec3 */
+    slayer3d_obj_buffer normals;       /* vec3 */
+    slayer3d_obj_buffer uvs;           /* vec2 */
+    slayer3d_obj_buffer face_vertices; /* slayer3d_obj_face_vertex */
+    slayer3d_obj_buffer faces;         /* slayer3d_obj_face */
+    slayer3d_obj_buffer materials;     /* slayer3d_material */
     int current_material;
     int current_group;
     char *group_name;
     char *dirname;
-} sdl3d_obj_state;
+} slayer3d_obj_state;
 
-static void sdl3d_obj_material_init(sdl3d_material *mat, const char *name)
+static void slayer3d_obj_material_init(slayer3d_material *mat, const char *name)
 {
     SDL_zerop(mat);
-    mat->name = name != NULL ? sdl3d_obj_strdup(name) : NULL;
+    mat->name = name != NULL ? slayer3d_obj_strdup(name) : NULL;
     mat->albedo[0] = 1.0f;
     mat->albedo[1] = 1.0f;
     mat->albedo[2] = 1.0f;
@@ -234,9 +234,9 @@ static void sdl3d_obj_material_init(sdl3d_material *mat, const char *name)
     mat->roughness = 1.0f;
 }
 
-static int sdl3d_obj_find_material(sdl3d_obj_state *s, const char *name)
+static int slayer3d_obj_find_material(slayer3d_obj_state *s, const char *name)
 {
-    const sdl3d_material *mats = (const sdl3d_material *)s->materials.data;
+    const slayer3d_material *mats = (const slayer3d_material *)s->materials.data;
     for (size_t i = 0; i < s->materials.count; ++i)
     {
         if (mats[i].name != NULL && SDL_strcmp(mats[i].name, name) == 0)
@@ -252,11 +252,11 @@ static int sdl3d_obj_find_material(sdl3d_obj_state *s, const char *name)
  * rather than failing so a bad .mtl never blocks geometry loading.
  * -------------------------------------------------------------------- */
 
-static bool sdl3d_mtl_parse_floats(const char *p, const char *end, float *out, int count)
+static bool slayer3d_mtl_parse_floats(const char *p, const char *end, float *out, int count)
 {
     for (int i = 0; i < count; ++i)
     {
-        p = sdl3d_obj_skip_spaces(p, end);
+        p = slayer3d_obj_skip_spaces(p, end);
         if (p >= end)
         {
             return false;
@@ -273,7 +273,7 @@ static bool sdl3d_mtl_parse_floats(const char *p, const char *end, float *out, i
     return true;
 }
 
-static char *sdl3d_mtl_parse_map_path(const char *p, const char *end)
+static char *slayer3d_mtl_parse_map_path(const char *p, const char *end)
 {
     /*
      * .mtl map_* directives may carry option flags like
@@ -285,12 +285,12 @@ static char *sdl3d_mtl_parse_map_path(const char *p, const char *end)
     const char *last_end = NULL;
     while (p < end)
     {
-        p = sdl3d_obj_skip_spaces(p, end);
+        p = slayer3d_obj_skip_spaces(p, end);
         if (p >= end || *p == '\n')
         {
             break;
         }
-        const char *tok_end = sdl3d_obj_find_space(p, end);
+        const char *tok_end = slayer3d_obj_find_space(p, end);
         if (*p == '-')
         {
             /* Flag; skip this token plus a format-dependent number of
@@ -299,12 +299,12 @@ static char *sdl3d_mtl_parse_map_path(const char *p, const char *end)
             p = tok_end;
             for (int i = 0; i < 3; ++i)
             {
-                p = sdl3d_obj_skip_spaces(p, end);
+                p = slayer3d_obj_skip_spaces(p, end);
                 if (p >= end || *p == '\n')
                 {
                     break;
                 }
-                const char *next = sdl3d_obj_find_space(p, end);
+                const char *next = slayer3d_obj_find_space(p, end);
                 /* If this token parses as a number, consume it. */
                 char *tail = NULL;
                 (void)SDL_strtod(p, &tail);
@@ -327,29 +327,29 @@ static char *sdl3d_mtl_parse_map_path(const char *p, const char *end)
     {
         return NULL;
     }
-    return sdl3d_obj_strdup_range(last_begin, last_end);
+    return slayer3d_obj_strdup_range(last_begin, last_end);
 }
 
-static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
+static bool slayer3d_mtl_load(slayer3d_obj_state *s, const char *mtl_path)
 {
     size_t size = 0;
-    char *text = sdl3d_obj_load_text(mtl_path, &size);
+    char *text = slayer3d_obj_load_text(mtl_path, &size);
     if (text == NULL)
     {
         /* Warn but keep going — geometry still loads. */
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                    "sdl3d: could not open mtl file '%s' (%s); materials from this library will not be applied.",
+                    "slayer3d: could not open mtl file '%s' (%s); materials from this library will not be applied.",
                     mtl_path, SDL_GetError());
         return true;
     }
 
     const char *p = text;
     const char *end = text + size;
-    sdl3d_material *current = NULL;
+    slayer3d_material *current = NULL;
 
     while (p < end)
     {
-        p = sdl3d_obj_skip_spaces(p, end);
+        p = slayer3d_obj_skip_spaces(p, end);
         if (p >= end)
         {
             break;
@@ -368,9 +368,9 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
             continue;
         }
 
-        const char *kw_end = sdl3d_obj_find_space(p, end);
+        const char *kw_end = slayer3d_obj_find_space(p, end);
         const size_t kw_len = (size_t)(kw_end - p);
-        const char *args = sdl3d_obj_skip_spaces(kw_end, end);
+        const char *args = slayer3d_obj_skip_spaces(kw_end, end);
         const char *line_end = args;
         while (line_end < end && *line_end != '\n')
         {
@@ -379,7 +379,7 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
 
         if (kw_len == 6 && SDL_strncmp(p, "newmtl", 6) == 0)
         {
-            char *name = sdl3d_obj_strdup_range(args, line_end);
+            char *name = slayer3d_obj_strdup_range(args, line_end);
             if (name == NULL)
             {
                 SDL_free(text);
@@ -387,20 +387,20 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
             }
             /* Trim trailing spaces left by the range extract. */
             size_t nl = SDL_strlen(name);
-            while (nl > 0 && sdl3d_obj_is_space(name[nl - 1]))
+            while (nl > 0 && slayer3d_obj_is_space(name[nl - 1]))
             {
                 name[--nl] = '\0';
             }
-            sdl3d_material mat;
-            sdl3d_obj_material_init(&mat, name);
+            slayer3d_material mat;
+            slayer3d_obj_material_init(&mat, name);
             SDL_free(name);
-            if (!sdl3d_obj_buffer_push(&s->materials, &mat))
+            if (!slayer3d_obj_buffer_push(&s->materials, &mat))
             {
                 SDL_free(mat.name);
                 SDL_free(text);
                 return false;
             }
-            current = &((sdl3d_material *)s->materials.data)[s->materials.count - 1];
+            current = &((slayer3d_material *)s->materials.data)[s->materials.count - 1];
         }
         else if (current == NULL)
         {
@@ -409,7 +409,7 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
         else if (kw_len == 2 && SDL_strncmp(p, "Kd", 2) == 0)
         {
             float rgb[3] = {1.0f, 1.0f, 1.0f};
-            if (sdl3d_mtl_parse_floats(args, line_end, rgb, 3))
+            if (slayer3d_mtl_parse_floats(args, line_end, rgb, 3))
             {
                 current->albedo[0] = rgb[0];
                 current->albedo[1] = rgb[1];
@@ -419,7 +419,7 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
         else if ((kw_len == 1 && *p == 'd') || (kw_len == 2 && SDL_strncmp(p, "Tr", 2) == 0))
         {
             float a = 1.0f;
-            if (sdl3d_mtl_parse_floats(args, line_end, &a, 1))
+            if (slayer3d_mtl_parse_floats(args, line_end, &a, 1))
             {
                 /* `Tr` is transparency, `d` is opacity. Convert to
                  * alpha-style opacity in [0,1]. */
@@ -433,7 +433,7 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
         else if (kw_len == 2 && SDL_strncmp(p, "Ke", 2) == 0)
         {
             float rgb[3] = {0.0f, 0.0f, 0.0f};
-            if (sdl3d_mtl_parse_floats(args, line_end, rgb, 3))
+            if (slayer3d_mtl_parse_floats(args, line_end, rgb, 3))
             {
                 current->emissive[0] = rgb[0];
                 current->emissive[1] = rgb[1];
@@ -443,7 +443,7 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
         else if (kw_len == 2 && SDL_strncmp(p, "Pr", 2) == 0)
         {
             float v = 1.0f;
-            if (sdl3d_mtl_parse_floats(args, line_end, &v, 1))
+            if (slayer3d_mtl_parse_floats(args, line_end, &v, 1))
             {
                 current->roughness = v;
             }
@@ -451,7 +451,7 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
         else if (kw_len == 2 && SDL_strncmp(p, "Pm", 2) == 0)
         {
             float v = 0.0f;
-            if (sdl3d_mtl_parse_floats(args, line_end, &v, 1))
+            if (slayer3d_mtl_parse_floats(args, line_end, &v, 1))
             {
                 current->metallic = v;
             }
@@ -459,32 +459,32 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
         else if (kw_len == 6 && SDL_strncmp(p, "map_Kd", 6) == 0)
         {
             SDL_free(current->albedo_map);
-            current->albedo_map = sdl3d_mtl_parse_map_path(args, line_end);
+            current->albedo_map = slayer3d_mtl_parse_map_path(args, line_end);
         }
         else if (kw_len == 6 && SDL_strncmp(p, "map_Ke", 6) == 0)
         {
             SDL_free(current->emissive_map);
-            current->emissive_map = sdl3d_mtl_parse_map_path(args, line_end);
+            current->emissive_map = slayer3d_mtl_parse_map_path(args, line_end);
         }
         else if (kw_len == 6 && SDL_strncmp(p, "map_Pr", 6) == 0)
         {
             /* Roughness alone; store under metallic_roughness_map so the
              * material has a single MR channel field like glTF. */
             SDL_free(current->metallic_roughness_map);
-            current->metallic_roughness_map = sdl3d_mtl_parse_map_path(args, line_end);
+            current->metallic_roughness_map = slayer3d_mtl_parse_map_path(args, line_end);
         }
         else if (kw_len == 6 && SDL_strncmp(p, "map_Pm", 6) == 0)
         {
             if (current->metallic_roughness_map == NULL)
             {
-                current->metallic_roughness_map = sdl3d_mtl_parse_map_path(args, line_end);
+                current->metallic_roughness_map = slayer3d_mtl_parse_map_path(args, line_end);
             }
         }
         else if ((kw_len == 8 && SDL_strncmp(p, "map_Bump", 8) == 0) ||
                  (kw_len == 8 && SDL_strncmp(p, "map_bump", 8) == 0) || (kw_len == 4 && SDL_strncmp(p, "norm", 4) == 0))
         {
             SDL_free(current->normal_map);
-            current->normal_map = sdl3d_mtl_parse_map_path(args, line_end);
+            current->normal_map = slayer3d_mtl_parse_map_path(args, line_end);
         }
         /* Unknown directive: silently skip. */
 
@@ -500,7 +500,7 @@ static bool sdl3d_mtl_load(sdl3d_obj_state *s, const char *mtl_path)
  * indices; negative values are resolved against the current pool size.
  * -------------------------------------------------------------------- */
 
-static bool sdl3d_obj_resolve_index(long raw, size_t pool_count, int *out)
+static bool slayer3d_obj_resolve_index(long raw, size_t pool_count, int *out)
 {
     if (raw > 0)
     {
@@ -524,8 +524,8 @@ static bool sdl3d_obj_resolve_index(long raw, size_t pool_count, int *out)
     return false;
 }
 
-static bool sdl3d_obj_parse_face_vertex(const char *tok, const char *tok_end, sdl3d_obj_state *s,
-                                        sdl3d_obj_face_vertex *out)
+static bool slayer3d_obj_parse_face_vertex(const char *tok, const char *tok_end, slayer3d_obj_state *s,
+                                           slayer3d_obj_face_vertex *out)
 {
     out->v = 0;
     out->vt = 0;
@@ -560,15 +560,15 @@ static bool sdl3d_obj_parse_face_vertex(const char *tok, const char *tok_end, sd
     {
         return false;
     }
-    if (!sdl3d_obj_resolve_index(parts[0], s->positions.count, &out->v))
+    if (!slayer3d_obj_resolve_index(parts[0], s->positions.count, &out->v))
     {
         return false;
     }
-    if (present[1] && !sdl3d_obj_resolve_index(parts[1], s->uvs.count, &out->vt))
+    if (present[1] && !slayer3d_obj_resolve_index(parts[1], s->uvs.count, &out->vt))
     {
         return false;
     }
-    if (present[2] && !sdl3d_obj_resolve_index(parts[2], s->normals.count, &out->vn))
+    if (present[2] && !slayer3d_obj_resolve_index(parts[2], s->normals.count, &out->vn))
     {
         return false;
     }
@@ -580,26 +580,26 @@ static bool sdl3d_obj_parse_face_vertex(const char *tok, const char *tok_end, sd
  * the parser simple; dedup is a meshoptimizer concern.
  * -------------------------------------------------------------------- */
 
-static bool sdl3d_obj_emit_triangle(const sdl3d_obj_state *s, const sdl3d_obj_face_vertex *a,
-                                    const sdl3d_obj_face_vertex *b, const sdl3d_obj_face_vertex *c,
-                                    sdl3d_obj_buffer *positions_out, sdl3d_obj_buffer *normals_out,
-                                    sdl3d_obj_buffer *uvs_out, bool *have_any_normal, bool *have_any_uv)
+static bool slayer3d_obj_emit_triangle(const slayer3d_obj_state *s, const slayer3d_obj_face_vertex *a,
+                                       const slayer3d_obj_face_vertex *b, const slayer3d_obj_face_vertex *c,
+                                       slayer3d_obj_buffer *positions_out, slayer3d_obj_buffer *normals_out,
+                                       slayer3d_obj_buffer *uvs_out, bool *have_any_normal, bool *have_any_uv)
 {
-    const sdl3d_obj_face_vertex *verts[3] = {a, b, c};
+    const slayer3d_obj_face_vertex *verts[3] = {a, b, c};
     const float *positions = (const float *)s->positions.data;
     const float *normals = (const float *)s->normals.data;
     const float *uvs = (const float *)s->uvs.data;
 
     for (int i = 0; i < 3; ++i)
     {
-        const sdl3d_obj_face_vertex *fv = verts[i];
+        const slayer3d_obj_face_vertex *fv = verts[i];
         const size_t p_index = (size_t)(fv->v - 1);
         if (p_index >= s->positions.count)
         {
             return SDL_SetError("OBJ vertex index %d out of range.", fv->v);
         }
         const float p[3] = {positions[p_index * 3 + 0], positions[p_index * 3 + 1], positions[p_index * 3 + 2]};
-        if (!sdl3d_obj_buffer_push(positions_out, p))
+        if (!slayer3d_obj_buffer_push(positions_out, p))
         {
             return false;
         }
@@ -617,7 +617,7 @@ static bool sdl3d_obj_emit_triangle(const sdl3d_obj_state *s, const sdl3d_obj_fa
             n[2] = normals[idx * 3 + 2];
             *have_any_normal = true;
         }
-        if (!sdl3d_obj_buffer_push(normals_out, n))
+        if (!slayer3d_obj_buffer_push(normals_out, n))
         {
             return false;
         }
@@ -634,7 +634,7 @@ static bool sdl3d_obj_emit_triangle(const sdl3d_obj_state *s, const sdl3d_obj_fa
             uv[1] = uvs[idx * 2 + 1];
             *have_any_uv = true;
         }
-        if (!sdl3d_obj_buffer_push(uvs_out, uv))
+        if (!slayer3d_obj_buffer_push(uvs_out, uv))
         {
             return false;
         }
@@ -642,16 +642,16 @@ static bool sdl3d_obj_emit_triangle(const sdl3d_obj_state *s, const sdl3d_obj_fa
     return true;
 }
 
-static bool sdl3d_obj_build_mesh(const sdl3d_obj_state *s, int begin_face, int end_face, sdl3d_mesh *out_mesh)
+static bool slayer3d_obj_build_mesh(const slayer3d_obj_state *s, int begin_face, int end_face, slayer3d_mesh *out_mesh)
 {
     SDL_zerop(out_mesh);
-    const sdl3d_obj_face *faces = (const sdl3d_obj_face *)s->faces.data;
-    const sdl3d_obj_face_vertex *fvs = (const sdl3d_obj_face_vertex *)s->face_vertices.data;
+    const slayer3d_obj_face *faces = (const slayer3d_obj_face *)s->faces.data;
+    const slayer3d_obj_face_vertex *fvs = (const slayer3d_obj_face_vertex *)s->face_vertices.data;
 
-    sdl3d_obj_buffer positions, normals, uvs;
-    sdl3d_obj_buffer_init(&positions, sizeof(float) * 3);
-    sdl3d_obj_buffer_init(&normals, sizeof(float) * 3);
-    sdl3d_obj_buffer_init(&uvs, sizeof(float) * 2);
+    slayer3d_obj_buffer positions, normals, uvs;
+    slayer3d_obj_buffer_init(&positions, sizeof(float) * 3);
+    slayer3d_obj_buffer_init(&normals, sizeof(float) * 3);
+    slayer3d_obj_buffer_init(&uvs, sizeof(float) * 2);
 
     bool have_any_normal = false;
     bool have_any_uv = false;
@@ -659,21 +659,21 @@ static bool sdl3d_obj_build_mesh(const sdl3d_obj_state *s, int begin_face, int e
 
     for (int f = begin_face; f < end_face && ok; ++f)
     {
-        const sdl3d_obj_face *face = &faces[f];
+        const slayer3d_obj_face *face = &faces[f];
         for (int i = 1; i + 1 < face->count && ok; ++i)
         {
-            const sdl3d_obj_face_vertex *a = &fvs[face->first];
-            const sdl3d_obj_face_vertex *b = &fvs[face->first + i];
-            const sdl3d_obj_face_vertex *c = &fvs[face->first + i + 1];
-            ok = sdl3d_obj_emit_triangle(s, a, b, c, &positions, &normals, &uvs, &have_any_normal, &have_any_uv);
+            const slayer3d_obj_face_vertex *a = &fvs[face->first];
+            const slayer3d_obj_face_vertex *b = &fvs[face->first + i];
+            const slayer3d_obj_face_vertex *c = &fvs[face->first + i + 1];
+            ok = slayer3d_obj_emit_triangle(s, a, b, c, &positions, &normals, &uvs, &have_any_normal, &have_any_uv);
         }
     }
 
     if (!ok)
     {
-        sdl3d_obj_buffer_free(&positions);
-        sdl3d_obj_buffer_free(&normals);
-        sdl3d_obj_buffer_free(&uvs);
+        slayer3d_obj_buffer_free(&positions);
+        slayer3d_obj_buffer_free(&normals);
+        slayer3d_obj_buffer_free(&uvs);
         return false;
     }
 
@@ -686,13 +686,13 @@ static bool sdl3d_obj_build_mesh(const sdl3d_obj_state *s, int begin_face, int e
         out_mesh->normals = (float *)normals.data;
         normals.data = NULL;
     }
-    sdl3d_obj_buffer_free(&normals);
+    slayer3d_obj_buffer_free(&normals);
     if (have_any_uv)
     {
         out_mesh->uvs = (float *)uvs.data;
         uvs.data = NULL;
     }
-    sdl3d_obj_buffer_free(&uvs);
+    slayer3d_obj_buffer_free(&uvs);
 
     unsigned int *indices = (unsigned int *)SDL_malloc((size_t)vertex_count * sizeof(unsigned int));
     if (indices == NULL)
@@ -717,16 +717,16 @@ static bool sdl3d_obj_build_mesh(const sdl3d_obj_state *s, int begin_face, int e
  * Entry point.
  * -------------------------------------------------------------------- */
 
-static void sdl3d_obj_state_cleanup(sdl3d_obj_state *s, bool free_materials)
+static void slayer3d_obj_state_cleanup(slayer3d_obj_state *s, bool free_materials)
 {
-    sdl3d_obj_buffer_free(&s->positions);
-    sdl3d_obj_buffer_free(&s->normals);
-    sdl3d_obj_buffer_free(&s->uvs);
-    sdl3d_obj_buffer_free(&s->face_vertices);
-    sdl3d_obj_buffer_free(&s->faces);
+    slayer3d_obj_buffer_free(&s->positions);
+    slayer3d_obj_buffer_free(&s->normals);
+    slayer3d_obj_buffer_free(&s->uvs);
+    slayer3d_obj_buffer_free(&s->face_vertices);
+    slayer3d_obj_buffer_free(&s->faces);
     if (free_materials)
     {
-        sdl3d_material *mats = (sdl3d_material *)s->materials.data;
+        slayer3d_material *mats = (slayer3d_material *)s->materials.data;
         for (size_t i = 0; i < s->materials.count; ++i)
         {
             SDL_free(mats[i].name);
@@ -736,40 +736,40 @@ static void sdl3d_obj_state_cleanup(sdl3d_obj_state *s, bool free_materials)
             SDL_free(mats[i].emissive_map);
         }
     }
-    sdl3d_obj_buffer_free(&s->materials);
+    slayer3d_obj_buffer_free(&s->materials);
     SDL_free(s->group_name);
     SDL_free(s->dirname);
 }
 
-bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
+bool slayer3d_load_model_obj(const char *path, slayer3d_model *out)
 {
     SDL_zerop(out);
 
     size_t size = 0;
-    char *text = sdl3d_obj_load_text(path, &size);
+    char *text = slayer3d_obj_load_text(path, &size);
     if (text == NULL)
     {
         return false;
     }
 
-    sdl3d_obj_state s;
-    sdl3d_obj_buffer_init(&s.positions, sizeof(float) * 3);
-    sdl3d_obj_buffer_init(&s.normals, sizeof(float) * 3);
-    sdl3d_obj_buffer_init(&s.uvs, sizeof(float) * 2);
-    sdl3d_obj_buffer_init(&s.face_vertices, sizeof(sdl3d_obj_face_vertex));
-    sdl3d_obj_buffer_init(&s.faces, sizeof(sdl3d_obj_face));
-    sdl3d_obj_buffer_init(&s.materials, sizeof(sdl3d_material));
+    slayer3d_obj_state s;
+    slayer3d_obj_buffer_init(&s.positions, sizeof(float) * 3);
+    slayer3d_obj_buffer_init(&s.normals, sizeof(float) * 3);
+    slayer3d_obj_buffer_init(&s.uvs, sizeof(float) * 2);
+    slayer3d_obj_buffer_init(&s.face_vertices, sizeof(slayer3d_obj_face_vertex));
+    slayer3d_obj_buffer_init(&s.faces, sizeof(slayer3d_obj_face));
+    slayer3d_obj_buffer_init(&s.materials, sizeof(slayer3d_material));
     s.current_material = -1;
     s.current_group = 0;
     s.group_name = NULL;
-    s.dirname = sdl3d_obj_dirname_dup(path);
+    s.dirname = slayer3d_obj_dirname_dup(path);
 
     const char *p = text;
     const char *end = text + size;
 
     while (p < end)
     {
-        p = sdl3d_obj_skip_spaces(p, end);
+        p = slayer3d_obj_skip_spaces(p, end);
         if (p >= end)
         {
             break;
@@ -788,9 +788,9 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
             continue;
         }
 
-        const char *kw_end = sdl3d_obj_find_space(p, end);
+        const char *kw_end = slayer3d_obj_find_space(p, end);
         const size_t kw_len = (size_t)(kw_end - p);
-        const char *args = sdl3d_obj_skip_spaces(kw_end, end);
+        const char *args = slayer3d_obj_skip_spaces(kw_end, end);
         const char *line_end = args;
         while (line_end < end && *line_end != '\n')
         {
@@ -802,9 +802,9 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
         if (kw_len == 1 && *p == 'v')
         {
             float xyz[3] = {0.0f, 0.0f, 0.0f};
-            if (!sdl3d_mtl_parse_floats(args, line_end, xyz, 3) || !sdl3d_obj_buffer_push(&s.positions, xyz))
+            if (!slayer3d_mtl_parse_floats(args, line_end, xyz, 3) || !slayer3d_obj_buffer_push(&s.positions, xyz))
             {
-                sdl3d_obj_state_cleanup(&s, true);
+                slayer3d_obj_state_cleanup(&s, true);
                 SDL_free(text);
                 if (!SDL_GetError()[0])
                 {
@@ -817,9 +817,9 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
         else if (kw_len == 2 && p[0] == 'v' && p[1] == 'n')
         {
             float xyz[3] = {0.0f, 0.0f, 0.0f};
-            if (!sdl3d_mtl_parse_floats(args, line_end, xyz, 3) || !sdl3d_obj_buffer_push(&s.normals, xyz))
+            if (!slayer3d_mtl_parse_floats(args, line_end, xyz, 3) || !slayer3d_obj_buffer_push(&s.normals, xyz))
             {
-                sdl3d_obj_state_cleanup(&s, true);
+                slayer3d_obj_state_cleanup(&s, true);
                 SDL_free(text);
                 return false;
             }
@@ -828,9 +828,9 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
         else if (kw_len == 2 && p[0] == 'v' && p[1] == 't')
         {
             float uv[2] = {0.0f, 0.0f};
-            if (!sdl3d_mtl_parse_floats(args, line_end, uv, 2) || !sdl3d_obj_buffer_push(&s.uvs, uv))
+            if (!slayer3d_mtl_parse_floats(args, line_end, uv, 2) || !slayer3d_obj_buffer_push(&s.uvs, uv))
             {
-                sdl3d_obj_state_cleanup(&s, true);
+                slayer3d_obj_state_cleanup(&s, true);
                 SDL_free(text);
                 return false;
             }
@@ -838,7 +838,7 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
         }
         else if (kw_len == 1 && *p == 'f')
         {
-            sdl3d_obj_face face;
+            slayer3d_obj_face face;
             face.first = (int)s.face_vertices.count;
             face.count = 0;
             face.material = s.current_material;
@@ -847,26 +847,26 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
             const char *cursor = args;
             while (cursor < line_end)
             {
-                cursor = sdl3d_obj_skip_spaces(cursor, line_end);
+                cursor = slayer3d_obj_skip_spaces(cursor, line_end);
                 if (cursor >= line_end)
                 {
                     break;
                 }
-                const char *tok_end = sdl3d_obj_find_space(cursor, line_end);
+                const char *tok_end = slayer3d_obj_find_space(cursor, line_end);
                 if (tok_end == cursor)
                 {
                     break;
                 }
-                sdl3d_obj_face_vertex fv;
-                if (!sdl3d_obj_parse_face_vertex(cursor, tok_end, &s, &fv))
+                slayer3d_obj_face_vertex fv;
+                if (!slayer3d_obj_parse_face_vertex(cursor, tok_end, &s, &fv))
                 {
-                    sdl3d_obj_state_cleanup(&s, true);
+                    slayer3d_obj_state_cleanup(&s, true);
                     SDL_free(text);
                     return SDL_SetError("OBJ: malformed face vertex in '%s'.", path);
                 }
-                if (!sdl3d_obj_buffer_push(&s.face_vertices, &fv))
+                if (!slayer3d_obj_buffer_push(&s.face_vertices, &fv))
                 {
-                    sdl3d_obj_state_cleanup(&s, true);
+                    slayer3d_obj_state_cleanup(&s, true);
                     SDL_free(text);
                     return false;
                 }
@@ -875,9 +875,9 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
             }
             if (face.count >= 3)
             {
-                if (!sdl3d_obj_buffer_push(&s.faces, &face))
+                if (!slayer3d_obj_buffer_push(&s.faces, &face))
                 {
-                    sdl3d_obj_state_cleanup(&s, true);
+                    slayer3d_obj_state_cleanup(&s, true);
                     SDL_free(text);
                     return false;
                 }
@@ -887,36 +887,36 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
         else if ((kw_len == 1 && (*p == 'o' || *p == 'g')))
         {
             SDL_free(s.group_name);
-            s.group_name = sdl3d_obj_strdup_range(args, line_end);
+            s.group_name = slayer3d_obj_strdup_range(args, line_end);
             s.current_group += 1;
             handled = true;
         }
         else if (kw_len == 6 && SDL_strncmp(p, "usemtl", 6) == 0)
         {
-            char *name = sdl3d_obj_strdup_range(args, line_end);
+            char *name = slayer3d_obj_strdup_range(args, line_end);
             if (name == NULL)
             {
-                sdl3d_obj_state_cleanup(&s, true);
+                slayer3d_obj_state_cleanup(&s, true);
                 SDL_free(text);
                 return false;
             }
             size_t nl = SDL_strlen(name);
-            while (nl > 0 && sdl3d_obj_is_space(name[nl - 1]))
+            while (nl > 0 && slayer3d_obj_is_space(name[nl - 1]))
             {
                 name[--nl] = '\0';
             }
-            int idx = sdl3d_obj_find_material(&s, name);
+            int idx = slayer3d_obj_find_material(&s, name);
             if (idx < 0)
             {
                 /* Forward reference: create a stub so the face can bind
                  * immediately; the mtllib pass may fill it in later. */
-                sdl3d_material stub;
-                sdl3d_obj_material_init(&stub, name);
-                if (!sdl3d_obj_buffer_push(&s.materials, &stub))
+                slayer3d_material stub;
+                slayer3d_obj_material_init(&stub, name);
+                if (!slayer3d_obj_buffer_push(&s.materials, &stub))
                 {
                     SDL_free(stub.name);
                     SDL_free(name);
-                    sdl3d_obj_state_cleanup(&s, true);
+                    slayer3d_obj_state_cleanup(&s, true);
                     SDL_free(text);
                     return false;
                 }
@@ -931,32 +931,32 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
             const char *cursor = args;
             while (cursor < line_end)
             {
-                cursor = sdl3d_obj_skip_spaces(cursor, line_end);
+                cursor = slayer3d_obj_skip_spaces(cursor, line_end);
                 if (cursor >= line_end)
                 {
                     break;
                 }
-                const char *tok_end = sdl3d_obj_find_space(cursor, line_end);
-                char *rel = sdl3d_obj_strdup_range(cursor, tok_end);
+                const char *tok_end = slayer3d_obj_find_space(cursor, line_end);
+                char *rel = slayer3d_obj_strdup_range(cursor, tok_end);
                 if (rel == NULL)
                 {
-                    sdl3d_obj_state_cleanup(&s, true);
+                    slayer3d_obj_state_cleanup(&s, true);
                     SDL_free(text);
                     return false;
                 }
-                char *full = sdl3d_obj_join_path(s.dirname, rel);
+                char *full = slayer3d_obj_join_path(s.dirname, rel);
                 SDL_free(rel);
                 if (full == NULL)
                 {
-                    sdl3d_obj_state_cleanup(&s, true);
+                    slayer3d_obj_state_cleanup(&s, true);
                     SDL_free(text);
                     return false;
                 }
-                const bool mtl_ok = sdl3d_mtl_load(&s, full);
+                const bool mtl_ok = slayer3d_mtl_load(&s, full);
                 SDL_free(full);
                 if (!mtl_ok)
                 {
-                    sdl3d_obj_state_cleanup(&s, true);
+                    slayer3d_obj_state_cleanup(&s, true);
                     SDL_free(text);
                     return false;
                 }
@@ -974,10 +974,10 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
      * list once, emitting a mesh whenever the signature changes; this
      * preserves face order within a mesh so triangulation stays stable.
      */
-    sdl3d_obj_buffer mesh_buffer;
-    sdl3d_obj_buffer_init(&mesh_buffer, sizeof(sdl3d_mesh));
+    slayer3d_obj_buffer mesh_buffer;
+    slayer3d_obj_buffer_init(&mesh_buffer, sizeof(slayer3d_mesh));
 
-    const sdl3d_obj_face *faces_data = (const sdl3d_obj_face *)s.faces.data;
+    const slayer3d_obj_face *faces_data = (const slayer3d_obj_face *)s.faces.data;
     int run_begin = 0;
     for (int i = 0; i <= (int)s.faces.count; ++i)
     {
@@ -985,10 +985,10 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
             (i == (int)s.faces.count) || (faces_data[i].group_signature != faces_data[run_begin].group_signature);
         if (end_of_run && i > run_begin)
         {
-            sdl3d_mesh mesh;
-            if (!sdl3d_obj_build_mesh(&s, run_begin, i, &mesh))
+            slayer3d_mesh mesh;
+            if (!slayer3d_obj_build_mesh(&s, run_begin, i, &mesh))
             {
-                sdl3d_mesh *meshes = (sdl3d_mesh *)mesh_buffer.data;
+                slayer3d_mesh *meshes = (slayer3d_mesh *)mesh_buffer.data;
                 for (size_t m = 0; m < mesh_buffer.count; ++m)
                 {
                     SDL_free(meshes[m].positions);
@@ -997,19 +997,19 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
                     SDL_free(meshes[m].indices);
                     SDL_free(meshes[m].name);
                 }
-                sdl3d_obj_buffer_free(&mesh_buffer);
-                sdl3d_obj_state_cleanup(&s, true);
+                slayer3d_obj_buffer_free(&mesh_buffer);
+                slayer3d_obj_state_cleanup(&s, true);
                 SDL_free(text);
                 return false;
             }
-            if (!sdl3d_obj_buffer_push(&mesh_buffer, &mesh))
+            if (!slayer3d_obj_buffer_push(&mesh_buffer, &mesh))
             {
                 SDL_free(mesh.positions);
                 SDL_free(mesh.normals);
                 SDL_free(mesh.uvs);
                 SDL_free(mesh.indices);
-                sdl3d_obj_buffer_free(&mesh_buffer);
-                sdl3d_obj_state_cleanup(&s, true);
+                slayer3d_obj_buffer_free(&mesh_buffer);
+                slayer3d_obj_state_cleanup(&s, true);
                 SDL_free(text);
                 return false;
             }
@@ -1017,23 +1017,23 @@ bool sdl3d_load_model_obj(const char *path, sdl3d_model *out)
         }
     }
 
-    out->meshes = (sdl3d_mesh *)mesh_buffer.data;
+    out->meshes = (slayer3d_mesh *)mesh_buffer.data;
     out->mesh_count = (int)mesh_buffer.count;
     mesh_buffer.data = NULL;
 
-    out->materials = (sdl3d_material *)s.materials.data;
+    out->materials = (slayer3d_material *)s.materials.data;
     out->material_count = (int)s.materials.count;
     s.materials.data = NULL;
     s.materials.count = 0;
 
-    out->source_path = sdl3d_obj_strdup(path);
+    out->source_path = slayer3d_obj_strdup(path);
 
-    sdl3d_obj_state_cleanup(&s, false);
+    slayer3d_obj_state_cleanup(&s, false);
     SDL_free(text);
 
     if (out->mesh_count == 0)
     {
-        sdl3d_free_model(out);
+        slayer3d_free_model(out);
         return SDL_SetError("OBJ '%s' produced no meshes.", path);
     }
 

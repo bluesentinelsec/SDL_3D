@@ -1,5 +1,5 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "editor": {
     "display_name": "FPS Mechanics Dojo",
     "description": "Data-only testbed for reusable FPS movement and world mechanics.",

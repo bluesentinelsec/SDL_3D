@@ -11,14 +11,14 @@
 
 #include "lighting_internal.h"
 
-static const float SDL3D_PI = 3.14159265358979323846f;
+static const float SLAYER3D_PI = 3.14159265358979323846f;
 
-static float sdl3d_maxf(float a, float b)
+static float slayer3d_maxf(float a, float b)
 {
     return a > b ? a : b;
 }
 
-static float sdl3d_clampf(float v, float lo, float hi)
+static float slayer3d_clampf(float v, float lo, float hi)
 {
     if (v < lo)
     {
@@ -32,16 +32,16 @@ static float sdl3d_clampf(float v, float lo, float hi)
 }
 
 /* GGX / Trowbridge-Reitz normal distribution function. */
-static float sdl3d_distribution_ggx(float n_dot_h, float roughness)
+static float slayer3d_distribution_ggx(float n_dot_h, float roughness)
 {
     float a = roughness * roughness;
     float a2 = a * a;
     float denom = n_dot_h * n_dot_h * (a2 - 1.0f) + 1.0f;
-    return a2 / (SDL3D_PI * denom * denom + 1e-7f);
+    return a2 / (SLAYER3D_PI * denom * denom + 1e-7f);
 }
 
 /* Schlick-GGX geometry function (one direction). */
-static float sdl3d_geometry_schlick_ggx(float n_dot_v, float roughness)
+static float slayer3d_geometry_schlick_ggx(float n_dot_v, float roughness)
 {
     float r = roughness + 1.0f;
     float k = (r * r) / 8.0f;
@@ -49,14 +49,14 @@ static float sdl3d_geometry_schlick_ggx(float n_dot_v, float roughness)
 }
 
 /* Smith geometry: product of two Schlick-GGX terms. */
-static float sdl3d_geometry_smith(float n_dot_v, float n_dot_l, float roughness)
+static float slayer3d_geometry_smith(float n_dot_v, float n_dot_l, float roughness)
 {
-    return sdl3d_geometry_schlick_ggx(n_dot_v, roughness) * sdl3d_geometry_schlick_ggx(n_dot_l, roughness);
+    return slayer3d_geometry_schlick_ggx(n_dot_v, roughness) * slayer3d_geometry_schlick_ggx(n_dot_l, roughness);
 }
 
 /* Schlick Fresnel approximation. */
-static void sdl3d_fresnel_schlick(float cos_theta, float f0_r, float f0_g, float f0_b, float *out_r, float *out_g,
-                                  float *out_b)
+static void slayer3d_fresnel_schlick(float cos_theta, float f0_r, float f0_g, float f0_b, float *out_r, float *out_g,
+                                     float *out_b)
 {
     float t = 1.0f - cos_theta;
     float t2 = t * t;
@@ -66,12 +66,12 @@ static void sdl3d_fresnel_schlick(float cos_theta, float f0_r, float f0_g, float
     *out_b = f0_b + (1.0f - f0_b) * t5;
 }
 
-static float sdl3d_vec3_dot_raw(float ax, float ay, float az, float bx, float by, float bz)
+static float slayer3d_vec3_dot_raw(float ax, float ay, float az, float bx, float by, float bz)
 {
     return ax * bx + ay * by + az * bz;
 }
 
-static float sdl3d_vec3_length_raw(float x, float y, float z)
+static float slayer3d_vec3_length_raw(float x, float y, float z)
 {
     return SDL_sqrtf(x * x + y * y + z * z);
 }
@@ -80,15 +80,15 @@ static float sdl3d_vec3_length_raw(float x, float y, float z)
  * Compute the light's radiance contribution and the light direction
  * (pointing FROM the fragment TOWARD the light).
  */
-static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px, float py, float pz, float *out_lx,
-                                             float *out_ly, float *out_lz, float *out_rad_r, float *out_rad_g,
-                                             float *out_rad_b)
+static bool slayer3d_compute_light_contribution(const slayer3d_light *light, float px, float py, float pz,
+                                                float *out_lx, float *out_ly, float *out_lz, float *out_rad_r,
+                                                float *out_rad_g, float *out_rad_b)
 {
     float attenuation = 1.0f;
 
-    if (light->type == SDL3D_LIGHT_DIRECTIONAL)
+    if (light->type == SLAYER3D_LIGHT_DIRECTIONAL)
     {
-        float len = sdl3d_vec3_length_raw(light->direction.x, light->direction.y, light->direction.z);
+        float len = slayer3d_vec3_length_raw(light->direction.x, light->direction.y, light->direction.z);
         if (len < 1e-7f)
         {
             return false;
@@ -104,7 +104,7 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
         float dx = light->position.x - px;
         float dy = light->position.y - py;
         float dz = light->position.z - pz;
-        float dist = sdl3d_vec3_length_raw(dx, dy, dz);
+        float dist = slayer3d_vec3_length_raw(dx, dy, dz);
         if (dist < 1e-7f)
         {
             return false;
@@ -126,9 +126,9 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
         }
 
         /* Spot cone falloff. */
-        if (light->type == SDL3D_LIGHT_SPOT)
+        if (light->type == SLAYER3D_LIGHT_SPOT)
         {
-            float spot_dir_len = sdl3d_vec3_length_raw(light->direction.x, light->direction.y, light->direction.z);
+            float spot_dir_len = slayer3d_vec3_length_raw(light->direction.x, light->direction.y, light->direction.z);
             if (spot_dir_len < 1e-7f)
             {
                 return false;
@@ -137,7 +137,7 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
             float sdx = light->direction.x * inv_sd;
             float sdy = light->direction.y * inv_sd;
             float sdz = light->direction.z * inv_sd;
-            float cos_angle = sdl3d_vec3_dot_raw(-(*out_lx), -(*out_ly), -(*out_lz), sdx, sdy, sdz);
+            float cos_angle = slayer3d_vec3_dot_raw(-(*out_lx), -(*out_ly), -(*out_lz), sdx, sdy, sdz);
             float epsilon = light->inner_cutoff - light->outer_cutoff;
             if (SDL_fabsf(epsilon) < 1e-7f)
             {
@@ -145,7 +145,7 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
             }
             else
             {
-                float spot_intensity = sdl3d_clampf((cos_angle - light->outer_cutoff) / epsilon, 0.0f, 1.0f);
+                float spot_intensity = slayer3d_clampf((cos_angle - light->outer_cutoff) / epsilon, 0.0f, 1.0f);
                 spot_intensity = spot_intensity * spot_intensity * (3.0f - 2.0f * spot_intensity);
                 attenuation *= spot_intensity;
             }
@@ -159,9 +159,10 @@ static bool sdl3d_compute_light_contribution(const sdl3d_light *light, float px,
     return true;
 }
 
-static float sdl3d_sample_shadow(const sdl3d_lighting_params *params, int light_index, float wpx, float wpy, float wpz)
+static float slayer3d_sample_shadow(const slayer3d_lighting_params *params, int light_index, float wpx, float wpy,
+                                    float wpz)
 {
-    sdl3d_vec4 lp;
+    slayer3d_vec4 lp;
     float ndc_x, ndc_y, ndc_z;
     int sx, sy, idx;
     float map_depth;
@@ -172,7 +173,7 @@ static float sdl3d_sample_shadow(const sdl3d_lighting_params *params, int light_
     }
 
     /* Transform world position to light clip space. */
-    lp = sdl3d_mat4_transform_vec4(params->shadow_vp[light_index], sdl3d_vec4_make(wpx, wpy, wpz, 1.0f));
+    lp = slayer3d_mat4_transform_vec4(params->shadow_vp[light_index], slayer3d_vec4_make(wpx, wpy, wpz, 1.0f));
     if (lp.w <= 0.0f)
     {
         return 1.0f;
@@ -183,15 +184,15 @@ static float sdl3d_sample_shadow(const sdl3d_lighting_params *params, int light_
     ndc_z = lp.z / lp.w;
 
     /* Map NDC [-1,1] to [0, shadow_map_size). */
-    sx = (int)((ndc_x * 0.5f + 0.5f) * (float)SDL3D_SHADOW_MAP_SIZE);
-    sy = (int)((ndc_y * 0.5f + 0.5f) * (float)SDL3D_SHADOW_MAP_SIZE);
+    sx = (int)((ndc_x * 0.5f + 0.5f) * (float)SLAYER3D_SHADOW_MAP_SIZE);
+    sy = (int)((ndc_y * 0.5f + 0.5f) * (float)SLAYER3D_SHADOW_MAP_SIZE);
 
-    if (sx < 0 || sx >= SDL3D_SHADOW_MAP_SIZE || sy < 0 || sy >= SDL3D_SHADOW_MAP_SIZE)
+    if (sx < 0 || sx >= SLAYER3D_SHADOW_MAP_SIZE || sy < 0 || sy >= SLAYER3D_SHADOW_MAP_SIZE)
     {
         return 1.0f; /* Outside shadow map → lit. */
     }
 
-    idx = sy * SDL3D_SHADOW_MAP_SIZE + sx;
+    idx = sy * SLAYER3D_SHADOW_MAP_SIZE + sx;
     map_depth = params->shadow_depth[light_index][idx];
 
     /* Fragment depth in [0,1] range. */
@@ -201,9 +202,9 @@ static float sdl3d_sample_shadow(const sdl3d_lighting_params *params, int light_
     }
 }
 
-void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_r, float albedo_g, float albedo_b,
-                              float world_nx, float world_ny, float world_nz, float world_px, float world_py,
-                              float world_pz, float *out_r, float *out_g, float *out_b)
+void slayer3d_shade_fragment_pbr(const slayer3d_lighting_params *params, float albedo_r, float albedo_g, float albedo_b,
+                                 float world_nx, float world_ny, float world_nz, float world_px, float world_py,
+                                 float world_pz, float *out_r, float *out_g, float *out_b)
 {
     /* F0: base reflectance. Dielectrics ~0.04, metals use albedo. */
     float f0_r = 0.04f + (albedo_r - 0.04f) * params->metallic;
@@ -214,7 +215,7 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
     float vx = params->camera_pos.x - world_px;
     float vy = params->camera_pos.y - world_py;
     float vz = params->camera_pos.z - world_pz;
-    float v_len = sdl3d_vec3_length_raw(vx, vy, vz);
+    float v_len = slayer3d_vec3_length_raw(vx, vy, vz);
     if (v_len > 1e-7f)
     {
         float inv = 1.0f / v_len;
@@ -223,7 +224,7 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
         vz *= inv;
     }
 
-    float n_dot_v = sdl3d_maxf(sdl3d_vec3_dot_raw(world_nx, world_ny, world_nz, vx, vy, vz), 0.0f);
+    float n_dot_v = slayer3d_maxf(slayer3d_vec3_dot_raw(world_nx, world_ny, world_nz, vx, vy, vz), 0.0f);
 
     /* Accumulate light contributions. */
     float lo_r = 0.0f, lo_g = 0.0f, lo_b = 0.0f;
@@ -233,13 +234,13 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
         float lx, ly, lz;
         float rad_r, rad_g, rad_b;
 
-        if (!sdl3d_compute_light_contribution(&params->lights[i], world_px, world_py, world_pz, &lx, &ly, &lz, &rad_r,
-                                              &rad_g, &rad_b))
+        if (!slayer3d_compute_light_contribution(&params->lights[i], world_px, world_py, world_pz, &lx, &ly, &lz,
+                                                 &rad_r, &rad_g, &rad_b))
         {
             continue;
         }
 
-        float n_dot_l = sdl3d_maxf(sdl3d_vec3_dot_raw(world_nx, world_ny, world_nz, lx, ly, lz), 0.0f);
+        float n_dot_l = slayer3d_maxf(slayer3d_vec3_dot_raw(world_nx, world_ny, world_nz, lx, ly, lz), 0.0f);
         if (n_dot_l <= 0.0f)
         {
             continue;
@@ -256,7 +257,7 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
             float hx = lx + vx;
             float hy = ly + vy;
             float hz = lz + vz;
-            float h_len = sdl3d_vec3_length_raw(hx, hy, hz);
+            float h_len = slayer3d_vec3_length_raw(hx, hy, hz);
             float n_dot_h, h_dot_v, ndf, geo, denom, spec_scale;
             if (h_len > 1e-7f)
             {
@@ -265,12 +266,12 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
                 hy *= inv;
                 hz *= inv;
             }
-            n_dot_h = sdl3d_maxf(sdl3d_vec3_dot_raw(world_nx, world_ny, world_nz, hx, hy, hz), 0.0f);
-            h_dot_v = sdl3d_maxf(sdl3d_vec3_dot_raw(hx, hy, hz, vx, vy, vz), 0.0f);
+            n_dot_h = slayer3d_maxf(slayer3d_vec3_dot_raw(world_nx, world_ny, world_nz, hx, hy, hz), 0.0f);
+            h_dot_v = slayer3d_maxf(slayer3d_vec3_dot_raw(hx, hy, hz, vx, vy, vz), 0.0f);
 
-            ndf = sdl3d_distribution_ggx(n_dot_h, params->roughness);
-            geo = sdl3d_geometry_smith(n_dot_v, n_dot_l, params->roughness);
-            sdl3d_fresnel_schlick(h_dot_v, f0_r, f0_g, f0_b, &fr, &fg, &fb);
+            ndf = slayer3d_distribution_ggx(n_dot_h, params->roughness);
+            geo = slayer3d_geometry_smith(n_dot_v, n_dot_l, params->roughness);
+            slayer3d_fresnel_schlick(h_dot_v, f0_r, f0_g, f0_b, &fr, &fg, &fb);
 
             denom = 4.0f * n_dot_v * n_dot_l + 1e-4f;
             spec_scale = ndf * geo / denom;
@@ -287,12 +288,12 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
 
         /* Energy-conserving diffuse: kD = (1 - F) * (1 - metallic). */
         float kd = (1.0f - params->metallic);
-        float diff_r = (1.0f - fr) * kd * albedo_r / SDL3D_PI;
-        float diff_g = (1.0f - fg) * kd * albedo_g / SDL3D_PI;
-        float diff_b = (1.0f - fb) * kd * albedo_b / SDL3D_PI;
+        float diff_r = (1.0f - fr) * kd * albedo_r / SLAYER3D_PI;
+        float diff_g = (1.0f - fg) * kd * albedo_g / SLAYER3D_PI;
+        float diff_b = (1.0f - fb) * kd * albedo_b / SLAYER3D_PI;
 
         {
-            float shadow = sdl3d_sample_shadow(params, i, world_px, world_py, world_pz);
+            float shadow = slayer3d_sample_shadow(params, i, world_px, world_py, world_pz);
             lo_r += (diff_r + spec_r) * rad_r * n_dot_l * shadow;
             lo_g += (diff_g + spec_g) * rad_g * n_dot_l * shadow;
             lo_b += (diff_b + spec_b) * rad_b * n_dot_l * shadow;
@@ -321,36 +322,36 @@ void sdl3d_shade_fragment_pbr(const sdl3d_lighting_params *params, float albedo_
 /* Tonemapping                                                         */
 /* ------------------------------------------------------------------ */
 
-static float sdl3d_tonemap_reinhard(float x)
+static float slayer3d_tonemap_reinhard(float x)
 {
     return x / (1.0f + x);
 }
 
-void sdl3d_tonemap(sdl3d_tonemap_mode mode, float *r, float *g, float *b)
+void slayer3d_tonemap(slayer3d_tonemap_mode mode, float *r, float *g, float *b)
 {
-    if (mode == SDL3D_TONEMAP_REINHARD)
+    if (mode == SLAYER3D_TONEMAP_REINHARD)
     {
-        *r = sdl3d_tonemap_reinhard(*r);
-        *g = sdl3d_tonemap_reinhard(*g);
-        *b = sdl3d_tonemap_reinhard(*b);
+        *r = slayer3d_tonemap_reinhard(*r);
+        *g = slayer3d_tonemap_reinhard(*g);
+        *b = slayer3d_tonemap_reinhard(*b);
     }
-    else if (mode == SDL3D_TONEMAP_ACES)
+    else if (mode == SLAYER3D_TONEMAP_ACES)
     {
         /* ACES filmic approximation (Narkowicz 2015). */
         float a = 2.51f, bt = 0.03f, c = 2.43f, d = 0.59f, e = 0.14f;
         float ri = *r, gi = *g, bi = *b;
-        *r = sdl3d_clampf((ri * (a * ri + bt)) / (ri * (c * ri + d) + e), 0.0f, 1.0f);
-        *g = sdl3d_clampf((gi * (a * gi + bt)) / (gi * (c * gi + d) + e), 0.0f, 1.0f);
-        *b = sdl3d_clampf((bi * (a * bi + bt)) / (bi * (c * bi + d) + e), 0.0f, 1.0f);
+        *r = slayer3d_clampf((ri * (a * ri + bt)) / (ri * (c * ri + d) + e), 0.0f, 1.0f);
+        *g = slayer3d_clampf((gi * (a * gi + bt)) / (gi * (c * gi + d) + e), 0.0f, 1.0f);
+        *b = slayer3d_clampf((bi * (a * bi + bt)) / (bi * (c * bi + d) + e), 0.0f, 1.0f);
     }
 
     /* Always apply sRGB gamma curve. Monitors expect sRGB input;
      * outputting linear values produces incorrect (too dark) colors. */
     {
         float inv_gamma = 1.0f / 2.2f;
-        *r = SDL_powf(sdl3d_clampf(*r, 0.0f, 1.0f), inv_gamma);
-        *g = SDL_powf(sdl3d_clampf(*g, 0.0f, 1.0f), inv_gamma);
-        *b = SDL_powf(sdl3d_clampf(*b, 0.0f, 1.0f), inv_gamma);
+        *r = SDL_powf(slayer3d_clampf(*r, 0.0f, 1.0f), inv_gamma);
+        *g = SDL_powf(slayer3d_clampf(*g, 0.0f, 1.0f), inv_gamma);
+        *b = SDL_powf(slayer3d_clampf(*b, 0.0f, 1.0f), inv_gamma);
     }
 }
 
@@ -358,32 +359,32 @@ void sdl3d_tonemap(sdl3d_tonemap_mode mode, float *r, float *g, float *b)
 /* Fog                                                                 */
 /* ------------------------------------------------------------------ */
 
-float sdl3d_compute_fog_factor(const sdl3d_fog *fog, float distance)
+float slayer3d_compute_fog_factor(const slayer3d_fog *fog, float distance)
 {
-    if (fog->mode == SDL3D_FOG_NONE)
+    if (fog->mode == SLAYER3D_FOG_NONE)
     {
         return 0.0f;
     }
 
-    if (fog->mode == SDL3D_FOG_LINEAR)
+    if (fog->mode == SLAYER3D_FOG_LINEAR)
     {
         if (fog->end <= fog->start)
         {
             return 0.0f;
         }
-        return sdl3d_clampf((distance - fog->start) / (fog->end - fog->start), 0.0f, 1.0f);
+        return slayer3d_clampf((distance - fog->start) / (fog->end - fog->start), 0.0f, 1.0f);
     }
 
-    if (fog->mode == SDL3D_FOG_EXP)
+    if (fog->mode == SLAYER3D_FOG_EXP)
     {
         float f = SDL_expf(-fog->density * distance);
-        return sdl3d_clampf(1.0f - f, 0.0f, 1.0f);
+        return slayer3d_clampf(1.0f - f, 0.0f, 1.0f);
     }
 
-    /* SDL3D_FOG_EXP2 */
+    /* SLAYER3D_FOG_EXP2 */
     {
         float d = fog->density * distance;
         float f = SDL_expf(-d * d);
-        return sdl3d_clampf(1.0f - f, 0.0f, 1.0f);
+        return slayer3d_clampf(1.0f - f, 0.0f, 1.0f);
     }
 }

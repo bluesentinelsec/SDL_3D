@@ -1,7 +1,7 @@
-# SDL3D
+# Slayer 3D
 
-SDL3D is an alpha-stage, data-driven, general-purpose game engine powered by
-SDL. The project is intended to support both 2D and 3D games while keeping
+Slayer 3D is an alpha-stage, data-driven, general-purpose game engine powered by
+SDL and OpenGL. The project is intended to support both 2D and 3D games while keeping
 game-specific content in JSON, Lua, and assets whenever the engine already
 provides the required reusable primitives.
 
@@ -16,16 +16,22 @@ The current engine direction is:
   renderer profiles, dynamic lighting, sprite-heavy 2D games, fixed-screen
   arcade games, and Doom/Quake-like 3D worlds
 
-SDL3D is not 1.0. APIs, schemas, and authored data conventions may still change
+Slayer 3D is not 1.0. APIs, schemas, and authored data conventions may still change
 when correctness or engine clarity requires it.
+
+This rebrand is a hard pre-1.0 rename from the former SDL3D identifiers to the
+canonical Slayer 3D identifiers. Compatibility aliases for the old C API,
+CMake options, tool names, pack extension, and JSON schema names are not kept;
+authored projects should migrate to `slayer3d_`, `SLAYER3D_`,
+`Slayer3D::slayer3d`, `.slayer3dpak`, and `slayer3d.*` schema names.
 
 ## Project Status
 
 The engine currently builds as a C17 static library plus tools and demo
-targets. The generic `sdl3d_runner` can launch games from:
+targets. The generic `slayer3d_runner` can launch games from:
 
 - a development asset directory
-- a `.sdl3dpak` file
+- a `.slayer3dpak` file
 - an embedded asset pack supplied by the build
 - a fused executable produced by appending a pack to the generic runner
 
@@ -35,16 +41,16 @@ The repository also includes data-only dojos for focused primitive and mechanic
 tuning, including FPS mechanics and procedural mesh primitive showcases.
 
 Default authored display and world conventions are intentionally simple:
-SDL3D games target a 1280x720 logical canvas that is letterboxed to preserve
+Slayer 3D games target a 1280x720 logical canvas that is letterboxed to preserve
 aspect ratio on the user's display, one world unit represents one meter, and
-perspective/FPS cameras default to a 90 degree vertical field of view unless a
+perspective/FPS cameras default to a 90 degree horizontal field of view unless a
 game authors a different value.
 
 ## Repository Layout
 
 - `include/`: public C headers
 - `src/`: engine implementation
-- `tools/`: command-line tools such as `sdl3d_runner`, `sdl3d_pack`, and `sdl3d_bundle`
+- `tools/`: command-line tools such as `slayer3d_runner`, `slayer3d_pack`, and `slayer3d_bundle`
 - `demos/`: data-authored and low-level capability demos
 - `docs/`: engine documentation
 - `tests/`: GoogleTest and renderer tests registered with CTest
@@ -70,19 +76,19 @@ Start here:
 
 - SDL3 3.2 or newer, discovered through CMake config packages
 
-SDL3D links publicly against `SDL3::SDL3`, the SDL target guaranteed by the
+Slayer 3D links publicly against `SDL3::SDL3`, the SDL target guaranteed by the
 official SDL CMake package. If SDL3 is not already available from a parent
-project or `find_package(SDL3 ...)`, SDL3D can fetch SDL3 automatically with
-`FetchContent`. Set `SDL3D_FETCH_SDL3=OFF` if you want SDL3D to require a
+project or `find_package(SDL3 ...)`, Slayer 3D can fetch SDL3 automatically with
+`FetchContent`. Set `SLAYER3D_FETCH_SDL3=OFF` if you want Slayer 3D to require a
 caller-provided SDL3 instead.
 
-When SDL3 is fetched this way, SDL3D disables its own install/export package
+When SDL3 is fetched this way, Slayer 3D disables its own install/export package
 generation for that build. Normal install/export packaging remains available
 when SDL3 comes from a parent target or a discovered SDL3 package.
 
 Vendored dependencies live under `vendor/` and are built from source. They are
 kept static-link friendly and should not introduce runtime deployment
-requirements for engine users or SDL3D tools.
+requirements for engine users or Slayer 3D tools.
 
 ## Build
 
@@ -116,20 +122,20 @@ ctest --preset sanitizers
 From a development directory:
 
 ```sh
-build/debug/sdl3d_runner --root path/to/game/data --data asset://game.game.json
+build/debug/slayer3d_runner --root path/to/game/data --data asset://game.game.json
 ```
 
 From a pack file:
 
 ```sh
-build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
+build/debug/slayer3d_runner --pack path/to/game.slayer3dpak --data asset://game.game.json
 ```
 
 As a single fused executable:
 
 ```sh
-build/debug/sdl3d_bundle \
-  --runner build/debug/sdl3d_runner \
+build/debug/slayer3d_bundle \
+  --runner build/debug/slayer3d_runner \
   --root path/to/game/data \
   --data asset://game.game.json \
   --output build/MyGame
@@ -140,7 +146,7 @@ build/MyGame
 Start directly in a scene for development:
 
 ```sh
-build/debug/sdl3d_runner \
+build/debug/slayer3d_runner \
   --root path/to/game/data \
   --data asset://game.game.json \
   --scene scene.level_1 \
@@ -157,18 +163,18 @@ must not contain game-specific rules.
 include(FetchContent)
 
 FetchContent_Declare(
-    SDL3D
-    GIT_REPOSITORY git@github.com:bluesentinelsec/SDL_3D.git
+    Slayer3D
+    GIT_REPOSITORY git@github.com:bluesentinelsec/Slayer3D.git
     GIT_TAG main
 )
 
-FetchContent_MakeAvailable(SDL3D)
+FetchContent_MakeAvailable(Slayer3D)
 
-target_link_libraries(your_target PRIVATE SDL3D::sdl3d)
+target_link_libraries(your_target PRIVATE Slayer3D::slayer3d)
 ```
 
-When SDL3D is consumed as a subproject, its tests default to `OFF`. To force
-them on, set `SDL3D_BUILD_TESTS=ON` before `FetchContent_MakeAvailable`.
+When Slayer 3D is consumed as a subproject, its tests default to `OFF`. To force
+them on, set `SLAYER3D_BUILD_TESTS=ON` before `FetchContent_MakeAvailable`.
 
 ## Formatting
 

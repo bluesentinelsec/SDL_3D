@@ -1,7 +1,7 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": {
-    "name": "SDL3D Mesh Primitives Dojo",
+    "name": "Slayer 3D Mesh Primitives Dojo",
     "id": "demo.mesh_primitives_dojo",
     "version": "0.1.0"
   },
@@ -12,7 +12,7 @@
     { "path": "fragments/actors/primitives.json", "sections": ["entities"] }
   ],
   "app": {
-    "title": "SDL3D Mesh Primitives Dojo",
+    "title": "Slayer 3D Mesh Primitives Dojo",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",

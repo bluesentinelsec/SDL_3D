@@ -7,7 +7,7 @@
  * Tombstones are used for deletion to preserve probe chains.
  */
 
-#include "sdl3d/properties.h"
+#include "slayer3d/properties.h"
 
 #include <SDL3/SDL_stdinc.h>
 
@@ -26,10 +26,10 @@ typedef struct entry
 {
     entry_state state;
     char *key; /* Owned copy of the key string. */
-    sdl3d_value value;
+    slayer3d_value value;
 } entry;
 
-struct sdl3d_properties
+struct slayer3d_properties
 {
     entry *entries;
     int capacity;
@@ -60,9 +60,9 @@ static unsigned int fnv1a(const char *str)
 /* ================================================================== */
 
 /** Free the owned memory inside a value (strings only). */
-static void free_value(sdl3d_value *v)
+static void free_value(slayer3d_value *v)
 {
-    if (v->type == SDL3D_VALUE_STRING)
+    if (v->type == SLAYER3D_VALUE_STRING)
     {
         SDL_free(v->as_string);
         v->as_string = NULL;
@@ -111,7 +111,7 @@ static entry *find_entry(entry *entries, int capacity, const char *key)
 }
 
 /** Grow the table and rehash all occupied entries. */
-static bool grow(sdl3d_properties *props)
+static bool grow(slayer3d_properties *props)
 {
     int new_capacity = props->capacity < INITIAL_CAPACITY ? INITIAL_CAPACITY : props->capacity * 2;
     entry *new_entries = (entry *)SDL_calloc((size_t)new_capacity, sizeof(entry));
@@ -136,7 +136,7 @@ static bool grow(sdl3d_properties *props)
 }
 
 /** Insert or overwrite a key with the given value. */
-static void set_value(sdl3d_properties *props, const char *key, sdl3d_value value)
+static void set_value(slayer3d_properties *props, const char *key, slayer3d_value value)
 {
     if (props == NULL || key == NULL)
         return;
@@ -177,7 +177,7 @@ static void set_value(sdl3d_properties *props, const char *key, sdl3d_value valu
 }
 
 /** Look up a key. Returns NULL if not found. */
-static const entry *lookup(const sdl3d_properties *props, const char *key)
+static const entry *lookup(const slayer3d_properties *props, const char *key)
 {
     if (props == NULL || key == NULL || props->capacity == 0)
         return NULL;
@@ -191,17 +191,17 @@ static const entry *lookup(const sdl3d_properties *props, const char *key)
 /* Lifecycle                                                          */
 /* ================================================================== */
 
-sdl3d_properties *sdl3d_properties_create(void)
+slayer3d_properties *slayer3d_properties_create(void)
 {
-    sdl3d_properties *props = (sdl3d_properties *)SDL_calloc(1, sizeof(sdl3d_properties));
+    slayer3d_properties *props = (slayer3d_properties *)SDL_calloc(1, sizeof(slayer3d_properties));
     return props;
 }
 
-void sdl3d_properties_destroy(sdl3d_properties *props)
+void slayer3d_properties_destroy(slayer3d_properties *props)
 {
     if (props == NULL)
         return;
-    sdl3d_properties_clear(props);
+    slayer3d_properties_clear(props);
     SDL_free(props->entries);
     SDL_free(props);
 }
@@ -210,58 +210,58 @@ void sdl3d_properties_destroy(sdl3d_properties *props)
 /* Setters                                                            */
 /* ================================================================== */
 
-void sdl3d_properties_set_int(sdl3d_properties *props, const char *key, int value)
+void slayer3d_properties_set_int(slayer3d_properties *props, const char *key, int value)
 {
-    sdl3d_value v;
+    slayer3d_value v;
     SDL_zero(v);
-    v.type = SDL3D_VALUE_INT;
+    v.type = SLAYER3D_VALUE_INT;
     v.as_int = value;
     set_value(props, key, v);
 }
 
-void sdl3d_properties_set_float(sdl3d_properties *props, const char *key, float value)
+void slayer3d_properties_set_float(slayer3d_properties *props, const char *key, float value)
 {
-    sdl3d_value v;
+    slayer3d_value v;
     SDL_zero(v);
-    v.type = SDL3D_VALUE_FLOAT;
+    v.type = SLAYER3D_VALUE_FLOAT;
     v.as_float = value;
     set_value(props, key, v);
 }
 
-void sdl3d_properties_set_bool(sdl3d_properties *props, const char *key, bool value)
+void slayer3d_properties_set_bool(slayer3d_properties *props, const char *key, bool value)
 {
-    sdl3d_value v;
+    slayer3d_value v;
     SDL_zero(v);
-    v.type = SDL3D_VALUE_BOOL;
+    v.type = SLAYER3D_VALUE_BOOL;
     v.as_bool = value;
     set_value(props, key, v);
 }
 
-void sdl3d_properties_set_vec3(sdl3d_properties *props, const char *key, sdl3d_vec3 value)
+void slayer3d_properties_set_vec3(slayer3d_properties *props, const char *key, slayer3d_vec3 value)
 {
-    sdl3d_value v;
+    slayer3d_value v;
     SDL_zero(v);
-    v.type = SDL3D_VALUE_VEC3;
+    v.type = SLAYER3D_VALUE_VEC3;
     v.as_vec3 = value;
     set_value(props, key, v);
 }
 
-void sdl3d_properties_set_string(sdl3d_properties *props, const char *key, const char *value)
+void slayer3d_properties_set_string(slayer3d_properties *props, const char *key, const char *value)
 {
-    sdl3d_value v;
+    slayer3d_value v;
     SDL_zero(v);
-    v.type = SDL3D_VALUE_STRING;
+    v.type = SLAYER3D_VALUE_STRING;
     v.as_string = SDL_strdup(value != NULL ? value : "");
     if (v.as_string == NULL)
         return;
     set_value(props, key, v);
 }
 
-void sdl3d_properties_set_color(sdl3d_properties *props, const char *key, sdl3d_color value)
+void slayer3d_properties_set_color(slayer3d_properties *props, const char *key, slayer3d_color value)
 {
-    sdl3d_value v;
+    slayer3d_value v;
     SDL_zero(v);
-    v.type = SDL3D_VALUE_COLOR;
+    v.type = SLAYER3D_VALUE_COLOR;
     v.as_color = value;
     set_value(props, key, v);
 }
@@ -270,50 +270,50 @@ void sdl3d_properties_set_color(sdl3d_properties *props, const char *key, sdl3d_
 /* Getters                                                            */
 /* ================================================================== */
 
-int sdl3d_properties_get_int(const sdl3d_properties *props, const char *key, int fallback)
+int slayer3d_properties_get_int(const slayer3d_properties *props, const char *key, int fallback)
 {
     const entry *e = lookup(props, key);
-    if (e == NULL || e->value.type != SDL3D_VALUE_INT)
+    if (e == NULL || e->value.type != SLAYER3D_VALUE_INT)
         return fallback;
     return e->value.as_int;
 }
 
-float sdl3d_properties_get_float(const sdl3d_properties *props, const char *key, float fallback)
+float slayer3d_properties_get_float(const slayer3d_properties *props, const char *key, float fallback)
 {
     const entry *e = lookup(props, key);
-    if (e == NULL || e->value.type != SDL3D_VALUE_FLOAT)
+    if (e == NULL || e->value.type != SLAYER3D_VALUE_FLOAT)
         return fallback;
     return e->value.as_float;
 }
 
-bool sdl3d_properties_get_bool(const sdl3d_properties *props, const char *key, bool fallback)
+bool slayer3d_properties_get_bool(const slayer3d_properties *props, const char *key, bool fallback)
 {
     const entry *e = lookup(props, key);
-    if (e == NULL || e->value.type != SDL3D_VALUE_BOOL)
+    if (e == NULL || e->value.type != SLAYER3D_VALUE_BOOL)
         return fallback;
     return e->value.as_bool;
 }
 
-sdl3d_vec3 sdl3d_properties_get_vec3(const sdl3d_properties *props, const char *key, sdl3d_vec3 fallback)
+slayer3d_vec3 slayer3d_properties_get_vec3(const slayer3d_properties *props, const char *key, slayer3d_vec3 fallback)
 {
     const entry *e = lookup(props, key);
-    if (e == NULL || e->value.type != SDL3D_VALUE_VEC3)
+    if (e == NULL || e->value.type != SLAYER3D_VALUE_VEC3)
         return fallback;
     return e->value.as_vec3;
 }
 
-const char *sdl3d_properties_get_string(const sdl3d_properties *props, const char *key, const char *fallback)
+const char *slayer3d_properties_get_string(const slayer3d_properties *props, const char *key, const char *fallback)
 {
     const entry *e = lookup(props, key);
-    if (e == NULL || e->value.type != SDL3D_VALUE_STRING)
+    if (e == NULL || e->value.type != SLAYER3D_VALUE_STRING)
         return fallback;
     return e->value.as_string;
 }
 
-sdl3d_color sdl3d_properties_get_color(const sdl3d_properties *props, const char *key, sdl3d_color fallback)
+slayer3d_color slayer3d_properties_get_color(const slayer3d_properties *props, const char *key, slayer3d_color fallback)
 {
     const entry *e = lookup(props, key);
-    if (e == NULL || e->value.type != SDL3D_VALUE_COLOR)
+    if (e == NULL || e->value.type != SLAYER3D_VALUE_COLOR)
         return fallback;
     return e->value.as_color;
 }
@@ -322,12 +322,12 @@ sdl3d_color sdl3d_properties_get_color(const sdl3d_properties *props, const char
 /* Query and mutation                                                 */
 /* ================================================================== */
 
-bool sdl3d_properties_has(const sdl3d_properties *props, const char *key)
+bool slayer3d_properties_has(const slayer3d_properties *props, const char *key)
 {
     return lookup(props, key) != NULL;
 }
 
-void sdl3d_properties_remove(sdl3d_properties *props, const char *key)
+void slayer3d_properties_remove(slayer3d_properties *props, const char *key)
 {
     if (props == NULL || key == NULL || props->capacity == 0)
         return;
@@ -342,7 +342,7 @@ void sdl3d_properties_remove(sdl3d_properties *props, const char *key)
     /* occupied stays the same — tombstones count toward load factor. */
 }
 
-void sdl3d_properties_clear(sdl3d_properties *props)
+void slayer3d_properties_clear(slayer3d_properties *props)
 {
     if (props == NULL)
         return;
@@ -361,15 +361,15 @@ void sdl3d_properties_clear(sdl3d_properties *props)
 /* Iteration / introspection                                         */
 /* ================================================================== */
 
-int sdl3d_properties_count(const sdl3d_properties *props)
+int slayer3d_properties_count(const slayer3d_properties *props)
 {
     if (props == NULL)
         return 0;
     return props->count;
 }
 
-bool sdl3d_properties_get_key_at(const sdl3d_properties *props, int index, const char **out_key,
-                                 sdl3d_value_type *out_type)
+bool slayer3d_properties_get_key_at(const slayer3d_properties *props, int index, const char **out_key,
+                                    slayer3d_value_type *out_type)
 {
     if (props == NULL || index < 0 || index >= props->count || out_key == NULL)
         return false;
@@ -391,7 +391,7 @@ bool sdl3d_properties_get_key_at(const sdl3d_properties *props, int index, const
     return false;
 }
 
-const sdl3d_value *sdl3d_properties_get_value(const sdl3d_properties *props, const char *key)
+const slayer3d_value *slayer3d_properties_get_value(const slayer3d_properties *props, const char *key)
 {
     const entry *e = lookup(props, key);
     if (e == NULL)

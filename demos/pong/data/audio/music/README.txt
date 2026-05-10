@@ -8,4 +8,4 @@ License: Public domain / PD-author as described on the Wikimedia Commons file
 page.
 
 observing-the-star.ogg
-Local test music asset previously onboarded for SDL3D Pong audio testing.
+Local test music asset previously onboarded for Slayer 3D Pong audio testing.

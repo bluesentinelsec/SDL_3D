@@ -1,9 +1,9 @@
-#include "sdl3d/sprite_actor.h"
+#include "slayer3d/sprite_actor.h"
 
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/drawing3d.h"
-#include "sdl3d/math.h"
+#include "slayer3d/drawing3d.h"
+#include "slayer3d/math.h"
 
 static const float SPRITE_PI = 3.14159265358979323846f;
 static const float SPRITE_TWO_PI = 6.28318530717958647692f;
@@ -11,9 +11,9 @@ static const float SPRITE_TWO_PI = 6.28318530717958647692f;
 /* Internal draw entry for depth sorting. */
 typedef struct sprite_draw_entry
 {
-    const sdl3d_sprite_actor *actor;
-    const sdl3d_texture2d *texture;
-    sdl3d_vec3 position;
+    const slayer3d_sprite_actor *actor;
+    const slayer3d_texture2d *texture;
+    slayer3d_vec3 position;
     float distance_sq;
 } sprite_draw_entry;
 
@@ -28,7 +28,7 @@ static int compare_sprite_draws(const void *lhs, const void *rhs)
     return 0;
 }
 
-void sdl3d_sprite_scene_init(sdl3d_sprite_scene *scene)
+void slayer3d_sprite_scene_init(slayer3d_sprite_scene *scene)
 {
     if (scene == NULL)
         return;
@@ -37,7 +37,7 @@ void sdl3d_sprite_scene_init(sdl3d_sprite_scene *scene)
     scene->capacity = 0;
 }
 
-void sdl3d_sprite_scene_free(sdl3d_sprite_scene *scene)
+void slayer3d_sprite_scene_free(slayer3d_sprite_scene *scene)
 {
     if (scene == NULL)
         return;
@@ -47,17 +47,17 @@ void sdl3d_sprite_scene_free(sdl3d_sprite_scene *scene)
     scene->capacity = 0;
 }
 
-sdl3d_sprite_actor *sdl3d_sprite_scene_add(sdl3d_sprite_scene *scene)
+slayer3d_sprite_actor *slayer3d_sprite_scene_add(slayer3d_sprite_scene *scene)
 {
-    sdl3d_sprite_actor *actor;
+    slayer3d_sprite_actor *actor;
     if (scene == NULL)
         return NULL;
 
     if (scene->count >= scene->capacity)
     {
         int new_cap = scene->capacity < 8 ? 8 : scene->capacity * 2;
-        sdl3d_sprite_actor *new_buf =
-            (sdl3d_sprite_actor *)SDL_realloc(scene->actors, (size_t)new_cap * sizeof(sdl3d_sprite_actor));
+        slayer3d_sprite_actor *new_buf =
+            (slayer3d_sprite_actor *)SDL_realloc(scene->actors, (size_t)new_cap * sizeof(slayer3d_sprite_actor));
         if (new_buf == NULL)
             return NULL;
         scene->actors = new_buf;
@@ -68,12 +68,12 @@ sdl3d_sprite_actor *sdl3d_sprite_scene_add(sdl3d_sprite_scene *scene)
     SDL_zerop(actor);
     actor->visible = true;
     actor->sector_id = -1;
-    actor->tint = (sdl3d_color){255, 255, 255, 255};
+    actor->tint = (slayer3d_color){255, 255, 255, 255};
     scene->count++;
     return actor;
 }
 
-void sdl3d_sprite_scene_remove(sdl3d_sprite_scene *scene, int index)
+void slayer3d_sprite_scene_remove(slayer3d_sprite_scene *scene, int index)
 {
     if (scene == NULL || index < 0 || index >= scene->count)
         return;
@@ -82,13 +82,13 @@ void sdl3d_sprite_scene_remove(sdl3d_sprite_scene *scene, int index)
         scene->actors[index] = scene->actors[scene->count];
 }
 
-void sdl3d_sprite_scene_update(sdl3d_sprite_scene *scene, float dt)
+void slayer3d_sprite_scene_update(slayer3d_sprite_scene *scene, float dt)
 {
     if (scene == NULL || dt <= 0.0f)
         return;
     for (int i = 0; i < scene->count; ++i)
     {
-        sdl3d_sprite_actor *actor = &scene->actors[i];
+        slayer3d_sprite_actor *actor = &scene->actors[i];
         actor->bob_phase += dt;
         if (actor->animation_frames != NULL && actor->animation_frame_count > 0 && actor->animation_fps > 0.0f)
         {
@@ -109,15 +109,15 @@ void sdl3d_sprite_scene_update(sdl3d_sprite_scene *scene, float dt)
     }
 }
 
-void sdl3d_sprite_actor_play_animation(sdl3d_sprite_actor *actor, const sdl3d_sprite_rotation_set *frames,
-                                       int frame_count, float fps, bool loop)
+void slayer3d_sprite_actor_play_animation(slayer3d_sprite_actor *actor, const slayer3d_sprite_rotation_set *frames,
+                                          int frame_count, float fps, bool loop)
 {
     if (actor == NULL)
         return;
 
     if (frames == NULL || frame_count <= 0 || fps <= 0.0f)
     {
-        sdl3d_sprite_actor_stop_animation(actor);
+        slayer3d_sprite_actor_stop_animation(actor);
         return;
     }
 
@@ -128,7 +128,7 @@ void sdl3d_sprite_actor_play_animation(sdl3d_sprite_actor *actor, const sdl3d_sp
     actor->animation_time = 0.0f;
 }
 
-void sdl3d_sprite_actor_stop_animation(sdl3d_sprite_actor *actor)
+void slayer3d_sprite_actor_stop_animation(slayer3d_sprite_actor *actor)
 {
     if (actor == NULL)
         return;
@@ -139,7 +139,7 @@ void sdl3d_sprite_actor_stop_animation(sdl3d_sprite_actor *actor)
     actor->animation_time = 0.0f;
 }
 
-int sdl3d_sprite_actor_current_animation_frame(const sdl3d_sprite_actor *actor)
+int slayer3d_sprite_actor_current_animation_frame(const slayer3d_sprite_actor *actor)
 {
     if (actor == NULL || actor->animation_frames == NULL || actor->animation_frame_count <= 0 ||
         actor->animation_fps <= 0.0f)
@@ -163,16 +163,16 @@ int sdl3d_sprite_actor_current_animation_frame(const sdl3d_sprite_actor *actor)
     return frame;
 }
 
-static const sdl3d_sprite_rotation_set *sdl3d_sprite_active_rotations(const sdl3d_sprite_actor *actor)
+static const slayer3d_sprite_rotation_set *slayer3d_sprite_active_rotations(const slayer3d_sprite_actor *actor)
 {
     if (actor == NULL)
         return NULL;
     if (actor->animation_frames != NULL && actor->animation_frame_count > 0 && actor->animation_fps > 0.0f)
-        return &actor->animation_frames[sdl3d_sprite_actor_current_animation_frame(actor)];
+        return &actor->animation_frames[slayer3d_sprite_actor_current_animation_frame(actor)];
     return actor->rotations;
 }
 
-static float sdl3d_sprite_wrap_angle(float radians)
+static float slayer3d_sprite_wrap_angle(float radians)
 {
     radians = SDL_fmodf(radians, SPRITE_TWO_PI);
     if (radians <= -SPRITE_PI)
@@ -182,26 +182,26 @@ static float sdl3d_sprite_wrap_angle(float radians)
     return radians;
 }
 
-sdl3d_vec3 sdl3d_sprite_actor_draw_position(const sdl3d_sprite_actor *actor)
+slayer3d_vec3 slayer3d_sprite_actor_draw_position(const slayer3d_sprite_actor *actor)
 {
     if (actor == NULL)
-        return sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
 
-    sdl3d_vec3 pos = actor->position;
+    slayer3d_vec3 pos = actor->position;
     pos.y -= actor->visual_ground_offset;
     if (actor->bob_amplitude > 0.0f)
         pos.y += SDL_sinf(actor->bob_phase * actor->bob_speed) * actor->bob_amplitude;
     return pos;
 }
 
-void sdl3d_sprite_actor_set_facing_yaw(sdl3d_sprite_actor *actor, float yaw_radians)
+void slayer3d_sprite_actor_set_facing_yaw(slayer3d_sprite_actor *actor, float yaw_radians)
 {
     if (actor == NULL)
         return;
-    actor->facing_yaw = sdl3d_sprite_wrap_angle(yaw_radians);
+    actor->facing_yaw = slayer3d_sprite_wrap_angle(yaw_radians);
 }
 
-void sdl3d_sprite_actor_set_facing_direction(sdl3d_sprite_actor *actor, float direction_x, float direction_z)
+void slayer3d_sprite_actor_set_facing_direction(slayer3d_sprite_actor *actor, float direction_x, float direction_z)
 {
     if (actor == NULL)
         return;
@@ -210,65 +210,65 @@ void sdl3d_sprite_actor_set_facing_direction(sdl3d_sprite_actor *actor, float di
     if (length_sq <= 0.000001f)
         return;
 
-    sdl3d_sprite_actor_set_facing_yaw(actor, SDL_atan2f(direction_x, -direction_z));
+    slayer3d_sprite_actor_set_facing_yaw(actor, SDL_atan2f(direction_x, -direction_z));
 }
 
-bool sdl3d_sprite_actor_can_stand_at(const sdl3d_sprite_actor *actor, const sdl3d_level *level,
-                                     const sdl3d_sector *sectors, float target_x, float target_z, float step_height,
-                                     float actor_height, float *out_floor_y)
+bool slayer3d_sprite_actor_can_stand_at(const slayer3d_sprite_actor *actor, const slayer3d_level *level,
+                                        const slayer3d_sector *sectors, float target_x, float target_z,
+                                        float step_height, float actor_height, float *out_floor_y)
 {
     if (actor == NULL || level == NULL || sectors == NULL || step_height < 0.0f || actor_height <= 0.0f)
         return false;
 
-    int sector = sdl3d_level_find_walkable_sector(level, sectors, target_x, target_z, actor->position.y, step_height,
-                                                  actor_height);
+    int sector = slayer3d_level_find_walkable_sector(level, sectors, target_x, target_z, actor->position.y, step_height,
+                                                     actor_height);
     if (sector < 0)
         return false;
 
     if (out_floor_y != NULL)
-        *out_floor_y = sdl3d_sector_floor_at(&sectors[sector], target_x, target_z);
+        *out_floor_y = slayer3d_sector_floor_at(&sectors[sector], target_x, target_z);
     return true;
 }
 
-bool sdl3d_sprite_actor_snap_to_ground(sdl3d_sprite_actor *actor, const sdl3d_level *level, const sdl3d_sector *sectors,
-                                       float step_height, float actor_height)
+bool slayer3d_sprite_actor_snap_to_ground(slayer3d_sprite_actor *actor, const slayer3d_level *level,
+                                          const slayer3d_sector *sectors, float step_height, float actor_height)
 {
     if (actor == NULL || level == NULL || sectors == NULL || step_height < 0.0f || actor_height <= 0.0f)
         return false;
 
     float probe_y = actor->position.y + step_height;
     int sector =
-        sdl3d_level_find_support_sector(level, sectors, actor->position.x, actor->position.z, probe_y, actor_height);
+        slayer3d_level_find_support_sector(level, sectors, actor->position.x, actor->position.z, probe_y, actor_height);
     if (sector < 0)
         return false;
 
-    actor->position.y = sdl3d_sector_floor_at(&sectors[sector], actor->position.x, actor->position.z);
+    actor->position.y = slayer3d_sector_floor_at(&sectors[sector], actor->position.x, actor->position.z);
     return true;
 }
 
-const sdl3d_texture2d *sdl3d_sprite_select_texture(const sdl3d_sprite_actor *actor, float cam_x, float cam_z)
+const slayer3d_texture2d *slayer3d_sprite_select_texture(const slayer3d_sprite_actor *actor, float cam_x, float cam_z)
 {
     if (actor == NULL)
         return NULL;
-    const sdl3d_sprite_rotation_set *rotations = sdl3d_sprite_active_rotations(actor);
+    const slayer3d_sprite_rotation_set *rotations = slayer3d_sprite_active_rotations(actor);
     if (rotations == NULL)
         return actor->texture;
 
     float dx = cam_x - actor->position.x;
     float dz = cam_z - actor->position.z;
     float yaw_to_camera = SDL_atan2f(dx, -dz);
-    float relative_yaw = sdl3d_sprite_wrap_angle(yaw_to_camera - actor->facing_yaw);
+    float relative_yaw = slayer3d_sprite_wrap_angle(yaw_to_camera - actor->facing_yaw);
     float octant = relative_yaw / (SPRITE_PI * 0.25f);
-    int index = (int)SDL_floorf(octant + 0.5f) % SDL3D_SPRITE_ROTATION_COUNT;
+    int index = (int)SDL_floorf(octant + 0.5f) % SLAYER3D_SPRITE_ROTATION_COUNT;
     if (index < 0)
-        index += SDL3D_SPRITE_ROTATION_COUNT;
+        index += SLAYER3D_SPRITE_ROTATION_COUNT;
 
-    const sdl3d_texture2d *tex = rotations->frames[index];
+    const slayer3d_texture2d *tex = rotations->frames[index];
     return tex != NULL ? tex : actor->texture;
 }
 
-void sdl3d_sprite_scene_draw(sdl3d_sprite_scene *scene, sdl3d_render_context *context, sdl3d_vec3 camera_position,
-                             const sdl3d_visibility_result *vis)
+void slayer3d_sprite_scene_draw(slayer3d_sprite_scene *scene, slayer3d_render_context *context,
+                                slayer3d_vec3 camera_position, const slayer3d_visibility_result *vis)
 {
     sprite_draw_entry *draws;
     int draw_count = 0;
@@ -282,11 +282,11 @@ void sdl3d_sprite_scene_draw(sdl3d_sprite_scene *scene, sdl3d_render_context *co
 
     for (int i = 0; i < scene->count; ++i)
     {
-        const sdl3d_sprite_actor *actor = &scene->actors[i];
+        const slayer3d_sprite_actor *actor = &scene->actors[i];
         if (!actor->visible)
             continue;
 
-        sdl3d_vec3 pos = sdl3d_sprite_actor_draw_position(actor);
+        slayer3d_vec3 pos = slayer3d_sprite_actor_draw_position(actor);
 
         /* Portal cull. */
         if (vis != NULL && vis->sector_visible != NULL && actor->sector_id >= 0)
@@ -300,7 +300,7 @@ void sdl3d_sprite_scene_draw(sdl3d_sprite_scene *scene, sdl3d_render_context *co
         float dz = pos.z - camera_position.z;
 
         draws[draw_count].actor = actor;
-        draws[draw_count].texture = sdl3d_sprite_select_texture(actor, camera_position.x, camera_position.z);
+        draws[draw_count].texture = slayer3d_sprite_select_texture(actor, camera_position.x, camera_position.z);
         draws[draw_count].position = pos;
         draws[draw_count].distance_sq = dx * dx + dy * dy + dz * dz;
         draw_count++;
@@ -310,18 +310,19 @@ void sdl3d_sprite_scene_draw(sdl3d_sprite_scene *scene, sdl3d_render_context *co
 
     for (int i = 0; i < draw_count; ++i)
     {
-        const sdl3d_sprite_actor *actor = draws[i].actor;
+        const slayer3d_sprite_actor *actor = draws[i].actor;
         if ((actor->shader_vertex_source != NULL && actor->shader_vertex_source[0] != '\0') ||
             (actor->shader_fragment_source != NULL && actor->shader_fragment_source[0] != '\0'))
         {
-            sdl3d_draw_billboard_shader_ex(context, draws[i].texture, draws[i].position, draws[i].actor->size,
-                                           (sdl3d_vec2){0.5f, 0.0f}, SDL3D_BILLBOARD_UPRIGHT, draws[i].actor->tint,
-                                           actor->lighting, actor->shader_vertex_source, actor->shader_fragment_source);
+            slayer3d_draw_billboard_shader_ex(context, draws[i].texture, draws[i].position, draws[i].actor->size,
+                                              (slayer3d_vec2){0.5f, 0.0f}, SLAYER3D_BILLBOARD_UPRIGHT,
+                                              draws[i].actor->tint, actor->lighting, actor->shader_vertex_source,
+                                              actor->shader_fragment_source);
         }
         else
         {
-            sdl3d_draw_billboard(context, draws[i].texture, draws[i].position, draws[i].actor->size,
-                                 draws[i].actor->tint);
+            slayer3d_draw_billboard(context, draws[i].texture, draws[i].position, draws[i].actor->size,
+                                    draws[i].actor->tint);
         }
     }
 

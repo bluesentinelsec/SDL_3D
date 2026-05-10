@@ -6,7 +6,7 @@
 
 extern "C"
 {
-#include "sdl3d/sdl3d.h"
+#include "slayer3d/slayer3d.h"
 }
 
 #include <array>
@@ -49,76 +49,76 @@ class SDLLogOutputGuard
 };
 } // namespace
 
-TEST(SDL3D, GreetReturnsExpectedMessage)
+TEST(SLAYER3D, GreetReturnsExpectedMessage)
 {
-    EXPECT_EQ(std::string_view("Hello from SDL3D."), sdl3d_greet());
+    EXPECT_EQ(std::string_view("Hello from SLAYER3D."), slayer3d_greet());
 }
 
-TEST(SDL3D, CopyGreetingWritesExpectedMessage)
+TEST(SLAYER3D, CopyGreetingWritesExpectedMessage)
 {
     std::array<char, 32> buffer{};
 
     SDL_ClearError();
-    ASSERT_TRUE(sdl3d_copy_greeting(buffer.data(), buffer.size())) << SDL_GetError();
-    EXPECT_EQ(std::string_view("Hello from SDL3D."), buffer.data());
+    ASSERT_TRUE(slayer3d_copy_greeting(buffer.data(), buffer.size())) << SDL_GetError();
+    EXPECT_EQ(std::string_view("Hello from SLAYER3D."), buffer.data());
     EXPECT_TRUE(std::string_view(SDL_GetError()).empty());
 }
 
-TEST(SDL3D, CopyGreetingRejectsNullBuffer)
+TEST(SLAYER3D, CopyGreetingRejectsNullBuffer)
 {
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_copy_greeting(nullptr, 32U));
+    EXPECT_FALSE(slayer3d_copy_greeting(nullptr, 32U));
     EXPECT_NE(std::string_view(SDL_GetError()).find("Parameter 'buffer' is invalid"), std::string_view::npos);
 }
 
-TEST(SDL3D, CopyGreetingRejectsSmallBuffer)
+TEST(SLAYER3D, CopyGreetingRejectsSmallBuffer)
 {
     std::array<char, 4> buffer{};
 
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_copy_greeting(buffer.data(), buffer.size()));
+    EXPECT_FALSE(slayer3d_copy_greeting(buffer.data(), buffer.size()));
     EXPECT_NE(std::string_view(SDL_GetError()).find("Buffer is too small"), std::string_view::npos);
 }
 
-TEST(SDL3D, ReportsLinkedSDLVersion)
+TEST(SLAYER3D, ReportsLinkedSDLVersion)
 {
-    EXPECT_GE(sdl3d_linked_sdl_version(), SDL_VERSIONNUM(3, 2, 0));
+    EXPECT_GE(slayer3d_linked_sdl_version(), SDL_VERSIONNUM(3, 2, 0));
 }
 
-TEST(SDL3D, LoggingUsesDedicatedCategoryAndCallerControlledPriority)
+TEST(SLAYER3D, LoggingUsesDedicatedCategoryAndCallerControlledPriority)
 {
     CapturedLogMessage capture;
     SDLLogOutputGuard log_output_guard;
 
     SDL_SetLogOutputFunction(CaptureLogOutput, &capture);
-    sdl3d_set_log_priority(SDL_LOG_PRIORITY_INFO);
+    slayer3d_set_log_priority(SDL_LOG_PRIORITY_INFO);
 
-    EXPECT_EQ(SDL_LOG_PRIORITY_INFO, sdl3d_get_log_priority());
-    ASSERT_TRUE(sdl3d_log_message(SDL_LOG_PRIORITY_INFO, "SDL3D info message"));
-    EXPECT_EQ(sdl3d_log_category(), capture.category);
+    EXPECT_EQ(SDL_LOG_PRIORITY_INFO, slayer3d_get_log_priority());
+    ASSERT_TRUE(slayer3d_log_message(SDL_LOG_PRIORITY_INFO, "SLAYER3D info message"));
+    EXPECT_EQ(slayer3d_log_category(), capture.category);
     EXPECT_EQ(SDL_LOG_PRIORITY_INFO, capture.priority);
-    EXPECT_EQ(std::string("SDL3D info message"), capture.message);
+    EXPECT_EQ(std::string("SLAYER3D info message"), capture.message);
 }
 
-TEST(SDL3D, LoggingRespectsPriorityFiltering)
+TEST(SLAYER3D, LoggingRespectsPriorityFiltering)
 {
     CapturedLogMessage capture;
     SDLLogOutputGuard log_output_guard;
 
     SDL_SetLogOutputFunction(CaptureLogOutput, &capture);
-    sdl3d_set_log_priority(SDL_LOG_PRIORITY_ERROR);
+    slayer3d_set_log_priority(SDL_LOG_PRIORITY_ERROR);
 
-    ASSERT_TRUE(sdl3d_log_message(SDL_LOG_PRIORITY_INFO, "suppressed"));
+    ASSERT_TRUE(slayer3d_log_message(SDL_LOG_PRIORITY_INFO, "suppressed"));
     EXPECT_TRUE(capture.message.empty());
 
-    ASSERT_TRUE(sdl3d_log_message(SDL_LOG_PRIORITY_ERROR, "visible"));
+    ASSERT_TRUE(slayer3d_log_message(SDL_LOG_PRIORITY_ERROR, "visible"));
     EXPECT_EQ(std::string("visible"), capture.message);
     EXPECT_EQ(SDL_LOG_PRIORITY_ERROR, capture.priority);
 }
 
-TEST(SDL3D, LoggingRejectsNullMessage)
+TEST(SLAYER3D, LoggingRejectsNullMessage)
 {
     SDL_ClearError();
-    EXPECT_FALSE(sdl3d_log_message(SDL_LOG_PRIORITY_INFO, nullptr));
+    EXPECT_FALSE(slayer3d_log_message(SDL_LOG_PRIORITY_INFO, nullptr));
     EXPECT_NE(std::string_view(SDL_GetError()).find("Parameter 'message' is invalid"), std::string_view::npos);
 }

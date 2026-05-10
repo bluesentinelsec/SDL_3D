@@ -1,11 +1,11 @@
-# SDL3D Game Data JSON
+# Slayer 3D Game Data JSON
 
-SDL3D game data is a JSON-family authoring format for data-driven games. It is
+Slayer 3D game data is a JSON-family authoring format for data-driven games. It is
 designed so game projects can compose reusable engine primitives in JSON, keep
-game-specific rules in Lua, and run through the generic `sdl3d_runner`.
+game-specific rules in Lua, and run through the generic `slayer3d_runner`.
 
-The root schema is currently `sdl3d.game.v0`. Fragment files use
-`sdl3d.fragment.v0`.
+The root schema is currently `slayer3d.game.v0`. Fragment files use
+`slayer3d.fragment.v0`.
 
 ## Design Goals
 
@@ -23,7 +23,7 @@ Every root game file is a JSON object.
 
 | Field | Required | Purpose |
 | --- | --- | --- |
-| `schema` | yes | Root schema id, currently `sdl3d.game.v0`. |
+| `schema` | yes | Root schema id, currently `slayer3d.game.v0`. |
 | `imports` | no | Structured references to fragment files. |
 | `metadata` | yes | Human-readable game identity and versioning. |
 | `app` | no | Managed-loop startup config such as title, logical size, backend, audio, and pause policy. |
@@ -114,11 +114,11 @@ through sensors and logic actions while keeping the runner game-agnostic.
 ## Structured Imports
 
 Imports are structured composition, not textual includes. Each imported file is
-a JSON object with schema `sdl3d.fragment.v0`.
+a JSON object with schema `slayer3d.fragment.v0`.
 
 ```json
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "imports": [
     { "path": "fragments/assets.json", "sections": ["assets"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
@@ -136,7 +136,7 @@ Fragment example:
 
 ```json
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "entities": [
     {
       "name": "entity.player",
@@ -439,7 +439,7 @@ any other specific world type.
 }
 ```
 
-SDL3D's default world convention is one authored world unit equals one meter
+Slayer 3D's default world convention is one authored world unit equals one meter
 (`units: "meters"`, `meters_per_unit: 1.0`). Author these fields explicitly in
 new games and demos so editors, physics tuning, movement speeds, and level
 metrics share the same scale vocabulary.
@@ -453,7 +453,7 @@ grows.
 `sector_levels` describe sector/portal worlds as data. This is the reusable
 foundation for Doom-like indoor maps: materials, sector floor plans, heights,
 sector metadata, and baked lights are authored in JSON and loaded into runtime
-`sdl3d_level` variants.
+`slayer3d_level` variants.
 
 ```json
 {
@@ -529,7 +529,7 @@ Validation requires:
 - optional lights with `position` vec3, optional `color` vec3, non-negative
   `intensity`, and positive `range`
 
-At load time SDL3D builds three runtime variants per sector level:
+At load time Slayer 3D builds three runtime variants per sector level:
 
 - `lightmapped`: baked lights plus lightmap atlas data
 - `vertex_baked`: baked vertex lighting without a lightmap atlas
@@ -539,7 +539,7 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
 
 ```json
 {
-  "schema": "sdl3d.scene.v0",
+  "schema": "slayer3d.scene.v0",
   "name": "scene.level_1",
   "camera": "camera.level_1",
   "world": {
@@ -892,11 +892,11 @@ current orientation. Both actions also support `target_from_payload` instead of
 }
 ```
 
-Scene files use `sdl3d.scene.v0`. They can select entities, input actions,
+Scene files use `slayer3d.scene.v0`. They can select entities, input actions,
 menus, UI text, update phases, transitions, and activity hooks.
 
 `scenes.initial` is the normal startup scene. Development tools may override it
-at launch time; for example, `sdl3d_runner --scene scene.level_1` enters a
+at launch time; for example, `slayer3d_runner --scene scene.level_1` enters a
 loaded scene directly and may inject scene state before that scene's enter
 signal runs. Authored data should still define a valid `scenes.initial` so the
 game has a complete production startup path.
@@ -1204,7 +1204,7 @@ full `sector_levels` object in every file:
 
 ```json
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "sector_level_fragments": [
     {
       "level": "sector.e1m1",
@@ -2084,7 +2084,7 @@ game to link game logic to network behavior.
 ## Validation
 
 Game data is validated before runtime state is instantiated. Hosts and tools
-can call `sdl3d_game_data_validate_file()` directly. Runtime loading runs the
+can call `slayer3d_game_data_validate_file()` directly. Runtime loading runs the
 same validation pass before actors, input, scripts, timers, and signal handlers
 are wired.
 
@@ -2105,5 +2105,5 @@ JSON path. It checks:
   directions, schema hash shape, and managed session-flow metadata
 
 Validation warnings are non-fatal by default. Tools can set
-`treat_warnings_as_errors` in `sdl3d_game_data_validation_options` for stricter
+`treat_warnings_as_errors` in `slayer3d_game_data_validation_options` for stricter
 authoring.

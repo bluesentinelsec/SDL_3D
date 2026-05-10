@@ -12,12 +12,12 @@
 
 #include "game_data_standard_options.h"
 #include "network_replication_schema.h"
-#include "sdl3d/actor_controller.h"
-#include "sdl3d/door.h"
-#include "sdl3d/input.h"
-#include "sdl3d/level.h"
-#include "sdl3d/sprite_actor.h"
-#include "sdl3d_crypto.h"
+#include "slayer3d/actor_controller.h"
+#include "slayer3d/door.h"
+#include "slayer3d/input.h"
+#include "slayer3d/level.h"
+#include "slayer3d/sprite_actor.h"
+#include "slayer3d_crypto.h"
 
 #define PATH_BUFFER_SIZE 256
 #define GAME_DATA_MENU_TEXT_MAX_BYTES 255
@@ -44,11 +44,11 @@ typedef struct script_manifest
 
 typedef struct validation_context
 {
-    const sdl3d_game_data_validation_options *options;
+    const slayer3d_game_data_validation_options *options;
     const char *source_path;
     const char *base_dir;
-    const sdl3d_asset_resolver *assets;
-    const sdl3d_game_data_source_map *source_map;
+    const slayer3d_asset_resolver *assets;
+    const slayer3d_game_data_source_map *source_map;
     char *error_buffer;
     int error_buffer_size;
     bool failed;
@@ -61,7 +61,7 @@ typedef struct game_data_source_map_entry
     char *source_json_path;
 } game_data_source_map_entry;
 
-struct sdl3d_game_data_source_map
+struct slayer3d_game_data_source_map
 {
     game_data_source_map_entry *entries;
     int count;
@@ -248,7 +248,7 @@ static bool source_path_prefix_matches(const char *entry_path, const char *json_
     return json_path[length] == '\0' || json_path[length] == '.' || json_path[length] == '[';
 }
 
-static const game_data_source_map_entry *source_map_find_best(const sdl3d_game_data_source_map *map,
+static const game_data_source_map_entry *source_map_find_best(const slayer3d_game_data_source_map *map,
                                                               const char *json_path)
 {
     const game_data_source_map_entry *best = NULL;
@@ -305,7 +305,7 @@ static void set_first_error(validation_context *ctx, const char *json_path, cons
                  message != NULL ? message : "unknown validation error");
 }
 
-static bool emit_diagnostic(validation_context *ctx, sdl3d_game_data_diagnostic_severity severity,
+static bool emit_diagnostic(validation_context *ctx, slayer3d_game_data_diagnostic_severity severity,
                             const char *json_path, const char *format, ...)
 {
     char message[384];
@@ -319,8 +319,8 @@ static bool emit_diagnostic(validation_context *ctx, sdl3d_game_data_diagnostic_
         ctx->options->diagnostic(ctx->options->userdata, severity, json_path != NULL ? json_path : "$", message);
     }
 
-    if (severity == SDL3D_GAME_DATA_DIAGNOSTIC_ERROR ||
-        (severity == SDL3D_GAME_DATA_DIAGNOSTIC_WARNING && ctx->options != NULL &&
+    if (severity == SLAYER3D_GAME_DATA_DIAGNOSTIC_ERROR ||
+        (severity == SLAYER3D_GAME_DATA_DIAGNOSTIC_WARNING && ctx->options != NULL &&
          ctx->options->treat_warnings_as_errors))
     {
         ctx->failed = true;
@@ -337,7 +337,7 @@ static bool validation_error(validation_context *ctx, const char *json_path, con
     va_start(args, format);
     SDL_vsnprintf(message, sizeof(message), format, args);
     va_end(args);
-    return emit_diagnostic(ctx, SDL3D_GAME_DATA_DIAGNOSTIC_ERROR, json_path, "%s", message);
+    return emit_diagnostic(ctx, SLAYER3D_GAME_DATA_DIAGNOSTIC_ERROR, json_path, "%s", message);
 }
 
 static bool validation_warning(validation_context *ctx, const char *json_path, const char *format, ...)
@@ -347,7 +347,7 @@ static bool validation_warning(validation_context *ctx, const char *json_path, c
     va_start(args, format);
     SDL_vsnprintf(message, sizeof(message), format, args);
     va_end(args);
-    return emit_diagnostic(ctx, SDL3D_GAME_DATA_DIAGNOSTIC_WARNING, json_path, "%s", message);
+    return emit_diagnostic(ctx, SLAYER3D_GAME_DATA_DIAGNOSTIC_WARNING, json_path, "%s", message);
 }
 
 static bool validate_storage_string(validation_context *ctx, yyjson_val *storage, const char *key,
@@ -608,24 +608,24 @@ static bool is_replication_property_path(const char *path)
     return true;
 }
 
-static void network_hash_update(sdl3d_crypto_hash32_state *state, const char *label, const char *value)
+static void network_hash_update(slayer3d_crypto_hash32_state *state, const char *label, const char *value)
 {
     static const char sep = '\0';
     static const char null_marker = '\1';
-    sdl3d_crypto_hash32_update(state, label, SDL_strlen(label));
-    sdl3d_crypto_hash32_update(state, &sep, 1u);
+    slayer3d_crypto_hash32_update(state, label, SDL_strlen(label));
+    slayer3d_crypto_hash32_update(state, &sep, 1u);
     if (value != NULL)
     {
-        sdl3d_crypto_hash32_update(state, value, SDL_strlen(value));
+        slayer3d_crypto_hash32_update(state, value, SDL_strlen(value));
     }
     else
     {
-        sdl3d_crypto_hash32_update(state, &null_marker, 1u);
+        slayer3d_crypto_hash32_update(state, &null_marker, 1u);
     }
-    sdl3d_crypto_hash32_update(state, &sep, 1u);
+    slayer3d_crypto_hash32_update(state, &sep, 1u);
 }
 
-static void network_hash_update_int(sdl3d_crypto_hash32_state *state, const char *label, Sint64 value)
+static void network_hash_update_int(slayer3d_crypto_hash32_state *state, const char *label, Sint64 value)
 {
     char buffer[32];
     SDL_snprintf(buffer, sizeof(buffer), "%lld", (long long)value);
@@ -645,8 +645,8 @@ static bool validate_network_actor_fields(validation_context *ctx, yyjson_val *f
         char path[PATH_BUFFER_SIZE];
         format_path(path, sizeof(path), "%s[%zu]", json_path, i);
         yyjson_val *field = yyjson_arr_get(fields, i);
-        sdl3d_replication_field_descriptor descriptor;
-        if (!sdl3d_replication_field_descriptor_from_json(field, &descriptor))
+        slayer3d_replication_field_descriptor descriptor;
+        if (!slayer3d_replication_field_descriptor_from_json(field, &descriptor))
         {
             ok = validation_error(ctx, path,
                                   "network actor field must be a built-in field string or object with path and type");
@@ -657,7 +657,7 @@ static bool validate_network_actor_fields(validation_context *ctx, yyjson_val *f
             ok = validation_error(ctx, path, "network actor field path '%s' is invalid", descriptor.path);
             break;
         }
-        if (sdl3d_replication_field_wire_size(descriptor.type) == 0U)
+        if (slayer3d_replication_field_wire_size(descriptor.type) == 0U)
         {
             ok = validation_error(ctx, path, "unsupported network actor field type");
             break;
@@ -1660,16 +1660,16 @@ static bool validate_haptics(validation_context *ctx, yyjson_val *root, validati
     return ok;
 }
 
-static void hash_network_actor_fields(sdl3d_crypto_hash32_state *state, yyjson_val *fields)
+static void hash_network_actor_fields(slayer3d_crypto_hash32_state *state, yyjson_val *fields)
 {
     network_hash_update_int(state, "field_count", (Sint64)yyjson_arr_size(fields));
     for (size_t i = 0; yyjson_is_arr(fields) && i < yyjson_arr_size(fields); ++i)
     {
-        sdl3d_replication_field_descriptor descriptor;
-        if (sdl3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, i), &descriptor))
+        slayer3d_replication_field_descriptor descriptor;
+        if (slayer3d_replication_field_descriptor_from_json(yyjson_arr_get(fields, i), &descriptor))
         {
             network_hash_update(state, "field.path", descriptor.path);
-            network_hash_update(state, "field.type", sdl3d_replication_field_type_name(descriptor.type));
+            network_hash_update(state, "field.type", slayer3d_replication_field_type_name(descriptor.type));
         }
     }
 }
@@ -1686,13 +1686,13 @@ static Sint64 network_actor_pool_capacity(yyjson_val *root, const char *pool_nam
     return 0;
 }
 
-bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_REPLICATION_SCHEMA_HASH_SIZE],
-                                         bool *out_present)
+bool slayer3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE],
+                                            bool *out_present)
 {
     if (out_present != NULL)
         *out_present = false;
     if (out_hash != NULL)
-        SDL_memset(out_hash, 0, SDL3D_REPLICATION_SCHEMA_HASH_SIZE);
+        SDL_memset(out_hash, 0, SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE);
     if (!yyjson_is_obj(root))
         return false;
 
@@ -1705,9 +1705,9 @@ bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_
     if (out_present != NULL)
         *out_present = true;
 
-    sdl3d_crypto_hash32_state state;
-    sdl3d_crypto_hash32_init(&state);
-    network_hash_update(&state, "schema", "sdl3d.network.replication.v0");
+    slayer3d_crypto_hash32_state state;
+    slayer3d_crypto_hash32_init(&state);
+    network_hash_update(&state, "schema", "slayer3d.network.replication.v0");
 
     yyjson_val *protocol = obj_get(network, "protocol");
     network_hash_update(&state, "protocol.id", json_string(protocol, "id"));
@@ -1763,7 +1763,7 @@ bool sdl3d_game_data_network_schema_hash(yyjson_val *root, Uint8 out_hash[SDL3D_
         network_hash_update(&state, "control.signal", json_string(control, "signal"));
     }
 
-    sdl3d_crypto_hash32_final(&state, out_hash);
+    slayer3d_crypto_hash32_final(&state, out_hash);
     return true;
 }
 
@@ -2005,10 +2005,11 @@ static bool validate_import_document(validation_context *parent_ctx, const char 
     if (import_stack_contains(stack, asset_path))
         return validation_error(parent_ctx, json_path, "import cycle detected for '%s'", asset_path);
 
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_buffer buffer;
     SDL_zero(buffer);
     char asset_error[256];
-    if (!sdl3d_asset_resolver_read_file(parent_ctx->assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
+    if (!slayer3d_asset_resolver_read_file(parent_ctx->assets, asset_path, &buffer, asset_error,
+                                           (int)sizeof(asset_error)))
     {
         return validation_error(parent_ctx, json_path, "import fragment '%s' does not exist or cannot be read",
                                 asset_path);
@@ -2016,7 +2017,7 @@ static bool validate_import_document(validation_context *parent_ctx, const char 
 
     yyjson_read_err err;
     yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
     if (doc == NULL)
     {
         return validation_error(parent_ctx, json_path, "import yyjson error %u at byte %llu: %s", err.code,
@@ -2035,9 +2036,9 @@ static bool validate_import_document(validation_context *parent_ctx, const char 
         ok = validation_error(&child_ctx, "$", "fragment root must be an object");
     }
     else if (SDL_strcmp(json_string(fragment_root, "schema") != NULL ? json_string(fragment_root, "schema") : "",
-                        "sdl3d.fragment.v0") != 0)
+                        "slayer3d.fragment.v0") != 0)
     {
-        ok = validation_error(&child_ctx, "$.schema", "import fragment must use schema sdl3d.fragment.v0");
+        ok = validation_error(&child_ctx, "$.schema", "import fragment must use schema slayer3d.fragment.v0");
     }
     else
     {
@@ -2103,7 +2104,7 @@ static bool validate_imports(validation_context *ctx, yyjson_val *root)
     return validate_imports_with_stack(ctx, root, &stack);
 }
 
-static bool source_map_reserve(sdl3d_game_data_source_map *map, int required)
+static bool source_map_reserve(slayer3d_game_data_source_map *map, int required)
 {
     if (map == NULL)
         return false;
@@ -2126,7 +2127,7 @@ static bool source_map_add(validation_context *ctx, const char *composed_path, c
 {
     if (ctx == NULL || ctx->source_map == NULL || composed_path == NULL || source_json_path == NULL)
         return true;
-    sdl3d_game_data_source_map *map = (sdl3d_game_data_source_map *)ctx->source_map;
+    slayer3d_game_data_source_map *map = (slayer3d_game_data_source_map *)ctx->source_map;
     if (!source_map_reserve(map, map->count + 1))
         return validation_error(ctx, composed_path, "failed to allocate import source map");
     game_data_source_map_entry *entry = &map->entries[map->count];
@@ -2139,7 +2140,7 @@ static bool source_map_add(validation_context *ctx, const char *composed_path, c
     return true;
 }
 
-void sdl3d_game_data_source_map_destroy(sdl3d_game_data_source_map *map)
+void slayer3d_game_data_source_map_destroy(slayer3d_game_data_source_map *map)
 {
     if (map == NULL)
         return;
@@ -2308,10 +2309,10 @@ static bool compose_import_entry(validation_context *ctx, yyjson_val *entry, siz
         return ok;
     }
 
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_buffer buffer;
     SDL_zero(buffer);
     char asset_error[256];
-    if (!sdl3d_asset_resolver_read_file(ctx->assets, resolved, &buffer, asset_error, (int)sizeof(asset_error)))
+    if (!slayer3d_asset_resolver_read_file(ctx->assets, resolved, &buffer, asset_error, (int)sizeof(asset_error)))
     {
         const bool ok = validation_error(ctx, path, "import fragment '%s' does not exist or cannot be read", resolved);
         SDL_free(resolved);
@@ -2320,7 +2321,7 @@ static bool compose_import_entry(validation_context *ctx, yyjson_val *entry, siz
 
     yyjson_read_err err;
     yyjson_doc *fragment_doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
     if (fragment_doc == NULL)
     {
         const bool ok = validation_error(ctx, path, "import yyjson error %u at byte %llu: %s", err.code,
@@ -2371,13 +2372,13 @@ static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyj
     const char *schema = json_string(root, "schema");
     if (is_root)
     {
-        if (SDL_strcmp(schema != NULL ? schema : "", "sdl3d.game.v0") != 0)
+        if (SDL_strcmp(schema != NULL ? schema : "", "slayer3d.game.v0") != 0)
             return validation_error(ctx, "$.schema", "unsupported or missing game data schema");
     }
     else
     {
-        if (SDL_strcmp(schema != NULL ? schema : "", "sdl3d.fragment.v0") != 0)
-            return validation_error(ctx, "$.schema", "import fragment must use schema sdl3d.fragment.v0");
+        if (SDL_strcmp(schema != NULL ? schema : "", "slayer3d.fragment.v0") != 0)
+            return validation_error(ctx, "$.schema", "import fragment must use schema slayer3d.fragment.v0");
         if (!validate_import_sections(ctx, sections, root, json_path) || !validate_fragment_keys(ctx, root, sections))
             return false;
     }
@@ -2639,9 +2640,9 @@ static bool compose_expand_sector_level_fragments(validation_context *ctx, yyjso
     return true;
 }
 
-yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const char *asset_path,
-                                          sdl3d_game_data_source_map **out_source_map, char *error_buffer,
-                                          int error_buffer_size)
+yyjson_doc *slayer3d_game_data_compose_asset(slayer3d_asset_resolver *assets, const char *asset_path,
+                                             slayer3d_game_data_source_map **out_source_map, char *error_buffer,
+                                             int error_buffer_size)
 {
     if (error_buffer != NULL && error_buffer_size > 0)
         error_buffer[0] = '\0';
@@ -2658,10 +2659,10 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
         return NULL;
     }
 
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_buffer buffer;
     SDL_zero(buffer);
     char asset_error[256];
-    if (!sdl3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
+    if (!slayer3d_asset_resolver_read_file(assets, asset_path, &buffer, asset_error, (int)sizeof(asset_error)))
     {
         validation_context ctx = {
             .source_path = asset_path,
@@ -2674,7 +2675,7 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
 
     yyjson_read_err err;
     yyjson_doc *source_doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
     if (source_doc == NULL)
     {
         validation_context ctx = {
@@ -2690,11 +2691,11 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
     char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
     yyjson_mut_doc *mut_doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *mut_root = mut_doc != NULL ? yyjson_mut_obj(mut_doc) : NULL;
-    sdl3d_game_data_source_map *source_map =
-        out_source_map != NULL ? (sdl3d_game_data_source_map *)SDL_calloc(1, sizeof(*source_map)) : NULL;
+    slayer3d_game_data_source_map *source_map =
+        out_source_map != NULL ? (slayer3d_game_data_source_map *)SDL_calloc(1, sizeof(*source_map)) : NULL;
     if (base_dir == NULL || mut_doc == NULL || mut_root == NULL || (out_source_map != NULL && source_map == NULL))
     {
-        sdl3d_game_data_source_map_destroy(source_map);
+        slayer3d_game_data_source_map_destroy(source_map);
         yyjson_mut_doc_free(mut_doc);
         yyjson_doc_free(source_doc);
         SDL_free(base_dir);
@@ -2735,7 +2736,7 @@ yyjson_doc *sdl3d_game_data_compose_asset(sdl3d_asset_resolver *assets, const ch
         *out_source_map = source_map;
         source_map = NULL;
     }
-    sdl3d_game_data_source_map_destroy(source_map);
+    slayer3d_game_data_source_map_destroy(source_map);
     yyjson_mut_doc_free(mut_doc);
     yyjson_doc_free(source_doc);
     SDL_free(base_dir);
@@ -2752,7 +2753,7 @@ static bool script_path_exists(validation_context *ctx, const char *script_path,
 
     if (ctx->assets != NULL)
     {
-        const bool exists = sdl3d_asset_resolver_exists(ctx->assets, resolved);
+        const bool exists = slayer3d_asset_resolver_exists(ctx->assets, resolved);
         SDL_free(resolved);
         if (!exists)
             return validation_error(ctx, json_path, "script asset '%s' does not exist", script_path);
@@ -3638,7 +3639,7 @@ static bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, val
         yyjson_val *direction_count_value = obj_get(sprite, "direction_count");
         const int direction_count =
             yyjson_is_int(direction_count_value) ? (int)yyjson_get_int(direction_count_value) : 1;
-        if (direction_count <= 0 || direction_count > SDL3D_SPRITE_ROTATION_COUNT)
+        if (direction_count <= 0 || direction_count > SLAYER3D_SPRITE_ROTATION_COUNT)
             return validation_error(ctx, path, "sprite direction_count must be between 1 and 8");
         const char *shader_vertex_path = json_string(sprite, "shader_vertex_path");
         const char *shader_fragment_path = json_string(sprite, "shader_fragment_path");
@@ -3696,7 +3697,7 @@ static bool collect_images(validation_context *ctx, yyjson_val *root, validation
                                  : path_join(ctx->base_dir, image_path);
             if (resolved == NULL)
                 return validation_error(ctx, path, "failed to resolve image asset path");
-            const bool exists = sdl3d_asset_resolver_exists(ctx->assets, resolved);
+            const bool exists = slayer3d_asset_resolver_exists(ctx->assets, resolved);
             SDL_free(resolved);
             if (!exists)
                 return validation_error(ctx, path, "image asset path '%s' does not exist", image_path);
@@ -3748,7 +3749,7 @@ static bool asset_path_exists(validation_context *ctx, const char *asset_path, c
                          : path_join(ctx->base_dir, asset_path);
     if (resolved == NULL)
         return validation_error(ctx, json_path, "failed to resolve %s asset path", asset_kind);
-    const bool exists = sdl3d_asset_resolver_exists(ctx->assets, resolved);
+    const bool exists = slayer3d_asset_resolver_exists(ctx->assets, resolved);
     SDL_free(resolved);
     if (!exists)
         return validation_error(ctx, json_path, "%s asset path '%s' does not exist", asset_kind, asset_path);
@@ -4123,7 +4124,7 @@ static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
                         return validation_error(ctx, path, "gamepad binding requires an axis or button");
                     yyjson_val *slot = obj_get(binding, "slot");
                     if (slot != NULL && (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 ||
-                                         yyjson_get_sint(slot) >= SDL3D_INPUT_MAX_GAMEPADS))
+                                         yyjson_get_sint(slot) >= SLAYER3D_INPUT_MAX_GAMEPADS))
                         return validation_error(ctx, path, "gamepad binding slot must be -1 or a valid slot index");
                 }
                 else if (SDL_strcmp(device != NULL ? device : "", "mouse") == 0)
@@ -4169,8 +4170,8 @@ static bool validate_input_profile_binding(validation_context *ctx, yyjson_val *
         if (button != NULL && !validation_gamepad_button_name_valid(button))
             return validation_error(ctx, path, "gamepad input profile binding requires a valid button");
         yyjson_val *slot = obj_get(binding, "slot");
-        if (slot != NULL &&
-            (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 || yyjson_get_sint(slot) >= SDL3D_INPUT_MAX_GAMEPADS))
+        if (slot != NULL && (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 ||
+                             yyjson_get_sint(slot) >= SLAYER3D_INPUT_MAX_GAMEPADS))
         {
             return validation_error(ctx, path, "gamepad input profile binding slot must be -1 or a valid slot index");
         }
@@ -4194,7 +4195,7 @@ static bool validate_input_profile_binding(validation_context *ctx, yyjson_val *
     return true;
 }
 
-yyjson_val *sdl3d_game_data_find_input_assignment_set_json(yyjson_val *root, const char *set_name)
+yyjson_val *slayer3d_game_data_find_input_assignment_set_json(yyjson_val *root, const char *set_name)
 {
     yyjson_val *sets = obj_get(obj_get(root, "input"), "device_assignment_sets");
     for (size_t i = 0; set_name != NULL && yyjson_is_arr(sets) && i < yyjson_arr_size(sets); ++i)
@@ -4308,7 +4309,7 @@ static bool validate_input_profile_assignment(validation_context *ctx, yyjson_va
     if (!require_ref(ctx, &names->input_assignment_sets, "input device assignment set", set_name, path))
         return false;
 
-    yyjson_val *set = sdl3d_game_data_find_input_assignment_set_json(root, set_name);
+    yyjson_val *set = slayer3d_game_data_find_input_assignment_set_json(root, set_name);
     const char *device = json_string(set, "device");
     yyjson_val *slot = obj_get(assignment, "slot");
     if (slot != NULL && SDL_strcmp(device != NULL ? device : "", "gamepad") != 0)
@@ -4316,7 +4317,7 @@ static bool validate_input_profile_assignment(validation_context *ctx, yyjson_va
         return validation_error(ctx, path, "input profile assignment slot is only valid for gamepad assignment sets");
     }
     if (slot != NULL &&
-        (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 || yyjson_get_sint(slot) >= SDL3D_INPUT_MAX_GAMEPADS))
+        (!yyjson_is_num(slot) || yyjson_get_sint(slot) < -1 || yyjson_get_sint(slot) >= SLAYER3D_INPUT_MAX_GAMEPADS))
     {
         return validation_error(ctx, path, "input profile assignment slot must be -1 or a valid slot index");
     }
@@ -4380,13 +4381,13 @@ static bool validate_input_profiles(validation_context *ctx, yyjson_val *root, v
         yyjson_val *max_gamepads = obj_get(profile, "max_gamepads");
         if (ok && min_gamepads != NULL &&
             (!yyjson_is_num(min_gamepads) || yyjson_get_sint(min_gamepads) < 0 ||
-             yyjson_get_sint(min_gamepads) > SDL3D_INPUT_MAX_GAMEPADS))
+             yyjson_get_sint(min_gamepads) > SLAYER3D_INPUT_MAX_GAMEPADS))
         {
             ok = validation_error(ctx, path, "input profile min_gamepads must be a valid gamepad count");
         }
         if (ok && max_gamepads != NULL &&
             (!yyjson_is_num(max_gamepads) || yyjson_get_sint(max_gamepads) < 0 ||
-             yyjson_get_sint(max_gamepads) > SDL3D_INPUT_MAX_GAMEPADS))
+             yyjson_get_sint(max_gamepads) > SLAYER3D_INPUT_MAX_GAMEPADS))
         {
             ok = validation_error(ctx, path, "input profile max_gamepads must be a valid gamepad count");
         }
@@ -4719,10 +4720,10 @@ static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
                 break;
             }
             if (!yyjson_is_arr(points) || yyjson_arr_size(points) < 3 ||
-                yyjson_arr_size(points) > SDL3D_SECTOR_MAX_POINTS)
+                yyjson_arr_size(points) > SLAYER3D_SECTOR_MAX_POINTS)
             {
                 ok = validation_error(ctx, sector_path, "sector points must contain 3..%d vec2 entries",
-                                      SDL3D_SECTOR_MAX_POINTS);
+                                      SLAYER3D_SECTOR_MAX_POINTS);
                 break;
             }
             for (size_t point_index = 0; point_index < yyjson_arr_size(points); ++point_index)
@@ -4856,7 +4857,7 @@ static bool validate_sector_doors(validation_context *ctx, yyjson_val *root, val
             return validation_error(ctx, door_path, "sector door start_open must be a boolean");
 
         yyjson_val *panels = obj_get(door, "panels");
-        if (!yyjson_is_arr(panels) || yyjson_arr_size(panels) < 1 || yyjson_arr_size(panels) > SDL3D_DOOR_MAX_PANELS)
+        if (!yyjson_is_arr(panels) || yyjson_arr_size(panels) < 1 || yyjson_arr_size(panels) > SLAYER3D_DOOR_MAX_PANELS)
         {
             return validation_error(ctx, door_path, "sector door panels must be an array with 1 or 2 entries");
         }
@@ -5010,7 +5011,7 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
             {
                 yyjson_val *waypoints = obj_get(component, "waypoints");
                 if (!yyjson_is_arr(waypoints) || yyjson_arr_size(waypoints) < 2 ||
-                    yyjson_arr_size(waypoints) > SDL3D_ACTOR_PATROL_MAX_WAYPOINTS)
+                    yyjson_arr_size(waypoints) > SLAYER3D_ACTOR_PATROL_MAX_WAYPOINTS)
                     return validation_error(ctx, path, "motion.patrol requires 2 to 16 waypoints");
                 for (size_t waypoint_index = 0; waypoint_index < yyjson_arr_size(waypoints); ++waypoint_index)
                 {
@@ -8613,18 +8614,19 @@ static bool validate_scene_file(validation_context *ctx, validation_names *names
     if (resolved == NULL)
         return validation_error(ctx, path, "failed to resolve scene file '%s'", scene_path);
 
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_buffer buffer;
     SDL_zero(buffer);
     char asset_error[256];
-    const bool read_ok = ctx->assets != NULL && sdl3d_asset_resolver_read_file(ctx->assets, resolved, &buffer,
-                                                                               asset_error, (int)sizeof(asset_error));
+    const bool read_ok =
+        ctx->assets != NULL &&
+        slayer3d_asset_resolver_read_file(ctx->assets, resolved, &buffer, asset_error, (int)sizeof(asset_error));
     SDL_free(resolved);
     if (!read_ok)
         return validation_error(ctx, path, "scene asset '%s' does not exist or cannot be read", scene_path);
 
     yyjson_read_err err;
     yyjson_doc *doc = yyjson_read_opts((char *)buffer.data, buffer.size, YYJSON_READ_NOFLAG, NULL, &err);
-    sdl3d_asset_buffer_free(&buffer);
+    slayer3d_asset_buffer_free(&buffer);
     if (doc == NULL)
     {
         return validation_error(ctx, path, "scene yyjson error %u at byte %llu: %s", err.code,
@@ -8634,10 +8636,10 @@ static bool validate_scene_file(validation_context *ctx, validation_names *names
     yyjson_val *scene_root = yyjson_doc_get_root(doc);
     if (!yyjson_is_obj(scene_root) ||
         SDL_strcmp(json_string(scene_root, "schema") != NULL ? json_string(scene_root, "schema") : "",
-                   "sdl3d.scene.v0") != 0)
+                   "slayer3d.scene.v0") != 0)
     {
         yyjson_doc_free(doc);
-        return validation_error(ctx, path, "scene file must use schema sdl3d.scene.v0");
+        return validation_error(ctx, path, "scene file must use schema slayer3d.scene.v0");
     }
 
     const char *name = json_string(scene_root, "name");
@@ -8664,10 +8666,10 @@ static bool validate_generated_scene_doc(validation_context *ctx, validation_nam
     yyjson_val *scene_root = yyjson_doc_get_root(doc);
     if (!yyjson_is_obj(scene_root) ||
         SDL_strcmp(json_string(scene_root, "schema") != NULL ? json_string(scene_root, "schema") : "",
-                   "sdl3d.scene.v0") != 0)
+                   "slayer3d.scene.v0") != 0)
     {
         yyjson_doc_free(doc);
-        return validation_error(ctx, json_path, "generated scene must use schema sdl3d.scene.v0");
+        return validation_error(ctx, json_path, "generated scene must use schema slayer3d.scene.v0");
     }
 
     const char *name = json_string(scene_root, "name");
@@ -8697,7 +8699,7 @@ static int scene_source_doc_capacity(yyjson_val *files)
         const char *package = scene_file_entry_package(entry);
         if (package != NULL && SDL_strcmp(package, "standard_options") == 0)
         {
-            count += SDL3D_STANDARD_OPTIONS_SCENE_COUNT;
+            count += SLAYER3D_STANDARD_OPTIONS_SCENE_COUNT;
             continue;
         }
 
@@ -9423,10 +9425,10 @@ static bool validate_scenes(validation_context *ctx, yyjson_val *root, validatio
         const char *package = scene_file_entry_package(entry);
         if (package != NULL)
         {
-            sdl3d_standard_options_scene_docs generated;
+            slayer3d_standard_options_scene_docs generated;
             char package_error[256];
-            if (!sdl3d_standard_options_build_scene_docs(root, package, &generated, package_error,
-                                                         (int)sizeof(package_error)))
+            if (!slayer3d_standard_options_build_scene_docs(root, package, &generated, package_error,
+                                                            (int)sizeof(package_error)))
             {
                 validation_scene_docs_destroy(docs, count);
                 return validation_error(ctx, "$.scenes.files", "%s", package_error);
@@ -9439,13 +9441,13 @@ static bool validate_scenes(validation_context *ctx, yyjson_val *root, validatio
                 generated.docs[generated_index] = NULL;
                 if (!validate_generated_scene_doc(ctx, names, doc, path, &docs[doc_count]))
                 {
-                    sdl3d_standard_options_scene_docs_free(&generated);
+                    slayer3d_standard_options_scene_docs_free(&generated);
                     validation_scene_docs_destroy(docs, count);
                     return false;
                 }
                 doc_count++;
             }
-            sdl3d_standard_options_scene_docs_free(&generated);
+            slayer3d_standard_options_scene_docs_free(&generated);
             continue;
         }
 
@@ -9587,11 +9589,11 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->used_scripts);
 }
 
-bool sdl3d_game_data_validate_document_with_source_map(yyjson_val *root, const char *source_path, const char *base_dir,
-                                                       const sdl3d_asset_resolver *assets,
-                                                       const sdl3d_game_data_source_map *source_map,
-                                                       const sdl3d_game_data_validation_options *options,
-                                                       char *error_buffer, int error_buffer_size)
+bool slayer3d_game_data_validate_document_with_source_map(yyjson_val *root, const char *source_path,
+                                                          const char *base_dir, const slayer3d_asset_resolver *assets,
+                                                          const slayer3d_game_data_source_map *source_map,
+                                                          const slayer3d_game_data_validation_options *options,
+                                                          char *error_buffer, int error_buffer_size)
 {
     if (error_buffer != NULL && error_buffer_size > 0)
         error_buffer[0] = '\0';
@@ -9609,7 +9611,7 @@ bool sdl3d_game_data_validate_document_with_source_map(yyjson_val *root, const c
 
     if (!yyjson_is_obj(root))
         return validation_error(&ctx, "$", "root must be an object");
-    if (SDL_strcmp(json_string(root, "schema") != NULL ? json_string(root, "schema") : "", "sdl3d.game.v0") != 0)
+    if (SDL_strcmp(json_string(root, "schema") != NULL ? json_string(root, "schema") : "", "slayer3d.game.v0") != 0)
         return validation_error(&ctx, "$.schema", "unsupported or missing game data schema");
     if (!validate_imports(&ctx, root))
         return false;
@@ -9621,17 +9623,17 @@ bool sdl3d_game_data_validate_document_with_source_map(yyjson_val *root, const c
     return ok;
 }
 
-bool sdl3d_game_data_validate_document(yyjson_val *root, const char *source_path, const char *base_dir,
-                                       const sdl3d_asset_resolver *assets,
-                                       const sdl3d_game_data_validation_options *options, char *error_buffer,
-                                       int error_buffer_size)
+bool slayer3d_game_data_validate_document(yyjson_val *root, const char *source_path, const char *base_dir,
+                                          const slayer3d_asset_resolver *assets,
+                                          const slayer3d_game_data_validation_options *options, char *error_buffer,
+                                          int error_buffer_size)
 {
-    return sdl3d_game_data_validate_document_with_source_map(root, source_path, base_dir, assets, NULL, options,
-                                                             error_buffer, error_buffer_size);
+    return slayer3d_game_data_validate_document_with_source_map(root, source_path, base_dir, assets, NULL, options,
+                                                                error_buffer, error_buffer_size);
 }
 
-bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_validation_options *options,
-                                   char *error_buffer, int error_buffer_size)
+bool slayer3d_game_data_validate_file(const char *path, const slayer3d_game_data_validation_options *options,
+                                      char *error_buffer, int error_buffer_size)
 {
     if (error_buffer != NULL && error_buffer_size > 0)
         error_buffer[0] = '\0';
@@ -9653,11 +9655,11 @@ bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_valid
         if (*p == '/' || *p == '\\')
             asset_name = p + 1;
     }
-    sdl3d_asset_resolver *assets = sdl3d_asset_resolver_create();
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     if (base_dir == NULL || assets == NULL)
     {
         SDL_free(base_dir);
-        sdl3d_asset_resolver_destroy(assets);
+        slayer3d_asset_resolver_destroy(assets);
         validation_context ctx = {
             .options = options,
             .source_path = path,
@@ -9668,10 +9670,10 @@ bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_valid
     }
 
     char asset_error[256];
-    if (!sdl3d_asset_resolver_mount_directory(assets, base_dir, asset_error, (int)sizeof(asset_error)))
+    if (!slayer3d_asset_resolver_mount_directory(assets, base_dir, asset_error, (int)sizeof(asset_error)))
     {
         SDL_free(base_dir);
-        sdl3d_asset_resolver_destroy(assets);
+        slayer3d_asset_resolver_destroy(assets);
         validation_context ctx = {
             .options = options,
             .source_path = path,
@@ -9681,15 +9683,15 @@ bool sdl3d_game_data_validate_file(const char *path, const sdl3d_game_data_valid
         return validation_error(&ctx, "$", "failed to mount validation directory: %s", asset_error);
     }
 
-    const bool ok = sdl3d_game_data_validate_asset(assets, asset_name, options, error_buffer, error_buffer_size);
+    const bool ok = slayer3d_game_data_validate_asset(assets, asset_name, options, error_buffer, error_buffer_size);
     SDL_free(base_dir);
-    sdl3d_asset_resolver_destroy(assets);
+    slayer3d_asset_resolver_destroy(assets);
     return ok;
 }
 
-bool sdl3d_game_data_validate_asset(sdl3d_asset_resolver *assets, const char *asset_path,
-                                    const sdl3d_game_data_validation_options *options, char *error_buffer,
-                                    int error_buffer_size)
+bool slayer3d_game_data_validate_asset(slayer3d_asset_resolver *assets, const char *asset_path,
+                                       const slayer3d_game_data_validation_options *options, char *error_buffer,
+                                       int error_buffer_size)
 {
     if (error_buffer != NULL && error_buffer_size > 0)
         error_buffer[0] = '\0';
@@ -9704,16 +9706,17 @@ bool sdl3d_game_data_validate_asset(sdl3d_asset_resolver *assets, const char *as
         return validation_error(&ctx, "$", "invalid game data asset validation arguments");
     }
 
-    sdl3d_game_data_source_map *source_map = NULL;
-    yyjson_doc *doc = sdl3d_game_data_compose_asset(assets, asset_path, &source_map, error_buffer, error_buffer_size);
+    slayer3d_game_data_source_map *source_map = NULL;
+    yyjson_doc *doc =
+        slayer3d_game_data_compose_asset(assets, asset_path, &source_map, error_buffer, error_buffer_size);
     if (doc == NULL)
         return false;
 
     char *base_dir = path_dirname(asset_path_without_scheme(asset_path));
-    const bool ok = sdl3d_game_data_validate_document_with_source_map(
+    const bool ok = slayer3d_game_data_validate_document_with_source_map(
         yyjson_doc_get_root(doc), asset_path, base_dir, assets, source_map, options, error_buffer, error_buffer_size);
     SDL_free(base_dir);
-    sdl3d_game_data_source_map_destroy(source_map);
+    slayer3d_game_data_source_map_destroy(source_map);
     yyjson_doc_free(doc);
     return ok;
 }

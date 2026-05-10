@@ -1,6 +1,6 @@
 # Data Game Runtime
 
-`sdl3d_data_game_runtime` is the engine-owned runtime layer for games authored
+`slayer3d_data_game_runtime` is the engine-owned runtime layer for games authored
 primarily with JSON, Lua, and assets. It exists so games can use the generic
 runner instead of implementing repetitive per-game asset, scene, app-flow,
 presentation, and network lifecycle code.
@@ -23,7 +23,7 @@ The runtime currently owns:
 - root game JSON loading
 - font, image, and particle presentation caches
 - authored app-flow startup and frame update
-- authored frame render through `sdl3d_game_data_draw_frame`
+- authored frame render through `slayer3d_game_data_draw_frame`
 - haptics policy signal wiring
 - input-profile hotplug refresh state and automatic gamepad-count rebinding
 - runtime-owned direct-connect, host, and discovery session primitives exposed
@@ -36,16 +36,16 @@ The runtime currently owns:
   diagnostics
 - ordered cleanup
 
-The generic `sdl3d_runner` executable owns the outer SDL process loop for games
+The generic `slayer3d_runner` executable owns the outer SDL process loop for games
 that only need the current data runtime surface. It enables managed network
 orchestration so data-authored games can use the standard direct-connect/LAN
 flow without game-specific C callbacks.
 
 ## Startup Shape
 
-A host creates a normal `sdl3d_game_session`, fills a
-`sdl3d_data_game_runtime_desc`, and calls
-`sdl3d_data_game_runtime_create`.
+A host creates a normal `slayer3d_game_session`, fills a
+`slayer3d_data_game_runtime_desc`, and calls
+`slayer3d_data_game_runtime_create`.
 
 The descriptor requires:
 
@@ -66,13 +66,13 @@ The descriptor may also include:
 
 During the managed loop:
 
-- call `sdl3d_data_game_runtime_update_frame` from tick and pause tick paths
-- call `sdl3d_data_game_runtime_render` from the render callback
+- call `slayer3d_data_game_runtime_update_frame` from tick and pause tick paths
+- call `slayer3d_data_game_runtime_render` from the render callback
 - input-profile hotplug refresh runs automatically inside
-  `sdl3d_data_game_runtime_update_frame`
+  `slayer3d_data_game_runtime_update_frame`
 - when `enable_managed_network` is true, host/client session updates and
   snapshot publication also run automatically inside
-  `sdl3d_data_game_runtime_update_frame`
+  `slayer3d_data_game_runtime_update_frame`
 
 The outer loop still controls fixed timestep, SDL events, input snapshots,
 audio frame updates, and presentation.
@@ -96,7 +96,7 @@ The helpers intentionally report events instead of hard-coding transitions.
 That keeps game-specific flow in authored JSON/Lua rather than native runner
 code.
 
-For data-only games launched by `sdl3d_runner`, prefer
+For data-only games launched by `slayer3d_runner`, prefer
 `enable_managed_network`. The managed path uses standard semantic names:
 
 - host session: `host`
@@ -125,7 +125,7 @@ without dropping an otherwise healthy network session.
 
 Network session-flow events close that gap for transition policy. Games can
 author `network.session_flow.events` entries and a host or runner can execute
-them with `sdl3d_game_data_run_network_session_flow_event()`. Each event may
+them with `slayer3d_game_data_run_network_session_flow_event()`. Each event may
 set pause state and run ordinary data actions, so policies such as “client
 received start game”, “peer disconnected during play”, or “acknowledge match
 termination” can live in JSON instead of C. The runtime passes optional payload
@@ -134,34 +134,34 @@ use `{reason}` placeholders.
 
 Authored `network.diagnostics.snapshots` entries make multiplayer state logging
 policy data-driven as well. Runtime code can call
-`sdl3d_game_data_log_network_snapshot_diagnostic()` by policy name; the game
+`slayer3d_game_data_log_network_snapshot_diagnostic()` by policy name; the game
 data chooses the replication channel, log level, cadence, session-state
 inclusion, and message template.
 
 ## Generic Runner
 
-`sdl3d_runner` launches a game data asset without game-specific C callbacks.
-It can mount either a development directory or a built `.sdl3dpak`, then reads
+`slayer3d_runner` launches a game data asset without game-specific C callbacks.
+It can mount either a development directory or a built `.slayer3dpak`, then reads
 the app/window/audio config from the root game JSON before entering the managed
 loop.
 
 Development directory example:
 
 ```sh
-build/debug/sdl3d_runner --root path/to/game/data --data asset://game.game.json
+build/debug/slayer3d_runner --root path/to/game/data --data asset://game.game.json
 ```
 
 Pack-file example:
 
 ```sh
-build/debug/sdl3d_runner --pack path/to/game.sdl3dpak --data asset://game.game.json
+build/debug/slayer3d_runner --pack path/to/game.slayer3dpak --data asset://game.game.json
 ```
 
 Fused executable example:
 
 ```sh
-build/debug/sdl3d_bundle \
-  --runner build/debug/sdl3d_runner \
+build/debug/slayer3d_bundle \
+  --runner build/debug/slayer3d_runner \
   --root path/to/game/data \
   --data asset://game.game.json \
   --output build/MyGame
@@ -170,7 +170,7 @@ build/MyGame
 ```
 
 The fused executable path is still the same generic runner. The game data is
-stored as an appended `.sdl3dpak`, and the runner auto-mounts it only when no
+stored as an appended `.slayer3dpak`, and the runner auto-mounts it only when no
 explicit mount flags are provided.
 
 Demo targets may build a game-specific executable from this same runner source
@@ -198,8 +198,8 @@ Optional flags:
 - `--state-file <path-or-asset>` injects scene-state values from a JSON object
   file. Files may be host paths or mounted `asset://` paths.
 - `--embedded` is available only when a build target defines
-  `SDL3D_RUNNER_EMBEDDED_ASSETS` and provides the generic
-  `sdl3d_runner_embedded_assets` pack blob symbols.
+  `SLAYER3D_RUNNER_EMBEDDED_ASSETS` and provides the generic
+  `slayer3d_runner_embedded_assets` pack blob symbols.
 
 State inputs are applied in this order: `--state-file`, then `--state-json`,
 then `--state`. Later values overwrite earlier values with the same key.

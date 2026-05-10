@@ -1,0 +1,269 @@
+#ifndef SLAYER3D_DRAWING3D_H
+#define SLAYER3D_DRAWING3D_H
+
+#include <stdbool.h>
+
+#include "slayer3d/camera.h"
+#include "slayer3d/model.h"
+#include "slayer3d/render_context.h"
+#include "slayer3d/texture.h"
+#include "slayer3d/types.h"
+
+struct slayer3d_asset_resolver;
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
+    /*
+     * Enter 3D drawing mode. Computes view and projection matrices for the
+     * camera against the context backbuffer and stores them on the context.
+     * All subsequent slayer3d_draw_*_3d calls use these matrices until
+     * slayer3d_end_mode_3d is called. Calling begin while already in 3D mode is
+     * an error.
+     */
+    bool slayer3d_begin_mode_3d(slayer3d_render_context *context, slayer3d_camera3d camera);
+    bool slayer3d_end_mode_3d(slayer3d_render_context *context);
+
+    bool slayer3d_is_in_mode_3d(const slayer3d_render_context *context);
+    bool slayer3d_set_backface_culling_enabled(slayer3d_render_context *context, bool enabled);
+    bool slayer3d_is_backface_culling_enabled(const slayer3d_render_context *context);
+    bool slayer3d_set_wireframe_enabled(slayer3d_render_context *context, bool enabled);
+    bool slayer3d_is_wireframe_enabled(const slayer3d_render_context *context);
+
+    /*
+     * Matrix stack for immediate-mode model transforms. These functions are
+     * only valid between slayer3d_begin_mode_3d and slayer3d_end_mode_3d.
+     *
+     * The current model matrix starts as identity when 3D mode begins.
+     * Transform mutators post-multiply the current model matrix, so calling
+     * translate, then rotate, then scale produces Model = T * R * S.
+     */
+    bool slayer3d_push_matrix(slayer3d_render_context *context);
+    bool slayer3d_pop_matrix(slayer3d_render_context *context);
+    bool slayer3d_translate(slayer3d_render_context *context, float x, float y, float z);
+    bool slayer3d_rotate(slayer3d_render_context *context, slayer3d_vec3 axis, float angle_radians);
+    bool slayer3d_scale(slayer3d_render_context *context, float x, float y, float z);
+
+    /*
+     * Override the depth planes used by slayer3d_begin_mode_3d. Must be called
+     * before begin_mode_3d. near_plane and far_plane must satisfy 0 < near < far.
+     * Defaults: near=0.01, far=1000.
+     */
+    bool slayer3d_set_depth_planes(slayer3d_render_context *context, float near_plane, float far_plane);
+
+    bool slayer3d_draw_triangle_3d(slayer3d_render_context *context, slayer3d_vec3 v0, slayer3d_vec3 v1,
+                                   slayer3d_vec3 v2, slayer3d_color color);
+
+    /*
+     * Triangle with per-vertex colors. Colors are interpolated across the
+     * triangle with perspective correction: each attribute is linearly
+     * interpolated in screen space as (attribute / w) and divided by the
+     * linearly interpolated (1 / w) at each pixel, which reproduces the
+     * correct 3D-space blend even under heavy perspective foreshortening.
+     *
+     * When wireframe is enabled, edges use linear screen-space color
+     * interpolation between their endpoints.
+     */
+    bool slayer3d_draw_triangle_3d_ex(slayer3d_render_context *context, slayer3d_vec3 v0, slayer3d_vec3 v1,
+                                      slayer3d_vec3 v2, slayer3d_color c0, slayer3d_color c1, slayer3d_color c2);
+    bool slayer3d_draw_line_3d(slayer3d_render_context *context, slayer3d_vec3 start, slayer3d_vec3 end,
+                               slayer3d_color color);
+    bool slayer3d_draw_point_3d(slayer3d_render_context *context, slayer3d_vec3 position, slayer3d_color color);
+
+    typedef enum slayer3d_billboard_mode
+    {
+        /* Keep the sprite upright in world space while facing the camera. */
+        SLAYER3D_BILLBOARD_UPRIGHT = 0,
+        /* Fully face the camera using the camera's right/up vectors. */
+        SLAYER3D_BILLBOARD_SPHERICAL = 1
+    } slayer3d_billboard_mode;
+
+    typedef enum slayer3d_overlay_effect
+    {
+        SLAYER3D_OVERLAY_EFFECT_NONE = 0,
+        SLAYER3D_OVERLAY_EFFECT_MELT = 1
+    } slayer3d_overlay_effect;
+
+    /*
+     * Draw a textured camera-facing quad. `position` is the billboard pivot
+     * in world space, `size` is width/height in world units, and `anchor`
+     * selects which point inside the sprite sits at `position`:
+     * - x=0 left, 0.5 center, 1 right
+     * - y=0 bottom, 0.5 center, 1 top
+     *
+     * Billboards use the lit textured path when scene lighting is enabled and
+     * active, and otherwise fall back to the unlit textured path. This keeps
+     * authored sprite shading intact in unlit scenes while allowing point
+     * lights, such as projectiles, to affect billboard sprites.
+     */
+    bool slayer3d_draw_billboard_ex(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                                    slayer3d_vec3 position, slayer3d_vec2 size, slayer3d_vec2 anchor,
+                                    slayer3d_billboard_mode mode, slayer3d_color tint);
+
+    /**
+     * @brief Draw a billboard with an authored custom sprite shader.
+     *
+     * The shader sources use the same textured-quad vertex contract as the
+     * built-in unlit path. The fragment source is required; the vertex source
+     * is optional and falls back to the engine's default billboard vertex
+     * shader when NULL. When @p lighting is true, the custom shader is routed
+     * through the lit billboard path and receives the standard lighting
+     * uniforms used by the built-in lit renderer. Software rendering ignores
+     * the custom shader and falls back to the built-in billboard draw path.
+     */
+    bool slayer3d_draw_billboard_shader_ex(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                                           slayer3d_vec3 position, slayer3d_vec2 size, slayer3d_vec2 anchor,
+                                           slayer3d_billboard_mode mode, slayer3d_color tint, bool lighting,
+                                           const char *shader_vertex_source, const char *shader_fragment_source);
+
+    /*
+     * Convenience wrapper for FPS-style sprites: upright billboard with a
+     * bottom-center pivot.
+     */
+    bool slayer3d_draw_billboard(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                                 slayer3d_vec3 position, slayer3d_vec2 size, slayer3d_color tint);
+
+    /*
+     * Draw a single mesh using the current model matrix stack. If `texture`
+     * is NULL, the mesh is rendered untextured and `tint` supplies the flat
+     * color. If `texture` is non-NULL, mesh UVs are interpreted as normalized
+     * coordinates with (0, 0) at the lower-left of the texture.
+     *
+     * Mesh vertex colors, when present, modulate the texture/tint.
+     */
+    bool slayer3d_draw_mesh(slayer3d_render_context *context, const slayer3d_mesh *mesh,
+                            const slayer3d_texture2d *texture, slayer3d_color tint);
+
+    /**
+     * @brief Draw a mesh whose vertex/index arrays are stable for the caller's lifetime.
+     *
+     * This is equivalent to slayer3d_draw_mesh(), but tells hardware backends they may
+     * cache GPU buffers for the mesh instead of uploading vertex data every frame.
+     * Use this for cached procedural meshes, loaded static models, and other
+     * immutable geometry. Do not pass stack-owned or per-frame temporary arrays.
+     */
+    bool slayer3d_draw_static_mesh(slayer3d_render_context *context, const slayer3d_mesh *mesh,
+                                   const slayer3d_texture2d *texture, slayer3d_color tint);
+
+    /*
+     * Draw every mesh in a model with a uniform translation + scale. Material
+     * albedo factors and albedo textures modulate the supplied tint. Texture
+     * paths are resolved relative to the model's source path and cached on
+     * the render context after first use.
+     */
+    bool slayer3d_draw_model(slayer3d_render_context *context, const slayer3d_model *model, slayer3d_vec3 position,
+                             float scale, slayer3d_color tint);
+
+    /*
+     * Same as slayer3d_draw_model, but applies translation, axis-angle rotation,
+     * and non-uniform scale before submitting the model. The transform
+     * composes with the current matrix stack.
+     */
+    bool slayer3d_draw_model_ex(slayer3d_render_context *context, const slayer3d_model *model, slayer3d_vec3 position,
+                                slayer3d_vec3 rotation_axis, float rotation_angle_radians, slayer3d_vec3 scale,
+                                slayer3d_color tint);
+
+    /*
+     * Same as slayer3d_draw_model_ex, but resolves material texture paths through
+     * an optional asset resolver. This lets data-authored games load model
+     * materials from mounted asset directories while preserving the existing
+     * filesystem path behavior when assets is NULL.
+     */
+    bool slayer3d_draw_model_ex_with_assets(slayer3d_render_context *context,
+                                            const struct slayer3d_asset_resolver *assets, const slayer3d_model *model,
+                                            slayer3d_vec3 position, slayer3d_vec3 rotation_axis,
+                                            float rotation_angle_radians, slayer3d_vec3 scale, slayer3d_color tint);
+
+    /*
+     * Draw a model with skeletal animation applied. `joint_matrices` is
+     * an array of skeleton->joint_count mat4 entries from
+     * slayer3d_evaluate_animation. Pass NULL for bind pose (same as draw_model_ex).
+     */
+    bool slayer3d_draw_model_skinned(slayer3d_render_context *context, const slayer3d_model *model,
+                                     slayer3d_vec3 position, slayer3d_vec3 rotation_axis, float rotation_angle_radians,
+                                     slayer3d_vec3 scale, slayer3d_color tint, const slayer3d_mat4 *joint_matrices);
+
+    /*
+     * Same as slayer3d_draw_model_skinned, but resolves material texture paths
+     * through an optional asset resolver.
+     */
+    bool slayer3d_draw_model_skinned_with_assets(slayer3d_render_context *context,
+                                                 const struct slayer3d_asset_resolver *assets,
+                                                 const slayer3d_model *model, slayer3d_vec3 position,
+                                                 slayer3d_vec3 rotation_axis, float rotation_angle_radians,
+                                                 slayer3d_vec3 scale, slayer3d_color tint,
+                                                 const slayer3d_mat4 *joint_matrices);
+
+    /*
+     * Draw a solid screen-space rectangle on the UI overlay layer.
+     *
+     * The overlay is composited after the main scene and all post-processing,
+     * so this is the correct primitive for editor UI, debug panels, and
+     * other HUD-like elements that must remain crisp and stable.
+     *
+     * Coordinates are in logical render-context pixels with (0, 0) at the
+     * top-left. The current scissor rect, when enabled, is honored.
+     */
+    bool slayer3d_draw_rect_overlay(slayer3d_render_context *context, float x, float y, float w, float h,
+                                    slayer3d_color color);
+
+    /**
+     * @brief Draw a textured screen-space rectangle on the UI overlay layer.
+     *
+     * Coordinates are in logical render-context pixels with (0, 0) at the
+     * top-left. The texture is sampled across the full rectangle and modulated
+     * by @p tint. @p effect, when not SLAYER3D_OVERLAY_EFFECT_NONE, applies a
+     * reusable screen-space image effect before sampling. The current scissor
+     * rect, when enabled, is honored.
+     *
+     * @param context Render context receiving the overlay draw.
+     * @param texture RGBA texture to draw.
+     * @param x Left edge in render-context pixels.
+     * @param y Top edge in render-context pixels.
+     * @param w Width in render-context pixels.
+     * @param h Height in render-context pixels.
+     * @param tint Color multiplier and alpha applied to the texture.
+     * @param effect Optional overlay effect.
+     * @param effect_progress Normalized effect progression in [0, 1].
+     * @param effect_seed Deterministic seed used by the effect shader.
+     * @return true on success.
+     */
+    bool slayer3d_draw_texture_overlay(slayer3d_render_context *context, const slayer3d_texture2d *texture, float x,
+                                       float y, float w, float h, slayer3d_color tint, slayer3d_overlay_effect effect,
+                                       float effect_progress, Uint32 effect_seed);
+
+    /**
+     * @brief Draw a textured overlay quad with an authored custom sprite shader.
+     *
+     * The shader sources use the same textured-quad vertex contract as the
+     * built-in unlit overlay path. The fragment source is required; the
+     * vertex source is optional and falls back to the engine's default
+     * overlay vertex shader when NULL. When a custom shader is authored,
+     * software rendering falls back to the built-in overlay effect path.
+     */
+    bool slayer3d_draw_texture_overlay_shader(slayer3d_render_context *context, const slayer3d_texture2d *texture,
+                                              float x, float y, float w, float h, slayer3d_color tint,
+                                              slayer3d_overlay_effect effect, float effect_progress, Uint32 effect_seed,
+                                              const char *shader_vertex_source, const char *shader_fragment_source);
+
+    /*
+     * Read a single pixel from the color backbuffer. Returns false if x or y
+     * fall outside the backbuffer. Intended for tests, screenshots, and
+     * pixel-pick queries.
+     */
+    bool slayer3d_get_framebuffer_pixel(const slayer3d_render_context *context, int x, int y,
+                                        slayer3d_color *out_color);
+
+    /*
+     * Read the depth value at a pixel. Depth is stored in NDC z in [-1, 1].
+     * After slayer3d_clear_render_context, all depth values are +1 (far plane).
+     */
+    bool slayer3d_get_framebuffer_depth(const slayer3d_render_context *context, int x, int y, float *out_depth);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

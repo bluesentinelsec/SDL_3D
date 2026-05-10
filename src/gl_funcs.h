@@ -1,10 +1,10 @@
 /*
  * Minimal OpenGL 3.3 / ES 3.0 function loader using SDL_GL_GetProcAddress.
- * No external dependencies — just the GL functions SDL3D needs.
+ * No external dependencies — just the GL functions SLAYER3D needs.
  */
 
-#ifndef SDL3D_GL_FUNCS_H
-#define SDL3D_GL_FUNCS_H
+#ifndef SLAYER3D_GL_FUNCS_H
+#define SLAYER3D_GL_FUNCS_H
 
 #include <SDL3/SDL.h>
 
@@ -171,7 +171,7 @@ typedef void (*PFNGLREADBUFFERPROC)(GLenum);
 typedef void (*PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
 typedef void (*PFNGLGENERATEMIPMAPPROC)(GLenum);
 /* Global function pointers. */
-typedef struct sdl3d_gl_funcs
+typedef struct slayer3d_gl_funcs
 {
     PFNGLCLEARPROC Clear;
     PFNGLCLEARCOLORPROC ClearColor;
@@ -248,9 +248,9 @@ typedef struct sdl3d_gl_funcs
     PFNGLREADBUFFERPROC ReadBuffer;
     PFNGLUNIFORM1FVPROC Uniform1fv;
     PFNGLGENERATEMIPMAPPROC GenerateMipmap;
-} sdl3d_gl_funcs;
+} slayer3d_gl_funcs;
 
-static bool sdl3d_gl_load_funcs(sdl3d_gl_funcs *gl)
+static bool slayer3d_gl_load_funcs(slayer3d_gl_funcs *gl)
 {
 #define LOAD(name)                                                                                                     \
     do                                                                                                                 \

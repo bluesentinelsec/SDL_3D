@@ -1,8 +1,8 @@
 {
-  "schema": "sdl3d.fragment.v0",
+  "schema": "slayer3d.fragment.v0",
   "network": {
     "protocol": {
-      "id": "sdl3d.pong.v1",
+      "id": "slayer3d.pong.v1",
       "version": 1,
       "transport": "udp",
       "tick_rate": 60

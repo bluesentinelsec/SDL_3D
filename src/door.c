@@ -3,7 +3,7 @@
  * @brief Runtime sliding door primitive implementation.
  */
 
-#include "sdl3d/door.h"
+#include "slayer3d/door.h"
 
 #include <SDL3/SDL_stdinc.h>
 
@@ -21,26 +21,26 @@ static float clamp_non_negative(float value)
     return value > 0.0f ? value : 0.0f;
 }
 
-static sdl3d_vec3 vec3_scale(sdl3d_vec3 value, float scale)
+static slayer3d_vec3 vec3_scale(slayer3d_vec3 value, float scale)
 {
-    return (sdl3d_vec3){value.x * scale, value.y * scale, value.z * scale};
+    return (slayer3d_vec3){value.x * scale, value.y * scale, value.z * scale};
 }
 
-static sdl3d_vec3 vec3_add(sdl3d_vec3 left, sdl3d_vec3 right)
+static slayer3d_vec3 vec3_add(slayer3d_vec3 left, slayer3d_vec3 right)
 {
-    return (sdl3d_vec3){left.x + right.x, left.y + right.y, left.z + right.z};
+    return (slayer3d_vec3){left.x + right.x, left.y + right.y, left.z + right.z};
 }
 
-static sdl3d_bounding_box bounds_translate(sdl3d_bounding_box bounds, sdl3d_vec3 offset)
+static slayer3d_bounding_box bounds_translate(slayer3d_bounding_box bounds, slayer3d_vec3 offset)
 {
     bounds.min = vec3_add(bounds.min, offset);
     bounds.max = vec3_add(bounds.max, offset);
     return bounds;
 }
 
-static sdl3d_bounding_box panel_current_bounds(const sdl3d_door *door, int panel_index)
+static slayer3d_bounding_box panel_current_bounds(const slayer3d_door *door, int panel_index)
 {
-    const sdl3d_door_panel_desc *panel = &door->panels[panel_index];
+    const slayer3d_door_panel_desc *panel = &door->panels[panel_index];
     return bounds_translate(panel->closed_bounds, vec3_scale(panel->open_offset, door->open_fraction));
 }
 
@@ -49,12 +49,12 @@ static bool vertical_intervals_overlap(float a_min, float a_max, float b_min, fl
     return a_min <= b_max && b_min <= a_max;
 }
 
-static float distance_to_closed_footprint_xz(const sdl3d_door *door, sdl3d_vec3 point)
+static float distance_to_closed_footprint_xz(const slayer3d_door *door, slayer3d_vec3 point)
 {
-    sdl3d_bounding_box footprint = door->panels[0].closed_bounds;
+    slayer3d_bounding_box footprint = door->panels[0].closed_bounds;
     for (int i = 1; i < door->panel_count; ++i)
     {
-        const sdl3d_bounding_box panel = door->panels[i].closed_bounds;
+        const slayer3d_bounding_box panel = door->panels[i].closed_bounds;
         if (panel.min.x < footprint.min.x)
             footprint.min.x = panel.min.x;
         if (panel.max.x > footprint.max.x)
@@ -80,7 +80,7 @@ static float distance_to_closed_footprint_xz(const sdl3d_door *door, sdl3d_vec3 
     return SDL_sqrtf(dx * dx + dz * dz);
 }
 
-void sdl3d_door_init(sdl3d_door *door, const sdl3d_door_desc *desc)
+void slayer3d_door_init(slayer3d_door *door, const slayer3d_door_desc *desc)
 {
     if (door == NULL)
         return;
@@ -94,8 +94,8 @@ void sdl3d_door_init(sdl3d_door *door, const sdl3d_door_desc *desc)
     door->panel_count = desc->panel_count;
     if (door->panel_count < 1)
         door->panel_count = 1;
-    if (door->panel_count > SDL3D_DOOR_MAX_PANELS)
-        door->panel_count = SDL3D_DOOR_MAX_PANELS;
+    if (door->panel_count > SLAYER3D_DOOR_MAX_PANELS)
+        door->panel_count = SLAYER3D_DOOR_MAX_PANELS;
 
     for (int i = 0; i < door->panel_count; ++i)
         door->panels[i] = desc->panels[i];
@@ -104,12 +104,12 @@ void sdl3d_door_init(sdl3d_door *door, const sdl3d_door_desc *desc)
     door->close_seconds = clamp_non_negative(desc->close_seconds);
     door->stay_open_seconds = clamp_non_negative(desc->stay_open_seconds);
     door->open_fraction = desc->start_open ? 1.0f : 0.0f;
-    door->state = desc->start_open ? SDL3D_DOOR_OPEN : SDL3D_DOOR_CLOSED;
+    door->state = desc->start_open ? SLAYER3D_DOOR_OPEN : SLAYER3D_DOOR_CLOSED;
     door->hold_timer = desc->start_open ? door->stay_open_seconds : 0.0f;
     door->enabled = true;
 }
 
-bool sdl3d_door_open(sdl3d_door *door)
+bool slayer3d_door_open(slayer3d_door *door)
 {
     if (door == NULL || !door->enabled)
         return false;
@@ -117,16 +117,16 @@ bool sdl3d_door_open(sdl3d_door *door)
     if (door->open_fraction >= 1.0f || door->open_seconds <= 0.0f)
     {
         door->open_fraction = 1.0f;
-        door->state = SDL3D_DOOR_OPEN;
+        door->state = SLAYER3D_DOOR_OPEN;
         door->hold_timer = door->stay_open_seconds;
         return true;
     }
 
-    door->state = SDL3D_DOOR_OPENING;
+    door->state = SLAYER3D_DOOR_OPENING;
     return true;
 }
 
-bool sdl3d_door_close(sdl3d_door *door)
+bool slayer3d_door_close(slayer3d_door *door)
 {
     if (door == NULL || !door->enabled)
         return false;
@@ -134,44 +134,44 @@ bool sdl3d_door_close(sdl3d_door *door)
     if (door->open_fraction <= 0.0f || door->close_seconds <= 0.0f)
     {
         door->open_fraction = 0.0f;
-        door->state = SDL3D_DOOR_CLOSED;
+        door->state = SLAYER3D_DOOR_CLOSED;
         door->hold_timer = 0.0f;
         return true;
     }
 
-    door->state = SDL3D_DOOR_CLOSING;
+    door->state = SLAYER3D_DOOR_CLOSING;
     door->hold_timer = 0.0f;
     return true;
 }
 
-bool sdl3d_door_toggle(sdl3d_door *door)
+bool slayer3d_door_toggle(slayer3d_door *door)
 {
     if (door == NULL)
         return false;
 
-    if (door->state == SDL3D_DOOR_OPEN || door->state == SDL3D_DOOR_OPENING)
-        return sdl3d_door_close(door);
-    return sdl3d_door_open(door);
+    if (door->state == SLAYER3D_DOOR_OPEN || door->state == SLAYER3D_DOOR_OPENING)
+        return slayer3d_door_close(door);
+    return slayer3d_door_open(door);
 }
 
-void sdl3d_door_set_auto_close_delay(sdl3d_door *door, float stay_open_seconds)
+void slayer3d_door_set_auto_close_delay(slayer3d_door *door, float stay_open_seconds)
 {
     if (door == NULL)
         return;
 
     door->stay_open_seconds = clamp_non_negative(stay_open_seconds);
-    if (door->state == SDL3D_DOOR_OPEN)
+    if (door->state == SLAYER3D_DOOR_OPEN)
         door->hold_timer = door->stay_open_seconds;
 }
 
-void sdl3d_door_update(sdl3d_door *door, float dt)
+void slayer3d_door_update(slayer3d_door *door, float dt)
 {
     if (door == NULL || !door->enabled || dt <= 0.0f)
         return;
 
     switch (door->state)
     {
-    case SDL3D_DOOR_OPENING:
+    case SLAYER3D_DOOR_OPENING:
         if (door->open_seconds <= 0.0f)
         {
             door->open_fraction = 1.0f;
@@ -183,21 +183,21 @@ void sdl3d_door_update(sdl3d_door *door, float dt)
 
         if (door->open_fraction >= 1.0f)
         {
-            door->state = SDL3D_DOOR_OPEN;
+            door->state = SLAYER3D_DOOR_OPEN;
             door->hold_timer = door->stay_open_seconds;
         }
         break;
 
-    case SDL3D_DOOR_OPEN:
+    case SLAYER3D_DOOR_OPEN:
         if (door->stay_open_seconds > 0.0f)
         {
             door->hold_timer -= dt;
             if (door->hold_timer <= 0.0f)
-                (void)sdl3d_door_close(door);
+                (void)slayer3d_door_close(door);
         }
         break;
 
-    case SDL3D_DOOR_CLOSING:
+    case SLAYER3D_DOOR_CLOSING:
         if (door->close_seconds <= 0.0f)
         {
             door->open_fraction = 0.0f;
@@ -209,32 +209,32 @@ void sdl3d_door_update(sdl3d_door *door, float dt)
 
         if (door->open_fraction <= 0.0f)
         {
-            door->state = SDL3D_DOOR_CLOSED;
+            door->state = SLAYER3D_DOOR_CLOSED;
             door->hold_timer = 0.0f;
         }
         break;
 
-    case SDL3D_DOOR_CLOSED:
+    case SLAYER3D_DOOR_CLOSED:
         break;
     }
 }
 
-sdl3d_door_state sdl3d_door_get_state(const sdl3d_door *door)
+slayer3d_door_state slayer3d_door_get_state(const slayer3d_door *door)
 {
-    return door != NULL ? door->state : SDL3D_DOOR_CLOSED;
+    return door != NULL ? door->state : SLAYER3D_DOOR_CLOSED;
 }
 
-float sdl3d_door_get_open_fraction(const sdl3d_door *door)
+float slayer3d_door_get_open_fraction(const slayer3d_door *door)
 {
     return door != NULL ? clamp01(door->open_fraction) : 0.0f;
 }
 
-int sdl3d_door_panel_count(const sdl3d_door *door)
+int slayer3d_door_panel_count(const slayer3d_door *door)
 {
     return door != NULL ? door->panel_count : 0;
 }
 
-bool sdl3d_door_get_panel_bounds(const sdl3d_door *door, int panel_index, sdl3d_bounding_box *out_bounds)
+bool slayer3d_door_get_panel_bounds(const slayer3d_door *door, int panel_index, slayer3d_bounding_box *out_bounds)
 {
     if (door == NULL || out_bounds == NULL || panel_index < 0 || panel_index >= door->panel_count)
         return false;
@@ -243,7 +243,7 @@ bool sdl3d_door_get_panel_bounds(const sdl3d_door *door, int panel_index, sdl3d_
     return true;
 }
 
-bool sdl3d_door_point_in_interaction_range(const sdl3d_door *door, sdl3d_vec3 point, float range)
+bool slayer3d_door_point_in_interaction_range(const slayer3d_door *door, slayer3d_vec3 point, float range)
 {
     if (door == NULL || !door->enabled || door->panel_count <= 0 || range < 0.0f)
         return false;
@@ -251,7 +251,8 @@ bool sdl3d_door_point_in_interaction_range(const sdl3d_door *door, sdl3d_vec3 po
     return distance_to_closed_footprint_xz(door, point) <= range;
 }
 
-bool sdl3d_door_intersects_cylinder(const sdl3d_door *door, sdl3d_vec3 eye_position, float height, float radius)
+bool slayer3d_door_intersects_cylinder(const slayer3d_door *door, slayer3d_vec3 eye_position, float height,
+                                       float radius)
 {
     if (door == NULL || door->panel_count <= 0 || height <= 0.0f || radius < 0.0f)
         return false;
@@ -260,7 +261,7 @@ bool sdl3d_door_intersects_cylinder(const sdl3d_door *door, sdl3d_vec3 eye_posit
     const float cyl_max_y = eye_position.y;
     for (int i = 0; i < door->panel_count; ++i)
     {
-        const sdl3d_bounding_box panel = panel_current_bounds(door, i);
+        const slayer3d_bounding_box panel = panel_current_bounds(door, i);
         if (!vertical_intervals_overlap(cyl_min_y, cyl_max_y, panel.min.y, panel.max.y))
             continue;
 
@@ -273,7 +274,7 @@ bool sdl3d_door_intersects_cylinder(const sdl3d_door *door, sdl3d_vec3 eye_posit
     return false;
 }
 
-bool sdl3d_door_resolve_cylinder(const sdl3d_door *door, sdl3d_vec3 *eye_position, float height, float radius)
+bool slayer3d_door_resolve_cylinder(const slayer3d_door *door, slayer3d_vec3 *eye_position, float height, float radius)
 {
     if (door == NULL || eye_position == NULL || door->panel_count <= 0 || height <= 0.0f || radius < 0.0f)
         return false;
@@ -283,7 +284,7 @@ bool sdl3d_door_resolve_cylinder(const sdl3d_door *door, sdl3d_vec3 *eye_positio
     const float cyl_max_y = eye_position->y;
     for (int i = 0; i < door->panel_count; ++i)
     {
-        const sdl3d_bounding_box panel = panel_current_bounds(door, i);
+        const slayer3d_bounding_box panel = panel_current_bounds(door, i);
         if (!vertical_intervals_overlap(cyl_min_y, cyl_max_y, panel.min.y, panel.max.y))
             continue;
 

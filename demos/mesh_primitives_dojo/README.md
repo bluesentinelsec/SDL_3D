@@ -1,10 +1,10 @@
 # Mesh Primitives Dojo
 
 Data-only graybox showcase for the procedural `render.mesh_primitive` component.
-It runs through the generic SDL3D runner and contains no demo-specific host code.
+It runs through the generic Slayer 3D runner and contains no demo-specific host code.
 
 ```sh
-build/debug/sdl3d_runner \
+build/debug/slayer3d_runner \
   --root demos/mesh_primitives_dojo/data \
   --data asset://mesh_primitives_dojo.game.json
 ```

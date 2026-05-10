@@ -3,41 +3,41 @@
  * @brief Renderer-facing helpers for JSON-authored game data.
  */
 
-#include "sdl3d/game_presentation.h"
+#include "slayer3d/game_presentation.h"
 
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/animation.h"
-#include "sdl3d/drawing3d.h"
-#include "sdl3d/image.h"
-#include "sdl3d/lighting.h"
-#include "sdl3d/shapes.h"
+#include "slayer3d/animation.h"
+#include "slayer3d/drawing3d.h"
+#include "slayer3d/image.h"
+#include "slayer3d/lighting.h"
+#include "slayer3d/shapes.h"
 
 typedef struct primitive_draw_context
 {
-    const sdl3d_game_data_runtime *runtime;
-    sdl3d_render_context *renderer;
-    sdl3d_game_data_image_cache *image_cache;
-    sdl3d_game_data_sprite_cache *sprite_cache;
-    sdl3d_game_data_model_cache *model_cache;
-    sdl3d_game_data_mesh_primitive_cache *mesh_primitive_cache;
-    const sdl3d_camera3d *camera;
-    const sdl3d_game_data_render_eval *eval;
-    sdl3d_game_data_render_primitive sphere_batch;
-    sdl3d_vec3 *sphere_batch_positions;
+    const slayer3d_game_data_runtime *runtime;
+    slayer3d_render_context *renderer;
+    slayer3d_game_data_image_cache *image_cache;
+    slayer3d_game_data_sprite_cache *sprite_cache;
+    slayer3d_game_data_model_cache *model_cache;
+    slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache;
+    const slayer3d_camera3d *camera;
+    const slayer3d_game_data_render_eval *eval;
+    slayer3d_game_data_render_primitive sphere_batch;
+    slayer3d_vec3 *sphere_batch_positions;
     int sphere_batch_count;
     int sphere_batch_capacity;
     bool sphere_batch_active;
 } primitive_draw_context;
 
-static const float SDL3D_GAME_PRESENTATION_PI = 3.14159265358979323846f;
+static const float SLAYER3D_GAME_PRESENTATION_PI = 3.14159265358979323846f;
 
 typedef struct sector_level_draw_context
 {
-    sdl3d_render_context *renderer;
-    const sdl3d_asset_resolver *assets;
-    const sdl3d_camera3d *camera;
+    slayer3d_render_context *renderer;
+    const slayer3d_asset_resolver *assets;
+    const slayer3d_camera3d *camera;
     bool *sector_visible;
     int sector_visible_capacity;
     bool ok;
@@ -45,30 +45,30 @@ typedef struct sector_level_draw_context
 
 typedef struct ui_draw_context
 {
-    const sdl3d_game_data_runtime *runtime;
-    sdl3d_render_context *renderer;
-    sdl3d_game_data_font_cache *font_cache;
-    const sdl3d_game_data_ui_metrics *metrics;
+    const slayer3d_game_data_runtime *runtime;
+    slayer3d_render_context *renderer;
+    slayer3d_game_data_font_cache *font_cache;
+    const slayer3d_game_data_ui_metrics *metrics;
     float pulse_phase;
     bool ok;
 } ui_draw_context;
 
 typedef struct ui_image_draw_context
 {
-    const sdl3d_game_data_runtime *runtime;
-    sdl3d_render_context *renderer;
-    sdl3d_game_data_image_cache *image_cache;
-    const sdl3d_game_data_ui_metrics *metrics;
-    const sdl3d_game_data_render_eval *render_eval;
+    const slayer3d_game_data_runtime *runtime;
+    slayer3d_render_context *renderer;
+    slayer3d_game_data_image_cache *image_cache;
+    const slayer3d_game_data_ui_metrics *metrics;
+    const slayer3d_game_data_render_eval *render_eval;
     bool ok;
 } ui_image_draw_context;
 
 typedef struct ui_rect_draw_context
 {
-    const sdl3d_game_data_runtime *runtime;
-    sdl3d_render_context *renderer;
-    const sdl3d_game_data_ui_metrics *metrics;
-    const sdl3d_game_data_render_eval *render_eval;
+    const slayer3d_game_data_runtime *runtime;
+    slayer3d_render_context *renderer;
+    const slayer3d_game_data_ui_metrics *metrics;
+    const slayer3d_game_data_render_eval *render_eval;
     bool ok;
 } ui_rect_draw_context;
 
@@ -85,133 +85,134 @@ static Uint32 ui_image_hash_string(const char *s)
     return h != 0u ? h : 1u;
 }
 
-static sdl3d_overlay_effect ui_image_effect_from_name(const char *effect)
+static slayer3d_overlay_effect ui_image_effect_from_name(const char *effect)
 {
     if (effect == NULL)
-        return SDL3D_OVERLAY_EFFECT_NONE;
+        return SLAYER3D_OVERLAY_EFFECT_NONE;
     if (SDL_strcasecmp(effect, "melt") == 0)
-        return SDL3D_OVERLAY_EFFECT_MELT;
-    return SDL3D_OVERLAY_EFFECT_NONE;
+        return SLAYER3D_OVERLAY_EFFECT_MELT;
+    return SLAYER3D_OVERLAY_EFFECT_NONE;
 }
 
 typedef struct particle_update_context
 {
-    sdl3d_game_data_particle_cache *cache;
+    slayer3d_game_data_particle_cache *cache;
     float dt;
     bool ok;
 } particle_update_context;
 
-static sdl3d_window_mode parse_window_mode_setting(const char *value, sdl3d_window_mode fallback)
+static slayer3d_window_mode parse_window_mode_setting(const char *value, slayer3d_window_mode fallback)
 {
     if (value == NULL || value[0] == '\0')
         return fallback;
     if (SDL_strcasecmp(value, "windowed") == 0 || SDL_strcasecmp(value, "window") == 0)
-        return SDL3D_WINDOW_MODE_WINDOWED;
+        return SLAYER3D_WINDOW_MODE_WINDOWED;
     if (SDL_strcasecmp(value, "fullscreen_exclusive") == 0 || SDL_strcasecmp(value, "exclusive") == 0)
-        return SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
+        return SLAYER3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE;
     if (SDL_strcasecmp(value, "fullscreen_borderless") == 0 || SDL_strcasecmp(value, "borderless") == 0 ||
         SDL_strcasecmp(value, "desktop_fullscreen") == 0)
-        return SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
+        return SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS;
     return fallback;
 }
 
-static const char *window_mode_setting_name(sdl3d_window_mode mode)
+static const char *window_mode_setting_name(slayer3d_window_mode mode)
 {
     switch (mode)
     {
-    case SDL3D_WINDOW_MODE_WINDOWED:
+    case SLAYER3D_WINDOW_MODE_WINDOWED:
         return "windowed";
-    case SDL3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE:
+    case SLAYER3D_WINDOW_MODE_FULLSCREEN_EXCLUSIVE:
         return "fullscreen_exclusive";
-    case SDL3D_WINDOW_MODE_FULLSCREEN_BORDERLESS:
+    case SLAYER3D_WINDOW_MODE_FULLSCREEN_BORDERLESS:
         return "fullscreen_borderless";
-    case SDL3D_WINDOW_MODE_DEFAULT:
+    case SLAYER3D_WINDOW_MODE_DEFAULT:
     default:
         return "default";
     }
 }
 
-static sdl3d_backend parse_backend_setting(const char *value, sdl3d_backend fallback)
+static slayer3d_backend parse_backend_setting(const char *value, slayer3d_backend fallback)
 {
     if (value == NULL || value[0] == '\0')
         return fallback;
     if (SDL_strcasecmp(value, "software") == 0 || SDL_strcasecmp(value, "sw") == 0)
-        return SDL3D_BACKEND_SOFTWARE;
+        return SLAYER3D_BACKEND_SOFTWARE;
     if (SDL_strcasecmp(value, "opengl") == 0 || SDL_strcasecmp(value, "gl") == 0)
-        return SDL3D_BACKEND_OPENGL;
+        return SLAYER3D_BACKEND_OPENGL;
     if (SDL_strcasecmp(value, "auto") == 0)
-        return SDL3D_BACKEND_AUTO;
+        return SLAYER3D_BACKEND_AUTO;
     return fallback;
 }
 
-static sdl3d_camera3d default_camera(void)
+static slayer3d_camera3d default_camera(void)
 {
-    sdl3d_camera3d camera;
+    slayer3d_camera3d camera;
     SDL_zero(camera);
-    camera.position = sdl3d_vec3_make(0.0f, 0.0f, 16.0f);
-    camera.target = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
-    camera.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    camera.position = slayer3d_vec3_make(0.0f, 0.0f, 16.0f);
+    camera.target = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    camera.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
     camera.fovy = 11.4f;
-    camera.projection = SDL3D_CAMERA_ORTHOGRAPHIC;
+    camera.projection = SLAYER3D_CAMERA_ORTHOGRAPHIC;
     return camera;
 }
 
-static sdl3d_camera3d active_camera_or_fallback(const sdl3d_game_data_runtime *runtime, const sdl3d_camera3d *fallback)
+static slayer3d_camera3d active_camera_or_fallback(const slayer3d_game_data_runtime *runtime,
+                                                   const slayer3d_camera3d *fallback)
 {
-    sdl3d_camera3d camera;
-    const char *active_camera = sdl3d_game_data_active_camera(runtime);
-    if (active_camera != NULL && sdl3d_game_data_get_camera(runtime, active_camera, &camera))
+    slayer3d_camera3d camera;
+    const char *active_camera = slayer3d_game_data_active_camera(runtime);
+    if (active_camera != NULL && slayer3d_game_data_get_camera(runtime, active_camera, &camera))
         return camera;
     if (fallback != NULL)
         return *fallback;
     return default_camera();
 }
 
-static bool apply_render_settings(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
+static bool apply_render_settings(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
 
-    sdl3d_game_data_render_settings settings;
-    if (!sdl3d_game_data_get_render_settings(runtime, &settings))
+    slayer3d_game_data_render_settings settings;
+    if (!slayer3d_game_data_get_render_settings(runtime, &settings))
         return false;
 
     bool ok = true;
     if (!settings.lighting_enabled)
-        ok = sdl3d_set_lighting_enabled(renderer, false) && ok;
+        ok = slayer3d_set_lighting_enabled(renderer, false) && ok;
     else if (!settings.has_profile)
-        ok = sdl3d_set_lighting_enabled(renderer, true) && ok;
+        ok = slayer3d_set_lighting_enabled(renderer, true) && ok;
     if (settings.has_profile)
-        ok = sdl3d_set_render_profile(renderer, &settings.profile) && ok;
-    ok = sdl3d_set_bloom_enabled(renderer, settings.bloom_enabled) && ok;
-    ok = sdl3d_set_ssao_enabled(renderer, settings.ssao_enabled) && ok;
-    ok = sdl3d_set_tonemap_mode(renderer, settings.tonemap) && ok;
-    ok = sdl3d_clear_render_context(renderer, settings.clear_color) && ok;
+        ok = slayer3d_set_render_profile(renderer, &settings.profile) && ok;
+    ok = slayer3d_set_bloom_enabled(renderer, settings.bloom_enabled) && ok;
+    ok = slayer3d_set_ssao_enabled(renderer, settings.ssao_enabled) && ok;
+    ok = slayer3d_set_tonemap_mode(renderer, settings.tonemap) && ok;
+    ok = slayer3d_clear_render_context(renderer, settings.clear_color) && ok;
     return ok;
 }
 
-static bool apply_world_lights(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                               const sdl3d_game_data_render_eval *eval)
+static bool apply_world_lights(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                               const slayer3d_game_data_render_eval *eval)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
 
-    bool ok = sdl3d_clear_lights(renderer);
+    bool ok = slayer3d_clear_lights(renderer);
     float ambient[3] = {0.015f, 0.018f, 0.026f};
-    sdl3d_game_data_get_world_ambient_light(runtime, ambient);
-    ok = sdl3d_set_ambient_light(renderer, ambient[0], ambient[1], ambient[2]) && ok;
+    slayer3d_game_data_get_world_ambient_light(runtime, ambient);
+    ok = slayer3d_set_ambient_light(renderer, ambient[0], ambient[1], ambient[2]) && ok;
 
-    sdl3d_light selected[SDL3D_MAX_LIGHTS];
-    float scores[SDL3D_MAX_LIGHTS];
+    slayer3d_light selected[SLAYER3D_MAX_LIGHTS];
+    float scores[SLAYER3D_MAX_LIGHTS];
     int selected_count = 0;
-    const int light_count = sdl3d_game_data_world_light_count(runtime);
+    const int light_count = slayer3d_game_data_world_light_count(runtime);
     for (int i = 0; i < light_count; ++i)
     {
-        sdl3d_light light;
-        if (!sdl3d_game_data_get_world_light_evaluated(runtime, i, eval, &light))
+        slayer3d_light light;
+        if (!slayer3d_game_data_get_world_light_evaluated(runtime, i, eval, &light))
             continue;
         const float score =
-            light.type == SDL3D_LIGHT_DIRECTIONAL ? 1000000.0f + light.intensity : light.intensity * light.range;
+            light.type == SLAYER3D_LIGHT_DIRECTIONAL ? 1000000.0f + light.intensity : light.intensity * light.range;
         int insert = selected_count;
         for (int candidate = 0; candidate < selected_count; ++candidate)
         {
@@ -221,9 +222,9 @@ static bool apply_world_lights(const sdl3d_game_data_runtime *runtime, sdl3d_ren
                 break;
             }
         }
-        if (insert >= SDL3D_MAX_LIGHTS)
+        if (insert >= SLAYER3D_MAX_LIGHTS)
             continue;
-        if (selected_count < SDL3D_MAX_LIGHTS)
+        if (selected_count < SLAYER3D_MAX_LIGHTS)
             ++selected_count;
         for (int move = selected_count - 1; move > insert; --move)
         {
@@ -234,28 +235,28 @@ static bool apply_world_lights(const sdl3d_game_data_runtime *runtime, sdl3d_ren
         scores[insert] = score;
     }
     for (int i = 0; i < selected_count; ++i)
-        ok = sdl3d_add_light(renderer, &selected[i]) && ok;
+        ok = slayer3d_add_light(renderer, &selected[i]) && ok;
     return ok;
 }
 
-static bool run_frame_hook(const sdl3d_game_data_frame_desc *frame, sdl3d_game_data_frame_hook hook)
+static bool run_frame_hook(const slayer3d_game_data_frame_desc *frame, slayer3d_game_data_frame_hook hook)
 {
     return hook == NULL || hook(frame->userdata, frame);
 }
 
-static bool menu_action_pressed(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, int action_id,
-                                const char *fallback_name)
+static bool menu_action_pressed(const slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
+                                int action_id, const char *fallback_name)
 {
-    if (action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, action_id) &&
-        sdl3d_input_is_pressed(input, action_id))
+    if (action_id >= 0 && slayer3d_game_data_active_scene_allows_action(runtime, action_id) &&
+        slayer3d_input_is_pressed(input, action_id))
     {
         return true;
     }
 
     if (fallback_name != NULL && input != NULL)
     {
-        const int fallback_id = sdl3d_input_find_action(input, fallback_name);
-        if (fallback_id >= 0 && sdl3d_input_is_pressed(input, fallback_id))
+        const int fallback_id = slayer3d_input_find_action(input, fallback_name);
+        if (fallback_id >= 0 && slayer3d_input_is_pressed(input, fallback_id))
         {
             return true;
         }
@@ -264,19 +265,19 @@ static bool menu_action_pressed(const sdl3d_game_data_runtime *runtime, const sd
     return false;
 }
 
-static bool menu_action_held(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, int action_id,
-                             const char *fallback_name)
+static bool menu_action_held(const slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
+                             int action_id, const char *fallback_name)
 {
-    if (action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, action_id) &&
-        sdl3d_input_is_held(input, action_id))
+    if (action_id >= 0 && slayer3d_game_data_active_scene_allows_action(runtime, action_id) &&
+        slayer3d_input_is_held(input, action_id))
     {
         return true;
     }
 
     if (fallback_name != NULL && input != NULL)
     {
-        const int fallback_id = sdl3d_input_find_action(input, fallback_name);
-        if (fallback_id >= 0 && sdl3d_input_is_held(input, fallback_id))
+        const int fallback_id = slayer3d_input_find_action(input, fallback_name);
+        if (fallback_id >= 0 && slayer3d_input_is_held(input, fallback_id))
         {
             return true;
         }
@@ -285,7 +286,7 @@ static bool menu_action_held(const sdl3d_game_data_runtime *runtime, const sdl3d
     return false;
 }
 
-static bool ensure_font_cache_capacity(sdl3d_game_data_font_cache *cache, int required)
+static bool ensure_font_cache_capacity(slayer3d_game_data_font_cache *cache, int required)
 {
     if (cache == NULL || required <= cache->capacity)
         return cache != NULL;
@@ -294,7 +295,7 @@ static bool ensure_font_cache_capacity(sdl3d_game_data_font_cache *cache, int re
     while (next_capacity < required)
         next_capacity *= 2;
 
-    sdl3d_font *new_fonts = (sdl3d_font *)SDL_calloc((size_t)next_capacity, sizeof(*new_fonts));
+    slayer3d_font *new_fonts = (slayer3d_font *)SDL_calloc((size_t)next_capacity, sizeof(*new_fonts));
     if (new_fonts == NULL)
         return false;
 
@@ -319,7 +320,7 @@ static bool ensure_font_cache_capacity(sdl3d_game_data_font_cache *cache, int re
     return true;
 }
 
-static bool ensure_particle_cache_capacity(sdl3d_game_data_particle_cache *cache, int required)
+static bool ensure_particle_cache_capacity(slayer3d_game_data_particle_cache *cache, int required)
 {
     if (cache == NULL || required <= cache->capacity)
         return cache != NULL;
@@ -328,87 +329,7 @@ static bool ensure_particle_cache_capacity(sdl3d_game_data_particle_cache *cache
     while (next_capacity < required)
         next_capacity *= 2;
 
-    sdl3d_game_data_particle_cache_entry *entries =
-        (sdl3d_game_data_particle_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
-    if (entries == NULL)
-        return false;
-
-    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
-    cache->entries = entries;
-    cache->capacity = next_capacity;
-    return true;
-}
-
-static bool ensure_image_cache_capacity(sdl3d_game_data_image_cache *cache, int required)
-{
-    if (cache == NULL || required <= cache->capacity)
-        return cache != NULL;
-
-    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
-    while (next_capacity < required)
-        next_capacity *= 2;
-
-    sdl3d_game_data_image_cache_entry *entries =
-        (sdl3d_game_data_image_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
-    if (entries == NULL)
-        return false;
-
-    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
-    cache->entries = entries;
-    cache->capacity = next_capacity;
-    return true;
-}
-
-static bool ensure_sprite_cache_capacity(sdl3d_game_data_sprite_cache *cache, int required)
-{
-    if (cache == NULL || required <= cache->capacity)
-        return cache != NULL;
-
-    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
-    while (next_capacity < required)
-        next_capacity *= 2;
-
-    sdl3d_game_data_sprite_cache_entry *entries =
-        (sdl3d_game_data_sprite_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
-    if (entries == NULL)
-        return false;
-
-    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
-    cache->entries = entries;
-    cache->capacity = next_capacity;
-    return true;
-}
-
-static bool ensure_model_cache_capacity(sdl3d_game_data_model_cache *cache, int required)
-{
-    if (cache == NULL || required <= cache->capacity)
-        return cache != NULL;
-
-    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
-    while (next_capacity < required)
-        next_capacity *= 2;
-
-    sdl3d_game_data_model_cache_entry *entries =
-        (sdl3d_game_data_model_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
-    if (entries == NULL)
-        return false;
-
-    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
-    cache->entries = entries;
-    cache->capacity = next_capacity;
-    return true;
-}
-
-static bool ensure_mesh_primitive_cache_capacity(sdl3d_game_data_mesh_primitive_cache *cache, int required)
-{
-    if (cache == NULL || required <= cache->capacity)
-        return cache != NULL;
-
-    int next_capacity = cache->capacity < 16 ? 16 : cache->capacity * 2;
-    while (next_capacity < required)
-        next_capacity *= 2;
-
-    sdl3d_game_data_mesh_primitive_cache_entry *entries = (sdl3d_game_data_mesh_primitive_cache_entry *)SDL_realloc(
+    slayer3d_game_data_particle_cache_entry *entries = (slayer3d_game_data_particle_cache_entry *)SDL_realloc(
         cache->entries, (size_t)next_capacity * sizeof(*entries));
     if (entries == NULL)
         return false;
@@ -419,8 +340,89 @@ static bool ensure_mesh_primitive_cache_capacity(sdl3d_game_data_mesh_primitive_
     return true;
 }
 
-static sdl3d_game_data_particle_cache_entry *find_particle_entry(sdl3d_game_data_particle_cache *cache,
-                                                                 const char *entity_name)
+static bool ensure_image_cache_capacity(slayer3d_game_data_image_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    slayer3d_game_data_image_cache_entry *entries =
+        (slayer3d_game_data_image_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
+static bool ensure_sprite_cache_capacity(slayer3d_game_data_sprite_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    slayer3d_game_data_sprite_cache_entry *entries =
+        (slayer3d_game_data_sprite_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
+static bool ensure_model_cache_capacity(slayer3d_game_data_model_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    slayer3d_game_data_model_cache_entry *entries =
+        (slayer3d_game_data_model_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
+static bool ensure_mesh_primitive_cache_capacity(slayer3d_game_data_mesh_primitive_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 16 ? 16 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    slayer3d_game_data_mesh_primitive_cache_entry *entries =
+        (slayer3d_game_data_mesh_primitive_cache_entry *)SDL_realloc(cache->entries,
+                                                                     (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
+static slayer3d_game_data_particle_cache_entry *find_particle_entry(slayer3d_game_data_particle_cache *cache,
+                                                                    const char *entity_name)
 {
     if (cache == NULL || entity_name == NULL)
         return NULL;
@@ -433,13 +435,13 @@ static sdl3d_game_data_particle_cache_entry *find_particle_entry(sdl3d_game_data
     return NULL;
 }
 
-static sdl3d_game_data_particle_cache_entry *find_or_create_particle_entry(
-    sdl3d_game_data_particle_cache *cache, const sdl3d_game_data_particle_emitter *emitter)
+static slayer3d_game_data_particle_cache_entry *find_or_create_particle_entry(
+    slayer3d_game_data_particle_cache *cache, const slayer3d_game_data_particle_emitter *emitter)
 {
     if (cache == NULL || emitter == NULL || emitter->entity_name == NULL)
         return NULL;
 
-    sdl3d_game_data_particle_cache_entry *entry = find_particle_entry(cache, emitter->entity_name);
+    slayer3d_game_data_particle_cache_entry *entry = find_particle_entry(cache, emitter->entity_name);
     if (entry != NULL)
         return entry;
 
@@ -449,7 +451,7 @@ static sdl3d_game_data_particle_cache_entry *find_or_create_particle_entry(
     entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->entity_name = emitter->entity_name;
-    entry->emitter = sdl3d_create_particle_emitter(&emitter->config);
+    entry->emitter = slayer3d_create_particle_emitter(&emitter->config);
     if (entry->emitter == NULL)
         return NULL;
 
@@ -457,8 +459,8 @@ static sdl3d_game_data_particle_cache_entry *find_or_create_particle_entry(
     return entry;
 }
 
-static sdl3d_font *find_or_load_font(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_font_cache *cache,
-                                     const char *font_id)
+static slayer3d_font *find_or_load_font(const slayer3d_game_data_runtime *runtime, slayer3d_game_data_font_cache *cache,
+                                        const char *font_id)
 {
     if (runtime == NULL || cache == NULL || font_id == NULL)
         return NULL;
@@ -472,16 +474,16 @@ static sdl3d_font *find_or_load_font(const sdl3d_game_data_runtime *runtime, sdl
     if (!ensure_font_cache_capacity(cache, cache->count + 1))
         return NULL;
 
-    sdl3d_game_data_font_asset font;
-    if (!sdl3d_game_data_get_font_asset(runtime, font_id, &font))
+    slayer3d_game_data_font_asset font;
+    if (!slayer3d_game_data_get_font_asset(runtime, font_id, &font))
         return NULL;
 
-    sdl3d_font *slot = &cache->fonts[cache->count];
+    slayer3d_font *slot = &cache->fonts[cache->count];
     bool loaded = false;
     if (font.builtin)
-        loaded = sdl3d_load_builtin_font(cache->media_dir, font.builtin_id, font.size, slot);
+        loaded = slayer3d_load_builtin_font(cache->media_dir, font.builtin_id, font.size, slot);
     else if (font.path != NULL)
-        loaded = sdl3d_load_font(font.path, font.size, slot);
+        loaded = slayer3d_load_font(font.path, font.size, slot);
     if (!loaded)
         return NULL;
 
@@ -490,9 +492,9 @@ static sdl3d_font *find_or_load_font(const sdl3d_game_data_runtime *runtime, sdl
     return slot;
 }
 
-static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_game_data_runtime *runtime,
-                                                                   sdl3d_game_data_image_cache *cache,
-                                                                   const char *image_id)
+static slayer3d_game_data_image_cache_entry *find_or_load_image_entry(const slayer3d_game_data_runtime *runtime,
+                                                                      slayer3d_game_data_image_cache *cache,
+                                                                      const char *image_id)
 {
     if (runtime == NULL || cache == NULL || cache->assets == NULL || image_id == NULL)
         return NULL;
@@ -506,16 +508,16 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
     if (!ensure_image_cache_capacity(cache, cache->count + 1))
         return NULL;
 
-    sdl3d_game_data_image_asset asset;
-    if (!sdl3d_game_data_get_image_asset(runtime, image_id, &asset))
+    slayer3d_game_data_image_asset asset;
+    if (!slayer3d_game_data_get_image_asset(runtime, image_id, &asset))
         return NULL;
 
     if (asset.sprite != NULL)
     {
-        sdl3d_sprite_asset_runtime sprite;
+        slayer3d_sprite_asset_runtime sprite;
         SDL_zero(sprite);
         char error[256];
-        if (!sdl3d_game_data_load_sprite_asset(runtime, asset.sprite, &sprite, error, (int)sizeof(error)))
+        if (!slayer3d_game_data_load_sprite_asset(runtime, asset.sprite, &sprite, error, (int)sizeof(error)))
         {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load sprite-backed UI image %s: %s", asset.sprite,
                          error);
@@ -526,17 +528,17 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
             sprite.base_textures[0].width <= 0 || sprite.base_textures[0].height <= 0)
         {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite-backed UI image %s has no base texture", asset.sprite);
-            sdl3d_sprite_asset_free(&sprite);
+            slayer3d_sprite_asset_free(&sprite);
             return NULL;
         }
 
-        sdl3d_image image;
+        slayer3d_image image;
         SDL_zero(image);
         image.pixels = sprite.base_textures[0].pixels;
         image.width = sprite.base_textures[0].width;
         image.height = sprite.base_textures[0].height;
 
-        sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
+        slayer3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
         SDL_zero(*entry);
         entry->image_id = asset.id;
         entry->effect = sprite.effect;
@@ -553,11 +555,11 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
                          asset.sprite);
             SDL_free(entry->shader_vertex_source);
             SDL_free(entry->shader_fragment_source);
-            sdl3d_sprite_asset_free(&sprite);
+            slayer3d_sprite_asset_free(&sprite);
             return NULL;
         }
-        entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
-        sdl3d_sprite_asset_free(&sprite);
+        entry->loaded = slayer3d_create_texture_from_image(&image, &entry->texture);
+        slayer3d_sprite_asset_free(&sprite);
         if (!entry->loaded)
         {
             SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for sprite-backed UI image %s",
@@ -575,26 +577,26 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
     if (asset.path == NULL)
         return NULL;
 
-    sdl3d_asset_buffer buffer;
+    slayer3d_asset_buffer buffer;
     SDL_zero(buffer);
     char error[256];
-    if (!sdl3d_asset_resolver_read_file(cache->assets, asset.path, &buffer, error, (int)sizeof(error)))
+    if (!slayer3d_asset_resolver_read_file(cache->assets, asset.path, &buffer, error, (int)sizeof(error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to read UI image asset %s: %s", asset.path, error);
         return NULL;
     }
 
-    sdl3d_image image;
+    slayer3d_image image;
     SDL_zero(image);
-    const bool decoded = sdl3d_load_image_from_memory(buffer.data, buffer.size, &image);
-    sdl3d_asset_buffer_free(&buffer);
+    const bool decoded = slayer3d_load_image_from_memory(buffer.data, buffer.size, &image);
+    slayer3d_asset_buffer_free(&buffer);
     if (!decoded)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to decode UI image asset %s", asset.path);
         return NULL;
     }
 
-    sdl3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
+    slayer3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->image_id = asset.id;
     entry->effect = NULL;
@@ -602,8 +604,8 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
     entry->effect_duration = 1.0f;
     entry->shader_vertex_source = NULL;
     entry->shader_fragment_source = NULL;
-    entry->loaded = sdl3d_create_texture_from_image(&image, &entry->texture);
-    sdl3d_free_image(&image);
+    entry->loaded = slayer3d_create_texture_from_image(&image, &entry->texture);
+    slayer3d_free_image(&image);
     if (!entry->loaded)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for UI image asset %s", asset.path);
@@ -614,9 +616,9 @@ static sdl3d_game_data_image_cache_entry *find_or_load_image_entry(const sdl3d_g
     return entry;
 }
 
-static sdl3d_game_data_sprite_cache_entry *find_or_load_sprite_entry(const sdl3d_game_data_runtime *runtime,
-                                                                     sdl3d_game_data_sprite_cache *cache,
-                                                                     const char *sprite_id)
+static slayer3d_game_data_sprite_cache_entry *find_or_load_sprite_entry(const slayer3d_game_data_runtime *runtime,
+                                                                        slayer3d_game_data_sprite_cache *cache,
+                                                                        const char *sprite_id)
 {
     if (runtime == NULL || cache == NULL || cache->assets == NULL || sprite_id == NULL)
         return NULL;
@@ -630,12 +632,12 @@ static sdl3d_game_data_sprite_cache_entry *find_or_load_sprite_entry(const sdl3d
     if (!ensure_sprite_cache_capacity(cache, cache->count + 1))
         return NULL;
 
-    sdl3d_game_data_sprite_cache_entry *entry = &cache->entries[cache->count];
+    slayer3d_game_data_sprite_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->sprite_id = sprite_id;
 
     char error[256];
-    if (!sdl3d_game_data_load_sprite_asset(runtime, sprite_id, &entry->sprite, error, (int)sizeof(error)))
+    if (!slayer3d_game_data_load_sprite_asset(runtime, sprite_id, &entry->sprite, error, (int)sizeof(error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load world sprite asset %s: %s", sprite_id, error);
         SDL_zero(entry);
@@ -647,9 +649,9 @@ static sdl3d_game_data_sprite_cache_entry *find_or_load_sprite_entry(const sdl3d
     return entry;
 }
 
-static sdl3d_game_data_model_cache_entry *find_or_load_model_entry(const sdl3d_game_data_runtime *runtime,
-                                                                   sdl3d_game_data_model_cache *cache,
-                                                                   const char *model_id)
+static slayer3d_game_data_model_cache_entry *find_or_load_model_entry(const slayer3d_game_data_runtime *runtime,
+                                                                      slayer3d_game_data_model_cache *cache,
+                                                                      const char *model_id)
 {
     if (runtime == NULL || cache == NULL || cache->assets == NULL || model_id == NULL)
         return NULL;
@@ -663,13 +665,14 @@ static sdl3d_game_data_model_cache_entry *find_or_load_model_entry(const sdl3d_g
     if (!ensure_model_cache_capacity(cache, cache->count + 1))
         return NULL;
 
-    sdl3d_game_data_model_asset asset;
-    if (!sdl3d_game_data_get_model_asset(runtime, model_id, &asset))
+    slayer3d_game_data_model_asset asset;
+    if (!slayer3d_game_data_get_model_asset(runtime, model_id, &asset))
         return NULL;
 
     char error[256];
     char *filesystem_path = NULL;
-    if (!sdl3d_asset_resolver_resolve_file_path(cache->assets, asset.path, &filesystem_path, error, (int)sizeof(error)))
+    if (!slayer3d_asset_resolver_resolve_file_path(cache->assets, asset.path, &filesystem_path, error,
+                                                   (int)sizeof(error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION,
                      "Failed to resolve model asset %s (%s): %s. Model assets currently require a directory mount.",
@@ -677,11 +680,11 @@ static sdl3d_game_data_model_cache_entry *find_or_load_model_entry(const sdl3d_g
         return NULL;
     }
 
-    sdl3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
+    slayer3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->model_id = model_id;
-    entry->loaded = sdl3d_load_model_from_file(filesystem_path, &entry->model);
-    sdl3d_asset_resolver_free_path(filesystem_path);
+    entry->loaded = slayer3d_load_model_from_file(filesystem_path, &entry->model);
+    slayer3d_asset_resolver_free_path(filesystem_path);
     if (!entry->loaded)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load model asset %s: %s", model_id, SDL_GetError());
@@ -693,7 +696,7 @@ static sdl3d_game_data_model_cache_entry *find_or_load_model_entry(const sdl3d_g
     return entry;
 }
 
-static bool draw_sphere_batch(sdl3d_render_context *renderer, const sdl3d_game_data_render_primitive *primitive)
+static bool draw_sphere_batch(slayer3d_render_context *renderer, const slayer3d_game_data_render_primitive *primitive)
 {
     if (renderer == NULL || primitive == NULL || primitive->instances == NULL || primitive->instance_count <= 0)
         return true;
@@ -721,7 +724,7 @@ static bool draw_sphere_batch(sdl3d_render_context *renderer, const sdl3d_game_d
     int index_offset = 0;
     for (int instance = 0; instance < primitive->instance_count; ++instance)
     {
-        const sdl3d_vec3 center = primitive->instances[instance];
+        const slayer3d_vec3 center = primitive->instances[instance];
         for (int ring = 0; ring <= rings; ++ring)
         {
             const float theta = SDL_PI_F * (float)ring / (float)rings;
@@ -763,7 +766,7 @@ static bool draw_sphere_batch(sdl3d_render_context *renderer, const sdl3d_game_d
         vertex_offset += verts_per_sphere;
     }
 
-    sdl3d_mesh mesh;
+    slayer3d_mesh mesh;
     SDL_zero(mesh);
     mesh.positions = positions;
     mesh.normals = normals;
@@ -771,7 +774,7 @@ static bool draw_sphere_batch(sdl3d_render_context *renderer, const sdl3d_game_d
     mesh.indices = indices;
     mesh.vertex_count = vertex_count;
     mesh.index_count = index_count;
-    const bool ok = sdl3d_draw_mesh(renderer, &mesh, NULL, primitive->color);
+    const bool ok = slayer3d_draw_mesh(renderer, &mesh, NULL, primitive->color);
     SDL_free(positions);
     SDL_free(normals);
     SDL_free(uvs);
@@ -779,20 +782,20 @@ static bool draw_sphere_batch(sdl3d_render_context *renderer, const sdl3d_game_d
     return ok;
 }
 
-static bool primitive_sphere_can_batch(const sdl3d_game_data_render_primitive *primitive)
+static bool primitive_sphere_can_batch(const slayer3d_game_data_render_primitive *primitive)
 {
-    if (primitive == NULL || primitive->type != SDL3D_GAME_DATA_RENDER_SPHERE || primitive->texture_image != NULL)
+    if (primitive == NULL || primitive->type != SLAYER3D_GAME_DATA_RENDER_SPHERE || primitive->texture_image != NULL)
         return false;
     return SDL_fabsf(primitive->rotation_angle) <= 0.0001f && SDL_fabsf(primitive->rotation_axis.x) <= 0.0001f &&
            SDL_fabsf(primitive->rotation_axis.y) <= 0.0001f && SDL_fabsf(primitive->rotation_axis.z) <= 0.0001f;
 }
 
-static bool primitive_sphere_batch_matches(const sdl3d_game_data_render_primitive *batch,
-                                           const sdl3d_game_data_render_primitive *primitive)
+static bool primitive_sphere_batch_matches(const slayer3d_game_data_render_primitive *batch,
+                                           const slayer3d_game_data_render_primitive *primitive)
 {
     if (batch == NULL || primitive == NULL)
         return false;
-    return batch->type == SDL3D_GAME_DATA_RENDER_SPHERE && primitive_sphere_can_batch(primitive) &&
+    return batch->type == SLAYER3D_GAME_DATA_RENDER_SPHERE && primitive_sphere_can_batch(primitive) &&
            SDL_fabsf(batch->radius - primitive->radius) <= 0.0001f && batch->rings == primitive->rings &&
            batch->slices == primitive->slices && batch->lighting_enabled == primitive->lighting_enabled &&
            batch->emissive == primitive->emissive &&
@@ -807,8 +810,8 @@ static bool flush_sphere_draw_batch(primitive_draw_context *context)
 {
     if (context == NULL || !context->sphere_batch_active || context->sphere_batch_count <= 0)
         return true;
-    sdl3d_game_data_render_primitive primitive = context->sphere_batch;
-    primitive.type = SDL3D_GAME_DATA_RENDER_SPHERE_BATCH;
+    slayer3d_game_data_render_primitive primitive = context->sphere_batch;
+    primitive.type = SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH;
     primitive.instances = context->sphere_batch_positions;
     primitive.instance_count = context->sphere_batch_count;
     const bool ok = draw_sphere_batch(context->renderer, &primitive);
@@ -817,7 +820,8 @@ static bool flush_sphere_draw_batch(primitive_draw_context *context)
     return ok;
 }
 
-static bool append_sphere_draw_batch(primitive_draw_context *context, const sdl3d_game_data_render_primitive *primitive)
+static bool append_sphere_draw_batch(primitive_draw_context *context,
+                                     const slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL)
         return false;
@@ -833,8 +837,8 @@ static bool append_sphere_draw_batch(primitive_draw_context *context, const sdl3
     if (context->sphere_batch_count >= context->sphere_batch_capacity)
     {
         const int next_capacity = context->sphere_batch_capacity > 0 ? context->sphere_batch_capacity * 2 : 16;
-        sdl3d_vec3 *positions =
-            (sdl3d_vec3 *)SDL_realloc(context->sphere_batch_positions, (size_t)next_capacity * sizeof(*positions));
+        slayer3d_vec3 *positions =
+            (slayer3d_vec3 *)SDL_realloc(context->sphere_batch_positions, (size_t)next_capacity * sizeof(*positions));
         if (positions == NULL)
             return false;
         context->sphere_batch_positions = positions;
@@ -844,17 +848,17 @@ static bool append_sphere_draw_batch(primitive_draw_context *context, const sdl3
     return true;
 }
 
-static const sdl3d_texture2d *primitive_texture(primitive_draw_context *context,
-                                                const sdl3d_game_data_render_primitive *primitive)
+static const slayer3d_texture2d *primitive_texture(primitive_draw_context *context,
+                                                   const slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL || primitive->texture_image == NULL || context->image_cache == NULL)
         return NULL;
-    sdl3d_game_data_image_cache_entry *entry =
+    slayer3d_game_data_image_cache_entry *entry =
         find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
     return entry != NULL ? &entry->texture : NULL;
 }
 
-static void mesh_primitive_free_mesh(sdl3d_mesh *mesh)
+static void mesh_primitive_free_mesh(slayer3d_mesh *mesh)
 {
     if (mesh == NULL)
         return;
@@ -865,7 +869,7 @@ static void mesh_primitive_free_mesh(sdl3d_mesh *mesh)
     SDL_zero(*mesh);
 }
 
-static bool mesh_primitive_alloc_mesh(sdl3d_mesh *mesh, int vertex_count, int index_count, bool with_uvs)
+static bool mesh_primitive_alloc_mesh(slayer3d_mesh *mesh, int vertex_count, int index_count, bool with_uvs)
 {
     if (mesh == NULL || vertex_count <= 0 || index_count <= 0)
         return false;
@@ -885,8 +889,8 @@ static bool mesh_primitive_alloc_mesh(sdl3d_mesh *mesh, int vertex_count, int in
     return true;
 }
 
-static void mesh_primitive_set_vertex(sdl3d_mesh *mesh, int index, sdl3d_vec3 position, sdl3d_vec3 normal, float u,
-                                      float v)
+static void mesh_primitive_set_vertex(slayer3d_mesh *mesh, int index, slayer3d_vec3 position, slayer3d_vec3 normal,
+                                      float u, float v)
 {
     mesh->positions[index * 3 + 0] = position.x;
     mesh->positions[index * 3 + 1] = position.y;
@@ -901,13 +905,13 @@ static void mesh_primitive_set_vertex(sdl3d_mesh *mesh, int index, sdl3d_vec3 po
     }
 }
 
-static sdl3d_vec3 mesh_primitive_face_normal(sdl3d_vec3 a, sdl3d_vec3 b, sdl3d_vec3 c)
+static slayer3d_vec3 mesh_primitive_face_normal(slayer3d_vec3 a, slayer3d_vec3 b, slayer3d_vec3 c)
 {
-    return sdl3d_vec3_normalize(sdl3d_vec3_cross(sdl3d_vec3_sub(b, a), sdl3d_vec3_sub(c, a)));
+    return slayer3d_vec3_normalize(slayer3d_vec3_cross(slayer3d_vec3_sub(b, a), slayer3d_vec3_sub(c, a)));
 }
 
-static bool mesh_primitive_cache_entry_matches(const sdl3d_game_data_mesh_primitive_cache_entry *entry,
-                                               const sdl3d_game_data_render_primitive *primitive)
+static bool mesh_primitive_cache_entry_matches(const slayer3d_game_data_mesh_primitive_cache_entry *entry,
+                                               const slayer3d_game_data_render_primitive *primitive)
 {
     if (entry == NULL || primitive == NULL || !entry->loaded)
         return false;
@@ -921,8 +925,8 @@ static bool mesh_primitive_cache_entry_matches(const sdl3d_game_data_mesh_primit
            entry->tube_segments == primitive->tube_segments;
 }
 
-static void mesh_primitive_cache_entry_set_key(sdl3d_game_data_mesh_primitive_cache_entry *entry,
-                                               const sdl3d_game_data_render_primitive *primitive)
+static void mesh_primitive_cache_entry_set_key(slayer3d_game_data_mesh_primitive_cache_entry *entry,
+                                               const slayer3d_game_data_render_primitive *primitive)
 {
     entry->primitive = primitive->mesh_primitive;
     entry->size = primitive->size;
@@ -939,19 +943,19 @@ static void mesh_primitive_cache_entry_set_key(sdl3d_game_data_mesh_primitive_ca
     entry->tube_segments = primitive->tube_segments;
 }
 
-static bool build_cube_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_cube_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     if (!mesh_primitive_alloc_mesh(mesh, 24, 36, true))
         return false;
     const float hx = primitive->size.x * 0.5f;
     const float hy = primitive->size.y * 0.5f;
     const float hz = primitive->size.z * 0.5f;
-    const sdl3d_vec3 c[8] = {{-hx, -hy, -hz}, {hx, -hy, -hz}, {-hx, hy, -hz}, {hx, hy, -hz},
-                             {-hx, -hy, hz},  {hx, -hy, hz},  {-hx, hy, hz},  {hx, hy, hz}};
+    const slayer3d_vec3 c[8] = {{-hx, -hy, -hz}, {hx, -hy, -hz}, {-hx, hy, -hz}, {hx, hy, -hz},
+                                {-hx, -hy, hz},  {hx, -hy, hz},  {-hx, hy, hz},  {hx, hy, hz}};
     static const int faces[6][4] = {
         {4, 5, 7, 6}, {1, 0, 2, 3}, {5, 1, 3, 7}, {0, 4, 6, 2}, {6, 7, 3, 2}, {0, 1, 5, 4},
     };
-    static const sdl3d_vec3 normals[6] = {{0, 0, 1}, {0, 0, -1}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
+    static const slayer3d_vec3 normals[6] = {{0, 0, 1}, {0, 0, -1}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
     static const float uvs[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
     for (int f = 0; f < 6; ++f)
     {
@@ -970,35 +974,35 @@ static bool build_cube_mesh(const sdl3d_game_data_render_primitive *primitive, s
     return true;
 }
 
-static bool build_quad_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_quad_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     if (!mesh_primitive_alloc_mesh(mesh, 4, 6, true))
         return false;
     const float hx = primitive->size.x * 0.5f;
     const float hy = primitive->size.y * 0.5f;
-    const sdl3d_vec3 n = {0.0f, 0.0f, 1.0f};
-    mesh_primitive_set_vertex(mesh, 0, sdl3d_vec3_make(-hx, -hy, 0.0f), n, 0.0f, 1.0f);
-    mesh_primitive_set_vertex(mesh, 1, sdl3d_vec3_make(hx, -hy, 0.0f), n, 1.0f, 1.0f);
-    mesh_primitive_set_vertex(mesh, 2, sdl3d_vec3_make(hx, hy, 0.0f), n, 1.0f, 0.0f);
-    mesh_primitive_set_vertex(mesh, 3, sdl3d_vec3_make(-hx, hy, 0.0f), n, 0.0f, 0.0f);
+    const slayer3d_vec3 n = {0.0f, 0.0f, 1.0f};
+    mesh_primitive_set_vertex(mesh, 0, slayer3d_vec3_make(-hx, -hy, 0.0f), n, 0.0f, 1.0f);
+    mesh_primitive_set_vertex(mesh, 1, slayer3d_vec3_make(hx, -hy, 0.0f), n, 1.0f, 1.0f);
+    mesh_primitive_set_vertex(mesh, 2, slayer3d_vec3_make(hx, hy, 0.0f), n, 1.0f, 0.0f);
+    mesh_primitive_set_vertex(mesh, 3, slayer3d_vec3_make(-hx, hy, 0.0f), n, 0.0f, 0.0f);
     const unsigned int indices[6] = {0, 1, 2, 0, 2, 3};
     SDL_memcpy(mesh->indices, indices, sizeof(indices));
     return true;
 }
 
-static bool build_disc_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_disc_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     const int segments = primitive->slices;
     if (!mesh_primitive_alloc_mesh(mesh, segments + 1, segments * 3, true))
         return false;
-    const sdl3d_vec3 n = {0.0f, 0.0f, 1.0f};
-    mesh_primitive_set_vertex(mesh, 0, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), n, 0.5f, 0.5f);
+    const slayer3d_vec3 n = {0.0f, 0.0f, 1.0f};
+    mesh_primitive_set_vertex(mesh, 0, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), n, 0.5f, 0.5f);
     for (int i = 0; i < segments; ++i)
     {
-        const float a = (float)i / (float)segments * SDL3D_GAME_PRESENTATION_PI * 2.0f;
+        const float a = (float)i / (float)segments * SLAYER3D_GAME_PRESENTATION_PI * 2.0f;
         const float x = SDL_cosf(a) * primitive->radius;
         const float y = SDL_sinf(a) * primitive->radius;
-        mesh_primitive_set_vertex(mesh, i + 1, sdl3d_vec3_make(x, y, 0.0f), n,
+        mesh_primitive_set_vertex(mesh, i + 1, slayer3d_vec3_make(x, y, 0.0f), n,
                                   0.5f + x / SDL_max(primitive->radius * 2.0f, 0.0001f),
                                   0.5f + y / SDL_max(primitive->radius * 2.0f, 0.0001f));
     }
@@ -1012,7 +1016,7 @@ static bool build_disc_mesh(const sdl3d_game_data_render_primitive *primitive, s
     return true;
 }
 
-static bool build_sphere_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_sphere_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     const int rings = primitive->rings;
     const int slices = primitive->slices;
@@ -1020,13 +1024,13 @@ static bool build_sphere_mesh(const sdl3d_game_data_render_primitive *primitive,
         return false;
     for (int r = 0; r <= rings; ++r)
     {
-        const float theta = SDL3D_GAME_PRESENTATION_PI * (float)r / (float)rings;
+        const float theta = SLAYER3D_GAME_PRESENTATION_PI * (float)r / (float)rings;
         for (int s = 0; s <= slices; ++s)
         {
-            const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
-            const sdl3d_vec3 normal =
-                sdl3d_vec3_make(SDL_sinf(theta) * SDL_cosf(phi), SDL_cosf(theta), SDL_sinf(theta) * SDL_sinf(phi));
-            const sdl3d_vec3 position = sdl3d_vec3_scale(normal, primitive->radius);
+            const float phi = SLAYER3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+            const slayer3d_vec3 normal =
+                slayer3d_vec3_make(SDL_sinf(theta) * SDL_cosf(phi), SDL_cosf(theta), SDL_sinf(theta) * SDL_sinf(phi));
+            const slayer3d_vec3 position = slayer3d_vec3_scale(normal, primitive->radius);
             mesh_primitive_set_vertex(mesh, r * (slices + 1) + s, position, normal, (float)s / (float)slices,
                                       1.0f - (float)r / (float)rings);
         }
@@ -1051,7 +1055,7 @@ static bool build_sphere_mesh(const sdl3d_game_data_render_primitive *primitive,
     return true;
 }
 
-static bool build_cylinder_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_cylinder_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     const int slices = primitive->slices;
     const int side_verts = 2 * (slices + 1);
@@ -1061,14 +1065,14 @@ static bool build_cylinder_mesh(const sdl3d_game_data_render_primitive *primitiv
     const float hh = primitive->height * 0.5f;
     for (int s = 0; s <= slices; ++s)
     {
-        const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+        const float phi = SLAYER3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
         const float c = SDL_cosf(phi);
         const float z = SDL_sinf(phi);
-        const sdl3d_vec3 normal = sdl3d_vec3_make(c, 0.0f, z);
-        mesh_primitive_set_vertex(mesh, s, sdl3d_vec3_make(primitive->radius_top * c, hh, primitive->radius_top * z),
+        const slayer3d_vec3 normal = slayer3d_vec3_make(c, 0.0f, z);
+        mesh_primitive_set_vertex(mesh, s, slayer3d_vec3_make(primitive->radius_top * c, hh, primitive->radius_top * z),
                                   normal, 0.0f, 0.0f);
         mesh_primitive_set_vertex(mesh, slices + 1 + s,
-                                  sdl3d_vec3_make(primitive->radius_bottom * c, -hh, primitive->radius_bottom * z),
+                                  slayer3d_vec3_make(primitive->radius_bottom * c, -hh, primitive->radius_bottom * z),
                                   normal, 0.0f, 0.0f);
     }
     int ii = 0;
@@ -1086,14 +1090,15 @@ static bool build_cylinder_mesh(const sdl3d_game_data_render_primitive *primitiv
         mesh->indices[ii++] = b1;
     }
     int cap = side_verts;
-    mesh_primitive_set_vertex(mesh, cap, sdl3d_vec3_make(0.0f, hh, 0.0f), sdl3d_vec3_make(0.0f, 1.0f, 0.0f), 0, 0);
+    mesh_primitive_set_vertex(mesh, cap, slayer3d_vec3_make(0.0f, hh, 0.0f), slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0,
+                              0);
     for (int s = 0; s <= slices; ++s)
     {
-        const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+        const float phi = SLAYER3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
         mesh_primitive_set_vertex(
             mesh, cap + 1 + s,
-            sdl3d_vec3_make(primitive->radius_top * SDL_cosf(phi), hh, primitive->radius_top * SDL_sinf(phi)),
-            sdl3d_vec3_make(0.0f, 1.0f, 0.0f), 0, 0);
+            slayer3d_vec3_make(primitive->radius_top * SDL_cosf(phi), hh, primitive->radius_top * SDL_sinf(phi)),
+            slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0, 0);
     }
     for (int s = 0; s < slices; ++s)
     {
@@ -1102,14 +1107,15 @@ static bool build_cylinder_mesh(const sdl3d_game_data_render_primitive *primitiv
         mesh->indices[ii++] = (unsigned int)(cap + 1 + s);
     }
     cap += slices + 2;
-    mesh_primitive_set_vertex(mesh, cap, sdl3d_vec3_make(0.0f, -hh, 0.0f), sdl3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
+    mesh_primitive_set_vertex(mesh, cap, slayer3d_vec3_make(0.0f, -hh, 0.0f), slayer3d_vec3_make(0.0f, -1.0f, 0.0f), 0,
+                              0);
     for (int s = 0; s <= slices; ++s)
     {
-        const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+        const float phi = SLAYER3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
         mesh_primitive_set_vertex(
             mesh, cap + 1 + s,
-            sdl3d_vec3_make(primitive->radius_bottom * SDL_cosf(phi), -hh, primitive->radius_bottom * SDL_sinf(phi)),
-            sdl3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
+            slayer3d_vec3_make(primitive->radius_bottom * SDL_cosf(phi), -hh, primitive->radius_bottom * SDL_sinf(phi)),
+            slayer3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
     }
     for (int s = 0; s < slices; ++s)
     {
@@ -1120,7 +1126,7 @@ static bool build_cylinder_mesh(const sdl3d_game_data_render_primitive *primitiv
     return true;
 }
 
-static bool build_capsule_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_capsule_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     const int slices = primitive->slices;
     const int rings = primitive->rings;
@@ -1140,7 +1146,7 @@ static bool build_capsule_mesh(const sdl3d_game_data_render_primitive *primitive
         if (k <= rings)
         {
             const float t = (float)k / (float)rings;
-            const float theta = SDL3D_GAME_PRESENTATION_PI * 0.5f * t;
+            const float theta = SLAYER3D_GAME_PRESENTATION_PI * 0.5f * t;
             ring_radius = primitive->radius * SDL_sinf(theta);
             center_y = end_y + primitive->radius * SDL_cosf(theta);
             normal_y = SDL_cosf(theta);
@@ -1149,19 +1155,19 @@ static bool build_capsule_mesh(const sdl3d_game_data_render_primitive *primitive
         {
             const int lower_k = k - (rings + 1);
             const float t = (float)lower_k / (float)rings;
-            const float theta = SDL3D_GAME_PRESENTATION_PI * 0.5f * t;
+            const float theta = SLAYER3D_GAME_PRESENTATION_PI * 0.5f * t;
             ring_radius = primitive->radius * SDL_cosf(theta);
             center_y = start_y - primitive->radius * SDL_sinf(theta);
             normal_y = -SDL_sinf(theta);
         }
         for (int s = 0; s <= slices; ++s)
         {
-            const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+            const float phi = SLAYER3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
             const float x = ring_radius * SDL_cosf(phi);
             const float z = ring_radius * SDL_sinf(phi);
-            const sdl3d_vec3 normal = sdl3d_vec3_normalize(sdl3d_vec3_make(
+            const slayer3d_vec3 normal = slayer3d_vec3_normalize(slayer3d_vec3_make(
                 SDL_cosf(phi) * ring_radius, normal_y * primitive->radius, SDL_sinf(phi) * ring_radius));
-            mesh_primitive_set_vertex(mesh, k * verts_per_ring + s, sdl3d_vec3_make(x, center_y, z), normal, 0, 0);
+            mesh_primitive_set_vertex(mesh, k * verts_per_ring + s, slayer3d_vec3_make(x, center_y, z), normal, 0, 0);
         }
     }
 
@@ -1185,7 +1191,8 @@ static bool build_capsule_mesh(const sdl3d_game_data_render_primitive *primitive
     return true;
 }
 
-static bool build_torus_like_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh, bool full_torus)
+static bool build_torus_like_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh,
+                                  bool full_torus)
 {
     const int segments = primitive->slices;
     const int tube_segments = primitive->tube_segments;
@@ -1193,21 +1200,21 @@ static bool build_torus_like_mesh(const sdl3d_game_data_render_primitive *primit
     const int tube_vertices = tube_segments + 1;
     if (!mesh_primitive_alloc_mesh(mesh, arc_vertices * tube_vertices, segments * tube_segments * 6, false))
         return false;
-    const float arc_angle = full_torus ? SDL3D_GAME_PRESENTATION_PI * 2.0f : primitive->arc_angle;
+    const float arc_angle = full_torus ? SLAYER3D_GAME_PRESENTATION_PI * 2.0f : primitive->arc_angle;
     const float start_angle = full_torus ? 0.0f : -arc_angle * 0.5f;
     for (int a = 0; a <= segments; ++a)
     {
         const float u = start_angle + (float)a / (float)segments * arc_angle;
-        const sdl3d_vec3 radial = sdl3d_vec3_make(SDL_cosf(u), 0.0f, SDL_sinf(u));
-        const sdl3d_vec3 center = sdl3d_vec3_scale(radial, primitive->major_radius);
+        const slayer3d_vec3 radial = slayer3d_vec3_make(SDL_cosf(u), 0.0f, SDL_sinf(u));
+        const slayer3d_vec3 center = slayer3d_vec3_scale(radial, primitive->major_radius);
         for (int t = 0; t <= tube_segments; ++t)
         {
-            const float v = (float)t / (float)tube_segments * SDL3D_GAME_PRESENTATION_PI * 2.0f;
-            const sdl3d_vec3 normal =
-                sdl3d_vec3_normalize(sdl3d_vec3_make(radial.x * SDL_cosf(v), SDL_sinf(v), radial.z * SDL_cosf(v)));
+            const float v = (float)t / (float)tube_segments * SLAYER3D_GAME_PRESENTATION_PI * 2.0f;
+            const slayer3d_vec3 normal = slayer3d_vec3_normalize(
+                slayer3d_vec3_make(radial.x * SDL_cosf(v), SDL_sinf(v), radial.z * SDL_cosf(v)));
             mesh_primitive_set_vertex(mesh, a * tube_vertices + t,
-                                      sdl3d_vec3_add(center, sdl3d_vec3_scale(normal, primitive->minor_radius)), normal,
-                                      0, 0);
+                                      slayer3d_vec3_add(center, slayer3d_vec3_scale(normal, primitive->minor_radius)),
+                                      normal, 0, 0);
         }
     }
     int ii = 0;
@@ -1230,23 +1237,23 @@ static bool build_torus_like_mesh(const sdl3d_game_data_render_primitive *primit
     return true;
 }
 
-static bool build_pyramid_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_pyramid_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     if (!mesh_primitive_alloc_mesh(mesh, 18, 18, false))
         return false;
     const float hx = primitive->size.x * 0.5f;
     const float hy = primitive->size.y * 0.5f;
     const float hz = primitive->size.z * 0.5f;
-    const sdl3d_vec3 apex = sdl3d_vec3_make(0.0f, hy, 0.0f);
-    const sdl3d_vec3 bl = sdl3d_vec3_make(-hx, -hy, -hz);
-    const sdl3d_vec3 br = sdl3d_vec3_make(hx, -hy, -hz);
-    const sdl3d_vec3 tr = sdl3d_vec3_make(hx, -hy, hz);
-    const sdl3d_vec3 tl = sdl3d_vec3_make(-hx, -hy, hz);
-    const sdl3d_vec3 faces[6][3] = {{bl, apex, br}, {br, apex, tr}, {tr, apex, tl},
-                                    {tl, apex, bl}, {bl, br, tr},   {bl, tr, tl}};
+    const slayer3d_vec3 apex = slayer3d_vec3_make(0.0f, hy, 0.0f);
+    const slayer3d_vec3 bl = slayer3d_vec3_make(-hx, -hy, -hz);
+    const slayer3d_vec3 br = slayer3d_vec3_make(hx, -hy, -hz);
+    const slayer3d_vec3 tr = slayer3d_vec3_make(hx, -hy, hz);
+    const slayer3d_vec3 tl = slayer3d_vec3_make(-hx, -hy, hz);
+    const slayer3d_vec3 faces[6][3] = {{bl, apex, br}, {br, apex, tr}, {tr, apex, tl},
+                                       {tl, apex, bl}, {bl, br, tr},   {bl, tr, tl}};
     for (int f = 0; f < 6; ++f)
     {
-        const sdl3d_vec3 normal = mesh_primitive_face_normal(faces[f][0], faces[f][1], faces[f][2]);
+        const slayer3d_vec3 normal = mesh_primitive_face_normal(faces[f][0], faces[f][1], faces[f][2]);
         for (int v = 0; v < 3; ++v)
         {
             const int vi = f * 3 + v;
@@ -1257,23 +1264,23 @@ static bool build_pyramid_mesh(const sdl3d_game_data_render_primitive *primitive
     return true;
 }
 
-static bool build_wedge_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_wedge_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     if (!mesh_primitive_alloc_mesh(mesh, 24, 24, false))
         return false;
     const float hx = primitive->size.x * 0.5f;
     const float hy = primitive->size.y * 0.5f;
     const float hz = primitive->size.z * 0.5f;
-    const sdl3d_vec3 p[6] = {sdl3d_vec3_make(-hx, -hy, -hz), sdl3d_vec3_make(hx, -hy, -hz),
-                             sdl3d_vec3_make(-hx, -hy, hz),  sdl3d_vec3_make(hx, -hy, hz),
-                             sdl3d_vec3_make(-hx, hy, hz),   sdl3d_vec3_make(hx, hy, hz)};
-    const sdl3d_vec3 triangles[8][3] = {
+    const slayer3d_vec3 p[6] = {slayer3d_vec3_make(-hx, -hy, -hz), slayer3d_vec3_make(hx, -hy, -hz),
+                                slayer3d_vec3_make(-hx, -hy, hz),  slayer3d_vec3_make(hx, -hy, hz),
+                                slayer3d_vec3_make(-hx, hy, hz),   slayer3d_vec3_make(hx, hy, hz)};
+    const slayer3d_vec3 triangles[8][3] = {
         {p[0], p[3], p[1]}, {p[0], p[2], p[3]}, {p[2], p[5], p[3]}, {p[2], p[4], p[5]},
         {p[0], p[4], p[2]}, {p[0], p[1], p[5]}, {p[0], p[5], p[4]}, {p[1], p[3], p[5]},
     };
     for (int f = 0; f < 8; ++f)
     {
-        const sdl3d_vec3 normal = mesh_primitive_face_normal(triangles[f][0], triangles[f][1], triangles[f][2]);
+        const slayer3d_vec3 normal = mesh_primitive_face_normal(triangles[f][0], triangles[f][1], triangles[f][2]);
         for (int v = 0; v < 3; ++v)
         {
             const int vi = f * 3 + v;
@@ -1284,7 +1291,7 @@ static bool build_wedge_mesh(const sdl3d_game_data_render_primitive *primitive, 
     return true;
 }
 
-static bool build_hemisphere_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_hemisphere_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     const int rings = primitive->rings;
     const int slices = primitive->slices;
@@ -1295,14 +1302,15 @@ static bool build_hemisphere_mesh(const sdl3d_game_data_render_primitive *primit
     const float y_offset = primitive->radius * 0.5f;
     for (int r = 0; r <= rings; ++r)
     {
-        const float theta = (float)r / (float)rings * SDL3D_GAME_PRESENTATION_PI * 0.5f;
+        const float theta = (float)r / (float)rings * SLAYER3D_GAME_PRESENTATION_PI * 0.5f;
         const float rr = SDL_sinf(theta) * primitive->radius;
         const float y = SDL_cosf(theta) * primitive->radius - y_offset;
         for (int s = 0; s <= slices; ++s)
         {
-            const float phi = (float)s / (float)slices * SDL3D_GAME_PRESENTATION_PI * 2.0f;
-            const sdl3d_vec3 position = sdl3d_vec3_make(SDL_cosf(phi) * rr, y, SDL_sinf(phi) * rr);
-            const sdl3d_vec3 normal = sdl3d_vec3_normalize(sdl3d_vec3_make(position.x, y + y_offset, position.z));
+            const float phi = (float)s / (float)slices * SLAYER3D_GAME_PRESENTATION_PI * 2.0f;
+            const slayer3d_vec3 position = slayer3d_vec3_make(SDL_cosf(phi) * rr, y, SDL_sinf(phi) * rr);
+            const slayer3d_vec3 normal =
+                slayer3d_vec3_normalize(slayer3d_vec3_make(position.x, y + y_offset, position.z));
             mesh_primitive_set_vertex(mesh, r * (slices + 1) + s, position, normal, 0, 0);
         }
     }
@@ -1323,8 +1331,8 @@ static bool build_hemisphere_mesh(const sdl3d_game_data_render_primitive *primit
             mesh->indices[ii++] = d;
         }
     }
-    mesh_primitive_set_vertex(mesh, cap_center, sdl3d_vec3_make(0.0f, -y_offset, 0.0f),
-                              sdl3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
+    mesh_primitive_set_vertex(mesh, cap_center, slayer3d_vec3_make(0.0f, -y_offset, 0.0f),
+                              slayer3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
     const int base_row = rings * (slices + 1);
     for (int s = 0; s < slices; ++s)
     {
@@ -1335,17 +1343,17 @@ static bool build_hemisphere_mesh(const sdl3d_game_data_render_primitive *primit
     return true;
 }
 
-static bool build_rounded_box_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+static bool build_rounded_box_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
 {
     const int grid = SDL_max(primitive->rings + 2, 3);
     const int face_vertices = grid * grid;
     if (!mesh_primitive_alloc_mesh(mesh, face_vertices * 6, (grid - 1) * (grid - 1) * 36, false))
         return false;
-    const sdl3d_vec3 half = sdl3d_vec3_scale(primitive->size, 0.5f);
+    const slayer3d_vec3 half = slayer3d_vec3_scale(primitive->size, 0.5f);
     const float radius = SDL_min(primitive->bevel_radius,
                                  SDL_min(primitive->size.x, SDL_min(primitive->size.y, primitive->size.z)) * 0.5f);
-    const sdl3d_vec3 inner =
-        sdl3d_vec3_make(SDL_max(half.x - radius, 0.0f), SDL_max(half.y - radius, 0.0f), SDL_max(half.z - radius, 0.0f));
+    const slayer3d_vec3 inner = slayer3d_vec3_make(SDL_max(half.x - radius, 0.0f), SDL_max(half.y - radius, 0.0f),
+                                                   SDL_max(half.z - radius, 0.0f));
     int vi = 0;
     for (int face = 0; face < 6; ++face)
     {
@@ -1357,28 +1365,28 @@ static bool build_rounded_box_mesh(const sdl3d_game_data_render_primitive *primi
             for (int x = 0; x < grid; ++x)
             {
                 const float u = -1.0f + 2.0f * (float)x / (float)(grid - 1);
-                sdl3d_vec3 local;
+                slayer3d_vec3 local;
                 if (axis == 0)
-                    local = sdl3d_vec3_make(sign * half.x, u * half.y, v * half.z);
+                    local = slayer3d_vec3_make(sign * half.x, u * half.y, v * half.z);
                 else if (axis == 1)
-                    local = sdl3d_vec3_make(u * half.x, sign * half.y, v * half.z);
+                    local = slayer3d_vec3_make(u * half.x, sign * half.y, v * half.z);
                 else
-                    local = sdl3d_vec3_make(u * half.x, v * half.y, sign * half.z);
-                const sdl3d_vec3 clamped =
-                    sdl3d_vec3_make(SDL_clamp(local.x, -inner.x, inner.x), SDL_clamp(local.y, -inner.y, inner.y),
-                                    SDL_clamp(local.z, -inner.z, inner.z));
-                const sdl3d_vec3 delta = sdl3d_vec3_sub(local, clamped);
-                sdl3d_vec3 face_normal = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+                    local = slayer3d_vec3_make(u * half.x, v * half.y, sign * half.z);
+                const slayer3d_vec3 clamped =
+                    slayer3d_vec3_make(SDL_clamp(local.x, -inner.x, inner.x), SDL_clamp(local.y, -inner.y, inner.y),
+                                       SDL_clamp(local.z, -inner.z, inner.z));
+                const slayer3d_vec3 delta = slayer3d_vec3_sub(local, clamped);
+                slayer3d_vec3 face_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
                 if (axis == 0)
                     face_normal.x = sign;
                 else if (axis == 1)
                     face_normal.y = sign;
                 else
                     face_normal.z = sign;
-                const sdl3d_vec3 normal =
-                    sdl3d_vec3_length_squared(delta) > 0.000001f ? sdl3d_vec3_normalize(delta) : face_normal;
-                mesh_primitive_set_vertex(mesh, vi++, sdl3d_vec3_add(clamped, sdl3d_vec3_scale(normal, radius)), normal,
-                                          0, 0);
+                const slayer3d_vec3 normal =
+                    slayer3d_vec3_length_squared(delta) > 0.000001f ? slayer3d_vec3_normalize(delta) : face_normal;
+                mesh_primitive_set_vertex(mesh, vi++, slayer3d_vec3_add(clamped, slayer3d_vec3_scale(normal, radius)),
+                                          normal, 0, 0);
             }
         }
     }
@@ -1406,53 +1414,53 @@ static bool build_rounded_box_mesh(const sdl3d_game_data_render_primitive *primi
     return true;
 }
 
-static bool build_mesh_primitive_cache_entry(sdl3d_game_data_mesh_primitive_cache_entry *entry,
-                                             const sdl3d_game_data_render_primitive *primitive)
+static bool build_mesh_primitive_cache_entry(slayer3d_game_data_mesh_primitive_cache_entry *entry,
+                                             const slayer3d_game_data_render_primitive *primitive)
 {
     bool ok = false;
     mesh_primitive_cache_entry_set_key(entry, primitive);
     switch (primitive->mesh_primitive)
     {
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
         ok = build_cube_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
         ok = build_sphere_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
         ok = build_capsule_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
         ok = build_cylinder_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
         ok = build_torus_like_mesh(primitive, &entry->mesh, true);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
         ok = build_torus_like_mesh(primitive, &entry->mesh, false);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
         ok = build_pyramid_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
         ok = build_wedge_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
         ok = build_quad_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
         ok = build_disc_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
         ok = build_hemisphere_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
         ok = build_rounded_box_mesh(primitive, &entry->mesh);
         break;
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
     default:
         ok = false;
         break;
@@ -1463,8 +1471,8 @@ static bool build_mesh_primitive_cache_entry(sdl3d_game_data_mesh_primitive_cach
     return ok;
 }
 
-static const sdl3d_mesh *find_or_build_mesh_primitive(sdl3d_game_data_mesh_primitive_cache *cache,
-                                                      const sdl3d_game_data_render_primitive *primitive)
+static const slayer3d_mesh *find_or_build_mesh_primitive(slayer3d_game_data_mesh_primitive_cache *cache,
+                                                         const slayer3d_game_data_render_primitive *primitive)
 {
     if (cache == NULL || primitive == NULL)
         return NULL;
@@ -1478,7 +1486,7 @@ static const sdl3d_mesh *find_or_build_mesh_primitive(sdl3d_game_data_mesh_primi
     }
     if (!ensure_mesh_primitive_cache_capacity(cache, cache->count + 1))
         return NULL;
-    sdl3d_game_data_mesh_primitive_cache_entry *entry = &cache->entries[cache->count];
+    slayer3d_game_data_mesh_primitive_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     if (!build_mesh_primitive_cache_entry(entry, primitive))
         return NULL;
@@ -1488,159 +1496,162 @@ static const sdl3d_mesh *find_or_build_mesh_primitive(sdl3d_game_data_mesh_primi
 }
 
 static bool draw_mesh_primitive_solid(primitive_draw_context *context,
-                                      const sdl3d_game_data_render_primitive *primitive)
+                                      const slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL)
         return false;
-    const sdl3d_texture2d *texture = primitive_texture(context, primitive);
-    const sdl3d_mesh *cached_mesh = find_or_build_mesh_primitive(context->mesh_primitive_cache, primitive);
+    const slayer3d_texture2d *texture = primitive_texture(context, primitive);
+    const slayer3d_mesh *cached_mesh = find_or_build_mesh_primitive(context->mesh_primitive_cache, primitive);
     if (cached_mesh != NULL)
-        return sdl3d_draw_static_mesh(context->renderer, cached_mesh, cached_mesh->uvs != NULL ? texture : NULL,
-                                      primitive->color);
+        return slayer3d_draw_static_mesh(context->renderer, cached_mesh, cached_mesh->uvs != NULL ? texture : NULL,
+                                         primitive->color);
     switch (primitive->mesh_primitive)
     {
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
-        return sdl3d_draw_cube_textured(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
-                                        sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.0f, texture, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
-        return sdl3d_draw_sphere_textured(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                                          primitive->rings, primitive->slices, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.0f,
-                                          texture, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE: {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+        return slayer3d_draw_cube_textured(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                           slayer3d_vec3_make(0.0f, 0.0f, 0.0f), 0.0f, texture, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        return slayer3d_draw_sphere_textured(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                             primitive->rings, primitive->slices, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                             0.0f, texture, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE: {
         const float cylinder_span = SDL_max(primitive->height - primitive->radius * 2.0f, 0.0f);
-        const sdl3d_vec3 start = sdl3d_vec3_make(0.0f, -cylinder_span * 0.5f, 0.0f);
-        const sdl3d_vec3 end = sdl3d_vec3_make(0.0f, cylinder_span * 0.5f, 0.0f);
-        return sdl3d_draw_capsule(context->renderer, start, end, primitive->radius, primitive->slices, primitive->rings,
-                                  primitive->color);
+        const slayer3d_vec3 start = slayer3d_vec3_make(0.0f, -cylinder_span * 0.5f, 0.0f);
+        const slayer3d_vec3 end = slayer3d_vec3_make(0.0f, cylinder_span * 0.5f, 0.0f);
+        return slayer3d_draw_capsule(context->renderer, start, end, primitive->radius, primitive->slices,
+                                     primitive->rings, primitive->color);
     }
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
-        return sdl3d_draw_cylinder(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
-                                   primitive->radius_bottom, primitive->height, primitive->slices, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE:
-        return sdl3d_draw_cylinder(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
-                                   primitive->radius_bottom, primitive->height, primitive->slices, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
-        return sdl3d_draw_torus(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
-                                primitive->minor_radius, primitive->slices, primitive->tube_segments, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
-        return sdl3d_draw_pyramid(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
-                                  primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
-        return sdl3d_draw_wedge(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
-                                primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
-        return sdl3d_draw_quad(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
-                               (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
-        return sdl3d_draw_disc(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                               primitive->slices, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
-        return sdl3d_draw_hemisphere(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                                     primitive->rings, primitive->slices, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
-        return sdl3d_draw_rounded_box(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
-                                      primitive->bevel_radius, primitive->rings, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
-        return sdl3d_draw_tube_segment(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
-                                       primitive->minor_radius, primitive->arc_angle, primitive->slices,
-                                       primitive->tube_segments, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
-        return sdl3d_draw_arrow(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                                primitive->height, primitive->slices, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
-        return sdl3d_draw_quad(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
-                               (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+        return slayer3d_draw_cylinder(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
+                                      primitive->radius_bottom, primitive->height, primitive->slices, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        return slayer3d_draw_cylinder(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
+                                      primitive->radius_bottom, primitive->height, primitive->slices, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+        return slayer3d_draw_torus(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
+                                   primitive->minor_radius, primitive->slices, primitive->tube_segments,
+                                   primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+        return slayer3d_draw_pyramid(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                     primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+        return slayer3d_draw_wedge(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                   primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+        return slayer3d_draw_quad(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                  (slayer3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return slayer3d_draw_disc(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                  primitive->slices, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return slayer3d_draw_hemisphere(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                        primitive->rings, primitive->slices, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return slayer3d_draw_rounded_box(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                         primitive->bevel_radius, primitive->rings, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return slayer3d_draw_tube_segment(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                          primitive->major_radius, primitive->minor_radius, primitive->arc_angle,
+                                          primitive->slices, primitive->tube_segments, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+        return slayer3d_draw_arrow(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                   primitive->height, primitive->slices, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        return slayer3d_draw_quad(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                  (slayer3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
     default:
         return false;
     }
 }
 
 static bool draw_mesh_primitive_wires(primitive_draw_context *context,
-                                      const sdl3d_game_data_render_primitive *primitive)
+                                      const slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL)
         return false;
     switch (primitive->mesh_primitive)
     {
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
-        return sdl3d_draw_cube_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
-                                     primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
-        return sdl3d_draw_sphere_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                                       primitive->rings, primitive->slices, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE: {
-        const float cylinder_span = SDL_max(primitive->height - primitive->radius * 2.0f, 0.0f);
-        const sdl3d_vec3 start = sdl3d_vec3_make(0.0f, -cylinder_span * 0.5f, 0.0f);
-        const sdl3d_vec3 end = sdl3d_vec3_make(0.0f, cylinder_span * 0.5f, 0.0f);
-        return sdl3d_draw_capsule_wires(context->renderer, start, end, primitive->radius, primitive->slices,
-                                        primitive->rings, primitive->wire_color);
-    }
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
-        return sdl3d_draw_cylinder_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
-                                         primitive->radius_bottom, primitive->height, primitive->slices,
-                                         primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE:
-        return sdl3d_draw_cylinder_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
-                                         primitive->radius_bottom, primitive->height, primitive->slices,
-                                         primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
-        return sdl3d_draw_torus_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
-                                      primitive->minor_radius, primitive->slices, primitive->tube_segments,
-                                      primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
-        return sdl3d_draw_pyramid_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+        return slayer3d_draw_cube_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
                                         primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
-        return sdl3d_draw_wedge_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
-                                      primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
-        return sdl3d_draw_quad_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                     (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
-        return sdl3d_draw_disc_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                                     primitive->slices, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
-        return sdl3d_draw_hemisphere_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                                           primitive->rings, primitive->slices, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
-        return sdl3d_draw_rounded_box_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
-                                            primitive->bevel_radius, primitive->rings, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
-        return sdl3d_draw_tube_segment_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                             primitive->major_radius, primitive->minor_radius, primitive->arc_angle,
-                                             primitive->slices, primitive->tube_segments, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
-        return sdl3d_draw_arrow_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
-                                      primitive->height, primitive->slices, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
-        return sdl3d_draw_quad_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                     (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
-    case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        return slayer3d_draw_sphere_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                          primitive->rings, primitive->slices, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE: {
+        const float cylinder_span = SDL_max(primitive->height - primitive->radius * 2.0f, 0.0f);
+        const slayer3d_vec3 start = slayer3d_vec3_make(0.0f, -cylinder_span * 0.5f, 0.0f);
+        const slayer3d_vec3 end = slayer3d_vec3_make(0.0f, cylinder_span * 0.5f, 0.0f);
+        return slayer3d_draw_capsule_wires(context->renderer, start, end, primitive->radius, primitive->slices,
+                                           primitive->rings, primitive->wire_color);
+    }
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+        return slayer3d_draw_cylinder_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                            primitive->radius_top, primitive->radius_bottom, primitive->height,
+                                            primitive->slices, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        return slayer3d_draw_cylinder_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                            primitive->radius_top, primitive->radius_bottom, primitive->height,
+                                            primitive->slices, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+        return slayer3d_draw_torus_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                         primitive->major_radius, primitive->minor_radius, primitive->slices,
+                                         primitive->tube_segments, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+        return slayer3d_draw_pyramid_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                           primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+        return slayer3d_draw_wedge_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                         primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+        return slayer3d_draw_quad_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                        (slayer3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return slayer3d_draw_disc_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                        primitive->slices, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return slayer3d_draw_hemisphere_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                              primitive->radius, primitive->rings, primitive->slices,
+                                              primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return slayer3d_draw_rounded_box_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                               primitive->bevel_radius, primitive->rings, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return slayer3d_draw_tube_segment_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                primitive->major_radius, primitive->minor_radius, primitive->arc_angle,
+                                                primitive->slices, primitive->tube_segments, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+        return slayer3d_draw_arrow_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                         primitive->height, primitive->slices, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        return slayer3d_draw_quad_wires(context->renderer, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                        (slayer3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
     default:
         return false;
     }
 }
 
-static bool draw_mesh_primitive(primitive_draw_context *context, const sdl3d_game_data_render_primitive *primitive)
+static bool draw_mesh_primitive(primitive_draw_context *context, const slayer3d_game_data_render_primitive *primitive)
 {
-    if (!sdl3d_push_matrix(context->renderer))
+    if (!slayer3d_push_matrix(context->renderer))
         return false;
-    bool ok = sdl3d_translate(context->renderer, primitive->position.x, primitive->position.y, primitive->position.z);
+    bool ok =
+        slayer3d_translate(context->renderer, primitive->position.x, primitive->position.y, primitive->position.z);
     const float axis_length_sq = primitive->rotation_axis.x * primitive->rotation_axis.x +
                                  primitive->rotation_axis.y * primitive->rotation_axis.y +
                                  primitive->rotation_axis.z * primitive->rotation_axis.z;
     if (ok && axis_length_sq > 0.000001f && SDL_fabsf(primitive->rotation_angle) > 0.000001f)
-        ok = sdl3d_rotate(context->renderer, primitive->rotation_axis, primitive->rotation_angle);
-    if (ok && primitive->draw_mode != SDL3D_GAME_DATA_RENDER_DRAW_WIRE)
+        ok = slayer3d_rotate(context->renderer, primitive->rotation_axis, primitive->rotation_angle);
+    if (ok && primitive->draw_mode != SLAYER3D_GAME_DATA_RENDER_DRAW_WIRE)
         ok = draw_mesh_primitive_solid(context, primitive);
-    if (ok && primitive->draw_mode != SDL3D_GAME_DATA_RENDER_DRAW_SOLID)
+    if (ok && primitive->draw_mode != SLAYER3D_GAME_DATA_RENDER_DRAW_SOLID)
         ok = draw_mesh_primitive_wires(context, primitive);
-    const bool pop_ok = sdl3d_pop_matrix(context->renderer);
+    const bool pop_ok = slayer3d_pop_matrix(context->renderer);
     return ok && pop_ok;
 }
 
-static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
+static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primitive *primitive)
 {
     primitive_draw_context *context = (primitive_draw_context *)userdata;
     if (context == NULL || context->renderer == NULL || primitive == NULL)
@@ -1650,72 +1661,73 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
     if (!flush_sphere_draw_batch(context))
         return false;
 
-    const bool restore_lighting = sdl3d_is_lighting_enabled(context->renderer);
+    const bool restore_lighting = slayer3d_is_lighting_enabled(context->renderer);
     if (!primitive->lighting_enabled)
-        sdl3d_set_lighting_enabled(context->renderer, false);
-    sdl3d_set_emissive(context->renderer, primitive->emissive_color.x, primitive->emissive_color.y,
-                       primitive->emissive_color.z);
-    if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
+        slayer3d_set_lighting_enabled(context->renderer, false);
+    slayer3d_set_emissive(context->renderer, primitive->emissive_color.x, primitive->emissive_color.y,
+                          primitive->emissive_color.z);
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_CUBE)
     {
-        const sdl3d_texture2d *texture = primitive_texture(context, primitive);
-        if (!sdl3d_draw_cube_textured(context->renderer, primitive->position, primitive->size, primitive->rotation_axis,
-                                      primitive->rotation_angle, texture, primitive->color))
+        const slayer3d_texture2d *texture = primitive_texture(context, primitive);
+        if (!slayer3d_draw_cube_textured(context->renderer, primitive->position, primitive->size,
+                                         primitive->rotation_axis, primitive->rotation_angle, texture,
+                                         primitive->color))
             return false;
     }
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE)
     {
-        const sdl3d_texture2d *texture = primitive_texture(context, primitive);
-        if (!sdl3d_draw_sphere_textured(context->renderer, primitive->position, primitive->radius, primitive->rings,
-                                        primitive->slices, primitive->rotation_axis, primitive->rotation_angle, texture,
-                                        primitive->color))
+        const slayer3d_texture2d *texture = primitive_texture(context, primitive);
+        if (!slayer3d_draw_sphere_textured(context->renderer, primitive->position, primitive->radius, primitive->rings,
+                                           primitive->slices, primitive->rotation_axis, primitive->rotation_angle,
+                                           texture, primitive->color))
             return false;
     }
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
     {
         if (!draw_mesh_primitive(context, primitive))
             return false;
     }
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH)
     {
         if (!draw_sphere_batch(context->renderer, primitive))
             return false;
     }
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPRITE)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPRITE)
     {
         if (context->sprite_cache == NULL)
             return true;
-        sdl3d_game_data_sprite_cache_entry *entry =
+        slayer3d_game_data_sprite_cache_entry *entry =
             find_or_load_sprite_entry(context->runtime, context->sprite_cache, primitive->sprite_asset);
         if (entry == NULL)
             return false;
 
-        sdl3d_sprite_actor actor;
+        slayer3d_sprite_actor actor;
         SDL_zero(actor);
-        sdl3d_sprite_asset_apply_actor(&actor, &entry->sprite);
+        slayer3d_sprite_asset_apply_actor(&actor, &entry->sprite);
         actor.position = primitive->position;
         actor.size = primitive->sprite_size.x > 0.0f && primitive->sprite_size.y > 0.0f ? primitive->sprite_size
-                                                                                        : (sdl3d_vec2){1.0f, 1.0f};
+                                                                                        : (slayer3d_vec2){1.0f, 1.0f};
         actor.tint = primitive->color;
         actor.visible = true;
         actor.sector_id = -1;
-        sdl3d_sprite_actor_set_facing_yaw(&actor, primitive->sprite_facing_yaw);
+        slayer3d_sprite_actor_set_facing_yaw(&actor, primitive->sprite_facing_yaw);
         if (context->eval != NULL)
             actor.animation_time = context->eval->time;
 
-        sdl3d_sprite_scene scene;
+        slayer3d_sprite_scene scene;
         SDL_zero(scene);
         scene.actors = &actor;
         scene.count = 1;
         scene.capacity = 1;
-        const sdl3d_vec3 camera_position =
-            context->camera != NULL ? context->camera->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
-        sdl3d_sprite_scene_draw(&scene, context->renderer, camera_position, NULL);
+        const slayer3d_vec3 camera_position =
+            context->camera != NULL ? context->camera->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        slayer3d_sprite_scene_draw(&scene, context->renderer, camera_position, NULL);
     }
-    else if (primitive->type == SDL3D_GAME_DATA_RENDER_MODEL)
+    else if (primitive->type == SLAYER3D_GAME_DATA_RENDER_MODEL)
     {
         if (context->model_cache == NULL)
             return true;
-        sdl3d_game_data_model_cache_entry *entry =
+        slayer3d_game_data_model_cache_entry *entry =
             find_or_load_model_entry(context->runtime, context->model_cache, primitive->model_asset);
         if (entry == NULL)
             return false;
@@ -1724,7 +1736,7 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
             int clip_index = primitive->animation_clip;
             if (clip_index >= entry->model.animation_count)
                 clip_index = 0;
-            const sdl3d_animation_clip *clip = &entry->model.animations[clip_index];
+            const slayer3d_animation_clip *clip = &entry->model.animations[clip_index];
             float animation_time = primitive->animation_time;
             if (primitive->animation_loop && clip->duration > 0.0f)
             {
@@ -1733,13 +1745,13 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
                     animation_time += clip->duration;
             }
             const int joint_count = entry->model.skeleton->joint_count;
-            sdl3d_mat4 *joint_matrices = (sdl3d_mat4 *)SDL_calloc((size_t)joint_count, sizeof(*joint_matrices));
+            slayer3d_mat4 *joint_matrices = (slayer3d_mat4 *)SDL_calloc((size_t)joint_count, sizeof(*joint_matrices));
             if (joint_matrices == NULL)
                 return false;
             const bool evaluated =
-                sdl3d_evaluate_animation(entry->model.skeleton, clip, animation_time, joint_matrices);
+                slayer3d_evaluate_animation(entry->model.skeleton, clip, animation_time, joint_matrices);
             const bool drawn =
-                evaluated && sdl3d_draw_model_skinned_with_assets(
+                evaluated && slayer3d_draw_model_skinned_with_assets(
                                  context->renderer, context->model_cache->assets, &entry->model, primitive->position,
                                  primitive->rotation_axis, primitive->rotation_angle, primitive->model_scale,
                                  primitive->color, joint_matrices);
@@ -1747,28 +1759,28 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
             if (!drawn)
                 return false;
         }
-        else if (!sdl3d_draw_model_ex_with_assets(context->renderer, context->model_cache->assets, &entry->model,
-                                                  primitive->position, primitive->rotation_axis,
-                                                  primitive->rotation_angle, primitive->model_scale, primitive->color))
+        else if (!slayer3d_draw_model_ex_with_assets(
+                     context->renderer, context->model_cache->assets, &entry->model, primitive->position,
+                     primitive->rotation_axis, primitive->rotation_angle, primitive->model_scale, primitive->color))
         {
             return false;
         }
     }
-    sdl3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
+    slayer3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
     if (!primitive->lighting_enabled)
-        sdl3d_set_lighting_enabled(context->renderer, restore_lighting);
+        slayer3d_set_lighting_enabled(context->renderer, restore_lighting);
     return true;
 }
 
-static bool draw_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
+static bool draw_ui_text(void *userdata, const slayer3d_game_data_ui_text *text)
 {
     ui_draw_context *draw = (ui_draw_context *)userdata;
     if (draw == NULL || text == NULL)
         return false;
 
-    sdl3d_game_data_ui_text resolved;
+    slayer3d_game_data_ui_text resolved;
     bool visible = false;
-    if (!sdl3d_game_data_resolve_ui_text(draw->runtime, text, draw->metrics, &resolved, &visible))
+    if (!slayer3d_game_data_resolve_ui_text(draw->runtime, text, draw->metrics, &resolved, &visible))
     {
         draw->ok = false;
         return true;
@@ -1777,17 +1789,17 @@ static bool draw_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         return true;
 
     char content[128];
-    if (!sdl3d_game_data_format_ui_text(draw->runtime, &resolved, draw->metrics, content, sizeof(content)))
+    if (!slayer3d_game_data_format_ui_text(draw->runtime, &resolved, draw->metrics, content, sizeof(content)))
         return true;
 
-    sdl3d_font *font = find_or_load_font(draw->runtime, draw->font_cache, resolved.font);
+    slayer3d_font *font = find_or_load_font(draw->runtime, draw->font_cache, resolved.font);
     if (font == NULL)
     {
         draw->ok = false;
         return true;
     }
 
-    sdl3d_color color = resolved.color;
+    slayer3d_color color = resolved.color;
     if (resolved.pulse_alpha)
     {
         const float pulse = 0.5f + 0.5f * SDL_sinf(draw->pulse_phase * SDL_PI_F * 2.0f);
@@ -1795,33 +1807,33 @@ static bool draw_ui_text(void *userdata, const sdl3d_game_data_ui_text *text)
         color.a = (Uint8)SDL_clamp((int)((float)color.a * alpha + 0.5f), 0, 255);
     }
 
-    const int width = sdl3d_get_render_context_width(draw->renderer);
-    const int height = sdl3d_get_render_context_height(draw->renderer);
+    const int width = slayer3d_get_render_context_width(draw->renderer);
+    const int height = slayer3d_get_render_context_height(draw->renderer);
     const float scale = resolved.scale > 0.0f ? resolved.scale : 1.0f;
     float x = resolved.normalized ? resolved.x * (float)width : resolved.x;
     const float y = resolved.normalized ? resolved.y * (float)height : resolved.y;
-    if (resolved.align == SDL3D_GAME_DATA_UI_ALIGN_CENTER || resolved.centered)
+    if (resolved.align == SLAYER3D_GAME_DATA_UI_ALIGN_CENTER || resolved.centered)
     {
         float text_w = 0.0f;
         float text_h = 0.0f;
-        sdl3d_measure_text(font, content, &text_w, &text_h);
+        slayer3d_measure_text(font, content, &text_w, &text_h);
         x -= text_w * scale * 0.5f;
     }
-    else if (resolved.align == SDL3D_GAME_DATA_UI_ALIGN_RIGHT)
+    else if (resolved.align == SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT)
     {
         float text_w = 0.0f;
         float text_h = 0.0f;
-        sdl3d_measure_text(font, content, &text_w, &text_h);
+        slayer3d_measure_text(font, content, &text_w, &text_h);
         x -= text_w * scale;
     }
 
-    if (!sdl3d_draw_text_overlay_scaled(draw->renderer, font, content, x, y, scale, color))
+    if (!slayer3d_draw_text_overlay_scaled(draw->renderer, font, content, x, y, scale, color))
         draw->ok = false;
     return true;
 }
 
-static void resolve_ui_image_rect(const sdl3d_game_data_ui_image *image, const sdl3d_texture2d *texture, int width,
-                                  int height, float *out_x, float *out_y, float *out_w, float *out_h)
+static void resolve_ui_image_rect(const slayer3d_game_data_ui_image *image, const slayer3d_texture2d *texture,
+                                  int width, int height, float *out_x, float *out_y, float *out_w, float *out_h)
 {
     float w = image->normalized ? image->w * (float)width : image->w;
     float h = image->normalized ? image->h * (float)height : image->h;
@@ -1853,13 +1865,13 @@ static void resolve_ui_image_rect(const sdl3d_game_data_ui_image *image, const s
 
     float x = image->normalized ? image->x * (float)width : image->x;
     float y = image->normalized ? image->y * (float)height : image->y;
-    if (image->align == SDL3D_GAME_DATA_UI_ALIGN_CENTER)
+    if (image->align == SLAYER3D_GAME_DATA_UI_ALIGN_CENTER)
         x -= w * 0.5f;
-    else if (image->align == SDL3D_GAME_DATA_UI_ALIGN_RIGHT)
+    else if (image->align == SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT)
         x -= w;
-    if (image->valign == SDL3D_GAME_DATA_UI_VALIGN_CENTER)
+    if (image->valign == SLAYER3D_GAME_DATA_UI_VALIGN_CENTER)
         y -= h * 0.5f;
-    else if (image->valign == SDL3D_GAME_DATA_UI_VALIGN_BOTTOM)
+    else if (image->valign == SLAYER3D_GAME_DATA_UI_VALIGN_BOTTOM)
         y -= h;
 
     *out_x = x;
@@ -1868,15 +1880,15 @@ static void resolve_ui_image_rect(const sdl3d_game_data_ui_image *image, const s
     *out_h = h;
 }
 
-static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
+static bool draw_ui_image(void *userdata, const slayer3d_game_data_ui_image *image)
 {
     ui_image_draw_context *draw = (ui_image_draw_context *)userdata;
     if (draw == NULL || image == NULL)
         return false;
 
-    sdl3d_game_data_ui_image resolved;
+    slayer3d_game_data_ui_image resolved;
     bool visible = false;
-    if (!sdl3d_game_data_resolve_ui_image(draw->runtime, image, draw->metrics, &resolved, &visible))
+    if (!slayer3d_game_data_resolve_ui_image(draw->runtime, image, draw->metrics, &resolved, &visible))
     {
         draw->ok = false;
         return true;
@@ -1884,26 +1896,26 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     if (!visible)
         return true;
 
-    sdl3d_game_data_image_cache_entry *entry =
+    slayer3d_game_data_image_cache_entry *entry =
         find_or_load_image_entry(draw->runtime, draw->image_cache, resolved.image);
     if (entry == NULL)
     {
         draw->ok = false;
         return true;
     }
-    sdl3d_texture2d *texture = &entry->texture;
+    slayer3d_texture2d *texture = &entry->texture;
 
-    const int width = sdl3d_get_render_context_width(draw->renderer);
-    const int height = sdl3d_get_render_context_height(draw->renderer);
+    const int width = slayer3d_get_render_context_width(draw->renderer);
+    const int height = slayer3d_get_render_context_height(draw->renderer);
     float x = 0.0f;
     float y = 0.0f;
     float w = 0.0f;
     float h = 0.0f;
     resolve_ui_image_rect(&resolved, texture, width, height, &x, &y, &w, &h);
     const char *effect_name = resolved.effect != NULL ? resolved.effect : entry->effect;
-    const sdl3d_overlay_effect effect = ui_image_effect_from_name(effect_name);
+    const slayer3d_overlay_effect effect = ui_image_effect_from_name(effect_name);
     const float effect_progress =
-        effect != SDL3D_OVERLAY_EFFECT_NONE && draw->render_eval != NULL
+        effect != SLAYER3D_OVERLAY_EFFECT_NONE && draw->render_eval != NULL
             ? SDL_clamp((draw->render_eval->time - entry->effect_delay) / SDL_max(entry->effect_duration, 0.0001f),
                         0.0f, 1.0f)
             : 0.0f;
@@ -1911,18 +1923,18 @@ static bool draw_ui_image(void *userdata, const sdl3d_game_data_ui_image *image)
     const bool has_custom_shader = (entry->shader_vertex_source != NULL && entry->shader_vertex_source[0] != '\0') ||
                                    (entry->shader_fragment_source != NULL && entry->shader_fragment_source[0] != '\0');
     const bool drawn = has_custom_shader
-                           ? sdl3d_draw_texture_overlay_shader(
+                           ? slayer3d_draw_texture_overlay_shader(
                                  draw->renderer, texture, x, y, w, h, resolved.color, effect, effect_progress,
                                  effect_seed, entry->shader_vertex_source, entry->shader_fragment_source)
-                           : sdl3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color, effect,
-                                                        effect_progress, effect_seed);
+                           : slayer3d_draw_texture_overlay(draw->renderer, texture, x, y, w, h, resolved.color, effect,
+                                                           effect_progress, effect_seed);
     if (!drawn)
         draw->ok = false;
     return true;
 }
 
-static void resolve_ui_rect_rect(const sdl3d_game_data_ui_rect *rect, int width, int height, float *out_x, float *out_y,
-                                 float *out_w, float *out_h)
+static void resolve_ui_rect_rect(const slayer3d_game_data_ui_rect *rect, int width, int height, float *out_x,
+                                 float *out_y, float *out_w, float *out_h)
 {
     float w = rect->normalized ? rect->w * (float)width : rect->w;
     float h = rect->normalized ? rect->h * (float)height : rect->h;
@@ -1932,13 +1944,13 @@ static void resolve_ui_rect_rect(const sdl3d_game_data_ui_rect *rect, int width,
 
     float x = rect->normalized ? rect->x * (float)width : rect->x;
     float y = rect->normalized ? rect->y * (float)height : rect->y;
-    if (rect->align == SDL3D_GAME_DATA_UI_ALIGN_CENTER)
+    if (rect->align == SLAYER3D_GAME_DATA_UI_ALIGN_CENTER)
         x -= w * 0.5f;
-    else if (rect->align == SDL3D_GAME_DATA_UI_ALIGN_RIGHT)
+    else if (rect->align == SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT)
         x -= w;
-    if (rect->valign == SDL3D_GAME_DATA_UI_VALIGN_CENTER)
+    if (rect->valign == SLAYER3D_GAME_DATA_UI_VALIGN_CENTER)
         y -= h * 0.5f;
-    else if (rect->valign == SDL3D_GAME_DATA_UI_VALIGN_BOTTOM)
+    else if (rect->valign == SLAYER3D_GAME_DATA_UI_VALIGN_BOTTOM)
         y -= h;
 
     *out_x = x;
@@ -1947,15 +1959,15 @@ static void resolve_ui_rect_rect(const sdl3d_game_data_ui_rect *rect, int width,
     *out_h = h;
 }
 
-static bool draw_ui_rect(void *userdata, const sdl3d_game_data_ui_rect *rect)
+static bool draw_ui_rect(void *userdata, const slayer3d_game_data_ui_rect *rect)
 {
     ui_rect_draw_context *draw = (ui_rect_draw_context *)userdata;
     if (draw == NULL || rect == NULL)
         return false;
 
-    sdl3d_game_data_ui_rect resolved;
+    slayer3d_game_data_ui_rect resolved;
     bool visible = false;
-    if (!sdl3d_game_data_resolve_ui_rect(draw->runtime, rect, draw->metrics, &resolved, &visible))
+    if (!slayer3d_game_data_resolve_ui_rect(draw->runtime, rect, draw->metrics, &resolved, &visible))
     {
         draw->ok = false;
         return true;
@@ -1963,7 +1975,7 @@ static bool draw_ui_rect(void *userdata, const sdl3d_game_data_ui_rect *rect)
     if (!visible)
         return true;
 
-    sdl3d_color color = resolved.color;
+    slayer3d_color color = resolved.color;
     if (resolved.pulse_alpha)
     {
         const float time = draw->render_eval != NULL ? draw->render_eval->time : 0.0f;
@@ -1974,43 +1986,43 @@ static bool draw_ui_rect(void *userdata, const sdl3d_game_data_ui_rect *rect)
     if (color.a == 0)
         return true;
 
-    const int width = sdl3d_get_render_context_width(draw->renderer);
-    const int height = sdl3d_get_render_context_height(draw->renderer);
+    const int width = slayer3d_get_render_context_width(draw->renderer);
+    const int height = slayer3d_get_render_context_height(draw->renderer);
     float x = 0.0f;
     float y = 0.0f;
     float w = 0.0f;
     float h = 0.0f;
     resolve_ui_rect_rect(&resolved, width, height, &x, &y, &w, &h);
-    if (!sdl3d_draw_rect_overlay(draw->renderer, x, y, w, h, color))
+    if (!slayer3d_draw_rect_overlay(draw->renderer, x, y, w, h, color))
         draw->ok = false;
     return true;
 }
 
-static bool update_particle(void *userdata, const sdl3d_game_data_particle_emitter *emitter)
+static bool update_particle(void *userdata, const slayer3d_game_data_particle_emitter *emitter)
 {
     particle_update_context *context = (particle_update_context *)userdata;
     if (context == NULL || context->cache == NULL || emitter == NULL)
         return false;
 
-    sdl3d_game_data_particle_cache_entry *entry = find_or_create_particle_entry(context->cache, emitter);
+    slayer3d_game_data_particle_cache_entry *entry = find_or_create_particle_entry(context->cache, emitter);
     if (entry == NULL)
     {
         context->ok = false;
         return true;
     }
 
-    if (!sdl3d_particle_emitter_set_config(entry->emitter, &emitter->config))
+    if (!slayer3d_particle_emitter_set_config(entry->emitter, &emitter->config))
     {
         context->ok = false;
         return true;
     }
     entry->draw_emissive = emitter->draw_emissive;
     entry->visible = true;
-    sdl3d_particle_emitter_update(entry->emitter, context->dt);
+    slayer3d_particle_emitter_update(entry->emitter, context->dt);
     return true;
 }
 
-void sdl3d_game_data_font_cache_init(sdl3d_game_data_font_cache *cache, const char *media_dir)
+void slayer3d_game_data_font_cache_init(slayer3d_game_data_font_cache *cache, const char *media_dir)
 {
     if (cache == NULL)
         return;
@@ -2018,18 +2030,18 @@ void sdl3d_game_data_font_cache_init(sdl3d_game_data_font_cache *cache, const ch
     cache->media_dir = media_dir;
 }
 
-void sdl3d_game_data_font_cache_free(sdl3d_game_data_font_cache *cache)
+void slayer3d_game_data_font_cache_free(slayer3d_game_data_font_cache *cache)
 {
     if (cache == NULL)
         return;
     for (int i = 0; i < cache->count; ++i)
-        sdl3d_free_font(&cache->fonts[i]);
+        slayer3d_free_font(&cache->fonts[i]);
     SDL_free(cache->fonts);
     SDL_free(cache->font_ids);
     SDL_zero(*cache);
 }
 
-void sdl3d_game_data_image_cache_init(sdl3d_game_data_image_cache *cache, sdl3d_asset_resolver *assets)
+void slayer3d_game_data_image_cache_init(slayer3d_game_data_image_cache *cache, slayer3d_asset_resolver *assets)
 {
     if (cache == NULL)
         return;
@@ -2037,14 +2049,14 @@ void sdl3d_game_data_image_cache_init(sdl3d_game_data_image_cache *cache, sdl3d_
     cache->assets = assets;
 }
 
-void sdl3d_game_data_image_cache_free(sdl3d_game_data_image_cache *cache)
+void slayer3d_game_data_image_cache_free(slayer3d_game_data_image_cache *cache)
 {
     if (cache == NULL)
         return;
     for (int i = 0; i < cache->count; ++i)
     {
         if (cache->entries[i].loaded)
-            sdl3d_free_texture(&cache->entries[i].texture);
+            slayer3d_free_texture(&cache->entries[i].texture);
         SDL_free(cache->entries[i].shader_vertex_source);
         SDL_free(cache->entries[i].shader_fragment_source);
     }
@@ -2052,7 +2064,7 @@ void sdl3d_game_data_image_cache_free(sdl3d_game_data_image_cache *cache)
     SDL_zero(*cache);
 }
 
-void sdl3d_game_data_sprite_cache_init(sdl3d_game_data_sprite_cache *cache, sdl3d_asset_resolver *assets)
+void slayer3d_game_data_sprite_cache_init(slayer3d_game_data_sprite_cache *cache, slayer3d_asset_resolver *assets)
 {
     if (cache == NULL)
         return;
@@ -2060,20 +2072,20 @@ void sdl3d_game_data_sprite_cache_init(sdl3d_game_data_sprite_cache *cache, sdl3
     cache->assets = assets;
 }
 
-void sdl3d_game_data_sprite_cache_free(sdl3d_game_data_sprite_cache *cache)
+void slayer3d_game_data_sprite_cache_free(slayer3d_game_data_sprite_cache *cache)
 {
     if (cache == NULL)
         return;
     for (int i = 0; i < cache->count; ++i)
     {
         if (cache->entries[i].loaded)
-            sdl3d_sprite_asset_free(&cache->entries[i].sprite);
+            slayer3d_sprite_asset_free(&cache->entries[i].sprite);
     }
     SDL_free(cache->entries);
     SDL_zero(*cache);
 }
 
-void sdl3d_game_data_model_cache_init(sdl3d_game_data_model_cache *cache, sdl3d_asset_resolver *assets)
+void slayer3d_game_data_model_cache_init(slayer3d_game_data_model_cache *cache, slayer3d_asset_resolver *assets)
 {
     if (cache == NULL)
         return;
@@ -2081,27 +2093,27 @@ void sdl3d_game_data_model_cache_init(sdl3d_game_data_model_cache *cache, sdl3d_
     cache->assets = assets;
 }
 
-void sdl3d_game_data_model_cache_free(sdl3d_game_data_model_cache *cache)
+void slayer3d_game_data_model_cache_free(slayer3d_game_data_model_cache *cache)
 {
     if (cache == NULL)
         return;
     for (int i = 0; i < cache->count; ++i)
     {
         if (cache->entries[i].loaded)
-            sdl3d_free_model(&cache->entries[i].model);
+            slayer3d_free_model(&cache->entries[i].model);
     }
     SDL_free(cache->entries);
     SDL_zero(*cache);
 }
 
-void sdl3d_game_data_mesh_primitive_cache_init(sdl3d_game_data_mesh_primitive_cache *cache)
+void slayer3d_game_data_mesh_primitive_cache_init(slayer3d_game_data_mesh_primitive_cache *cache)
 {
     if (cache == NULL)
         return;
     SDL_zero(*cache);
 }
 
-void sdl3d_game_data_mesh_primitive_cache_free(sdl3d_game_data_mesh_primitive_cache *cache)
+void slayer3d_game_data_mesh_primitive_cache_free(slayer3d_game_data_mesh_primitive_cache *cache)
 {
     if (cache == NULL)
         return;
@@ -2112,10 +2124,10 @@ void sdl3d_game_data_mesh_primitive_cache_free(sdl3d_game_data_mesh_primitive_ca
 }
 
 static bool draw_render_primitives_evaluated_with_cache(
-    const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer, const sdl3d_game_data_render_eval *eval,
-    sdl3d_game_data_image_cache *image_cache, sdl3d_game_data_sprite_cache *sprite_cache,
-    sdl3d_game_data_model_cache *model_cache, sdl3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
-    const sdl3d_camera3d *camera)
+    const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+    const slayer3d_game_data_render_eval *eval, slayer3d_game_data_image_cache *image_cache,
+    slayer3d_game_data_sprite_cache *sprite_cache, slayer3d_game_data_model_cache *model_cache,
+    slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache, const slayer3d_camera3d *camera)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -2130,21 +2142,21 @@ static bool draw_render_primitives_evaluated_with_cache(
     context.mesh_primitive_cache = mesh_primitive_cache;
     context.camera = camera;
     context.eval = eval;
-    bool ok = sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
+    bool ok = slayer3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
     ok = flush_sphere_draw_batch(&context) && ok;
     SDL_free(context.sphere_batch_positions);
     return ok;
 }
 
-static bool draw_sector_level_instance(void *userdata, const sdl3d_game_data_sector_level_instance *instance)
+static bool draw_sector_level_instance(void *userdata, const slayer3d_game_data_sector_level_instance *instance)
 {
     sector_level_draw_context *context = (sector_level_draw_context *)userdata;
     if (context == NULL || context->renderer == NULL || instance == NULL || instance->level == NULL)
         return false;
 
-    sdl3d_visibility_result vis;
+    slayer3d_visibility_result vis;
     SDL_zero(vis);
-    const sdl3d_visibility_result *vis_ptr = NULL;
+    const slayer3d_visibility_result *vis_ptr = NULL;
     if (instance->portal_culling && context->camera != NULL && instance->sectors != NULL && instance->sector_count > 0)
     {
         if (context->sector_visible_capacity < instance->sector_count)
@@ -2160,55 +2172,56 @@ static bool draw_sector_level_instance(void *userdata, const sdl3d_game_data_sec
             context->sector_visible_capacity = instance->sector_count;
         }
         vis.sector_visible = context->sector_visible;
-        sdl3d_camera3d local_camera = *context->camera;
+        slayer3d_camera3d local_camera = *context->camera;
         local_camera.position.x -= instance->position.x;
         local_camera.position.y -= instance->position.y;
         local_camera.position.z -= instance->position.z;
         local_camera.target.x -= instance->position.x;
         local_camera.target.y -= instance->position.y;
         local_camera.target.z -= instance->position.z;
-        sdl3d_level_compute_visibility_from_camera(
-            instance->level, instance->sectors, &local_camera, sdl3d_get_render_context_width(context->renderer),
-            sdl3d_get_render_context_height(context->renderer), 0.01f, 1000.0f, &vis);
+        slayer3d_level_compute_visibility_from_camera(
+            instance->level, instance->sectors, &local_camera, slayer3d_get_render_context_width(context->renderer),
+            slayer3d_get_render_context_height(context->renderer), 0.01f, 1000.0f, &vis);
         vis_ptr = &vis;
     }
 
     bool pushed = false;
     if (instance->position.x != 0.0f || instance->position.y != 0.0f || instance->position.z != 0.0f)
     {
-        if (!sdl3d_push_matrix(context->renderer))
+        if (!slayer3d_push_matrix(context->renderer))
         {
             context->ok = false;
             return false;
         }
         pushed = true;
-        if (!sdl3d_translate(context->renderer, instance->position.x, instance->position.y, instance->position.z))
+        if (!slayer3d_translate(context->renderer, instance->position.x, instance->position.y, instance->position.z))
         {
             context->ok = false;
             if (pushed)
-                (void)sdl3d_pop_matrix(context->renderer);
+                (void)slayer3d_pop_matrix(context->renderer);
             return false;
         }
     }
 
-    const bool drawn = sdl3d_draw_level_with_assets(context->renderer, context->assets, instance->level, vis_ptr,
-                                                    (sdl3d_color){255, 255, 255, 255});
-    if (pushed && !sdl3d_pop_matrix(context->renderer))
+    const bool drawn = slayer3d_draw_level_with_assets(context->renderer, context->assets, instance->level, vis_ptr,
+                                                       (slayer3d_color){255, 255, 255, 255});
+    if (pushed && !slayer3d_pop_matrix(context->renderer))
         context->ok = false;
     if (!drawn)
         context->ok = false;
     return context->ok;
 }
 
-bool sdl3d_game_data_draw_sector_levels(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                        const sdl3d_camera3d *camera)
+bool slayer3d_game_data_draw_sector_levels(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                           const slayer3d_camera3d *camera)
 {
-    return sdl3d_game_data_draw_sector_levels_with_assets(runtime, renderer, NULL, camera);
+    return slayer3d_game_data_draw_sector_levels_with_assets(runtime, renderer, NULL, camera);
 }
 
-bool sdl3d_game_data_draw_sector_levels_with_assets(const sdl3d_game_data_runtime *runtime,
-                                                    sdl3d_render_context *renderer, const sdl3d_asset_resolver *assets,
-                                                    const sdl3d_camera3d *camera)
+bool slayer3d_game_data_draw_sector_levels_with_assets(const slayer3d_game_data_runtime *runtime,
+                                                       slayer3d_render_context *renderer,
+                                                       const slayer3d_asset_resolver *assets,
+                                                       const slayer3d_camera3d *camera)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -2219,52 +2232,54 @@ bool sdl3d_game_data_draw_sector_levels_with_assets(const sdl3d_game_data_runtim
     context.assets = assets;
     context.camera = camera;
     context.ok = true;
-    const bool iterated = sdl3d_game_data_for_each_sector_level_instance(runtime, draw_sector_level_instance, &context);
+    const bool iterated =
+        slayer3d_game_data_for_each_sector_level_instance(runtime, draw_sector_level_instance, &context);
     SDL_free(context.sector_visible);
     return iterated && context.ok;
 }
 
-static bool draw_active_scene_skybox(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                     sdl3d_game_data_image_cache *image_cache)
+static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                     slayer3d_game_data_image_cache *image_cache)
 {
-    sdl3d_game_data_scene_skybox skybox_desc;
+    slayer3d_game_data_scene_skybox skybox_desc;
     if (runtime == NULL || renderer == NULL || image_cache == NULL)
         return true;
-    if (!sdl3d_game_data_get_active_scene_skybox(runtime, &skybox_desc))
+    if (!slayer3d_game_data_get_active_scene_skybox(runtime, &skybox_desc))
         return true;
 
-    sdl3d_game_data_image_cache_entry *pos_x = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_x);
-    sdl3d_game_data_image_cache_entry *neg_x = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_x);
-    sdl3d_game_data_image_cache_entry *pos_y = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_y);
-    sdl3d_game_data_image_cache_entry *neg_y = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_y);
-    sdl3d_game_data_image_cache_entry *pos_z = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_z);
-    sdl3d_game_data_image_cache_entry *neg_z = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_z);
+    slayer3d_game_data_image_cache_entry *pos_x = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_x);
+    slayer3d_game_data_image_cache_entry *neg_x = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_x);
+    slayer3d_game_data_image_cache_entry *pos_y = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_y);
+    slayer3d_game_data_image_cache_entry *neg_y = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_y);
+    slayer3d_game_data_image_cache_entry *pos_z = find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_z);
+    slayer3d_game_data_image_cache_entry *neg_z = find_or_load_image_entry(runtime, image_cache, skybox_desc.neg_z);
     if (pos_x == NULL || neg_x == NULL || pos_y == NULL || neg_y == NULL || pos_z == NULL || neg_z == NULL)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load active scene skybox image assets");
         return false;
     }
 
-    sdl3d_skybox_textured skybox = {&pos_x->texture, &neg_x->texture, &pos_y->texture, &neg_y->texture,
-                                    &pos_z->texture, &neg_z->texture, skybox_desc.size};
-    return sdl3d_draw_skybox_textured(renderer, &skybox);
+    slayer3d_skybox_textured skybox = {&pos_x->texture, &neg_x->texture, &pos_y->texture, &neg_y->texture,
+                                       &pos_z->texture, &neg_z->texture, skybox_desc.size};
+    return slayer3d_draw_skybox_textured(renderer, &skybox);
 }
 
-bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
+bool slayer3d_game_data_draw_render_primitives(const slayer3d_game_data_runtime *runtime,
+                                               slayer3d_render_context *renderer)
 {
     return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
-bool sdl3d_game_data_draw_render_primitives_evaluated(const sdl3d_game_data_runtime *runtime,
-                                                      sdl3d_render_context *renderer,
-                                                      const sdl3d_game_data_render_eval *eval)
+bool slayer3d_game_data_draw_render_primitives_evaluated(const slayer3d_game_data_runtime *runtime,
+                                                         slayer3d_render_context *renderer,
+                                                         const slayer3d_game_data_render_eval *eval)
 {
     return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL, NULL);
 }
 
-bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                  sdl3d_game_data_font_cache *font_cache, const sdl3d_game_data_ui_metrics *metrics,
-                                  float pulse_phase)
+bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                     slayer3d_game_data_font_cache *font_cache,
+                                     const slayer3d_game_data_ui_metrics *metrics, float pulse_phase)
 {
     if (runtime == NULL || renderer == NULL || font_cache == NULL)
         return false;
@@ -2278,12 +2293,13 @@ bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_
     context.pulse_phase = pulse_phase;
     context.ok = true;
 
-    return sdl3d_game_data_for_each_ui_text_for_metrics(runtime, metrics, draw_ui_text, &context) && context.ok;
+    return slayer3d_game_data_for_each_ui_text_for_metrics(runtime, metrics, draw_ui_text, &context) && context.ok;
 }
 
-bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                    sdl3d_game_data_image_cache *image_cache, const sdl3d_game_data_ui_metrics *metrics,
-                                    const sdl3d_game_data_render_eval *render_eval)
+bool slayer3d_game_data_draw_ui_images(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                       slayer3d_game_data_image_cache *image_cache,
+                                       const slayer3d_game_data_ui_metrics *metrics,
+                                       const slayer3d_game_data_render_eval *render_eval)
 {
     if (runtime == NULL || renderer == NULL || image_cache == NULL)
         return false;
@@ -2297,12 +2313,12 @@ bool sdl3d_game_data_draw_ui_images(const sdl3d_game_data_runtime *runtime, sdl3
     context.render_eval = render_eval;
     context.ok = true;
 
-    return sdl3d_game_data_for_each_ui_image(runtime, draw_ui_image, &context) && context.ok;
+    return slayer3d_game_data_for_each_ui_image(runtime, draw_ui_image, &context) && context.ok;
 }
 
-bool sdl3d_game_data_draw_ui_rects(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                   const sdl3d_game_data_ui_metrics *metrics,
-                                   const sdl3d_game_data_render_eval *render_eval)
+bool slayer3d_game_data_draw_ui_rects(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                      const slayer3d_game_data_ui_metrics *metrics,
+                                      const slayer3d_game_data_render_eval *render_eval)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -2315,29 +2331,29 @@ bool sdl3d_game_data_draw_ui_rects(const sdl3d_game_data_runtime *runtime, sdl3d
     context.render_eval = render_eval;
     context.ok = true;
 
-    return sdl3d_game_data_for_each_ui_rect(runtime, draw_ui_rect, &context) && context.ok;
+    return slayer3d_game_data_for_each_ui_rect(runtime, draw_ui_rect, &context) && context.ok;
 }
 
-void sdl3d_game_data_particle_cache_init(sdl3d_game_data_particle_cache *cache)
+void slayer3d_game_data_particle_cache_init(slayer3d_game_data_particle_cache *cache)
 {
     if (cache != NULL)
         SDL_zero(*cache);
 }
 
-void sdl3d_game_data_particle_cache_free(sdl3d_game_data_particle_cache *cache)
+void slayer3d_game_data_particle_cache_free(slayer3d_game_data_particle_cache *cache)
 {
     if (cache == NULL)
         return;
     for (int i = 0; i < cache->count; ++i)
     {
-        sdl3d_destroy_particle_emitter(cache->entries[i].emitter);
+        slayer3d_destroy_particle_emitter(cache->entries[i].emitter);
     }
     SDL_free(cache->entries);
     SDL_zero(*cache);
 }
 
-bool sdl3d_game_data_update_particles(const sdl3d_game_data_runtime *runtime, sdl3d_game_data_particle_cache *cache,
-                                      float dt)
+bool slayer3d_game_data_update_particles(const slayer3d_game_data_runtime *runtime,
+                                         slayer3d_game_data_particle_cache *cache, float dt)
 {
     if (runtime == NULL || cache == NULL)
         return false;
@@ -2353,31 +2369,31 @@ bool sdl3d_game_data_update_particles(const sdl3d_game_data_runtime *runtime, sd
     context.dt = dt;
     context.ok = true;
 
-    return sdl3d_game_data_for_each_particle_emitter(runtime, update_particle, &context) && context.ok;
+    return slayer3d_game_data_for_each_particle_emitter(runtime, update_particle, &context) && context.ok;
 }
 
-bool sdl3d_game_data_draw_particles(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
-                                    sdl3d_game_data_particle_cache *cache)
+bool slayer3d_game_data_draw_particles(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                       slayer3d_game_data_particle_cache *cache)
 {
     if (runtime == NULL || renderer == NULL || cache == NULL)
         return false;
 
     for (int i = 0; i < cache->count; ++i)
     {
-        sdl3d_game_data_particle_cache_entry *entry = &cache->entries[i];
+        slayer3d_game_data_particle_cache_entry *entry = &cache->entries[i];
         if (!entry->visible || entry->emitter == NULL ||
-            !sdl3d_game_data_active_scene_has_entity(runtime, entry->entity_name))
+            !slayer3d_game_data_active_scene_has_entity(runtime, entry->entity_name))
             continue;
 
-        sdl3d_set_emissive(renderer, entry->draw_emissive.x, entry->draw_emissive.y, entry->draw_emissive.z);
-        sdl3d_draw_particles(renderer, entry->emitter);
-        sdl3d_set_emissive(renderer, 0.0f, 0.0f, 0.0f);
+        slayer3d_set_emissive(renderer, entry->draw_emissive.x, entry->draw_emissive.y, entry->draw_emissive.z);
+        slayer3d_draw_particles(renderer, entry->emitter);
+        slayer3d_set_emissive(renderer, 0.0f, 0.0f, 0.0f);
     }
     return true;
 }
 
-static bool menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
-                               const sdl3d_game_data_menu *menu)
+static bool menu_input_is_idle(const slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
+                               const slayer3d_game_data_menu *menu)
 {
     if (menu == NULL)
         return true;
@@ -2392,8 +2408,8 @@ static bool menu_input_is_idle(const sdl3d_game_data_runtime *runtime, const sdl
            !menu_action_held(runtime, input, menu->back_action_id, "ui_back");
 }
 
-static void menu_result_set_scene_state(sdl3d_game_data_menu_update_result *result,
-                                        const sdl3d_game_data_menu_item *item)
+static void menu_result_set_scene_state(slayer3d_game_data_menu_update_result *result,
+                                        const slayer3d_game_data_menu_item *item)
 {
     if (result == NULL || item == NULL)
         return;
@@ -2407,9 +2423,10 @@ static void menu_result_set_scene_state(sdl3d_game_data_menu_update_result *resu
     }
 }
 
-bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input,
-                                              bool *input_armed, const sdl3d_game_data_ui_metrics *metrics,
-                                              sdl3d_game_data_menu_update_result *out_result)
+bool slayer3d_game_data_update_menus_for_metrics(slayer3d_game_data_runtime *runtime,
+                                                 const slayer3d_input_manager *input, bool *input_armed,
+                                                 const slayer3d_game_data_ui_metrics *metrics,
+                                                 slayer3d_game_data_menu_update_result *out_result)
 {
     if (out_result != NULL)
     {
@@ -2422,8 +2439,8 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
     if (runtime == NULL || input_armed == NULL)
         return false;
 
-    sdl3d_game_data_menu menu;
-    if (!sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &menu))
+    slayer3d_game_data_menu menu;
+    if (!slayer3d_game_data_get_active_menu_for_metrics(runtime, metrics, &menu))
         return true;
 
     if (out_result != NULL)
@@ -2432,30 +2449,30 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
         out_result->selected_index = menu.selected_index;
     }
 
-    if (sdl3d_game_data_menu_input_binding_capture_active(runtime))
+    if (slayer3d_game_data_menu_input_binding_capture_active(runtime))
     {
-        const sdl3d_game_data_input_binding_capture_status capture_status =
-            sdl3d_game_data_update_menu_input_binding_capture(runtime, input);
+        const slayer3d_game_data_input_binding_capture_status capture_status =
+            slayer3d_game_data_update_menu_input_binding_capture(runtime, input);
         if (out_result != NULL)
         {
             out_result->handled_input = true;
-            out_result->input_binding_changed = capture_status == SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CHANGED;
-            out_result->input_binding_conflict = capture_status == SDL3D_GAME_DATA_INPUT_BINDING_CAPTURE_CONFLICT;
+            out_result->input_binding_changed = capture_status == SLAYER3D_GAME_DATA_INPUT_BINDING_CAPTURE_CHANGED;
+            out_result->input_binding_conflict = capture_status == SLAYER3D_GAME_DATA_INPUT_BINDING_CAPTURE_CONFLICT;
             out_result->selected = out_result->input_binding_changed;
             out_result->select_signal_id = out_result->input_binding_changed ? menu.select_signal_id : -1;
         }
         return true;
     }
-    if (sdl3d_game_data_menu_text_entry_capture_active(runtime))
+    if (slayer3d_game_data_menu_text_entry_capture_active(runtime))
     {
-        const sdl3d_game_data_text_entry_capture_status capture_status =
-            sdl3d_game_data_update_menu_text_entry_capture(runtime, input);
+        const slayer3d_game_data_text_entry_capture_status capture_status =
+            slayer3d_game_data_update_menu_text_entry_capture(runtime, input);
         if (out_result != NULL)
         {
             out_result->handled_input = true;
-            out_result->text_entry_changed = capture_status == SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CHANGED;
-            out_result->text_entry_submitted = capture_status == SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_SUBMITTED;
-            out_result->text_entry_canceled = capture_status == SDL3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CANCELED;
+            out_result->text_entry_changed = capture_status == SLAYER3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CHANGED;
+            out_result->text_entry_submitted = capture_status == SLAYER3D_GAME_DATA_TEXT_ENTRY_CAPTURE_SUBMITTED;
+            out_result->text_entry_canceled = capture_status == SLAYER3D_GAME_DATA_TEXT_ENTRY_CAPTURE_CANCELED;
             out_result->control_changed = out_result->text_entry_changed;
             out_result->selected = out_result->text_entry_submitted;
             out_result->select_signal_id = out_result->text_entry_submitted ? menu.select_signal_id : -1;
@@ -2473,14 +2490,14 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
     bool handled = false;
     if (menu_action_pressed(runtime, input, menu.up_action_id, "ui_up"))
     {
-        const bool moved = sdl3d_game_data_menu_move(runtime, menu.name, -1);
+        const bool moved = slayer3d_game_data_menu_move(runtime, menu.name, -1);
         handled = moved || handled;
         if (moved && out_result != NULL)
             out_result->move_signal_id = menu.move_signal_id;
     }
     if (menu_action_pressed(runtime, input, menu.down_action_id, "ui_down"))
     {
-        const bool moved = sdl3d_game_data_menu_move(runtime, menu.name, 1);
+        const bool moved = slayer3d_game_data_menu_move(runtime, menu.name, 1);
         handled = moved || handled;
         if (moved && out_result != NULL)
             out_result->move_signal_id = menu.move_signal_id;
@@ -2508,15 +2525,15 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
     if (menu_action_pressed(runtime, input, menu.back_action_id, "ui_back"))
     {
         handled = true;
-        sdl3d_game_data_menu refreshed;
-        if (!sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
+        slayer3d_game_data_menu refreshed;
+        if (!slayer3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
             return true;
 
-        sdl3d_game_data_menu_item item;
+        slayer3d_game_data_menu_item item;
         bool found_back_item = false;
         for (int i = 0; i < refreshed.item_count; ++i)
         {
-            if (!sdl3d_game_data_get_menu_item(runtime, refreshed.name, i, &item))
+            if (!slayer3d_game_data_get_menu_item(runtime, refreshed.name, i, &item))
                 continue;
             if (!item.return_scene && !(item.label != NULL && SDL_strcasecmp(item.label, "Back") == 0))
                 continue;
@@ -2551,24 +2568,24 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
 
     if (control_direction != 0)
     {
-        sdl3d_game_data_menu refreshed;
-        if (!sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
+        slayer3d_game_data_menu refreshed;
+        if (!slayer3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
             return true;
 
-        sdl3d_game_data_menu_item item;
+        slayer3d_game_data_menu_item item;
         /* Selecting the initially highlighted dynamic-list row should publish its selected outputs. */
-        (void)sdl3d_game_data_publish_menu_selection(runtime, refreshed.name);
-        if (!sdl3d_game_data_get_menu_item(runtime, refreshed.name, refreshed.selected_index, &item))
+        (void)slayer3d_game_data_publish_menu_selection(runtime, refreshed.name);
+        if (!slayer3d_game_data_get_menu_item(runtime, refreshed.name, refreshed.selected_index, &item))
             return true;
 
         if (out_result != NULL)
         {
             out_result->menu = refreshed.name;
             out_result->selected_index = refreshed.selected_index;
-            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
+            if (!control_adjust_input && item.control_type == SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
             {
-                out_result->input_binding_capture_started =
-                    sdl3d_game_data_start_menu_input_binding_capture(runtime, refreshed.name, refreshed.selected_index);
+                out_result->input_binding_capture_started = slayer3d_game_data_start_menu_input_binding_capture(
+                    runtime, refreshed.name, refreshed.selected_index);
                 out_result->selected = out_result->input_binding_capture_started;
                 out_result->select_signal_id = out_result->selected ? refreshed.select_signal_id : -1;
                 out_result->signal_id = -1;
@@ -2578,17 +2595,17 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 out_result->scene_state_key = NULL;
                 out_result->scene_state_value = NULL;
                 out_result->return_scene = false;
-                out_result->pause_command = SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+                out_result->pause_command = SLAYER3D_GAME_DATA_MENU_PAUSE_NONE;
                 out_result->has_return_paused = false;
                 out_result->return_paused = false;
                 out_result->control_changed = false;
                 out_result->handled_input = true;
                 return true;
             }
-            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
+            if (!control_adjust_input && item.control_type == SLAYER3D_GAME_DATA_MENU_CONTROL_TEXT)
             {
                 out_result->text_entry_capture_started =
-                    sdl3d_game_data_start_menu_text_entry_capture(runtime, refreshed.name, refreshed.selected_index);
+                    slayer3d_game_data_start_menu_text_entry_capture(runtime, refreshed.name, refreshed.selected_index);
                 out_result->selected = out_result->text_entry_capture_started;
                 out_result->select_signal_id = out_result->selected ? refreshed.select_signal_id : -1;
                 out_result->signal_id = -1;
@@ -2598,7 +2615,7 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 out_result->scene_state_key = NULL;
                 out_result->scene_state_value = NULL;
                 out_result->return_scene = false;
-                out_result->pause_command = SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+                out_result->pause_command = SLAYER3D_GAME_DATA_MENU_PAUSE_NONE;
                 out_result->has_return_paused = false;
                 out_result->return_paused = false;
                 out_result->control_changed = false;
@@ -2606,10 +2623,10 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
                 return true;
             }
             out_result->control_changed =
-                control_adjust_input && (item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING ||
-                                         item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
+                control_adjust_input && (item.control_type == SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING ||
+                                         item.control_type == SLAYER3D_GAME_DATA_MENU_CONTROL_TEXT)
                     ? false
-                    : sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
+                    : slayer3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
             out_result->selected = !control_adjust_input || out_result->control_changed;
             out_result->select_signal_id = out_result->selected ? refreshed.select_signal_id : -1;
             out_result->quit = !control_adjust_input && !out_result->control_changed && item.quit;
@@ -2626,27 +2643,28 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
             out_result->signal_id = out_result->selected ? item.signal_id : -1;
             out_result->pause_command = !control_adjust_input && !out_result->control_changed
                                             ? item.pause_command
-                                            : SDL3D_GAME_DATA_MENU_PAUSE_NONE;
+                                            : SLAYER3D_GAME_DATA_MENU_PAUSE_NONE;
             out_result->has_return_paused =
                 !control_adjust_input && !out_result->control_changed && item.has_return_paused;
             out_result->return_paused = item.return_paused;
         }
         else
         {
-            if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
-                (void)sdl3d_game_data_start_menu_input_binding_capture(runtime, refreshed.name,
+            if (!control_adjust_input && item.control_type == SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING)
+                (void)slayer3d_game_data_start_menu_input_binding_capture(runtime, refreshed.name,
+                                                                          refreshed.selected_index);
+            else if (!control_adjust_input && item.control_type == SLAYER3D_GAME_DATA_MENU_CONTROL_TEXT)
+                (void)slayer3d_game_data_start_menu_text_entry_capture(runtime, refreshed.name,
                                                                        refreshed.selected_index);
-            else if (!control_adjust_input && item.control_type == SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
-                (void)sdl3d_game_data_start_menu_text_entry_capture(runtime, refreshed.name, refreshed.selected_index);
-            else if (item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING &&
-                     item.control_type != SDL3D_GAME_DATA_MENU_CONTROL_TEXT)
-                (void)sdl3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
+            else if (item.control_type != SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING &&
+                     item.control_type != SLAYER3D_GAME_DATA_MENU_CONTROL_TEXT)
+                (void)slayer3d_game_data_adjust_menu_item_control(runtime, &item, control_direction);
         }
     }
     else if (handled && out_result != NULL)
     {
-        sdl3d_game_data_menu refreshed;
-        if (sdl3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
+        slayer3d_game_data_menu refreshed;
+        if (slayer3d_game_data_get_active_menu_for_metrics(runtime, metrics, &refreshed))
             out_result->selected_index = refreshed.selected_index;
     }
 
@@ -2655,30 +2673,31 @@ bool sdl3d_game_data_update_menus_for_metrics(sdl3d_game_data_runtime *runtime, 
     return true;
 }
 
-bool sdl3d_game_data_update_menus(sdl3d_game_data_runtime *runtime, const sdl3d_input_manager *input, bool *input_armed,
-                                  sdl3d_game_data_menu_update_result *out_result)
+bool slayer3d_game_data_update_menus(slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
+                                     bool *input_armed, slayer3d_game_data_menu_update_result *out_result)
 {
-    return sdl3d_game_data_update_menus_for_metrics(runtime, input, input_armed, NULL, out_result);
+    return slayer3d_game_data_update_menus_for_metrics(runtime, input, input_armed, NULL, out_result);
 }
 
-void sdl3d_game_data_frame_state_init(sdl3d_game_data_frame_state *state)
+void slayer3d_game_data_frame_state_init(slayer3d_game_data_frame_state *state)
 {
     if (state == NULL)
         return;
     SDL_zero(*state);
 }
 
-bool sdl3d_game_data_update_frame(sdl3d_game_data_frame_state *state, const sdl3d_game_data_update_frame_desc *desc)
+bool slayer3d_game_data_update_frame(slayer3d_game_data_frame_state *state,
+                                     const slayer3d_game_data_update_frame_desc *desc)
 {
     if (state == NULL || desc == NULL || desc->ctx == NULL || desc->runtime == NULL)
         return false;
 
-    sdl3d_game_context *ctx = desc->ctx;
-    sdl3d_game_data_runtime *runtime = desc->runtime;
+    slayer3d_game_context *ctx = desc->ctx;
+    slayer3d_game_data_runtime *runtime = desc->runtime;
     const bool paused_at_start = ctx->paused;
-    if (sdl3d_game_data_active_scene_update_phase(runtime, "app_flow", ctx->paused) && desc->app_flow != NULL)
+    if (slayer3d_game_data_active_scene_update_phase(runtime, "app_flow", ctx->paused) && desc->app_flow != NULL)
     {
-        if (!sdl3d_game_data_app_flow_update(desc->app_flow, ctx, runtime, desc->dt))
+        if (!slayer3d_game_data_app_flow_update(desc->app_flow, ctx, runtime, desc->dt))
             return false;
     }
 
@@ -2689,29 +2708,30 @@ bool sdl3d_game_data_update_frame(sdl3d_game_data_frame_state *state, const sdl3
     }
 
     const bool pause_entered = !state->was_paused && ctx->paused;
-    if (sdl3d_game_data_active_scene_update_phase(runtime, "scene_activity", ctx->paused) &&
-        !sdl3d_game_data_update_scene_activity(runtime, sdl3d_game_session_get_input(ctx->session), desc->dt))
+    if (slayer3d_game_data_active_scene_update_phase(runtime, "scene_activity", ctx->paused) &&
+        !slayer3d_game_data_update_scene_activity(runtime, slayer3d_game_session_get_input(ctx->session), desc->dt))
         return false;
 
-    if (sdl3d_game_data_active_scene_update_phase(runtime, "presentation", ctx->paused))
+    if (slayer3d_game_data_active_scene_update_phase(runtime, "presentation", ctx->paused))
     {
         state->time += desc->dt;
-        if (!sdl3d_game_data_update_presentation_clocks(runtime, desc->dt, ctx->paused, pause_entered))
+        if (!slayer3d_game_data_update_presentation_clocks(runtime, desc->dt, ctx->paused, pause_entered))
             return false;
-        if (!sdl3d_game_data_update_animations(runtime, desc->dt))
+        if (!slayer3d_game_data_update_animations(runtime, desc->dt))
             return false;
-        state->ui_pulse_phase = sdl3d_game_data_ui_pulse_phase(runtime, state->ui_pulse_phase);
+        state->ui_pulse_phase = slayer3d_game_data_ui_pulse_phase(runtime, state->ui_pulse_phase);
     }
-    if (sdl3d_game_data_active_scene_update_phase(runtime, "property_effects", ctx->paused) &&
-        !sdl3d_game_data_update_property_effects(runtime, desc->dt))
+    if (slayer3d_game_data_active_scene_update_phase(runtime, "property_effects", ctx->paused) &&
+        !slayer3d_game_data_update_property_effects(runtime, desc->dt))
         return false;
-    if (desc->particle_cache != NULL && sdl3d_game_data_active_scene_update_phase(runtime, "particles", ctx->paused) &&
-        !sdl3d_game_data_update_particles(runtime, desc->particle_cache, desc->dt))
+    if (desc->particle_cache != NULL &&
+        slayer3d_game_data_active_scene_update_phase(runtime, "particles", ctx->paused) &&
+        !slayer3d_game_data_update_particles(runtime, desc->particle_cache, desc->dt))
         return false;
-    if (!paused_at_start && sdl3d_game_data_active_scene_update_phase(runtime, "simulation", ctx->paused) &&
-        (desc->app_flow == NULL || !sdl3d_game_data_app_flow_quit_pending(desc->app_flow)))
+    if (!paused_at_start && slayer3d_game_data_active_scene_update_phase(runtime, "simulation", ctx->paused) &&
+        (desc->app_flow == NULL || !slayer3d_game_data_app_flow_quit_pending(desc->app_flow)))
     {
-        if (!sdl3d_game_data_update(runtime, desc->dt))
+        if (!slayer3d_game_data_update(runtime, desc->dt))
             return false;
     }
 
@@ -2719,8 +2739,9 @@ bool sdl3d_game_data_update_frame(sdl3d_game_data_frame_state *state, const sdl3
     return true;
 }
 
-void sdl3d_game_data_frame_state_record_render(sdl3d_game_data_frame_state *state, const sdl3d_game_context *ctx,
-                                               const sdl3d_game_data_runtime *runtime)
+void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state *state,
+                                                  const slayer3d_game_context *ctx,
+                                                  const slayer3d_game_data_runtime *runtime)
 {
     if (state == NULL || ctx == NULL)
         return;
@@ -2732,7 +2753,7 @@ void sdl3d_game_data_frame_state_record_render(sdl3d_game_data_frame_state *stat
         {
             state->fps_sample_time += frame_dt;
             ++state->fps_sample_frames;
-            const float sample_seconds = sdl3d_game_data_fps_sample_seconds(runtime, 0.25f);
+            const float sample_seconds = slayer3d_game_data_fps_sample_seconds(runtime, 0.25f);
             if (state->fps_sample_time >= sample_seconds)
             {
                 state->displayed_fps = (float)state->fps_sample_frames / state->fps_sample_time;
@@ -2747,42 +2768,42 @@ void sdl3d_game_data_frame_state_record_render(sdl3d_game_data_frame_state *stat
     state->metrics.fps = state->displayed_fps;
     state->metrics.frame = state->rendered_frames;
     state->render_eval.time = state->time;
-    state->ui_pulse_phase = sdl3d_game_data_ui_pulse_phase(runtime, state->ui_pulse_phase);
+    state->ui_pulse_phase = slayer3d_game_data_ui_pulse_phase(runtime, state->ui_pulse_phase);
 }
 
-void sdl3d_game_data_scene_flow_init(sdl3d_game_data_scene_flow *flow)
+void slayer3d_game_data_scene_flow_init(slayer3d_game_data_scene_flow *flow)
 {
     if (flow == NULL)
         return;
     SDL_zero(*flow);
-    sdl3d_transition_reset(&flow->transition);
+    slayer3d_transition_reset(&flow->transition);
 }
 
-bool sdl3d_game_data_scene_flow_is_transitioning(const sdl3d_game_data_scene_flow *flow)
+bool slayer3d_game_data_scene_flow_is_transitioning(const slayer3d_game_data_scene_flow *flow)
 {
     return flow != NULL && (flow->fading_out || flow->fading_in || flow->transition.active);
 }
 
-bool sdl3d_game_data_scene_flow_request(sdl3d_game_data_scene_flow *flow, sdl3d_game_data_runtime *runtime,
-                                        const char *scene_name)
+bool slayer3d_game_data_scene_flow_request(slayer3d_game_data_scene_flow *flow, slayer3d_game_data_runtime *runtime,
+                                           const char *scene_name)
 {
     if (flow == NULL || runtime == NULL || scene_name == NULL)
         return false;
 
-    sdl3d_game_data_scene_transition_policy policy;
-    (void)sdl3d_game_data_get_scene_transition_policy(runtime, &policy);
-    if (sdl3d_game_data_scene_flow_is_transitioning(flow) && !policy.allow_interrupt)
+    slayer3d_game_data_scene_transition_policy policy;
+    (void)slayer3d_game_data_get_scene_transition_policy(runtime, &policy);
+    if (slayer3d_game_data_scene_flow_is_transitioning(flow) && !policy.allow_interrupt)
         return false;
 
-    const char *active = sdl3d_game_data_active_scene(runtime);
+    const char *active = slayer3d_game_data_active_scene(runtime);
     if (active != NULL && SDL_strcmp(active, scene_name) == 0 && !policy.allow_same_scene)
         return false;
 
     bool known_scene = false;
-    const int scene_count = sdl3d_game_data_scene_count(runtime);
+    const int scene_count = slayer3d_game_data_scene_count(runtime);
     for (int i = 0; i < scene_count; ++i)
     {
-        const char *name = sdl3d_game_data_scene_name_at(runtime, i);
+        const char *name = slayer3d_game_data_scene_name_at(runtime, i);
         if (name != NULL && SDL_strcmp(name, scene_name) == 0)
         {
             known_scene = true;
@@ -2792,54 +2813,54 @@ bool sdl3d_game_data_scene_flow_request(sdl3d_game_data_scene_flow *flow, sdl3d_
     if (!known_scene)
         return false;
 
-    if (sdl3d_game_data_scene_flow_is_transitioning(flow))
-        sdl3d_transition_reset(&flow->transition);
+    if (slayer3d_game_data_scene_flow_is_transitioning(flow))
+        slayer3d_transition_reset(&flow->transition);
     flow->pending_scene = scene_name;
     flow->fading_out = true;
     flow->fading_in = false;
 
-    sdl3d_game_data_transition_desc transition;
-    if (active != NULL && sdl3d_game_data_get_scene_transition(runtime, active, "exit", &transition))
+    slayer3d_game_data_transition_desc transition;
+    if (active != NULL && slayer3d_game_data_get_scene_transition(runtime, active, "exit", &transition))
     {
-        sdl3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
-                               transition.duration, transition.done_signal_id);
+        slayer3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
+                                  transition.duration, transition.done_signal_id);
     }
     else
     {
-        sdl3d_transition_reset(&flow->transition);
+        slayer3d_transition_reset(&flow->transition);
     }
     return true;
 }
 
-void sdl3d_game_data_scene_flow_update(sdl3d_game_data_scene_flow *flow, sdl3d_game_data_runtime *runtime,
-                                       sdl3d_signal_bus *bus, float dt)
+void slayer3d_game_data_scene_flow_update(slayer3d_game_data_scene_flow *flow, slayer3d_game_data_runtime *runtime,
+                                          slayer3d_signal_bus *bus, float dt)
 {
     if (flow == NULL || runtime == NULL)
         return;
 
-    sdl3d_transition_update(&flow->transition, bus, dt);
+    slayer3d_transition_update(&flow->transition, bus, dt);
     if (flow->fading_out && !flow->transition.active)
     {
         const char *next_scene = flow->pending_scene;
         flow->pending_scene = NULL;
         flow->fading_out = false;
-        if (next_scene != NULL && sdl3d_game_data_set_active_scene(runtime, next_scene))
+        if (next_scene != NULL && slayer3d_game_data_set_active_scene(runtime, next_scene))
         {
-            sdl3d_game_data_transition_desc transition;
-            if (sdl3d_game_data_get_scene_transition(runtime, next_scene, "enter", &transition))
+            slayer3d_game_data_transition_desc transition;
+            if (slayer3d_game_data_get_scene_transition(runtime, next_scene, "enter", &transition))
             {
                 flow->fading_in = true;
-                sdl3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
-                                       transition.duration, transition.done_signal_id);
+                slayer3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
+                                          transition.duration, transition.done_signal_id);
             }
             else
             {
-                sdl3d_transition_reset(&flow->transition);
+                slayer3d_transition_reset(&flow->transition);
             }
         }
         else
         {
-            sdl3d_transition_reset(&flow->transition);
+            slayer3d_transition_reset(&flow->transition);
         }
     }
     else if (flow->fading_in && !flow->transition.active)
@@ -2848,39 +2869,39 @@ void sdl3d_game_data_scene_flow_update(sdl3d_game_data_scene_flow *flow, sdl3d_g
     }
 }
 
-void sdl3d_game_data_scene_flow_draw(const sdl3d_game_data_scene_flow *flow, sdl3d_render_context *renderer)
+void slayer3d_game_data_scene_flow_draw(const slayer3d_game_data_scene_flow *flow, slayer3d_render_context *renderer)
 {
     if (flow != NULL)
-        sdl3d_transition_draw(&flow->transition, renderer);
+        slayer3d_transition_draw(&flow->transition, renderer);
 }
 
-static void app_flow_request_quit(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
-                                  sdl3d_game_data_runtime *runtime)
+static void app_flow_request_quit(slayer3d_game_data_app_flow *flow, slayer3d_game_context *ctx,
+                                  slayer3d_game_data_runtime *runtime)
 {
     if (flow == NULL || ctx == NULL || runtime == NULL || flow->quit_pending)
         return;
 
     flow->quit_pending = true;
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D app quit requested");
-    sdl3d_game_data_transition_desc transition;
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D app quit requested");
+    slayer3d_game_data_transition_desc transition;
     if (flow->app.quit_transition == NULL ||
-        !sdl3d_game_data_get_transition(runtime, flow->app.quit_transition, &transition))
+        !slayer3d_game_data_get_transition(runtime, flow->app.quit_transition, &transition))
     {
         ctx->quit_requested = true;
         return;
     }
 
-    sdl3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
-                           transition.duration, transition.done_signal_id);
+    slayer3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
+                              transition.duration, transition.done_signal_id);
 }
 
-static bool app_flow_request_scene(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
+static bool app_flow_request_scene(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime,
                                    const char *scene_name)
 {
-    if (sdl3d_game_data_scene_flow_request(&flow->scene_flow, runtime, scene_name))
+    if (slayer3d_game_data_scene_flow_request(&flow->scene_flow, runtime, scene_name))
     {
-        sdl3d_game_data_scene_transition_policy policy;
-        (void)sdl3d_game_data_get_scene_transition_policy(runtime, &policy);
+        slayer3d_game_data_scene_transition_policy policy;
+        (void)slayer3d_game_data_get_scene_transition_policy(runtime, &policy);
         if (policy.reset_menu_input_on_request)
             flow->scene_input_armed = false;
         return true;
@@ -2888,29 +2909,29 @@ static bool app_flow_request_scene(sdl3d_game_data_app_flow *flow, sdl3d_game_da
     return false;
 }
 
-static void app_flow_apply_pause_command(sdl3d_game_context *ctx, sdl3d_game_data_menu_pause_command command)
+static void app_flow_apply_pause_command(slayer3d_game_context *ctx, slayer3d_game_data_menu_pause_command command)
 {
     if (ctx == NULL)
         return;
 
-    if (command == SDL3D_GAME_DATA_MENU_PAUSE_PAUSE)
+    if (command == SLAYER3D_GAME_DATA_MENU_PAUSE_PAUSE)
         ctx->paused = true;
-    else if (command == SDL3D_GAME_DATA_MENU_PAUSE_RESUME)
+    else if (command == SLAYER3D_GAME_DATA_MENU_PAUSE_RESUME)
         ctx->paused = false;
-    else if (command == SDL3D_GAME_DATA_MENU_PAUSE_TOGGLE)
+    else if (command == SLAYER3D_GAME_DATA_MENU_PAUSE_TOGGLE)
         ctx->paused = !ctx->paused;
 }
 
-static bool app_flow_apply_window_settings(const sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
-                                           sdl3d_game_data_runtime *runtime)
+static bool app_flow_apply_window_settings(const slayer3d_game_data_app_flow *flow, slayer3d_game_context *ctx,
+                                           slayer3d_game_data_runtime *runtime)
 {
     if (flow == NULL || ctx == NULL || runtime == NULL || ctx->window == NULL || ctx->renderer == NULL)
         return false;
 
-    sdl3d_registered_actor *settings = sdl3d_game_data_find_actor(runtime, flow->app.window_settings_target);
+    slayer3d_registered_actor *settings = slayer3d_game_data_find_actor(runtime, flow->app.window_settings_target);
     if (settings == NULL)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D window settings skipped: settings actor '%s' was not found",
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D window settings skipped: settings actor '%s' was not found",
                     flow->app.window_settings_target != NULL ? flow->app.window_settings_target : "");
         return false;
     }
@@ -2919,71 +2940,72 @@ static bool app_flow_apply_window_settings(const sdl3d_game_data_app_flow *flow,
     int height = 0;
     SDL_GetWindowSize(ctx->window, &width, &height);
 
-    sdl3d_window_config config;
-    sdl3d_init_window_config(&config);
+    slayer3d_window_config config;
+    slayer3d_init_window_config(&config);
     config.width = width;
     config.height = height;
-    config.logical_width = sdl3d_get_render_context_width(ctx->renderer);
-    config.logical_height = sdl3d_get_render_context_height(ctx->renderer);
+    config.logical_width = slayer3d_get_render_context_width(ctx->renderer);
+    config.logical_height = slayer3d_get_render_context_height(ctx->renderer);
     config.title = SDL_GetWindowTitle(ctx->window);
     config.display_mode = parse_window_mode_setting(
-        sdl3d_properties_get_string(settings->props, flow->app.window_display_mode_key, "windowed"),
-        SDL3D_WINDOW_MODE_WINDOWED);
+        slayer3d_properties_get_string(settings->props, flow->app.window_display_mode_key, "windowed"),
+        SLAYER3D_WINDOW_MODE_WINDOWED);
     config.backend =
-        parse_backend_setting(sdl3d_properties_get_string(settings->props, flow->app.window_renderer_key, "opengl"),
-                              sdl3d_get_render_context_backend(ctx->renderer));
-    config.vsync = sdl3d_properties_get_bool(settings->props, flow->app.window_vsync_key, true);
+        parse_backend_setting(slayer3d_properties_get_string(settings->props, flow->app.window_renderer_key, "opengl"),
+                              slayer3d_get_render_context_backend(ctx->renderer));
+    config.vsync = slayer3d_properties_get_bool(settings->props, flow->app.window_vsync_key, true);
     config.maximized = true;
     config.resizable = true;
     config.allow_backend_fallback = false;
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D authored window apply requested: mode=%s renderer=%s vsync=%s",
-                window_mode_setting_name(config.display_mode), sdl3d_get_backend_name(config.backend),
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D authored window apply requested: mode=%s renderer=%s vsync=%s",
+                window_mode_setting_name(config.display_mode), slayer3d_get_backend_name(config.backend),
                 config.vsync ? "on" : "off");
-    return sdl3d_apply_window_config(&ctx->window, &ctx->renderer, &config);
+    return slayer3d_apply_window_config(&ctx->window, &ctx->renderer, &config);
 }
 
-static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
-                                  sdl3d_game_data_runtime *runtime, sdl3d_input_manager *input, sdl3d_signal_bus *bus)
+static bool app_flow_consume_menu(slayer3d_game_data_app_flow *flow, slayer3d_game_context *ctx,
+                                  slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
+                                  slayer3d_signal_bus *bus)
 {
-    if (flow->quit_pending || sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+    if (flow->quit_pending || slayer3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
         return false;
 
-    sdl3d_game_data_ui_metrics metrics;
+    slayer3d_game_data_ui_metrics metrics;
     SDL_zero(metrics);
     metrics.paused = ctx != NULL && ctx->paused;
 
-    sdl3d_game_data_menu_update_result result;
-    if (!sdl3d_game_data_update_menus_for_metrics(runtime, input, &flow->scene_input_armed, &metrics, &result) ||
+    slayer3d_game_data_menu_update_result result;
+    if (!slayer3d_game_data_update_menus_for_metrics(runtime, input, &flow->scene_input_armed, &metrics, &result) ||
         !result.handled_input)
         return false;
 
     if (result.move_signal_id >= 0)
-        sdl3d_signal_emit(bus, result.move_signal_id, NULL);
+        slayer3d_signal_emit(bus, result.move_signal_id, NULL);
     if (result.select_signal_id >= 0)
-        sdl3d_signal_emit(bus, result.select_signal_id, NULL);
+        slayer3d_signal_emit(bus, result.select_signal_id, NULL);
     if (!result.selected)
         return true;
 
     if (result.signal_id >= 0)
-        sdl3d_signal_emit(bus, result.signal_id, NULL);
-    if (sdl3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id))
+        slayer3d_signal_emit(bus, result.signal_id, NULL);
+    if (slayer3d_game_data_app_signal_applies_window_settings(runtime, result.signal_id))
         (void)app_flow_apply_window_settings(flow, ctx, runtime);
 
-    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     if (result.return_to != NULL && scene_state != NULL)
-        sdl3d_properties_set_string(scene_state, "return_scene", result.return_to);
+        slayer3d_properties_set_string(scene_state, "return_scene", result.return_to);
     if (result.scene_state_key != NULL && result.scene_state_value != NULL && scene_state != NULL)
-        sdl3d_properties_set_string(scene_state, result.scene_state_key, result.scene_state_value);
+        slayer3d_properties_set_string(scene_state, result.scene_state_key, result.scene_state_value);
     if (result.has_return_paused && scene_state != NULL)
-        sdl3d_properties_set_bool(scene_state, "return_paused", result.return_paused);
+        slayer3d_properties_set_bool(scene_state, "return_paused", result.return_paused);
 
     const char *scene = result.scene;
     if (result.return_scene && scene_state != NULL)
     {
-        scene = sdl3d_properties_get_string(scene_state, "return_scene", scene);
+        scene = slayer3d_properties_get_string(scene_state, "return_scene", scene);
         if (ctx != NULL)
-            ctx->paused = sdl3d_properties_get_bool(scene_state, "return_paused", ctx->paused);
+            ctx->paused = slayer3d_properties_get_bool(scene_state, "return_paused", ctx->paused);
     }
     app_flow_apply_pause_command(ctx, result.pause_command);
 
@@ -2995,19 +3017,19 @@ static bool app_flow_consume_menu(sdl3d_game_data_app_flow *flow, sdl3d_game_con
     return true;
 }
 
-static void app_flow_consume_scene_shortcuts(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
-                                             sdl3d_input_manager *input)
+static void app_flow_consume_scene_shortcuts(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime,
+                                             slayer3d_input_manager *input)
 {
-    if (flow->quit_pending || sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+    if (flow->quit_pending || slayer3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
         return;
 
-    const int count = sdl3d_game_data_scene_shortcut_count(runtime);
+    const int count = slayer3d_game_data_scene_shortcut_count(runtime);
     for (int i = 0; i < count; ++i)
     {
-        sdl3d_game_data_scene_shortcut shortcut;
-        if (sdl3d_game_data_scene_shortcut_at(runtime, i, &shortcut) && shortcut.action_id >= 0 &&
-            sdl3d_game_data_active_scene_allows_action(runtime, shortcut.action_id) &&
-            sdl3d_input_is_pressed(input, shortcut.action_id))
+        slayer3d_game_data_scene_shortcut shortcut;
+        if (slayer3d_game_data_scene_shortcut_at(runtime, i, &shortcut) && shortcut.action_id >= 0 &&
+            slayer3d_game_data_active_scene_allows_action(runtime, shortcut.action_id) &&
+            slayer3d_input_is_pressed(input, shortcut.action_id))
         {
             (void)app_flow_request_scene(flow, runtime, shortcut.scene);
             return;
@@ -3015,23 +3037,23 @@ static void app_flow_consume_scene_shortcuts(sdl3d_game_data_app_flow *flow, sdl
     }
 }
 
-static bool app_flow_set_scene_without_transition(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
-                                                  const char *scene_name)
+static bool app_flow_set_scene_without_transition(slayer3d_game_data_app_flow *flow,
+                                                  slayer3d_game_data_runtime *runtime, const char *scene_name)
 {
     if (flow == NULL || runtime == NULL || scene_name == NULL)
         return false;
 
-    if (!sdl3d_game_data_set_active_scene(runtime, scene_name))
+    if (!slayer3d_game_data_set_active_scene(runtime, scene_name))
         return false;
 
-    sdl3d_game_data_scene_flow_init(&flow->scene_flow);
+    slayer3d_game_data_scene_flow_init(&flow->scene_flow);
     flow->scene_input_armed = false;
-    sdl3d_game_data_timeline_state_init(&flow->timeline);
+    slayer3d_game_data_timeline_state_init(&flow->timeline);
     return true;
 }
 
-static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
-                                       const sdl3d_input_manager *input, bool capture_input, bool *out_applied,
+static bool app_flow_apply_skip_policy(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime,
+                                       const slayer3d_input_manager *input, bool capture_input, bool *out_applied,
                                        bool *out_block_menus, bool *out_block_scene_shortcuts)
 {
     if (out_applied != NULL)
@@ -3043,15 +3065,15 @@ static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_gam
     if (flow == NULL || runtime == NULL)
         return false;
 
-    sdl3d_game_data_skip_policy policy;
-    if (!sdl3d_game_data_get_active_skip_policy(runtime, &policy))
+    slayer3d_game_data_skip_policy policy;
+    if (!slayer3d_game_data_get_active_skip_policy(runtime, &policy))
     {
         flow->skip_scene = NULL;
         flow->skip_requested = false;
         return false;
     }
 
-    const char *active_scene = sdl3d_game_data_active_scene(runtime);
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
     if (flow->skip_scene != active_scene)
     {
         flow->skip_scene = active_scene;
@@ -3062,14 +3084,15 @@ static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_gam
     if (capture_input && input != NULL)
     {
         bool matched = false;
-        if (policy.input == SDL3D_GAME_DATA_SKIP_INPUT_ANY)
+        if (policy.input == SLAYER3D_GAME_DATA_SKIP_INPUT_ANY)
         {
-            matched = sdl3d_input_any_pressed(input);
+            matched = slayer3d_input_any_pressed(input);
         }
-        else if (policy.input == SDL3D_GAME_DATA_SKIP_INPUT_ACTION)
+        else if (policy.input == SLAYER3D_GAME_DATA_SKIP_INPUT_ACTION)
         {
-            matched = policy.action_id >= 0 && sdl3d_game_data_active_scene_allows_action(runtime, policy.action_id) &&
-                      sdl3d_input_is_pressed(input, policy.action_id);
+            matched = policy.action_id >= 0 &&
+                      slayer3d_game_data_active_scene_allows_action(runtime, policy.action_id) &&
+                      slayer3d_input_is_pressed(input, policy.action_id);
         }
 
         if (matched)
@@ -3084,7 +3107,7 @@ static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_gam
     }
 
     if (flow->skip_requested && !flow->quit_pending && !flow->transition.active &&
-        !sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+        !slayer3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
     {
         const bool requested = policy.preserve_exit_transition
                                    ? app_flow_request_scene(flow, runtime, policy.scene)
@@ -3100,18 +3123,18 @@ static bool app_flow_apply_skip_policy(sdl3d_game_data_app_flow *flow, sdl3d_gam
     return consumed;
 }
 
-static bool app_flow_timeline_is_pending(const sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime)
+static bool app_flow_timeline_is_pending(const slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime)
 {
-    sdl3d_game_data_timeline_policy policy;
+    slayer3d_game_data_timeline_policy policy;
     if (flow == NULL || runtime == NULL || flow->timeline.complete ||
-        !sdl3d_game_data_get_active_timeline_policy(runtime, &policy))
+        !slayer3d_game_data_get_active_timeline_policy(runtime, &policy))
     {
         return false;
     }
     return true;
 }
 
-static void app_flow_timeline_blocks(const sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime,
+static void app_flow_timeline_blocks(const slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime,
                                      bool *out_block_menus, bool *out_block_scene_shortcuts)
 {
     if (out_block_menus != NULL)
@@ -3122,8 +3145,8 @@ static void app_flow_timeline_blocks(const sdl3d_game_data_app_flow *flow, sdl3d
     if (!app_flow_timeline_is_pending(flow, runtime))
         return;
 
-    sdl3d_game_data_timeline_policy policy;
-    if (!sdl3d_game_data_get_active_timeline_policy(runtime, &policy))
+    slayer3d_game_data_timeline_policy policy;
+    if (!slayer3d_game_data_get_active_timeline_policy(runtime, &policy))
         return;
 
     if (out_block_menus != NULL)
@@ -3132,16 +3155,16 @@ static void app_flow_timeline_blocks(const sdl3d_game_data_app_flow *flow, sdl3d
         *out_block_scene_shortcuts = policy.block_scene_shortcuts;
 }
 
-static bool app_flow_update_timeline(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime, float dt)
+static bool app_flow_update_timeline(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime, float dt)
 {
     if (flow == NULL || runtime == NULL || flow->quit_pending || flow->transition.active ||
-        sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+        slayer3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
     {
         return true;
     }
 
-    sdl3d_game_data_timeline_update_result result;
-    if (!sdl3d_game_data_update_timeline(runtime, &flow->timeline, dt, &result))
+    slayer3d_game_data_timeline_update_result result;
+    if (!slayer3d_game_data_update_timeline(runtime, &flow->timeline, dt, &result))
         return false;
 
     if (result.scene_request != NULL)
@@ -3149,74 +3172,75 @@ static bool app_flow_update_timeline(sdl3d_game_data_app_flow *flow, sdl3d_game_
     return true;
 }
 
-static void app_flow_update_transition(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx, sdl3d_signal_bus *bus,
-                                       float dt)
+static void app_flow_update_transition(slayer3d_game_data_app_flow *flow, slayer3d_game_context *ctx,
+                                       slayer3d_signal_bus *bus, float dt)
 {
     if (flow->transition.active)
-        sdl3d_transition_update(&flow->transition, bus, dt);
+        slayer3d_transition_update(&flow->transition, bus, dt);
     if (flow->quit_pending && flow->transition.finished && !flow->transition.active)
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D app quit transition finished");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D app quit transition finished");
         ctx->quit_requested = true;
     }
 }
 
-void sdl3d_game_data_app_flow_init(sdl3d_game_data_app_flow *flow)
+void slayer3d_game_data_app_flow_init(slayer3d_game_data_app_flow *flow)
 {
     if (flow == NULL)
         return;
     SDL_zero(*flow);
-    sdl3d_game_data_scene_flow_init(&flow->scene_flow);
-    sdl3d_transition_reset(&flow->transition);
+    slayer3d_game_data_scene_flow_init(&flow->scene_flow);
+    slayer3d_transition_reset(&flow->transition);
     flow->app.start_signal_id = -1;
     flow->app.quit_action_id = -1;
     flow->app.pause_action_id = -1;
     flow->app.quit_signal_id = -1;
 }
 
-bool sdl3d_game_data_app_flow_start(sdl3d_game_data_app_flow *flow, sdl3d_game_data_runtime *runtime)
+bool slayer3d_game_data_app_flow_start(slayer3d_game_data_app_flow *flow, slayer3d_game_data_runtime *runtime)
 {
     if (flow == NULL || runtime == NULL)
         return false;
 
-    sdl3d_game_data_scene_flow_init(&flow->scene_flow);
-    sdl3d_transition_reset(&flow->transition);
+    slayer3d_game_data_scene_flow_init(&flow->scene_flow);
+    slayer3d_transition_reset(&flow->transition);
     flow->quit_pending = false;
     flow->scene_input_armed = false;
     flow->skip_scene = NULL;
     flow->skip_requested = false;
-    sdl3d_game_data_timeline_state_init(&flow->timeline);
-    if (!sdl3d_game_data_get_app_control(runtime, &flow->app))
+    slayer3d_game_data_timeline_state_init(&flow->timeline);
+    if (!slayer3d_game_data_get_app_control(runtime, &flow->app))
         return false;
 
-    sdl3d_game_data_transition_desc transition;
+    slayer3d_game_data_transition_desc transition;
     if (flow->app.startup_transition != NULL &&
-        sdl3d_game_data_get_transition(runtime, flow->app.startup_transition, &transition))
+        slayer3d_game_data_get_transition(runtime, flow->app.startup_transition, &transition))
     {
-        sdl3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
-                               transition.duration, transition.done_signal_id);
+        slayer3d_transition_start(&flow->transition, transition.type, transition.direction, transition.color,
+                                  transition.duration, transition.done_signal_id);
     }
     return true;
 }
 
-bool sdl3d_game_data_app_flow_quit_pending(const sdl3d_game_data_app_flow *flow)
+bool slayer3d_game_data_app_flow_quit_pending(const slayer3d_game_data_app_flow *flow)
 {
     return flow != NULL && flow->quit_pending;
 }
 
-bool sdl3d_game_data_app_flow_is_transitioning(const sdl3d_game_data_app_flow *flow)
+bool slayer3d_game_data_app_flow_is_transitioning(const slayer3d_game_data_app_flow *flow)
 {
-    return flow != NULL && (flow->transition.active || sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow));
+    return flow != NULL &&
+           (flow->transition.active || slayer3d_game_data_scene_flow_is_transitioning(&flow->scene_flow));
 }
 
-bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_context *ctx,
-                                     sdl3d_game_data_runtime *runtime, float dt)
+bool slayer3d_game_data_app_flow_update(slayer3d_game_data_app_flow *flow, slayer3d_game_context *ctx,
+                                        slayer3d_game_data_runtime *runtime, float dt)
 {
     if (flow == NULL || ctx == NULL || runtime == NULL || ctx->session == NULL)
         return false;
 
-    sdl3d_input_manager *input = sdl3d_game_session_get_input(ctx->session);
-    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(ctx->session);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(ctx->session);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(ctx->session);
     bool skip_applied = false;
     bool skip_blocks_menus = false;
     bool skip_blocks_scene_shortcuts = false;
@@ -3228,14 +3252,14 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
 
     bool activity_blocks_menus = false;
     bool activity_blocks_scene_shortcuts = false;
-    const bool activity_wake_consumed = sdl3d_game_data_scene_activity_consumes_wake_input(
+    const bool activity_wake_consumed = slayer3d_game_data_scene_activity_consumes_wake_input(
         runtime, input, &activity_blocks_menus, &activity_blocks_scene_shortcuts);
 
     if (!skip_consumed && !activity_wake_consumed)
     {
         if (flow->app.quit_action_id >= 0 &&
-            sdl3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
-            sdl3d_input_is_pressed(input, flow->app.quit_action_id))
+            slayer3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
+            slayer3d_input_is_pressed(input, flow->app.quit_action_id))
             app_flow_request_quit(flow, ctx, runtime);
 
         if (!skip_blocks_scene_shortcuts && !timeline_blocks_scene_shortcuts && !activity_blocks_scene_shortcuts)
@@ -3245,27 +3269,27 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
             menu_consumed = app_flow_consume_menu(flow, ctx, runtime, input, bus);
 
         if (!menu_consumed && flow->app.pause_action_id >= 0 &&
-            sdl3d_input_is_pressed(input, flow->app.pause_action_id) &&
-            sdl3d_game_data_active_scene_allows_action(runtime, flow->app.pause_action_id) && !flow->quit_pending &&
-            !sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
+            slayer3d_input_is_pressed(input, flow->app.pause_action_id) &&
+            slayer3d_game_data_active_scene_allows_action(runtime, flow->app.pause_action_id) && !flow->quit_pending &&
+            !slayer3d_game_data_scene_flow_is_transitioning(&flow->scene_flow))
         {
             if (ctx->paused)
                 ctx->paused = false;
             else
             {
-                sdl3d_game_data_ui_metrics metrics;
+                slayer3d_game_data_ui_metrics metrics;
                 SDL_zero(metrics);
                 metrics.paused = ctx->paused;
-                if (sdl3d_game_data_app_pause_allowed(runtime, &metrics) &&
-                    sdl3d_game_data_active_scene_updates_game(runtime))
+                if (slayer3d_game_data_app_pause_allowed(runtime, &metrics) &&
+                    slayer3d_game_data_active_scene_updates_game(runtime))
                     ctx->paused = true;
             }
         }
     }
 
-    const bool scene_transitioning_before = sdl3d_game_data_scene_flow_is_transitioning(&flow->scene_flow);
+    const bool scene_transitioning_before = slayer3d_game_data_scene_flow_is_transitioning(&flow->scene_flow);
     app_flow_update_transition(flow, ctx, bus, dt);
-    sdl3d_game_data_scene_flow_update(&flow->scene_flow, runtime, bus, dt);
+    slayer3d_game_data_scene_flow_update(&flow->scene_flow, runtime, bus, dt);
     bool deferred_skip_applied = false;
     (void)app_flow_apply_skip_policy(flow, runtime, input, false, &deferred_skip_applied, NULL, NULL);
     skip_applied = skip_applied || deferred_skip_applied;
@@ -3274,15 +3298,15 @@ bool sdl3d_game_data_app_flow_update(sdl3d_game_data_app_flow *flow, sdl3d_game_
     return true;
 }
 
-void sdl3d_game_data_app_flow_draw(const sdl3d_game_data_app_flow *flow, sdl3d_render_context *renderer)
+void slayer3d_game_data_app_flow_draw(const slayer3d_game_data_app_flow *flow, slayer3d_render_context *renderer)
 {
     if (flow == NULL)
         return;
-    sdl3d_game_data_scene_flow_draw(&flow->scene_flow, renderer);
-    sdl3d_transition_draw(&flow->transition, renderer);
+    slayer3d_game_data_scene_flow_draw(&flow->scene_flow, renderer);
+    slayer3d_transition_draw(&flow->transition, renderer);
 }
 
-bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
+bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
 {
     if (frame == NULL || frame->runtime == NULL || frame->renderer == NULL)
         return false;
@@ -3291,25 +3315,25 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;
 
-    if (sdl3d_game_data_active_scene_renders_world(frame->runtime))
+    if (slayer3d_game_data_active_scene_renders_world(frame->runtime))
     {
-        const sdl3d_camera3d camera = active_camera_or_fallback(frame->runtime, frame->fallback_camera);
-        if (sdl3d_begin_mode_3d(frame->renderer, camera))
+        const slayer3d_camera3d camera = active_camera_or_fallback(frame->runtime, frame->fallback_camera);
+        if (slayer3d_begin_mode_3d(frame->renderer, camera))
         {
             ok = run_frame_hook(frame, frame->before_world_3d) && ok;
             ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache) && ok;
-            ok = sdl3d_game_data_draw_sector_levels_with_assets(
+            ok = slayer3d_game_data_draw_sector_levels_with_assets(
                      frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
                      &camera) &&
                  ok;
             if (frame->particle_cache != NULL)
-                ok = sdl3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
+                ok = slayer3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
             ok = draw_render_primitives_evaluated_with_cache(
                      frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
                      frame->model_cache, frame->mesh_primitive_cache, &camera) &&
                  ok;
             ok = run_frame_hook(frame, frame->after_world_3d) && ok;
-            sdl3d_end_mode_3d(frame->renderer);
+            slayer3d_end_mode_3d(frame->renderer);
         }
         else
         {
@@ -3318,19 +3342,19 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
     }
 
     ok = run_frame_hook(frame, frame->before_ui) && ok;
-    ok = sdl3d_game_data_draw_ui_rects(frame->runtime, frame->renderer, frame->metrics, frame->render_eval) && ok;
+    ok = slayer3d_game_data_draw_ui_rects(frame->runtime, frame->renderer, frame->metrics, frame->render_eval) && ok;
     if (frame->image_cache != NULL)
-        ok = sdl3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics,
-                                            frame->render_eval) &&
+        ok = slayer3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics,
+                                               frame->render_eval) &&
              ok;
     if (frame->font_cache != NULL)
     {
-        ok = sdl3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->metrics,
-                                          frame->pulse_phase) &&
+        ok = slayer3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->metrics,
+                                             frame->pulse_phase) &&
              ok;
     }
     if (frame->app_flow != NULL)
-        sdl3d_game_data_app_flow_draw(frame->app_flow, frame->renderer);
+        slayer3d_game_data_app_flow_draw(frame->app_flow, frame->renderer);
     ok = run_frame_hook(frame, frame->after_ui) && ok;
     return ok;
 }

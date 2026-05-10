@@ -1,14 +1,14 @@
 /*
- * Internal GL transition dispatch. Public callers use sdl3d_transition_draw.
+ * Internal GL transition dispatch. Public callers use slayer3d_transition_draw.
  */
 
-#ifndef SDL3D_TRANSITION_GL_H
-#define SDL3D_TRANSITION_GL_H
+#ifndef SLAYER3D_TRANSITION_GL_H
+#define SLAYER3D_TRANSITION_GL_H
 
 #include <stdbool.h>
 
-#include "sdl3d/transition.h"
+#include "slayer3d/transition.h"
 
-bool sdl3d_transition_draw_gl(const sdl3d_transition *transition, sdl3d_render_context *context);
+bool slayer3d_transition_draw_gl(const slayer3d_transition *transition, slayer3d_render_context *context);
 
-#endif /* SDL3D_TRANSITION_GL_H */
+#endif /* SLAYER3D_TRANSITION_GL_H */

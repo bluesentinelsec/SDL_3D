@@ -1,5 +1,5 @@
 /*
- * Software backend implementation for the sdl3d_backend_interface.
+ * Software backend implementation for the slayer3d_backend_interface.
  *
  * Delegates to the existing CPU rasterizer and SDL2D texture upload path.
  */
@@ -17,9 +17,9 @@
 /* Lifecycle                                                           */
 /* ------------------------------------------------------------------ */
 
-static void sw_destroy(sdl3d_render_context *context)
+static void sw_destroy(slayer3d_render_context *context)
 {
-    sdl3d_parallel_rasterizer_destroy(context->parallel_rasterizer);
+    slayer3d_parallel_rasterizer_destroy(context->parallel_rasterizer);
     context->parallel_rasterizer = NULL;
     SDL_DestroyTexture(context->color_texture);
     context->color_texture = NULL;
@@ -33,14 +33,14 @@ static void sw_destroy(sdl3d_render_context *context)
 /* Per-frame operations                                                */
 /* ------------------------------------------------------------------ */
 
-static bool sw_clear(sdl3d_render_context *context, sdl3d_color color)
+static bool sw_clear(slayer3d_render_context *context, slayer3d_color color)
 {
-    sdl3d_framebuffer framebuffer = sdl3d_framebuffer_from_context(context);
-    sdl3d_framebuffer_clear(&framebuffer, color, 1.0f);
+    slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
+    slayer3d_framebuffer_clear(&framebuffer, color, 1.0f);
     return true;
 }
 
-static bool sw_present(sdl3d_render_context *context)
+static bool sw_present(slayer3d_render_context *context)
 {
     if (!SDL_UpdateTexture(context->color_texture, NULL, context->color_buffer, context->width * 4))
     {
@@ -79,14 +79,14 @@ static bool sw_present(sdl3d_render_context *context)
 /* migrated in a future pass without a risky big-bang rewrite.         */
 /* ------------------------------------------------------------------ */
 
-static bool sw_draw_mesh_unlit(sdl3d_render_context *context, const sdl3d_draw_params_unlit *params)
+static bool sw_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_draw_params_unlit *params)
 {
     (void)context;
     (void)params;
     return false; /* fall through to inline software path */
 }
 
-static bool sw_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_params_lit *params)
+static bool sw_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_draw_params_lit *params)
 {
     (void)context;
     (void)params;
@@ -97,7 +97,7 @@ static bool sw_draw_mesh_lit(sdl3d_render_context *context, const sdl3d_draw_par
 /* Interface initializer                                               */
 /* ------------------------------------------------------------------ */
 
-void sdl3d_sw_backend_init(sdl3d_backend_interface *iface)
+void slayer3d_sw_backend_init(slayer3d_backend_interface *iface)
 {
     iface->destroy = sw_destroy;
     iface->clear = sw_clear;

@@ -80,7 +80,7 @@ using RendererPtr = std::unique_ptr<SDL_Renderer, decltype(&SDL_DestroyRenderer)
 }
 } // namespace
 
-TEST(SDL3DRenderLoop, MinimalRendererLoopCompletesDeterministically)
+TEST(SLAYER3DRenderLoop, MinimalRendererLoopCompletesDeterministically)
 {
     SDL_SetMainReady();
     SDL_ClearError();
@@ -89,7 +89,7 @@ TEST(SDL3DRenderLoop, MinimalRendererLoopCompletesDeterministically)
 
     SDL_Window *raw_window = nullptr;
     SDL_Renderer *raw_renderer = nullptr;
-    ASSERT_TRUE(SDL_CreateWindowAndRenderer("SDL3D Render Loop Test", 96, 96, 0, &raw_window, &raw_renderer))
+    ASSERT_TRUE(SDL_CreateWindowAndRenderer("SLAYER3D Render Loop Test", 96, 96, 0, &raw_window, &raw_renderer))
         << SDL_GetError();
 
     WindowPtr window(raw_window, SDL_DestroyWindow);

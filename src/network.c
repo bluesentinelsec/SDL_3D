@@ -1,11 +1,11 @@
-#include "sdl3d/network.h"
+#include "slayer3d/network.h"
 
 #include <SDL3/SDL_endian.h>
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
-#if SDL3D_NETWORKING_ENABLED
+#if SLAYER3D_NETWORKING_ENABLED
 #include <SDL3_net/SDL_net.h>
 
 #if (defined(__APPLE__) || defined(__linux__)) && !defined(__ANDROID__)
@@ -17,9 +17,9 @@
 #include <net/if.h>
 #endif
 #include <netinet/in.h>
-#define SDL3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS 1
+#define SLAYER3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS 1
 #else
-#define SDL3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS 0
+#define SLAYER3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS 0
 #endif
 #else
 typedef struct NET_Address
@@ -68,35 +68,35 @@ typedef int NET_Status;
     } while (0)
 #endif
 
-#define SDL3D_NETWORK_MAX_DISCOVERY_TARGETS 320
-#define SDL3D_NETWORK_DISCOVERY_BATCH_SIZE 10
-#define SDL3D_NETWORK_DISCOVERY_BATCH_INTERVAL 0.02f
-#define SDL3D_NETWORK_GLOBAL_BROADCAST "255.255.255.255"
+#define SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS 320
+#define SLAYER3D_NETWORK_DISCOVERY_BATCH_SIZE 10
+#define SLAYER3D_NETWORK_DISCOVERY_BATCH_INTERVAL 0.02f
+#define SLAYER3D_NETWORK_GLOBAL_BROADCAST "255.255.255.255"
 
-typedef enum sdl3d_network_packet_kind
+typedef enum slayer3d_network_packet_kind
 {
-    SDL3D_NETWORK_PACKET_HELLO = 1,
-    SDL3D_NETWORK_PACKET_WELCOME = 2,
-    SDL3D_NETWORK_PACKET_REJECT = 3,
-    SDL3D_NETWORK_PACKET_KEEPALIVE = 4,
-    SDL3D_NETWORK_PACKET_USER = 5,
-    SDL3D_NETWORK_PACKET_DISCOVERY_QUERY = 6,
-    SDL3D_NETWORK_PACKET_DISCOVERY_REPLY = 7,
-} sdl3d_network_packet_kind;
+    SLAYER3D_NETWORK_PACKET_HELLO = 1,
+    SLAYER3D_NETWORK_PACKET_WELCOME = 2,
+    SLAYER3D_NETWORK_PACKET_REJECT = 3,
+    SLAYER3D_NETWORK_PACKET_KEEPALIVE = 4,
+    SLAYER3D_NETWORK_PACKET_USER = 5,
+    SLAYER3D_NETWORK_PACKET_DISCOVERY_QUERY = 6,
+    SLAYER3D_NETWORK_PACKET_DISCOVERY_REPLY = 7,
+} slayer3d_network_packet_kind;
 
-typedef struct sdl3d_network_packet_entry
+typedef struct slayer3d_network_packet_entry
 {
-    Uint8 data[SDL3D_NETWORK_MAX_PACKET_SIZE];
+    Uint8 data[SLAYER3D_NETWORK_MAX_PACKET_SIZE];
     int size;
-} sdl3d_network_packet_entry;
+} slayer3d_network_packet_entry;
 
-struct sdl3d_network_session
+struct slayer3d_network_session
 {
-    sdl3d_network_session_desc desc;
-    char host[SDL3D_NETWORK_MAX_HOST_LENGTH];
-    char session_name[SDL3D_NETWORK_MAX_HOST_LENGTH];
-    char status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
-    sdl3d_network_state state;
+    slayer3d_network_session_desc desc;
+    char host[SLAYER3D_NETWORK_MAX_HOST_LENGTH];
+    char session_name[SLAYER3D_NETWORK_MAX_HOST_LENGTH];
+    char status[SLAYER3D_NETWORK_MAX_STATUS_LENGTH];
+    slayer3d_network_state state;
     float handshake_elapsed;
     float handshake_send_elapsed;
     float idle_elapsed;
@@ -108,23 +108,23 @@ struct sdl3d_network_session
     NET_DatagramSocket *socket;
     NET_Address *remote_address;
     NET_Address *peer_address;
-    sdl3d_network_packet_entry queue[SDL3D_NETWORK_MAX_QUEUE_SIZE];
+    slayer3d_network_packet_entry queue[SLAYER3D_NETWORK_MAX_QUEUE_SIZE];
     int queue_head;
     int queue_count;
 };
 
-struct sdl3d_network_discovery_session
+struct slayer3d_network_discovery_session
 {
-    sdl3d_network_discovery_session_desc desc;
-    char status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
+    slayer3d_network_discovery_session_desc desc;
+    char status[SLAYER3D_NETWORK_MAX_STATUS_LENGTH];
     NET_DatagramSocket *socket;
-    NET_Address *target_addresses[SDL3D_NETWORK_MAX_DISCOVERY_TARGETS];
-    char target_hosts[SDL3D_NETWORK_MAX_DISCOVERY_TARGETS][SDL3D_NETWORK_MAX_HOST_LENGTH];
-    bool target_probe_sent[SDL3D_NETWORK_MAX_DISCOVERY_TARGETS];
+    NET_Address *target_addresses[SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS];
+    char target_hosts[SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS][SLAYER3D_NETWORK_MAX_HOST_LENGTH];
+    bool target_probe_sent[SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS];
     int target_count;
     int next_probe_index;
     Uint16 target_port;
-    sdl3d_network_discovery_result results[SDL3D_NETWORK_MAX_DISCOVERY_RESULTS];
+    slayer3d_network_discovery_result results[SLAYER3D_NETWORK_MAX_DISCOVERY_RESULTS];
     int result_count;
     float elapsed;
     float refresh_elapsed;
@@ -132,12 +132,13 @@ struct sdl3d_network_discovery_session
     bool scanning;
 };
 
-#if SDL3D_NETWORKING_ENABLED
-static int sdl3d_network_library_refs = 0;
+#if SLAYER3D_NETWORKING_ENABLED
+static int slayer3d_network_library_refs = 0;
 #endif
 
-#if SDL3D_NETWORKING_ENABLED
-static void sdl3d_network_set_status(sdl3d_network_session *session, sdl3d_network_state state, const char *status)
+#if SLAYER3D_NETWORKING_ENABLED
+static void slayer3d_network_set_status(slayer3d_network_session *session, slayer3d_network_state state,
+                                        const char *status)
 {
     if (session == NULL)
     {
@@ -148,7 +149,7 @@ static void sdl3d_network_set_status(sdl3d_network_session *session, sdl3d_netwo
     SDL_snprintf(session->status, sizeof(session->status), "%s", status != NULL ? status : "");
 }
 
-static void sdl3d_network_clear_peer(sdl3d_network_session *session)
+static void slayer3d_network_clear_peer(slayer3d_network_session *session)
 {
     if (session == NULL)
     {
@@ -171,7 +172,7 @@ static void sdl3d_network_clear_peer(sdl3d_network_session *session)
     session->queue_count = 0;
 }
 
-static void sdl3d_network_destroy_socket(sdl3d_network_session *session)
+static void slayer3d_network_destroy_socket(slayer3d_network_session *session)
 {
     if (session == NULL)
     {
@@ -186,13 +187,13 @@ static void sdl3d_network_destroy_socket(sdl3d_network_session *session)
 }
 #endif
 
-#if SDL3D_NETWORKING_ENABLED
-static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_session *session);
-static void sdl3d_network_discovery_destroy_socket(sdl3d_network_discovery_session *session);
-static void sdl3d_network_discovery_destroy_target_address(sdl3d_network_discovery_session *session);
-static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *session);
+#if SLAYER3D_NETWORKING_ENABLED
+static void slayer3d_network_discovery_clear_results(slayer3d_network_discovery_session *session);
+static void slayer3d_network_discovery_destroy_socket(slayer3d_network_discovery_session *session);
+static void slayer3d_network_discovery_destroy_target_address(slayer3d_network_discovery_session *session);
+static bool slayer3d_network_discovery_send_probe(slayer3d_network_discovery_session *session);
 
-static void sdl3d_network_destroy_remote_address(sdl3d_network_session *session)
+static void slayer3d_network_destroy_remote_address(slayer3d_network_session *session)
 {
     if (session == NULL)
     {
@@ -206,7 +207,7 @@ static void sdl3d_network_destroy_remote_address(sdl3d_network_session *session)
     }
 }
 
-static void sdl3d_network_discovery_destroy_target_address(sdl3d_network_discovery_session *session)
+static void slayer3d_network_discovery_destroy_target_address(slayer3d_network_discovery_session *session)
 {
     if (session == NULL)
     {
@@ -227,62 +228,63 @@ static void sdl3d_network_discovery_destroy_target_address(sdl3d_network_discove
     session->next_probe_index = 0;
 }
 
-#if SDL3D_NETWORKING_ENABLED
-static int sdl3d_network_encode_packet(Uint8 *buffer, int buffer_size, sdl3d_network_packet_kind kind,
-                                       const void *payload, int payload_size);
-static bool sdl3d_network_decode_packet(const Uint8 *buffer, int size, sdl3d_network_packet_kind *out_kind,
-                                        const Uint8 **out_payload, int *out_payload_size);
-static void sdl3d_network_write_u16(Uint8 *dst, Uint16 value);
-static Uint16 sdl3d_network_read_u16(const Uint8 *src);
-static bool sdl3d_network_send_packet_to(sdl3d_network_session *session, NET_Address *address, Uint16 port,
-                                         sdl3d_network_packet_kind kind, const void *payload, int payload_size);
+#if SLAYER3D_NETWORKING_ENABLED
+static int slayer3d_network_encode_packet(Uint8 *buffer, int buffer_size, slayer3d_network_packet_kind kind,
+                                          const void *payload, int payload_size);
+static bool slayer3d_network_decode_packet(const Uint8 *buffer, int size, slayer3d_network_packet_kind *out_kind,
+                                           const Uint8 **out_payload, int *out_payload_size);
+static void slayer3d_network_write_u16(Uint8 *dst, Uint16 value);
+static Uint16 slayer3d_network_read_u16(const Uint8 *src);
+static bool slayer3d_network_send_packet_to(slayer3d_network_session *session, NET_Address *address, Uint16 port,
+                                            slayer3d_network_packet_kind kind, const void *payload, int payload_size);
 
-static void sdl3d_network_queue_packet(sdl3d_network_session *session, const Uint8 *data, int size)
+static void slayer3d_network_queue_packet(slayer3d_network_session *session, const Uint8 *data, int size)
 {
-    if (session == NULL || data == NULL || size <= 0 || size > SDL3D_NETWORK_MAX_PACKET_SIZE ||
-        session->queue_count >= SDL3D_NETWORK_MAX_QUEUE_SIZE)
+    if (session == NULL || data == NULL || size <= 0 || size > SLAYER3D_NETWORK_MAX_PACKET_SIZE ||
+        session->queue_count >= SLAYER3D_NETWORK_MAX_QUEUE_SIZE)
     {
         return;
     }
 
-    const int slot = (session->queue_head + session->queue_count) % SDL3D_NETWORK_MAX_QUEUE_SIZE;
+    const int slot = (session->queue_head + session->queue_count) % SLAYER3D_NETWORK_MAX_QUEUE_SIZE;
     SDL_memcpy(session->queue[slot].data, data, (size_t)size);
     session->queue[slot].size = size;
     session->queue_count++;
 }
 
-static bool sdl3d_network_library_acquire(void)
+static bool slayer3d_network_library_acquire(void)
 {
-    if (sdl3d_network_library_refs == 0 && !NET_Init())
+    if (slayer3d_network_library_refs == 0 && !NET_Init())
     {
         return false;
     }
-    sdl3d_network_library_refs++;
+    slayer3d_network_library_refs++;
     return true;
 }
 
-static void sdl3d_network_library_release(void)
+static void slayer3d_network_library_release(void)
 {
-    if (sdl3d_network_library_refs > 0)
+    if (slayer3d_network_library_refs > 0)
     {
-        sdl3d_network_library_refs--;
-        if (sdl3d_network_library_refs == 0)
+        slayer3d_network_library_refs--;
+        if (slayer3d_network_library_refs == 0)
         {
             NET_Quit();
         }
     }
 }
 
-static const char *sdl3d_network_session_advertised_name(const sdl3d_network_session *session)
+static const char *slayer3d_network_session_advertised_name(const slayer3d_network_session *session)
 {
     if (session == NULL || session->session_name[0] == '\0')
     {
-        return "SDL3D Session";
+        return "SLAYER3D Session";
     }
     return session->session_name;
 }
 
-static bool sdl3d_network_discovery_target_exists(const sdl3d_network_discovery_session *session, const char *host)
+static bool slayer3d_network_discovery_target_exists(const slayer3d_network_discovery_session *session,
+                                                     const char *host)
 {
     if (session == NULL || host == NULL || host[0] == '\0')
     {
@@ -299,29 +301,29 @@ static bool sdl3d_network_discovery_target_exists(const sdl3d_network_discovery_
     return false;
 }
 
-static bool sdl3d_network_discovery_add_target(sdl3d_network_discovery_session *session, const char *host)
+static bool slayer3d_network_discovery_add_target(slayer3d_network_discovery_session *session, const char *host)
 {
     if (session == NULL || host == NULL || host[0] == '\0')
     {
         return false;
     }
 
-    if (sdl3d_network_discovery_target_exists(session, host))
+    if (slayer3d_network_discovery_target_exists(session, host))
     {
         return true;
     }
 
-    if (session->target_count >= SDL3D_NETWORK_MAX_DISCOVERY_TARGETS)
+    if (session->target_count >= SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery target dropped: list full host=%s", host);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery target dropped: list full host=%s", host);
         return false;
     }
 
     NET_Address *address = NET_ResolveHostname(host);
     if (address == NULL)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery target resolution create failed: host=%s error=%s",
-                    host, SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                    "SLAYER3D discovery target resolution create failed: host=%s error=%s", host, SDL_GetError());
         return false;
     }
 
@@ -332,9 +334,9 @@ static bool sdl3d_network_discovery_add_target(sdl3d_network_discovery_session *
     return true;
 }
 
-#if SDL3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS
-static bool sdl3d_network_discovery_host_list_contains(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int count,
-                                                       const char *host)
+#if SLAYER3D_NETWORK_CAN_ENUMERATE_BROADCAST_TARGETS
+static bool slayer3d_network_discovery_host_list_contains(char hosts[][SLAYER3D_NETWORK_MAX_HOST_LENGTH], int count,
+                                                          const char *host)
 {
     if (hosts == NULL || host == NULL || host[0] == '\0')
     {
@@ -351,21 +353,21 @@ static bool sdl3d_network_discovery_host_list_contains(char hosts[][SDL3D_NETWOR
     return false;
 }
 
-static bool sdl3d_network_discovery_add_host_to_list(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int *count, int max,
-                                                     const char *host)
+static bool slayer3d_network_discovery_add_host_to_list(char hosts[][SLAYER3D_NETWORK_MAX_HOST_LENGTH], int *count,
+                                                        int max, const char *host)
 {
     if (hosts == NULL || count == NULL || max <= 0 || *count >= max || host == NULL || host[0] == '\0' ||
-        sdl3d_network_discovery_host_list_contains(hosts, *count, host))
+        slayer3d_network_discovery_host_list_contains(hosts, *count, host))
     {
         return false;
     }
 
-    SDL_snprintf(hosts[*count], SDL3D_NETWORK_MAX_HOST_LENGTH, "%s", host);
+    SDL_snprintf(hosts[*count], SLAYER3D_NETWORK_MAX_HOST_LENGTH, "%s", host);
     (*count)++;
     return true;
 }
 
-static int sdl3d_network_collect_directed_broadcast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
+static int slayer3d_network_collect_directed_broadcast_hosts(char hosts[][SLAYER3D_NETWORK_MAX_HOST_LENGTH], int max)
 {
     struct ifaddrs *interfaces = NULL;
     int count = 0;
@@ -377,7 +379,7 @@ static int sdl3d_network_collect_directed_broadcast_hosts(char hosts[][SDL3D_NET
 
     if (getifaddrs(&interfaces) != 0)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery interface enumeration failed");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery interface enumeration failed");
         return 0;
     }
 
@@ -419,14 +421,14 @@ static int sdl3d_network_collect_directed_broadcast_hosts(char hosts[][SDL3D_NET
             continue;
         }
 
-        (void)sdl3d_network_discovery_add_host_to_list(hosts, &count, max, host);
+        (void)slayer3d_network_discovery_add_host_to_list(hosts, &count, max, host);
     }
 
     freeifaddrs(interfaces);
     return count;
 }
 
-static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
+static int slayer3d_network_collect_lan_unicast_hosts(char hosts[][SLAYER3D_NETWORK_MAX_HOST_LENGTH], int max)
 {
     struct ifaddrs *interfaces = NULL;
     int count = 0;
@@ -438,7 +440,7 @@ static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MA
 
     if (getifaddrs(&interfaces) != 0)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery interface enumeration failed");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery interface enumeration failed");
         return 0;
     }
 
@@ -471,7 +473,7 @@ static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MA
                 continue;
             }
 
-            (void)sdl3d_network_discovery_add_host_to_list(hosts, &count, max, host);
+            (void)slayer3d_network_discovery_add_host_to_list(hosts, &count, max, host);
         }
     }
 
@@ -479,14 +481,14 @@ static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MA
     return count;
 }
 #else
-static int sdl3d_network_collect_directed_broadcast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
+static int slayer3d_network_collect_directed_broadcast_hosts(char hosts[][SLAYER3D_NETWORK_MAX_HOST_LENGTH], int max)
 {
     (void)hosts;
     (void)max;
     return 0;
 }
 
-static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MAX_HOST_LENGTH], int max)
+static int slayer3d_network_collect_lan_unicast_hosts(char hosts[][SLAYER3D_NETWORK_MAX_HOST_LENGTH], int max)
 {
     (void)hosts;
     (void)max;
@@ -494,9 +496,9 @@ static int sdl3d_network_collect_lan_unicast_hosts(char hosts[][SDL3D_NETWORK_MA
 }
 #endif
 
-static void sdl3d_network_discovery_add_default_targets(sdl3d_network_discovery_session *session)
+static void slayer3d_network_discovery_add_default_targets(slayer3d_network_discovery_session *session)
 {
-    char hosts[SDL3D_NETWORK_MAX_DISCOVERY_TARGETS][SDL3D_NETWORK_MAX_HOST_LENGTH];
+    char hosts[SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS][SLAYER3D_NETWORK_MAX_HOST_LENGTH];
     int host_count = 0;
 
     if (session == NULL)
@@ -504,22 +506,22 @@ static void sdl3d_network_discovery_add_default_targets(sdl3d_network_discovery_
         return;
     }
 
-    host_count = sdl3d_network_collect_directed_broadcast_hosts(hosts, SDL3D_NETWORK_MAX_DISCOVERY_TARGETS - 1);
+    host_count = slayer3d_network_collect_directed_broadcast_hosts(hosts, SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS - 1);
     for (int i = 0; i < host_count; ++i)
     {
-        (void)sdl3d_network_discovery_add_target(session, hosts[i]);
+        (void)slayer3d_network_discovery_add_target(session, hosts[i]);
     }
 
-    (void)sdl3d_network_discovery_add_target(session, SDL3D_NETWORK_GLOBAL_BROADCAST);
+    (void)slayer3d_network_discovery_add_target(session, SLAYER3D_NETWORK_GLOBAL_BROADCAST);
 
-    host_count = sdl3d_network_collect_lan_unicast_hosts(hosts, SDL3D_NETWORK_MAX_DISCOVERY_TARGETS);
+    host_count = slayer3d_network_collect_lan_unicast_hosts(hosts, SLAYER3D_NETWORK_MAX_DISCOVERY_TARGETS);
     for (int i = 0; i < host_count; ++i)
     {
-        (void)sdl3d_network_discovery_add_target(session, hosts[i]);
+        (void)slayer3d_network_discovery_add_target(session, hosts[i]);
     }
 }
 
-static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_session *session)
+static void slayer3d_network_discovery_clear_results(slayer3d_network_discovery_session *session)
 {
     if (session == NULL)
     {
@@ -530,8 +532,8 @@ static void sdl3d_network_discovery_clear_results(sdl3d_network_discovery_sessio
     session->result_count = 0;
 }
 
-static bool sdl3d_network_discovery_add_result(sdl3d_network_discovery_session *session, const char *session_name,
-                                               const char *host, Uint16 port, const char *status)
+static bool slayer3d_network_discovery_add_result(slayer3d_network_discovery_session *session, const char *session_name,
+                                                  const char *host, Uint16 port, const char *status)
 {
     if (session == NULL || host == NULL || host[0] == '\0' || port == 0)
     {
@@ -540,25 +542,25 @@ static bool sdl3d_network_discovery_add_result(sdl3d_network_discovery_session *
 
     for (int i = 0; i < session->result_count; ++i)
     {
-        sdl3d_network_discovery_result *result = &session->results[i];
+        slayer3d_network_discovery_result *result = &session->results[i];
         if (SDL_strcmp(result->host, host) == 0 && result->port == port)
         {
             SDL_snprintf(result->session_name, sizeof(result->session_name), "%s",
-                         session_name != NULL && session_name[0] != '\0' ? session_name : "SDL3D Session");
+                         session_name != NULL && session_name[0] != '\0' ? session_name : "SLAYER3D Session");
             SDL_snprintf(result->status, sizeof(result->status), "%s", status != NULL ? status : "");
             result->last_seen_ms = SDL_GetTicks();
             return true;
         }
     }
 
-    if (session->result_count >= SDL3D_NETWORK_MAX_DISCOVERY_RESULTS)
+    if (session->result_count >= SLAYER3D_NETWORK_MAX_DISCOVERY_RESULTS)
     {
         return false;
     }
 
-    sdl3d_network_discovery_result *result = &session->results[session->result_count++];
+    slayer3d_network_discovery_result *result = &session->results[session->result_count++];
     SDL_snprintf(result->session_name, sizeof(result->session_name), "%s",
-                 session_name != NULL && session_name[0] != '\0' ? session_name : "SDL3D Session");
+                 session_name != NULL && session_name[0] != '\0' ? session_name : "SLAYER3D Session");
     SDL_snprintf(result->host, sizeof(result->host), "%s", host);
     SDL_snprintf(result->status, sizeof(result->status), "%s", status != NULL ? status : "");
     result->port = port;
@@ -566,7 +568,7 @@ static bool sdl3d_network_discovery_add_result(sdl3d_network_discovery_session *
     return true;
 }
 
-static void sdl3d_network_discovery_destroy_socket(sdl3d_network_discovery_session *session)
+static void slayer3d_network_discovery_destroy_socket(slayer3d_network_discovery_session *session)
 {
     if (session == NULL)
     {
@@ -580,12 +582,12 @@ static void sdl3d_network_discovery_destroy_socket(sdl3d_network_discovery_sessi
     }
 }
 
-static bool sdl3d_network_discovery_send_packet_to(sdl3d_network_discovery_session *session, NET_Address *address,
-                                                   Uint16 port, sdl3d_network_packet_kind kind, const void *payload,
-                                                   int payload_size)
+static bool slayer3d_network_discovery_send_packet_to(slayer3d_network_discovery_session *session, NET_Address *address,
+                                                      Uint16 port, slayer3d_network_packet_kind kind,
+                                                      const void *payload, int payload_size)
 {
-    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
-    const int size = sdl3d_network_encode_packet(packet, (int)sizeof(packet), kind, payload, payload_size);
+    Uint8 packet[SLAYER3D_NETWORK_MAX_PACKET_SIZE];
+    const int size = slayer3d_network_encode_packet(packet, (int)sizeof(packet), kind, payload, payload_size);
     if (session == NULL || session->socket == NULL || address == NULL || port == 0 || size < 0)
     {
         return false;
@@ -593,7 +595,7 @@ static bool sdl3d_network_discovery_send_packet_to(sdl3d_network_discovery_sessi
     return NET_SendDatagram(session->socket, address, port, packet, size);
 }
 
-static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *session)
+static bool slayer3d_network_discovery_send_probe(slayer3d_network_discovery_session *session)
 {
     bool any_sent = false;
     bool any_pending = false;
@@ -610,8 +612,8 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
     }
 
     SDL_snprintf(session->status, sizeof(session->status), "Scanning for local matches");
-    for (int i = session->next_probe_index; i < session->target_count && processed < SDL3D_NETWORK_DISCOVERY_BATCH_SIZE;
-         ++i)
+    for (int i = session->next_probe_index;
+         i < session->target_count && processed < SLAYER3D_NETWORK_DISCOVERY_BATCH_SIZE; ++i)
     {
         NET_Status target_status;
         if (session->target_addresses[i] == NULL || session->target_probe_sent[i])
@@ -628,7 +630,7 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
         }
         if (target_status == NET_FAILURE)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery target resolution failed: target=%s error=%s",
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery target resolution failed: target=%s error=%s",
                         session->target_hosts[i], SDL_GetError());
             session->target_probe_sent[i] = true;
             session->next_probe_index = i + 1;
@@ -643,18 +645,18 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
 
         if (session->target_count <= 16)
         {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery probe send: target=%s port=%u",
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery probe send: target=%s port=%u",
                         session->target_hosts[i][0] != '\0' ? session->target_hosts[i] : "<unknown>",
                         (unsigned int)session->target_port);
         }
-        if (sdl3d_network_discovery_send_packet_to(session, session->target_addresses[i], session->target_port,
-                                                   SDL3D_NETWORK_PACKET_DISCOVERY_QUERY, NULL, 0))
+        if (slayer3d_network_discovery_send_packet_to(session, session->target_addresses[i], session->target_port,
+                                                      SLAYER3D_NETWORK_PACKET_DISCOVERY_QUERY, NULL, 0))
         {
             any_sent = true;
         }
         else
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery probe send failed: target=%s error=%s",
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery probe send failed: target=%s error=%s",
                         session->target_hosts[i], SDL_GetError());
         }
         session->target_probe_sent[i] = true;
@@ -669,38 +671,38 @@ static bool sdl3d_network_discovery_send_probe(sdl3d_network_discovery_session *
     return any_sent || any_pending;
 }
 
-typedef struct sdl3d_network_discovery_reply_payload
+typedef struct slayer3d_network_discovery_reply_payload
 {
     Uint8 port[2];
-    char session_name[SDL3D_NETWORK_MAX_HOST_LENGTH];
-    char status[SDL3D_NETWORK_MAX_STATUS_LENGTH];
-} sdl3d_network_discovery_reply_payload;
+    char session_name[SLAYER3D_NETWORK_MAX_HOST_LENGTH];
+    char status[SLAYER3D_NETWORK_MAX_STATUS_LENGTH];
+} slayer3d_network_discovery_reply_payload;
 
-static void sdl3d_network_discovery_process_datagram(sdl3d_network_discovery_session *session,
-                                                     const NET_Datagram *dgram)
+static void slayer3d_network_discovery_process_datagram(slayer3d_network_discovery_session *session,
+                                                        const NET_Datagram *dgram)
 {
     if (session == NULL || dgram == NULL || dgram->buf == NULL || dgram->buflen <= 0)
     {
         return;
     }
 
-    sdl3d_network_packet_kind kind;
+    slayer3d_network_packet_kind kind;
     const Uint8 *payload = NULL;
     int payload_size = 0;
-    if (!sdl3d_network_decode_packet(dgram->buf, dgram->buflen, &kind, &payload, &payload_size))
+    if (!slayer3d_network_decode_packet(dgram->buf, dgram->buflen, &kind, &payload, &payload_size))
     {
         return;
     }
 
-    if (kind != SDL3D_NETWORK_PACKET_DISCOVERY_REPLY ||
-        payload_size != (int)sizeof(sdl3d_network_discovery_reply_payload))
+    if (kind != SLAYER3D_NETWORK_PACKET_DISCOVERY_REPLY ||
+        payload_size != (int)sizeof(slayer3d_network_discovery_reply_payload))
     {
         return;
     }
 
-    const sdl3d_network_discovery_reply_payload *reply = (const sdl3d_network_discovery_reply_payload *)payload;
-    char host_string[SDL3D_NETWORK_MAX_HOST_LENGTH];
-    const Uint16 announced_port = sdl3d_network_read_u16(reply->port);
+    const slayer3d_network_discovery_reply_payload *reply = (const slayer3d_network_discovery_reply_payload *)payload;
+    char host_string[SLAYER3D_NETWORK_MAX_HOST_LENGTH];
+    const Uint16 announced_port = slayer3d_network_read_u16(reply->port);
 
     SDL_snprintf(host_string, sizeof(host_string), "%s",
                  NET_GetAddressString(dgram->addr) != NULL ? NET_GetAddressString(dgram->addr) : "");
@@ -710,67 +712,69 @@ static void sdl3d_network_discovery_process_datagram(sdl3d_network_discovery_ses
         return;
     }
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery reply received: host=%s port=%u", host_string,
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery reply received: host=%s port=%u", host_string,
                 (unsigned int)announced_port);
-    if (!sdl3d_network_discovery_add_result(session, reply->session_name, host_string, announced_port, reply->status))
+    if (!slayer3d_network_discovery_add_result(session, reply->session_name, host_string, announced_port,
+                                               reply->status))
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery result dropped: list full");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery result dropped: list full");
     }
     else
     {
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery result added: session=%s host=%s port=%u status=%s",
-                    reply->session_name, host_string, (unsigned int)announced_port, reply->status);
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                    "SLAYER3D discovery result added: session=%s host=%s port=%u status=%s", reply->session_name,
+                    host_string, (unsigned int)announced_port, reply->status);
     }
 }
 
-static void sdl3d_network_discovery_process_query(sdl3d_network_session *session, const NET_Datagram *dgram)
+static void slayer3d_network_discovery_process_query(slayer3d_network_session *session, const NET_Datagram *dgram)
 {
-    if (session == NULL || dgram == NULL || session->state != SDL3D_NETWORK_STATE_WAITING || dgram->addr == NULL ||
+    if (session == NULL || dgram == NULL || session->state != SLAYER3D_NETWORK_STATE_WAITING || dgram->addr == NULL ||
         dgram->port == 0)
     {
         return;
     }
 
-    sdl3d_network_discovery_reply_payload payload;
-    const char *session_name = sdl3d_network_session_advertised_name(session);
+    slayer3d_network_discovery_reply_payload payload;
+    const char *session_name = slayer3d_network_session_advertised_name(session);
     const char *status = session->status[0] != '\0' ? session->status : "Awaiting client";
     SDL_zero(payload);
     SDL_snprintf(payload.session_name, sizeof(payload.session_name), "%s", session_name);
     SDL_snprintf(payload.status, sizeof(payload.status), "%s", status);
-    sdl3d_network_write_u16(payload.port,
-                            session->local_bound_port != 0 ? session->local_bound_port : session->desc.port);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery query received: host=%s port=%u session=%s status=%s",
+    slayer3d_network_write_u16(payload.port,
+                               session->local_bound_port != 0 ? session->local_bound_port : session->desc.port);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery query received: host=%s port=%u session=%s status=%s",
                 NET_GetAddressString(dgram->addr) != NULL ? NET_GetAddressString(dgram->addr) : "<unknown>",
                 (unsigned int)dgram->port, session_name, status);
     SDL_LogInfo(
-        SDL_LOG_CATEGORY_APPLICATION, "SDL3D network discovery reply: session=%s host=%s port=%u status=%s",
+        SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network discovery reply: session=%s host=%s port=%u status=%s",
         session_name, NET_GetAddressString(dgram->addr) != NULL ? NET_GetAddressString(dgram->addr) : "<unknown>",
         (unsigned int)(session->local_bound_port != 0 ? session->local_bound_port : session->desc.port), status);
-    (void)sdl3d_network_send_packet_to(session, dgram->addr, dgram->port, SDL3D_NETWORK_PACKET_DISCOVERY_REPLY,
-                                       &payload, (int)sizeof(payload));
+    (void)slayer3d_network_send_packet_to(session, dgram->addr, dgram->port, SLAYER3D_NETWORK_PACKET_DISCOVERY_REPLY,
+                                          &payload, (int)sizeof(payload));
 }
 #endif
-#if SDL3D_NETWORKING_ENABLED
-static void sdl3d_network_write_u16(Uint8 *dst, Uint16 value)
+#if SLAYER3D_NETWORKING_ENABLED
+static void slayer3d_network_write_u16(Uint8 *dst, Uint16 value)
 {
     Uint16 encoded = SDL_Swap16LE(value);
     SDL_memcpy(dst, &encoded, sizeof(encoded));
 }
 
-static void sdl3d_network_write_u32(Uint8 *dst, Uint32 value)
+static void slayer3d_network_write_u32(Uint8 *dst, Uint32 value)
 {
     Uint32 encoded = SDL_Swap32LE(value);
     SDL_memcpy(dst, &encoded, sizeof(encoded));
 }
 
-static Uint16 sdl3d_network_read_u16(const Uint8 *src)
+static Uint16 slayer3d_network_read_u16(const Uint8 *src)
 {
     Uint16 value = 0;
     SDL_memcpy(&value, src, sizeof(value));
     return SDL_Swap16LE(value);
 }
 
-static Uint32 sdl3d_network_read_u32(const Uint8 *src)
+static Uint32 slayer3d_network_read_u32(const Uint8 *src)
 {
     Uint32 value = 0;
     SDL_memcpy(&value, src, sizeof(value));
@@ -778,9 +782,9 @@ static Uint32 sdl3d_network_read_u32(const Uint8 *src)
 }
 #endif
 
-#if SDL3D_NETWORKING_ENABLED
-static int sdl3d_network_encode_packet(Uint8 *buffer, int buffer_size, sdl3d_network_packet_kind kind,
-                                       const void *payload, int payload_size)
+#if SLAYER3D_NETWORKING_ENABLED
+static int slayer3d_network_encode_packet(Uint8 *buffer, int buffer_size, slayer3d_network_packet_kind kind,
+                                          const void *payload, int payload_size)
 {
     const int header_size = 12;
     if (buffer == NULL || buffer_size < header_size || payload_size < 0 || payload_size > buffer_size - header_size)
@@ -788,12 +792,12 @@ static int sdl3d_network_encode_packet(Uint8 *buffer, int buffer_size, sdl3d_net
         return -1;
     }
 
-    sdl3d_network_write_u32(buffer, 0x53444C33u);
-    sdl3d_network_write_u16(buffer + 4, 1u);
+    slayer3d_network_write_u32(buffer, 0x53444C33u);
+    slayer3d_network_write_u16(buffer + 4, 1u);
     buffer[6] = (Uint8)kind;
     buffer[7] = 0u;
-    sdl3d_network_write_u16(buffer + 8, (Uint16)payload_size);
-    sdl3d_network_write_u16(buffer + 10, 0u);
+    slayer3d_network_write_u16(buffer + 8, (Uint16)payload_size);
+    slayer3d_network_write_u16(buffer + 10, 0u);
     if (payload_size > 0 && payload != NULL)
     {
         SDL_memcpy(buffer + header_size, payload, (size_t)payload_size);
@@ -801,8 +805,8 @@ static int sdl3d_network_encode_packet(Uint8 *buffer, int buffer_size, sdl3d_net
     return header_size + payload_size;
 }
 
-static bool sdl3d_network_decode_packet(const Uint8 *buffer, int size, sdl3d_network_packet_kind *out_kind,
-                                        const Uint8 **out_payload, int *out_payload_size)
+static bool slayer3d_network_decode_packet(const Uint8 *buffer, int size, slayer3d_network_packet_kind *out_kind,
+                                           const Uint8 **out_payload, int *out_payload_size)
 {
     const int header_size = 12;
     if (buffer == NULL || size < header_size || out_kind == NULL || out_payload == NULL || out_payload_size == NULL)
@@ -810,30 +814,30 @@ static bool sdl3d_network_decode_packet(const Uint8 *buffer, int size, sdl3d_net
         return false;
     }
 
-    if (sdl3d_network_read_u32(buffer) != 0x53444C33u)
+    if (slayer3d_network_read_u32(buffer) != 0x53444C33u)
     {
         return false;
     }
 
-    const Uint16 version = sdl3d_network_read_u16(buffer + 4);
+    const Uint16 version = slayer3d_network_read_u16(buffer + 4);
     if (version != 1u)
     {
         return false;
     }
 
-    const int payload_size = (int)sdl3d_network_read_u16(buffer + 8);
+    const int payload_size = (int)slayer3d_network_read_u16(buffer + 8);
     if (payload_size < 0 || payload_size > size - header_size)
     {
         return false;
     }
 
-    *out_kind = (sdl3d_network_packet_kind)buffer[6];
+    *out_kind = (slayer3d_network_packet_kind)buffer[6];
     *out_payload = buffer + header_size;
     *out_payload_size = payload_size;
     return true;
 }
 
-static bool sdl3d_network_address_matches(const NET_Address *a, Uint16 port_a, const NET_Address *b, Uint16 port_b)
+static bool slayer3d_network_address_matches(const NET_Address *a, Uint16 port_a, const NET_Address *b, Uint16 port_b)
 {
     if (a == NULL || b == NULL)
     {
@@ -842,16 +846,16 @@ static bool sdl3d_network_address_matches(const NET_Address *a, Uint16 port_a, c
     return NET_CompareAddresses(a, b) == 0 && port_a == port_b;
 }
 
-static bool sdl3d_network_send_packet_to(sdl3d_network_session *session, NET_Address *address, Uint16 port,
-                                         sdl3d_network_packet_kind kind, const void *payload, int payload_size)
+static bool slayer3d_network_send_packet_to(slayer3d_network_session *session, NET_Address *address, Uint16 port,
+                                            slayer3d_network_packet_kind kind, const void *payload, int payload_size)
 {
     if (session == NULL || session->socket == NULL || address == NULL || port == 0)
     {
         return false;
     }
 
-    Uint8 packet[SDL3D_NETWORK_MAX_PACKET_SIZE];
-    const int size = sdl3d_network_encode_packet(packet, (int)sizeof(packet), kind, payload, payload_size);
+    Uint8 packet[SLAYER3D_NETWORK_MAX_PACKET_SIZE];
+    const int size = slayer3d_network_encode_packet(packet, (int)sizeof(packet), kind, payload, payload_size);
     if (size < 0)
     {
         return false;
@@ -859,8 +863,8 @@ static bool sdl3d_network_send_packet_to(sdl3d_network_session *session, NET_Add
     return NET_SendDatagram(session->socket, address, port, packet, size);
 }
 
-static bool sdl3d_network_send_control(sdl3d_network_session *session, sdl3d_network_packet_kind kind,
-                                       const void *payload, int payload_size)
+static bool slayer3d_network_send_control(slayer3d_network_session *session, slayer3d_network_packet_kind kind,
+                                          const void *payload, int payload_size)
 {
     if (session == NULL || session->socket == NULL)
     {
@@ -869,24 +873,25 @@ static bool sdl3d_network_send_control(sdl3d_network_session *session, sdl3d_net
 
     if (session->peer_address != NULL && session->peer_port != 0)
     {
-        return sdl3d_network_send_packet_to(session, session->peer_address, session->peer_port, kind, payload,
-                                            payload_size);
+        return slayer3d_network_send_packet_to(session, session->peer_address, session->peer_port, kind, payload,
+                                               payload_size);
     }
 
-    if (session->desc.role == SDL3D_NETWORK_ROLE_CLIENT && session->remote_address != NULL && session->desc.port != 0)
+    if (session->desc.role == SLAYER3D_NETWORK_ROLE_CLIENT && session->remote_address != NULL &&
+        session->desc.port != 0)
     {
-        return sdl3d_network_send_packet_to(session, session->remote_address, session->desc.port, kind, payload,
-                                            payload_size);
+        return slayer3d_network_send_packet_to(session, session->remote_address, session->desc.port, kind, payload,
+                                               payload_size);
     }
 
     return false;
 }
 
-static void sdl3d_network_discovery_process_query(sdl3d_network_session *session, const NET_Datagram *dgram);
+static void slayer3d_network_discovery_process_query(slayer3d_network_session *session, const NET_Datagram *dgram);
 
-static void sdl3d_network_update_connected_activity(sdl3d_network_session *session, float dt)
+static void slayer3d_network_update_connected_activity(slayer3d_network_session *session, float dt)
 {
-    if (session == NULL || session->state != SDL3D_NETWORK_STATE_CONNECTED)
+    if (session == NULL || session->state != SLAYER3D_NETWORK_STATE_CONNECTED)
     {
         return;
     }
@@ -896,10 +901,10 @@ static void sdl3d_network_update_connected_activity(sdl3d_network_session *sessi
 
     if (session->keepalive_elapsed >= 1.0f)
     {
-        if (!sdl3d_network_send_control(session, SDL3D_NETWORK_PACKET_KEEPALIVE, NULL, 0))
+        if (!slayer3d_network_send_control(session, SLAYER3D_NETWORK_PACKET_KEEPALIVE, NULL, 0))
         {
-            sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_ERROR, "Failed to send keepalive");
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network keepalive send failed: %s", SDL_GetError());
+            slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_ERROR, "Failed to send keepalive");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network keepalive send failed: %s", SDL_GetError());
             return;
         }
         session->keepalive_elapsed = 0.0f;
@@ -907,47 +912,48 @@ static void sdl3d_network_update_connected_activity(sdl3d_network_session *sessi
 
     if (session->idle_elapsed >= session->desc.idle_timeout)
     {
-        if (session->desc.role == SDL3D_NETWORK_ROLE_HOST)
+        if (session->desc.role == SLAYER3D_NETWORK_ROLE_HOST)
         {
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network peer timed out; returning host to waiting state");
-            sdl3d_network_clear_peer(session);
-            sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_WAITING, "Awaiting client");
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
+                        "SLAYER3D network peer timed out; returning host to waiting state");
+            slayer3d_network_clear_peer(session);
+            slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_WAITING, "Awaiting client");
         }
         else
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network connection timed out");
-            sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_TIMED_OUT, "Connection timed out");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network connection timed out");
+            slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_TIMED_OUT, "Connection timed out");
         }
     }
 }
 
-static void sdl3d_network_process_datagram(sdl3d_network_session *session, const NET_Datagram *dgram)
+static void slayer3d_network_process_datagram(slayer3d_network_session *session, const NET_Datagram *dgram)
 {
     if (session == NULL || dgram == NULL || dgram->buf == NULL || dgram->buflen <= 0)
     {
         return;
     }
 
-    sdl3d_network_packet_kind kind;
+    slayer3d_network_packet_kind kind;
     const Uint8 *payload = NULL;
     int payload_size = 0;
-    if (!sdl3d_network_decode_packet(dgram->buf, dgram->buflen, &kind, &payload, &payload_size))
+    if (!slayer3d_network_decode_packet(dgram->buf, dgram->buflen, &kind, &payload, &payload_size))
     {
         return;
     }
 
     switch (kind)
     {
-    case SDL3D_NETWORK_PACKET_DISCOVERY_QUERY:
-        if (session->desc.role == SDL3D_NETWORK_ROLE_HOST)
+    case SLAYER3D_NETWORK_PACKET_DISCOVERY_QUERY:
+        if (session->desc.role == SLAYER3D_NETWORK_ROLE_HOST)
         {
-            sdl3d_network_discovery_process_query(session, dgram);
+            slayer3d_network_discovery_process_query(session, dgram);
         }
         break;
-    case SDL3D_NETWORK_PACKET_DISCOVERY_REPLY:
+    case SLAYER3D_NETWORK_PACKET_DISCOVERY_REPLY:
         break;
-    case SDL3D_NETWORK_PACKET_HELLO:
-        if (session->desc.role == SDL3D_NETWORK_ROLE_HOST && session->state == SDL3D_NETWORK_STATE_WAITING)
+    case SLAYER3D_NETWORK_PACKET_HELLO:
+        if (session->desc.role == SLAYER3D_NETWORK_ROLE_HOST && session->state == SLAYER3D_NETWORK_STATE_WAITING)
         {
             if (session->peer_address != NULL)
             {
@@ -956,33 +962,33 @@ static void sdl3d_network_process_datagram(sdl3d_network_session *session, const
             session->peer_address = NET_RefAddress(dgram->addr);
             session->peer_port = dgram->port;
             session->idle_elapsed = 0.0f;
-            sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_CONNECTED, "Client connected");
-            if (!sdl3d_network_send_control(session, SDL3D_NETWORK_PACKET_WELCOME, NULL, 0))
+            slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_CONNECTED, "Client connected");
+            if (!slayer3d_network_send_control(session, SLAYER3D_NETWORK_PACKET_WELCOME, NULL, 0))
             {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network welcome send failed: %s", SDL_GetError());
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network welcome send failed: %s", SDL_GetError());
             }
             else
             {
                 session->welcome_sent = true;
-                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network host accepted peer on port %u",
+                SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network host accepted peer on port %u",
                             (unsigned int)session->peer_port);
             }
         }
-        else if (session->desc.role == SDL3D_NETWORK_ROLE_HOST && session->state == SDL3D_NETWORK_STATE_CONNECTED)
+        else if (session->desc.role == SLAYER3D_NETWORK_ROLE_HOST && session->state == SLAYER3D_NETWORK_STATE_CONNECTED)
         {
-            if (sdl3d_network_address_matches(session->peer_address, session->peer_port, dgram->addr, dgram->port))
+            if (slayer3d_network_address_matches(session->peer_address, session->peer_port, dgram->addr, dgram->port))
             {
-                (void)sdl3d_network_send_control(session, SDL3D_NETWORK_PACKET_WELCOME, NULL, 0);
+                (void)slayer3d_network_send_control(session, SLAYER3D_NETWORK_PACKET_WELCOME, NULL, 0);
             }
             else
             {
-                (void)sdl3d_network_send_packet_to(session, dgram->addr, dgram->port, SDL3D_NETWORK_PACKET_REJECT, NULL,
-                                                   0);
+                (void)slayer3d_network_send_packet_to(session, dgram->addr, dgram->port, SLAYER3D_NETWORK_PACKET_REJECT,
+                                                      NULL, 0);
             }
         }
         break;
-    case SDL3D_NETWORK_PACKET_WELCOME:
-        if (session->desc.role == SDL3D_NETWORK_ROLE_CLIENT && session->state == SDL3D_NETWORK_STATE_CONNECTING)
+    case SLAYER3D_NETWORK_PACKET_WELCOME:
+        if (session->desc.role == SLAYER3D_NETWORK_ROLE_CLIENT && session->state == SLAYER3D_NETWORK_STATE_CONNECTING)
         {
             if (session->peer_address != NULL)
             {
@@ -992,33 +998,33 @@ static void sdl3d_network_process_datagram(sdl3d_network_session *session, const
             session->peer_port = dgram->port;
             session->idle_elapsed = 0.0f;
             session->keepalive_elapsed = 0.0f;
-            sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_CONNECTED, "Connected");
-            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network client connected to %s:%u",
+            slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_CONNECTED, "Connected");
+            SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network client connected to %s:%u",
                         NET_GetAddressString(session->peer_address) != NULL
                             ? NET_GetAddressString(session->peer_address)
                             : "<unknown>",
                         (unsigned int)session->peer_port);
         }
         break;
-    case SDL3D_NETWORK_PACKET_REJECT:
-        if (session->desc.role == SDL3D_NETWORK_ROLE_CLIENT && session->state == SDL3D_NETWORK_STATE_CONNECTING)
+    case SLAYER3D_NETWORK_PACKET_REJECT:
+        if (session->desc.role == SLAYER3D_NETWORK_ROLE_CLIENT && session->state == SLAYER3D_NETWORK_STATE_CONNECTING)
         {
-            sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_REJECTED, "Connection rejected");
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network client rejected by host");
+            slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_REJECTED, "Connection rejected");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network client rejected by host");
         }
         break;
-    case SDL3D_NETWORK_PACKET_KEEPALIVE:
-        if (session->state == SDL3D_NETWORK_STATE_CONNECTED &&
-            sdl3d_network_address_matches(session->peer_address, session->peer_port, dgram->addr, dgram->port))
+    case SLAYER3D_NETWORK_PACKET_KEEPALIVE:
+        if (session->state == SLAYER3D_NETWORK_STATE_CONNECTED &&
+            slayer3d_network_address_matches(session->peer_address, session->peer_port, dgram->addr, dgram->port))
         {
             session->idle_elapsed = 0.0f;
         }
         break;
-    case SDL3D_NETWORK_PACKET_USER:
-        if (session->state == SDL3D_NETWORK_STATE_CONNECTED &&
-            sdl3d_network_address_matches(session->peer_address, session->peer_port, dgram->addr, dgram->port))
+    case SLAYER3D_NETWORK_PACKET_USER:
+        if (session->state == SLAYER3D_NETWORK_STATE_CONNECTED &&
+            slayer3d_network_address_matches(session->peer_address, session->peer_port, dgram->addr, dgram->port))
         {
-            sdl3d_network_queue_packet(session, payload, payload_size);
+            slayer3d_network_queue_packet(session, payload, payload_size);
             session->idle_elapsed = 0.0f;
         }
         break;
@@ -1028,7 +1034,7 @@ static void sdl3d_network_process_datagram(sdl3d_network_session *session, const
 }
 #endif
 
-void sdl3d_network_session_desc_init(sdl3d_network_session_desc *desc)
+void slayer3d_network_session_desc_init(slayer3d_network_session_desc *desc)
 {
     if (desc == NULL)
     {
@@ -1036,18 +1042,18 @@ void sdl3d_network_session_desc_init(sdl3d_network_session_desc *desc)
     }
 
     SDL_zero(*desc);
-    desc->role = SDL3D_NETWORK_ROLE_CLIENT;
-    desc->port = SDL3D_NETWORK_DEFAULT_PORT;
+    desc->role = SLAYER3D_NETWORK_ROLE_CLIENT;
+    desc->port = SLAYER3D_NETWORK_DEFAULT_PORT;
     desc->local_port = 0;
     desc->handshake_timeout = 5.0f;
     desc->idle_timeout = 10.0f;
 }
 
-bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_network_session **out_session)
+bool slayer3d_network_session_create(const slayer3d_network_session_desc *desc, slayer3d_network_session **out_session)
 {
-    sdl3d_network_session_desc defaults;
-    const sdl3d_network_session_desc *effective = desc;
-    sdl3d_network_session *session = NULL;
+    slayer3d_network_session_desc defaults;
+    const slayer3d_network_session_desc *effective = desc;
+    slayer3d_network_session *session = NULL;
 
     if (out_session == NULL)
     {
@@ -1057,7 +1063,7 @@ bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_
 
     if (effective == NULL)
     {
-        sdl3d_network_session_desc_init(&defaults);
+        slayer3d_network_session_desc_init(&defaults);
         effective = &defaults;
     }
 
@@ -1067,7 +1073,7 @@ bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_
         return false;
     }
 
-    session = (sdl3d_network_session *)SDL_calloc(1, sizeof(*session));
+    session = (slayer3d_network_session *)SDL_calloc(1, sizeof(*session));
     if (session == NULL)
     {
         SDL_OutOfMemory();
@@ -1087,29 +1093,29 @@ bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_
         SDL_snprintf(session->session_name, sizeof(session->session_name), "%s", effective->session_name);
     }
 
-    if (!sdl3d_network_library_acquire())
+    if (!slayer3d_network_library_acquire())
     {
-        sdl3d_network_session_destroy(session);
+        slayer3d_network_session_destroy(session);
         return false;
     }
 
-#if SDL3D_NETWORKING_ENABLED
-    const Uint16 bound_port = effective->role == SDL3D_NETWORK_ROLE_HOST
+#if SLAYER3D_NETWORKING_ENABLED
+    const Uint16 bound_port = effective->role == SLAYER3D_NETWORK_ROLE_HOST
                                   ? effective->port
                                   : (effective->local_port != 0 ? effective->local_port : 0);
     session->socket = NET_CreateDatagramSocket(NULL, bound_port);
     if (session->socket == NULL)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network socket create failed: %s", SDL_GetError());
-        sdl3d_network_session_destroy(session);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network socket create failed: %s", SDL_GetError());
+        slayer3d_network_session_destroy(session);
         return false;
     }
 
-    if (effective->role == SDL3D_NETWORK_ROLE_HOST)
+    if (effective->role == SLAYER3D_NETWORK_ROLE_HOST)
     {
         session->local_bound_port = bound_port;
-        sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_WAITING, "Awaiting client");
-        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network host listening on port %u",
+        slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_WAITING, "Awaiting client");
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network host listening on port %u",
                     (unsigned int)session->local_bound_port);
     }
     else
@@ -1117,31 +1123,32 @@ bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_
         if (effective->host == NULL || effective->host[0] == '\0')
         {
             SDL_SetError("Client network session requires a remote host.");
-            sdl3d_network_session_destroy(session);
+            slayer3d_network_session_destroy(session);
             return false;
         }
 
         session->remote_address = NET_ResolveHostname(effective->host);
         if (session->remote_address == NULL)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network hostname resolution failed: %s", SDL_GetError());
-            sdl3d_network_session_destroy(session);
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network hostname resolution failed: %s",
+                        SDL_GetError());
+            slayer3d_network_session_destroy(session);
             return false;
         }
 
         session->local_bound_port = bound_port;
-        sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_CONNECTING, "Resolving host");
+        slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_CONNECTING, "Resolving host");
         if (NET_GetAddressStatus(session->remote_address) == NET_FAILURE)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network hostname resolution error: %s", SDL_GetError());
-            sdl3d_network_session_destroy(session);
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network hostname resolution error: %s", SDL_GetError());
+            slayer3d_network_session_destroy(session);
             return false;
         }
     }
 #else
     (void)effective;
-    sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_ERROR, "Networking disabled");
-    sdl3d_network_session_destroy(session);
+    slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_ERROR, "Networking disabled");
+    slayer3d_network_session_destroy(session);
     return false;
 #endif
 
@@ -1149,21 +1156,21 @@ bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_
     return true;
 }
 
-void sdl3d_network_session_destroy(sdl3d_network_session *session)
+void slayer3d_network_session_destroy(slayer3d_network_session *session)
 {
     if (session == NULL)
     {
         return;
     }
 
-    sdl3d_network_destroy_socket(session);
-    sdl3d_network_destroy_remote_address(session);
-    sdl3d_network_clear_peer(session);
-    sdl3d_network_library_release();
+    slayer3d_network_destroy_socket(session);
+    slayer3d_network_destroy_remote_address(session);
+    slayer3d_network_clear_peer(session);
+    slayer3d_network_library_release();
     SDL_free(session);
 }
 
-bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
+bool slayer3d_network_session_update(slayer3d_network_session *session, float dt)
 {
     if (session == NULL)
     {
@@ -1175,8 +1182,8 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
         return true;
     }
 
-#if SDL3D_NETWORKING_ENABLED
-    if (session->desc.role == SDL3D_NETWORK_ROLE_CLIENT && session->state == SDL3D_NETWORK_STATE_CONNECTING)
+#if SLAYER3D_NETWORKING_ENABLED
+    if (session->desc.role == SLAYER3D_NETWORK_ROLE_CLIENT && session->state == SLAYER3D_NETWORK_STATE_CONNECTING)
     {
         session->handshake_elapsed += SDL_max(dt, 0.0f);
 
@@ -1187,9 +1194,9 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
             {
                 if (!session->hello_sent || session->handshake_send_elapsed >= 0.5f)
                 {
-                    if (!sdl3d_network_send_control(session, SDL3D_NETWORK_PACKET_HELLO, NULL, 0))
+                    if (!slayer3d_network_send_control(session, SLAYER3D_NETWORK_PACKET_HELLO, NULL, 0))
                     {
-                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network hello send failed: %s",
+                        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network hello send failed: %s",
                                     SDL_GetError());
                     }
                     else
@@ -1201,7 +1208,7 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
             }
             else if (address_status == NET_FAILURE)
             {
-                sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_ERROR, "Host resolution failed");
+                slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_ERROR, "Host resolution failed");
                 return true;
             }
         }
@@ -1209,8 +1216,8 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
         session->handshake_send_elapsed += SDL_max(dt, 0.0f);
         if (session->handshake_elapsed >= session->desc.handshake_timeout)
         {
-            sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_TIMED_OUT, "Connection timed out");
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network connection timed out while connecting");
+            slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_TIMED_OUT, "Connection timed out");
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network connection timed out while connecting");
             return true;
         }
     }
@@ -1218,8 +1225,8 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
     const int input_count = NET_WaitUntilInputAvailable((void **)&session->socket, 1, 0);
     if (input_count < 0)
     {
-        sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_ERROR, "Network poll failed");
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network poll failed: %s", SDL_GetError());
+        slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_ERROR, "Network poll failed");
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network poll failed: %s", SDL_GetError());
         return true;
     }
 
@@ -1230,16 +1237,17 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
             NET_Datagram *dgram = NULL;
             if (!NET_ReceiveDatagram(session->socket, &dgram))
             {
-                if (session->desc.role == SDL3D_NETWORK_ROLE_CLIENT && session->state == SDL3D_NETWORK_STATE_CONNECTING)
+                if (session->desc.role == SLAYER3D_NETWORK_ROLE_CLIENT &&
+                    session->state == SLAYER3D_NETWORK_STATE_CONNECTING)
                 {
                     SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                                "SDL3D network receive failed while connecting; continuing to wait: %s",
+                                "SLAYER3D network receive failed while connecting; continuing to wait: %s",
                                 SDL_GetError());
                     break;
                 }
 
-                sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_ERROR, "Failed to receive datagram");
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D network receive failed: %s", SDL_GetError());
+                slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_ERROR, "Failed to receive datagram");
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network receive failed: %s", SDL_GetError());
                 return true;
             }
 
@@ -1248,33 +1256,33 @@ bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
                 break;
             }
 
-            sdl3d_network_process_datagram(session, dgram);
+            slayer3d_network_process_datagram(session, dgram);
             NET_DestroyDatagram(dgram);
         }
     }
 
-    sdl3d_network_update_connected_activity(session, dt);
+    slayer3d_network_update_connected_activity(session, dt);
 #else
     (void)dt;
 #endif
     return true;
 }
 
-bool sdl3d_network_session_send(sdl3d_network_session *session, const void *data, int data_size)
+bool slayer3d_network_session_send(slayer3d_network_session *session, const void *data, int data_size)
 {
-    if (session == NULL || data == NULL || data_size <= 0 || data_size > SDL3D_NETWORK_MAX_PACKET_SIZE)
+    if (session == NULL || data == NULL || data_size <= 0 || data_size > SLAYER3D_NETWORK_MAX_PACKET_SIZE)
     {
         return false;
     }
 
-#if SDL3D_NETWORKING_ENABLED
-    if (session->state != SDL3D_NETWORK_STATE_CONNECTED)
+#if SLAYER3D_NETWORKING_ENABLED
+    if (session->state != SLAYER3D_NETWORK_STATE_CONNECTED)
     {
         SDL_SetError("Network session is not connected.");
         return false;
     }
 
-    return sdl3d_network_send_control(session, SDL3D_NETWORK_PACKET_USER, data, data_size);
+    return slayer3d_network_send_control(session, SLAYER3D_NETWORK_PACKET_USER, data, data_size);
 #else
     (void)data;
     (void)data_size;
@@ -1283,7 +1291,7 @@ bool sdl3d_network_session_send(sdl3d_network_session *session, const void *data
 #endif
 }
 
-int sdl3d_network_session_receive(sdl3d_network_session *session, void *buffer, int buffer_size)
+int slayer3d_network_session_receive(slayer3d_network_session *session, void *buffer, int buffer_size)
 {
     if (session == NULL || buffer == NULL || buffer_size <= 0)
     {
@@ -1295,7 +1303,7 @@ int sdl3d_network_session_receive(sdl3d_network_session *session, void *buffer, 
         return 0;
     }
 
-    const sdl3d_network_packet_entry *entry = &session->queue[session->queue_head];
+    const slayer3d_network_packet_entry *entry = &session->queue[session->queue_head];
     if (entry->size > buffer_size)
     {
         SDL_SetError("Network receive buffer too small.");
@@ -1304,62 +1312,62 @@ int sdl3d_network_session_receive(sdl3d_network_session *session, void *buffer, 
 
     SDL_memcpy(buffer, entry->data, (size_t)entry->size);
     const int size = entry->size;
-    session->queue_head = (session->queue_head + 1) % SDL3D_NETWORK_MAX_QUEUE_SIZE;
+    session->queue_head = (session->queue_head + 1) % SLAYER3D_NETWORK_MAX_QUEUE_SIZE;
     session->queue_count--;
     return size;
 }
 
-void sdl3d_network_session_disconnect(sdl3d_network_session *session)
+void slayer3d_network_session_disconnect(slayer3d_network_session *session)
 {
     if (session == NULL)
     {
         return;
     }
 
-    if (session->desc.role == SDL3D_NETWORK_ROLE_HOST)
+    if (session->desc.role == SLAYER3D_NETWORK_ROLE_HOST)
     {
-        sdl3d_network_clear_peer(session);
-        sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_WAITING, "Awaiting client");
+        slayer3d_network_clear_peer(session);
+        slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_WAITING, "Awaiting client");
     }
     else
     {
-        sdl3d_network_destroy_socket(session);
-        sdl3d_network_destroy_remote_address(session);
-        sdl3d_network_clear_peer(session);
-        sdl3d_network_set_status(session, SDL3D_NETWORK_STATE_DISCONNECTED, "Disconnected");
-        sdl3d_network_library_release();
+        slayer3d_network_destroy_socket(session);
+        slayer3d_network_destroy_remote_address(session);
+        slayer3d_network_clear_peer(session);
+        slayer3d_network_set_status(session, SLAYER3D_NETWORK_STATE_DISCONNECTED, "Disconnected");
+        slayer3d_network_library_release();
     }
 }
 
-sdl3d_network_state sdl3d_network_session_state(const sdl3d_network_session *session)
+slayer3d_network_state slayer3d_network_session_state(const slayer3d_network_session *session)
 {
-    return session != NULL ? session->state : SDL3D_NETWORK_STATE_DISCONNECTED;
+    return session != NULL ? session->state : SLAYER3D_NETWORK_STATE_DISCONNECTED;
 }
 
-const char *sdl3d_network_session_status(const sdl3d_network_session *session)
+const char *slayer3d_network_session_status(const slayer3d_network_session *session)
 {
     return session != NULL ? session->status : NULL;
 }
 
-bool sdl3d_network_session_is_connected(const sdl3d_network_session *session)
+bool slayer3d_network_session_is_connected(const slayer3d_network_session *session)
 {
-    return session != NULL && session->state == SDL3D_NETWORK_STATE_CONNECTED;
+    return session != NULL && session->state == SLAYER3D_NETWORK_STATE_CONNECTED;
 }
 
-Uint16 sdl3d_network_session_port(const sdl3d_network_session *session)
+Uint16 slayer3d_network_session_port(const slayer3d_network_session *session)
 {
     return session != NULL ? session->local_bound_port : 0u;
 }
 
-bool sdl3d_network_session_get_peer_endpoint(const sdl3d_network_session *session, char *host_buffer,
-                                             int host_buffer_size, Uint16 *out_port)
+bool slayer3d_network_session_get_peer_endpoint(const slayer3d_network_session *session, char *host_buffer,
+                                                int host_buffer_size, Uint16 *out_port)
 {
     if (session == NULL || session->peer_address == NULL)
     {
         return false;
     }
 
-#if SDL3D_NETWORKING_ENABLED
+#if SLAYER3D_NETWORKING_ENABLED
     if (host_buffer != NULL && host_buffer_size > 0)
     {
         const char *host = NET_GetAddressString(session->peer_address);
@@ -1378,7 +1386,7 @@ bool sdl3d_network_session_get_peer_endpoint(const sdl3d_network_session *sessio
 #endif
 }
 
-void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_desc *desc)
+void slayer3d_network_discovery_session_desc_init(slayer3d_network_discovery_session_desc *desc)
 {
     if (desc == NULL)
     {
@@ -1386,16 +1394,16 @@ void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_d
     }
 
     SDL_zero(*desc);
-    desc->port = SDL3D_NETWORK_DEFAULT_PORT;
+    desc->port = SLAYER3D_NETWORK_DEFAULT_PORT;
     desc->local_port = 0;
 }
 
-bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_session_desc *desc,
-                                            sdl3d_network_discovery_session **out_session)
+bool slayer3d_network_discovery_session_create(const slayer3d_network_discovery_session_desc *desc,
+                                               slayer3d_network_discovery_session **out_session)
 {
-    sdl3d_network_discovery_session_desc defaults;
-    const sdl3d_network_discovery_session_desc *effective = desc;
-    sdl3d_network_discovery_session *session = NULL;
+    slayer3d_network_discovery_session_desc defaults;
+    const slayer3d_network_discovery_session_desc *effective = desc;
+    slayer3d_network_discovery_session *session = NULL;
 
     if (out_session == NULL)
     {
@@ -1405,7 +1413,7 @@ bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_sessio
 
     if (effective == NULL)
     {
-        sdl3d_network_discovery_session_desc_init(&defaults);
+        slayer3d_network_discovery_session_desc_init(&defaults);
         effective = &defaults;
     }
 
@@ -1415,7 +1423,7 @@ bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_sessio
         return false;
     }
 
-    session = (sdl3d_network_discovery_session *)SDL_calloc(1, sizeof(*session));
+    session = (slayer3d_network_discovery_session *)SDL_calloc(1, sizeof(*session));
     if (session == NULL)
     {
         SDL_OutOfMemory();
@@ -1427,43 +1435,43 @@ bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_sessio
     SDL_zero(session->status);
     session->target_count = 0;
 
-    if (!sdl3d_network_library_acquire())
+    if (!slayer3d_network_library_acquire())
     {
-        sdl3d_network_discovery_session_destroy(session);
+        slayer3d_network_discovery_session_destroy(session);
         return false;
     }
 
-#if SDL3D_NETWORKING_ENABLED
+#if SLAYER3D_NETWORKING_ENABLED
     session->socket = NET_CreateDatagramSocket(NULL, effective->local_port != 0 ? effective->local_port : 0);
     if (session->socket == NULL)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery socket create failed: %s", SDL_GetError());
-        sdl3d_network_discovery_session_destroy(session);
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery socket create failed: %s", SDL_GetError());
+        slayer3d_network_discovery_session_destroy(session);
         return false;
     }
 
     if (effective->host != NULL && effective->host[0] != '\0')
     {
-        if (!sdl3d_network_discovery_add_target(session, effective->host))
+        if (!slayer3d_network_discovery_add_target(session, effective->host))
         {
-            sdl3d_network_discovery_session_destroy(session);
+            slayer3d_network_discovery_session_destroy(session);
             return false;
         }
     }
     else
     {
-        sdl3d_network_discovery_add_default_targets(session);
+        slayer3d_network_discovery_add_default_targets(session);
         if (session->target_count <= 0)
         {
             SDL_SetError("Discovery session has no usable probe targets.");
-            sdl3d_network_discovery_session_destroy(session);
+            slayer3d_network_discovery_session_destroy(session);
             return false;
         }
     }
 
     SDL_snprintf(session->status, sizeof(session->status), "Ready to scan");
 #else
-    sdl3d_network_discovery_session_destroy(session);
+    slayer3d_network_discovery_session_destroy(session);
     SDL_SetError("Networking disabled.");
     return false;
 #endif
@@ -1472,27 +1480,27 @@ bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_sessio
     return true;
 }
 
-void sdl3d_network_discovery_session_destroy(sdl3d_network_discovery_session *session)
+void slayer3d_network_discovery_session_destroy(slayer3d_network_discovery_session *session)
 {
     if (session == NULL)
     {
         return;
     }
 
-    sdl3d_network_discovery_destroy_socket(session);
-    sdl3d_network_discovery_destroy_target_address(session);
-    sdl3d_network_library_release();
+    slayer3d_network_discovery_destroy_socket(session);
+    slayer3d_network_discovery_destroy_target_address(session);
+    slayer3d_network_library_release();
     SDL_free(session);
 }
 
-bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *session)
+bool slayer3d_network_discovery_session_refresh(slayer3d_network_discovery_session *session)
 {
     if (session == NULL || session->socket == NULL)
     {
         return false;
     }
 
-    sdl3d_network_discovery_clear_results(session);
+    slayer3d_network_discovery_clear_results(session);
     session->elapsed = 0.0f;
     session->refresh_elapsed = 0.0f;
     session->probe_batch_elapsed = 0.0f;
@@ -1502,12 +1510,12 @@ bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *se
     {
         session->target_probe_sent[i] = false;
     }
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery refresh: targets=%d port=%u", session->target_count,
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery refresh: targets=%d port=%u", session->target_count,
                 (unsigned int)session->target_port);
-    return sdl3d_network_discovery_send_probe(session);
+    return slayer3d_network_discovery_send_probe(session);
 }
 
-bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *session, float dt)
+bool slayer3d_network_discovery_session_update(slayer3d_network_discovery_session *session, float dt)
 {
     if (session == NULL)
     {
@@ -1519,7 +1527,7 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
         return true;
     }
 
-#if SDL3D_NETWORKING_ENABLED
+#if SLAYER3D_NETWORKING_ENABLED
     session->elapsed += SDL_max(dt, 0.0f);
     session->refresh_elapsed += SDL_max(dt, 0.0f);
 
@@ -1537,10 +1545,10 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
         if (has_pending_probe)
         {
             session->probe_batch_elapsed += SDL_max(dt, 0.0f);
-            if (session->probe_batch_elapsed >= SDL3D_NETWORK_DISCOVERY_BATCH_INTERVAL)
+            if (session->probe_batch_elapsed >= SLAYER3D_NETWORK_DISCOVERY_BATCH_INTERVAL)
             {
                 session->probe_batch_elapsed = 0.0f;
-                (void)sdl3d_network_discovery_send_probe(session);
+                (void)slayer3d_network_discovery_send_probe(session);
             }
         }
     }
@@ -1548,7 +1556,7 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
     const int input_count = NET_WaitUntilInputAvailable((void **)&session->socket, 1, 0);
     if (input_count < 0)
     {
-        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery poll failed: %s", SDL_GetError());
+        SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery poll failed: %s", SDL_GetError());
         SDL_snprintf(session->status, sizeof(session->status), "Discovery poll failed");
         return true;
     }
@@ -1560,7 +1568,7 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
             NET_Datagram *dgram = NULL;
             if (!NET_ReceiveDatagram(session->socket, &dgram))
             {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D discovery receive failed: %s", SDL_GetError());
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery receive failed: %s", SDL_GetError());
                 SDL_snprintf(session->status, sizeof(session->status), "Discovery receive failed");
                 return true;
             }
@@ -1570,7 +1578,7 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
                 break;
             }
 
-            sdl3d_network_discovery_process_datagram(session, dgram);
+            slayer3d_network_discovery_process_datagram(session, dgram);
             NET_DestroyDatagram(dgram);
         }
     }
@@ -1593,13 +1601,13 @@ bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *ses
 #endif
 }
 
-int sdl3d_network_discovery_session_result_count(const sdl3d_network_discovery_session *session)
+int slayer3d_network_discovery_session_result_count(const slayer3d_network_discovery_session *session)
 {
     return session != NULL ? session->result_count : 0;
 }
 
-bool sdl3d_network_discovery_session_get_result(const sdl3d_network_discovery_session *session, int index,
-                                                sdl3d_network_discovery_result *out_result)
+bool slayer3d_network_discovery_session_get_result(const slayer3d_network_discovery_session *session, int index,
+                                                   slayer3d_network_discovery_result *out_result)
 {
     if (session == NULL || out_result == NULL || index < 0 || index >= session->result_count)
     {
@@ -1610,12 +1618,12 @@ bool sdl3d_network_discovery_session_get_result(const sdl3d_network_discovery_se
     return true;
 }
 
-const char *sdl3d_network_discovery_session_status(const sdl3d_network_discovery_session *session)
+const char *slayer3d_network_discovery_session_status(const slayer3d_network_discovery_session *session)
 {
     return session != NULL ? session->status : NULL;
 }
 #else
-void sdl3d_network_session_desc_init(sdl3d_network_session_desc *desc)
+void slayer3d_network_session_desc_init(slayer3d_network_session_desc *desc)
 {
     if (desc == NULL)
     {
@@ -1623,85 +1631,85 @@ void sdl3d_network_session_desc_init(sdl3d_network_session_desc *desc)
     }
 
     SDL_zero(*desc);
-    desc->role = SDL3D_NETWORK_ROLE_CLIENT;
-    desc->port = SDL3D_NETWORK_DEFAULT_PORT;
+    desc->role = SLAYER3D_NETWORK_ROLE_CLIENT;
+    desc->port = SLAYER3D_NETWORK_DEFAULT_PORT;
     desc->local_port = 0;
     desc->handshake_timeout = 5.0f;
     desc->idle_timeout = 10.0f;
 }
 
-bool sdl3d_network_session_create(const sdl3d_network_session_desc *desc, sdl3d_network_session **out_session)
+bool slayer3d_network_session_create(const slayer3d_network_session_desc *desc, slayer3d_network_session **out_session)
 {
     (void)desc;
     if (out_session != NULL)
     {
         *out_session = NULL;
     }
-    SDL_SetError("SDL3D networking is disabled at build time.");
+    SDL_SetError("SLAYER3D networking is disabled at build time.");
     return false;
 }
 
-void sdl3d_network_session_destroy(sdl3d_network_session *session)
+void slayer3d_network_session_destroy(slayer3d_network_session *session)
 {
     (void)session;
 }
 
-bool sdl3d_network_session_update(sdl3d_network_session *session, float dt)
+bool slayer3d_network_session_update(slayer3d_network_session *session, float dt)
 {
     (void)session;
     (void)dt;
     return false;
 }
 
-bool sdl3d_network_session_send(sdl3d_network_session *session, const void *data, int data_size)
+bool slayer3d_network_session_send(slayer3d_network_session *session, const void *data, int data_size)
 {
     (void)session;
     (void)data;
     (void)data_size;
-    SDL_SetError("SDL3D networking is disabled at build time.");
+    SDL_SetError("SLAYER3D networking is disabled at build time.");
     return false;
 }
 
-int sdl3d_network_session_receive(sdl3d_network_session *session, void *buffer, int buffer_size)
+int slayer3d_network_session_receive(slayer3d_network_session *session, void *buffer, int buffer_size)
 {
     (void)session;
     (void)buffer;
     (void)buffer_size;
-    SDL_SetError("SDL3D networking is disabled at build time.");
+    SDL_SetError("SLAYER3D networking is disabled at build time.");
     return -1;
 }
 
-void sdl3d_network_session_disconnect(sdl3d_network_session *session)
+void slayer3d_network_session_disconnect(slayer3d_network_session *session)
 {
     (void)session;
 }
 
-sdl3d_network_state sdl3d_network_session_state(const sdl3d_network_session *session)
+slayer3d_network_state slayer3d_network_session_state(const slayer3d_network_session *session)
 {
     (void)session;
-    return SDL3D_NETWORK_STATE_DISCONNECTED;
+    return SLAYER3D_NETWORK_STATE_DISCONNECTED;
 }
 
-const char *sdl3d_network_session_status(const sdl3d_network_session *session)
+const char *slayer3d_network_session_status(const slayer3d_network_session *session)
 {
     (void)session;
     return "Networking disabled";
 }
 
-bool sdl3d_network_session_is_connected(const sdl3d_network_session *session)
+bool slayer3d_network_session_is_connected(const slayer3d_network_session *session)
 {
     (void)session;
     return false;
 }
 
-Uint16 sdl3d_network_session_port(const sdl3d_network_session *session)
+Uint16 slayer3d_network_session_port(const slayer3d_network_session *session)
 {
     (void)session;
     return 0;
 }
 
-bool sdl3d_network_session_get_peer_endpoint(const sdl3d_network_session *session, char *host_buffer,
-                                             int host_buffer_size, Uint16 *out_port)
+bool slayer3d_network_session_get_peer_endpoint(const slayer3d_network_session *session, char *host_buffer,
+                                                int host_buffer_size, Uint16 *out_port)
 {
     (void)session;
     (void)host_buffer;
@@ -1710,7 +1718,7 @@ bool sdl3d_network_session_get_peer_endpoint(const sdl3d_network_session *sessio
     return false;
 }
 
-void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_desc *desc)
+void slayer3d_network_discovery_session_desc_init(slayer3d_network_discovery_session_desc *desc)
 {
     if (desc == NULL)
     {
@@ -1718,49 +1726,49 @@ void sdl3d_network_discovery_session_desc_init(sdl3d_network_discovery_session_d
     }
 
     SDL_zero(*desc);
-    desc->port = SDL3D_NETWORK_DEFAULT_PORT;
+    desc->port = SLAYER3D_NETWORK_DEFAULT_PORT;
     desc->local_port = 0;
 }
 
-bool sdl3d_network_discovery_session_create(const sdl3d_network_discovery_session_desc *desc,
-                                            sdl3d_network_discovery_session **out_session)
+bool slayer3d_network_discovery_session_create(const slayer3d_network_discovery_session_desc *desc,
+                                               slayer3d_network_discovery_session **out_session)
 {
     (void)desc;
     if (out_session != NULL)
     {
         *out_session = NULL;
     }
-    SDL_SetError("SDL3D networking is disabled at build time.");
+    SDL_SetError("SLAYER3D networking is disabled at build time.");
     return false;
 }
 
-void sdl3d_network_discovery_session_destroy(sdl3d_network_discovery_session *session)
+void slayer3d_network_discovery_session_destroy(slayer3d_network_discovery_session *session)
 {
     (void)session;
 }
 
-bool sdl3d_network_discovery_session_refresh(sdl3d_network_discovery_session *session)
+bool slayer3d_network_discovery_session_refresh(slayer3d_network_discovery_session *session)
 {
     (void)session;
-    SDL_SetError("SDL3D networking is disabled at build time.");
+    SDL_SetError("SLAYER3D networking is disabled at build time.");
     return false;
 }
 
-bool sdl3d_network_discovery_session_update(sdl3d_network_discovery_session *session, float dt)
+bool slayer3d_network_discovery_session_update(slayer3d_network_discovery_session *session, float dt)
 {
     (void)session;
     (void)dt;
     return false;
 }
 
-int sdl3d_network_discovery_session_result_count(const sdl3d_network_discovery_session *session)
+int slayer3d_network_discovery_session_result_count(const slayer3d_network_discovery_session *session)
 {
     (void)session;
     return 0;
 }
 
-bool sdl3d_network_discovery_session_get_result(const sdl3d_network_discovery_session *session, int index,
-                                                sdl3d_network_discovery_result *out_result)
+bool slayer3d_network_discovery_session_get_result(const slayer3d_network_discovery_session *session, int index,
+                                                   slayer3d_network_discovery_result *out_result)
 {
     (void)session;
     (void)index;
@@ -1768,7 +1776,7 @@ bool sdl3d_network_discovery_session_get_result(const sdl3d_network_discovery_se
     return false;
 }
 
-const char *sdl3d_network_discovery_session_status(const sdl3d_network_discovery_session *session)
+const char *slayer3d_network_discovery_session_status(const slayer3d_network_discovery_session *session)
 {
     (void)session;
     return "Networking disabled";

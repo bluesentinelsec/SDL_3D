@@ -12,8 +12,8 @@
 extern "C"
 {
 #include "rasterizer.h"
-#include "sdl3d/math.h"
-#include "sdl3d/types.h"
+#include "slayer3d/math.h"
+#include "slayer3d/types.h"
 }
 
 #include <cmath>
@@ -29,7 +29,7 @@ struct Framebuffer
 {
     std::vector<Uint8> color;
     std::vector<float> depth;
-    sdl3d_framebuffer fb{};
+    slayer3d_framebuffer fb{};
 
     Framebuffer(int w = kW, int h = kH)
         : color(static_cast<size_t>(w * h * 4), 0u), depth(static_cast<size_t>(w * h), 1.0f)
@@ -40,27 +40,27 @@ struct Framebuffer
         fb.height = h;
     }
 
-    sdl3d_color GetPixel(int x, int y) const
+    slayer3d_color GetPixel(int x, int y) const
     {
-        sdl3d_color c{};
-        EXPECT_TRUE(sdl3d_framebuffer_get_pixel(&fb, x, y, &c));
+        slayer3d_color c{};
+        EXPECT_TRUE(slayer3d_framebuffer_get_pixel(&fb, x, y, &c));
         return c;
     }
 
     float GetDepth(int x, int y) const
     {
         float d = 0.0f;
-        EXPECT_TRUE(sdl3d_framebuffer_get_depth(&fb, x, y, &d));
+        EXPECT_TRUE(slayer3d_framebuffer_get_depth(&fb, x, y, &d));
         return d;
     }
 };
 
-bool PixelEquals(sdl3d_color a, sdl3d_color b)
+bool PixelEquals(slayer3d_color a, slayer3d_color b)
 {
     return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
 }
 
-int CountPixelsEqual(const Framebuffer &f, sdl3d_color c)
+int CountPixelsEqual(const Framebuffer &f, slayer3d_color c)
 {
     int count = 0;
     for (int y = 0; y < f.fb.height; ++y)
@@ -76,24 +76,24 @@ int CountPixelsEqual(const Framebuffer &f, sdl3d_color c)
     return count;
 }
 
-constexpr sdl3d_color kRed = {255, 0, 0, 255};
-constexpr sdl3d_color kGreen = {0, 255, 0, 255};
-constexpr sdl3d_color kBlue = {0, 0, 255, 255};
-constexpr sdl3d_color kBlack = {0, 0, 0, 0};
+constexpr slayer3d_color kRed = {255, 0, 0, 255};
+constexpr slayer3d_color kGreen = {0, 255, 0, 255};
+constexpr slayer3d_color kBlue = {0, 0, 255, 255};
+constexpr slayer3d_color kBlack = {0, 0, 0, 0};
 
-sdl3d_texture2d MakeTextureFromPixels(const std::vector<Uint8> &pixels, int width, int height)
+slayer3d_texture2d MakeTextureFromPixels(const std::vector<Uint8> &pixels, int width, int height)
 {
-    sdl3d_image image{};
+    slayer3d_image image{};
     image.pixels = const_cast<Uint8 *>(pixels.data());
     image.width = width;
     image.height = height;
 
-    sdl3d_texture2d texture{};
-    EXPECT_TRUE(sdl3d_create_texture_from_image(&image, &texture));
+    slayer3d_texture2d texture{};
+    EXPECT_TRUE(slayer3d_create_texture_from_image(&image, &texture));
     return texture;
 }
 
-bool PixelNear(sdl3d_color actual, sdl3d_color expected, int tolerance = 12)
+bool PixelNear(slayer3d_color actual, slayer3d_color expected, int tolerance = 12)
 {
     return std::abs((int)actual.r - (int)expected.r) <= tolerance &&
            std::abs((int)actual.g - (int)expected.g) <= tolerance &&
@@ -101,7 +101,7 @@ bool PixelNear(sdl3d_color actual, sdl3d_color expected, int tolerance = 12)
            std::abs((int)actual.a - (int)expected.a) <= tolerance;
 }
 
-bool SampleNearColor(const Framebuffer &f, int cx, int cy, int window, sdl3d_color expected)
+bool SampleNearColor(const Framebuffer &f, int cx, int cy, int window, slayer3d_color expected)
 {
     for (int dy = -window; dy <= window; ++dy)
     {
@@ -122,9 +122,9 @@ bool SampleNearColor(const Framebuffer &f, int cx, int cy, int window, sdl3d_col
     return false;
 }
 
-SDL_Point ProjectToFramebuffer(const sdl3d_mat4 &mvp, int width, int height, sdl3d_vec3 point)
+SDL_Point ProjectToFramebuffer(const slayer3d_mat4 &mvp, int width, int height, slayer3d_vec3 point)
 {
-    const sdl3d_vec4 clip = sdl3d_mat4_transform_vec4(mvp, sdl3d_vec4_from_vec3(point, 1.0f));
+    const slayer3d_vec4 clip = slayer3d_mat4_transform_vec4(mvp, slayer3d_vec4_from_vec3(point, 1.0f));
     const float inverse_w = 1.0f / clip.w;
     const float ndc_x = clip.x * inverse_w;
     const float ndc_y = clip.y * inverse_w;
@@ -137,10 +137,10 @@ SDL_Point ProjectToFramebuffer(const sdl3d_mat4 &mvp, int width, int height, sdl
 
 /* --- Framebuffer clear --------------------------------------------------- */
 
-TEST(SDL3DFramebuffer, ClearSetsColorAndDepth)
+TEST(SLAYER3DFramebuffer, ClearSetsColorAndDepth)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kRed, 0.5f);
+    slayer3d_framebuffer_clear(&f.fb, kRed, 0.5f);
     for (int y = 0; y < kH; ++y)
     {
         for (int x = 0; x < kW; ++x)
@@ -151,23 +151,23 @@ TEST(SDL3DFramebuffer, ClearSetsColorAndDepth)
     }
 }
 
-TEST(SDL3DFramebuffer, AccessorsRejectOutOfBounds)
+TEST(SLAYER3DFramebuffer, AccessorsRejectOutOfBounds)
 {
     Framebuffer f;
-    sdl3d_color c{};
+    slayer3d_color c{};
     float d = 0.0f;
-    EXPECT_FALSE(sdl3d_framebuffer_get_pixel(&f.fb, -1, 0, &c));
-    EXPECT_FALSE(sdl3d_framebuffer_get_pixel(&f.fb, 0, kH, &c));
-    EXPECT_FALSE(sdl3d_framebuffer_get_depth(&f.fb, kW, 0, &d));
+    EXPECT_FALSE(slayer3d_framebuffer_get_pixel(&f.fb, -1, 0, &c));
+    EXPECT_FALSE(slayer3d_framebuffer_get_pixel(&f.fb, 0, kH, &c));
+    EXPECT_FALSE(slayer3d_framebuffer_get_depth(&f.fb, kW, 0, &d));
 }
 
-TEST(SDL3DFramebuffer, ClearRectOnlyTouchesRequestedPixels)
+TEST(SLAYER3DFramebuffer, ClearRectOnlyTouchesRequestedPixels)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
 
     const SDL_Rect rect = {4, 5, 3, 2};
-    sdl3d_framebuffer_clear_rect(&f.fb, &rect, kBlue, 0.25f);
+    slayer3d_framebuffer_clear_rect(&f.fb, &rect, kBlue, 0.25f);
 
     for (int y = 0; y < kH; ++y)
     {
@@ -182,82 +182,88 @@ TEST(SDL3DFramebuffer, ClearRectOnlyTouchesRequestedPixels)
 
 /* --- Triangle coverage --------------------------------------------------- */
 
-TEST(SDL3DRasterizeTriangle, FullscreenTriangleCoversAllPixels)
+TEST(SLAYER3DRasterizeTriangle, FullscreenTriangleCoversAllPixels)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
     // Oversized triangle (NDC) that covers the whole viewport [-1, 1]^2.
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.0f), sdl3d_vec3_make(3.0f, -1.0f, 0.0f),
-                             sdl3d_vec3_make(0.0f, 3.0f, 0.0f), kRed, false, false);
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-3.0f, -1.0f, 0.0f),
+                                slayer3d_vec3_make(3.0f, -1.0f, 0.0f), slayer3d_vec3_make(0.0f, 3.0f, 0.0f), kRed,
+                                false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), kW * kH);
 }
 
-TEST(SDL3DRasterizeTriangle, BehindNearPlaneProducesNoPixels)
+TEST(SLAYER3DRasterizeTriangle, BehindNearPlaneProducesNoPixels)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
     // z = -2 in NDC means clip-space z < -w, entirely behind near plane.
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, -2.0f), sdl3d_vec3_make(1.0f, -1.0f, -2.0f),
-                             sdl3d_vec3_make(0.0f, 1.0f, -2.0f), kRed, false, false);
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-1.0f, -1.0f, -2.0f),
+                                slayer3d_vec3_make(1.0f, -1.0f, -2.0f), slayer3d_vec3_make(0.0f, 1.0f, -2.0f), kRed,
+                                false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), 0);
 }
 
-TEST(SDL3DRasterizeTriangle, DegenerateTriangleProducesNoPixels)
+TEST(SLAYER3DRasterizeTriangle, DegenerateTriangleProducesNoPixels)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
     // Collinear vertices: zero area.
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
-                             sdl3d_vec3_make(0.5f, 0.5f, 0.0f), kRed, false, false);
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-0.5f, -0.5f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                slayer3d_vec3_make(0.5f, 0.5f, 0.0f), kRed, false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), 0);
 }
 
-TEST(SDL3DRasterizeTriangle, DepthTestNearHidesFar)
+TEST(SLAYER3DRasterizeTriangle, DepthTestNearHidesFar)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
     // Far triangle first (z = 0.5), then near (z = -0.5). Near must win.
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.5f), sdl3d_vec3_make(3.0f, -1.0f, 0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue, false, false);
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, -0.5f), sdl3d_vec3_make(3.0f, -1.0f, -0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, -0.5f), kRed, false, false);
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-3.0f, -1.0f, 0.5f),
+                                slayer3d_vec3_make(3.0f, -1.0f, 0.5f), slayer3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue,
+                                false, false);
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-3.0f, -1.0f, -0.5f),
+                                slayer3d_vec3_make(3.0f, -1.0f, -0.5f), slayer3d_vec3_make(0.0f, 3.0f, -0.5f), kRed,
+                                false, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), kW * kH);
     EXPECT_EQ(CountPixelsEqual(f, kBlue), 0);
 
     // Reverse order: the far draw should not overwrite near pixels.
     Framebuffer g;
-    sdl3d_framebuffer_clear(&g.fb, kBlack, 1.0f);
-    sdl3d_rasterize_triangle(&g.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, -0.5f), sdl3d_vec3_make(3.0f, -1.0f, -0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, -0.5f), kRed, false, false);
-    sdl3d_rasterize_triangle(&g.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.5f), sdl3d_vec3_make(3.0f, -1.0f, 0.5f),
-                             sdl3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue, false, false);
+    slayer3d_framebuffer_clear(&g.fb, kBlack, 1.0f);
+    slayer3d_rasterize_triangle(&g.fb, id, slayer3d_vec3_make(-3.0f, -1.0f, -0.5f),
+                                slayer3d_vec3_make(3.0f, -1.0f, -0.5f), slayer3d_vec3_make(0.0f, 3.0f, -0.5f), kRed,
+                                false, false);
+    slayer3d_rasterize_triangle(&g.fb, id, slayer3d_vec3_make(-3.0f, -1.0f, 0.5f),
+                                slayer3d_vec3_make(3.0f, -1.0f, 0.5f), slayer3d_vec3_make(0.0f, 3.0f, 0.5f), kBlue,
+                                false, false);
     EXPECT_EQ(CountPixelsEqual(g, kRed), kW * kH);
     EXPECT_EQ(CountPixelsEqual(g, kBlue), 0);
 }
 
-TEST(SDL3DRasterizeTriangle, AdjacentTrianglesNoGapsNoOverlap)
+TEST(SLAYER3DRasterizeTriangle, AdjacentTrianglesNoGapsNoOverlap)
 {
     // Split a full-screen quad into two triangles sharing a diagonal edge.
     // Top-left fill rule: every pixel is covered exactly once across both.
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
     // Quad corners in NDC: TL(-1,1), TR(1,1), BR(1,-1), BL(-1,-1).
-    const sdl3d_vec3 tl = sdl3d_vec3_make(-1.0f, 1.0f, 0.0f);
-    const sdl3d_vec3 tr = sdl3d_vec3_make(1.0f, 1.0f, 0.0f);
-    const sdl3d_vec3 br = sdl3d_vec3_make(1.0f, -1.0f, 0.0f);
-    const sdl3d_vec3 bl = sdl3d_vec3_make(-1.0f, -1.0f, 0.0f);
+    const slayer3d_vec3 tl = slayer3d_vec3_make(-1.0f, 1.0f, 0.0f);
+    const slayer3d_vec3 tr = slayer3d_vec3_make(1.0f, 1.0f, 0.0f);
+    const slayer3d_vec3 br = slayer3d_vec3_make(1.0f, -1.0f, 0.0f);
+    const slayer3d_vec3 bl = slayer3d_vec3_make(-1.0f, -1.0f, 0.0f);
 
     // First triangle: tl, tr, br. Uses kRed. Writes depth 0.
-    sdl3d_rasterize_triangle(&f.fb, id, tl, tr, br, kRed, false, false);
+    slayer3d_rasterize_triangle(&f.fb, id, tl, tr, br, kRed, false, false);
     // Second triangle: tl, br, bl. Uses kBlue. Due to depth test (<=)
     // pixels shared across the diagonal go to whichever writes first;
     // the fill rule ensures no pixel is actually shared.
-    sdl3d_rasterize_triangle(&f.fb, id, tl, br, bl, kBlue, false, false);
+    slayer3d_rasterize_triangle(&f.fb, id, tl, br, bl, kBlue, false, false);
 
     const int red = CountPixelsEqual(f, kRed);
     const int blue = CountPixelsEqual(f, kBlue);
@@ -268,13 +274,14 @@ TEST(SDL3DRasterizeTriangle, AdjacentTrianglesNoGapsNoOverlap)
 
 /* --- Line rasterization -------------------------------------------------- */
 
-TEST(SDL3DRasterizeLine, HorizontalLineAcrossCenter)
+TEST(SLAYER3DRasterizeLine, HorizontalLineAcrossCenter)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
     // Horizontal line at NDC y=0 → screen y ≈ H/2.
-    sdl3d_rasterize_line(&f.fb, id, sdl3d_vec3_make(-0.9f, 0.0f, 0.0f), sdl3d_vec3_make(0.9f, 0.0f, 0.0f), kGreen);
+    slayer3d_rasterize_line(&f.fb, id, slayer3d_vec3_make(-0.9f, 0.0f, 0.0f), slayer3d_vec3_make(0.9f, 0.0f, 0.0f),
+                            kGreen);
     const int green = CountPixelsEqual(f, kGreen);
     EXPECT_GT(green, 0);
 
@@ -299,12 +306,13 @@ TEST(SDL3DRasterizeLine, HorizontalLineAcrossCenter)
     EXPECT_EQ(hit_rows, 1);
 }
 
-TEST(SDL3DRasterizeLine, DiagonalLineCoversBothEndpointRegions)
+TEST(SLAYER3DRasterizeLine, DiagonalLineCoversBothEndpointRegions)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
-    sdl3d_rasterize_line(&f.fb, id, sdl3d_vec3_make(-0.9f, -0.9f, 0.0f), sdl3d_vec3_make(0.9f, 0.9f, 0.0f), kGreen);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
+    slayer3d_rasterize_line(&f.fb, id, slayer3d_vec3_make(-0.9f, -0.9f, 0.0f), slayer3d_vec3_make(0.9f, 0.9f, 0.0f),
+                            kGreen);
     EXPECT_GT(CountPixelsEqual(f, kGreen), 0);
 
     // Endpoints reach opposite halves of the screen.
@@ -333,170 +341,173 @@ TEST(SDL3DRasterizeLine, DiagonalLineCoversBothEndpointRegions)
     EXPECT_TRUE(hit_bottom_right);
 }
 
-TEST(SDL3DRasterizeLine, LineEntirelyBehindNearProducesNoPixels)
+TEST(SLAYER3DRasterizeLine, LineEntirelyBehindNearProducesNoPixels)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
-    sdl3d_rasterize_line(&f.fb, id, sdl3d_vec3_make(-0.5f, 0.0f, -2.0f), sdl3d_vec3_make(0.5f, 0.0f, -2.0f), kGreen);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
+    slayer3d_rasterize_line(&f.fb, id, slayer3d_vec3_make(-0.5f, 0.0f, -2.0f), slayer3d_vec3_make(0.5f, 0.0f, -2.0f),
+                            kGreen);
     EXPECT_EQ(CountPixelsEqual(f, kGreen), 0);
 }
 
 /* --- Point rasterization ------------------------------------------------- */
 
-TEST(SDL3DRasterizePoint, CenterPointProducesOnePixel)
+TEST(SLAYER3DRasterizePoint, CenterPointProducesOnePixel)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
     // NDC (0, 0) → screen (W/2, H/2).
-    sdl3d_rasterize_point(&f.fb, id, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), kRed);
+    slayer3d_rasterize_point(&f.fb, id, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), kRed);
     EXPECT_EQ(CountPixelsEqual(f, kRed), 1);
     EXPECT_TRUE(PixelEquals(f.GetPixel(kW / 2, kH / 2), kRed));
 }
 
-TEST(SDL3DRasterizePoint, OutsideFrustumProducesNoPixel)
+TEST(SLAYER3DRasterizePoint, OutsideFrustumProducesNoPixel)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
-    sdl3d_rasterize_point(&f.fb, id, sdl3d_vec3_make(2.0f, 0.0f, 0.0f), kRed);
-    sdl3d_rasterize_point(&f.fb, id, sdl3d_vec3_make(0.0f, 0.0f, -2.0f), kRed);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
+    slayer3d_rasterize_point(&f.fb, id, slayer3d_vec3_make(2.0f, 0.0f, 0.0f), kRed);
+    slayer3d_rasterize_point(&f.fb, id, slayer3d_vec3_make(0.0f, 0.0f, -2.0f), kRed);
     EXPECT_EQ(CountPixelsEqual(f, kRed), 0);
 }
 
 /* --- Clipping: triangle straddling near plane ---------------------------- */
 
-TEST(SDL3DRasterizeTriangle, TriangleStraddlingNearPlaneRenders)
+TEST(SLAYER3DRasterizeTriangle, TriangleStraddlingNearPlaneRenders)
 {
     // Build a perspective projection, put a triangle half-in / half-out of
     // the near plane, and verify clipping produces pixels (rather than
     // dividing by zero or wrapping).
     Framebuffer f(32, 32);
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    sdl3d_mat4 proj;
-    ASSERT_TRUE(sdl3d_mat4_perspective(sdl3d_degrees_to_radians(60.0f), 1.0f, 0.5f, 100.0f, &proj));
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    slayer3d_mat4 proj;
+    ASSERT_TRUE(slayer3d_mat4_perspective(slayer3d_degrees_to_radians(60.0f), 1.0f, 0.5f, 100.0f, &proj));
 
     // View-space triangle: apex well in front of near (z=-2), base two
     // vertices closer to camera than the near plane (z=-0.3 vs near=0.5).
     // Non-zero y gives the triangle area so the near-plane clip produces
     // a trimmed polygon that covers pixels after viewport transform.
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(0.0f, 1.0f, -2.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(-1.0f, -1.0f, -0.3f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(1.0f, -1.0f, -0.3f);
+    const slayer3d_vec3 v0 = slayer3d_vec3_make(0.0f, 1.0f, -2.0f);
+    const slayer3d_vec3 v1 = slayer3d_vec3_make(-1.0f, -1.0f, -0.3f);
+    const slayer3d_vec3 v2 = slayer3d_vec3_make(1.0f, -1.0f, -0.3f);
 
-    sdl3d_rasterize_triangle(&f.fb, proj, v0, v1, v2, kRed, false, false);
+    slayer3d_rasterize_triangle(&f.fb, proj, v0, v1, v2, kRed, false, false);
     EXPECT_GT(CountPixelsEqual(f, kRed), 0);
 }
 
-TEST(SDL3DRasterizeTriangle, BackfaceCullingRejectsClockwiseScreenFaces)
+TEST(SLAYER3DRasterizeTriangle, BackfaceCullingRejectsClockwiseScreenFaces)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
 
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(0.0f, 0.5f, 0.0f), sdl3d_vec3_make(0.5f, -0.5f, 0.0f),
-                             sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), kRed, true, false);
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(0.0f, 0.5f, 0.0f), slayer3d_vec3_make(0.5f, -0.5f, 0.0f),
+                                slayer3d_vec3_make(-0.5f, -0.5f, 0.0f), kRed, true, false);
     EXPECT_EQ(CountPixelsEqual(f, kRed), 0);
 }
 
-TEST(SDL3DRasterizeTriangle, WireframeDrawsEdgesWithoutFillingInterior)
+TEST(SLAYER3DRasterizeTriangle, WireframeDrawsEdgesWithoutFillingInterior)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
 
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-0.5f, -0.5f, 0.0f), sdl3d_vec3_make(0.5f, -0.5f, 0.0f),
-                             sdl3d_vec3_make(0.0f, 0.5f, 0.0f), kRed, false, true);
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-0.5f, -0.5f, 0.0f),
+                                slayer3d_vec3_make(0.5f, -0.5f, 0.0f), slayer3d_vec3_make(0.0f, 0.5f, 0.0f), kRed,
+                                false, true);
 
     EXPECT_GT(CountPixelsEqual(f, kRed), 0);
     EXPECT_TRUE(PixelEquals(f.GetPixel(kW / 2, kH / 2), kBlack));
 }
 
-TEST(SDL3DRasterizeTriangle, TexturedNearestMapsQuadrantsCorrectly)
+TEST(SLAYER3DRasterizeTriangle, TexturedNearestMapsQuadrantsCorrectly)
 {
     Framebuffer f(32, 32);
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
 
     const std::vector<Uint8> pixels = {
         255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 0, 255,
     };
-    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&texture, SDL3D_TEXTURE_FILTER_NEAREST));
-    ASSERT_TRUE(sdl3d_set_texture_wrap(&texture, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP));
+    slayer3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&texture, SLAYER3D_TEXTURE_FILTER_NEAREST));
+    ASSERT_TRUE(slayer3d_set_texture_wrap(&texture, SLAYER3D_TEXTURE_WRAP_CLAMP, SLAYER3D_TEXTURE_WRAP_CLAMP));
 
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
-    const sdl3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
+    const slayer3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
 
-    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f),
-                                      sdl3d_vec3_make(1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
-                                      sdl3d_vec2{0.0f, 0.0f}, sdl3d_vec2{1.0f, 0.0f}, sdl3d_vec2{1.0f, 1.0f}, modulate,
-                                      modulate, modulate, &texture, false, false);
-    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
-                                      sdl3d_vec3_make(-1.0f, 1.0f, 0.0f), sdl3d_vec2{0.0f, 0.0f},
-                                      sdl3d_vec2{1.0f, 1.0f}, sdl3d_vec2{0.0f, 1.0f}, modulate, modulate, modulate,
-                                      &texture, false, false);
+    slayer3d_rasterize_triangle_textured(
+        &f.fb, id, slayer3d_vec3_make(-1.0f, -1.0f, 0.0f), slayer3d_vec3_make(1.0f, -1.0f, 0.0f),
+        slayer3d_vec3_make(1.0f, 1.0f, 0.0f), slayer3d_vec2{0.0f, 0.0f}, slayer3d_vec2{1.0f, 0.0f},
+        slayer3d_vec2{1.0f, 1.0f}, modulate, modulate, modulate, &texture, false, false);
+    slayer3d_rasterize_triangle_textured(
+        &f.fb, id, slayer3d_vec3_make(-1.0f, -1.0f, 0.0f), slayer3d_vec3_make(1.0f, 1.0f, 0.0f),
+        slayer3d_vec3_make(-1.0f, 1.0f, 0.0f), slayer3d_vec2{0.0f, 0.0f}, slayer3d_vec2{1.0f, 1.0f},
+        slayer3d_vec2{0.0f, 1.0f}, modulate, modulate, modulate, &texture, false, false);
 
     EXPECT_TRUE(PixelNear(f.GetPixel(8, 8), kBlue));
-    EXPECT_TRUE(PixelNear(f.GetPixel(24, 8), sdl3d_color{255, 255, 0, 255}));
+    EXPECT_TRUE(PixelNear(f.GetPixel(24, 8), slayer3d_color{255, 255, 0, 255}));
     EXPECT_TRUE(PixelNear(f.GetPixel(8, 24), kRed));
     EXPECT_TRUE(PixelNear(f.GetPixel(24, 24), kGreen));
 
-    sdl3d_free_texture(&texture);
+    slayer3d_free_texture(&texture);
 }
 
-TEST(SDL3DRasterizeTriangle, TexturedBilinearBlendsAtCenter)
+TEST(SLAYER3DRasterizeTriangle, TexturedBilinearBlendsAtCenter)
 {
     Framebuffer f(32, 32);
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
 
     const std::vector<Uint8> pixels = {
         0, 0, 0, 255, 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255,
     };
-    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&texture, SDL3D_TEXTURE_FILTER_BILINEAR));
+    slayer3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 2);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&texture, SLAYER3D_TEXTURE_FILTER_BILINEAR));
 
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
-    const sdl3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
+    const slayer3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
 
-    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f),
-                                      sdl3d_vec3_make(1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
-                                      sdl3d_vec2{0.0f, 0.0f}, sdl3d_vec2{1.0f, 0.0f}, sdl3d_vec2{1.0f, 1.0f}, modulate,
-                                      modulate, modulate, &texture, false, false);
-    sdl3d_rasterize_triangle_textured(&f.fb, id, sdl3d_vec3_make(-1.0f, -1.0f, 0.0f), sdl3d_vec3_make(1.0f, 1.0f, 0.0f),
-                                      sdl3d_vec3_make(-1.0f, 1.0f, 0.0f), sdl3d_vec2{0.0f, 0.0f},
-                                      sdl3d_vec2{1.0f, 1.0f}, sdl3d_vec2{0.0f, 1.0f}, modulate, modulate, modulate,
-                                      &texture, false, false);
+    slayer3d_rasterize_triangle_textured(
+        &f.fb, id, slayer3d_vec3_make(-1.0f, -1.0f, 0.0f), slayer3d_vec3_make(1.0f, -1.0f, 0.0f),
+        slayer3d_vec3_make(1.0f, 1.0f, 0.0f), slayer3d_vec2{0.0f, 0.0f}, slayer3d_vec2{1.0f, 0.0f},
+        slayer3d_vec2{1.0f, 1.0f}, modulate, modulate, modulate, &texture, false, false);
+    slayer3d_rasterize_triangle_textured(
+        &f.fb, id, slayer3d_vec3_make(-1.0f, -1.0f, 0.0f), slayer3d_vec3_make(1.0f, 1.0f, 0.0f),
+        slayer3d_vec3_make(-1.0f, 1.0f, 0.0f), slayer3d_vec2{0.0f, 0.0f}, slayer3d_vec2{1.0f, 1.0f},
+        slayer3d_vec2{0.0f, 1.0f}, modulate, modulate, modulate, &texture, false, false);
 
-    const sdl3d_color center = f.GetPixel(16, 16);
+    const slayer3d_color center = f.GetPixel(16, 16);
     EXPECT_NEAR((int)center.r, 64, 20);
     EXPECT_NEAR((int)center.g, 64, 20);
     EXPECT_NEAR((int)center.b, 64, 20);
 
-    sdl3d_free_texture(&texture);
+    slayer3d_free_texture(&texture);
 }
 
-TEST(SDL3DRasterizeTriangle, TexturedPerspectiveCorrectNearTexelDominates)
+TEST(SLAYER3DRasterizeTriangle, TexturedPerspectiveCorrectNearTexelDominates)
 {
     Framebuffer f(64, 64);
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
 
     const std::vector<Uint8> pixels = {
         255, 0, 0, 255, 0, 255, 0, 255,
     };
-    sdl3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 1);
-    ASSERT_TRUE(sdl3d_set_texture_filter(&texture, SDL3D_TEXTURE_FILTER_NEAREST));
+    slayer3d_texture2d texture = MakeTextureFromPixels(pixels, 2, 1);
+    ASSERT_TRUE(slayer3d_set_texture_filter(&texture, SLAYER3D_TEXTURE_FILTER_NEAREST));
 
-    sdl3d_mat4 proj;
-    ASSERT_TRUE(sdl3d_mat4_perspective(sdl3d_degrees_to_radians(60.0f), 1.0f, 0.01f, 100.0f, &proj));
+    slayer3d_mat4 proj;
+    ASSERT_TRUE(slayer3d_mat4_perspective(slayer3d_degrees_to_radians(60.0f), 1.0f, 0.01f, 100.0f, &proj));
 
-    const sdl3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
-    const sdl3d_vec3 v0 = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
-    const sdl3d_vec3 v1 = sdl3d_vec3_make(2.0f, 0.0f, -10.0f);
-    const sdl3d_vec3 v2 = sdl3d_vec3_make(0.0f, 2.0f, -10.0f);
+    const slayer3d_vec4 modulate = {1.0f, 1.0f, 1.0f, 1.0f};
+    const slayer3d_vec3 v0 = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+    const slayer3d_vec3 v1 = slayer3d_vec3_make(2.0f, 0.0f, -10.0f);
+    const slayer3d_vec3 v2 = slayer3d_vec3_make(0.0f, 2.0f, -10.0f);
 
-    sdl3d_rasterize_triangle_textured(&f.fb, proj, v0, v1, v2, sdl3d_vec2{0.0f, 0.0f}, sdl3d_vec2{1.0f, 0.0f},
-                                      sdl3d_vec2{1.0f, 1.0f}, modulate, modulate, modulate, &texture, false, false);
+    slayer3d_rasterize_triangle_textured(&f.fb, proj, v0, v1, v2, slayer3d_vec2{0.0f, 0.0f}, slayer3d_vec2{1.0f, 0.0f},
+                                         slayer3d_vec2{1.0f, 1.0f}, modulate, modulate, modulate, &texture, false,
+                                         false);
 
     const SDL_Point p0 = ProjectToFramebuffer(proj, f.fb.width, f.fb.height, v0);
     const SDL_Point p1 = ProjectToFramebuffer(proj, f.fb.width, f.fb.height, v1);
@@ -506,56 +517,61 @@ TEST(SDL3DRasterizeTriangle, TexturedPerspectiveCorrectNearTexelDominates)
 
     EXPECT_TRUE(SampleNearColor(f, cx, cy, 2, kRed));
 
-    sdl3d_free_texture(&texture);
+    slayer3d_free_texture(&texture);
 }
 
-TEST(SDL3DRasterizeTriangle, ScissorClipsTriangleCoverage)
+TEST(SLAYER3DRasterizeTriangle, ScissorClipsTriangleCoverage)
 {
     Framebuffer f;
-    sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+    slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
     f.fb.scissor_enabled = true;
     f.fb.scissor_rect = SDL_Rect{8, 8, 1, 1};
 
-    const sdl3d_mat4 id = sdl3d_mat4_identity();
-    sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.0f), sdl3d_vec3_make(3.0f, -1.0f, 0.0f),
-                             sdl3d_vec3_make(0.0f, 3.0f, 0.0f), kRed, false, false);
+    const slayer3d_mat4 id = slayer3d_mat4_identity();
+    slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-3.0f, -1.0f, 0.0f),
+                                slayer3d_vec3_make(3.0f, -1.0f, 0.0f), slayer3d_vec3_make(0.0f, 3.0f, 0.0f), kRed,
+                                false, false);
 
     EXPECT_EQ(CountPixelsEqual(f, kRed), 1);
     EXPECT_TRUE(PixelEquals(f.GetPixel(8, 8), kRed));
 }
 
-TEST(SDL3DRasterizeTriangle, ParallelTilesMatchReferenceByteForByte)
+TEST(SLAYER3DRasterizeTriangle, ParallelTilesMatchReferenceByteForByte)
 {
     Framebuffer reference(96, 80);
     Framebuffer parallel(96, 80);
 
-    sdl3d_parallel_rasterizer *parallel_rasterizer = nullptr;
-    if (!sdl3d_parallel_rasterizer_create(2, &parallel_rasterizer))
+    slayer3d_parallel_rasterizer *parallel_rasterizer = nullptr;
+    if (!slayer3d_parallel_rasterizer_create(2, &parallel_rasterizer))
     {
         GTEST_SKIP() << "Parallel rasterizer is unavailable on this platform/toolchain: " << SDL_GetError();
     }
     ASSERT_NE(parallel_rasterizer, nullptr);
-    EXPECT_EQ(sdl3d_parallel_rasterizer_get_worker_count(parallel_rasterizer), 2);
+    EXPECT_EQ(slayer3d_parallel_rasterizer_get_worker_count(parallel_rasterizer), 2);
 
     parallel.fb.parallel_rasterizer = parallel_rasterizer;
 
     const auto draw_scene = [](Framebuffer &f) {
         f.fb.scissor_enabled = true;
         f.fb.scissor_rect = SDL_Rect{7, 5, 73, 61};
-        sdl3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
+        slayer3d_framebuffer_clear(&f.fb, kBlack, 1.0f);
 
-        const sdl3d_mat4 id = sdl3d_mat4_identity();
-        sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-3.0f, -1.0f, 0.7f), sdl3d_vec3_make(3.0f, -1.0f, 0.7f),
-                                 sdl3d_vec3_make(0.0f, 3.0f, 0.7f), kBlue, false, false);
-        sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(-2.2f, -1.5f, -0.2f), sdl3d_vec3_make(2.5f, -0.8f, -0.2f),
-                                 sdl3d_vec3_make(-0.2f, 2.4f, -0.2f), kRed, false, false);
-        sdl3d_rasterize_triangle(&f.fb, id, sdl3d_vec3_make(0.3f, 0.8f, 0.1f), sdl3d_vec3_make(0.8f, -0.7f, 0.1f),
-                                 sdl3d_vec3_make(-0.9f, -0.6f, 0.1f), kGreen, true, false);
+        const slayer3d_mat4 id = slayer3d_mat4_identity();
+        slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-3.0f, -1.0f, 0.7f),
+                                    slayer3d_vec3_make(3.0f, -1.0f, 0.7f), slayer3d_vec3_make(0.0f, 3.0f, 0.7f), kBlue,
+                                    false, false);
+        slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(-2.2f, -1.5f, -0.2f),
+                                    slayer3d_vec3_make(2.5f, -0.8f, -0.2f), slayer3d_vec3_make(-0.2f, 2.4f, -0.2f),
+                                    kRed, false, false);
+        slayer3d_rasterize_triangle(&f.fb, id, slayer3d_vec3_make(0.3f, 0.8f, 0.1f),
+                                    slayer3d_vec3_make(0.8f, -0.7f, 0.1f), slayer3d_vec3_make(-0.9f, -0.6f, 0.1f),
+                                    kGreen, true, false);
 
-        sdl3d_mat4 proj;
-        ASSERT_TRUE(sdl3d_mat4_perspective(sdl3d_degrees_to_radians(65.0f), 1.2f, 0.5f, 100.0f, &proj));
-        sdl3d_rasterize_triangle(&f.fb, proj, sdl3d_vec3_make(0.0f, 1.2f, -2.5f), sdl3d_vec3_make(-1.4f, -1.0f, -0.2f),
-                                 sdl3d_vec3_make(1.1f, -0.8f, -0.3f), kGreen, false, false);
+        slayer3d_mat4 proj;
+        ASSERT_TRUE(slayer3d_mat4_perspective(slayer3d_degrees_to_radians(65.0f), 1.2f, 0.5f, 100.0f, &proj));
+        slayer3d_rasterize_triangle(&f.fb, proj, slayer3d_vec3_make(0.0f, 1.2f, -2.5f),
+                                    slayer3d_vec3_make(-1.4f, -1.0f, -0.2f), slayer3d_vec3_make(1.1f, -0.8f, -0.3f),
+                                    kGreen, false, false);
     };
 
     draw_scene(reference);
@@ -565,5 +581,5 @@ TEST(SDL3DRasterizeTriangle, ParallelTilesMatchReferenceByteForByte)
     ASSERT_EQ(reference.depth.size(), parallel.depth.size());
     EXPECT_EQ(std::memcmp(reference.depth.data(), parallel.depth.data(), reference.depth.size() * sizeof(float)), 0);
 
-    sdl3d_parallel_rasterizer_destroy(parallel_rasterizer);
+    slayer3d_parallel_rasterizer_destroy(parallel_rasterizer);
 }

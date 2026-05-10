@@ -1,7 +1,7 @@
 {
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": {
-    "name": "SDL3D FPS Mechanics Dojo",
+    "name": "Slayer 3D FPS Mechanics Dojo",
     "id": "demo.fps_mechanics_dojo",
     "version": "0.1.0"
   },
@@ -15,7 +15,7 @@
     { "path": "fragments/editor/metadata.json", "sections": ["editor"] }
   ],
   "app": {
-    "title": "SDL3D FPS Mechanics Dojo",
+    "title": "Slayer 3D FPS Mechanics Dojo",
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",

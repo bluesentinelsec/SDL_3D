@@ -12,11 +12,11 @@ extern "C"
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 
-#include "sdl3d/asset.h"
-#include "sdl3d/game.h"
-#include "sdl3d/game_data.h"
-#include "sdl3d/image.h"
-#include "sdl3d/sprite_asset.h"
+#include "slayer3d/asset.h"
+#include "slayer3d/game.h"
+#include "slayer3d/game_data.h"
+#include "slayer3d/image.h"
+#include "slayer3d/sprite_asset.h"
 }
 
 namespace
@@ -25,7 +25,7 @@ namespace
 std::filesystem::path make_temp_dir(const char *leaf)
 {
     std::filesystem::path root;
-    char *pref_path = SDL_GetPrefPath("bluesentinelsec", "SDL3DTests");
+    char *pref_path = SDL_GetPrefPath("bluesentinelsec", "SLAYER3DTests");
     if (pref_path != nullptr)
     {
         root = pref_path;
@@ -51,11 +51,11 @@ bool write_text(const std::filesystem::path &path, const std::string &text)
     return out.good();
 }
 
-bool write_png(const std::filesystem::path &path, const sdl3d_image &image)
+bool write_png(const std::filesystem::path &path, const slayer3d_image &image)
 {
     std::filesystem::create_directories(path.parent_path());
     const std::string path_text = path.string();
-    return sdl3d_save_image_png(&image, path_text.c_str());
+    return slayer3d_save_image_png(&image, path_text.c_str());
 }
 
 std::vector<Uint8> make_rgba_sheet_pixels(int cell_width, int cell_height, int columns, int rows,
@@ -87,7 +87,7 @@ std::vector<Uint8> make_rgba_sheet_pixels(int cell_width, int cell_height, int c
     return pixels;
 }
 
-void expect_texture_color(const sdl3d_texture2d *texture, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
+void expect_texture_color(const slayer3d_texture2d *texture, Uint8 r, Uint8 g, Uint8 b, Uint8 a)
 {
     ASSERT_NE(texture, nullptr);
     ASSERT_NE(texture->pixels, nullptr);
@@ -112,14 +112,14 @@ TEST(SpriteAsset, LoadsSheetAndSlicesFrames)
         {{255, 0, 0, 255}, {0, 255, 0, 255}, {0, 0, 255, 255}, {255, 255, 0, 255}}};
     std::vector<Uint8> pixels = make_rgba_sheet_pixels(cell_width, cell_height, columns, rows, colors);
 
-    sdl3d_image image{};
+    slayer3d_image image{};
     image.pixels = pixels.data();
     image.width = cell_width * columns;
     image.height = cell_height * rows;
     ASSERT_TRUE(write_png(png_path, image)) << SDL_GetError();
 
-    sdl3d_sprite_asset_source source{};
-    source.kind = SDL3D_SPRITE_ASSET_SOURCE_SHEET;
+    slayer3d_sprite_asset_source source{};
+    source.kind = SLAYER3D_SPRITE_ASSET_SOURCE_SHEET;
     const std::string sheet_path_text = png_path.string();
     source.sheet_path = sheet_path_text.c_str();
     source.frame_width = cell_width;
@@ -134,9 +134,9 @@ TEST(SpriteAsset, LoadsSheetAndSlicesFrames)
     source.emissive = false;
     source.visual_ground_offset = 0.25f;
 
-    sdl3d_sprite_asset_runtime runtime{};
+    slayer3d_sprite_asset_runtime runtime{};
     char error[256]{};
-    ASSERT_TRUE(sdl3d_sprite_asset_load(nullptr, &source, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_sprite_asset_load(nullptr, &source, &runtime, error, sizeof(error))) << error;
 
     ASSERT_EQ(runtime.base_texture_count, 2);
     ASSERT_EQ(runtime.animation_texture_count, 4);
@@ -157,17 +157,17 @@ TEST(SpriteAsset, LoadsSheetAndSlicesFrames)
     expect_texture_color(runtime.animation_frames[1].frames[0], 0, 0, 255, 255);
     expect_texture_color(runtime.animation_frames[1].frames[1], 255, 255, 0, 255);
 
-    sdl3d_sprite_actor actor{};
-    sdl3d_sprite_asset_apply_actor(&actor, &runtime);
+    slayer3d_sprite_actor actor{};
+    slayer3d_sprite_asset_apply_actor(&actor, &runtime);
     EXPECT_EQ(actor.texture, runtime.base_textures);
-    EXPECT_EQ(actor.rotations, sdl3d_sprite_asset_base_rotations(&runtime));
-    EXPECT_EQ(actor.animation_frames, sdl3d_sprite_asset_animation_frames(&runtime));
+    EXPECT_EQ(actor.rotations, slayer3d_sprite_asset_base_rotations(&runtime));
+    EXPECT_EQ(actor.animation_frames, slayer3d_sprite_asset_animation_frames(&runtime));
     EXPECT_EQ(actor.animation_frame_count, 2);
     EXPECT_FLOAT_EQ(actor.animation_fps, 12.0f);
     EXPECT_TRUE(actor.animation_loop);
     EXPECT_FLOAT_EQ(actor.visual_ground_offset, 0.25f);
 
-    sdl3d_sprite_asset_free(&runtime);
+    slayer3d_sprite_asset_free(&runtime);
 }
 
 TEST(SpriteAsset, LoadsExplicitFileListSources)
@@ -189,7 +189,7 @@ TEST(SpriteAsset, LoadsExplicitFileListSources)
     for (size_t i = 0; i < paths.size(); ++i)
     {
         std::vector<Uint8> pixels = {colors[i][0], colors[i][1], colors[i][2], colors[i][3]};
-        sdl3d_image image{};
+        slayer3d_image image{};
         image.pixels = pixels.data();
         image.width = 1;
         image.height = 1;
@@ -201,8 +201,8 @@ TEST(SpriteAsset, LoadsExplicitFileListSources)
     const char *frame_paths[4] = {path_strings[2].c_str(), path_strings[3].c_str(), path_strings[4].c_str(),
                                   path_strings[5].c_str()};
 
-    sdl3d_sprite_asset_source source{};
-    source.kind = SDL3D_SPRITE_ASSET_SOURCE_FILES;
+    slayer3d_sprite_asset_source source{};
+    source.kind = SLAYER3D_SPRITE_ASSET_SOURCE_FILES;
     source.base_paths = base_paths;
     source.frame_paths = frame_paths;
     source.frame_count = 2;
@@ -213,9 +213,9 @@ TEST(SpriteAsset, LoadsExplicitFileListSources)
     source.emissive = true;
     source.visual_ground_offset = 0.5f;
 
-    sdl3d_sprite_asset_runtime runtime{};
+    slayer3d_sprite_asset_runtime runtime{};
     char error[256]{};
-    ASSERT_TRUE(sdl3d_sprite_asset_load(nullptr, &source, &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_sprite_asset_load(nullptr, &source, &runtime, error, sizeof(error))) << error;
 
     ASSERT_EQ(runtime.base_texture_count, 2);
     ASSERT_EQ(runtime.animation_texture_count, 4);
@@ -227,7 +227,7 @@ TEST(SpriteAsset, LoadsExplicitFileListSources)
     expect_texture_color(runtime.animation_frames[1].frames[0], 255, 0, 255, 255);
     expect_texture_color(runtime.animation_frames[1].frames[1], 0, 255, 255, 255);
 
-    sdl3d_sprite_asset_free(&runtime);
+    slayer3d_sprite_asset_free(&runtime);
 }
 
 TEST(SpriteAsset, LoadsFromSpriteManifestFile)
@@ -253,7 +253,7 @@ TEST(SpriteAsset, LoadsFromSpriteManifestFile)
     for (size_t i = 0; i < paths.size(); ++i)
     {
         std::vector<Uint8> pixels = {colors[i][0], colors[i][1], colors[i][2], colors[i][3]};
-        sdl3d_image image{};
+        slayer3d_image image{};
         image.pixels = pixels.data();
         image.width = 1;
         image.height = 1;
@@ -316,9 +316,10 @@ void main() {
 })json"))
         << SDL_GetError();
 
-    sdl3d_sprite_asset_runtime runtime{};
+    slayer3d_sprite_asset_runtime runtime{};
     char error[256]{};
-    ASSERT_TRUE(sdl3d_sprite_asset_load_file(manifest_path.string().c_str(), &runtime, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_sprite_asset_load_file(manifest_path.string().c_str(), &runtime, error, sizeof(error)))
+        << error;
 
     ASSERT_EQ(runtime.base_texture_count, 2);
     ASSERT_EQ(runtime.animation_frame_count, 2);
@@ -338,7 +339,7 @@ void main() {
     EXPECT_NE(std::string(runtime.shader_vertex_source).find("aPosition"), std::string::npos);
     EXPECT_NE(std::string(runtime.shader_fragment_source).find("fragColor"), std::string::npos);
 
-    sdl3d_sprite_asset_free(&runtime);
+    slayer3d_sprite_asset_free(&runtime);
 }
 
 TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
@@ -357,7 +358,7 @@ TEST(SpriteAsset, LoadsThroughGameDataSpriteBridge)
         {{10, 20, 30, 255}, {40, 50, 60, 255}, {70, 80, 90, 255}, {100, 110, 120, 255}}};
     std::vector<Uint8> pixels = make_rgba_sheet_pixels(cell_width, cell_height, columns, rows, colors);
 
-    sdl3d_image image{};
+    slayer3d_image image{};
     image.pixels = pixels.data();
     image.width = cell_width * columns;
     image.height = cell_height * rows;
@@ -378,7 +379,7 @@ void main() {
 
     ASSERT_TRUE(write_text(json_path,
                            R"json({
-  "schema": "sdl3d.game.v0",
+  "schema": "slayer3d.game.v0",
   "metadata": { "name": "Sprite Bridge", "id": "test.sprite_bridge", "version": "0.1.0" },
   "world": { "name": "world.sprite_bridge", "kind": "fixed_screen" },
   "assets": {
@@ -407,18 +408,18 @@ void main() {
   "entities": []
 })json"));
 
-    sdl3d_game_session *session = nullptr;
-    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
 
     char load_error[256]{};
-    sdl3d_game_data_runtime *runtime = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(
-        sdl3d_game_data_load_file(json_path.string().c_str(), session, &runtime, load_error, sizeof(load_error)))
+        slayer3d_game_data_load_file(json_path.string().c_str(), session, &runtime, load_error, sizeof(load_error)))
         << load_error;
 
-    sdl3d_sprite_asset_runtime sprite{};
+    slayer3d_sprite_asset_runtime sprite{};
     ASSERT_TRUE(
-        sdl3d_game_data_load_sprite_asset(runtime, "sprite.robot.walk", &sprite, load_error, sizeof(load_error)))
+        slayer3d_game_data_load_sprite_asset(runtime, "sprite.robot.walk", &sprite, load_error, sizeof(load_error)))
         << load_error;
 
     ASSERT_EQ(sprite.base_texture_count, 2);
@@ -435,7 +436,7 @@ void main() {
     ASSERT_NE(sprite.shader_fragment_source, nullptr);
     EXPECT_NE(std::string(sprite.shader_fragment_source).find("fragColor"), std::string::npos);
 
-    sdl3d_sprite_asset_free(&sprite);
-    sdl3d_game_data_destroy(runtime);
-    sdl3d_game_session_destroy(session);
+    slayer3d_sprite_asset_free(&sprite);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }

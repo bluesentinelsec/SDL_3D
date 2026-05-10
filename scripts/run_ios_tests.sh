@@ -5,12 +5,12 @@
 set -euo pipefail
 
 APP="${APP:-}"
-APP_NAME="${APP_NAME:-sdl3d_ios_tests.app}"
+APP_NAME="${APP_NAME:-slayer3d_ios_tests.app}"
 BUILD_DIR="${BUILD_DIR:-build/ios/iphonesimulator}"
-BUNDLE_ID="${BUNDLE_ID:-com.sdl3d.tests}"
-LOG_SUBSYSTEM="${LOG_SUBSYSTEM:-com.sdl3d.tests}"
-SENTINEL="${SENTINEL:-SDL3D_TEST_RESULT}"
-SIM_NAME="${SIM_NAME:-SDL3D Tests}"
+BUNDLE_ID="${BUNDLE_ID:-com.slayer3d.tests}"
+LOG_SUBSYSTEM="${LOG_SUBSYSTEM:-com.slayer3d.tests}"
+SENTINEL="${SENTINEL:-SLAYER3D_TEST_RESULT}"
+SIM_NAME="${SIM_NAME:-SLAYER3D Tests}"
 TIMEOUT_SECONDS="${TIMEOUT_SECONDS:-240}"
 
 SIM_UDID=""

@@ -6,21 +6,21 @@
  * wide room generates wall segments on either side of the doorway.
  */
 
-#include "sdl3d/level.h"
+#include "slayer3d/level.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
-#include "sdl3d/math.h"
-#include "sdl3d/properties.h"
-#include "sdl3d/signal_bus.h"
+#include "slayer3d/math.h"
+#include "slayer3d/properties.h"
+#include "slayer3d/signal_bus.h"
 
 #define LM_TEXELS_PER_UNIT 4
 #define LM_MIN_SURFACE_TEXELS 2
 #define LM_MIN_ATLAS_SIZE 256
 #define LM_MAX_ATLAS_SIZE 2048
-#define SDL3D_LEVEL_PLANE_EPSILON 0.000001f
+#define SLAYER3D_LEVEL_PLANE_EPSILON 0.000001f
 
 /* ------------------------------------------------------------------ */
 /* Edge overlap detection                                              */
@@ -59,7 +59,7 @@ typedef struct
 /* Sector planes                                                       */
 /* ------------------------------------------------------------------ */
 
-static sdl3d_vec3 normalized_or_default(const float normal[3], sdl3d_vec3 fallback)
+static slayer3d_vec3 normalized_or_default(const float normal[3], slayer3d_vec3 fallback)
 {
     if (normal == NULL)
     {
@@ -67,37 +67,37 @@ static sdl3d_vec3 normalized_or_default(const float normal[3], sdl3d_vec3 fallba
     }
 
     const float len = SDL_sqrtf(normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2]);
-    if (len <= SDL3D_LEVEL_PLANE_EPSILON)
+    if (len <= SLAYER3D_LEVEL_PLANE_EPSILON)
     {
         return fallback;
     }
 
     const float inv_len = 1.0f / len;
-    return sdl3d_vec3_make(normal[0] * inv_len, normal[1] * inv_len, normal[2] * inv_len);
+    return slayer3d_vec3_make(normal[0] * inv_len, normal[1] * inv_len, normal[2] * inv_len);
 }
 
-sdl3d_vec3 sdl3d_sector_floor_normal(const sdl3d_sector *sector)
+slayer3d_vec3 slayer3d_sector_floor_normal(const slayer3d_sector *sector)
 {
-    return sector != NULL ? normalized_or_default(sector->floor_normal, sdl3d_vec3_make(0.0f, 1.0f, 0.0f))
-                          : sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    return sector != NULL ? normalized_or_default(sector->floor_normal, slayer3d_vec3_make(0.0f, 1.0f, 0.0f))
+                          : slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
 }
 
-sdl3d_vec3 sdl3d_sector_ceil_normal(const sdl3d_sector *sector)
+slayer3d_vec3 slayer3d_sector_ceil_normal(const slayer3d_sector *sector)
 {
-    return sector != NULL ? normalized_or_default(sector->ceil_normal, sdl3d_vec3_make(0.0f, -1.0f, 0.0f))
-                          : sdl3d_vec3_make(0.0f, -1.0f, 0.0f);
+    return sector != NULL ? normalized_or_default(sector->ceil_normal, slayer3d_vec3_make(0.0f, -1.0f, 0.0f))
+                          : slayer3d_vec3_make(0.0f, -1.0f, 0.0f);
 }
 
-sdl3d_vec3 sdl3d_sector_push_velocity(const sdl3d_sector *sector)
+slayer3d_vec3 slayer3d_sector_push_velocity(const slayer3d_sector *sector)
 {
     if (sector == NULL)
     {
-        return sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     }
-    return sdl3d_vec3_make(sector->push_velocity[0], sector->push_velocity[1], sector->push_velocity[2]);
+    return slayer3d_vec3_make(sector->push_velocity[0], sector->push_velocity[1], sector->push_velocity[2]);
 }
 
-float sdl3d_sector_damage_per_second(const sdl3d_sector *sector)
+float slayer3d_sector_damage_per_second(const slayer3d_sector *sector)
 {
     if (sector == NULL || sector->damage_per_second <= 0.0f)
     {
@@ -106,16 +106,16 @@ float sdl3d_sector_damage_per_second(const sdl3d_sector *sector)
     return sector->damage_per_second;
 }
 
-float sdl3d_sector_damage_for_delta(const sdl3d_sector *sector, float dt)
+float slayer3d_sector_damage_for_delta(const slayer3d_sector *sector, float dt)
 {
     if (dt <= 0.0f)
     {
         return 0.0f;
     }
-    return sdl3d_sector_damage_per_second(sector) * dt;
+    return slayer3d_sector_damage_per_second(sector) * dt;
 }
 
-static void sector_centroid_xz(const sdl3d_sector *sector, float *out_x, float *out_z)
+static void sector_centroid_xz(const slayer3d_sector *sector, float *out_x, float *out_z)
 {
     float x = 0.0f;
     float z = 0.0f;
@@ -138,12 +138,12 @@ static void sector_centroid_xz(const sdl3d_sector *sector, float *out_x, float *
     *out_z = z * inv_count;
 }
 
-static float sector_plane_y_at(const sdl3d_sector *sector, sdl3d_vec3 normal, float base_y, float x, float z)
+static float sector_plane_y_at(const slayer3d_sector *sector, slayer3d_vec3 normal, float base_y, float x, float z)
 {
     float cx;
     float cz;
 
-    if (sector == NULL || SDL_fabsf(normal.y) <= SDL3D_LEVEL_PLANE_EPSILON)
+    if (sector == NULL || SDL_fabsf(normal.y) <= SLAYER3D_LEVEL_PLANE_EPSILON)
     {
         return base_y;
     }
@@ -152,22 +152,22 @@ static float sector_plane_y_at(const sdl3d_sector *sector, sdl3d_vec3 normal, fl
     return base_y - (normal.x * (x - cx) + normal.z * (z - cz)) / normal.y;
 }
 
-float sdl3d_sector_floor_at(const sdl3d_sector *sector, float x, float z)
+float slayer3d_sector_floor_at(const slayer3d_sector *sector, float x, float z)
 {
     if (sector == NULL)
     {
         return 0.0f;
     }
-    return sector_plane_y_at(sector, sdl3d_sector_floor_normal(sector), sector->floor_y, x, z);
+    return sector_plane_y_at(sector, slayer3d_sector_floor_normal(sector), sector->floor_y, x, z);
 }
 
-float sdl3d_sector_ceil_at(const sdl3d_sector *sector, float x, float z)
+float slayer3d_sector_ceil_at(const slayer3d_sector *sector, float x, float z)
 {
     if (sector == NULL)
     {
         return 0.0f;
     }
-    return sector_plane_y_at(sector, sdl3d_sector_ceil_normal(sector), sector->ceil_y, x, z);
+    return sector_plane_y_at(sector, slayer3d_sector_ceil_normal(sector), sector->ceil_y, x, z);
 }
 
 /* ------------------------------------------------------------------ */
@@ -185,7 +185,7 @@ typedef struct
     int vc, vc_cap;
     int ic, ic_cap;
     bool has_bounds;
-    sdl3d_bounding_box bounds;
+    slayer3d_bounding_box bounds;
 } macc;
 
 typedef enum
@@ -346,7 +346,7 @@ static int lm_surface_texels(float units)
     return texels < LM_MIN_SURFACE_TEXELS ? LM_MIN_SURFACE_TEXELS : texels;
 }
 
-static void lm_sector_bounds_xz(const sdl3d_sector *sector, float *min_x, float *max_x, float *min_z, float *max_z)
+static void lm_sector_bounds_xz(const slayer3d_sector *sector, float *min_x, float *max_x, float *min_z, float *max_z)
 {
     float sx0 = sector->points[0][0], sx1 = sector->points[0][0];
     float sz0 = sector->points[0][1], sz1 = sector->points[0][1];
@@ -428,10 +428,10 @@ static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, const m
 }
 
 static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, const macc *acc, int first_vertex,
-                                         const sdl3d_sector *sector, bool floor_surface)
+                                         const slayer3d_sector *sector, bool floor_surface)
 {
     lm_surface surface;
-    sdl3d_vec3 normal = floor_surface ? sdl3d_sector_floor_normal(sector) : sdl3d_sector_ceil_normal(sector);
+    slayer3d_vec3 normal = floor_surface ? slayer3d_sector_floor_normal(sector) : slayer3d_sector_ceil_normal(sector);
     float min_y = 1e30f;
     float max_y = -1e30f;
 
@@ -451,8 +451,8 @@ static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, c
     lm_sector_bounds_xz(sector, &surface.min_x, &surface.max_x, &surface.min_z, &surface.max_z);
     for (int i = 0; i < sector->num_points; ++i)
     {
-        float y = floor_surface ? sdl3d_sector_floor_at(sector, sector->points[i][0], sector->points[i][1])
-                                : sdl3d_sector_ceil_at(sector, sector->points[i][0], sector->points[i][1]);
+        float y = floor_surface ? slayer3d_sector_floor_at(sector, sector->points[i][0], sector->points[i][1])
+                                : slayer3d_sector_ceil_at(sector, sector->points[i][0], sector->points[i][1]);
         if (y < min_y)
             min_y = y;
         if (y > max_y)
@@ -579,9 +579,9 @@ static Uint8 lm_channel_clamp(float value)
     return (Uint8)(value + 0.5f);
 }
 
-static bool lm_build_texture(sdl3d_level *out)
+static bool lm_build_texture(slayer3d_level *out)
 {
-    sdl3d_image image;
+    slayer3d_image image;
     size_t pixel_count = (size_t)out->lightmap_width * (size_t)out->lightmap_height;
 
     if (out->lightmap_pixels == NULL || out->lightmap_width <= 0 || out->lightmap_height <= 0)
@@ -606,23 +606,23 @@ static bool lm_build_texture(sdl3d_level *out)
         image.pixels[i * 4 + 3] = 255;
     }
 
-    if (!sdl3d_create_texture_from_image(&image, &out->lightmap_texture))
+    if (!slayer3d_create_texture_from_image(&image, &out->lightmap_texture))
     {
         SDL_free(image.pixels);
         return false;
     }
     SDL_free(image.pixels);
-    if (!sdl3d_set_texture_filter(&out->lightmap_texture, SDL3D_TEXTURE_FILTER_BILINEAR) ||
-        !sdl3d_set_texture_wrap(&out->lightmap_texture, SDL3D_TEXTURE_WRAP_CLAMP, SDL3D_TEXTURE_WRAP_CLAMP))
+    if (!slayer3d_set_texture_filter(&out->lightmap_texture, SLAYER3D_TEXTURE_FILTER_BILINEAR) ||
+        !slayer3d_set_texture_wrap(&out->lightmap_texture, SLAYER3D_TEXTURE_WRAP_CLAMP, SLAYER3D_TEXTURE_WRAP_CLAMP))
     {
-        sdl3d_free_texture(&out->lightmap_texture);
+        slayer3d_free_texture(&out->lightmap_texture);
         return false;
     }
     return true;
 }
 
-static bool lm_bake_lightmap(const lm_surface_list *list, const sdl3d_level_light *lights, int light_count,
-                             sdl3d_level *out)
+static bool lm_bake_lightmap(const lm_surface_list *list, const slayer3d_level_light *lights, int light_count,
+                             slayer3d_level *out)
 {
     const int atlas_w = out->lightmap_width;
     const int atlas_h = out->lightmap_height;
@@ -754,10 +754,10 @@ static bool add_wall(macc *a, float x0, float z0, float x1, float z1, float bot0
     return macc_tri(a, v_0, v_1, v_2) && macc_tri(a, v_0, v_2, v_3);
 }
 
-static bool add_floor_ceil(macc *a, const sdl3d_sector *s, bool floor_surface, const float *rgba, float tex_scale)
+static bool add_floor_ceil(macc *a, const slayer3d_sector *s, bool floor_surface, const float *rgba, float tex_scale)
 {
     int n = s->num_points;
-    sdl3d_vec3 normal = floor_surface ? sdl3d_sector_floor_normal(s) : sdl3d_sector_ceil_normal(s);
+    slayer3d_vec3 normal = floor_surface ? slayer3d_sector_floor_normal(s) : slayer3d_sector_ceil_normal(s);
     if (n < 3)
         return true;
     int base = a->vc;
@@ -766,7 +766,7 @@ static bool add_floor_ceil(macc *a, const sdl3d_sector *s, bool floor_surface, c
     {
         float x = s->points[i][0];
         float z = s->points[i][1];
-        float y = floor_surface ? sdl3d_sector_floor_at(s, x, z) : sdl3d_sector_ceil_at(s, x, z);
+        float y = floor_surface ? slayer3d_sector_floor_at(s, x, z) : slayer3d_sector_ceil_at(s, x, z);
         if (macc_vert(a, x, y, z, normal.x, normal.y, normal.z, rgba, x / sc, z / sc) < 0)
             return false;
     }
@@ -788,7 +788,7 @@ static bool add_floor_ceil(macc *a, const sdl3d_sector *s, bool floor_surface, c
 
 static bool add_wall_and_lightmap(macc *wall_acc, lm_surface_list *surf_list, int wall_acc_index, float x0, float z0,
                                   float x1, float z1, float bot0, float top0, float bot1, float top1,
-                                  const sdl3d_level_material *material)
+                                  const slayer3d_level_material *material)
 {
     int vb = wall_acc->vc;
     return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, material->albedo, material->tex_scale) &&
@@ -799,7 +799,7 @@ static bool add_wall_and_lightmap(macc *wall_acc, lm_surface_list *surf_list, in
 /* Public API                                                          */
 /* ------------------------------------------------------------------ */
 
-static void sector_apply_runtime_geometry(sdl3d_sector *sector, const sdl3d_sector_geometry *geometry)
+static void sector_apply_runtime_geometry(slayer3d_sector *sector, const slayer3d_sector_geometry *geometry)
 {
     sector->floor_y = geometry->floor_y;
     sector->ceil_y = geometry->ceil_y;
@@ -807,7 +807,7 @@ static void sector_apply_runtime_geometry(sdl3d_sector *sector, const sdl3d_sect
     SDL_memcpy(sector->ceil_normal, geometry->ceil_normal, sizeof(sector->ceil_normal));
 }
 
-static void free_mesh_geometry(sdl3d_mesh *mesh)
+static void free_mesh_geometry(slayer3d_mesh *mesh)
 {
     if (mesh == NULL)
     {
@@ -826,7 +826,7 @@ static void free_mesh_geometry(sdl3d_mesh *mesh)
     SDL_zero(*mesh);
 }
 
-static edge_info *build_level_edges(const sdl3d_sector *sectors, int sector_count, int *out_edge_count)
+static edge_info *build_level_edges(const slayer3d_sector *sectors, int sector_count, int *out_edge_count)
 {
     int total_edges = 0;
     edge_info *edges;
@@ -846,7 +846,7 @@ static edge_info *build_level_edges(const sdl3d_sector *sectors, int sector_coun
 
     for (int s = 0; s < sector_count; s++)
     {
-        const sdl3d_sector *sec = &sectors[s];
+        const slayer3d_sector *sec = &sectors[s];
         for (int e = 0; e < sec->num_points; e++)
         {
             int next = (e + 1) % sec->num_points;
@@ -863,29 +863,30 @@ static edge_info *build_level_edges(const sdl3d_sector *sectors, int sector_coun
     return edges;
 }
 
-static bool append_portal(sdl3d_level_portal **portals, int *portal_count, int *portal_cap, const sdl3d_sector *sectors,
-                          int sector_a, int sector_b, float x0, float z0, float x1, float z1)
+static bool append_portal(slayer3d_level_portal **portals, int *portal_count, int *portal_cap,
+                          const slayer3d_sector *sectors, int sector_a, int sector_b, float x0, float z0, float x1,
+                          float z1)
 {
-    const sdl3d_sector *a = &sectors[sector_a];
-    const sdl3d_sector *b = &sectors[sector_b];
-    float a_floor0 = sdl3d_sector_floor_at(a, x0, z0);
-    float a_floor1 = sdl3d_sector_floor_at(a, x1, z1);
-    float b_floor0 = sdl3d_sector_floor_at(b, x0, z0);
-    float b_floor1 = sdl3d_sector_floor_at(b, x1, z1);
-    float a_ceil0 = sdl3d_sector_ceil_at(a, x0, z0);
-    float a_ceil1 = sdl3d_sector_ceil_at(a, x1, z1);
-    float b_ceil0 = sdl3d_sector_ceil_at(b, x0, z0);
-    float b_ceil1 = sdl3d_sector_ceil_at(b, x1, z1);
+    const slayer3d_sector *a = &sectors[sector_a];
+    const slayer3d_sector *b = &sectors[sector_b];
+    float a_floor0 = slayer3d_sector_floor_at(a, x0, z0);
+    float a_floor1 = slayer3d_sector_floor_at(a, x1, z1);
+    float b_floor0 = slayer3d_sector_floor_at(b, x0, z0);
+    float b_floor1 = slayer3d_sector_floor_at(b, x1, z1);
+    float a_ceil0 = slayer3d_sector_ceil_at(a, x0, z0);
+    float a_ceil1 = slayer3d_sector_ceil_at(a, x1, z1);
+    float b_ceil0 = slayer3d_sector_ceil_at(b, x0, z0);
+    float b_ceil1 = slayer3d_sector_ceil_at(b, x1, z1);
     float p_floor0 = a_floor0 > b_floor0 ? a_floor0 : b_floor0;
     float p_floor1 = a_floor1 > b_floor1 ? a_floor1 : b_floor1;
     float p_ceil0 = a_ceil0 < b_ceil0 ? a_ceil0 : b_ceil0;
     float p_ceil1 = a_ceil1 < b_ceil1 ? a_ceil1 : b_ceil1;
-    sdl3d_level_portal *p;
+    slayer3d_level_portal *p;
 
     if (*portal_count >= *portal_cap)
     {
         int new_cap = *portal_cap > 0 ? *portal_cap * 2 : 32;
-        sdl3d_level_portal *new_portals = SDL_realloc(*portals, (size_t)new_cap * sizeof(*new_portals));
+        slayer3d_level_portal *new_portals = SDL_realloc(*portals, (size_t)new_cap * sizeof(*new_portals));
         if (new_portals == NULL)
         {
             return SDL_OutOfMemory();
@@ -906,10 +907,10 @@ static bool append_portal(sdl3d_level_portal **portals, int *portal_count, int *
     return true;
 }
 
-static bool rebuild_level_portals(const sdl3d_sector *sectors, const edge_info *edges, int edge_count,
-                                  sdl3d_level_portal **out_portals, int *out_portal_count)
+static bool rebuild_level_portals(const slayer3d_sector *sectors, const edge_info *edges, int edge_count,
+                                  slayer3d_level_portal **out_portals, int *out_portal_count)
 {
-    sdl3d_level_portal *portals = NULL;
+    slayer3d_level_portal *portals = NULL;
     int portal_count = 0;
     int portal_cap = 0;
 
@@ -1034,20 +1035,20 @@ static bool mark_dirty_sector_neighbors(const edge_info *edges, int edge_count, 
 }
 
 static bool add_wall_runtime(macc *wall_acc, float x0, float z0, float x1, float z1, float bot0, float top0, float bot1,
-                             float top1, const sdl3d_level_material *material)
+                             float top1, const slayer3d_level_material *material)
 {
     return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, material->albedo, material->tex_scale);
 }
 
-static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_count, const edge_info *edges,
-                                    int edge_count, const bool *dirty, const sdl3d_level_material *materials,
+static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_count, const edge_info *edges,
+                                    int edge_count, const bool *dirty, const slayer3d_level_material *materials,
                                     int material_count, macc *accs)
 {
     (void)sector_count;
 
     for (int s = 0; s < sector_count; s++)
     {
-        const sdl3d_sector *sec;
+        const slayer3d_sector *sec;
         int fi;
         int ci;
         int wi;
@@ -1138,9 +1139,9 @@ static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_coun
 
             if (novl == 0)
             {
-                if (!add_wall_runtime(wall_acc, ax, az, bx, bz, sdl3d_sector_floor_at(sec, ax, az),
-                                      sdl3d_sector_ceil_at(sec, ax, az), sdl3d_sector_floor_at(sec, bx, bz),
-                                      sdl3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
+                if (!add_wall_runtime(wall_acc, ax, az, bx, bz, slayer3d_sector_floor_at(sec, ax, az),
+                                      slayer3d_sector_ceil_at(sec, ax, az), slayer3d_sector_floor_at(sec, bx, bz),
+                                      slayer3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
                 {
                     return false;
                 }
@@ -1163,7 +1164,7 @@ static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_coun
                     float oz0;
                     float ox1;
                     float oz1;
-                    const sdl3d_sector *other;
+                    const slayer3d_sector *other;
                     float sec_floor0;
                     float sec_floor1;
                     float other_floor0;
@@ -1177,9 +1178,10 @@ static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_coun
                     {
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
-                        if (!add_wall_runtime(wall_acc, wx0, wz0, wx1, wz1, sdl3d_sector_floor_at(sec, wx0, wz0),
-                                              sdl3d_sector_ceil_at(sec, wx0, wz0), sdl3d_sector_floor_at(sec, wx1, wz1),
-                                              sdl3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
+                        if (!add_wall_runtime(wall_acc, wx0, wz0, wx1, wz1, slayer3d_sector_floor_at(sec, wx0, wz0),
+                                              slayer3d_sector_ceil_at(sec, wx0, wz0),
+                                              slayer3d_sector_floor_at(sec, wx1, wz1),
+                                              slayer3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
                         {
                             return false;
                         }
@@ -1190,14 +1192,14 @@ static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_coun
                     ox1 = ax + (bx - ax) * overlaps[oi].t1;
                     oz1 = az + (bz - az) * overlaps[oi].t1;
                     other = &sectors[overlaps[oi].other_sector];
-                    sec_floor0 = sdl3d_sector_floor_at(sec, ox0, oz0);
-                    sec_floor1 = sdl3d_sector_floor_at(sec, ox1, oz1);
-                    other_floor0 = sdl3d_sector_floor_at(other, ox0, oz0);
-                    other_floor1 = sdl3d_sector_floor_at(other, ox1, oz1);
-                    sec_ceil0 = sdl3d_sector_ceil_at(sec, ox0, oz0);
-                    sec_ceil1 = sdl3d_sector_ceil_at(sec, ox1, oz1);
-                    other_ceil0 = sdl3d_sector_ceil_at(other, ox0, oz0);
-                    other_ceil1 = sdl3d_sector_ceil_at(other, ox1, oz1);
+                    sec_floor0 = slayer3d_sector_floor_at(sec, ox0, oz0);
+                    sec_floor1 = slayer3d_sector_floor_at(sec, ox1, oz1);
+                    other_floor0 = slayer3d_sector_floor_at(other, ox0, oz0);
+                    other_floor1 = slayer3d_sector_floor_at(other, ox1, oz1);
+                    sec_ceil0 = slayer3d_sector_ceil_at(sec, ox0, oz0);
+                    sec_ceil1 = slayer3d_sector_ceil_at(sec, ox1, oz1);
+                    other_ceil0 = slayer3d_sector_ceil_at(other, ox0, oz0);
+                    other_ceil1 = slayer3d_sector_ceil_at(other, ox1, oz1);
                     if (sec_floor0 < other_floor0 - 0.001f || sec_floor1 < other_floor1 - 0.001f)
                     {
                         if (!add_wall_runtime(wall_acc, ox0, oz0, ox1, oz1, sec_floor0, other_floor0, sec_floor1,
@@ -1219,9 +1221,9 @@ static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_coun
                 if (cursor < 1.0f - 0.001f)
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
-                    if (!add_wall_runtime(wall_acc, wx0, wz0, bx, bz, sdl3d_sector_floor_at(sec, wx0, wz0),
-                                          sdl3d_sector_ceil_at(sec, wx0, wz0), sdl3d_sector_floor_at(sec, bx, bz),
-                                          sdl3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
+                    if (!add_wall_runtime(wall_acc, wx0, wz0, bx, bz, slayer3d_sector_floor_at(sec, wx0, wz0),
+                                          slayer3d_sector_ceil_at(sec, wx0, wz0), slayer3d_sector_floor_at(sec, bx, bz),
+                                          slayer3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
                     {
                         return false;
                     }
@@ -1233,7 +1235,8 @@ static bool build_dirty_sector_accs(const sdl3d_sector *sectors, int sector_coun
     return true;
 }
 
-static void bake_vertex_lighting_for_accs(macc *accs, int acc_count, const sdl3d_level_light *lights, int light_count)
+static void bake_vertex_lighting_for_accs(macc *accs, int acc_count, const slayer3d_level_light *lights,
+                                          int light_count)
 {
     if (lights == NULL || light_count <= 0)
     {
@@ -1286,7 +1289,7 @@ static void bake_vertex_lighting_for_accs(macc *accs, int acc_count, const sdl3d
     }
 }
 
-static void move_acc_to_mesh(sdl3d_mesh *mesh, macc *acc, int material_index, bool baked_light)
+static void move_acc_to_mesh(slayer3d_mesh *mesh, macc *acc, int material_index, bool baked_light)
 {
     SDL_zero(*mesh);
     mesh->vertex_count = acc->vc;
@@ -1312,8 +1315,8 @@ static void move_acc_to_mesh(sdl3d_mesh *mesh, macc *acc, int material_index, bo
     acc->ic = 0;
 }
 
-bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3d_level_material *materials,
-                       int material_count, const sdl3d_level_light *lights, int light_count, sdl3d_level *out)
+bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, const slayer3d_level_material *materials,
+                          int material_count, const slayer3d_level_light *lights, int light_count, slayer3d_level *out)
 {
     lm_surface_list surf_list;
 
@@ -1337,7 +1340,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     int ei = 0;
     for (int s = 0; s < sector_count; s++)
     {
-        const sdl3d_sector *sec = &sectors[s];
+        const slayer3d_sector *sec = &sectors[s];
         for (int e = 0; e < sec->num_points; e++)
         {
             int next = (e + 1) % sec->num_points;
@@ -1362,7 +1365,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
     /* Portal accumulator — collect adjacencies during edge overlap detection. */
     int portal_cap = 32, portal_count = 0;
-    sdl3d_level_portal *portals = SDL_malloc((size_t)portal_cap * sizeof(sdl3d_level_portal));
+    slayer3d_level_portal *portals = SDL_malloc((size_t)portal_cap * sizeof(slayer3d_level_portal));
     if (!portals)
     {
         for (int ai = 0; ai < acc_count; ai++)
@@ -1374,7 +1377,7 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
 
     for (int s = 0; s < sector_count; s++)
     {
-        const sdl3d_sector *sec = &sectors[s];
+        const slayer3d_sector *sec = &sectors[s];
         int fi = (sec->floor_material >= 0 && sec->floor_material < material_count) ? sec->floor_material : -1;
         int ci = (sec->ceil_material >= 0 && sec->ceil_material < material_count) ? sec->ceil_material : -1;
         int wi = sec->wall_material < material_count ? sec->wall_material : 0;
@@ -1446,8 +1449,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                         if (portal_count >= portal_cap)
                         {
                             portal_cap *= 2;
-                            sdl3d_level_portal *tmp =
-                                SDL_realloc(portals, (size_t)portal_cap * sizeof(sdl3d_level_portal));
+                            slayer3d_level_portal *tmp =
+                                SDL_realloc(portals, (size_t)portal_cap * sizeof(slayer3d_level_portal));
                             if (tmp)
                                 portals = tmp;
                         }
@@ -1455,20 +1458,20 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                         {
                             float px0 = ax + (bx - ax) * t0, pz0 = az + (bz - az) * t0;
                             float px1 = ax + (bx - ax) * t1, pz1 = az + (bz - az) * t1;
-                            const sdl3d_sector *other = &sectors[edges[j].sector];
-                            float sec_floor0 = sdl3d_sector_floor_at(sec, px0, pz0);
-                            float sec_floor1 = sdl3d_sector_floor_at(sec, px1, pz1);
-                            float other_floor0 = sdl3d_sector_floor_at(other, px0, pz0);
-                            float other_floor1 = sdl3d_sector_floor_at(other, px1, pz1);
-                            float sec_ceil0 = sdl3d_sector_ceil_at(sec, px0, pz0);
-                            float sec_ceil1 = sdl3d_sector_ceil_at(sec, px1, pz1);
-                            float other_ceil0 = sdl3d_sector_ceil_at(other, px0, pz0);
-                            float other_ceil1 = sdl3d_sector_ceil_at(other, px1, pz1);
+                            const slayer3d_sector *other = &sectors[edges[j].sector];
+                            float sec_floor0 = slayer3d_sector_floor_at(sec, px0, pz0);
+                            float sec_floor1 = slayer3d_sector_floor_at(sec, px1, pz1);
+                            float other_floor0 = slayer3d_sector_floor_at(other, px0, pz0);
+                            float other_floor1 = slayer3d_sector_floor_at(other, px1, pz1);
+                            float sec_ceil0 = slayer3d_sector_ceil_at(sec, px0, pz0);
+                            float sec_ceil1 = slayer3d_sector_ceil_at(sec, px1, pz1);
+                            float other_ceil0 = slayer3d_sector_ceil_at(other, px0, pz0);
+                            float other_ceil1 = slayer3d_sector_ceil_at(other, px1, pz1);
                             float p_floor0 = sec_floor0 > other_floor0 ? sec_floor0 : other_floor0;
                             float p_floor1 = sec_floor1 > other_floor1 ? sec_floor1 : other_floor1;
                             float p_ceil0 = sec_ceil0 < other_ceil0 ? sec_ceil0 : other_ceil0;
                             float p_ceil1 = sec_ceil1 < other_ceil1 ? sec_ceil1 : other_ceil1;
-                            sdl3d_level_portal *p = &portals[portal_count++];
+                            slayer3d_level_portal *p = &portals[portal_count++];
                             p->sector_a = s;
                             p->sector_b = edges[j].sector;
                             p->min_x = px0 < px1 ? px0 : px1;
@@ -1485,8 +1488,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
             if (novl == 0)
             {
                 if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ax, az, bx, bz,
-                                           sdl3d_sector_floor_at(sec, ax, az), sdl3d_sector_ceil_at(sec, ax, az),
-                                           sdl3d_sector_floor_at(sec, bx, bz), sdl3d_sector_ceil_at(sec, bx, bz),
+                                           slayer3d_sector_floor_at(sec, ax, az), slayer3d_sector_ceil_at(sec, ax, az),
+                                           slayer3d_sector_floor_at(sec, bx, bz), slayer3d_sector_ceil_at(sec, bx, bz),
                                            &materials[wi]))
                 {
                     goto fail;
@@ -1511,25 +1514,25 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
                         if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, wx0, wz0, wx1, wz1,
-                                                   sdl3d_sector_floor_at(sec, wx0, wz0),
-                                                   sdl3d_sector_ceil_at(sec, wx0, wz0),
-                                                   sdl3d_sector_floor_at(sec, wx1, wz1),
-                                                   sdl3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
+                                                   slayer3d_sector_floor_at(sec, wx0, wz0),
+                                                   slayer3d_sector_ceil_at(sec, wx0, wz0),
+                                                   slayer3d_sector_floor_at(sec, wx1, wz1),
+                                                   slayer3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
                         {
                             goto fail;
                         }
                     }
                     float ox0 = ax + (bx - ax) * overlaps[oi].t0, oz0 = az + (bz - az) * overlaps[oi].t0;
                     float ox1 = ax + (bx - ax) * overlaps[oi].t1, oz1 = az + (bz - az) * overlaps[oi].t1;
-                    const sdl3d_sector *other = &sectors[overlaps[oi].other_sector];
-                    float sec_floor0 = sdl3d_sector_floor_at(sec, ox0, oz0);
-                    float sec_floor1 = sdl3d_sector_floor_at(sec, ox1, oz1);
-                    float other_floor0 = sdl3d_sector_floor_at(other, ox0, oz0);
-                    float other_floor1 = sdl3d_sector_floor_at(other, ox1, oz1);
-                    float sec_ceil0 = sdl3d_sector_ceil_at(sec, ox0, oz0);
-                    float sec_ceil1 = sdl3d_sector_ceil_at(sec, ox1, oz1);
-                    float other_ceil0 = sdl3d_sector_ceil_at(other, ox0, oz0);
-                    float other_ceil1 = sdl3d_sector_ceil_at(other, ox1, oz1);
+                    const slayer3d_sector *other = &sectors[overlaps[oi].other_sector];
+                    float sec_floor0 = slayer3d_sector_floor_at(sec, ox0, oz0);
+                    float sec_floor1 = slayer3d_sector_floor_at(sec, ox1, oz1);
+                    float other_floor0 = slayer3d_sector_floor_at(other, ox0, oz0);
+                    float other_floor1 = slayer3d_sector_floor_at(other, ox1, oz1);
+                    float sec_ceil0 = slayer3d_sector_ceil_at(sec, ox0, oz0);
+                    float sec_ceil1 = slayer3d_sector_ceil_at(sec, ox1, oz1);
+                    float other_ceil0 = slayer3d_sector_ceil_at(other, ox0, oz0);
+                    float other_ceil1 = slayer3d_sector_ceil_at(other, ox1, oz1);
                     if (sec_floor0 < other_floor0 - 0.001f || sec_floor1 < other_floor1 - 0.001f)
                     {
                         if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ox0, oz0, ox1, oz1, sec_floor0,
@@ -1552,9 +1555,10 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                     if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, wx0, wz0, bx, bz,
-                                               sdl3d_sector_floor_at(sec, wx0, wz0),
-                                               sdl3d_sector_ceil_at(sec, wx0, wz0), sdl3d_sector_floor_at(sec, bx, bz),
-                                               sdl3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
+                                               slayer3d_sector_floor_at(sec, wx0, wz0),
+                                               slayer3d_sector_ceil_at(sec, wx0, wz0),
+                                               slayer3d_sector_floor_at(sec, bx, bz),
+                                               slayer3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
                     {
                         goto fail;
                     }
@@ -1640,8 +1644,8 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
         if (accs[ai].ic > 0)
             num_meshes++;
 
-    sdl3d_mesh *meshes = SDL_calloc((size_t)num_meshes, sizeof(sdl3d_mesh));
-    sdl3d_material *out_mats = SDL_calloc((size_t)material_count, sizeof(sdl3d_material));
+    slayer3d_mesh *meshes = SDL_calloc((size_t)num_meshes, sizeof(slayer3d_mesh));
+    slayer3d_material *out_mats = SDL_calloc((size_t)material_count, sizeof(slayer3d_material));
     int *mesh_sector_ids = SDL_malloc((size_t)num_meshes * sizeof(int));
     if (!meshes || !out_mats || !mesh_sector_ids)
     {
@@ -1715,8 +1719,9 @@ bool sdl3d_build_level(const sdl3d_sector *sectors, int sector_count, const sdl3
     out->portal_count = portal_count;
     out->portals = portals;
 
-    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SDL3D level: %d verts, %d tris, %d meshes, %d portals from %d sectors",
-                 total_verts, total_tris, num_meshes, portal_count, sector_count);
+    SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION,
+                 "SLAYER3D level: %d verts, %d tris, %d meshes, %d portals from %d sectors", total_verts, total_tris,
+                 num_meshes, portal_count, sector_count);
     return true;
 
 fail:
@@ -1732,22 +1737,23 @@ fail:
     out->lightmap_pixels = NULL;
     out->lightmap_width = 0;
     out->lightmap_height = 0;
-    sdl3d_free_texture(&out->lightmap_texture);
+    slayer3d_free_texture(&out->lightmap_texture);
     return false;
 }
 
-bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, int sector_count, int sector_index,
-                                     const sdl3d_sector_geometry *geometry, const sdl3d_level_material *materials,
-                                     int material_count, const sdl3d_level_light *lights, int light_count)
+bool slayer3d_level_set_sector_geometry(slayer3d_level *level, slayer3d_sector *sectors, int sector_count,
+                                        int sector_index, const slayer3d_sector_geometry *geometry,
+                                        const slayer3d_level_material *materials, int material_count,
+                                        const slayer3d_level_light *lights, int light_count)
 {
-    sdl3d_sector *candidate_sectors;
+    slayer3d_sector *candidate_sectors;
     edge_info *edges;
     int edge_count = 0;
     bool *dirty;
     macc *accs;
-    sdl3d_level_portal *new_portals = NULL;
+    slayer3d_level_portal *new_portals = NULL;
     int new_portal_count = 0;
-    sdl3d_mesh *new_meshes = NULL;
+    slayer3d_mesh *new_meshes = NULL;
     int *new_mesh_sector_ids = NULL;
     int new_mesh_count = 0;
     int acc_count;
@@ -1782,7 +1788,7 @@ bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, 
     {
         return SDL_SetError("sector_index is out of range.");
     }
-    if (geometry->ceil_y <= geometry->floor_y + SDL3D_LEVEL_PLANE_EPSILON)
+    if (geometry->ceil_y <= geometry->floor_y + SLAYER3D_LEVEL_PLANE_EPSILON)
     {
         return SDL_SetError("sector ceiling must be above sector floor.");
     }
@@ -1950,15 +1956,15 @@ bool sdl3d_level_set_sector_geometry(sdl3d_level *level, sdl3d_sector *sectors, 
     return true;
 }
 
-void sdl3d_free_level(sdl3d_level *level)
+void slayer3d_free_level(slayer3d_level *level)
 {
     if (level)
     {
-        sdl3d_free_model(&level->model);
+        slayer3d_free_model(&level->model);
         SDL_free(level->mesh_sector_ids);
         SDL_free(level->portals);
         SDL_free(level->lightmap_pixels);
-        sdl3d_free_texture(&level->lightmap_texture);
+        slayer3d_free_texture(&level->lightmap_texture);
         level->mesh_sector_ids = NULL;
         level->portals = NULL;
         level->lightmap_pixels = NULL;
@@ -1974,7 +1980,7 @@ void sdl3d_free_level(sdl3d_level *level)
 /* Sector lookup                                                       */
 /* ------------------------------------------------------------------ */
 
-static bool point_in_polygon_xz(const sdl3d_sector *sector, float x, float z)
+static bool point_in_polygon_xz(const slayer3d_sector *sector, float x, float z)
 {
     bool inside = false;
     for (int i = 0, j = sector->num_points - 1; i < sector->num_points; j = i++)
@@ -1987,7 +1993,7 @@ static bool point_in_polygon_xz(const sdl3d_sector *sector, float x, float z)
     return inside;
 }
 
-int sdl3d_level_find_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z)
+int slayer3d_level_find_sector(const slayer3d_level *level, const slayer3d_sector *sectors, float x, float z)
 {
     if (!level || !sectors)
         return -1;
@@ -1999,7 +2005,8 @@ int sdl3d_level_find_sector(const sdl3d_level *level, const sdl3d_sector *sector
     return -1;
 }
 
-int sdl3d_level_find_sector_at(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z, float feet_y)
+int slayer3d_level_find_sector_at(const slayer3d_level *level, const slayer3d_sector *sectors, float x, float z,
+                                  float feet_y)
 {
     int best = -1;
     float best_floor = -1e30f;
@@ -2009,13 +2016,13 @@ int sdl3d_level_find_sector_at(const sdl3d_level *level, const sdl3d_sector *sec
 
     for (int i = 0; i < level->sector_count; ++i)
     {
-        const sdl3d_sector *sector = &sectors[i];
+        const slayer3d_sector *sector = &sectors[i];
         float floor_y;
         float ceil_y;
         if (!point_in_polygon_xz(sector, x, z))
             continue;
-        floor_y = sdl3d_sector_floor_at(sector, x, z);
-        ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+        floor_y = slayer3d_sector_floor_at(sector, x, z);
+        ceil_y = slayer3d_sector_ceil_at(sector, x, z);
         if (floor_y > feet_y || feet_y >= ceil_y)
             continue;
         if (floor_y > best_floor)
@@ -2027,8 +2034,8 @@ int sdl3d_level_find_sector_at(const sdl3d_level *level, const sdl3d_sector *sec
     return best;
 }
 
-int sdl3d_level_find_walkable_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
-                                     float feet_y, float step_height, float player_height)
+int slayer3d_level_find_walkable_sector(const slayer3d_level *level, const slayer3d_sector *sectors, float x, float z,
+                                        float feet_y, float step_height, float player_height)
 {
     int best = -1;
     float best_floor = -1e30f;
@@ -2038,13 +2045,13 @@ int sdl3d_level_find_walkable_sector(const sdl3d_level *level, const sdl3d_secto
 
     for (int i = 0; i < level->sector_count; ++i)
     {
-        const sdl3d_sector *sector = &sectors[i];
+        const slayer3d_sector *sector = &sectors[i];
         float floor_y;
         float ceil_y;
         if (!point_in_polygon_xz(sector, x, z))
             continue;
-        floor_y = sdl3d_sector_floor_at(sector, x, z);
-        ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+        floor_y = slayer3d_sector_floor_at(sector, x, z);
+        ceil_y = slayer3d_sector_ceil_at(sector, x, z);
         if (floor_y > feet_y + step_height)
             continue;
         if (ceil_y - floor_y < player_height)
@@ -2058,8 +2065,8 @@ int sdl3d_level_find_walkable_sector(const sdl3d_level *level, const sdl3d_secto
     return best;
 }
 
-int sdl3d_level_find_support_sector(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float z,
-                                    float feet_y, float player_height)
+int slayer3d_level_find_support_sector(const slayer3d_level *level, const slayer3d_sector *sectors, float x, float z,
+                                       float feet_y, float player_height)
 {
     int best = -1;
     float best_floor = -1e30f;
@@ -2069,13 +2076,13 @@ int sdl3d_level_find_support_sector(const sdl3d_level *level, const sdl3d_sector
 
     for (int i = 0; i < level->sector_count; ++i)
     {
-        const sdl3d_sector *sector = &sectors[i];
+        const slayer3d_sector *sector = &sectors[i];
         float floor_y;
         float ceil_y;
         if (!point_in_polygon_xz(sector, x, z))
             continue;
-        floor_y = sdl3d_sector_floor_at(sector, x, z);
-        ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+        floor_y = slayer3d_sector_floor_at(sector, x, z);
+        ceil_y = slayer3d_sector_ceil_at(sector, x, z);
         if (floor_y > feet_y)
             continue;
         if (ceil_y - floor_y < player_height)
@@ -2089,17 +2096,17 @@ int sdl3d_level_find_support_sector(const sdl3d_level *level, const sdl3d_sector
     return best;
 }
 
-bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sectors, float x, float y, float z)
+bool slayer3d_level_point_inside(const slayer3d_level *level, const slayer3d_sector *sectors, float x, float y, float z)
 {
     if (!level || !sectors)
         return false;
     for (int i = 0; i < level->sector_count; ++i)
     {
-        const sdl3d_sector *sector = &sectors[i];
+        const slayer3d_sector *sector = &sectors[i];
         if (point_in_polygon_xz(sector, x, z))
         {
-            float floor_y = sdl3d_sector_floor_at(sector, x, z);
-            float ceil_y = sdl3d_sector_ceil_at(sector, x, z);
+            float floor_y = slayer3d_sector_floor_at(sector, x, z);
+            float ceil_y = slayer3d_sector_ceil_at(sector, x, z);
             if (y < floor_y || y > ceil_y)
                 continue;
             return true;
@@ -2108,7 +2115,7 @@ bool sdl3d_level_point_inside(const sdl3d_level *level, const sdl3d_sector *sect
     return false;
 }
 
-void sdl3d_sector_watcher_init(sdl3d_sector_watcher *watcher)
+void slayer3d_sector_watcher_init(slayer3d_sector_watcher *watcher)
 {
     if (watcher == NULL)
     {
@@ -2117,11 +2124,12 @@ void sdl3d_sector_watcher_init(sdl3d_sector_watcher *watcher)
 
     watcher->current_sector = -1;
     watcher->current_ambient_id = -1;
-    watcher->entered_signal_id = SDL3D_SIGNAL_ENTERED_SECTOR;
+    watcher->entered_signal_id = SLAYER3D_SIGNAL_ENTERED_SECTOR;
 }
 
-bool sdl3d_sector_watcher_update(sdl3d_sector_watcher *watcher, const sdl3d_level *level, const sdl3d_sector *sectors,
-                                 sdl3d_vec3 sample_position, sdl3d_signal_bus *bus)
+bool slayer3d_sector_watcher_update(slayer3d_sector_watcher *watcher, const slayer3d_level *level,
+                                    const slayer3d_sector *sectors, slayer3d_vec3 sample_position,
+                                    slayer3d_signal_bus *bus)
 {
     int next_sector;
     int next_ambient_id;
@@ -2133,7 +2141,8 @@ bool sdl3d_sector_watcher_update(sdl3d_sector_watcher *watcher, const sdl3d_leve
         return false;
     }
 
-    next_sector = sdl3d_level_find_sector_at(level, sectors, sample_position.x, sample_position.z, sample_position.y);
+    next_sector =
+        slayer3d_level_find_sector_at(level, sectors, sample_position.x, sample_position.z, sample_position.y);
     next_ambient_id =
         (next_sector >= 0 && next_sector < level->sector_count) ? sectors[next_sector].ambient_sound_id : -1;
 
@@ -2149,22 +2158,22 @@ bool sdl3d_sector_watcher_update(sdl3d_sector_watcher *watcher, const sdl3d_leve
 
     if (bus != NULL)
     {
-        sdl3d_properties *payload = sdl3d_properties_create();
+        slayer3d_properties *payload = slayer3d_properties_create();
         if (payload != NULL)
         {
-            sdl3d_properties_set_int(payload, "sector_id", next_sector);
-            sdl3d_properties_set_int(payload, "previous_sector_id", previous_sector);
-            sdl3d_properties_set_int(payload, "ambient_sound_id", next_ambient_id);
-            sdl3d_properties_set_int(payload, "previous_ambient_sound_id", previous_ambient_id);
-            sdl3d_signal_emit(bus, watcher->entered_signal_id, payload);
-            sdl3d_properties_destroy(payload);
+            slayer3d_properties_set_int(payload, "sector_id", next_sector);
+            slayer3d_properties_set_int(payload, "previous_sector_id", previous_sector);
+            slayer3d_properties_set_int(payload, "ambient_sound_id", next_ambient_id);
+            slayer3d_properties_set_int(payload, "previous_ambient_sound_id", previous_ambient_id);
+            slayer3d_signal_emit(bus, watcher->entered_signal_id, payload);
+            slayer3d_properties_destroy(payload);
         }
     }
 
     return true;
 }
 
-void sdl3d_extract_frustum_planes(sdl3d_mat4 view_projection, float out_planes[6][4])
+void slayer3d_extract_frustum_planes(slayer3d_mat4 view_projection, float out_planes[6][4])
 {
     const float *m = view_projection.m;
     float raw[6][4] = {
@@ -2195,13 +2204,13 @@ void sdl3d_extract_frustum_planes(sdl3d_mat4 view_projection, float out_planes[6
     }
 }
 
-sdl3d_color sdl3d_level_sample_light(const sdl3d_level_light *lights, int light_count, sdl3d_vec3 position)
+slayer3d_color slayer3d_level_sample_light(const slayer3d_level_light *lights, int light_count, slayer3d_vec3 position)
 {
     float r = 0.0f, g = 0.0f, b = 0.0f;
 
     if (lights == NULL || light_count <= 0)
     {
-        return (sdl3d_color){0, 0, 0, 255};
+        return (slayer3d_color){0, 0, 0, 255};
     }
 
     for (int i = 0; i < light_count; ++i)
@@ -2232,14 +2241,14 @@ sdl3d_color sdl3d_level_sample_light(const sdl3d_level_light *lights, int light_
     if (b < 0.0f)
         b = 0.0f;
 
-    return (sdl3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
+    return (slayer3d_color){(Uint8)(r * 255.0f), (Uint8)(g * 255.0f), (Uint8)(b * 255.0f), 255};
 }
 
 /* ------------------------------------------------------------------ */
 /* Portal visibility traversal                                         */
 /* ------------------------------------------------------------------ */
 
-static bool portal_box_in_frustum(const sdl3d_level_portal *p, float planes[6][4])
+static bool portal_box_in_frustum(const slayer3d_level_portal *p, float planes[6][4])
 {
     for (int i = 0; i < 6; ++i)
     {
@@ -2253,7 +2262,7 @@ static bool portal_box_in_frustum(const sdl3d_level_portal *p, float planes[6][4
     return true;
 }
 
-static bool portal_behind_camera(const sdl3d_level_portal *p, sdl3d_vec3 cam_pos, sdl3d_vec3 cam_dir)
+static bool portal_behind_camera(const slayer3d_level_portal *p, slayer3d_vec3 cam_pos, slayer3d_vec3 cam_dir)
 {
     /* Test portal center against camera forward half-space. */
     float cx = (p->min_x + p->max_x) * 0.5f - cam_pos.x;
@@ -2280,8 +2289,9 @@ static bool portal_behind_camera(const sdl3d_level_portal *p, sdl3d_vec3 cam_pos
     return true;
 }
 
-void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector, sdl3d_vec3 camera_pos,
-                                    sdl3d_vec3 camera_dir, float frustum_planes[6][4], sdl3d_visibility_result *result)
+void slayer3d_level_compute_visibility(const slayer3d_level *level, int current_sector, slayer3d_vec3 camera_pos,
+                                       slayer3d_vec3 camera_dir, float frustum_planes[6][4],
+                                       slayer3d_visibility_result *result)
 {
     if (!level || !result || !result->sector_visible)
         return;
@@ -2320,7 +2330,7 @@ void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector
         int s = queue[head++];
         for (int pi = 0; pi < level->portal_count; pi++)
         {
-            const sdl3d_level_portal *p = &level->portals[pi];
+            const slayer3d_level_portal *p = &level->portals[pi];
             int neighbor = -1;
             if (p->sector_a == s)
                 neighbor = p->sector_b;
@@ -2349,10 +2359,10 @@ void sdl3d_level_compute_visibility(const sdl3d_level *level, int current_sector
     SDL_free(queue);
 }
 
-void sdl3d_level_compute_visibility_from_camera(const sdl3d_level *level, const sdl3d_sector *sectors,
-                                                const sdl3d_camera3d *camera, int backbuffer_width,
-                                                int backbuffer_height, float near_plane, float far_plane,
-                                                sdl3d_visibility_result *result)
+void slayer3d_level_compute_visibility_from_camera(const slayer3d_level *level, const slayer3d_sector *sectors,
+                                                   const slayer3d_camera3d *camera, int backbuffer_width,
+                                                   int backbuffer_height, float near_plane, float far_plane,
+                                                   slayer3d_visibility_result *result)
 {
     if (!level || !sectors || !camera || !result || !result->sector_visible)
         return;
@@ -2362,28 +2372,29 @@ void sdl3d_level_compute_visibility_from_camera(const sdl3d_level *level, const 
         result->sector_visible[i] = true;
     result->visible_count = level->sector_count;
 
-    sdl3d_mat4 view, proj;
-    if (!sdl3d_camera3d_compute_matrices(camera, backbuffer_width, backbuffer_height, near_plane, far_plane, &view,
-                                         &proj))
+    slayer3d_mat4 view, proj;
+    if (!slayer3d_camera3d_compute_matrices(camera, backbuffer_width, backbuffer_height, near_plane, far_plane, &view,
+                                            &proj))
         return;
 
-    sdl3d_mat4 vp = sdl3d_mat4_multiply(proj, view);
+    slayer3d_mat4 vp = slayer3d_mat4_multiply(proj, view);
     float fp[6][4];
-    sdl3d_extract_frustum_planes(vp, fp);
+    slayer3d_extract_frustum_planes(vp, fp);
 
-    sdl3d_vec3 dir = sdl3d_vec3_make(camera->target.x - camera->position.x, camera->target.y - camera->position.y,
-                                     camera->target.z - camera->position.z);
+    slayer3d_vec3 dir = slayer3d_vec3_make(camera->target.x - camera->position.x, camera->target.y - camera->position.y,
+                                           camera->target.z - camera->position.z);
 
     int current =
-        sdl3d_level_find_sector_at(level, sectors, camera->position.x, camera->position.z, camera->position.y);
+        slayer3d_level_find_sector_at(level, sectors, camera->position.x, camera->position.z, camera->position.y);
 
-    sdl3d_level_compute_visibility(level, current, camera->position, dir, fp, result);
+    slayer3d_level_compute_visibility(level, current, camera->position, dir, fp, result);
 }
 
-sdl3d_level_trace_result sdl3d_level_trace_point(const sdl3d_level *level, const sdl3d_sector *sectors,
-                                                 sdl3d_vec3 origin, sdl3d_vec3 direction, float max_distance)
+slayer3d_level_trace_result slayer3d_level_trace_point(const slayer3d_level *level, const slayer3d_sector *sectors,
+                                                       slayer3d_vec3 origin, slayer3d_vec3 direction,
+                                                       float max_distance)
 {
-    sdl3d_level_trace_result r;
+    slayer3d_level_trace_result r;
     r.hit = false;
     r.end_point = origin;
     r.end_sector = -1;
@@ -2412,12 +2423,12 @@ sdl3d_level_trace_result sdl3d_level_trace_point(const sdl3d_level *level, const
         float nx = px + dx * step_dist;
         float ny = py + dy * step_dist;
         float nz = pz + dz * step_dist;
-        if (!sdl3d_level_point_inside(level, sectors, nx, ny, nz))
+        if (!slayer3d_level_point_inside(level, sectors, nx, ny, nz))
         {
             r.hit = true;
-            r.end_point = sdl3d_vec3_make(px, py, pz);
+            r.end_point = slayer3d_vec3_make(px, py, pz);
             r.fraction = (float)(i) / (float)steps;
-            r.end_sector = sdl3d_level_find_sector_at(level, sectors, px, pz, py);
+            r.end_sector = slayer3d_level_find_sector_at(level, sectors, px, pz, py);
             return r;
         }
         px = nx;
@@ -2426,8 +2437,8 @@ sdl3d_level_trace_result sdl3d_level_trace_point(const sdl3d_level *level, const
     }
 
     r.hit = false;
-    r.end_point = sdl3d_vec3_make(px, py, pz);
+    r.end_point = slayer3d_vec3_make(px, py, pz);
     r.fraction = 1.0f;
-    r.end_sector = sdl3d_level_find_sector_at(level, sectors, px, pz, py);
+    r.end_sector = slayer3d_level_find_sector_at(level, sectors, px, pz, py);
     return r;
 }

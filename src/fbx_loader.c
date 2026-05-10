@@ -2,8 +2,8 @@
  * ufbx-backed FBX loader.
  *
  * Loads meshes and materials from .fbx files (binary and ASCII).
- * Each ufbx_mesh material_part becomes one sdl3d_mesh; each
- * ufbx_material becomes one sdl3d_material. Faces are triangulated
+ * Each ufbx_mesh material_part becomes one slayer3d_mesh; each
+ * ufbx_material becomes one slayer3d_material. Faces are triangulated
  * via ufbx_triangulate_face.
  */
 
@@ -19,7 +19,7 @@
 /* String helpers                                                      */
 /* ------------------------------------------------------------------ */
 
-static char *sdl3d_fbx_strdup(const char *s)
+static char *slayer3d_fbx_strdup(const char *s)
 {
     size_t len;
     char *copy;
@@ -38,20 +38,20 @@ static char *sdl3d_fbx_strdup(const char *s)
     return copy;
 }
 
-static char *sdl3d_fbx_strdup_ufbx(ufbx_string s)
+static char *slayer3d_fbx_strdup_ufbx(ufbx_string s)
 {
     if (s.length == 0 || s.data == NULL)
     {
         return NULL;
     }
-    return sdl3d_fbx_strdup(s.data);
+    return slayer3d_fbx_strdup(s.data);
 }
 
 /* ------------------------------------------------------------------ */
 /* Material conversion                                                 */
 /* ------------------------------------------------------------------ */
 
-static void sdl3d_fbx_material_init(sdl3d_material *mat)
+static void slayer3d_fbx_material_init(slayer3d_material *mat)
 {
     SDL_zerop(mat);
     mat->albedo[0] = 1.0f;
@@ -62,7 +62,7 @@ static void sdl3d_fbx_material_init(sdl3d_material *mat)
     mat->roughness = 1.0f;
 }
 
-static char *sdl3d_fbx_texture_path(const ufbx_material_map *map)
+static char *slayer3d_fbx_texture_path(const ufbx_material_map *map)
 {
     if (map->texture == NULL)
     {
@@ -71,19 +71,19 @@ static char *sdl3d_fbx_texture_path(const ufbx_material_map *map)
     /* Prefer the relative filename resolved by ufbx. */
     if (map->texture->relative_filename.length > 0)
     {
-        return sdl3d_fbx_strdup_ufbx(map->texture->relative_filename);
+        return slayer3d_fbx_strdup_ufbx(map->texture->relative_filename);
     }
     if (map->texture->filename.length > 0)
     {
-        return sdl3d_fbx_strdup_ufbx(map->texture->filename);
+        return slayer3d_fbx_strdup_ufbx(map->texture->filename);
     }
     return NULL;
 }
 
-static void sdl3d_fbx_convert_material(const ufbx_material *src, sdl3d_material *dst)
+static void slayer3d_fbx_convert_material(const ufbx_material *src, slayer3d_material *dst)
 {
-    sdl3d_fbx_material_init(dst);
-    dst->name = sdl3d_fbx_strdup_ufbx(src->name);
+    slayer3d_fbx_material_init(dst);
+    dst->name = slayer3d_fbx_strdup_ufbx(src->name);
 
     /* Use PBR base_color when it looks populated, otherwise fall back to
      * FBX classic diffuse_color × diffuse_factor. */
@@ -121,20 +121,20 @@ static void sdl3d_fbx_convert_material(const ufbx_material *src, sdl3d_material 
     dst->emissive[2] = (float)src->fbx.emission_color.value_vec3.z * (float)src->fbx.emission_factor.value_real;
 
     /* Texture paths. */
-    dst->albedo_map = sdl3d_fbx_texture_path(&src->pbr.base_color);
+    dst->albedo_map = slayer3d_fbx_texture_path(&src->pbr.base_color);
     if (dst->albedo_map == NULL)
     {
-        dst->albedo_map = sdl3d_fbx_texture_path(&src->fbx.diffuse_color);
+        dst->albedo_map = slayer3d_fbx_texture_path(&src->fbx.diffuse_color);
     }
-    dst->normal_map = sdl3d_fbx_texture_path(&src->fbx.normal_map);
-    dst->emissive_map = sdl3d_fbx_texture_path(&src->fbx.emission_color);
+    dst->normal_map = slayer3d_fbx_texture_path(&src->fbx.normal_map);
+    dst->emissive_map = slayer3d_fbx_texture_path(&src->fbx.emission_color);
 }
 
 /* ------------------------------------------------------------------ */
 /* Mesh conversion                                                     */
 /* ------------------------------------------------------------------ */
 
-static int sdl3d_fbx_find_material_index(const ufbx_scene *scene, const ufbx_material *mat)
+static int slayer3d_fbx_find_material_index(const ufbx_scene *scene, const ufbx_material *mat)
 {
     if (mat == NULL)
     {
@@ -150,8 +150,8 @@ static int sdl3d_fbx_find_material_index(const ufbx_scene *scene, const ufbx_mat
     return -1;
 }
 
-static bool sdl3d_fbx_convert_mesh_part(const ufbx_scene *scene, const ufbx_mesh *mesh, const ufbx_mesh_part *part,
-                                        int part_index, sdl3d_mesh *dst)
+static bool slayer3d_fbx_convert_mesh_part(const ufbx_scene *scene, const ufbx_mesh *mesh, const ufbx_mesh_part *part,
+                                           int part_index, slayer3d_mesh *dst)
 {
     size_t num_triangles = part->num_triangles;
     size_t vertex_count = num_triangles * 3;
@@ -177,13 +177,13 @@ static bool sdl3d_fbx_convert_mesh_part(const ufbx_scene *scene, const ufbx_mesh
         {
             SDL_snprintf(buf, sizeof(buf), "mesh_%d/%d", (int)mesh->typed_id, part_index);
         }
-        dst->name = sdl3d_fbx_strdup(buf);
+        dst->name = slayer3d_fbx_strdup(buf);
     }
 
     /* Material index. */
     if (part_index >= 0 && (size_t)part_index < mesh->materials.count)
     {
-        dst->material_index = sdl3d_fbx_find_material_index(scene, mesh->materials.data[part_index]);
+        dst->material_index = slayer3d_fbx_find_material_index(scene, mesh->materials.data[part_index]);
     }
     else
     {
@@ -301,7 +301,7 @@ static bool sdl3d_fbx_convert_mesh_part(const ufbx_scene *scene, const ufbx_mesh
 /* Count total mesh parts with triangles.                              */
 /* ------------------------------------------------------------------ */
 
-static int sdl3d_fbx_count_mesh_parts(const ufbx_scene *scene)
+static int slayer3d_fbx_count_mesh_parts(const ufbx_scene *scene)
 {
     int count = 0;
     for (size_t m = 0; m < scene->meshes.count; ++m)
@@ -322,7 +322,7 @@ static int sdl3d_fbx_count_mesh_parts(const ufbx_scene *scene)
 /* Public entry point                                                  */
 /* ------------------------------------------------------------------ */
 
-bool sdl3d_load_model_fbx(const char *path, sdl3d_model *out)
+bool slayer3d_load_model_fbx(const char *path, slayer3d_model *out)
 {
     ufbx_load_opts opts;
     ufbx_error error;
@@ -358,21 +358,21 @@ bool sdl3d_load_model_fbx(const char *path, sdl3d_model *out)
     if (scene->materials.count > 0)
     {
         out->material_count = (int)scene->materials.count;
-        out->materials = (sdl3d_material *)SDL_calloc(scene->materials.count, sizeof(sdl3d_material));
+        out->materials = (slayer3d_material *)SDL_calloc(scene->materials.count, sizeof(slayer3d_material));
         if (out->materials == NULL)
         {
             ufbx_free_scene(scene);
-            sdl3d_free_model(out);
+            slayer3d_free_model(out);
             return SDL_OutOfMemory();
         }
         for (size_t i = 0; i < scene->materials.count; ++i)
         {
-            sdl3d_fbx_convert_material(scene->materials.data[i], &out->materials[i]);
+            slayer3d_fbx_convert_material(scene->materials.data[i], &out->materials[i]);
         }
     }
 
     /* Count mesh parts. */
-    total_parts = sdl3d_fbx_count_mesh_parts(scene);
+    total_parts = slayer3d_fbx_count_mesh_parts(scene);
     if (total_parts == 0)
     {
         ufbx_free_scene(scene);
@@ -380,11 +380,11 @@ bool sdl3d_load_model_fbx(const char *path, sdl3d_model *out)
     }
 
     out->mesh_count = total_parts;
-    out->meshes = (sdl3d_mesh *)SDL_calloc((size_t)total_parts, sizeof(sdl3d_mesh));
+    out->meshes = (slayer3d_mesh *)SDL_calloc((size_t)total_parts, sizeof(slayer3d_mesh));
     if (out->meshes == NULL)
     {
         ufbx_free_scene(scene);
-        sdl3d_free_model(out);
+        slayer3d_free_model(out);
         return SDL_OutOfMemory();
     }
 
@@ -399,10 +399,10 @@ bool sdl3d_load_model_fbx(const char *path, sdl3d_model *out)
             {
                 continue;
             }
-            if (!sdl3d_fbx_convert_mesh_part(scene, mesh, part, (int)p, &out->meshes[mesh_index]))
+            if (!slayer3d_fbx_convert_mesh_part(scene, mesh, part, (int)p, &out->meshes[mesh_index]))
             {
                 ufbx_free_scene(scene);
-                sdl3d_free_model(out);
+                slayer3d_free_model(out);
                 return false;
             }
             ++mesh_index;
