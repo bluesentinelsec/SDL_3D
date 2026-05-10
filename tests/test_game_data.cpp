@@ -8994,6 +8994,130 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, WeaponHitscanTracesActiveBrushWorlds)
+{
+    const std::filesystem::path dir = unique_test_dir("weapon_hitscan_brush");
+    write_text(dir / "weapon_hitscan_brush.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Weapon Brush Hitscan", "id": "test.weapon_hitscan_brush", "version": "0.1.0" },
+  "world": { "name": "world.weapon_hitscan_brush", "kind": "brush" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.5, 2.0] },
+      "properties": {
+        "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
+        "energy": { "type": "int", "value": 1 },
+        "fire_timer": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "weapon.hitscan",
+            "target": "entity.player",
+            "trace_brush_worlds": true,
+            "brush_contents_mask": ["solid", "projectile_clip"],
+            "range": 20.0,
+            "ammo_resource": "energy",
+            "cooldown": 0.0,
+            "run_actions_on_miss": false,
+            "actions": [
+              {
+                "type": "property.set",
+                "target": "entity.player",
+                "key": "last_hit_brush",
+                "value_from_payload": "hit_brush_name"
+              },
+              {
+                "type": "property.set",
+                "target": "entity.player",
+                "key": "last_hit_material",
+                "value_from_payload": "hit_material"
+              },
+              {
+                "type": "property.set",
+                "target": "entity.player",
+                "key": "last_hit_distance",
+                "value_from_payload": "hit_distance"
+              },
+              {
+                "type": "property.set",
+                "target": "entity.player",
+                "key": "last_hit_brush_flag",
+                "value_from_payload": "hit_brush"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "brush_worlds": [
+    {
+      "name": "brush.hitscan",
+      "materials": [{ "name": "mat.wall", "albedo": [0.3, 0.3, 0.3, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.target_wall",
+          "contents": ["solid", "projectile_clip"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 2.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 2.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 1, 0], "distance": 3.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, 1], "distance": 0.2 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0.2 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "world": { "brush_worlds": [{ "world": "brush.hitscan" }] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "weapon_hitscan_brush.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int fire = slayer3d_game_data_find_signal(runtime, "signal.fire");
+    ASSERT_GE(fire, 0);
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+
+    slayer3d_signal_emit(bus, fire, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "energy", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_hit_brush", ""), "brush.target_wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_hit_material", ""), "mat.wall");
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "last_hit_brush_flag", false));
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_hit_distance", 0.0f), 1.8f, 0.01f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidWeaponPrimitives)
 {
     const std::filesystem::path dir = unique_test_dir("invalid_weapon_primitives");
@@ -9062,6 +9186,39 @@ TEST(GameDataRuntime, RejectsInvalidWeaponPrimitives)
                                               error, sizeof(error)));
     EXPECT_NE(std::string(error).find("weapon.hitscan range and hit_radius must be non-negative"), std::string::npos)
         << error;
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+
+    write_text(dir / "invalid_hitscan_brush_mask.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid Hitscan Brush Mask", "id": "test.invalid_hitscan_brush_mask", "version": "0.1.0" },
+  "world": { "name": "world.invalid_hitscan_brush_mask", "kind": "brush" },
+  "entities": [{ "name": "entity.player" }],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "weapon.hitscan",
+            "target": "entity.player",
+            "trace_brush_worlds": true,
+            "brush_contents_mask": ["solid", "missing_content"]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid_hitscan_brush_mask.game.json").string().c_str(), session,
+                                              &runtime, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("brush content value is unknown"), std::string::npos) << error;
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
@@ -10940,6 +11097,7 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
           "player_radius": 0.25,
           "step_height": 0.4,
           "ceiling_clearance": 0.1,
+          "walkable_normal_y": 0.65,
           "mouse_sensitivity": 0.0
         }
       ]
@@ -11011,6 +11169,12 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     EXPECT_NEAR(player->position.y, 1.6f, 0.03f);
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "current_sector", 99), -1);
     EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "on_ground", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_collision_kind", ""), "wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_collision_brush", ""), "brush.north_wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "brush_floor_brush", ""), "brush.floor");
+    expect_vec3_near(
+        slayer3d_properties_get_vec3(player->props, "brush_floor_normal", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+        slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
     expect_vec3_near(
         slayer3d_properties_get_vec3(player->props, "camera_forward", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
         slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
@@ -12533,6 +12697,21 @@ TEST(GameDataRuntime, RejectsInvalidFpsBrushController)
               }
             })json",
             "brush content value is unknown",
+        },
+        {
+            "bad_walkable_normal",
+            R"json({
+              "type": "controller.fps_brush",
+              "brush_world": "brush.test",
+              "walkable_normal_y": 1.5,
+              "actions": {
+                "forward": "action.move.forward",
+                "back": "action.move.back",
+                "left": "action.move.left",
+                "right": "action.move.right"
+              }
+            })json",
+            "walkable_normal_y must be in [0, 1]",
         },
     };
 

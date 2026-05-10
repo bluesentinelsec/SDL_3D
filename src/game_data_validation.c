@@ -3068,9 +3068,35 @@ static bool validate_fps_brush_component(validation_context *ctx, yyjson_val *co
         return false;
     char contents_path[PATH_BUFFER_SIZE];
     format_path(contents_path, sizeof(contents_path), "%s.contents_mask", path);
-    return validate_brush_string_or_string_array(ctx, obj_get(component, "contents_mask"), contents_path,
-                                                 "brush content", brush_content_name_valid, false) &&
-           validate_fps_controller_common(ctx, component, path, names, "controller.fps_brush");
+    if (!validate_brush_string_or_string_array(ctx, obj_get(component, "contents_mask"), contents_path, "brush content",
+                                               brush_content_name_valid, false) ||
+        !validate_fps_controller_common(ctx, component, path, names, "controller.fps_brush"))
+    {
+        return false;
+    }
+    yyjson_val *walkable = obj_get(component, "walkable_normal_y");
+    if (walkable != NULL &&
+        (!yyjson_is_num(walkable) || yyjson_get_num(walkable) < 0.0 || yyjson_get_num(walkable) > 1.0))
+    {
+        return validation_error(ctx, path, "controller.fps_brush walkable_normal_y must be in [0, 1]");
+    }
+    const char *property_keys[] = {"brush_collision_kind_property",
+                                   "brush_collision_normal_property",
+                                   "brush_collision_brush_property",
+                                   "brush_collision_material_property",
+                                   "brush_collision_contents_property",
+                                   "brush_collision_surface_flags_property",
+                                   "brush_floor_normal_property",
+                                   "brush_floor_brush_property",
+                                   "brush_step_up_property"};
+    for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
+    {
+        yyjson_val *value = obj_get(component, property_keys[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, path,
+                                    "controller.fps_brush diagnostic property names must be non-empty strings");
+    }
+    return true;
 }
 
 static bool validate_combat_health_component(validation_context *ctx, yyjson_val *component, const char *path)
@@ -7043,6 +7069,16 @@ static bool validate_weapon_hitscan_action(validation_context *ctx, yyjson_val *
     const char *sector_level = json_string(action, "sector_level");
     if (sector_level != NULL && !require_ref(ctx, &names->sector_levels, "sector level", sector_level, json_path))
         return false;
+    yyjson_val *trace_brush_worlds = obj_get(action, "trace_brush_worlds");
+    if (trace_brush_worlds != NULL && !yyjson_is_bool(trace_brush_worlds))
+        return validation_error(ctx, json_path, "weapon.hitscan trace_brush_worlds must be a boolean");
+    char contents_path[PATH_BUFFER_SIZE];
+    format_path(contents_path, sizeof(contents_path), "%s.brush_contents_mask", json_path);
+    if (!validate_brush_string_or_string_array(ctx, obj_get(action, "brush_contents_mask"), contents_path,
+                                               "brush content", brush_content_name_valid, false))
+    {
+        return false;
+    }
     if (!validate_non_empty_string_field(ctx, action, json_path, "weapon.hitscan", "target_tag") ||
         !validate_non_empty_string_field(ctx, action, json_path, "weapon.hitscan", "hit_tag"))
     {
