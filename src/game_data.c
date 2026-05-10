@@ -11676,6 +11676,8 @@ static bool execute_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *a
                                  const sdl3d_properties *payload);
 static bool execute_optional_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *actions,
                                           const sdl3d_properties *payload);
+static int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
+                                         const sdl3d_registered_actor *actor);
 static float sector_door_distance_sq_xz(const sdl3d_door *door, sdl3d_vec3 point);
 static bool sector_door_is_in_front(const sdl3d_door *door, sdl3d_vec3 point, float yaw, float min_dot);
 
@@ -17000,6 +17002,76 @@ static void update_sector_doors(sdl3d_game_data_runtime *runtime, float dt)
     }
 }
 
+static sdl3d_properties *sector_platform_crush_payload(const sector_platform_runtime *platform,
+                                                       const sdl3d_registered_actor *actor, float floor_y,
+                                                       float floor_delta, float damage)
+{
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+    sdl3d_properties_set_string(payload, "actor_name", actor != NULL && actor->name != NULL ? actor->name : "");
+    sdl3d_properties_set_string(payload, "target_actor_name", actor != NULL && actor->name != NULL ? actor->name : "");
+    sdl3d_properties_set_string(payload, "sector_platform",
+                                platform != NULL && platform->name != NULL ? platform->name : "");
+    sdl3d_properties_set_string(
+        payload, "sector_level",
+        platform != NULL && platform->level != NULL && platform->level->name != NULL ? platform->level->name : "");
+    sdl3d_properties_set_int(payload, "sector_index", platform != NULL ? platform->sector_index : -1);
+    sdl3d_properties_set_float(payload, "sector_platform_floor_y", floor_y);
+    sdl3d_properties_set_float(payload, "sector_platform_floor_delta", floor_delta);
+    sdl3d_properties_set_float(payload, "sector_platform_crush_damage", damage);
+    sdl3d_properties_set_float(payload, "amount", damage);
+    return payload;
+}
+
+static bool sector_platform_apply_crush_policy(sdl3d_game_data_runtime *runtime, sector_platform_runtime *platform,
+                                               float floor_y, float previous_floor_y, float dt)
+{
+    const float damage_per_second = SDL_max(json_float(platform->json, "crush_damage_per_second", 0.0f), 0.0f);
+    yyjson_val *actions = obj_get(platform->json, "crush_actions");
+    const int signal_id = action_signal_id(runtime, platform->json, "on_crush");
+    if (damage_per_second <= 0.0f && !yyjson_is_arr(actions) && signal_id < 0)
+        return true;
+
+    const float floor_delta = floor_y - previous_floor_y;
+    if (floor_delta <= 0.0f && !json_bool(platform->json, "crush_when_descending", false))
+        return true;
+
+    const char *tag = json_string(platform->json, "crush_actor_tag", json_string(platform->json, "actor_tag", NULL));
+    sensor_actor_list actors;
+    SDL_zero(actors);
+    if (!collect_effect_targets(runtime, tag, &actors))
+    {
+        sensor_actor_list_free(&actors);
+        return false;
+    }
+
+    bool ok = true;
+    const float clearance = SDL_max(json_float(platform->json, "crush_clearance", 1.8f), 0.0f);
+    const float damage = damage_per_second * SDL_max(dt, 0.0f);
+    sdl3d_signal_bus *bus = runtime_bus(runtime);
+    for (int i = 0; i < actors.count; ++i)
+    {
+        sdl3d_registered_actor *actor = actors.items[i];
+        if (!runtime_actor_is_active(runtime, actor) || !actor_has_authored_tag(runtime, actor, tag))
+            continue;
+        if (actor_sector_index_for_sensor(platform->level, NULL, actor) != platform->sector_index)
+            continue;
+        if (actor->position.y > floor_y + clearance)
+            continue;
+
+        sdl3d_properties *payload = sector_platform_crush_payload(platform, actor, floor_y, floor_delta, damage);
+        if (damage > 0.0f)
+            ok = apply_combat_damage_to_actor(runtime, platform->json, payload, actor, damage) && ok;
+        ok = execute_optional_action_array(runtime, actions, payload) && ok;
+        if (bus != NULL && signal_id >= 0)
+            sdl3d_signal_emit(bus, signal_id, payload);
+        sdl3d_properties_destroy(payload);
+    }
+    sensor_actor_list_free(&actors);
+    return ok;
+}
+
 static bool update_sector_platforms(sdl3d_game_data_runtime *runtime, float dt)
 {
     if (runtime == NULL)
@@ -17021,25 +17093,32 @@ static bool update_sector_platforms(sdl3d_game_data_runtime *runtime, float dt)
         const float phase = platform->time / platform->cycle_seconds;
         const float wave = (SDL_sinf(phase * SDL_PI_F * 2.0f - SDL_PI_F * 0.5f) + 1.0f) * 0.5f;
         const float floor_y = platform->min_floor_y + (platform->max_floor_y - platform->min_floor_y) * wave;
-        if (platform->has_last_floor_y && SDL_fabsf(floor_y - platform->last_floor_y) < platform->rebuild_min_delta)
-            continue;
+        const float previous_floor_y = platform->last_floor_y;
+        const bool should_rebuild =
+            !platform->has_last_floor_y || SDL_fabsf(floor_y - platform->last_floor_y) >= platform->rebuild_min_delta;
 
-        sdl3d_sector_geometry geometry;
-        SDL_zero(geometry);
-        geometry.floor_y = floor_y;
-        geometry.ceil_y = platform->ceil_y;
-        geometry.floor_normal[1] = 1.0f;
-        geometry.ceil_normal[1] = -1.0f;
-
-        char error[256];
-        if (!set_sector_level_geometry(platform->level, platform->sector_index, &geometry, error, (int)sizeof(error)))
+        if (should_rebuild)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D sector platform '%s' update failed: %s",
-                        platform->name != NULL ? platform->name : "<unnamed>", error);
-            return false;
+            sdl3d_sector_geometry geometry;
+            SDL_zero(geometry);
+            geometry.floor_y = floor_y;
+            geometry.ceil_y = platform->ceil_y;
+            geometry.floor_normal[1] = 1.0f;
+            geometry.ceil_normal[1] = -1.0f;
+
+            char error[256];
+            if (!set_sector_level_geometry(platform->level, platform->sector_index, &geometry, error,
+                                           (int)sizeof(error)))
+            {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SDL3D sector platform '%s' update failed: %s",
+                            platform->name != NULL ? platform->name : "<unnamed>", error);
+                return false;
+            }
+            platform->last_floor_y = floor_y;
+            platform->has_last_floor_y = true;
         }
-        platform->last_floor_y = floor_y;
-        platform->has_last_floor_y = true;
+        if (!sector_platform_apply_crush_policy(runtime, platform, floor_y, previous_floor_y, dt))
+            return false;
     }
     return true;
 }

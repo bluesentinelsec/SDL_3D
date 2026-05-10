@@ -673,7 +673,19 @@ geometry motion:
       "max_floor_y": 2.5,
       "ceil_y": 12.0,
       "cycle_seconds": 6.0,
-      "rebuild_min_delta": 0.02
+      "rebuild_min_delta": 0.02,
+      "crush_damage_per_second": 20.0,
+      "crush_clearance": 1.6,
+      "crush_actor_tag": "player",
+      "damage_type": "crush",
+      "crush_actions": [
+        {
+          "type": "property.set",
+          "target_from_payload": "actor_name",
+          "key": "last_hazard",
+          "value_from_payload": "sector_platform"
+        }
+      ]
     }
   ]
 }
@@ -684,6 +696,23 @@ above `max_floor_y`, `cycle_seconds` must be positive, and `scene` may be
 omitted for a platform that updates in every scene. The platform follows a
 smooth sine cycle that starts at `min_floor_y`, rises to `max_floor_y`, and
 returns to `min_floor_y`.
+
+Platforms can also act as moving world hazards. `crush_damage_per_second`
+applies generic combat damage while the platform moves upward into an actor's
+`crush_clearance` inside the platform sector. Use `crush_actor_tag` (or
+`actor_tag`) to limit affected actors. Without a tag, every active actor in the
+active scene is eligible. By default, damage only applies while the platform is
+rising; set `crush_when_descending: true` for moving ceilings, crushers, or
+other authored setups that should also damage on downward motion.
+
+Crush damage uses the same property conventions as `combat.damage`, including
+`health_property`, `max_health_property`, `armor_property`,
+`armor_absorb_property`, `alive_property`, `damage_type`, `on_damage`, and
+`on_death`. `crush_actions` run for each crushed actor with payload fields:
+`actor_name`, `target_actor_name`, `sector_platform`, `sector_level`,
+`sector_index`, `sector_platform_floor_y`, `sector_platform_floor_delta`,
+`sector_platform_crush_damage`, and `amount`. This is intended for feedback
+such as sparks, warning lights, sounds, or diagnostic UI.
 
 Use `controller.fps_sector` on an actor to drive first-person movement through
 a sector level:
