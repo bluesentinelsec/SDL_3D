@@ -7314,6 +7314,91 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
                 return false;
             continue;
         }
+        if (SDL_strcmp(type, "sensor.perception") == 0)
+        {
+            const char *observer = json_string(sensor, "observer");
+            if (observer == NULL)
+                observer = json_string(sensor, "entity");
+            if (observer == NULL)
+                observer = json_string(sensor, "actor");
+            const char *observer_tag = json_string(sensor, "observer_tag");
+            if (observer_tag == NULL)
+                observer_tag = json_string(sensor, "actor_tag");
+            const char *target = json_string(sensor, "target");
+            if (target == NULL)
+                target = json_string(sensor, "b");
+            const char *target_tag = json_string(sensor, "target_tag");
+            if (target_tag == NULL)
+                target_tag = json_string(sensor, "b_tag");
+            yyjson_val *actions = obj_get(sensor, "actions");
+            const char *edge = json_string(sensor, "edge");
+            const char *signal = json_string(sensor, "on_enter");
+            if (edge != NULL && (SDL_strcmp(edge, "stay") == 0 || SDL_strcmp(edge, "overlap") == 0))
+            {
+                const char *on_stay = json_string(sensor, "on_stay");
+                signal = on_stay != NULL ? on_stay : signal;
+            }
+            else if (edge != NULL && SDL_strcmp(edge, "exit") == 0)
+            {
+                const char *on_exit = json_string(sensor, "on_exit");
+                signal = on_exit != NULL ? on_exit : signal;
+            }
+
+            if ((observer == NULL && observer_tag == NULL) || (observer != NULL && observer_tag != NULL))
+                return validation_error(ctx, path,
+                                        "sensor.perception requires exactly one of observer or observer_tag");
+            if ((target == NULL && target_tag == NULL) || (target != NULL && target_tag != NULL))
+                return validation_error(ctx, path, "sensor.perception requires exactly one of target or target_tag");
+            if (observer != NULL && !require_actor_ref(ctx, names, observer, path))
+                return false;
+            if (target != NULL && !require_actor_ref(ctx, names, target, path))
+                return false;
+            if (observer_tag != NULL && observer_tag[0] == '\0')
+                return validation_error(ctx, path, "sensor.perception observer_tag must be non-empty");
+            if (target_tag != NULL && target_tag[0] == '\0')
+                return validation_error(ctx, path, "sensor.perception target_tag must be non-empty");
+            if (!require_ref(ctx, &names->sector_levels, "sector level", json_string(sensor, "sector_level"), path))
+                return false;
+            yyjson_val *range = obj_get(sensor, "range");
+            if (range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) <= 0.0))
+                return validation_error(ctx, path, "sensor.perception range must be positive");
+            yyjson_val *min_dot = obj_get(sensor, "min_dot");
+            if (min_dot != NULL &&
+                (!yyjson_is_num(min_dot) || yyjson_get_num(min_dot) < -1.0 || yyjson_get_num(min_dot) > 1.0))
+            {
+                return validation_error(ctx, path, "sensor.perception min_dot must be between -1 and 1");
+            }
+            yyjson_val *fov_degrees = obj_get(sensor, "fov_degrees");
+            if (fov_degrees != NULL && (!yyjson_is_num(fov_degrees) || yyjson_get_num(fov_degrees) <= 0.0 ||
+                                        yyjson_get_num(fov_degrees) > 360.0))
+            {
+                return validation_error(ctx, path, "sensor.perception fov_degrees must be in the range (0, 360]");
+            }
+            yyjson_val *observer_eye_height = obj_get(sensor, "observer_eye_height");
+            yyjson_val *target_eye_height = obj_get(sensor, "target_eye_height");
+            yyjson_val *eye_height = obj_get(sensor, "eye_height");
+            if ((observer_eye_height != NULL && !yyjson_is_num(observer_eye_height)) ||
+                (target_eye_height != NULL && !yyjson_is_num(target_eye_height)) ||
+                (eye_height != NULL && !yyjson_is_num(eye_height)))
+            {
+                return validation_error(ctx, path, "sensor.perception eye heights must be numeric");
+            }
+            yyjson_val *yaw_property = obj_get(sensor, "yaw_property");
+            if (yaw_property != NULL && (!yyjson_is_str(yaw_property) || yyjson_get_str(yaw_property)[0] == '\0'))
+                return validation_error(ctx, path, "sensor.perception yaw_property must be a non-empty string");
+            if (edge != NULL && SDL_strcmp(edge, "enter") != 0 && SDL_strcmp(edge, "stay") != 0 &&
+                SDL_strcmp(edge, "overlap") != 0 && SDL_strcmp(edge, "exit") != 0)
+            {
+                return validation_error(ctx, path, "sensor.perception edge must be enter, stay, overlap, or exit");
+            }
+            if (actions != NULL && !validate_action_array(ctx, actions, path, names))
+                return false;
+            if (actions == NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
+                return false;
+            if (!validate_target_filter_fields(ctx, sensor, path, "sensor.perception"))
+                return false;
+            continue;
+        }
         if (SDL_strcmp(type, "sensor.sector") == 0)
         {
             const char *actor = json_string(sensor, "actor");
