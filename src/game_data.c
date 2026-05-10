@@ -7088,6 +7088,8 @@ static yyjson_val *active_timeline_events(const sdl3d_game_data_runtime *runtime
 }
 
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload);
+static bool execute_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *actions,
+                                 const sdl3d_properties *payload);
 static bool execute_fps_controller_launch_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
                                                  const sdl3d_properties *payload);
 static bool execute_fps_controller_teleport_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
@@ -11667,6 +11669,8 @@ static int action_signal_id(sdl3d_game_data_runtime *runtime, yyjson_val *action
 
 static bool execute_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *actions,
                                  const sdl3d_properties *payload);
+static bool execute_optional_action_array(sdl3d_game_data_runtime *runtime, yyjson_val *actions,
+                                          const sdl3d_properties *payload);
 static float sector_door_distance_sq_xz(const sdl3d_door *door, sdl3d_vec3 point);
 static bool sector_door_is_in_front(const sdl3d_door *door, sdl3d_vec3 point, float yaw, float min_dot);
 
@@ -13720,6 +13724,169 @@ static bool execute_actor_despawn_by_tag_action(sdl3d_game_data_runtime *runtime
     return true;
 }
 
+typedef enum weapon_fire_status
+{
+    WEAPON_FIRE_READY = 0,
+    WEAPON_FIRE_COOLDOWN,
+    WEAPON_FIRE_RELOADING,
+    WEAPON_FIRE_EMPTY
+} weapon_fire_status;
+
+static bool weapon_value_as_float(const sdl3d_value *value, float *out_value)
+{
+    if (value == NULL || out_value == NULL)
+        return false;
+    if (value->type == SDL3D_VALUE_INT)
+    {
+        *out_value = (float)value->as_int;
+        return true;
+    }
+    if (value->type == SDL3D_VALUE_FLOAT)
+    {
+        *out_value = value->as_float;
+        return true;
+    }
+    return false;
+}
+
+static float weapon_actor_numeric_property(const sdl3d_registered_actor *actor, const char *key, float fallback)
+{
+    float value = fallback;
+    return actor != NULL && actor->props != NULL &&
+                   weapon_value_as_float(sdl3d_properties_get_value(actor->props, key), &value)
+               ? value
+               : fallback;
+}
+
+static void weapon_set_actor_numeric_property(sdl3d_registered_actor *actor, const char *key, float value)
+{
+    if (actor == NULL || actor->props == NULL || key == NULL || key[0] == '\0')
+        return;
+    const sdl3d_value *existing = sdl3d_properties_get_value(actor->props, key);
+    const float rounded = SDL_roundf(value);
+    if (existing != NULL && existing->type == SDL3D_VALUE_INT && SDL_fabsf(value - rounded) <= 0.0001f)
+        sdl3d_properties_set_int(actor->props, key, (int)rounded);
+    else
+        sdl3d_properties_set_float(actor->props, key, value);
+}
+
+static sdl3d_properties *weapon_event_payload(const sdl3d_registered_actor *source, yyjson_val *action,
+                                              weapon_fire_status status)
+{
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+    sdl3d_properties_set_string(payload, "actor_name", source != NULL && source->name != NULL ? source->name : "");
+    sdl3d_properties_set_string(payload, "source_actor_name",
+                                source != NULL && source->name != NULL ? source->name : "");
+    const char *status_text = "ready";
+    if (status == WEAPON_FIRE_COOLDOWN)
+        status_text = "cooldown";
+    else if (status == WEAPON_FIRE_RELOADING)
+        status_text = "reloading";
+    else if (status == WEAPON_FIRE_EMPTY)
+        status_text = "empty";
+    sdl3d_properties_set_string(payload, "weapon_status", status_text);
+    sdl3d_properties_set_float(payload, "ammo_per_shot", json_float(action, "ammo_per_shot", 1.0f));
+    return payload;
+}
+
+static void weapon_emit_signal(sdl3d_game_data_runtime *runtime, yyjson_val *action, const char *signal_key,
+                               const sdl3d_registered_actor *source, weapon_fire_status status)
+{
+    const int signal_id = action_signal_id(runtime, action, signal_key);
+    if (signal_id < 0 || runtime_bus(runtime) == NULL)
+        return;
+    sdl3d_properties *payload = weapon_event_payload(source, action, status);
+    sdl3d_signal_emit(runtime_bus(runtime), signal_id, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static weapon_fire_status weapon_fire_status_for_actor(const sdl3d_registered_actor *actor, yyjson_val *action)
+{
+    if (actor == NULL || action == NULL)
+        return WEAPON_FIRE_EMPTY;
+
+    const char *cooldown_property = json_string(action, "cooldown_property", "fire_timer");
+    if (cooldown_property != NULL && cooldown_property[0] != '\0' &&
+        sdl3d_properties_get_float(actor->props, cooldown_property, 0.0f) > 0.0f)
+    {
+        return WEAPON_FIRE_COOLDOWN;
+    }
+
+    const char *reload_timer_property = json_string(action, "reload_timer_property", NULL);
+    if (reload_timer_property != NULL && reload_timer_property[0] != '\0' &&
+        sdl3d_properties_get_float(actor->props, reload_timer_property, 0.0f) > 0.0f)
+    {
+        return WEAPON_FIRE_RELOADING;
+    }
+
+    const float ammo_per_shot = SDL_max(json_float(action, "ammo_per_shot", 1.0f), 0.0f);
+    const char *clip_property = json_string(action, "clip_property", NULL);
+    if (clip_property != NULL && clip_property[0] != '\0' &&
+        weapon_actor_numeric_property(actor, clip_property, 0.0f) + 0.0001f < ammo_per_shot)
+    {
+        return WEAPON_FIRE_EMPTY;
+    }
+
+    const char *ammo_resource = json_string(action, "ammo_resource", NULL);
+    const char *ammo_property = json_string(action, "ammo_property", ammo_resource);
+    if (clip_property == NULL && ammo_property != NULL && ammo_property[0] != '\0' &&
+        weapon_actor_numeric_property(actor, ammo_property, 0.0f) + 0.0001f < ammo_per_shot)
+    {
+        return WEAPON_FIRE_EMPTY;
+    }
+    return WEAPON_FIRE_READY;
+}
+
+static bool weapon_fire_prepare(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                const sdl3d_registered_actor *actor)
+{
+    const weapon_fire_status status = weapon_fire_status_for_actor(actor, action);
+    if (status == WEAPON_FIRE_READY)
+        return true;
+    if (status == WEAPON_FIRE_COOLDOWN)
+        weapon_emit_signal(runtime, action, "on_cooldown", actor, status);
+    else if (status == WEAPON_FIRE_RELOADING)
+        weapon_emit_signal(runtime, action, "on_reloading", actor, status);
+    else
+        weapon_emit_signal(runtime, action, "on_empty", actor, status);
+    return false;
+}
+
+static void weapon_fire_commit(sdl3d_game_data_runtime *runtime, yyjson_val *action, sdl3d_registered_actor *actor)
+{
+    if (actor == NULL || action == NULL)
+        return;
+
+    const float ammo_per_shot = SDL_max(json_float(action, "ammo_per_shot", 1.0f), 0.0f);
+    const char *clip_property = json_string(action, "clip_property", NULL);
+    if (clip_property != NULL && clip_property[0] != '\0')
+    {
+        const float clip = weapon_actor_numeric_property(actor, clip_property, 0.0f);
+        weapon_set_actor_numeric_property(actor, clip_property, SDL_max(clip - ammo_per_shot, 0.0f));
+    }
+    else
+    {
+        const char *ammo_resource = json_string(action, "ammo_resource", NULL);
+        const char *ammo_property = json_string(action, "ammo_property", ammo_resource);
+        if (ammo_property != NULL && ammo_property[0] != '\0')
+        {
+            const float ammo = weapon_actor_numeric_property(actor, ammo_property, 0.0f);
+            weapon_set_actor_numeric_property(actor, ammo_property, SDL_max(ammo - ammo_per_shot, 0.0f));
+        }
+    }
+
+    const char *cooldown_property = json_string(action, "cooldown_property", "fire_timer");
+    if (cooldown_property != NULL && cooldown_property[0] != '\0')
+    {
+        const float cooldown =
+            json_float(action, "cooldown", sdl3d_properties_get_float(actor->props, "fire_cooldown", 0.0f));
+        sdl3d_properties_set_float(actor->props, cooldown_property, cooldown);
+    }
+    weapon_emit_signal(runtime, action, "on_fire", actor, WEAPON_FIRE_READY);
+}
+
 static bool execute_projectile_fire_action_for_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
                                                      const sdl3d_properties *payload,
                                                      sdl3d_registered_actor *source_actor)
@@ -13732,12 +13899,8 @@ static bool execute_projectile_fire_action_for_actor(sdl3d_game_data_runtime *ru
     if (target == NULL || !runtime_actor_is_active(runtime, target))
         return false;
 
-    const char *cooldown_property = json_string(action, "cooldown_property", "fire_timer");
-    if (cooldown_property != NULL && cooldown_property[0] != '\0' &&
-        sdl3d_properties_get_float(target->props, cooldown_property, 0.0f) > 0.0f)
-    {
+    if (!weapon_fire_prepare(runtime, action, target))
         return true;
-    }
 
     actor_pool_runtime *pool = find_actor_pool(runtime, json_string(action, "pool", NULL));
     actor_pool_note_spawn_attempt(pool);
@@ -13784,13 +13947,7 @@ static bool execute_projectile_fire_action_for_actor(sdl3d_game_data_runtime *ru
         sdl3d_properties_set_vec3(actor->props, "velocity", projectile_velocity);
     }
     actor_pool_note_spawn_success(runtime, pool);
-
-    if (cooldown_property != NULL && cooldown_property[0] != '\0')
-    {
-        const float cooldown =
-            json_float(action, "cooldown", sdl3d_properties_get_float(target->props, "fire_cooldown", 0.0f));
-        sdl3d_properties_set_float(target->props, cooldown_property, cooldown);
-    }
+    weapon_fire_commit(runtime, action, target);
     return true;
 }
 
@@ -14357,6 +14514,250 @@ static bool execute_status_effect_apply_action(sdl3d_game_data_runtime *runtime,
         emit_optional_signal(runtime, action, "on_apply", event_payload);
         sdl3d_properties_destroy(event_payload);
     }
+    return true;
+}
+
+static bool actor_matches_weapon_target(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *actor,
+                                        const sdl3d_registered_actor *source, const char *tag, bool exclude_source)
+{
+    if (actor == NULL || !actor->active)
+        return false;
+    if (exclude_source && source != NULL && actor == source)
+        return false;
+    if (tag == NULL || tag[0] == '\0')
+        return true;
+
+    yyjson_val *entity = find_entity_json(runtime, actor->name);
+    if (entity_json_has_tags(entity, &tag, 1))
+        return true;
+
+    int actor_index = -1;
+    const actor_pool_runtime *pool = find_actor_pool_for_actor_const(runtime, actor->name, &actor_index);
+    return pool != NULL && actor_index >= 0 && entity_json_has_tags(pool->archetype_json, &tag, 1);
+}
+
+static bool ray_sphere_intersection(sdl3d_vec3 origin, sdl3d_vec3 direction, sdl3d_vec3 center, float radius,
+                                    float max_distance, float *out_distance)
+{
+    const sdl3d_vec3 oc = sdl3d_vec3_make(origin.x - center.x, origin.y - center.y, origin.z - center.z);
+    const float b = oc.x * direction.x + oc.y * direction.y + oc.z * direction.z;
+    const float c = sdl3d_vec3_length_squared(oc) - radius * radius;
+    const float discriminant = b * b - c;
+    if (discriminant < 0.0f)
+        return false;
+    const float sqrt_discriminant = SDL_sqrtf(discriminant);
+    float t = -b - sqrt_discriminant;
+    if (t < 0.0f)
+        t = -b + sqrt_discriminant;
+    if (t < 0.0f || t > max_distance)
+        return false;
+    if (out_distance != NULL)
+        *out_distance = t;
+    return true;
+}
+
+static sdl3d_registered_actor *find_hitscan_actor_target(sdl3d_game_data_runtime *runtime,
+                                                         const sdl3d_registered_actor *source, yyjson_val *action,
+                                                         sdl3d_vec3 origin, sdl3d_vec3 direction, float max_distance,
+                                                         float *out_distance)
+{
+    const char *tag = json_string(action, "target_tag", json_string(action, "hit_tag", NULL));
+    const bool exclude_source = json_bool(action, "exclude_source", true);
+    float best_distance = max_distance;
+    sdl3d_registered_actor *best = NULL;
+
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        yyjson_val *entity = yyjson_arr_get(entities, i);
+        const char *entity_name = json_string(entity, "name", NULL);
+        if (!active_scene_has_entity_internal(runtime, entity_name))
+            continue;
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+        if (!actor_matches_weapon_target(runtime, actor, source, tag, exclude_source))
+            continue;
+        const float radius =
+            SDL_max(weapon_actor_numeric_property(
+                        actor, "hit_radius",
+                        weapon_actor_numeric_property(actor, "radius", json_float(action, "hit_radius", 0.5f))),
+                    0.001f);
+        float distance = 0.0f;
+        if (ray_sphere_intersection(origin, direction, actor->position, radius, best_distance, &distance))
+        {
+            best = actor;
+            best_distance = distance;
+        }
+    }
+
+    for (int pool_index = 0; runtime != NULL && pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!actor_pool_in_scene(pool, sdl3d_game_data_active_scene(runtime)))
+            continue;
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (!actor_pool_actor_is_active(pool, actor, actor_index) ||
+                !actor_matches_weapon_target(runtime, actor, source, tag, exclude_source))
+            {
+                continue;
+            }
+            const float radius =
+                SDL_max(weapon_actor_numeric_property(
+                            actor, "hit_radius",
+                            weapon_actor_numeric_property(actor, "radius", json_float(action, "hit_radius", 0.5f))),
+                        0.001f);
+            float distance = 0.0f;
+            if (ray_sphere_intersection(origin, direction, actor->position, radius, best_distance, &distance))
+            {
+                best = actor;
+                best_distance = distance;
+            }
+        }
+    }
+
+    if (out_distance != NULL)
+        *out_distance = best_distance;
+    return best;
+}
+
+static sdl3d_vec3 weapon_direction_from_action(const sdl3d_registered_actor *source, yyjson_val *action)
+{
+    const sdl3d_vec3 fallback = json_vec3_value(obj_get(action, "direction"), sdl3d_vec3_make(0.0f, 0.0f, -1.0f));
+    const char *direction_property = json_string(action, "direction_from_property", "camera_forward");
+    sdl3d_vec3 direction = direction_property != NULL && source != NULL
+                               ? sdl3d_properties_get_vec3(source->props, direction_property, fallback)
+                               : fallback;
+    if (sdl3d_vec3_length_squared(direction) <= 0.000001f)
+        direction = sdl3d_vec3_make(0.0f, 0.0f, -1.0f);
+    return sdl3d_vec3_normalize(direction);
+}
+
+static sdl3d_properties *weapon_hitscan_payload(const sdl3d_registered_actor *source, const sdl3d_registered_actor *hit,
+                                                sdl3d_vec3 origin, sdl3d_vec3 direction, sdl3d_vec3 hit_position,
+                                                float distance, bool wall_hit)
+{
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+    sdl3d_properties_set_string(payload, "source_actor_name",
+                                source != NULL && source->name != NULL ? source->name : "");
+    sdl3d_properties_set_string(payload, "actor_name", hit != NULL && hit->name != NULL ? hit->name : "");
+    sdl3d_properties_set_string(payload, "hit_actor_name", hit != NULL && hit->name != NULL ? hit->name : "");
+    sdl3d_properties_set_vec3(payload, "origin", origin);
+    sdl3d_properties_set_vec3(payload, "direction", direction);
+    sdl3d_properties_set_vec3(payload, "hit_position", hit_position);
+    sdl3d_properties_set_float(payload, "hit_distance", distance);
+    sdl3d_properties_set_bool(payload, "hit_actor", hit != NULL);
+    sdl3d_properties_set_bool(payload, "hit_wall", wall_hit);
+    return payload;
+}
+
+static bool execute_weapon_hitscan_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                          const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *source = action_target_actor(runtime, action, payload);
+    if (source == NULL || !runtime_actor_is_active(runtime, source))
+        return false;
+    if (!weapon_fire_prepare(runtime, action, source))
+        return true;
+
+    const float range = SDL_max(json_float(action, "range", 64.0f), 0.0f);
+    sdl3d_vec3 origin = actor_spawn_position_from_action(runtime, action, payload, source->position);
+    sdl3d_vec3 direction = weapon_direction_from_action(source, action);
+    float wall_distance = range;
+    bool wall_hit = false;
+    sdl3d_vec3 hit_position =
+        sdl3d_vec3_make(origin.x + direction.x * range, origin.y + direction.y * range, origin.z + direction.z * range);
+
+    const sector_level_runtime *level = find_sector_level_runtime(runtime, json_string(action, "sector_level", NULL));
+    if (level != NULL)
+    {
+        const sdl3d_level_trace_result trace =
+            sdl3d_level_trace_point(&level->lightmapped, level->sectors, origin, direction, range);
+        wall_distance = SDL_clamp(trace.fraction, 0.0f, 1.0f) * range;
+        wall_hit = trace.hit;
+        hit_position = trace.end_point;
+    }
+
+    float actor_distance = wall_distance;
+    sdl3d_registered_actor *hit_actor =
+        find_hitscan_actor_target(runtime, source, action, origin, direction, wall_distance, &actor_distance);
+    if (hit_actor != NULL)
+    {
+        hit_position = sdl3d_vec3_make(origin.x + direction.x * actor_distance, origin.y + direction.y * actor_distance,
+                                       origin.z + direction.z * actor_distance);
+        wall_hit = false;
+    }
+
+    weapon_fire_commit(runtime, action, source);
+    sdl3d_properties *hit_payload =
+        weapon_hitscan_payload(source, hit_actor, origin, direction, hit_position,
+                               hit_actor != NULL ? actor_distance : wall_distance, wall_hit);
+    const bool ok =
+        execute_optional_action_array(runtime,
+                                      hit_actor != NULL || wall_hit || json_bool(action, "run_actions_on_miss", false)
+                                          ? obj_get(action, "actions")
+                                          : obj_get(action, "miss_actions"),
+                                      hit_payload);
+    sdl3d_properties_destroy(hit_payload);
+    return ok;
+}
+
+static void weapon_complete_reload(sdl3d_registered_actor *actor, yyjson_val *json)
+{
+    if (actor == NULL || json == NULL)
+        return;
+
+    const char *clip_property = json_string(json, "clip_property", "clip");
+    const char *clip_size_property = json_string(json, "clip_size_property", "clip_size");
+    const char *reserve_property = json_string(json, "reserve_property", "ammo_reserve");
+    const char *pending_property = json_string(json, "reload_pending_property", "reload_pending");
+    const char *timer_property = json_string(json, "reload_timer_property", "reload_timer");
+    const float clip_size =
+        SDL_max(json_float(json, "clip_size", weapon_actor_numeric_property(actor, clip_size_property, 0.0f)), 0.0f);
+    const float clip = SDL_clamp(weapon_actor_numeric_property(actor, clip_property, 0.0f), 0.0f, clip_size);
+    const bool consume_reserve = json_bool(json, "consume_reserve", true);
+    const float reserve =
+        consume_reserve ? SDL_max(weapon_actor_numeric_property(actor, reserve_property, 0.0f), 0.0f) : clip_size;
+    const float needed = SDL_max(clip_size - clip, 0.0f);
+    const float loaded = consume_reserve ? SDL_min(needed, reserve) : needed;
+    weapon_set_actor_numeric_property(actor, clip_property, clip + loaded);
+    if (consume_reserve)
+        weapon_set_actor_numeric_property(actor, reserve_property, reserve - loaded);
+    sdl3d_properties_set_bool(actor->props, pending_property, false);
+    sdl3d_properties_set_float(actor->props, timer_property, 0.0f);
+}
+
+static bool execute_weapon_reload_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                         const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *actor = action_target_actor(runtime, action, payload);
+    if (actor == NULL)
+        return false;
+
+    const char *clip_property = json_string(action, "clip_property", "clip");
+    const char *clip_size_property = json_string(action, "clip_size_property", "clip_size");
+    const char *reserve_property = json_string(action, "reserve_property", "ammo_reserve");
+    const char *pending_property = json_string(action, "reload_pending_property", "reload_pending");
+    const char *timer_property = json_string(action, "reload_timer_property", "reload_timer");
+    const float clip_size =
+        SDL_max(json_float(action, "clip_size", weapon_actor_numeric_property(actor, clip_size_property, 0.0f)), 0.0f);
+    const float clip = SDL_clamp(weapon_actor_numeric_property(actor, clip_property, 0.0f), 0.0f, clip_size);
+    const bool consume_reserve = json_bool(action, "consume_reserve", true);
+    const float reserve = consume_reserve ? weapon_actor_numeric_property(actor, reserve_property, 0.0f) : clip_size;
+    if (clip >= clip_size || reserve <= 0.0f)
+    {
+        weapon_emit_signal(runtime, action, "on_failure", actor, WEAPON_FIRE_EMPTY);
+        return true;
+    }
+
+    const float reload_seconds = SDL_max(json_float(action, "reload_seconds", 0.0f), 0.0f);
+    sdl3d_properties_set_bool(actor->props, pending_property, true);
+    sdl3d_properties_set_float(actor->props, timer_property, reload_seconds);
+    weapon_emit_signal(runtime, action, "on_reload", actor, WEAPON_FIRE_RELOADING);
+    if (reload_seconds <= 0.0f)
+        weapon_complete_reload(actor, action);
     return true;
 }
 
@@ -15061,6 +15462,10 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return execute_resource_station_use_action(runtime, action, payload);
     if (SDL_strcmp(type, "status_effect.apply") == 0)
         return execute_status_effect_apply_action(runtime, action, payload);
+    if (SDL_strcmp(type, "weapon.reload") == 0)
+        return execute_weapon_reload_action(runtime, action, payload);
+    if (SDL_strcmp(type, "weapon.hitscan") == 0)
+        return execute_weapon_hitscan_action(runtime, action, payload);
 
     if (SDL_strcmp(type, "projectile.fire") == 0)
         return execute_projectile_fire_action(runtime, action, payload);
@@ -16245,6 +16650,36 @@ static void update_status_effect_timer_component(sdl3d_game_data_runtime *runtim
     }
 }
 
+static void update_weapon_state_component(yyjson_val *component, sdl3d_registered_actor *actor, float dt)
+{
+    if (component == NULL || actor == NULL || !actor->active)
+        return;
+
+    const char *cooldown_property = json_string(component, "cooldown_property", NULL);
+    if (cooldown_property != NULL && cooldown_property[0] != '\0')
+    {
+        const float cooldown_rate = json_float(component, "cooldown_rate", 1.0f);
+        const float cooldown = sdl3d_properties_get_float(actor->props, cooldown_property, 0.0f);
+        if (cooldown > 0.0f && cooldown_rate > 0.0f)
+            sdl3d_properties_set_float(actor->props, cooldown_property, SDL_max(cooldown - cooldown_rate * dt, 0.0f));
+    }
+
+    const char *timer_property = json_string(component, "reload_timer_property", "reload_timer");
+    const char *pending_property = json_string(component, "reload_pending_property", "reload_pending");
+    if (!sdl3d_properties_get_bool(actor->props, pending_property, false))
+        return;
+
+    const float timer = sdl3d_properties_get_float(actor->props, timer_property, 0.0f);
+    if (timer > 0.0f)
+    {
+        const float next = SDL_max(timer - dt, 0.0f);
+        sdl3d_properties_set_float(actor->props, timer_property, next);
+        if (next > 0.0f)
+            return;
+    }
+    weapon_complete_reload(actor, component);
+}
+
 static void update_control_components(sdl3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
     sdl3d_input_manager *input = runtime_input(runtime);
@@ -16359,6 +16794,12 @@ static void update_motion_components(sdl3d_game_data_runtime *runtime, yyjson_va
 
             if (!runtime_actor_is_active(runtime, actor))
                 continue;
+            for (size_t c = 0; c < yyjson_arr_size(components); ++c)
+            {
+                yyjson_val *component = yyjson_arr_get(components, c);
+                if (SDL_strcmp(json_string(component, "type", ""), "weapon.state") == 0)
+                    update_weapon_state_component(component, actor, dt);
+            }
             if (!sdl3d_properties_get_bool(actor->props, "active_motion", true))
             {
                 continue;
