@@ -11,6 +11,7 @@
         "pitch": { "type": "float", "value": 0.0 },
         "current_sector": { "type": "int", "value": -1 },
         "dojo_hazard_damage": { "type": "float", "value": 0.0 },
+        "dojo_crush_damage": { "type": "float", "value": 0.0 },
         "health": { "type": "float", "value": 65.0 },
         "max_health": { "type": "float", "value": 100.0 },
         "ammo": { "type": "int", "value": 2 },

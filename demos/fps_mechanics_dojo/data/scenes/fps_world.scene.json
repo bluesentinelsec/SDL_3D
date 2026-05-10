@@ -50,7 +50,7 @@
       },
       {
         "name": "ui.dojo.damage",
-        "text": "Hazard damage {target.entity.player.dojo_hazard_damage}",
+        "text": "Hazard {target.entity.player.dojo_hazard_damage}  Crush {target.entity.player.dojo_crush_damage}",
         "font": "font.dojo.hud",
         "position": [0.02, 0.07],
         "anchor": "top_left",

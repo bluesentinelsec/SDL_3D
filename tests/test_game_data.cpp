@@ -10029,6 +10029,7 @@ TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
   "schema": "sdl3d.scene.v0",
   "name": "scene.play",
   "updates_game": true,
+  "entities": ["entity.player"],
   "world": { "sector_levels": [{ "level": "sector.test", "variant": "unlit" }] }
 })json");
     write_text(dir / "sector_platforms.game.json",
@@ -10036,6 +10037,19 @@ TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
   "schema": "sdl3d.game.v0",
   "metadata": { "name": "Sector Platform Test" },
   "world": { "name": "world.test", "kind": "sector" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "tags": ["player"],
+      "transform": { "position": [2.0, 1.2, 2.0] },
+      "properties": {
+        "current_sector": { "type": "int", "value": 0 },
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    }
+  ],
   "sector_levels": [
     {
       "name": "sector.test",
@@ -10063,7 +10077,19 @@ TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
       "max_floor_y": 2.0,
       "ceil_y": 4.0,
       "cycle_seconds": 4.0,
-      "rebuild_min_delta": 0.0
+      "rebuild_min_delta": 0.0,
+      "crush_damage_per_second": 10.0,
+      "crush_clearance": 0.5,
+      "crush_actor_tag": "player",
+      "damage_type": "crusher",
+      "crush_actions": [
+        {
+          "type": "property.set",
+          "target_from_payload": "actor_name",
+          "key": "last_platform",
+          "value_from_payload": "sector_platform"
+        }
+      ]
     }
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
@@ -10082,16 +10108,22 @@ TEST(GameDataRuntime, RunsAuthoredSectorPlatform)
     ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
     ASSERT_EQ(level.sector_count, 1);
     EXPECT_NEAR(level.sectors[0].floor_y, 0.0f, 0.001f);
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
 
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
     ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
     EXPECT_NEAR(level.sectors[0].floor_y, 1.0f, 0.001f);
     ASSERT_NE(level.unlit, nullptr);
     ASSERT_EQ(level.unlit->sector_count, 1);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 90.0f, 0.001f);
+    EXPECT_STREQ(sdl3d_properties_get_string(player->props, "last_platform", ""), "platform.test");
 
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 1.0f));
     ASSERT_TRUE(sdl3d_game_data_get_sector_level(runtime, "sector.test", &level));
     EXPECT_NEAR(level.sectors[0].floor_y, 2.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 80.0f, 0.001f);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -10139,6 +10171,22 @@ TEST(GameDataRuntime, RejectsInvalidSectorPlatforms)
               }
             ])json",
             "cycle_seconds must be positive",
+        },
+        {
+            "bad_crush_damage",
+            R"json([
+              {
+                "name": "platform.bad",
+                "sector_level": "sector.test",
+                "sector": "lift",
+                "min_floor_y": 0.0,
+                "max_floor_y": 2.0,
+                "ceil_y": 4.0,
+                "cycle_seconds": 4.0,
+                "crush_damage_per_second": -1.0
+              }
+            ])json",
+            "crush_damage_per_second must be non-negative",
         },
     };
 

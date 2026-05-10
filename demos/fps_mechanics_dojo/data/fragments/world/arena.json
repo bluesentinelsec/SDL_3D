@@ -44,7 +44,14 @@
       "max_floor_y": 2.25,
       "ceil_y": 6.0,
       "cycle_seconds": 5.0,
-      "rebuild_min_delta": 0.02
+      "rebuild_min_delta": 0.02,
+      "crush_damage_per_second": 8.0,
+      "crush_clearance": 0.8,
+      "crush_actor_tag": "player",
+      "damage_type": "dojo_crusher",
+      "crush_actions": [
+        { "type": "property.add", "target_from_payload": "actor_name", "key": "dojo_crush_damage", "value_from_payload": "amount" }
+      ]
     }
   ],
   "logic": {

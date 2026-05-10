@@ -5124,6 +5124,8 @@ static bool validate_sector_platforms(validation_context *ctx, yyjson_val *root,
         yyjson_val *ceil_y = obj_get(platform, "ceil_y");
         yyjson_val *cycle_seconds = obj_get(platform, "cycle_seconds");
         yyjson_val *rebuild_min_delta = obj_get(platform, "rebuild_min_delta");
+        yyjson_val *crush_damage = obj_get(platform, "crush_damage_per_second");
+        yyjson_val *crush_clearance = obj_get(platform, "crush_clearance");
         if (!yyjson_is_num(min_floor_y) || !yyjson_is_num(max_floor_y) || !yyjson_is_num(ceil_y))
             return validation_error(ctx, path, "sector platform requires numeric min_floor_y, max_floor_y, and ceil_y");
         const double min_y = yyjson_get_num(min_floor_y);
@@ -5138,9 +5140,43 @@ static bool validate_sector_platforms(validation_context *ctx, yyjson_val *root,
             return validation_error(ctx, path, "sector platform cycle_seconds must be positive");
         if (rebuild_min_delta != NULL && (!yyjson_is_num(rebuild_min_delta) || yyjson_get_num(rebuild_min_delta) < 0.0))
             return validation_error(ctx, path, "sector platform rebuild_min_delta must be non-negative");
+        if (crush_damage != NULL && (!yyjson_is_num(crush_damage) || yyjson_get_num(crush_damage) < 0.0))
+            return validation_error(ctx, path, "sector platform crush_damage_per_second must be non-negative");
+        if (crush_clearance != NULL && (!yyjson_is_num(crush_clearance) || yyjson_get_num(crush_clearance) < 0.0))
+            return validation_error(ctx, path, "sector platform crush_clearance must be non-negative");
         yyjson_val *enabled = obj_get(platform, "enabled");
         if (enabled != NULL && !yyjson_is_bool(enabled))
             return validation_error(ctx, path, "sector platform enabled must be a boolean");
+        yyjson_val *crush_when_descending = obj_get(platform, "crush_when_descending");
+        if (crush_when_descending != NULL && !yyjson_is_bool(crush_when_descending))
+            return validation_error(ctx, path, "sector platform crush_when_descending must be a boolean");
+        yyjson_val *deactivate_on_death = obj_get(platform, "deactivate_on_death");
+        if (deactivate_on_death != NULL && !yyjson_is_bool(deactivate_on_death))
+            return validation_error(ctx, path, "sector platform deactivate_on_death must be a boolean");
+        yyjson_val *armor_absorb = obj_get(platform, "armor_absorb");
+        if (armor_absorb != NULL &&
+            (!yyjson_is_num(armor_absorb) || yyjson_get_num(armor_absorb) < 0.0 || yyjson_get_num(armor_absorb) > 1.0))
+        {
+            return validation_error(ctx, path, "sector platform armor_absorb must be in 0..1");
+        }
+        if (!validate_non_empty_string_field(ctx, platform, path, "sector platform", "crush_actor_tag") ||
+            !validate_non_empty_string_field(ctx, platform, path, "sector platform", "actor_tag") ||
+            !validate_non_empty_string_field(ctx, platform, path, "sector platform", "damage_type") ||
+            !validate_non_empty_string_field(ctx, platform, path, "sector platform", "health_property") ||
+            !validate_non_empty_string_field(ctx, platform, path, "sector platform", "max_health_property") ||
+            !validate_non_empty_string_field(ctx, platform, path, "sector platform", "armor_property") ||
+            !validate_non_empty_string_field(ctx, platform, path, "sector platform", "armor_absorb_property") ||
+            !validate_non_empty_string_field(ctx, platform, path, "sector platform", "alive_property"))
+        {
+            return false;
+        }
+        yyjson_val *actions = obj_get(platform, "crush_actions");
+        if (actions != NULL && !validate_action_array(ctx, actions, path, names))
+            return false;
+        if (!validate_optional_signal_field(ctx, platform, path, names, "on_crush") ||
+            !validate_optional_signal_field(ctx, platform, path, names, "on_damage") ||
+            !validate_optional_signal_field(ctx, platform, path, names, "on_death"))
+            return false;
     }
     return true;
 }
