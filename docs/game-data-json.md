@@ -1609,6 +1609,13 @@ Reusable components include:
   through an authored `sector_level`, tracing against sector volumes and
   despawning on impact by default. Use this for data-authored projectiles in
   FPS/sector worlds.
+- `motion.brush_velocity_3d`: moves an actor by a `vec3` velocity property
+  through active brush-world instances, using swept point, sphere, or AABB
+  traces. It collides with `solid` and `projectile_clip` contents by default,
+  can publish impact diagnostics, can run `impact_actions` or emit `on_impact`
+  with brush/material payload data, and despawns on impact by default. Use this
+  for projectiles, thrown props, and simple kinematic movers in true-3D brush
+  worlds.
 - `motion.patrol`: moves an actor through an authored list of 3D waypoints.
   Use `speed`, `wait_time`, `arrival_radius`, `mode` (`loop` or `ping_pong`),
   and optional `yaw_property` to expose movement direction to rendering or Lua

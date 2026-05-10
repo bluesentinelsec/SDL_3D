@@ -12077,6 +12077,131 @@ TEST(GameDataRuntime, SectorVelocityMotionDespawnsPooledActorsOnImpact)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, BrushVelocityMotionDespawnsPooledActorsOnImpact)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_velocity_motion");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "world": { "brush_worlds": [{ "world": "brush.test" }] }
+})json");
+    write_text(dir / "brush_velocity.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Velocity Motion Test" },
+  "world": { "name": "world.test", "kind": "brush" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.5, 2.0] },
+      "properties": {
+        "camera_forward": { "type": "vec3", "value": [1.0, 0.0, 0.0] },
+        "fire_timer": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] },
+        "radius": { "type": "float", "value": 0.25 }
+      },
+      "components": [
+        {
+          "type": "motion.brush_velocity_3d",
+          "property": "velocity",
+          "shape": "sphere",
+          "contents_mask": ["solid", "projectile_clip"],
+          "impact_actions": [
+            { "type": "property.set", "target": "entity.player", "key": "last_hit_brush", "value_from_payload": "hit_brush_name" },
+            { "type": "property.set", "target": "entity.player", "key": "last_hit_material", "value_from_payload": "hit_material" },
+            { "type": "property.set", "target": "entity.player", "key": "last_hit_distance", "value_from_payload": "hit_distance" }
+          ],
+          "reason": "hit brush"
+        }
+      ]
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1, "scene": "scene.play" }
+  ],
+  "signals": ["signal.fire"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.fire",
+        "actions": [
+          {
+            "type": "projectile.fire",
+            "target": "entity.player",
+            "pool": "pool.shots",
+            "velocity_from_property": "camera_forward",
+            "speed": 20.0
+          }
+        ]
+      }
+    ]
+  },
+  "brush_worlds": [
+    {
+      "name": "brush.test",
+      "materials": [{ "name": "mat.wall", "albedo": [0.35, 0.35, 0.38, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.projectile_wall",
+          "contents": ["solid", "projectile_clip"],
+          "faces": [
+            { "plane": { "normal": [ 1, 0, 0], "distance": 4.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": -3.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [0,  1, 0], "distance": 3.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0,  1], "distance": 4.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": -0.5 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "brush_velocity.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_registered_actor *shot = slayer3d_game_data_find_actor(runtime, "pool.shots.0");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(shot, nullptr);
+    ASSERT_NE(player, nullptr);
+    ASSERT_FALSE(shot->active);
+    const int fire_signal = slayer3d_game_data_find_signal(runtime, "signal.fire");
+    ASSERT_GE(fire_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), fire_signal, nullptr);
+    ASSERT_TRUE(shot->active);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_TRUE(shot->active);
+    EXPECT_NEAR(shot->position.x, 2.0f, 0.05f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.2f));
+    EXPECT_FALSE(shot->active);
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_hit_brush", ""), "brush.projectile_wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_hit_material", ""), "mat.wall");
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_hit_distance", 0.0f), 1.25f, 0.1f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, VolumeSensorsRunEnterAndExitActions)
 {
     const std::filesystem::path dir = unique_test_dir("volume_sensor_actions");
@@ -14348,6 +14473,26 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "unknown sector level",
+        },
+        {
+            "bad_brush_velocity_shape",
+            R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    {
+      "name": "archetype.shot",
+      "components": [
+        { "type": "motion.brush_velocity_3d", "shape": "capsule" }
+      ]
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "shape must be point, sphere, or aabb",
         },
         {
             "bad_spawn_from",
