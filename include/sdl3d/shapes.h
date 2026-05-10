@@ -122,6 +122,30 @@ extern "C"
     bool sdl3d_draw_capsule_wires(sdl3d_render_context *context, sdl3d_vec3 start, sdl3d_vec3 end, float radius,
                                   int slices, int rings, sdl3d_color color);
 
+    /*
+     * Torus aligned around the local +Y axis. `major_radius` is the
+     * distance from the origin to the tube centerline, and `minor_radius`
+     * is the tube radius. Both segment counts must be >= 3.
+     */
+    bool sdl3d_draw_torus(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius, float minor_radius,
+                          int segments, int tube_segments, sdl3d_color color);
+    bool sdl3d_draw_torus_wires(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius,
+                                float minor_radius, int segments, int tube_segments, sdl3d_color color);
+
+    /*
+     * Square pyramid centered in local space. `size.x` and `size.z` define
+     * the base extents, and `size.y` defines the height.
+     */
+    bool sdl3d_draw_pyramid(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color);
+    bool sdl3d_draw_pyramid_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color);
+
+    /*
+     * Wedge/ramp triangular prism centered in local space. The low edge is
+     * at local -Z and the high edge is at local +Z.
+     */
+    bool sdl3d_draw_wedge(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color);
+    bool sdl3d_draw_wedge_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color);
+
 #ifdef __cplusplus
 }
 #endif

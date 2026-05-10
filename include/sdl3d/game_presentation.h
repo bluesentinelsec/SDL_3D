@@ -320,8 +320,9 @@ extern "C"
      * @brief Draw authored render primitives for the active scene.
      *
      * This renders currently supported primitive components (`render.cube`,
-     * `render.sphere`, `render.sprite`, and `render.model`) using SDL3D's
-     * immediate drawing helpers. Call inside an active 3D pass.
+     * `render.sphere`, `render.mesh_primitive`, `render.sprite`, and
+     * `render.model`) using SDL3D's immediate drawing helpers. Call inside an
+     * active 3D pass.
      */
     bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer);
 
