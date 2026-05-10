@@ -186,6 +186,12 @@ combat/resources, hazards, and navigation. New dojos should follow that pattern:
 one scene per editing question, with authored scene-enter setup that places the
 player near the mechanic under test.
 
+`demos/mesh_primitives_dojo` is the reference shape for visual primitive
+showcases. It keeps the project data-only, uses graybox sector bounds and
+simple lighting, and places authored actors far enough apart that each
+procedural mesh primitive can be inspected from the same FPS runtime path future
+games will use.
+
 Use optional `editor` metadata beside the authored object it describes. This
 keeps future editor palettes and prefab browsers grounded in the same JSON that
 runtime validation sees. Metadata should describe categories, previews, bounds,

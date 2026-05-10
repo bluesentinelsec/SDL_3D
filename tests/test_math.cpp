@@ -297,6 +297,20 @@ TEST(SDL3DCamera, PerspectiveMatrixDerivation)
     EXPECT_LT(ndc_z, 1.0f);
 }
 
+TEST(SDL3DCamera, HorizontalFovDerivesVerticalProjectionFromAspect)
+{
+    sdl3d_camera3d camera = {
+        {0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 90.0f, SDL3D_CAMERA_PERSPECTIVE};
+    camera.fov_axis = SDL3D_CAMERA_FOV_HORIZONTAL;
+
+    sdl3d_mat4 view;
+    sdl3d_mat4 projection;
+    ASSERT_TRUE(sdl3d_camera3d_compute_matrices(&camera, 1600, 900, 1.0f, 100.0f, &view, &projection));
+
+    EXPECT_PRED_FORMAT3(Near, projection.m[0], 1.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, projection.m[5], 16.0f / 9.0f, 1e-5f);
+}
+
 TEST(SDL3DCamera, OrthographicProducesUnitNDC)
 {
     const sdl3d_camera3d camera = {

@@ -1,0 +1,24 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "sector_level_fragments": [
+    {
+      "level": "sector.mesh_primitives.graybox_room",
+      "materials": [
+        { "name": "floor.gray", "albedo": [0.30, 0.31, 0.33, 1.0], "roughness": 0.9, "tex_scale": 6.0 },
+        { "name": "wall.gray", "albedo": [0.43, 0.45, 0.48, 1.0], "roughness": 0.82, "tex_scale": 6.0 },
+        { "name": "ceiling.gray", "albedo": [0.24, 0.25, 0.28, 1.0], "roughness": 0.92, "tex_scale": 6.0 }
+      ],
+      "sectors": [
+        {
+          "name": "showcase_room",
+          "points": [[0, 0], [52, 0], [52, 48], [0, 48]],
+          "floor_y": 0.0,
+          "ceil_y": 7.0,
+          "floor_material": "floor.gray",
+          "ceil_material": "ceiling.gray",
+          "wall_material": "wall.gray"
+        }
+      ]
+    }
+  ]
+}

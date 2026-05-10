@@ -31,6 +31,8 @@ targets. The generic `sdl3d_runner` can launch games from:
 
 The demo games are compatibility proofs for engine capabilities. New demo work
 should strengthen reusable systems instead of adding one-off host code.
+The repository also includes data-only dojos for focused primitive and mechanic
+tuning, including FPS mechanics and procedural mesh primitive showcases.
 
 Default authored display and world conventions are intentionally simple:
 SDL3D games target a 1280x720 logical canvas that is letterboxed to preserve

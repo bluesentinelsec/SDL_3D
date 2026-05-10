@@ -395,7 +395,7 @@ void sdl3d_fps_mover_teleport(sdl3d_fps_mover *mover, sdl3d_vec3 eye_position, b
     mover->has_last_good = true;
 }
 
-sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fovy)
+sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fov)
 {
     sdl3d_camera3d cam;
     SDL_zero(cam);
@@ -403,7 +403,7 @@ sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fovy)
     if (mover == NULL)
     {
         cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-        cam.fovy = fovy;
+        cam.fovy = fov;
         cam.projection = SDL3D_CAMERA_PERSPECTIVE;
         return cam;
     }
@@ -416,7 +416,7 @@ sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fovy)
     cam.position = sdl3d_vec3_make(mover->position.x, eye_y, mover->position.z);
     cam.target = sdl3d_vec3_make(mover->position.x + fx, eye_y + fy, mover->position.z + fz);
     cam.up = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
-    cam.fovy = fovy;
+    cam.fovy = fov;
     cam.projection = SDL3D_CAMERA_PERSPECTIVE;
     return cam;
 }

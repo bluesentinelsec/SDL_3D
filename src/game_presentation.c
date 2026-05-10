@@ -21,6 +21,7 @@ typedef struct primitive_draw_context
     sdl3d_game_data_image_cache *image_cache;
     sdl3d_game_data_sprite_cache *sprite_cache;
     sdl3d_game_data_model_cache *model_cache;
+    sdl3d_game_data_mesh_primitive_cache *mesh_primitive_cache;
     const sdl3d_camera3d *camera;
     const sdl3d_game_data_render_eval *eval;
     sdl3d_game_data_render_primitive sphere_batch;
@@ -29,6 +30,8 @@ typedef struct primitive_draw_context
     int sphere_batch_capacity;
     bool sphere_batch_active;
 } primitive_draw_context;
+
+static const float SDL3D_GAME_PRESENTATION_PI = 3.14159265358979323846f;
 
 typedef struct sector_level_draw_context
 {
@@ -387,6 +390,26 @@ static bool ensure_model_cache_capacity(sdl3d_game_data_model_cache *cache, int 
 
     sdl3d_game_data_model_cache_entry *entries =
         (sdl3d_game_data_model_cache_entry *)SDL_realloc(cache->entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
+    cache->entries = entries;
+    cache->capacity = next_capacity;
+    return true;
+}
+
+static bool ensure_mesh_primitive_cache_capacity(sdl3d_game_data_mesh_primitive_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->capacity < 16 ? 16 : cache->capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    sdl3d_game_data_mesh_primitive_cache_entry *entries = (sdl3d_game_data_mesh_primitive_cache_entry *)SDL_realloc(
+        cache->entries, (size_t)next_capacity * sizeof(*entries));
     if (entries == NULL)
         return false;
 
@@ -831,12 +854,649 @@ static const sdl3d_texture2d *primitive_texture(primitive_draw_context *context,
     return entry != NULL ? &entry->texture : NULL;
 }
 
+static void mesh_primitive_free_mesh(sdl3d_mesh *mesh)
+{
+    if (mesh == NULL)
+        return;
+    SDL_free(mesh->positions);
+    SDL_free(mesh->normals);
+    SDL_free(mesh->uvs);
+    SDL_free(mesh->indices);
+    SDL_zero(*mesh);
+}
+
+static bool mesh_primitive_alloc_mesh(sdl3d_mesh *mesh, int vertex_count, int index_count, bool with_uvs)
+{
+    if (mesh == NULL || vertex_count <= 0 || index_count <= 0)
+        return false;
+    SDL_zero(*mesh);
+    mesh->positions = (float *)SDL_calloc((size_t)vertex_count * 3U, sizeof(float));
+    mesh->normals = (float *)SDL_calloc((size_t)vertex_count * 3U, sizeof(float));
+    mesh->uvs = with_uvs ? (float *)SDL_calloc((size_t)vertex_count * 2U, sizeof(float)) : NULL;
+    mesh->indices = (unsigned int *)SDL_calloc((size_t)index_count, sizeof(unsigned int));
+    if (mesh->positions == NULL || mesh->normals == NULL || (with_uvs && mesh->uvs == NULL) || mesh->indices == NULL)
+    {
+        mesh_primitive_free_mesh(mesh);
+        return SDL_OutOfMemory();
+    }
+    mesh->vertex_count = vertex_count;
+    mesh->index_count = index_count;
+    mesh->material_index = -1;
+    return true;
+}
+
+static void mesh_primitive_set_vertex(sdl3d_mesh *mesh, int index, sdl3d_vec3 position, sdl3d_vec3 normal, float u,
+                                      float v)
+{
+    mesh->positions[index * 3 + 0] = position.x;
+    mesh->positions[index * 3 + 1] = position.y;
+    mesh->positions[index * 3 + 2] = position.z;
+    mesh->normals[index * 3 + 0] = normal.x;
+    mesh->normals[index * 3 + 1] = normal.y;
+    mesh->normals[index * 3 + 2] = normal.z;
+    if (mesh->uvs != NULL)
+    {
+        mesh->uvs[index * 2 + 0] = u;
+        mesh->uvs[index * 2 + 1] = v;
+    }
+}
+
+static sdl3d_vec3 mesh_primitive_face_normal(sdl3d_vec3 a, sdl3d_vec3 b, sdl3d_vec3 c)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_cross(sdl3d_vec3_sub(b, a), sdl3d_vec3_sub(c, a)));
+}
+
+static bool mesh_primitive_cache_entry_matches(const sdl3d_game_data_mesh_primitive_cache_entry *entry,
+                                               const sdl3d_game_data_render_primitive *primitive)
+{
+    if (entry == NULL || primitive == NULL || !entry->loaded)
+        return false;
+    return entry->primitive == primitive->mesh_primitive && entry->size.x == primitive->size.x &&
+           entry->size.y == primitive->size.y && entry->size.z == primitive->size.z &&
+           entry->radius == primitive->radius && entry->radius_top == primitive->radius_top &&
+           entry->radius_bottom == primitive->radius_bottom && entry->height == primitive->height &&
+           entry->major_radius == primitive->major_radius && entry->minor_radius == primitive->minor_radius &&
+           entry->bevel_radius == primitive->bevel_radius && entry->arc_angle == primitive->arc_angle &&
+           entry->slices == primitive->slices && entry->rings == primitive->rings &&
+           entry->tube_segments == primitive->tube_segments;
+}
+
+static void mesh_primitive_cache_entry_set_key(sdl3d_game_data_mesh_primitive_cache_entry *entry,
+                                               const sdl3d_game_data_render_primitive *primitive)
+{
+    entry->primitive = primitive->mesh_primitive;
+    entry->size = primitive->size;
+    entry->radius = primitive->radius;
+    entry->radius_top = primitive->radius_top;
+    entry->radius_bottom = primitive->radius_bottom;
+    entry->height = primitive->height;
+    entry->major_radius = primitive->major_radius;
+    entry->minor_radius = primitive->minor_radius;
+    entry->bevel_radius = primitive->bevel_radius;
+    entry->arc_angle = primitive->arc_angle;
+    entry->slices = primitive->slices;
+    entry->rings = primitive->rings;
+    entry->tube_segments = primitive->tube_segments;
+}
+
+static bool build_cube_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    if (!mesh_primitive_alloc_mesh(mesh, 24, 36, true))
+        return false;
+    const float hx = primitive->size.x * 0.5f;
+    const float hy = primitive->size.y * 0.5f;
+    const float hz = primitive->size.z * 0.5f;
+    const sdl3d_vec3 c[8] = {{-hx, -hy, -hz}, {hx, -hy, -hz}, {-hx, hy, -hz}, {hx, hy, -hz},
+                             {-hx, -hy, hz},  {hx, -hy, hz},  {-hx, hy, hz},  {hx, hy, hz}};
+    static const int faces[6][4] = {
+        {4, 5, 7, 6}, {1, 0, 2, 3}, {5, 1, 3, 7}, {0, 4, 6, 2}, {6, 7, 3, 2}, {0, 1, 5, 4},
+    };
+    static const sdl3d_vec3 normals[6] = {{0, 0, 1}, {0, 0, -1}, {1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}};
+    static const float uvs[4][2] = {{0, 1}, {1, 1}, {1, 0}, {0, 0}};
+    for (int f = 0; f < 6; ++f)
+    {
+        const int base = f * 4;
+        for (int v = 0; v < 4; ++v)
+            mesh_primitive_set_vertex(mesh, base + v, c[faces[f][v]], normals[f], uvs[v][0], uvs[v][1]);
+        const unsigned int b = (unsigned int)base;
+        const int ii = f * 6;
+        mesh->indices[ii + 0] = b;
+        mesh->indices[ii + 1] = b + 1U;
+        mesh->indices[ii + 2] = b + 2U;
+        mesh->indices[ii + 3] = b;
+        mesh->indices[ii + 4] = b + 2U;
+        mesh->indices[ii + 5] = b + 3U;
+    }
+    return true;
+}
+
+static bool build_quad_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    if (!mesh_primitive_alloc_mesh(mesh, 4, 6, true))
+        return false;
+    const float hx = primitive->size.x * 0.5f;
+    const float hy = primitive->size.y * 0.5f;
+    const sdl3d_vec3 n = {0.0f, 0.0f, 1.0f};
+    mesh_primitive_set_vertex(mesh, 0, sdl3d_vec3_make(-hx, -hy, 0.0f), n, 0.0f, 1.0f);
+    mesh_primitive_set_vertex(mesh, 1, sdl3d_vec3_make(hx, -hy, 0.0f), n, 1.0f, 1.0f);
+    mesh_primitive_set_vertex(mesh, 2, sdl3d_vec3_make(hx, hy, 0.0f), n, 1.0f, 0.0f);
+    mesh_primitive_set_vertex(mesh, 3, sdl3d_vec3_make(-hx, hy, 0.0f), n, 0.0f, 0.0f);
+    const unsigned int indices[6] = {0, 1, 2, 0, 2, 3};
+    SDL_memcpy(mesh->indices, indices, sizeof(indices));
+    return true;
+}
+
+static bool build_disc_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    const int segments = primitive->slices;
+    if (!mesh_primitive_alloc_mesh(mesh, segments + 1, segments * 3, true))
+        return false;
+    const sdl3d_vec3 n = {0.0f, 0.0f, 1.0f};
+    mesh_primitive_set_vertex(mesh, 0, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), n, 0.5f, 0.5f);
+    for (int i = 0; i < segments; ++i)
+    {
+        const float a = (float)i / (float)segments * SDL3D_GAME_PRESENTATION_PI * 2.0f;
+        const float x = SDL_cosf(a) * primitive->radius;
+        const float y = SDL_sinf(a) * primitive->radius;
+        mesh_primitive_set_vertex(mesh, i + 1, sdl3d_vec3_make(x, y, 0.0f), n,
+                                  0.5f + x / SDL_max(primitive->radius * 2.0f, 0.0001f),
+                                  0.5f + y / SDL_max(primitive->radius * 2.0f, 0.0001f));
+    }
+    int ii = 0;
+    for (int i = 0; i < segments; ++i)
+    {
+        mesh->indices[ii++] = 0U;
+        mesh->indices[ii++] = (unsigned int)(i + 1);
+        mesh->indices[ii++] = (unsigned int)((i + 1) % segments + 1);
+    }
+    return true;
+}
+
+static bool build_sphere_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    const int rings = primitive->rings;
+    const int slices = primitive->slices;
+    if (!mesh_primitive_alloc_mesh(mesh, (rings + 1) * (slices + 1), rings * slices * 6, true))
+        return false;
+    for (int r = 0; r <= rings; ++r)
+    {
+        const float theta = SDL3D_GAME_PRESENTATION_PI * (float)r / (float)rings;
+        for (int s = 0; s <= slices; ++s)
+        {
+            const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+            const sdl3d_vec3 normal =
+                sdl3d_vec3_make(SDL_sinf(theta) * SDL_cosf(phi), SDL_cosf(theta), SDL_sinf(theta) * SDL_sinf(phi));
+            const sdl3d_vec3 position = sdl3d_vec3_scale(normal, primitive->radius);
+            mesh_primitive_set_vertex(mesh, r * (slices + 1) + s, position, normal, (float)s / (float)slices,
+                                      1.0f - (float)r / (float)rings);
+        }
+    }
+    int ii = 0;
+    for (int r = 0; r < rings; ++r)
+    {
+        for (int s = 0; s < slices; ++s)
+        {
+            const unsigned int a = (unsigned int)(r * (slices + 1) + s);
+            const unsigned int b = a + 1U;
+            const unsigned int c = (unsigned int)((r + 1) * (slices + 1) + s);
+            const unsigned int d = c + 1U;
+            mesh->indices[ii++] = a;
+            mesh->indices[ii++] = b;
+            mesh->indices[ii++] = d;
+            mesh->indices[ii++] = a;
+            mesh->indices[ii++] = d;
+            mesh->indices[ii++] = c;
+        }
+    }
+    return true;
+}
+
+static bool build_cylinder_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    const int slices = primitive->slices;
+    const int side_verts = 2 * (slices + 1);
+    const int cap_verts = (slices + 2) * 2;
+    if (!mesh_primitive_alloc_mesh(mesh, side_verts + cap_verts, slices * 12, false))
+        return false;
+    const float hh = primitive->height * 0.5f;
+    for (int s = 0; s <= slices; ++s)
+    {
+        const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+        const float c = SDL_cosf(phi);
+        const float z = SDL_sinf(phi);
+        const sdl3d_vec3 normal = sdl3d_vec3_make(c, 0.0f, z);
+        mesh_primitive_set_vertex(mesh, s, sdl3d_vec3_make(primitive->radius_top * c, hh, primitive->radius_top * z),
+                                  normal, 0.0f, 0.0f);
+        mesh_primitive_set_vertex(mesh, slices + 1 + s,
+                                  sdl3d_vec3_make(primitive->radius_bottom * c, -hh, primitive->radius_bottom * z),
+                                  normal, 0.0f, 0.0f);
+    }
+    int ii = 0;
+    for (int s = 0; s < slices; ++s)
+    {
+        const unsigned int t0 = (unsigned int)s;
+        const unsigned int t1 = (unsigned int)(s + 1);
+        const unsigned int b0 = (unsigned int)(slices + 1 + s);
+        const unsigned int b1 = (unsigned int)(slices + 1 + s + 1);
+        mesh->indices[ii++] = b0;
+        mesh->indices[ii++] = t0;
+        mesh->indices[ii++] = t1;
+        mesh->indices[ii++] = b0;
+        mesh->indices[ii++] = t1;
+        mesh->indices[ii++] = b1;
+    }
+    int cap = side_verts;
+    mesh_primitive_set_vertex(mesh, cap, sdl3d_vec3_make(0.0f, hh, 0.0f), sdl3d_vec3_make(0.0f, 1.0f, 0.0f), 0, 0);
+    for (int s = 0; s <= slices; ++s)
+    {
+        const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+        mesh_primitive_set_vertex(
+            mesh, cap + 1 + s,
+            sdl3d_vec3_make(primitive->radius_top * SDL_cosf(phi), hh, primitive->radius_top * SDL_sinf(phi)),
+            sdl3d_vec3_make(0.0f, 1.0f, 0.0f), 0, 0);
+    }
+    for (int s = 0; s < slices; ++s)
+    {
+        mesh->indices[ii++] = (unsigned int)cap;
+        mesh->indices[ii++] = (unsigned int)(cap + 1 + s + 1);
+        mesh->indices[ii++] = (unsigned int)(cap + 1 + s);
+    }
+    cap += slices + 2;
+    mesh_primitive_set_vertex(mesh, cap, sdl3d_vec3_make(0.0f, -hh, 0.0f), sdl3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
+    for (int s = 0; s <= slices; ++s)
+    {
+        const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+        mesh_primitive_set_vertex(
+            mesh, cap + 1 + s,
+            sdl3d_vec3_make(primitive->radius_bottom * SDL_cosf(phi), -hh, primitive->radius_bottom * SDL_sinf(phi)),
+            sdl3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
+    }
+    for (int s = 0; s < slices; ++s)
+    {
+        mesh->indices[ii++] = (unsigned int)cap;
+        mesh->indices[ii++] = (unsigned int)(cap + 1 + s);
+        mesh->indices[ii++] = (unsigned int)(cap + 1 + s + 1);
+    }
+    return true;
+}
+
+static bool build_capsule_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    const int slices = primitive->slices;
+    const int rings = primitive->rings;
+    const int total_rings = 2 * rings + 2;
+    const int verts_per_ring = slices + 1;
+    if (!mesh_primitive_alloc_mesh(mesh, total_rings * verts_per_ring, (total_rings - 1) * slices * 6, false))
+        return false;
+
+    const float cylinder_span = SDL_max(primitive->height - primitive->radius * 2.0f, 0.0f);
+    const float start_y = -cylinder_span * 0.5f;
+    const float end_y = cylinder_span * 0.5f;
+    for (int k = 0; k < total_rings; ++k)
+    {
+        float ring_radius = 0.0f;
+        float center_y = 0.0f;
+        float normal_y = 0.0f;
+        if (k <= rings)
+        {
+            const float t = (float)k / (float)rings;
+            const float theta = SDL3D_GAME_PRESENTATION_PI * 0.5f * t;
+            ring_radius = primitive->radius * SDL_sinf(theta);
+            center_y = end_y + primitive->radius * SDL_cosf(theta);
+            normal_y = SDL_cosf(theta);
+        }
+        else
+        {
+            const int lower_k = k - (rings + 1);
+            const float t = (float)lower_k / (float)rings;
+            const float theta = SDL3D_GAME_PRESENTATION_PI * 0.5f * t;
+            ring_radius = primitive->radius * SDL_cosf(theta);
+            center_y = start_y - primitive->radius * SDL_sinf(theta);
+            normal_y = -SDL_sinf(theta);
+        }
+        for (int s = 0; s <= slices; ++s)
+        {
+            const float phi = SDL3D_GAME_PRESENTATION_PI * 2.0f * (float)s / (float)slices;
+            const float x = ring_radius * SDL_cosf(phi);
+            const float z = ring_radius * SDL_sinf(phi);
+            const sdl3d_vec3 normal = sdl3d_vec3_normalize(sdl3d_vec3_make(
+                SDL_cosf(phi) * ring_radius, normal_y * primitive->radius, SDL_sinf(phi) * ring_radius));
+            mesh_primitive_set_vertex(mesh, k * verts_per_ring + s, sdl3d_vec3_make(x, center_y, z), normal, 0, 0);
+        }
+    }
+
+    int ii = 0;
+    for (int k = 0; k + 1 < total_rings; ++k)
+    {
+        for (int s = 0; s < slices; ++s)
+        {
+            const unsigned int a = (unsigned int)(k * verts_per_ring + s);
+            const unsigned int b = a + 1U;
+            const unsigned int c = (unsigned int)((k + 1) * verts_per_ring + s);
+            const unsigned int d = c + 1U;
+            mesh->indices[ii++] = a;
+            mesh->indices[ii++] = c;
+            mesh->indices[ii++] = d;
+            mesh->indices[ii++] = a;
+            mesh->indices[ii++] = d;
+            mesh->indices[ii++] = b;
+        }
+    }
+    return true;
+}
+
+static bool build_torus_like_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh, bool full_torus)
+{
+    const int segments = primitive->slices;
+    const int tube_segments = primitive->tube_segments;
+    const int arc_vertices = segments + 1;
+    const int tube_vertices = tube_segments + 1;
+    if (!mesh_primitive_alloc_mesh(mesh, arc_vertices * tube_vertices, segments * tube_segments * 6, false))
+        return false;
+    const float arc_angle = full_torus ? SDL3D_GAME_PRESENTATION_PI * 2.0f : primitive->arc_angle;
+    const float start_angle = full_torus ? 0.0f : -arc_angle * 0.5f;
+    for (int a = 0; a <= segments; ++a)
+    {
+        const float u = start_angle + (float)a / (float)segments * arc_angle;
+        const sdl3d_vec3 radial = sdl3d_vec3_make(SDL_cosf(u), 0.0f, SDL_sinf(u));
+        const sdl3d_vec3 center = sdl3d_vec3_scale(radial, primitive->major_radius);
+        for (int t = 0; t <= tube_segments; ++t)
+        {
+            const float v = (float)t / (float)tube_segments * SDL3D_GAME_PRESENTATION_PI * 2.0f;
+            const sdl3d_vec3 normal =
+                sdl3d_vec3_normalize(sdl3d_vec3_make(radial.x * SDL_cosf(v), SDL_sinf(v), radial.z * SDL_cosf(v)));
+            mesh_primitive_set_vertex(mesh, a * tube_vertices + t,
+                                      sdl3d_vec3_add(center, sdl3d_vec3_scale(normal, primitive->minor_radius)), normal,
+                                      0, 0);
+        }
+    }
+    int ii = 0;
+    for (int a = 0; a < segments; ++a)
+    {
+        for (int t = 0; t < tube_segments; ++t)
+        {
+            const unsigned int p00 = (unsigned int)(a * tube_vertices + t);
+            const unsigned int p01 = p00 + 1U;
+            const unsigned int p10 = (unsigned int)((a + 1) * tube_vertices + t);
+            const unsigned int p11 = p10 + 1U;
+            mesh->indices[ii++] = p00;
+            mesh->indices[ii++] = p10;
+            mesh->indices[ii++] = p01;
+            mesh->indices[ii++] = p01;
+            mesh->indices[ii++] = p10;
+            mesh->indices[ii++] = p11;
+        }
+    }
+    return true;
+}
+
+static bool build_pyramid_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    if (!mesh_primitive_alloc_mesh(mesh, 18, 18, false))
+        return false;
+    const float hx = primitive->size.x * 0.5f;
+    const float hy = primitive->size.y * 0.5f;
+    const float hz = primitive->size.z * 0.5f;
+    const sdl3d_vec3 apex = sdl3d_vec3_make(0.0f, hy, 0.0f);
+    const sdl3d_vec3 bl = sdl3d_vec3_make(-hx, -hy, -hz);
+    const sdl3d_vec3 br = sdl3d_vec3_make(hx, -hy, -hz);
+    const sdl3d_vec3 tr = sdl3d_vec3_make(hx, -hy, hz);
+    const sdl3d_vec3 tl = sdl3d_vec3_make(-hx, -hy, hz);
+    const sdl3d_vec3 faces[6][3] = {{bl, apex, br}, {br, apex, tr}, {tr, apex, tl},
+                                    {tl, apex, bl}, {bl, br, tr},   {bl, tr, tl}};
+    for (int f = 0; f < 6; ++f)
+    {
+        const sdl3d_vec3 normal = mesh_primitive_face_normal(faces[f][0], faces[f][1], faces[f][2]);
+        for (int v = 0; v < 3; ++v)
+        {
+            const int vi = f * 3 + v;
+            mesh_primitive_set_vertex(mesh, vi, faces[f][v], normal, 0, 0);
+            mesh->indices[vi] = (unsigned int)vi;
+        }
+    }
+    return true;
+}
+
+static bool build_wedge_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    if (!mesh_primitive_alloc_mesh(mesh, 24, 24, false))
+        return false;
+    const float hx = primitive->size.x * 0.5f;
+    const float hy = primitive->size.y * 0.5f;
+    const float hz = primitive->size.z * 0.5f;
+    const sdl3d_vec3 p[6] = {sdl3d_vec3_make(-hx, -hy, -hz), sdl3d_vec3_make(hx, -hy, -hz),
+                             sdl3d_vec3_make(-hx, -hy, hz),  sdl3d_vec3_make(hx, -hy, hz),
+                             sdl3d_vec3_make(-hx, hy, hz),   sdl3d_vec3_make(hx, hy, hz)};
+    const sdl3d_vec3 triangles[8][3] = {
+        {p[0], p[3], p[1]}, {p[0], p[2], p[3]}, {p[2], p[5], p[3]}, {p[2], p[4], p[5]},
+        {p[0], p[4], p[2]}, {p[0], p[1], p[5]}, {p[0], p[5], p[4]}, {p[1], p[3], p[5]},
+    };
+    for (int f = 0; f < 8; ++f)
+    {
+        const sdl3d_vec3 normal = mesh_primitive_face_normal(triangles[f][0], triangles[f][1], triangles[f][2]);
+        for (int v = 0; v < 3; ++v)
+        {
+            const int vi = f * 3 + v;
+            mesh_primitive_set_vertex(mesh, vi, triangles[f][v], normal, 0, 0);
+            mesh->indices[vi] = (unsigned int)vi;
+        }
+    }
+    return true;
+}
+
+static bool build_hemisphere_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    const int rings = primitive->rings;
+    const int slices = primitive->slices;
+    const int curved_vertices = (rings + 1) * (slices + 1);
+    const int cap_center = curved_vertices;
+    if (!mesh_primitive_alloc_mesh(mesh, curved_vertices + 1, rings * slices * 6 + slices * 3, false))
+        return false;
+    const float y_offset = primitive->radius * 0.5f;
+    for (int r = 0; r <= rings; ++r)
+    {
+        const float theta = (float)r / (float)rings * SDL3D_GAME_PRESENTATION_PI * 0.5f;
+        const float rr = SDL_sinf(theta) * primitive->radius;
+        const float y = SDL_cosf(theta) * primitive->radius - y_offset;
+        for (int s = 0; s <= slices; ++s)
+        {
+            const float phi = (float)s / (float)slices * SDL3D_GAME_PRESENTATION_PI * 2.0f;
+            const sdl3d_vec3 position = sdl3d_vec3_make(SDL_cosf(phi) * rr, y, SDL_sinf(phi) * rr);
+            const sdl3d_vec3 normal = sdl3d_vec3_normalize(sdl3d_vec3_make(position.x, y + y_offset, position.z));
+            mesh_primitive_set_vertex(mesh, r * (slices + 1) + s, position, normal, 0, 0);
+        }
+    }
+    int ii = 0;
+    for (int r = 0; r < rings; ++r)
+    {
+        for (int s = 0; s < slices; ++s)
+        {
+            const unsigned int a = (unsigned int)(r * (slices + 1) + s);
+            const unsigned int b = a + 1U;
+            const unsigned int c = (unsigned int)((r + 1) * (slices + 1) + s);
+            const unsigned int d = c + 1U;
+            mesh->indices[ii++] = a;
+            mesh->indices[ii++] = c;
+            mesh->indices[ii++] = b;
+            mesh->indices[ii++] = b;
+            mesh->indices[ii++] = c;
+            mesh->indices[ii++] = d;
+        }
+    }
+    mesh_primitive_set_vertex(mesh, cap_center, sdl3d_vec3_make(0.0f, -y_offset, 0.0f),
+                              sdl3d_vec3_make(0.0f, -1.0f, 0.0f), 0, 0);
+    const int base_row = rings * (slices + 1);
+    for (int s = 0; s < slices; ++s)
+    {
+        mesh->indices[ii++] = (unsigned int)cap_center;
+        mesh->indices[ii++] = (unsigned int)(base_row + s + 1);
+        mesh->indices[ii++] = (unsigned int)(base_row + s);
+    }
+    return true;
+}
+
+static bool build_rounded_box_mesh(const sdl3d_game_data_render_primitive *primitive, sdl3d_mesh *mesh)
+{
+    const int grid = SDL_max(primitive->rings + 2, 3);
+    const int face_vertices = grid * grid;
+    if (!mesh_primitive_alloc_mesh(mesh, face_vertices * 6, (grid - 1) * (grid - 1) * 36, false))
+        return false;
+    const sdl3d_vec3 half = sdl3d_vec3_scale(primitive->size, 0.5f);
+    const float radius = SDL_min(primitive->bevel_radius,
+                                 SDL_min(primitive->size.x, SDL_min(primitive->size.y, primitive->size.z)) * 0.5f);
+    const sdl3d_vec3 inner =
+        sdl3d_vec3_make(SDL_max(half.x - radius, 0.0f), SDL_max(half.y - radius, 0.0f), SDL_max(half.z - radius, 0.0f));
+    int vi = 0;
+    for (int face = 0; face < 6; ++face)
+    {
+        const int axis = face / 2;
+        const float sign = (face % 2) == 0 ? -1.0f : 1.0f;
+        for (int y = 0; y < grid; ++y)
+        {
+            const float v = -1.0f + 2.0f * (float)y / (float)(grid - 1);
+            for (int x = 0; x < grid; ++x)
+            {
+                const float u = -1.0f + 2.0f * (float)x / (float)(grid - 1);
+                sdl3d_vec3 local;
+                if (axis == 0)
+                    local = sdl3d_vec3_make(sign * half.x, u * half.y, v * half.z);
+                else if (axis == 1)
+                    local = sdl3d_vec3_make(u * half.x, sign * half.y, v * half.z);
+                else
+                    local = sdl3d_vec3_make(u * half.x, v * half.y, sign * half.z);
+                const sdl3d_vec3 clamped =
+                    sdl3d_vec3_make(SDL_clamp(local.x, -inner.x, inner.x), SDL_clamp(local.y, -inner.y, inner.y),
+                                    SDL_clamp(local.z, -inner.z, inner.z));
+                const sdl3d_vec3 delta = sdl3d_vec3_sub(local, clamped);
+                sdl3d_vec3 face_normal = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+                if (axis == 0)
+                    face_normal.x = sign;
+                else if (axis == 1)
+                    face_normal.y = sign;
+                else
+                    face_normal.z = sign;
+                const sdl3d_vec3 normal =
+                    sdl3d_vec3_length_squared(delta) > 0.000001f ? sdl3d_vec3_normalize(delta) : face_normal;
+                mesh_primitive_set_vertex(mesh, vi++, sdl3d_vec3_add(clamped, sdl3d_vec3_scale(normal, radius)), normal,
+                                          0, 0);
+            }
+        }
+    }
+    int ii = 0;
+    for (int face = 0; face < 6; ++face)
+    {
+        const int base = face * face_vertices;
+        for (int y = 0; y < grid - 1; ++y)
+        {
+            for (int x = 0; x < grid - 1; ++x)
+            {
+                const unsigned int a = (unsigned int)(base + y * grid + x);
+                const unsigned int b = a + 1U;
+                const unsigned int c = (unsigned int)(base + (y + 1) * grid + x);
+                const unsigned int d = c + 1U;
+                mesh->indices[ii++] = a;
+                mesh->indices[ii++] = c;
+                mesh->indices[ii++] = b;
+                mesh->indices[ii++] = b;
+                mesh->indices[ii++] = c;
+                mesh->indices[ii++] = d;
+            }
+        }
+    }
+    return true;
+}
+
+static bool build_mesh_primitive_cache_entry(sdl3d_game_data_mesh_primitive_cache_entry *entry,
+                                             const sdl3d_game_data_render_primitive *primitive)
+{
+    bool ok = false;
+    mesh_primitive_cache_entry_set_key(entry, primitive);
+    switch (primitive->mesh_primitive)
+    {
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+        ok = build_cube_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        ok = build_sphere_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+        ok = build_capsule_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        ok = build_cylinder_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+        ok = build_torus_like_mesh(primitive, &entry->mesh, true);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        ok = build_torus_like_mesh(primitive, &entry->mesh, false);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+        ok = build_pyramid_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+        ok = build_wedge_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        ok = build_quad_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        ok = build_disc_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        ok = build_hemisphere_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        ok = build_rounded_box_mesh(primitive, &entry->mesh);
+        break;
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        ok = false;
+        break;
+    }
+    entry->loaded = ok;
+    if (!ok)
+        mesh_primitive_free_mesh(&entry->mesh);
+    return ok;
+}
+
+static const sdl3d_mesh *find_or_build_mesh_primitive(sdl3d_game_data_mesh_primitive_cache *cache,
+                                                      const sdl3d_game_data_render_primitive *primitive)
+{
+    if (cache == NULL || primitive == NULL)
+        return NULL;
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (mesh_primitive_cache_entry_matches(&cache->entries[i], primitive))
+        {
+            ++cache->hits;
+            return &cache->entries[i].mesh;
+        }
+    }
+    if (!ensure_mesh_primitive_cache_capacity(cache, cache->count + 1))
+        return NULL;
+    sdl3d_game_data_mesh_primitive_cache_entry *entry = &cache->entries[cache->count];
+    SDL_zero(*entry);
+    if (!build_mesh_primitive_cache_entry(entry, primitive))
+        return NULL;
+    ++cache->count;
+    ++cache->misses;
+    return &entry->mesh;
+}
+
 static bool draw_mesh_primitive_solid(primitive_draw_context *context,
                                       const sdl3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL)
         return false;
     const sdl3d_texture2d *texture = primitive_texture(context, primitive);
+    const sdl3d_mesh *cached_mesh = find_or_build_mesh_primitive(context->mesh_primitive_cache, primitive);
+    if (cached_mesh != NULL)
+        return sdl3d_draw_static_mesh(context->renderer, cached_mesh, cached_mesh->uvs != NULL ? texture : NULL,
+                                      primitive->color);
     switch (primitive->mesh_primitive)
     {
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
@@ -868,6 +1528,28 @@ static bool draw_mesh_primitive_solid(primitive_draw_context *context,
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
         return sdl3d_draw_wedge(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
                                 primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+        return sdl3d_draw_quad(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                               (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return sdl3d_draw_disc(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                               primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return sdl3d_draw_hemisphere(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                     primitive->rings, primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return sdl3d_draw_rounded_box(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                      primitive->bevel_radius, primitive->rings, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return sdl3d_draw_tube_segment(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
+                                       primitive->minor_radius, primitive->arc_angle, primitive->slices,
+                                       primitive->tube_segments, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+        return sdl3d_draw_arrow(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                primitive->height, primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        return sdl3d_draw_quad(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                               (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
     default:
         return false;
@@ -912,6 +1594,28 @@ static bool draw_mesh_primitive_wires(primitive_draw_context *context,
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
         return sdl3d_draw_wedge_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
                                       primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+        return sdl3d_draw_quad_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                     (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return sdl3d_draw_disc_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                     primitive->slices, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return sdl3d_draw_hemisphere_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                           primitive->rings, primitive->slices, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return sdl3d_draw_rounded_box_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                            primitive->bevel_radius, primitive->rings, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return sdl3d_draw_tube_segment_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                             primitive->major_radius, primitive->minor_radius, primitive->arc_angle,
+                                             primitive->slices, primitive->tube_segments, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+        return sdl3d_draw_arrow_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                      primitive->height, primitive->slices, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        return sdl3d_draw_quad_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                     (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
     default:
         return false;
@@ -1390,10 +2094,28 @@ void sdl3d_game_data_model_cache_free(sdl3d_game_data_model_cache *cache)
     SDL_zero(*cache);
 }
 
+void sdl3d_game_data_mesh_primitive_cache_init(sdl3d_game_data_mesh_primitive_cache *cache)
+{
+    if (cache == NULL)
+        return;
+    SDL_zero(*cache);
+}
+
+void sdl3d_game_data_mesh_primitive_cache_free(sdl3d_game_data_mesh_primitive_cache *cache)
+{
+    if (cache == NULL)
+        return;
+    for (int i = 0; i < cache->count; ++i)
+        mesh_primitive_free_mesh(&cache->entries[i].mesh);
+    SDL_free(cache->entries);
+    SDL_zero(*cache);
+}
+
 static bool draw_render_primitives_evaluated_with_cache(
     const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer, const sdl3d_game_data_render_eval *eval,
     sdl3d_game_data_image_cache *image_cache, sdl3d_game_data_sprite_cache *sprite_cache,
-    sdl3d_game_data_model_cache *model_cache, const sdl3d_camera3d *camera)
+    sdl3d_game_data_model_cache *model_cache, sdl3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
+    const sdl3d_camera3d *camera)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -1405,6 +2127,7 @@ static bool draw_render_primitives_evaluated_with_cache(
     context.image_cache = image_cache;
     context.sprite_cache = sprite_cache;
     context.model_cache = model_cache;
+    context.mesh_primitive_cache = mesh_primitive_cache;
     context.camera = camera;
     context.eval = eval;
     bool ok = sdl3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
@@ -1529,14 +2252,14 @@ static bool draw_active_scene_skybox(const sdl3d_game_data_runtime *runtime, sdl
 
 bool sdl3d_game_data_draw_render_primitives(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL, NULL);
 }
 
 bool sdl3d_game_data_draw_render_primitives_evaluated(const sdl3d_game_data_runtime *runtime,
                                                       sdl3d_render_context *renderer,
                                                       const sdl3d_game_data_render_eval *eval)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL, NULL);
 }
 
 bool sdl3d_game_data_draw_ui_text(const sdl3d_game_data_runtime *runtime, sdl3d_render_context *renderer,
@@ -2581,9 +3304,9 @@ bool sdl3d_game_data_draw_frame(const sdl3d_game_data_frame_desc *frame)
                  ok;
             if (frame->particle_cache != NULL)
                 ok = sdl3d_game_data_draw_particles(frame->runtime, frame->renderer, frame->particle_cache) && ok;
-            ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
-                                                             frame->image_cache, frame->sprite_cache,
-                                                             frame->model_cache, &camera) &&
+            ok = draw_render_primitives_evaluated_with_cache(
+                     frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
+                     frame->model_cache, frame->mesh_primitive_cache, &camera) &&
                  ok;
             ok = run_frame_hook(frame, frame->after_world_3d) && ok;
             sdl3d_end_mode_3d(frame->renderer);

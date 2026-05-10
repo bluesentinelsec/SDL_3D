@@ -1,0 +1,191 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.sun",
+      "active": true,
+      "transform": { "position": [26.0, 8.0, 24.0] },
+      "components": [
+        {
+          "type": "light.directional",
+          "direction": [-0.45, -1.0, -0.35],
+          "color": [1.0, 0.94, 0.82],
+          "intensity": 2.35
+        }
+      ]
+    },
+    {
+      "name": "entity.mesh.cube",
+      "active": true,
+      "transform": { "position": [6.0, 1.0, 14.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "cube", "size": [1.6, 1.6, 1.6], "color": [230, 70, 70, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.sphere",
+      "active": true,
+      "transform": { "position": [13.0, 1.0, 14.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "sphere", "radius": 0.95, "segments": 24, "rings": 12, "color": [80, 180, 255, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.capsule",
+      "active": true,
+      "transform": { "position": [20.0, 1.35, 14.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "capsule", "radius": 0.55, "height": 2.5, "segments": 20, "rings": 8, "color": [110, 235, 130, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.cylinder",
+      "active": true,
+      "transform": { "position": [27.0, 1.0, 14.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "cylinder", "radius_top": 0.75, "radius_bottom": 0.75, "height": 2.0, "segments": 24, "color": [255, 210, 70, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.cone",
+      "active": true,
+      "transform": { "position": [34.0, 1.0, 14.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "cone", "radius": 0.9, "height": 2.0, "segments": 24, "color": [255, 125, 55, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.torus",
+      "active": true,
+      "transform": { "position": [41.0, 1.25, 14.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "torus", "major_radius": 0.8, "minor_radius": 0.22, "segments": 28, "tube_segments": 10, "rotation_axis": [1.0, 0.0, 0.0], "rotation_angle": 1.5707964, "color": [185, 115, 255, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.pyramid",
+      "active": true,
+      "transform": { "position": [48.0, 1.0, 14.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "pyramid", "size": [1.9, 2.0, 1.9], "color": [70, 235, 225, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.wedge",
+      "active": true,
+      "transform": { "position": [6.0, 0.85, 24.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "wedge", "size": [2.0, 1.7, 2.0], "draw_mode": "solid_wire", "wire_color": [20, 20, 24, 220], "color": [255, 95, 190, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.plane",
+      "active": true,
+      "transform": { "position": [13.0, 1.5, 24.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "plane", "size": [2.4, 1.4, 0.05], "draw_mode": "solid_wire", "wire_color": [25, 25, 28, 220], "color": [245, 120, 120, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.disc",
+      "active": true,
+      "transform": { "position": [20.0, 1.4, 24.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "disc", "radius": 1.05, "segments": 28, "color": [255, 226, 105, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.hemisphere",
+      "active": true,
+      "transform": { "position": [27.0, 1.0, 24.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "hemisphere", "radius": 1.05, "segments": 24, "rings": 8, "color": [255, 190, 65, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.rounded_box",
+      "active": true,
+      "transform": { "position": [34.0, 1.0, 24.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "rounded_box", "size": [1.9, 1.7, 1.45], "bevel_radius": 0.28, "rings": 4, "color": [120, 190, 255, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.pipe",
+      "active": true,
+      "transform": { "position": [41.0, 1.2, 24.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "pipe", "major_radius": 0.95, "minor_radius": 0.18, "arc_angle": 3.1415927, "segments": 20, "tube_segments": 8, "color": [90, 230, 210, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.arrow",
+      "active": true,
+      "transform": { "position": [48.0, 1.35, 24.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "arrow", "radius": 0.55, "height": 2.4, "segments": 24, "rotation_axis": [0.0, 0.0, 1.0], "rotation_angle": -1.5707964, "color": [255, 90, 215, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mesh.billboard_plane",
+      "active": true,
+      "transform": { "position": [6.0, 1.55, 34.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "billboard_plane", "size": [2.2, 2.2, 0.05], "color": [180, 255, 125, 255], "lighting": true }
+      ]
+    },
+    {
+      "name": "entity.mock.robot",
+      "active": true,
+      "transform": { "position": [17.0, 0.9, 35.0] },
+      "components": [
+        {
+          "type": "render.composite",
+          "lighting": true,
+          "wire_color": [18, 20, 24, 210],
+          "parts": [
+            { "primitive": "rounded_box", "offset": [0.0, 0.9, 0.0], "size": [1.2, 1.55, 0.85], "bevel_radius": 0.2, "rings": 4, "color": [100, 165, 235, 255] },
+            { "primitive": "sphere", "offset": [0.0, 1.85, 0.0], "radius": 0.42, "segments": 16, "rings": 8, "color": [230, 235, 245, 255] },
+            { "primitive": "disc", "offset": [-0.16, 1.88, 0.39], "radius": 0.08, "segments": 16, "color": [45, 120, 255, 255], "emissive": true },
+            { "primitive": "disc", "offset": [0.16, 1.88, 0.39], "radius": 0.08, "segments": 16, "color": [45, 120, 255, 255], "emissive": true },
+            { "primitive": "capsule", "offset": [-0.86, 0.85, 0.0], "radius": 0.16, "height": 1.25, "segments": 14, "rings": 6, "color": [75, 95, 130, 255] },
+            { "primitive": "capsule", "offset": [0.86, 0.85, 0.0], "radius": 0.16, "height": 1.25, "segments": 14, "rings": 6, "color": [75, 95, 130, 255] }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.mock.ship",
+      "active": true,
+      "transform": { "position": [28.0, 1.0, 35.0] },
+      "components": [
+        {
+          "type": "render.composite",
+          "lighting": true,
+          "wire_color": [16, 18, 24, 220],
+          "parts": [
+            { "primitive": "capsule", "offset": [0.0, 0.55, 0.0], "radius": 0.34, "height": 2.35, "segments": 18, "rings": 6, "rotation_axis": [1.0, 0.0, 0.0], "rotation_angle": 1.5707964, "color": [205, 220, 240, 255] },
+            { "primitive": "wedge", "offset": [-0.95, 0.4, 0.1], "size": [1.5, 0.25, 1.35], "rotation_axis": [0.0, 1.0, 0.0], "rotation_angle": 0.35, "color": [255, 115, 75, 255] },
+            { "primitive": "wedge", "offset": [0.95, 0.4, 0.1], "size": [1.5, 0.25, 1.35], "rotation_axis": [0.0, 1.0, 0.0], "rotation_angle": -0.35, "color": [255, 115, 75, 255] },
+            { "primitive": "cone", "offset": [0.0, 0.55, -1.32], "radius": 0.36, "height": 0.65, "segments": 20, "rotation_axis": [1.0, 0.0, 0.0], "rotation_angle": -1.5707964, "color": [95, 210, 255, 255], "emissive": true }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "entity.mock.portal",
+      "active": true,
+      "transform": { "position": [40.5, 1.6, 35.0] },
+      "components": [
+        {
+          "type": "render.composite",
+          "lighting": true,
+          "parts": [
+            { "primitive": "tube_segment", "major_radius": 0.9, "minor_radius": 0.12, "arc_angle": 6.2831853, "segments": 28, "tube_segments": 8, "rotation_axis": [1.0, 0.0, 0.0], "rotation_angle": 1.5707964, "color": [95, 245, 255, 255], "emissive": true },
+            { "primitive": "disc", "radius": 0.78, "segments": 28, "color": [45, 75, 150, 130] }
+          ]
+        }
+      ]
+    }
+  ]
+}

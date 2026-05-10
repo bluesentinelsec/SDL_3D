@@ -134,6 +134,17 @@ extern "C"
     bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
                          sdl3d_color tint);
 
+    /**
+     * @brief Draw a mesh whose vertex/index arrays are stable for the caller's lifetime.
+     *
+     * This is equivalent to sdl3d_draw_mesh(), but tells hardware backends they may
+     * cache GPU buffers for the mesh instead of uploading vertex data every frame.
+     * Use this for cached procedural meshes, loaded static models, and other
+     * immutable geometry. Do not pass stack-owned or per-frame temporary arrays.
+     */
+    bool sdl3d_draw_static_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
+                                sdl3d_color tint);
+
     /*
      * Draw every mesh in a model with a uniform translation + scale. Material
      * albedo factors and albedo textures modulate the supplied tint. Texture

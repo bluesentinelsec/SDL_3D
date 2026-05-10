@@ -1,6 +1,17 @@
 #include "sdl3d/camera.h"
 
 #include <SDL3/SDL_error.h>
+#include <SDL3/SDL_stdinc.h>
+
+static float camera_vertical_fov_radians(const sdl3d_camera3d *camera, float aspect)
+{
+    const float fov_radians = sdl3d_degrees_to_radians(camera->fovy);
+    if (camera->fov_axis != SDL3D_CAMERA_FOV_HORIZONTAL)
+        return fov_radians;
+
+    const float half_tan = SDL_tanf(fov_radians * 0.5f) / aspect;
+    return 2.0f * SDL_atanf(half_tan);
+}
 
 bool sdl3d_camera3d_compute_matrices(const sdl3d_camera3d *camera, int backbuffer_width, int backbuffer_height,
                                      float near_plane, float far_plane, sdl3d_mat4 *out_view,
@@ -36,7 +47,7 @@ bool sdl3d_camera3d_compute_matrices(const sdl3d_camera3d *camera, int backbuffe
     switch (camera->projection)
     {
     case SDL3D_CAMERA_PERSPECTIVE: {
-        const float fovy_radians = sdl3d_degrees_to_radians(camera->fovy);
+        const float fovy_radians = camera_vertical_fov_radians(camera, aspect);
         return sdl3d_mat4_perspective(fovy_radians, aspect, near_plane, far_plane, out_projection);
     }
     case SDL3D_CAMERA_ORTHOGRAPHIC: {

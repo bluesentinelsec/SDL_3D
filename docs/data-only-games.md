@@ -138,7 +138,7 @@ build/debug/sdl3d_runner \
 ```
 
 The starter proves the data-only shape for common FPS primitives: WASD/mouse
-input, an FPS sector controller, a 90-degree FOV camera, a sector room,
+input, an FPS sector controller, an FPS camera, a sector room,
 navigation graph, reticle/FPS/resource HUD text, pause menu, projectile weapon,
 projectile pool, pickup archetype, resource-station archetype, and editor
 palette metadata. It uses colored geometry and built-in fonts so it remains
@@ -160,6 +160,18 @@ build/debug/sdl3d_runner \
 Focused dojo scenes should use authored scene-enter setup to place the player
 near the mechanic being tuned. That keeps the workflow equivalent to the final
 runner path while avoiding splash/title/campaign flow during development.
+
+`demos/mesh_primitives_dojo` is a graybox showcase for procedural 3D placeholder
+geometry. It uses a sector-bounded room, one directional sun light, an FPS
+camera, one differently colored actor for each `render.mesh_primitive` shape,
+composite mock actors assembled from primitive parts, and spaced HUD labels plus
+an FPS counter for quick performance checks:
+
+```sh
+build/debug/sdl3d_runner \
+  --root demos/mesh_primitives_dojo/data \
+  --data asset://mesh_primitives_dojo.game.json
+```
 
 ## Data-Only Parity Checklist
 

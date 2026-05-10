@@ -624,6 +624,35 @@ TEST_F(SDL3DShapesFixture, TorusPyramidAndWedgeRender)
     EXPECT_GT(CountColor(c.ctx, kBlue), 100);
 }
 
+TEST_F(SDL3DShapesFixture, AdditionalPlaceholderPrimitivesRender)
+{
+    WindowRenderer wr(128, 128);
+    ASSERT_TRUE(wr.ok());
+    ContextOwner c;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &c.ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_quad(c.ctx, sdl3d_vec3_make(-0.7f, 0.7f, 0.0f), {0.7f, 0.5f}, kRed));
+    ASSERT_TRUE(sdl3d_draw_disc(c.ctx, sdl3d_vec3_make(0.7f, 0.7f, 0.0f), 0.32f, 18, kGreen));
+    ASSERT_TRUE(sdl3d_draw_hemisphere(c.ctx, sdl3d_vec3_make(-0.7f, -0.35f, 0.0f), 0.42f, 6, 18, kBlue));
+    ASSERT_TRUE(sdl3d_draw_rounded_box(c.ctx, sdl3d_vec3_make(0.65f, -0.35f, 0.0f),
+                                       sdl3d_vec3_make(0.55f, 0.55f, 0.55f), 0.14f, 3, kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+    EXPECT_GT(CountColor(c.ctx, kRed), 40);
+    EXPECT_GT(CountColor(c.ctx, kGreen), 20);
+    EXPECT_GT(CountColor(c.ctx, kBlue), 20);
+
+    ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    ASSERT_TRUE(
+        sdl3d_draw_tube_segment(c.ctx, sdl3d_vec3_make(-0.55f, 0.0f, 0.0f), 0.45f, 0.1f, 3.1415927f, 16, 8, kGreen));
+    ASSERT_TRUE(sdl3d_draw_arrow(c.ctx, sdl3d_vec3_make(0.65f, 0.0f, 0.0f), 0.28f, 1.1f, 16, kBlue));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+    EXPECT_GT(CountColor(c.ctx, kGreen), 20);
+    EXPECT_GT(CountColor(c.ctx, kBlue), 20);
+}
+
 TEST_F(SDL3DShapesFixture, NewPrimitiveWiresDrawWithoutFilling)
 {
     WindowRenderer wr(128, 128);
@@ -658,6 +687,12 @@ TEST_F(SDL3DShapesFixture, RejectsBadNewPrimitiveArguments)
     EXPECT_FALSE(sdl3d_draw_torus_wires(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.5f, 0.1f, 8, 2, kRed));
     EXPECT_FALSE(sdl3d_draw_pyramid(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(-1.0f, 1.0f, 1.0f), kRed));
     EXPECT_FALSE(sdl3d_draw_wedge(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.0f, -1.0f, 1.0f), kRed));
+    EXPECT_FALSE(sdl3d_draw_disc(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.5f, 2, kRed));
+    EXPECT_FALSE(sdl3d_draw_hemisphere(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.5f, 1, 8, kRed));
+    EXPECT_FALSE(sdl3d_draw_tube_segment(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.5f, 0.1f, 0.0f, 8, 6, kRed));
+    EXPECT_FALSE(
+        sdl3d_draw_rounded_box(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.0f, 1.0f, 1.0f), 0.1f, 0, kRed));
+    EXPECT_FALSE(sdl3d_draw_arrow(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.0f, 1.0f, 8, kRed));
     ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
 }
 

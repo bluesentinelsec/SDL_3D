@@ -375,6 +375,11 @@ std::filesystem::path fps_mechanics_dojo_data_path()
     return demo_data_path("fps_mechanics_dojo", "fps_mechanics_dojo.game.json");
 }
 
+std::filesystem::path mesh_primitives_dojo_data_path()
+{
+    return demo_data_path("mesh_primitives_dojo", "mesh_primitives_dojo.game.json");
+}
+
 std::filesystem::path fps_template_data_path()
 {
     return demo_data_path("templates/fps", "fps_template.game.json");
@@ -7009,6 +7014,112 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
     sdl3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
+{
+    const std::filesystem::path dojo_path = mesh_primitives_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    sdl3d_game_config config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
+                                                     app_error, sizeof(app_error)))
+        << app_error;
+    EXPECT_STREQ(config.title, "SDL3D Mesh Primitives Dojo");
+    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.mesh_primitives.showcase"));
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.player"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.sun"), nullptr);
+
+    const char *units = nullptr;
+    float meters_per_unit = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+
+    sdl3d_camera3d camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.mesh_primitives.player", &camera));
+    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(camera.fovy, 90.0f);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_HORIZONTAL);
+
+    ASSERT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    sdl3d_light sun{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &sun));
+    EXPECT_EQ(sun.type, SDL3D_LIGHT_DIRECTIONAL);
+    EXPECT_NEAR(sun.direction.y, -1.0f, 0.0001f);
+    EXPECT_NEAR(sun.color[0], 1.0f, 0.0001f);
+
+    struct MeshDojoCapture
+    {
+        int count = 0;
+        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
+        bool saw_solid_wire = false;
+    } capture;
+    auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
+        auto *mesh_capture = static_cast<MeshDojoCapture *>(userdata);
+        if (primitive->type != SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+            return true;
+        mesh_capture->count++;
+        EXPECT_TRUE(primitive->lighting_enabled) << primitive->entity_name;
+        EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
+        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
+        if (primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID &&
+            primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
+        {
+            mesh_capture->seen[primitive->mesh_primitive] = true;
+        }
+        if (primitive->draw_mode == SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE)
+            mesh_capture->saw_solid_wire = true;
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
+    EXPECT_GE(capture.count, 15);
+    EXPECT_TRUE(capture.saw_solid_wire);
+    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE; ++kind)
+        EXPECT_TRUE(capture.seen[kind]) << kind;
+
+    struct UiCapture
+    {
+        bool saw_fps = false;
+        int label_count = 0;
+    } ui_capture;
+    auto capture_ui = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<UiCapture *>(userdata);
+        if (std::string(text->name) == "ui.mesh_primitives.fps")
+        {
+            capture->saw_fps = true;
+            EXPECT_NE(text->format, nullptr);
+            EXPECT_TRUE(text->normalized);
+            EXPECT_FLOAT_EQ(text->x, 0.985f);
+            EXPECT_FLOAT_EQ(text->y, 0.03f);
+        }
+        if (std::string(text->name).find("ui.mesh_primitives.labels.") == 0)
+        {
+            ++capture->label_count;
+            EXPECT_TRUE(text->normalized);
+            EXPECT_GT(text->y, 0.1f);
+        }
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui, &ui_capture));
+    EXPECT_TRUE(ui_capture.saw_fps);
+    EXPECT_EQ(ui_capture.label_count, 3);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
 {
     const std::filesystem::path dir = unique_test_dir("world_camera_defaults");
@@ -7025,6 +7136,16 @@ TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
         "type": "perspective",
         "position": [0.0, 0.0, 2.0],
         "target": [0.0, 0.0, 0.0]
+      },
+      {
+        "name": "camera.runtime_fov",
+        "type": "perspective",
+        "position": [0.0, 0.0, 2.0],
+        "target": [0.0, 0.0, 0.0],
+        "fov": 75.0,
+        "fov_axis": "vertical",
+        "fov_key": "camera.fov",
+        "fov_axis_key": "camera.fov_axis"
       }
     ]
   }
@@ -7047,6 +7168,19 @@ TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.default", &camera));
     EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
     EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_VERTICAL);
+
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
+    EXPECT_FLOAT_EQ(camera.fovy, 75.0f);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_VERTICAL);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_float(scene_state, "camera.fov", 90.0f);
+    sdl3d_properties_set_string(scene_state, "camera.fov_axis", "horizontal");
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
+    EXPECT_FLOAT_EQ(camera.fovy, 90.0f);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_HORIZONTAL);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -7096,6 +7230,36 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
   }
 })json",
             "camera fovy must be in the range",
+        },
+        {
+            "bad_fov_axis",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad FOV Axis" },
+  "world": {
+    "name": "world.bad",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.bad", "type": "perspective", "fov": 90.0, "fov_axis": "diagonal" }
+    ]
+  }
+})json",
+            "camera fov_axis must be",
+        },
+        {
+            "ambiguous_fov",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Ambiguous FOV" },
+  "world": {
+    "name": "world.bad",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.bad", "type": "perspective", "fov": 90.0, "fovy": 60.0 }
+    ]
+  }
+})json",
+            "must not define both fov and fovy",
         },
     };
 
@@ -8970,6 +9134,24 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
       "components": [
         { "type": "render.mesh_primitive", "primitive": "wedge", "size": [1.0, 0.5, 1.5], "lighting": false }
       ]
+    },
+    {
+      "name": "entity.mesh.composite",
+      "active": true,
+      "components": [
+        {
+          "type": "render.composite",
+          "parts": [
+            { "primitive": "plane", "size": [1.2, 0.8, 0.05] },
+            { "primitive": "disc", "radius": 0.4, "segments": 16 },
+            { "primitive": "hemisphere", "radius": 0.45, "segments": 16, "rings": 8 },
+            { "primitive": "rounded_box", "size": [0.9, 0.7, 0.5], "bevel_radius": 0.1, "rings": 4 },
+            { "primitive": "pipe", "major_radius": 0.55, "minor_radius": 0.08, "arc_angle": 1.5707964, "segments": 12, "tube_segments": 8 },
+            { "primitive": "arrow", "radius": 0.2, "height": 1.0, "segments": 12 },
+            { "primitive": "billboard_plane", "size": [0.8, 0.8, 0.05] }
+          ]
+        }
+      ]
     }
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
@@ -8993,7 +9175,7 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
     struct MeshCapture
     {
         int count = 0;
-        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE + 1] = {};
+        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
     } capture;
     auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
         auto *mesh_capture = static_cast<MeshCapture *>(userdata);
@@ -9001,9 +9183,9 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
             return true;
         mesh_capture->count++;
         EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
-        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
+        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
         if (primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID ||
-            primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE)
+            primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
         {
             return false;
         }
@@ -9037,8 +9219,8 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
     };
 
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
-    EXPECT_EQ(capture.count, 8);
-    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE; ++kind)
+    EXPECT_EQ(capture.count, 15);
+    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE; ++kind)
         EXPECT_TRUE(capture.seen[kind]) << kind;
 
     sdl3d_game_data_destroy(runtime);

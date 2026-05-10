@@ -4140,6 +4140,53 @@ static bool scene_state_bool(const sdl3d_game_data_runtime *runtime, const char 
     return fallback;
 }
 
+static float scene_state_float(const sdl3d_game_data_runtime *runtime, const char *key, float fallback)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+        return fallback;
+    const sdl3d_value *value = sdl3d_properties_get_value(runtime->scene_state, key);
+    if (value == NULL)
+        return fallback;
+    if (value->type == SDL3D_VALUE_FLOAT)
+        return value->as_float;
+    if (value->type == SDL3D_VALUE_INT)
+        return (float)value->as_int;
+    return fallback;
+}
+
+static bool camera_fov_degrees_valid(float value)
+{
+    return value > 0.0f && value < 180.0f;
+}
+
+static sdl3d_camera_fov_axis parse_camera_fov_axis(const char *value, sdl3d_camera_fov_axis fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "vertical") == 0)
+        return SDL3D_CAMERA_FOV_VERTICAL;
+    if (SDL_strcasecmp(value, "horizontal") == 0)
+        return SDL3D_CAMERA_FOV_HORIZONTAL;
+    return fallback;
+}
+
+static float camera_fov_degrees(const sdl3d_game_data_runtime *runtime, yyjson_val *camera_json, float fallback)
+{
+    const float authored = json_float(camera_json, "fov", json_float(camera_json, "fovy", fallback));
+    const float valid_authored = camera_fov_degrees_valid(authored) ? authored : fallback;
+    const float runtime_value = scene_state_float(runtime, json_string(camera_json, "fov_key", NULL), valid_authored);
+    return camera_fov_degrees_valid(runtime_value) ? runtime_value : valid_authored;
+}
+
+static sdl3d_camera_fov_axis camera_fov_axis(const sdl3d_game_data_runtime *runtime, yyjson_val *camera_json)
+{
+    const sdl3d_camera_fov_axis authored =
+        parse_camera_fov_axis(json_string(camera_json, "fov_axis", NULL), SDL3D_CAMERA_FOV_VERTICAL);
+    return parse_camera_fov_axis(scene_state_string(runtime, json_string(camera_json, "fov_axis_key", NULL),
+                                                    json_string(camera_json, "fov_axis", NULL)),
+                                 authored);
+}
+
 static sdl3d_transition_type parse_transition_type(const char *value, sdl3d_transition_type fallback)
 {
     if (value == NULL)
@@ -5588,11 +5635,13 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
         if (target == NULL)
             return false;
 
-        const float fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        const float fov = camera_fov_degrees(runtime, camera_json, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        const sdl3d_camera_fov_axis fov_axis = camera_fov_axis(runtime, camera_json);
         const fps_controller_runtime *controller = find_fps_controller_const(runtime, target->name);
         if (controller != NULL && controller->initialized)
         {
-            *out_camera = sdl3d_fps_mover_camera(&controller->mover, fovy);
+            *out_camera = sdl3d_fps_mover_camera(&controller->mover, fov);
+            out_camera->fov_axis = fov_axis;
             return true;
         }
 
@@ -5605,7 +5654,8 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
             target->props, json_string(camera_json, "pitch_property", "pitch"), json_float(camera_json, "pitch", 0.0f));
         fallback_mover.view_smooth = sdl3d_properties_get_float(
             target->props, json_string(camera_json, "view_smooth_property", "view_smooth"), 0.0f);
-        *out_camera = sdl3d_fps_mover_camera(&fallback_mover, fovy);
+        *out_camera = sdl3d_fps_mover_camera(&fallback_mover, fov);
+        out_camera->fov_axis = fov_axis;
         return true;
     }
 
@@ -5651,7 +5701,8 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
         out_camera->target = sdl3d_vec3_make(anchor.x + velocity.x * lookahead, anchor.y + velocity.y * lookahead,
                                              anchor.z + target_z_offset);
         out_camera->up = json_vec3(camera_json, "up", sdl3d_vec3_make(0.0f, 0.0f, 1.0f));
-        out_camera->fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fovy = camera_fov_degrees(runtime, camera_json, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fov_axis = camera_fov_axis(runtime, camera_json);
         out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
         return true;
     }
@@ -5667,7 +5718,8 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
     else
     {
         out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
-        out_camera->fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fovy = camera_fov_degrees(runtime, camera_json, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fov_axis = camera_fov_axis(runtime, camera_json);
     }
     return true;
 }
@@ -6130,6 +6182,20 @@ static sdl3d_game_data_mesh_primitive_kind mesh_primitive_kind_from_string(const
         return SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID;
     if (SDL_strcmp(name, "wedge") == 0)
         return SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE;
+    if (SDL_strcmp(name, "plane") == 0 || SDL_strcmp(name, "quad") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE;
+    if (SDL_strcmp(name, "disc") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC;
+    if (SDL_strcmp(name, "hemisphere") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE;
+    if (SDL_strcmp(name, "rounded_box") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX;
+    if (SDL_strcmp(name, "tube_segment") == 0 || SDL_strcmp(name, "pipe") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT;
+    if (SDL_strcmp(name, "arrow") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW;
+    if (SDL_strcmp(name, "billboard_plane") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE;
     return SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID;
 }
 
@@ -6142,6 +6208,35 @@ static sdl3d_game_data_render_draw_mode render_draw_mode_from_string(const char 
     if (SDL_strcmp(name, "solid_wire") == 0)
         return SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE;
     return SDL3D_GAME_DATA_RENDER_DRAW_SOLID;
+}
+
+static void populate_mesh_primitive_descriptor(const sdl3d_registered_actor *actor, yyjson_val *component,
+                                               sdl3d_game_data_render_primitive *primitive)
+{
+    if (component == NULL || primitive == NULL)
+        return;
+    primitive->type = SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE;
+    primitive->mesh_primitive = mesh_primitive_kind_from_string(json_string(component, "primitive", NULL));
+    primitive->draw_mode = render_draw_mode_from_string(json_string(component, "draw_mode", NULL));
+    primitive->size = json_vec3(component, "size", primitive->size);
+    const char *size_property = json_string(component, "size_property", NULL);
+    if (actor != NULL && size_property != NULL)
+        primitive->size = sdl3d_properties_get_vec3(actor->props, size_property, primitive->size);
+    primitive->radius = json_float(component, "radius", primitive->radius);
+    primitive->height =
+        json_float(component, "height", primitive->height > 0.0f ? primitive->height : primitive->size.y);
+    primitive->radius_top = json_float(component, "radius_top", primitive->radius);
+    primitive->radius_bottom = json_float(component, "radius_bottom", primitive->radius);
+    primitive->major_radius = json_float(component, "major_radius", primitive->major_radius);
+    primitive->minor_radius = json_float(component, "minor_radius", primitive->minor_radius);
+    primitive->bevel_radius =
+        json_float(component, "bevel_radius", json_float(component, "radius", primitive->bevel_radius));
+    primitive->arc_angle = json_float(component, "arc_angle", primitive->arc_angle);
+    primitive->slices = SDL_max(json_int(component, "slices", json_int(component, "segments", primitive->slices)), 3);
+    primitive->rings = SDL_max(json_int(component, "rings", primitive->rings), 3);
+    primitive->tube_segments = SDL_max(json_int(component, "tube_segments", primitive->tube_segments), 3);
+    if (primitive->mesh_primitive == SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE)
+        primitive->radius_top = json_float(component, "radius_top", 0.0f);
 }
 
 static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
@@ -6176,6 +6271,18 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
         primitive.emissive_color =
             primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
         primitive.wire_color = json_color(component, "wire_color", (sdl3d_color){0, 0, 0, 255});
+        primitive.size = sdl3d_vec3_make(1.0f, 1.0f, 1.0f);
+        primitive.radius = 0.5f;
+        primitive.height = primitive.size.y;
+        primitive.radius_top = primitive.radius;
+        primitive.radius_bottom = primitive.radius;
+        primitive.major_radius = 0.5f;
+        primitive.minor_radius = 0.15f;
+        primitive.bevel_radius = 0.15f;
+        primitive.arc_angle = 3.1415927f;
+        primitive.slices = 24;
+        primitive.rings = 8;
+        primitive.tube_segments = primitive.rings;
 
         if (SDL_strcmp(type, "render.cube") == 0)
         {
@@ -6194,24 +6301,44 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
         }
         else if (SDL_strcmp(type, "render.mesh_primitive") == 0)
         {
-            primitive.type = SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE;
-            primitive.mesh_primitive = mesh_primitive_kind_from_string(json_string(component, "primitive", NULL));
-            primitive.draw_mode = render_draw_mode_from_string(json_string(component, "draw_mode", NULL));
-            primitive.size = json_vec3(component, "size", sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
-            const char *size_property = json_string(component, "size_property", NULL);
-            if (size_property != NULL)
-                primitive.size = sdl3d_properties_get_vec3(actor->props, size_property, primitive.size);
-            primitive.radius = json_float(component, "radius", 0.5f);
-            primitive.height = json_float(component, "height", primitive.size.y);
-            primitive.radius_top = json_float(component, "radius_top", primitive.radius);
-            primitive.radius_bottom = json_float(component, "radius_bottom", primitive.radius);
-            primitive.major_radius = json_float(component, "major_radius", 0.5f);
-            primitive.minor_radius = json_float(component, "minor_radius", 0.15f);
-            primitive.slices = SDL_max(json_int(component, "slices", json_int(component, "segments", 24)), 3);
-            primitive.rings = SDL_max(json_int(component, "rings", 8), 3);
-            primitive.tube_segments = SDL_max(json_int(component, "tube_segments", primitive.rings), 3);
-            if (primitive.mesh_primitive == SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE)
-                primitive.radius_top = json_float(component, "radius_top", 0.0f);
+            populate_mesh_primitive_descriptor(actor, component, &primitive);
+        }
+        else if (SDL_strcmp(type, "render.composite") == 0)
+        {
+            yyjson_val *parts = obj_get(component, "parts");
+            if (!yyjson_is_arr(parts))
+                continue;
+            for (size_t p = 0; p < yyjson_arr_size(parts); ++p)
+            {
+                yyjson_val *part = yyjson_arr_get(parts, p);
+                sdl3d_game_data_render_primitive part_primitive = primitive;
+                const sdl3d_vec3 part_offset = json_vec3(part, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+                part_primitive.position.x += part_offset.x;
+                part_primitive.position.y += part_offset.y;
+                part_primitive.position.z += part_offset.z;
+                part_primitive.rotation_axis = json_vec3(part, "rotation_axis", part_primitive.rotation_axis);
+                part_primitive.rotation_angle = json_float(part, "rotation_angle", part_primitive.rotation_angle);
+                const char *part_rotation_property = json_string(part, "rotation_property", NULL);
+                if (part_rotation_property != NULL)
+                    part_primitive.rotation_angle +=
+                        sdl3d_properties_get_float(actor->props, part_rotation_property, 0.0f);
+                part_primitive.color = json_color(part, "color", part_primitive.color);
+                part_primitive.texture_image = json_string(part, "texture", part_primitive.texture_image);
+                part_primitive.lighting_enabled = json_bool(part, "lighting", part_primitive.lighting_enabled);
+                part_primitive.emissive = json_bool(part, "emissive", part_primitive.emissive);
+                part_primitive.emissive_color =
+                    part_primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : part_primitive.emissive_color;
+                part_primitive.wire_color = json_color(part, "wire_color", part_primitive.wire_color);
+                populate_mesh_primitive_descriptor(actor, part, &part_primitive);
+                if (eval != NULL)
+                {
+                    apply_render_effects(runtime, component, eval, &part_primitive);
+                    apply_render_effects(runtime, part, eval, &part_primitive);
+                }
+                if (!callback(userdata, &part_primitive))
+                    return false;
+            }
+            continue;
         }
         else if (SDL_strcmp(type, "render.sprite") == 0)
         {

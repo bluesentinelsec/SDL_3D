@@ -342,22 +342,46 @@ camera with their `camera` field, and logic actions can switch cameras with
 Camera types:
 
 - `orthographic`: fixed position/target/up with `size`.
-- `perspective`: fixed position/target/up with `fovy`. If omitted, the
-  vertical field of view defaults to 90 degrees.
+- `perspective`: fixed position/target/up with `fov` and optional `fov_axis`.
+  `fov_axis` may be `vertical` or `horizontal`; omitted cameras use vertical
+  FOV. The legacy `fovy` field is still accepted as a vertical-FOV alias when
+  `fov` is absent. If omitted, the vertical field of view defaults to 90
+  degrees.
 - `chase`: follows an actor named by `target_entity`. The forward vector comes
   from a Vec3 actor property such as `velocity` or an authored
   `camera_forward`, with `fallback_forward` used when that property is near
   zero. Use `chase_distance: 0` for actor-perspective cameras and larger
-  values for behind-the-actor chase cameras. If omitted, `fovy` defaults to 90
-  degrees.
+  values for behind-the-actor chase cameras. If omitted, FOV defaults to 90
+  degrees on the vertical axis.
 - `fps`: reads a first-person sector controller from `target_entity` and
   renders from that actor's eye position. If the controller has not updated
   yet, the camera falls back to the actor's `yaw`, `pitch`, and `view_smooth`
   properties. The controller also publishes a normalized view direction to
   `camera_forward` by default; override this with `forward_property` when a
   game wants a different property name for projectile or camera logic. If
-  omitted, `fovy` defaults to 90 degrees.
+  omitted, FOV defaults to 90 degrees on the vertical axis.
 - `adapter`: delegates camera ownership to a native or Lua adapter.
+
+Perspective, chase, and FPS cameras can be tuned at runtime with scene state:
+
+```json
+{
+  "name": "camera.player",
+  "type": "fps",
+  "target_entity": "entity.player",
+  "fov": 90.0,
+  "fov_axis": "horizontal",
+  "fov_key": "settings.camera.fov",
+  "fov_axis_key": "settings.camera.fov_axis"
+}
+```
+
+`fov_key` reads a numeric scene-state value. `fov_axis_key` reads a string scene
+state value and accepts `vertical` or `horizontal`. Invalid runtime values fall
+back to the authored camera values. Use horizontal FOV for FPS-style settings
+when designers want values like "90 degrees" to mean the player's visible
+left-to-right angle; at 16:9, a 90-degree horizontal FOV renders with a vertical
+FOV of roughly 58.7 degrees.
 
 ## Storage And Persistence
 
@@ -1382,15 +1406,32 @@ Reusable components include:
   dimensions.
 - `render.mesh_primitive`: declares a procedural placeholder mesh descriptor.
   The canonical `primitive` values are `cube`, `sphere`, `capsule`,
-  `cylinder`, `cone`, `torus`, `pyramid`, and `wedge`. These descriptors use
-  the same transform, `color`, `texture`, `lighting`, and `emissive` fields as
-  other render primitives where applicable, and add `draw_mode`: `solid`
-  (default), `wire`, or `solid_wire`. Dimension fields include `size`,
-  `radius`, `height`, `radius_top`, `radius_bottom`, `major_radius`,
-  `minor_radius`, `segments`/`slices`, `rings`, and `tube_segments`. This is the
-  stable data/runtime representation for procedural mesh primitives. The
-  generic presentation path renders every primitive as shaded solid geometry by
-  default, with optional wire-only or solid-plus-wire modes.
+  `cylinder`, `cone`, `torus`, `pyramid`, `wedge`, `plane`, `quad`, `disc`,
+  `hemisphere`, `rounded_box`, `tube_segment`, `pipe`, `arrow`, and
+  `billboard_plane`. `quad` is an alias for `plane`; `pipe` is an alias for
+  `tube_segment`. `billboard_plane` is a flat 3D placeholder plane; use
+  `render.sprite` when you need an actual texture-backed camera-facing
+  billboard. These descriptors use the same transform, `color`, `texture`,
+  `lighting`, and `emissive` fields as other render primitives where
+  applicable, and add `draw_mode`: `solid` (default), `wire`, or `solid_wire`.
+  Dimension fields include `size`, `radius`, `height`, `radius_top`,
+  `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
+  `segments`/`slices`, `rings`, and `tube_segments`. This is the stable
+  data/runtime representation for procedural mesh primitives. The generic
+  presentation path renders every primitive as shaded solid geometry by
+  default, with optional wire-only or solid-plus-wire modes. Solid procedural
+  primitives are generated through a presentation cache when hosts provide one,
+  so repeated static placeholder geometry can reuse stable CPU mesh data and
+  hardware backends can keep GPU buffers instead of rebuilding geometry every
+  frame. Wire overlays are useful for inspection, but they still add extra line
+  work and should be used selectively in large scenes.
+- `render.composite`: expands one actor into multiple procedural
+  `render.mesh_primitive` parts. Use `parts` as a non-empty array of mesh
+  primitive descriptors. Part `offset` values are local offsets from the owning
+  actor, and part fields such as `color`, `lighting`, `draw_mode`, dimensions,
+  and rotation override the composite defaults. This is intended for quick
+  proof-of-concept actors such as robots, ships, decorations, pickups, markers,
+  and editor placeholders before bespoke model assets exist.
 - `render.model`: renders an authored `assets.models` entry with `model`,
   optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
   animation playback via `animation_clip` and `animation_time_property`.
