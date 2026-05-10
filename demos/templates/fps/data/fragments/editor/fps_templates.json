@@ -1,0 +1,84 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "editor": {
+    "display_name": "FPS Starter Templates",
+    "description": "Project-agnostic sector/FPS authoring templates for controls, player setup, HUD, pickups, projectile pools, and common world mechanics.",
+    "category": "templates/fps",
+    "tags": ["fps", "sector", "template", "starter"],
+    "preview": { "primitive": "sector", "color": [0.25, 0.55, 1.0, 1.0] },
+    "snap": { "grid": [0.5, 0.25, 0.5], "rotation_degrees": 15.0, "align_to_floor": true },
+    "test_scene": "scene.fps.play",
+    "templates": [
+      {
+        "name": "template.fps.player_controller",
+        "display_name": "FPS Player Controller",
+        "category": "actors/player",
+        "tags": ["player", "controller", "camera"],
+        "source": "entity.player",
+        "source_kind": "entity",
+        "preview": { "primitive": "capsule", "color": [0.2, 0.8, 1.0, 1.0] },
+        "bounds": { "size": [0.7, 1.6, 0.7] },
+        "snap": { "grid": 0.25, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "move_speed", "type": "float", "display_name": "Move Speed", "min": 0.1, "default": 7.0 },
+          { "name": "jump_velocity", "type": "float", "display_name": "Jump Velocity", "min": 0.0, "default": 6.0 },
+          { "name": "mouse_sensitivity", "type": "float", "display_name": "Mouse Sensitivity", "min": 0.0, "default": 0.002 }
+        ],
+        "test_scene": "scene.fps.play"
+      },
+      {
+        "name": "template.fps.projectile_pool",
+        "display_name": "Projectile Pool",
+        "category": "mechanics/weapons",
+        "tags": ["projectile", "pool", "weapon"],
+        "source": "pool.fps.player_projectiles",
+        "source_kind": "actor_pool",
+        "preview": { "primitive": "sphere", "color": [1.0, 0.65, 0.25, 1.0] },
+        "bounds": { "radius": 0.15 },
+        "exposed_properties": [
+          { "name": "capacity", "type": "int", "display_name": "Pool Capacity", "min": 1, "default": 16 },
+          { "name": "damage", "type": "int", "display_name": "Damage", "min": 0, "default": 12 },
+          { "name": "ttl", "type": "float", "display_name": "Lifetime Seconds", "min": 0.1, "default": 2.5 }
+        ],
+        "test_scene": "scene.fps.play"
+      },
+      {
+        "name": "template.fps.health_pickup",
+        "display_name": "Health Pickup",
+        "category": "mechanics/resources",
+        "tags": ["pickup", "health", "respawn"],
+        "source": "archetype.fps.health_pickup",
+        "source_kind": "actor_archetype",
+        "preview": { "primitive": "sphere", "color": [0.25, 1.0, 0.45, 1.0] },
+        "bounds": { "size": [0.8, 0.8, 0.8] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "amount", "type": "float", "display_name": "Resource Amount", "min": 0.0, "default": 25.0 },
+          { "name": "respawn_seconds", "type": "float", "display_name": "Respawn Seconds", "min": 0.0, "default": 8.0 }
+        ],
+        "test_scene": "scene.fps.play"
+      },
+      {
+        "name": "template.fps.debug_hud",
+        "display_name": "FPS Debug HUD",
+        "category": "ui/hud",
+        "tags": ["hud", "reticle", "fps_counter", "resources"],
+        "source": "fragments/ui/fps_hud.json",
+        "source_kind": "fragment",
+        "preview": { "primitive": "none", "color": [1.0, 1.0, 1.0, 1.0] },
+        "test_scene": "scene.fps.play"
+      },
+      {
+        "name": "template.fps.sector_navigation",
+        "display_name": "Sector Navigation Graph",
+        "category": "mechanics/navigation",
+        "tags": ["navigation", "sector", "ai"],
+        "source": "nav.fps.template_room",
+        "source_kind": "sector_navigation",
+        "preview": { "primitive": "volume", "color": [0.25, 0.55, 1.0, 1.0] },
+        "bounds": { "size": [24.0, 1.0, 10.0] },
+        "test_scene": "scene.fps.play"
+      }
+    ]
+  }
+}

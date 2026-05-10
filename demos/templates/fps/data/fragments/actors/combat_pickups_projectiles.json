@@ -1,0 +1,98 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "actor_archetypes": [
+    {
+      "name": "archetype.fps.projectile",
+      "tags": ["projectile", "player_projectile"],
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] },
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 2.5 },
+        "damage": { "type": "int", "value": 12 }
+      },
+      "components": [
+        { "type": "render.sphere", "radius": 0.1, "slices": 8, "rings": 8, "color": [255, 210, 120, 255], "emissive": true, "lighting": false },
+        { "type": "motion.sector_velocity_3d", "property": "velocity", "sector_level": "sector.fps.template_room", "reason": "projectile impact" },
+        { "type": "lifecycle.ttl", "age_property": "age", "ttl_property": "ttl", "reason": "projectile expired" },
+        { "type": "light.point", "color": [1.0, 0.65, 0.25], "intensity": 3.5, "range": 4.5 }
+      ],
+      "editor": {
+        "display_name": "FPS Projectile",
+        "category": "mechanics/weapons",
+        "tags": ["projectile", "pooled"],
+        "preview": { "primitive": "sphere", "color": [1.0, 0.65, 0.25, 1.0] },
+        "bounds": { "radius": 0.15 },
+        "test_scene": "scene.fps.play"
+      }
+    },
+    {
+      "name": "archetype.fps.health_pickup",
+      "active": true,
+      "tags": ["pickup", "health_pickup"],
+      "properties": {
+        "pickup_available": { "type": "bool", "value": true },
+        "pickup_respawn_remaining": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "pickup.respawn" },
+        { "type": "render.sphere", "radius": 0.32, "color": [70, 255, 120, 240], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [0.25, 1.0, 0.45], "intensity": 1.8, "range": 5.0 },
+        { "type": "motion.spin", "property": "rotation_angle", "rate": 2.0 }
+      ],
+      "editor": {
+        "display_name": "Health Pickup",
+        "category": "mechanics/resources",
+        "tags": ["pickup", "health"],
+        "preview": { "primitive": "sphere", "color": [0.25, 1.0, 0.45, 1.0] },
+        "bounds": { "size": [0.8, 0.8, 0.8] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "test_scene": "scene.fps.play"
+      }
+    },
+    {
+      "name": "archetype.fps.resource_station",
+      "active": true,
+      "tags": ["resource_station"],
+      "properties": {
+        "charges": { "type": "int", "value": 99 },
+        "cooldown": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "property.decay", "property": "cooldown", "rate": 1.0, "target": 0.0, "min": 0.0 },
+        { "type": "render.cube", "size": [1.2, 1.4, 1.2], "color": [80, 220, 255, 230], "lighting": true, "emissive": true },
+        { "type": "light.point", "color": [0.2, 0.85, 1.0], "intensity": 2.0, "range": 6.0 }
+      ],
+      "editor": {
+        "display_name": "Resource Station",
+        "category": "mechanics/resources",
+        "tags": ["station", "resource"],
+        "preview": { "primitive": "cube", "color": [0.2, 0.85, 1.0, 1.0] },
+        "bounds": { "size": [1.2, 1.4, 1.2] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "test_scene": "scene.fps.play"
+      }
+    }
+  ],
+  "actor_instances": [
+    {
+      "name": "entity.fps.health_pickup",
+      "archetype": "archetype.fps.health_pickup",
+      "transform": { "position": [16.0, 0.55, 5.0] }
+    },
+    {
+      "name": "entity.fps.resource_station",
+      "archetype": "archetype.fps.resource_station",
+      "transform": { "position": [20.0, 0.7, 5.0] }
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.fps.player_projectiles",
+      "archetype": "archetype.fps.projectile",
+      "capacity": 16,
+      "scene": "scene.fps.play",
+      "exhaustion_policy": "reuse_oldest",
+      "on_scene_exit": "reset"
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "SDL3D FPS Template",
+    "id": "template.fps",
+    "version": "0.1.0"
+  },
+  "imports": [
+    { "path": "fragments/input/fps_controls.json", "sections": ["input"] },
+    { "path": "fragments/world/fps_room.json", "sections": ["sector_level_fragments", "sector_navigation"] },
+    { "path": "fragments/actors/fps_player.json", "sections": ["entities"] },
+    { "path": "fragments/actors/combat_pickups_projectiles.json", "sections": ["actor_archetypes", "actor_instances", "actor_pools"] },
+    { "path": "fragments/ui/fps_hud.json", "sections": ["assets", "ui"] },
+    { "path": "fragments/editor/fps_templates.json", "sections": ["editor"] }
+  ],
+  "app": {
+    "title": "SDL3D FPS Template",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": { "renderer": "opengl", "vsync": true },
+    "pause": { "action": "action.pause" },
+    "quit": { "action": "action.exit" },
+    "input_policy": { "global_actions": ["action.exit"] }
+  },
+  "world": {
+    "name": "world.fps_template",
+    "kind": "sector",
+    "units": "meters",
+    "meters_per_unit": 1.0,
+    "ambient_light": [0.14, 0.14, 0.18],
+    "cameras": [
+      {
+        "name": "camera.fps.player",
+        "type": "fps",
+        "target_entity": "entity.player",
+        "fovy": 90.0,
+        "active": true
+      }
+    ]
+  },
+  "render": {
+    "lighting": true,
+    "bloom": true,
+    "clear_color": [0.018, 0.02, 0.028]
+  },
+  "scenes": {
+    "initial": "scene.fps.play",
+    "files": ["scenes/fps_play.scene.json"]
+  }
+}

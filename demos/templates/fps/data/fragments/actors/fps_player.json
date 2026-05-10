@@ -1,0 +1,67 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "tags": ["player", "fps_actor"],
+      "transform": { "position": [4.0, 1.6, 5.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "current_sector": { "type": "int", "value": -1 },
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 },
+        "armor": { "type": "float", "value": 0.0 },
+        "ammo": { "type": "int", "value": 24 },
+        "max_ammo": { "type": "int", "value": 48 },
+        "fire_timer": { "type": "float", "value": 0.0 },
+        "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
+        "alive": { "type": "bool", "value": true }
+      },
+      "components": [
+        { "type": "combat.health" },
+        {
+          "type": "controller.fps_sector",
+          "sector_level": "sector.fps.template_room",
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 7.0,
+          "jump_velocity": 6.0,
+          "gravity": 14.0,
+          "player_height": 1.6,
+          "player_radius": 0.35,
+          "step_height": 0.6,
+          "ceiling_clearance": 0.1,
+          "mouse_sensitivity": 0.002
+        },
+        {
+          "type": "weapon.projectile",
+          "action": "action.fire",
+          "pool": "pool.fps.player_projectiles",
+          "cooldown": 0.16,
+          "cooldown_property": "fire_timer",
+          "speed": 22.0,
+          "offset": [0.0, -0.08, -0.35],
+          "velocity_from_property": "camera_forward",
+          "ammo_property": "ammo",
+          "ammo_per_shot": 1
+        }
+      ],
+      "editor": {
+        "display_name": "FPS Player",
+        "category": "actors/player",
+        "tags": ["player", "controller"],
+        "preview": { "primitive": "capsule", "color": [0.2, 0.8, 1.0, 1.0] },
+        "bounds": { "center": [0.0, -0.8, 0.0], "size": [0.7, 1.6, 0.7] },
+        "snap": { "grid": 0.25, "align_to_floor": true },
+        "test_scene": "scene.fps.play"
+      }
+    }
+  ]
+}

@@ -1,0 +1,60 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "assets": {
+    "fonts": [
+      { "id": "font.fps.hud", "builtin": "Inter", "size": 22 },
+      { "id": "font.fps.title", "builtin": "Inter", "size": 34 }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.fps.reticle",
+        "font": "font.fps.hud",
+        "text": "+",
+        "x": 0.5,
+        "y": 0.5,
+        "scale": 1.1,
+        "centered": true,
+        "normalized": true,
+        "color": [255, 255, 255, 210]
+      },
+      {
+        "name": "ui.fps.fps_counter",
+        "font": "font.fps.hud",
+        "format": "FPS %.0f",
+        "bindings": [{ "type": "metric", "metric": "fps" }],
+        "x": 0.985,
+        "y": 0.035,
+        "scale": 0.8,
+        "align": "right",
+        "normalized": true,
+        "color": [180, 235, 190, 230]
+      },
+      {
+        "name": "ui.fps.resources",
+        "font": "font.fps.hud",
+        "text": "HP {target.entity.player.health}/{target.entity.player.max_health}  Armor {target.entity.player.armor}  Ammo {target.entity.player.ammo}/{target.entity.player.max_ammo}",
+        "x": 0.02,
+        "y": 0.93,
+        "scale": 0.8,
+        "align": "left",
+        "normalized": true,
+        "color": [215, 245, 225, 235]
+      },
+      {
+        "name": "ui.fps.pause.title",
+        "font": "font.fps.title",
+        "text": "PAUSED",
+        "x": 0.5,
+        "y": 0.42,
+        "scale": 1.2,
+        "centered": true,
+        "normalized": true,
+        "color": [245, 248, 255, 255],
+        "pulse_alpha": true,
+        "visible_if": { "type": "app.paused", "equals": true }
+      }
+    ]
+  }
+}
