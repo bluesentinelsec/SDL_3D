@@ -14057,12 +14057,25 @@ static void emit_combat_signal(sdl3d_game_data_runtime *runtime, yyjson_val *act
         sdl3d_signal_emit(runtime_bus(runtime), signal_id, payload);
 }
 
+static bool apply_combat_damage_to_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                         const sdl3d_properties *payload, sdl3d_registered_actor *actor, float amount);
+
 static bool execute_combat_damage_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
                                          const sdl3d_properties *payload)
 {
     sdl3d_registered_actor *actor = action_target_actor(runtime, action, payload);
     float amount = 0.0f;
     if (actor == NULL || !action_float_value(runtime, action, payload, "amount", "amount_from_payload", &amount))
+        return false;
+    amount = SDL_max(amount, 0.0f);
+
+    return apply_combat_damage_to_actor(runtime, action, payload, actor, amount);
+}
+
+static bool apply_combat_damage_to_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                         const sdl3d_properties *payload, sdl3d_registered_actor *actor, float amount)
+{
+    if (actor == NULL)
         return false;
     amount = SDL_max(amount, 0.0f);
 
@@ -15304,6 +15317,173 @@ static bool execute_interaction_use_action(sdl3d_game_data_runtime *runtime, yyj
     return ok;
 }
 
+static sdl3d_registered_actor *effect_source_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *source =
+        actor_from_payload_key(runtime, payload, json_string(action, "source_from_payload", NULL));
+    if (source == NULL)
+        source = sdl3d_game_data_find_actor(runtime, json_string(action, "source", NULL));
+    if (source == NULL)
+        source = actor_from_payload_key(runtime, payload, json_string(action, "from_payload", NULL));
+    if (source == NULL)
+        source = sdl3d_game_data_find_actor(runtime, json_string(action, "from", NULL));
+    return source;
+}
+
+static bool collect_effect_targets(sdl3d_game_data_runtime *runtime, const char *tag, sensor_actor_list *out_list)
+{
+    if (runtime == NULL || out_list == NULL)
+        return false;
+    if (tag != NULL && tag[0] != '\0')
+        return collect_sensor_endpoint_actors(runtime, NULL, tag, out_list);
+
+    yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
+    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
+    {
+        const char *entity_name = json_string(yyjson_arr_get(entities, i), "name", NULL);
+        if (!active_scene_has_entity_internal(runtime, entity_name))
+            continue;
+        sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
+        if (runtime_actor_is_active(runtime, actor) && !sensor_actor_list_add(out_list, actor))
+            return false;
+    }
+
+    for (int pool_index = 0; pool_index < runtime->actor_pool_count; ++pool_index)
+    {
+        actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
+        if (!actor_pool_in_scene(pool, sdl3d_game_data_active_scene(runtime)))
+            continue;
+        for (int actor_index = 0; actor_index < pool->capacity; ++actor_index)
+        {
+            sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
+            if (actor_pool_actor_is_active(pool, actor, actor_index) && !sensor_actor_list_add(out_list, actor))
+                return false;
+        }
+    }
+    return true;
+}
+
+static float effect_explosion_falloff(yyjson_val *action, float distance)
+{
+    const float radius = SDL_max(json_float(action, "radius", 0.0f), 0.0f);
+    const float inner_radius = SDL_clamp(json_float(action, "inner_radius", 0.0f), 0.0f, radius);
+    if (distance <= inner_radius)
+        return 1.0f;
+    if (radius <= inner_radius)
+        return distance <= radius ? 1.0f : 0.0f;
+    const char *falloff = json_string(action, "falloff", "linear");
+    if (falloff != NULL && (SDL_strcmp(falloff, "none") == 0 || SDL_strcmp(falloff, "constant") == 0))
+        return 1.0f;
+    return SDL_clamp(1.0f - ((distance - inner_radius) / (radius - inner_radius)), 0.0f, 1.0f);
+}
+
+static sdl3d_properties *effect_explosion_payload(const sdl3d_registered_actor *source,
+                                                  const sdl3d_registered_actor *target, sdl3d_vec3 origin,
+                                                  float distance, float radius, float falloff, float damage,
+                                                  float impulse)
+{
+    sdl3d_properties *event_payload = sdl3d_properties_create();
+    if (event_payload == NULL)
+        return NULL;
+    sdl3d_properties_set_string(event_payload, "actor_name",
+                                target != NULL && target->name != NULL ? target->name : "");
+    sdl3d_properties_set_string(event_payload, "target_actor_name",
+                                target != NULL && target->name != NULL ? target->name : "");
+    sdl3d_properties_set_string(event_payload, "source_actor_name",
+                                source != NULL && source->name != NULL ? source->name : "");
+    sdl3d_properties_set_vec3(event_payload, "origin", origin);
+    sdl3d_properties_set_float(event_payload, "distance", distance);
+    sdl3d_properties_set_float(event_payload, "radius", radius);
+    sdl3d_properties_set_float(event_payload, "falloff", falloff);
+    sdl3d_properties_set_float(event_payload, "damage", damage);
+    sdl3d_properties_set_float(event_payload, "amount", damage);
+    sdl3d_properties_set_float(event_payload, "impulse", impulse);
+    return event_payload;
+}
+
+static void effect_apply_impulse(sdl3d_registered_actor *actor, sdl3d_vec3 origin, float strength,
+                                 const char *velocity_property)
+{
+    if (actor == NULL || strength <= 0.0f || velocity_property == NULL || velocity_property[0] == '\0')
+        return;
+    sdl3d_vec3 delta =
+        sdl3d_vec3_make(actor->position.x - origin.x, actor->position.y - origin.y, actor->position.z - origin.z);
+    if (sdl3d_vec3_length_squared(delta) <= 0.000001f)
+        delta = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    else
+        delta = sdl3d_vec3_normalize(delta);
+    const sdl3d_vec3 velocity =
+        sdl3d_properties_get_vec3(actor->props, velocity_property, sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    sdl3d_properties_set_vec3(actor->props, velocity_property,
+                              sdl3d_vec3_make(velocity.x + delta.x * strength, velocity.y + delta.y * strength,
+                                              velocity.z + delta.z * strength));
+}
+
+static bool execute_effect_explosion_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const sdl3d_properties *payload)
+{
+    if (runtime == NULL || action == NULL)
+        return false;
+
+    const float radius = SDL_max(json_float(action, "radius", 0.0f), 0.0f);
+    if (radius <= 0.0f)
+        return true;
+    sdl3d_registered_actor *source = effect_source_actor(runtime, action, payload);
+    const sdl3d_vec3 fallback = source != NULL ? source->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const sdl3d_vec3 origin = actor_spawn_position_from_action(runtime, action, payload, fallback);
+    const char *tag = json_string(action, "target_tag", json_string(action, "affected_tag", NULL));
+    const bool exclude_source = json_bool(action, "exclude_source", true);
+    const int max_targets = SDL_max(json_int(action, "max_targets", SDL_MAX_SINT32), 0);
+    const float base_damage = SDL_max(json_float(action, "damage", json_float(action, "amount", 0.0f)), 0.0f);
+    const float base_impulse = SDL_max(json_float(action, "impulse", 0.0f), 0.0f);
+    const char *velocity_property = json_string(action, "velocity_property", "velocity");
+
+    sensor_actor_list targets;
+    SDL_zero(targets);
+    if (!collect_effect_targets(runtime, tag, &targets))
+    {
+        sensor_actor_list_free(&targets);
+        return false;
+    }
+
+    bool ok = true;
+    int affected = 0;
+    const float radius_sq = radius * radius;
+    for (int i = 0; i < targets.count && affected < max_targets; ++i)
+    {
+        sdl3d_registered_actor *target = targets.items[i];
+        if (!runtime_actor_is_active(runtime, target) || (exclude_source && source != NULL && target == source) ||
+            !actor_has_authored_tag(runtime, target, tag))
+        {
+            continue;
+        }
+        const float dx = target->position.x - origin.x;
+        const float dy = target->position.y - origin.y;
+        const float dz = target->position.z - origin.z;
+        const float distance_sq = dx * dx + dy * dy + dz * dz;
+        if (distance_sq > radius_sq)
+            continue;
+        const float distance = SDL_sqrtf(distance_sq);
+        const float falloff = effect_explosion_falloff(action, distance);
+        const float damage = base_damage * falloff;
+        const float impulse = base_impulse * falloff;
+        if (damage > 0.0f)
+            ok = apply_combat_damage_to_actor(runtime, action, payload, target, damage) && ok;
+        effect_apply_impulse(target, origin, impulse, velocity_property);
+
+        sdl3d_properties *event_payload =
+            effect_explosion_payload(source, target, origin, distance, radius, falloff, damage, impulse);
+        ok = execute_optional_action_array(runtime, obj_get(action, "actions"), event_payload) && ok;
+        emit_optional_signal(runtime, action, "on_hit", event_payload);
+        sdl3d_properties_destroy(event_payload);
+        ++affected;
+    }
+
+    sensor_actor_list_free(&targets);
+    return ok;
+}
+
 static const char *sector_door_action_target_name(yyjson_val *action, const sdl3d_properties *payload)
 {
     const char *target_from_payload = json_string(action, "target_from_payload", NULL);
@@ -15745,6 +15925,8 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return execute_weapon_hitscan_action(runtime, action, payload);
     if (SDL_strcmp(type, "interaction.use") == 0)
         return execute_interaction_use_action(runtime, action, payload);
+    if (SDL_strcmp(type, "effect.explosion") == 0)
+        return execute_effect_explosion_action(runtime, action, payload);
 
     if (SDL_strcmp(type, "projectile.fire") == 0)
         return execute_projectile_fire_action(runtime, action, payload);
