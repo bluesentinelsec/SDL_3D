@@ -2843,6 +2843,7 @@ static bool is_supported_component_type(const char *type)
         "collision.circle",
         "combat.health",
         "control.axis_1d",
+        "controller.fps_brush",
         "controller.fps_sector",
         "lifecycle.ttl",
         "light.directional",
@@ -2995,17 +2996,17 @@ static bool validate_non_empty_string_field(validation_context *ctx, yyjson_val 
                                             const char *type, const char *field);
 static bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
                                            validation_names *names, const char *field);
+static bool brush_content_name_valid(const char *name);
+static bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *value, const char *path,
+                                                  const char *label, bool (*name_valid)(const char *name),
+                                                  bool allow_empty);
 
-static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *component, const char *path,
-                                          validation_names *names)
+static bool validate_fps_controller_common(validation_context *ctx, yyjson_val *component, const char *path,
+                                           validation_names *names, const char *type_name)
 {
-    const char *level = json_string(component, "sector_level");
-    if (!require_ref(ctx, &names->sector_levels, "sector level", level, path))
-        return false;
-
     yyjson_val *actions = obj_get(component, "actions");
     if (!yyjson_is_obj(actions))
-        return validation_error(ctx, path, "controller.fps_sector requires an actions object");
+        return validation_error(ctx, path, "%s requires an actions object", type_name);
     const char *action_keys[] = {"forward", "back", "left", "right"};
     for (size_t i = 0; i < SDL_arraysize(action_keys); ++i)
     {
@@ -3028,7 +3029,7 @@ static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *c
     {
         yyjson_val *value = obj_get(component, property_keys[i]);
         if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
-            return validation_error(ctx, path, "controller.fps_sector property names must be non-empty strings");
+            return validation_error(ctx, path, "%s property names must be non-empty strings", type_name);
     }
 
     const char *non_negative[] = {"move_speed",    "jump_velocity", "gravity",           "player_height",
@@ -3037,18 +3038,39 @@ static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *c
     {
         yyjson_val *value = obj_get(component, non_negative[i]);
         if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
-            return validation_error(ctx, path, "controller.fps_sector numeric tuning values must be non-negative");
+            return validation_error(ctx, path, "%s numeric tuning values must be non-negative", type_name);
     }
     yyjson_val *mouse_look = obj_get(component, "mouse_look");
     if (mouse_look != NULL && !yyjson_is_bool(mouse_look))
-        return validation_error(ctx, path, "controller.fps_sector mouse_look must be a boolean");
+        return validation_error(ctx, path, "%s mouse_look must be a boolean", type_name);
     yyjson_val *spawn_yaw = obj_get(component, "spawn_yaw");
     yyjson_val *spawn_pitch = obj_get(component, "spawn_pitch");
     if ((spawn_yaw != NULL && !yyjson_is_num(spawn_yaw)) || (spawn_pitch != NULL && !yyjson_is_num(spawn_pitch)))
     {
-        return validation_error(ctx, path, "controller.fps_sector spawn yaw and pitch values must be numbers");
+        return validation_error(ctx, path, "%s spawn yaw and pitch values must be numbers", type_name);
     }
     return true;
+}
+
+static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                          validation_names *names)
+{
+    const char *level = json_string(component, "sector_level");
+    return require_ref(ctx, &names->sector_levels, "sector level", level, path) &&
+           validate_fps_controller_common(ctx, component, path, names, "controller.fps_sector");
+}
+
+static bool validate_fps_brush_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                         validation_names *names)
+{
+    const char *world = json_string(component, "brush_world");
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", world, path))
+        return false;
+    char contents_path[PATH_BUFFER_SIZE];
+    format_path(contents_path, sizeof(contents_path), "%s.contents_mask", path);
+    return validate_brush_string_or_string_array(ctx, obj_get(component, "contents_mask"), contents_path,
+                                                 "brush content", brush_content_name_valid, false) &&
+           validate_fps_controller_common(ctx, component, path, names, "controller.fps_brush");
 }
 
 static bool validate_combat_health_component(validation_context *ctx, yyjson_val *component, const char *path)
@@ -5319,6 +5341,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!validate_fps_sector_component(ctx, component, path, names))
                     return false;
             }
+            else if (SDL_strcmp(type, "controller.fps_brush") == 0)
+            {
+                if (!validate_fps_brush_component(ctx, component, path, names))
+                    return false;
+            }
             else if (SDL_strcmp(type, "combat.health") == 0)
             {
                 if (!validate_combat_health_component(ctx, component, path))
@@ -5864,10 +5891,10 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             {
                 return false;
             }
-            if (SDL_strcmp(type, "controller.fps_sector") == 0)
+            if (SDL_strcmp(type, "controller.fps_sector") == 0 || SDL_strcmp(type, "controller.fps_brush") == 0)
             {
                 return validation_error(ctx, component_path,
-                                        "controller.fps_sector is only supported on static entities");
+                                        "first-person controllers are only supported on static entities");
             }
             else if (SDL_strcmp(type, "combat.health") == 0)
             {
@@ -7473,7 +7500,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     {
         return validate_projectile_fire_shape(ctx, action, json_path, names, true);
     }
-    if (SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
+    if (SDL_strcmp(type, "controller.fps.launch") == 0 || SDL_strcmp(type, "controller.fps.teleport") == 0 ||
+        SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
         SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
     {
         yyjson_val *target_value = obj_get(action, "target");
@@ -7489,21 +7517,20 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (target_from_payload_value != NULL &&
             (!yyjson_is_str(target_from_payload_value) || yyjson_get_str(target_from_payload_value)[0] == '\0'))
             return validation_error(ctx, json_path, "%s target_from_payload must be a non-empty string", type);
-        if (SDL_strcmp(type, "controller.fps_sector.launch") == 0)
+        if (SDL_strcmp(type, "controller.fps.launch") == 0 || SDL_strcmp(type, "controller.fps_sector.launch") == 0)
         {
             yyjson_val *vertical_velocity = obj_get(action, "vertical_velocity");
             if (!yyjson_is_num(vertical_velocity) || yyjson_get_num(vertical_velocity) <= 0.0)
-                return validation_error(ctx, json_path,
-                                        "controller.fps_sector.launch requires positive vertical_velocity");
+                return validation_error(ctx, json_path, "%s requires positive vertical_velocity", type);
             return true;
         }
 
         if (!is_vec_array(obj_get(action, "position"), 3))
-            return validation_error(ctx, json_path, "controller.fps_sector.teleport requires a vec3 position");
+            return validation_error(ctx, json_path, "%s requires a vec3 position", type);
         yyjson_val *yaw = obj_get(action, "yaw");
         yyjson_val *pitch = obj_get(action, "pitch");
         if ((yaw != NULL && !yyjson_is_num(yaw)) || (pitch != NULL && !yyjson_is_num(pitch)))
-            return validation_error(ctx, json_path, "controller.fps_sector.teleport yaw and pitch must be numeric");
+            return validation_error(ctx, json_path, "%s yaw and pitch must be numeric", type);
         return true;
     }
     if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0 || SDL_strcmp(type, "grid.spawn_runs_from_glyphs") == 0)

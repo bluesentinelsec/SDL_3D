@@ -1,15 +1,24 @@
 {
   "schema": "slayer3d.scene.v0",
   "name": "scene.brush_geometry.showcase",
-  "camera": "camera.brush_geometry.overview",
+  "camera": "camera.brush_geometry.player",
   "updates_game": true,
   "renders_world": true,
   "entities": [
+    "entity.brush_geometry.player",
     "entity.brush_geometry.sun",
     "entity.brush_geometry.blue_fill"
   ],
   "input": {
-    "actions": ["action.exit"]
+    "mouse_capture": "unpaused",
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump",
+      "action.exit"
+    ]
   },
   "world": {
     "brush_worlds": [
@@ -35,13 +44,25 @@
       },
       {
         "name": "ui.brush_geometry.help",
-        "text": "Static brush mesh showcase: room slabs, ramp wedge, overhang, pillar  Esc quit",
+        "text": "WASD move  Mouse look  Space jump  Esc quit",
         "font": "font.brush_geometry.hud",
         "x": 0.02,
         "y": 0.075,
         "normalized": true,
         "color": [205, 215, 230, 210],
         "scale": 0.62
+      },
+      {
+        "name": "ui.brush_geometry.reticle",
+        "text": "+",
+        "font": "font.brush_geometry.hud",
+        "x": 0.5,
+        "y": 0.5,
+        "normalized": true,
+        "align": "center",
+        "valign": "middle",
+        "color": [235, 240, 250, 185],
+        "scale": 0.92
       },
       {
         "name": "ui.brush_geometry.fps",

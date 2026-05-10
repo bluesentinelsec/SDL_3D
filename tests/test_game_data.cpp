@@ -7390,8 +7390,11 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
 
     ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 2);
     slayer3d_camera3d camera{};
-    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.overview", &camera));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.player", &camera));
     EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
+    EXPECT_NEAR(camera.position.y, 1.6f, 0.05f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -10851,6 +10854,180 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_brush_controller");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "input": {
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump"
+    ]
+  },
+  "world": {
+    "brush_worlds": [
+      { "world": "brush.test_room", "position": [0.0, 0.0, 0.0] }
+    ]
+  }
+})json");
+    write_text(dir / "fps_brush.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "FPS Brush Controller Test" },
+  "world": {
+    "name": "world.test",
+    "kind": "brush",
+    "cameras": [
+      {
+        "name": "camera.player",
+        "type": "fps",
+        "target_entity": "entity.player",
+        "fov": 90.0,
+        "fov_axis": "horizontal",
+        "active": true
+      }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" },
+          { "name": "action.jump" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.6, 1.5] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "current_sector": { "type": "int", "value": 7 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_brush",
+          "brush_world": "brush.test_room",
+          "contents_mask": ["solid", "player_clip"],
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 4.0,
+          "jump_velocity": 4.0,
+          "gravity": 9.0,
+          "player_height": 1.6,
+          "player_radius": 0.25,
+          "step_height": 0.4,
+          "ceiling_clearance": 0.1,
+          "mouse_sensitivity": 0.0
+        }
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.test_room",
+      "materials": [
+        { "name": "mat.floor", "albedo": [0.5, 0.5, 0.5, 1.0] },
+        { "name": "mat.wall", "albedo": [0.25, 0.25, 0.3, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.floor",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.5 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 4.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, 0, -1], "distance": 4.0 }, "material": "mat.floor" }
+          ]
+        },
+        {
+          "name": "brush.north_wall",
+          "contents": ["solid", "player_clip"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 1, 0], "distance": 3.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, 1], "distance": -3.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 4.0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "fps_brush.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    const float initial_z = player->position.z;
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
+    ASSERT_GE(forward, 0);
+    slayer3d_input_set_action_override(input, forward, 1.0f);
+    for (int i = 0; i < 20; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(1000 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    }
+
+    EXPECT_LT(player->position.z, initial_z);
+    EXPECT_GT(player->position.z, -3.35f);
+    EXPECT_NEAR(player->position.y, 1.6f, 0.03f);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "current_sector", 99), -1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "on_ground", false));
+    expect_vec3_near(
+        slayer3d_properties_get_vec3(player->props, "camera_forward", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
+        slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
+
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
+    EXPECT_NEAR(camera.position.x, player->position.x, 0.001f);
+    EXPECT_NEAR(camera.position.y, player->position.y, 0.001f);
+    EXPECT_NEAR(camera.position.z, player->position.z, 0.001f);
+    EXPECT_LT(camera.target.z, camera.position.z);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, SectorLightingModulatesLitActorsAndCanUpdateAtRuntime)
 {
     const std::filesystem::path dir = unique_test_dir("sector_lighting_runtime");
@@ -12294,6 +12471,115 @@ TEST(GameDataRuntime, RejectsInvalidFpsSectorController)
         "ceil_y": 3,
         "wall_material": "floor"
       }]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+        write_text(game_path, game_json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(slayer3d_game_data_validate_file(game_path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidFpsBrushController)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_brush_controller_invalid");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.player"],
+  "world": { "brush_worlds": [{ "world": "brush.test" }] }
+})json");
+
+    struct Case
+    {
+        const char *name;
+        const char *component_json;
+        const char *expected_error;
+    };
+    const Case cases[] = {
+        {
+            "unknown_world",
+            R"json({
+              "type": "controller.fps_brush",
+              "brush_world": "brush.missing",
+              "actions": {
+                "forward": "action.move.forward",
+                "back": "action.move.back",
+                "left": "action.move.left",
+                "right": "action.move.right"
+              }
+            })json",
+            "unknown brush world",
+        },
+        {
+            "bad_contents_mask",
+            R"json({
+              "type": "controller.fps_brush",
+              "brush_world": "brush.test",
+              "contents_mask": ["solid", "bad_content"],
+              "actions": {
+                "forward": "action.move.forward",
+                "back": "action.move.back",
+                "left": "action.move.left",
+                "right": "action.move.right"
+              }
+            })json",
+            "brush content value is unknown",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path game_path = dir / (std::string(test_case.name) + ".game.json");
+        const std::string game_json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid FPS Brush Controller" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "components": [
+)json") + test_case.component_json +
+                                      R"json(
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.test",
+      "materials": [{ "name": "mat" }],
+      "brushes": [
+        {
+          "name": "brush.floor",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1.0 }, "material": "mat" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1.0 }, "material": "mat" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.25 }, "material": "mat" }
+          ]
+        }
+      ]
     }
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }

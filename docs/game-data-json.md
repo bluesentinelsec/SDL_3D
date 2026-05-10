@@ -557,6 +557,51 @@ the hit fraction, plane normal, brush, material, contents, and surface flags.
 `slayer3d_game_data_slide_active_brush_worlds()` layer deterministic
 plane-sliding over those traces for controllers and projectile movement.
 
+Use `controller.fps_brush` on an actor to drive first-person movement through
+the active scene's brush-world instances:
+
+```json
+{
+  "name": "entity.player",
+  "active": true,
+  "transform": { "position": [0.0, 1.6, 8.0] },
+  "properties": {
+    "yaw": { "type": "float", "value": 0.0 },
+    "pitch": { "type": "float", "value": 0.0 }
+  },
+  "components": [
+    {
+      "type": "controller.fps_brush",
+      "brush_world": "brush.keep_01",
+      "contents_mask": ["solid", "player_clip"],
+      "actions": {
+        "forward": "action.move.forward",
+        "back": "action.move.back",
+        "left": "action.move.left",
+        "right": "action.move.right",
+        "jump": "action.jump"
+      },
+      "move_speed": 7.0,
+      "jump_velocity": 5.8,
+      "gravity": 14.0,
+      "player_height": 1.6,
+      "player_radius": 0.35,
+      "step_height": 0.65,
+      "ceiling_clearance": 0.1,
+      "mouse_sensitivity": 0.002
+    }
+  ]
+}
+```
+
+The actor transform is the player's eye position. The controller sweeps an AABB
+body through `world.brush_worlds` in active-scene world space, slides along
+brush planes, supports basic stair stepping, gravity, jumping, and mouse-look,
+and writes the same diagnostic properties as `controller.fps_sector`.
+`brush_world` is validated as the intended collision world; runtime collision
+uses all active brush-world instances so multi-part brush scenes compose
+naturally. Missing `contents_mask` defaults to `["solid", "player_clip"]`.
+
 ## Sector Levels
 
 `sector_levels` describe sector/portal worlds as data. This is the reusable
@@ -1015,23 +1060,24 @@ defaults are `yaw`, `pitch`, `view_smooth`, `vertical_velocity`, `on_ground`,
 and `current_sector`. Use an `fps` camera targeting the same actor for the
 player view.
 
-FPS sector controllers also expose reusable actions for trigger volumes and
-scripted events:
+FPS controllers also expose reusable actions for trigger volumes and scripted
+events:
 
 ```json
 {
-  "type": "controller.fps_sector.launch",
+  "type": "controller.fps.launch",
   "target": "entity.player",
   "vertical_velocity": 15.0
 }
 ```
 
-`controller.fps_sector.launch` applies an upward impulse to the controller and
-requires a positive `vertical_velocity`.
+`controller.fps.launch` applies an upward impulse to either an
+`controller.fps_sector` or `controller.fps_brush` actor and requires a positive
+`vertical_velocity`.
 
 ```json
 {
-  "type": "controller.fps_sector.teleport",
+  "type": "controller.fps.teleport",
   "target": "entity.player",
   "position": [72.0, 4.1, 63.0],
   "yaw": -1.5707964,
@@ -1039,10 +1085,12 @@ requires a positive `vertical_velocity`.
 }
 ```
 
-`controller.fps_sector.teleport` moves the controller and actor to the given
+`controller.fps.teleport` moves the controller and actor to the given
 eye-position. `yaw` and `pitch` are optional; omitted angles preserve the
 current orientation. Both actions also support `target_from_payload` instead of
-`target` when a sensor payload supplies the actor name.
+`target` when a sensor payload supplies the actor name. The older
+`controller.fps_sector.launch` and `controller.fps_sector.teleport` names remain
+accepted for existing authored content.
 
 ## Scenes
 
@@ -1548,6 +1596,9 @@ Reusable components include:
 - `controller.fps_sector`: first-person movement through a sector level using
   authored input actions, sector collision, jumping, gravity, stair stepping,
   and mouse-look.
+- `controller.fps_brush`: first-person movement through active brush-world
+  instances using authored input actions, AABB brush collision, jumping,
+  gravity, stair stepping, and mouse-look.
 - `combat.health`: declares that an actor participates in generic combat
   health/armor actions. The actual runtime state remains ordinary actor
   properties so UI, Lua, replication, saves, and data actions can read the same
