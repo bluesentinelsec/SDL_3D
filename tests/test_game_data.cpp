@@ -6872,6 +6872,10 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.launch_pad"), nullptr);
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_pad"), nullptr);
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_destination"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.combat_dummy"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.health_pickup"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.health_station"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.powerup"), nullptr);
 
     const char *units = nullptr;
     float meters_per_unit = 0.0f;
@@ -6886,6 +6890,47 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
     RenderPrimitiveCapture render{};
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
     EXPECT_GE(render.cubes, 3);
+
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    struct DojoSceneCase
+    {
+        const char *scene;
+        const char *scene_key;
+        sdl3d_vec3 expected_position;
+        const char *ui_title;
+    };
+    const DojoSceneCase scenes[] = {
+        {"scene.dojo.movement", "movement", sdl3d_vec3_make(3.0f, 1.6f, 4.0f), "ui.dojo.movement.title"},
+        {"scene.dojo.combat_resources", "combat_resources", sdl3d_vec3_make(21.0f, 1.6f, 5.0f),
+         "ui.dojo.combat_resources.title"},
+        {"scene.dojo.hazards", "hazards", sdl3d_vec3_make(16.0f, 1.6f, 5.0f), "ui.dojo.hazards.title"},
+        {"scene.dojo.navigation", "navigation", sdl3d_vec3_make(4.0f, 1.6f, 14.0f), "ui.dojo.navigation.title"},
+    };
+    for (const DojoSceneCase &scene : scenes)
+    {
+        ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, scene.scene)) << scene.scene;
+        EXPECT_STREQ(sdl3d_game_data_active_scene(runtime), scene.scene);
+        EXPECT_STREQ(sdl3d_properties_get_string(player->props, "dojo_scene", ""), scene.scene_key);
+        expect_vec3_near(player->position, scene.expected_position);
+
+        bool saw_title = false;
+        auto find_dojo_scene_title = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+            auto *args = static_cast<std::pair<const char *, bool *> *>(userdata);
+            if (std::string(text->name) == args->first)
+            {
+                *args->second = true;
+                return false;
+            }
+            return true;
+        };
+        std::pair<const char *, bool *> title_args{scene.ui_title, &saw_title};
+        ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, find_dojo_scene_title, &title_args));
+        EXPECT_TRUE(saw_title) << scene.ui_title;
+    }
+
+    EXPECT_TRUE(sdl3d_game_data_sector_nav_path_available(runtime, "nav.dojo.arena", sdl3d_vec3_make(4.0f, 1.0f, 4.0f),
+                                                          sdl3d_vec3_make(24.0f, 1.0f, 6.0f)));
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

@@ -1,0 +1,56 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.dojo.navigation",
+  "on_enter_signal": "signal.dojo.scene.navigation.enter",
+  "camera": "camera.dojo.player",
+  "updates_game": true,
+  "renders_world": true,
+  "entities": [
+    "entity.player",
+    "entity.dojo.teleporter_destination",
+    "entity.dojo.combat_dummy"
+  ],
+  "input": {
+    "mouse_capture": "unpaused",
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump",
+      "action.pause"
+    ]
+  },
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.dojo.arena",
+        "variant": "lightmapped",
+        "position": [0.0, 0.0, 0.0],
+        "portal_culling": true
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.dojo.navigation.title",
+        "text": "Navigation Dojo: sector graph path substrate",
+        "font": "font.dojo.hud",
+        "position": [0.02, 0.03],
+        "anchor": "top_left",
+        "color": [210, 230, 255, 235],
+        "scale": 0.8
+      },
+      {
+        "name": "ui.dojo.navigation.reticle",
+        "text": "+",
+        "font": "font.dojo.hud",
+        "position": [0.5, 0.5],
+        "anchor": "center",
+        "color": [255, 255, 255, 210],
+        "scale": 1.0
+      }
+    ]
+  }
+}

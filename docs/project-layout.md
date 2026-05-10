@@ -180,6 +180,12 @@ clear UI indicators over finished media while the mechanic is still evolving.
 Launch dojos through `sdl3d_runner` and direct scene selection so mechanics can
 be tested without walking through splash, title, or campaign flow.
 
+`demos/fps_mechanics_dojo` is the reference shape for FPS/sector mechanics. It
+keeps an overview scene plus focused direct-launch scenes for movement,
+combat/resources, hazards, and navigation. New dojos should follow that pattern:
+one scene per editing question, with authored scene-enter setup that places the
+player near the mechanic under test.
+
 Use optional `editor` metadata beside the authored object it describes. This
 keeps future editor palettes and prefab browsers grounded in the same JSON that
 runtime validation sees. Metadata should describe categories, previews, bounds,

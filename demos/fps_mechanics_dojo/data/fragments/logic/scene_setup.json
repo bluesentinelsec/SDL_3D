@@ -1,0 +1,63 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "signals": [
+    "signal.dojo.scene.overview.enter",
+    "signal.dojo.scene.movement.enter",
+    "signal.dojo.scene.combat_resources.enter",
+    "signal.dojo.scene.hazards.enter",
+    "signal.dojo.scene.navigation.enter"
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.dojo.scene.overview.enter",
+        "actions": [
+          { "type": "controller.fps_sector.teleport", "target": "entity.player", "position": [3.0, 1.6, 4.0], "yaw": 0.0, "pitch": 0.0 },
+          { "type": "property.set", "target": "entity.player", "key": "dojo_scene", "value": "overview" },
+          { "type": "sector_door.close", "target": "door.dojo.hazard_gate" }
+        ]
+      },
+      {
+        "signal": "signal.dojo.scene.movement.enter",
+        "actions": [
+          { "type": "controller.fps_sector.teleport", "target": "entity.player", "position": [3.0, 1.6, 4.0], "yaw": 0.0, "pitch": 0.0 },
+          { "type": "property.set", "target": "entity.player", "key": "dojo_scene", "value": "movement" },
+          { "type": "sector_door.close", "target": "door.dojo.hazard_gate" }
+        ]
+      },
+      {
+        "signal": "signal.dojo.scene.combat_resources.enter",
+        "actions": [
+          { "type": "controller.fps_sector.teleport", "target": "entity.player", "position": [21.0, 1.6, 5.0], "yaw": 1.5707964, "pitch": 0.0 },
+          { "type": "property.set", "target": "entity.player", "key": "dojo_scene", "value": "combat_resources" },
+          { "type": "property.set", "target": "entity.player", "key": "health", "value": 65.0 },
+          { "type": "property.set", "target": "entity.player", "key": "ammo", "value": 2 },
+          { "type": "property.set", "target": "entity.dojo.combat_dummy", "key": "health", "value": 100.0 },
+          { "type": "property.set", "target": "entity.dojo.combat_dummy", "key": "armor", "value": 30.0 },
+          { "type": "property.set", "target": "entity.dojo.combat_dummy", "key": "alive", "value": true },
+          { "type": "entity.set_active", "target": "entity.dojo.health_pickup", "active": true },
+          { "type": "entity.set_active", "target": "entity.dojo.powerup", "active": true },
+          { "type": "sector_door.open", "target": "door.dojo.hazard_gate" }
+        ]
+      },
+      {
+        "signal": "signal.dojo.scene.hazards.enter",
+        "actions": [
+          { "type": "controller.fps_sector.teleport", "target": "entity.player", "position": [16.0, 1.6, 5.0], "yaw": 1.5707964, "pitch": 0.0 },
+          { "type": "property.set", "target": "entity.player", "key": "dojo_scene", "value": "hazards" },
+          { "type": "property.set", "target": "entity.player", "key": "dojo_hazard_damage", "value": 0.0 },
+          { "type": "property.set", "target": "entity.player", "key": "dojo_crush_damage", "value": 0.0 },
+          { "type": "sector_door.open", "target": "door.dojo.hazard_gate" }
+        ]
+      },
+      {
+        "signal": "signal.dojo.scene.navigation.enter",
+        "actions": [
+          { "type": "controller.fps_sector.teleport", "target": "entity.player", "position": [4.0, 1.6, 14.0], "yaw": 0.0, "pitch": 0.0 },
+          { "type": "property.set", "target": "entity.player", "key": "dojo_scene", "value": "navigation" },
+          { "type": "sector_door.close", "target": "door.dojo.hazard_gate" }
+        ]
+      }
+    ]
+  }
+}

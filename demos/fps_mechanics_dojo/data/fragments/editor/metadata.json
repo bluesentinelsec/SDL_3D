@@ -39,6 +39,88 @@
           { "name": "yaw", "type": "float", "display_name": "Facing Yaw", "default": -1.5707964 }
         ],
         "test_scene": "scene.dojo.fps_world"
+      },
+      {
+        "name": "template.fps.hazard_sector",
+        "display_name": "Hazard Sector",
+        "category": "mechanics/hazards",
+        "tags": ["sector", "hazard", "damage"],
+        "source": "sensor.dojo.hazard.damage",
+        "source_kind": "sensor",
+        "preview": { "primitive": "volume", "color": [1.0, 0.2, 0.08, 1.0] },
+        "bounds": { "size": [10.0, 4.0, 10.0] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "damage_per_second", "type": "float", "display_name": "Damage Per Second", "min": 0.0, "default": 6.0 }
+        ],
+        "test_scene": "scene.dojo.hazards"
+      },
+      {
+        "name": "template.fps.platform_lift",
+        "display_name": "Sector Lift",
+        "category": "mechanics/world",
+        "tags": ["platform", "lift", "crusher"],
+        "source": "platform.dojo.lift",
+        "source_kind": "sector_platform",
+        "preview": { "primitive": "cube", "color": [0.4, 0.65, 1.0, 1.0] },
+        "bounds": { "size": [10.0, 2.25, 8.0] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "cycle_seconds", "type": "float", "display_name": "Cycle Seconds", "min": 0.1, "default": 5.0 },
+          { "name": "crush_damage_per_second", "type": "float", "display_name": "Crush Damage", "min": 0.0, "default": 8.0 }
+        ],
+        "test_scene": "scene.dojo.hazards"
+      },
+      {
+        "name": "template.fps.sector_door",
+        "display_name": "Sector Door",
+        "category": "mechanics/world",
+        "tags": ["door", "sector", "gate"],
+        "source": "door.dojo.hazard_gate",
+        "source_kind": "sector_door",
+        "preview": { "primitive": "cube", "color": [0.8, 0.25, 0.15, 1.0] },
+        "bounds": { "size": [0.5, 3.2, 3.2] },
+        "snap": { "grid": 0.25, "align_to_floor": true },
+        "test_scene": "scene.dojo.hazards"
+      },
+      {
+        "name": "template.fps.combat_dummy",
+        "display_name": "Combat Target Dummy",
+        "category": "mechanics/combat",
+        "tags": ["combat", "health", "armor"],
+        "source": "archetype.dojo.combat_dummy",
+        "source_kind": "actor_archetype",
+        "preview": { "primitive": "cube", "color": [1.0, 0.25, 0.15, 1.0] },
+        "bounds": { "size": [1.2, 1.8, 1.2] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "exposed_properties": [
+          { "name": "health", "type": "float", "display_name": "Health", "min": 0.0, "default": 100.0 },
+          { "name": "armor", "type": "float", "display_name": "Armor", "min": 0.0, "default": 30.0 }
+        ],
+        "test_scene": "scene.dojo.combat_resources"
+      },
+      {
+        "name": "template.fps.resource_pickup",
+        "display_name": "Resource Pickup",
+        "category": "mechanics/resources",
+        "tags": ["pickup", "resource", "respawn"],
+        "source": "archetype.dojo.pickup",
+        "source_kind": "actor_archetype",
+        "preview": { "primitive": "sphere", "color": [0.25, 1.0, 0.45, 1.0] },
+        "bounds": { "size": [0.8, 0.8, 0.8] },
+        "snap": { "grid": 0.5, "align_to_floor": true },
+        "test_scene": "scene.dojo.combat_resources"
+      },
+      {
+        "name": "template.fps.sector_navigation_graph",
+        "display_name": "Sector Navigation Graph",
+        "category": "mechanics/navigation",
+        "tags": ["navigation", "sector", "ai"],
+        "source": "nav.dojo.arena",
+        "source_kind": "sector_navigation",
+        "preview": { "primitive": "volume", "color": [0.25, 0.55, 1.0, 1.0] },
+        "bounds": { "size": [28.0, 1.0, 18.0] },
+        "test_scene": "scene.dojo.navigation"
       }
     ]
   }

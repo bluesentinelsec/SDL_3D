@@ -1,15 +1,12 @@
 {
   "schema": "sdl3d.scene.v0",
-  "name": "scene.dojo.fps_world",
-  "on_enter_signal": "signal.dojo.scene.overview.enter",
+  "name": "scene.dojo.combat_resources",
+  "on_enter_signal": "signal.dojo.scene.combat_resources.enter",
   "camera": "camera.dojo.player",
   "updates_game": true,
   "renders_world": true,
   "entities": [
     "entity.player",
-    "entity.dojo.launch_pad",
-    "entity.dojo.teleporter_pad",
-    "entity.dojo.teleporter_destination",
     "entity.dojo.combat_dummy",
     "entity.dojo.health_pickup",
     "entity.dojo.health_station",
@@ -23,7 +20,6 @@
       "action.move.left",
       "action.move.right",
       "action.jump",
-      "action.interact",
       "action.fire",
       "action.pause"
     ]
@@ -41,43 +37,34 @@
   "ui": {
     "text": [
       {
-        "name": "ui.dojo.title",
-        "text": "FPS Mechanics Dojo",
+        "name": "ui.dojo.combat_resources.title",
+        "text": "Combat + Resources Dojo",
         "font": "font.dojo.hud",
         "position": [0.02, 0.03],
         "anchor": "top_left",
-        "color": [220, 235, 255, 230],
-        "scale": 0.9
+        "color": [255, 220, 190, 235],
+        "scale": 0.8
       },
       {
-        "name": "ui.dojo.damage",
-        "text": "Hazard {target.entity.player.dojo_hazard_damage}  Crush {target.entity.player.dojo_crush_damage}",
+        "name": "ui.dojo.combat_resources.dummy",
+        "text": "Dummy HP {target.entity.dojo.combat_dummy.health} Armor {target.entity.dojo.combat_dummy.armor} Alive {target.entity.dojo.combat_dummy.alive}",
         "font": "font.dojo.hud",
         "position": [0.02, 0.07],
         "anchor": "top_left",
-        "color": [255, 150, 120, 220],
-        "scale": 0.75
+        "color": [255, 210, 180, 220],
+        "scale": 0.7
       },
       {
-        "name": "ui.dojo.dummy",
-        "text": "Dummy HP {target.entity.dojo.combat_dummy.health}  Armor {target.entity.dojo.combat_dummy.armor}  Alive {target.entity.dojo.combat_dummy.alive}",
+        "name": "ui.dojo.combat_resources.player",
+        "text": "HP {target.entity.player.health}/{target.entity.player.max_health} Ammo {target.entity.player.ammo}/{target.entity.player.max_ammo} Quad {target.entity.player.quad_damage_active}",
         "font": "font.dojo.hud",
         "position": [0.02, 0.11],
         "anchor": "top_left",
-        "color": [255, 210, 180, 220],
-        "scale": 0.75
-      },
-      {
-        "name": "ui.dojo.resources",
-        "text": "HP {target.entity.player.health}/{target.entity.player.max_health}  Ammo {target.entity.player.ammo}/{target.entity.player.max_ammo}  Quad {target.entity.player.quad_damage_active}",
-        "font": "font.dojo.hud",
-        "position": [0.02, 0.15],
-        "anchor": "top_left",
         "color": [190, 255, 210, 230],
-        "scale": 0.75
+        "scale": 0.7
       },
       {
-        "name": "ui.dojo.reticle",
+        "name": "ui.dojo.combat_resources.reticle",
         "text": "+",
         "font": "font.dojo.hud",
         "position": [0.5, 0.5],

@@ -11,6 +11,7 @@
     { "path": "fragments/world/navigation.json", "sections": ["sector_navigation"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/actors/mechanic_markers.json", "sections": ["actor_archetypes", "actor_instances"] },
+    { "path": "fragments/logic/scene_setup.json", "sections": ["signals", "logic"] },
     { "path": "fragments/editor/metadata.json", "sections": ["editor"] }
   ],
   "app": {
@@ -51,6 +52,12 @@
   },
   "scenes": {
     "initial": "scene.dojo.fps_world",
-    "files": ["scenes/fps_world.scene.json"]
+    "files": [
+      "scenes/fps_world.scene.json",
+      "scenes/movement.scene.json",
+      "scenes/combat_resources.scene.json",
+      "scenes/hazards.scene.json",
+      "scenes/navigation.scene.json"
+    ]
   }
 }
