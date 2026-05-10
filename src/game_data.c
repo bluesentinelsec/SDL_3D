@@ -51,6 +51,7 @@ typedef enum game_data_sensor_type
     GAME_DATA_SENSOR_BOUNDS_REFLECT,
     GAME_DATA_SENSOR_CONTACT_2D,
     GAME_DATA_SENSOR_INPUT_PRESSED,
+    GAME_DATA_SENSOR_PERCEPTION,
     GAME_DATA_SENSOR_SECTOR,
     GAME_DATA_SENSOR_VOLUME,
 } game_data_sensor_type;
@@ -133,6 +134,11 @@ typedef struct sensor_entry
     float min_value;
     float max_value;
     float threshold;
+    float range;
+    float min_dot;
+    float observer_eye_height;
+    float target_eye_height;
+    const char *yaw_property;
     sdl3d_vec3 volume_min;
     sdl3d_vec3 volume_max;
     int signal_id;
@@ -16474,20 +16480,22 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
             entry->type = GAME_DATA_SENSOR_CONTACT_2D;
         else if (SDL_strcmp(type, "sensor.input_pressed") == 0)
             entry->type = GAME_DATA_SENSOR_INPUT_PRESSED;
+        else if (SDL_strcmp(type, "sensor.perception") == 0)
+            entry->type = GAME_DATA_SENSOR_PERCEPTION;
         else if (SDL_strcmp(type, "sensor.sector") == 0)
             entry->type = GAME_DATA_SENSOR_SECTOR;
         else if (SDL_strcmp(type, "sensor.volume") == 0)
             entry->type = GAME_DATA_SENSOR_VOLUME;
 
         entry->name = json_string(sensor, "name", NULL);
-        entry->entity = json_string(sensor, "entity", json_string(sensor, "a", NULL));
+        entry->entity = json_string(sensor, "observer", json_string(sensor, "entity", json_string(sensor, "a", NULL)));
         if (entry->entity == NULL)
             entry->entity = json_string(sensor, "actor", NULL);
-        entry->other = json_string(sensor, "b", NULL);
-        entry->entity_tag = json_string(sensor, "a_tag", NULL);
+        entry->other = json_string(sensor, "target", json_string(sensor, "b", NULL));
+        entry->entity_tag = json_string(sensor, "observer_tag", json_string(sensor, "a_tag", NULL));
         if (entry->entity_tag == NULL)
             entry->entity_tag = json_string(sensor, "actor_tag", NULL);
-        entry->other_tag = json_string(sensor, "b_tag", NULL);
+        entry->other_tag = json_string(sensor, "target_tag", json_string(sensor, "b_tag", NULL));
         entry->sector_level = json_string(sensor, "sector_level", NULL);
         entry->sector = json_string(sensor, "sector", NULL);
         entry->sector_property = json_string(sensor, "sector_property", "current_sector");
@@ -16498,6 +16506,14 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
         entry->min_value = json_float(sensor, "min", 0.0f);
         entry->max_value = json_float(sensor, "max", 0.0f);
         entry->threshold = json_float(sensor, "threshold", 0.0f);
+        entry->range = json_float(sensor, "range", 64.0f);
+        entry->min_dot = SDL_clamp(json_float(sensor, "min_dot", -1.0f), -1.0f, 1.0f);
+        yyjson_val *fov_degrees = obj_get(sensor, "fov_degrees");
+        if (yyjson_is_num(fov_degrees))
+            entry->min_dot = SDL_cosf(SDL_clamp((float)yyjson_get_num(fov_degrees), 0.0f, 360.0f) * SDL_PI_F / 360.0f);
+        entry->observer_eye_height = json_float(sensor, "observer_eye_height", json_float(sensor, "eye_height", 0.0f));
+        entry->target_eye_height = json_float(sensor, "target_eye_height", entry->observer_eye_height);
+        entry->yaw_property = json_string(sensor, "yaw_property", "yaw");
         entry->volume_min = json_vec3(sensor, "min", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
         entry->volume_max = json_vec3(sensor, "max", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
         entry->actions = obj_get(sensor, "actions");
@@ -18322,6 +18338,170 @@ static void update_volume_sensor(sdl3d_game_data_runtime *runtime, sensor_entry 
     sensor_actor_list_free(&actors);
 }
 
+static bool perception_actor_in_field_of_view(const sensor_entry *sensor, const sdl3d_registered_actor *observer,
+                                              const sdl3d_registered_actor *target)
+{
+    if (sensor == NULL || observer == NULL || target == NULL)
+        return false;
+    if (sensor->min_dot <= -1.0f)
+        return true;
+
+    const float yaw = sdl3d_properties_get_float(observer->props, sensor->yaw_property, 0.0f);
+    const sdl3d_vec3 forward = sdl3d_vec3_make(SDL_sinf(yaw), 0.0f, -SDL_cosf(yaw));
+    sdl3d_vec3 to_target =
+        sdl3d_vec3_make(target->position.x - observer->position.x, 0.0f, target->position.z - observer->position.z);
+    if (sdl3d_vec3_length_squared(to_target) <= 0.000001f)
+        return true;
+    to_target = sdl3d_vec3_normalize(to_target);
+    return sdl3d_vec3_dot(forward, to_target) >= sensor->min_dot;
+}
+
+static bool perception_sensor_has_line_of_sight(const sensor_entry *sensor, const sector_level_runtime *level,
+                                                const sdl3d_registered_actor *observer,
+                                                const sdl3d_registered_actor *target, float *out_distance,
+                                                sdl3d_vec3 *out_origin, sdl3d_vec3 *out_target)
+{
+    if (sensor == NULL || level == NULL || observer == NULL || target == NULL)
+        return false;
+
+    const sdl3d_vec3 origin =
+        sdl3d_vec3_make(observer->position.x, observer->position.y + sensor->observer_eye_height, observer->position.z);
+    const sdl3d_vec3 target_point =
+        sdl3d_vec3_make(target->position.x, target->position.y + sensor->target_eye_height, target->position.z);
+    const sdl3d_vec3 delta = sdl3d_vec3_sub(target_point, origin);
+    const float distance = sdl3d_vec3_length(delta);
+    if (distance <= 0.000001f || distance > sensor->range)
+        return false;
+
+    if (out_distance != NULL)
+        *out_distance = distance;
+    if (out_origin != NULL)
+        *out_origin = origin;
+    if (out_target != NULL)
+        *out_target = target_point;
+
+    const sdl3d_vec3 direction = sdl3d_vec3_scale(delta, 1.0f / distance);
+    const sdl3d_level_trace_result trace =
+        sdl3d_level_trace_point(&level->lightmapped, level->sectors, origin, direction, distance);
+    return !trace.hit || SDL_clamp(trace.fraction, 0.0f, 1.0f) >= 0.995f;
+}
+
+static sdl3d_properties *create_perception_sensor_payload(const sensor_entry *sensor, const sector_level_runtime *level,
+                                                          const sdl3d_registered_actor *observer,
+                                                          const sdl3d_registered_actor *target, float distance,
+                                                          sdl3d_vec3 origin, sdl3d_vec3 target_point)
+{
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+
+    sdl3d_properties_set_string(payload, "actor_name",
+                                observer != NULL && observer->name != NULL ? observer->name : "");
+    sdl3d_properties_set_string(payload, "observer_actor_name",
+                                observer != NULL && observer->name != NULL ? observer->name : "");
+    sdl3d_properties_set_string(payload, "target_actor_name",
+                                target != NULL && target->name != NULL ? target->name : "");
+    sdl3d_properties_set_string(payload, "other_actor_name",
+                                target != NULL && target->name != NULL ? target->name : "");
+    sdl3d_properties_set_string(payload, "sector_level", level != NULL && level->name != NULL ? level->name : "");
+    sdl3d_properties_set_float(payload, "distance", distance);
+    sdl3d_properties_set_float(payload, "perception_distance", distance);
+    sdl3d_properties_set_float(payload, "range", sensor != NULL ? sensor->range : 0.0f);
+    sdl3d_properties_set_vec3(payload, "origin", origin);
+    sdl3d_properties_set_vec3(payload, "target_position", target_point);
+    return payload;
+}
+
+static void emit_perception_sensor_signal(sdl3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                          const sector_level_runtime *level, sdl3d_registered_actor *observer,
+                                          sdl3d_registered_actor *target, float distance, sdl3d_vec3 origin,
+                                          sdl3d_vec3 target_point)
+{
+    sdl3d_signal_bus *bus = runtime_bus(runtime);
+    if (bus == NULL || sensor == NULL || sensor->signal_id < 0)
+        return;
+
+    sdl3d_properties *payload =
+        create_perception_sensor_payload(sensor, level, observer, target, distance, origin, target_point);
+    sdl3d_signal_emit(bus, sensor->signal_id, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static void execute_perception_sensor_actions(sdl3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                              const sector_level_runtime *level, sdl3d_registered_actor *observer,
+                                              sdl3d_registered_actor *target, float distance, sdl3d_vec3 origin,
+                                              sdl3d_vec3 target_point)
+{
+    if (runtime == NULL || sensor == NULL || !yyjson_is_arr(sensor->actions))
+        return;
+
+    sdl3d_properties *payload =
+        create_perception_sensor_payload(sensor, level, observer, target, distance, origin, target_point);
+    if (payload != NULL)
+        (void)execute_action_array(runtime, sensor->actions, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static void update_perception_sensor_pair(sdl3d_game_data_runtime *runtime, sensor_entry *sensor,
+                                          const sector_level_runtime *level, sdl3d_registered_actor *observer,
+                                          sdl3d_registered_actor *target)
+{
+    if (!runtime_actor_is_active(runtime, observer) || !runtime_actor_is_active(runtime, target) || observer == target)
+        return;
+
+    sensor_contact_pair_state *state = sensor_contact_pair_state_for(sensor, observer->name, target->name);
+    if (state == NULL)
+        return;
+
+    float distance = 0.0f;
+    sdl3d_vec3 origin = observer->position;
+    sdl3d_vec3 target_point = target->position;
+    bool active =
+        actor_matches_target_filter(runtime, target, observer, sensor->json, NULL, sensor->other_tag, true) &&
+        perception_actor_in_field_of_view(sensor, observer, target) &&
+        perception_sensor_has_line_of_sight(sensor, level, observer, target, &distance, &origin, &target_point);
+
+    const bool should_emit = sensor_edge_is_exit(sensor)   ? (!active && state->active)
+                             : sensor_edge_is_stay(sensor) ? active
+                                                           : (active && !state->active);
+    if (should_emit)
+    {
+        emit_perception_sensor_signal(runtime, sensor, level, observer, target, distance, origin, target_point);
+        execute_perception_sensor_actions(runtime, sensor, level, observer, target, distance, origin, target_point);
+    }
+    state->active = active;
+    state->seen = true;
+}
+
+static void update_perception_sensor(sdl3d_game_data_runtime *runtime, sensor_entry *sensor)
+{
+    const sector_level_runtime *level = find_sector_level_runtime(runtime, sensor->sector_level);
+    if (level == NULL)
+        return;
+
+    sensor_actor_list observers;
+    sensor_actor_list targets;
+    SDL_zero(observers);
+    SDL_zero(targets);
+
+    sensor_contact_states_begin(sensor);
+    if (collect_sensor_endpoint_actors(runtime, sensor->entity, sensor->entity_tag, &observers) &&
+        collect_sensor_endpoint_actors(runtime, sensor->other, sensor->other_tag, &targets))
+    {
+        for (int observer_index = 0; observer_index < observers.count; ++observer_index)
+        {
+            for (int target_index = 0; target_index < targets.count; ++target_index)
+            {
+                update_perception_sensor_pair(runtime, sensor, level, observers.items[observer_index],
+                                              targets.items[target_index]);
+            }
+        }
+    }
+    sensor_contact_states_end(sensor);
+    sensor_actor_list_free(&observers);
+    sensor_actor_list_free(&targets);
+}
+
 static void update_sensors(sdl3d_game_data_runtime *runtime)
 {
     for (int i = 0; i < runtime->sensor_count; ++i)
@@ -18340,6 +18520,11 @@ static void update_sensors(sdl3d_game_data_runtime *runtime)
         if (sensor->type == GAME_DATA_SENSOR_VOLUME)
         {
             update_volume_sensor(runtime, sensor);
+            continue;
+        }
+        if (sensor->type == GAME_DATA_SENSOR_PERCEPTION)
+        {
+            update_perception_sensor(runtime, sensor);
             continue;
         }
 

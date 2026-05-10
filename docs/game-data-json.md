@@ -1754,6 +1754,40 @@ Use `actor_tag` instead of `actor` to apply a sector sensor to every active
 actor with a matching tag. `sector_index` may be used instead of `sector` when
 the authored sector order is deliberate and stable.
 
+`sensor.perception` detects whether an observer can see one or more targets
+inside a sector level. It combines range, field-of-view, sector line-of-sight,
+and the standard `target_filter` object, so faction-aware AI perception can be
+authored without game-specific C. Use exactly one of `observer` or
+`observer_tag`, exactly one of `target` or `target_tag`, and a `sector_level`.
+The sensor supports `enter`, `stay` / `overlap`, and `exit` edges.
+
+```json
+{
+  "name": "sensor.guard.sees_enemy",
+  "type": "sensor.perception",
+  "observer": "entity.guard",
+  "target_tag": "actor",
+  "sector_level": "sector.dungeon",
+  "range": 18.0,
+  "fov_degrees": 120.0,
+  "observer_eye_height": 1.5,
+  "target_eye_height": 1.0,
+  "target_filter": { "relationship": "hostile" },
+  "edge": "stay",
+  "actions": [
+    { "type": "property.set", "target": "entity.guard", "key": "alerted", "value": true },
+    { "type": "property.set", "target_from_payload": "target_actor_name", "key": "was_seen", "value": true }
+  ]
+}
+```
+
+Use `min_dot` instead of `fov_degrees` when you want to author the dot-product
+threshold directly; `-1.0` means omnidirectional. `yaw_property` defaults to
+`yaw` and is used for field-of-view checks. The payload includes `actor_name`
+and `observer_actor_name` for the observer, `target_actor_name` and
+`other_actor_name` for the seen target, `sector_level`, `distance`,
+`perception_distance`, `range`, `origin`, and `target_position`.
+
 `sensor.volume` detects whether an actor is inside an authored axis-aligned 3D
 box. It supports the same `enter`, `stay` / `overlap`, and `exit` edges and
 publishes `actor_name` to actions or signals. Use it for trigger volumes such

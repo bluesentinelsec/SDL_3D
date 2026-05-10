@@ -11010,6 +11010,151 @@ TEST(GameDataRuntime, RunsAuthoredSectorHazardSensors)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredPerceptionSensorsWithSectorLineOfSightAndTargetFilters)
+{
+    const std::filesystem::path dir = unique_test_dir("perception_sensors");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.player", "entity.enemy.visible", "entity.enemy.blocked", "entity.friend"]
+})json");
+    write_text(dir / "perception_sensors.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Perception Sensor Test" },
+  "world": { "name": "world.test", "kind": "sector" },
+  "factions": {
+    "player": { "enemy": "hostile", "civilian": "friendly" },
+    "enemy": { "player": "hostile" },
+    "civilian": { "player": "friendly" }
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [2.0, 1.0, 2.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "faction": { "type": "string", "value": "player" }
+      }
+    },
+    {
+      "name": "entity.enemy.visible",
+      "active": true,
+      "tags": ["npc"],
+      "transform": { "position": [2.0, 1.0, 0.75] },
+      "properties": {
+        "faction": { "type": "string", "value": "enemy" },
+        "spotted": { "type": "int", "value": 0 },
+        "last_distance": { "type": "float", "value": 0.0 },
+        "lost": { "type": "bool", "value": false }
+      }
+    },
+    {
+      "name": "entity.enemy.blocked",
+      "active": true,
+      "tags": ["npc"],
+      "transform": { "position": [6.0, 1.0, 2.0] },
+      "properties": {
+        "faction": { "type": "string", "value": "enemy" },
+        "spotted": { "type": "int", "value": 0 }
+      }
+    },
+    {
+      "name": "entity.friend",
+      "active": true,
+      "tags": ["npc"],
+      "transform": { "position": [2.5, 1.0, 0.75] },
+      "properties": {
+        "faction": { "type": "string", "value": "civilian" },
+        "spotted": { "type": "int", "value": 0 }
+      }
+    }
+  ],
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [{ "name": "floor" }],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "wall_material": "floor"
+        }
+      ]
+    }
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.enemy.visible",
+        "type": "sensor.perception",
+        "observer": "entity.player",
+        "target_tag": "npc",
+        "sector_level": "sector.test",
+        "range": 8.0,
+        "fov_degrees": 120.0,
+        "edge": "stay",
+        "target_filter": { "relationship": "hostile" },
+        "actions": [
+          { "type": "property.add", "target_from_payload": "target_actor_name", "key": "spotted", "value": 1 },
+          { "type": "property.set", "target_from_payload": "target_actor_name", "key": "last_distance", "value_from_payload": "distance" }
+        ]
+      },
+      {
+        "name": "sensor.enemy.lost",
+        "type": "sensor.perception",
+        "observer": "entity.player",
+        "target": "entity.enemy.visible",
+        "sector_level": "sector.test",
+        "range": 8.0,
+        "fov_degrees": 120.0,
+        "edge": "exit",
+        "target_filter": { "relationship": "hostile" },
+        "actions": [
+          { "type": "property.set", "target_from_payload": "target_actor_name", "key": "lost", "value": true }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "perception_sensors.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+    sdl3d_registered_actor *visible = sdl3d_game_data_find_actor(runtime, "entity.enemy.visible");
+    ASSERT_NE(visible, nullptr);
+    sdl3d_registered_actor *blocked = sdl3d_game_data_find_actor(runtime, "entity.enemy.blocked");
+    ASSERT_NE(blocked, nullptr);
+    sdl3d_registered_actor *friendly = sdl3d_game_data_find_actor(runtime, "entity.friend");
+    ASSERT_NE(friendly, nullptr);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(sdl3d_properties_get_int(visible->props, "spotted", 0), 1);
+    EXPECT_GT(sdl3d_properties_get_float(visible->props, "last_distance", 0.0f), 1.0f);
+    EXPECT_EQ(sdl3d_properties_get_int(blocked->props, "spotted", 0), 0);
+    EXPECT_EQ(sdl3d_properties_get_int(friendly->props, "spotted", 0), 0);
+    EXPECT_FALSE(sdl3d_properties_get_bool(visible->props, "lost", false));
+
+    visible->position = sdl3d_vec3_make(2.0f, 1.0f, 3.5f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(sdl3d_properties_get_int(visible->props, "spotted", 0), 1);
+    EXPECT_TRUE(sdl3d_properties_get_bool(visible->props, "lost", false));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
 {
     const std::filesystem::path dir = unique_test_dir("sector_doors_invalid");
@@ -11075,6 +11220,25 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
               ]
             })json",
             "unknown sensor.sector sector",
+        },
+        {
+            "invalid_perception_sensor",
+            R"json([])json",
+            R"json({
+              "sensors": [
+                {
+                  "type": "sensor.perception",
+                  "observer": "entity.player",
+                  "target_tag": "enemy",
+                  "sector_level": "sector.test",
+                  "fov_degrees": 0,
+                  "actions": [
+                    { "type": "property.set", "target_from_payload": "target_actor_name", "key": "alert", "value": true }
+                  ]
+                }
+              ]
+            })json",
+            "sensor.perception fov_degrees",
         },
     };
 
