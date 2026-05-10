@@ -6230,6 +6230,90 @@ static bool validate_interaction_use_action(validation_context *ctx, yyjson_val 
     return miss_actions == NULL || validate_action_array(ctx, miss_actions, json_path, names);
 }
 
+static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                             validation_names *names)
+{
+    yyjson_val *radius = obj_get(action, "radius");
+    if (radius == NULL || !yyjson_is_num(radius) || yyjson_get_num(radius) < 0.0)
+        return validation_error(ctx, json_path, "effect.explosion radius must be a non-negative number");
+
+    yyjson_val *inner_radius = obj_get(action, "inner_radius");
+    if (inner_radius != NULL && (!yyjson_is_num(inner_radius) || yyjson_get_num(inner_radius) < 0.0))
+        return validation_error(ctx, json_path, "effect.explosion inner_radius must be non-negative");
+    if (inner_radius != NULL && yyjson_get_num(inner_radius) > yyjson_get_num(radius))
+        return validation_error(ctx, json_path, "effect.explosion inner_radius must not exceed radius");
+
+    yyjson_val *damage = obj_get(action, "damage");
+    yyjson_val *amount = obj_get(action, "amount");
+    if (damage != NULL && amount != NULL)
+        return validation_error(ctx, json_path, "effect.explosion requires at most one of damage or amount");
+    if ((damage != NULL && (!yyjson_is_num(damage) || yyjson_get_num(damage) < 0.0)) ||
+        (amount != NULL && (!yyjson_is_num(amount) || yyjson_get_num(amount) < 0.0)))
+    {
+        return validation_error(ctx, json_path, "effect.explosion damage must be non-negative");
+    }
+
+    yyjson_val *impulse = obj_get(action, "impulse");
+    if (impulse != NULL && (!yyjson_is_num(impulse) || yyjson_get_num(impulse) < 0.0))
+        return validation_error(ctx, json_path, "effect.explosion impulse must be non-negative");
+
+    yyjson_val *position = obj_get(action, "position");
+    yyjson_val *offset = obj_get(action, "offset");
+    if (position != NULL && !is_vec_array(position, 3))
+        return validation_error(ctx, json_path, "effect.explosion position must be a vec3");
+    if (offset != NULL && !is_vec_array(offset, 3))
+        return validation_error(ctx, json_path, "effect.explosion offset must be a vec3");
+
+    const char *actor_ref_fields[] = {"source", "from"};
+    for (size_t i = 0; i < SDL_arraysize(actor_ref_fields); ++i)
+    {
+        yyjson_val *value = obj_get(action, actor_ref_fields[i]);
+        const char *name = json_string(action, actor_ref_fields[i]);
+        if (value != NULL && !yyjson_is_str(value))
+            return validation_error(ctx, json_path, "effect.explosion %s must be a string", actor_ref_fields[i]);
+        if (name != NULL && !require_actor_ref(ctx, names, name, json_path))
+            return false;
+    }
+
+    const char *payload_fields[] = {"source_from_payload", "from_payload"};
+    for (size_t i = 0; i < SDL_arraysize(payload_fields); ++i)
+    {
+        yyjson_val *value = obj_get(action, payload_fields[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "effect.explosion %s must be a non-empty string",
+                                    payload_fields[i]);
+    }
+
+    const char *string_fields[] = {"target_tag", "affected_tag", "damage_type", "velocity_property"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        if (!validate_non_empty_string_field(ctx, action, json_path, "effect.explosion", string_fields[i]))
+            return false;
+    }
+
+    yyjson_val *falloff = obj_get(action, "falloff");
+    if (falloff != NULL)
+    {
+        const char *value = yyjson_is_str(falloff) ? yyjson_get_str(falloff) : NULL;
+        if (value == NULL ||
+            (SDL_strcmp(value, "linear") != 0 && SDL_strcmp(value, "constant") != 0 && SDL_strcmp(value, "none") != 0))
+        {
+            return validation_error(ctx, json_path, "effect.explosion falloff must be linear, constant, or none");
+        }
+    }
+
+    yyjson_val *exclude_source = obj_get(action, "exclude_source");
+    if (exclude_source != NULL && !yyjson_is_bool(exclude_source))
+        return validation_error(ctx, json_path, "effect.explosion exclude_source must be a boolean");
+    yyjson_val *max_targets = obj_get(action, "max_targets");
+    if (max_targets != NULL && (!yyjson_is_int(max_targets) || yyjson_get_sint(max_targets) < 0))
+        return validation_error(ctx, json_path, "effect.explosion max_targets must be a non-negative integer");
+
+    yyjson_val *actions = obj_get(action, "actions");
+    return (actions == NULL || validate_action_array(ctx, actions, json_path, names)) &&
+           validate_optional_signal_field(ctx, action, json_path, names, "on_hit");
+}
+
 static bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                 validation_names *names)
 {
@@ -6407,6 +6491,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return validate_weapon_hitscan_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "interaction.use") == 0)
         return validate_interaction_use_action(ctx, action, json_path, names);
+    if (SDL_strcmp(type, "effect.explosion") == 0)
+        return validate_effect_explosion_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||
         SDL_strcmp(type, "sector_door.toggle") == 0)
     {

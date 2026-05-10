@@ -7176,6 +7176,279 @@ TEST(GameDataRuntime, RejectsInvalidCombatActionsAndComponents)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, EffectExplosionAppliesRadialDamageImpulseAndActions)
+{
+    const std::filesystem::path dir = unique_test_dir("effect_explosion");
+    write_text(dir / "explosion.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Explosion", "id": "test.effect_explosion", "version": "0.1.0" },
+  "world": { "name": "world.explosion", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "tags": ["player"],
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": { "health": { "type": "float", "value": 100.0 } }
+    },
+    {
+      "name": "entity.enemy.near",
+      "active": true,
+      "tags": ["enemy"],
+      "transform": { "position": [1.0, 0.0, 0.0] },
+      "properties": {
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      }
+    },
+    {
+      "name": "entity.enemy.mid",
+      "active": true,
+      "tags": ["enemy"],
+      "transform": { "position": [3.0, 0.0, 0.0] },
+      "properties": {
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 },
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      }
+    },
+    {
+      "name": "entity.enemy.outside",
+      "active": true,
+      "tags": ["enemy"],
+      "transform": { "position": [6.0, 0.0, 0.0] },
+      "properties": {
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    },
+    {
+      "name": "entity.ally",
+      "active": true,
+      "tags": ["ally"],
+      "transform": { "position": [1.0, 0.0, 1.0] },
+      "properties": {
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    }
+  ],
+  "signals": ["signal.blast"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.blast",
+        "actions": [
+          {
+            "type": "effect.explosion",
+            "source": "entity.player",
+            "radius": 5.0,
+            "inner_radius": 1.0,
+            "damage": 40.0,
+            "damage_type": "blast",
+            "target_tag": "enemy",
+            "impulse": 2.0,
+            "actions": [
+              {
+                "type": "property.set",
+                "target_from_payload": "actor_name",
+                "key": "last_explosion_falloff",
+                "value_from_payload": "falloff"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": [
+    "entity.player",
+    "entity.enemy.near",
+    "entity.enemy.mid",
+    "entity.enemy.outside",
+    "entity.ally"
+  ]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "explosion.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    ASSERT_GE(sdl3d_game_data_find_signal(runtime, "signal.blast"), 0);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
+
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *near_enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy.near");
+    sdl3d_registered_actor *mid_enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy.mid");
+    sdl3d_registered_actor *outside_enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy.outside");
+    sdl3d_registered_actor *ally = sdl3d_game_data_find_actor(runtime, "entity.ally");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(near_enemy, nullptr);
+    ASSERT_NE(mid_enemy, nullptr);
+    ASSERT_NE(outside_enemy, nullptr);
+    ASSERT_NE(ally, nullptr);
+
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(near_enemy->props, "health", 0.0f), 60.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(mid_enemy->props, "health", 0.0f), 80.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(outside_enemy->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(ally->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(near_enemy->props, "last_explosion_falloff", 0.0f), 1.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(mid_enemy->props, "last_explosion_falloff", 0.0f), 0.5f, 0.001f);
+    const sdl3d_vec3 near_velocity =
+        sdl3d_properties_get_vec3(near_enemy->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const sdl3d_vec3 mid_velocity =
+        sdl3d_properties_get_vec3(mid_enemy->props, "velocity", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(near_velocity.x, 2.0f, 0.001f);
+    EXPECT_NEAR(mid_velocity.x, 1.0f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EffectExplosionSupportsBoundedChainReactions)
+{
+    const std::filesystem::path dir = unique_test_dir("effect_explosion_chain");
+    write_text(dir / "explosion_chain.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Explosion Chain", "id": "test.effect_explosion_chain", "version": "0.1.0" },
+  "world": { "name": "world.explosion_chain", "kind": "fixed_screen" },
+  "entities": [
+    { "name": "entity.player", "active": true, "transform": { "position": [0.0, 0.0, 0.0] } },
+    {
+      "name": "entity.barrel",
+      "active": true,
+      "tags": ["explosive"],
+      "transform": { "position": [1.0, 0.0, 0.0] },
+      "properties": { "health": { "type": "float", "value": 100.0 } }
+    },
+    {
+      "name": "entity.enemy",
+      "active": true,
+      "tags": ["enemy"],
+      "transform": { "position": [3.0, 0.0, 0.0] },
+      "properties": {
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    }
+  ],
+  "signals": ["signal.blast"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.blast",
+        "actions": [
+          {
+            "type": "effect.explosion",
+            "source": "entity.player",
+            "radius": 2.0,
+            "target_tag": "explosive",
+            "max_targets": 1,
+            "actions": [
+              {
+                "type": "effect.explosion",
+                "from_payload": "actor_name",
+                "radius": 3.0,
+                "inner_radius": 3.0,
+                "damage": 25.0,
+                "target_tag": "enemy",
+                "damage_type": "chain_blast"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player", "entity.barrel", "entity.enemy"]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "explosion_chain.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
+
+    sdl3d_registered_actor *barrel = sdl3d_game_data_find_actor(runtime, "entity.barrel");
+    sdl3d_registered_actor *enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy");
+    ASSERT_NE(barrel, nullptr);
+    ASSERT_NE(enemy, nullptr);
+    EXPECT_NEAR(sdl3d_properties_get_float(barrel->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 75.0f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidExplosionActions)
+{
+    const std::filesystem::path dir = unique_test_dir("invalid_explosion_action");
+    write_text(dir / "invalid_explosion.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Explosion", "id": "test.invalid_explosion", "version": "0.1.0" },
+  "world": { "name": "world.invalid_explosion", "kind": "fixed_screen" },
+  "entities": [{ "name": "entity.actor" }],
+  "signals": ["signal.blast"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.blast",
+        "actions": [
+          { "type": "effect.explosion", "source": "entity.actor", "radius": -1.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_explosion.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("effect.explosion radius must be a non-negative number"), std::string::npos)
+        << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ResourcesPickupsStationsAndStatusEffectsAreDataDriven)
 {
     const std::filesystem::path dir = unique_test_dir("resources_pickups_status");

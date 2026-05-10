@@ -1467,6 +1467,53 @@ centralize armor absorption, clamping, alive/dead state, and signal emission.
 Raw property actions remain useful for simple meters, counters, and diagnostic
 state.
 
+`effect.explosion` applies an authored radial effect around a position or actor.
+It is suitable for grenades, exploding barrels, blast spells, mines, traps, and
+chain reactions:
+
+```json
+{
+  "type": "effect.explosion",
+  "source": "entity.player",
+  "radius": 5.0,
+  "inner_radius": 1.0,
+  "damage": 40.0,
+  "damage_type": "blast",
+  "target_tag": "enemy",
+  "impulse": 2.0,
+  "actions": [
+    {
+      "type": "property.set",
+      "target_from_payload": "actor_name",
+      "key": "last_blast_falloff",
+      "value_from_payload": "falloff"
+    }
+  ]
+}
+```
+
+The origin is resolved from `position`, `from` / `from_payload`, or
+`source` / `source_from_payload`, then `offset` is added when present. `radius`
+is required; `inner_radius` receives full effect before falloff begins.
+`falloff` defaults to `linear`; use `constant` or `none` for full-strength
+damage throughout the radius. `target_tag` (or `affected_tag`) limits affected
+actors to authored entity/archetype tags. Without a tag, every active actor in
+the active scene is considered. `exclude_source` defaults to true so a blast
+does not damage the actor that emitted it unless explicitly requested.
+
+`damage` (or the equivalent `amount`) uses the same health, armor, alive/dead,
+source, damage-type, and signal conventions as `combat.damage`. `impulse`
+adds radial velocity to the target actor's `velocity` property by default; use
+`velocity_property` to write a different Vec3 property. `max_targets` can cap
+the number of affected actors for deterministic bounded chain reactions.
+
+For each affected actor, nested `actions` run with a payload containing
+`actor_name`, `target_actor_name`, `source_actor_name`, `origin`, `distance`,
+`radius`, `falloff`, `damage`, `amount`, and `impulse`. Nested actions can
+spawn pooled visual effects, despawn hit actors, or trigger another
+`effect.explosion` from `from_payload: "actor_name"` to model chain reactions.
+The optional `on_hit` signal receives the same payload.
+
 ### Resources, Pickups, Stations, And Status Effects
 
 Generic resource actions manage numeric meters such as ammo, mana, keys, fuel,
