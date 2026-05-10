@@ -144,6 +144,23 @@ projectile pool, pickup archetype, resource-station archetype, and editor
 palette metadata. It uses colored geometry and built-in fonts so it remains
 lightweight and game-agnostic.
 
+## Mechanic Dojos
+
+`demos/fps_mechanics_dojo` is the reference data-only mechanic testbed for
+sector/FPS primitives. It can be launched normally or direct-started into a
+focused scene:
+
+```sh
+build/debug/sdl3d_runner \
+  --root demos/fps_mechanics_dojo/data \
+  --data asset://fps_mechanics_dojo.game.json \
+  --scene scene.dojo.hazards
+```
+
+Focused dojo scenes should use authored scene-enter setup to place the player
+near the mechanic being tuned. That keeps the workflow equivalent to the final
+runner path while avoiding splash/title/campaign flow during development.
+
 ## Data-Only Parity Checklist
 
 Before treating a game as data-only, validate the runner-backed game path:
