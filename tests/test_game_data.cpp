@@ -7916,6 +7916,186 @@ TEST(GameDataRuntime, RejectsInvalidWeaponPrimitives)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, GenericInteractionUseRunsLockedCooldownAndSuccessActions)
+{
+    const std::filesystem::path dir = unique_test_dir("generic_interaction_use");
+    write_text(dir / "interaction.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Interaction", "id": "test.interaction", "version": "0.1.0" },
+  "world": { "name": "world.interaction", "kind": "sector" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "keycard": { "type": "int", "value": 0 },
+        "locked_feedback": { "type": "bool", "value": false },
+        "cooldown_feedback": { "type": "bool", "value": false }
+      }
+    },
+    {
+      "name": "entity.switch",
+      "active": true,
+      "tags": ["usable"],
+      "transform": { "position": [0.0, 0.0, -1.0] },
+      "properties": {
+        "use_count": { "type": "int", "value": 0 },
+        "interaction_cooldown": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "interactable",
+          "prompt_key": "prompt.open",
+          "range": 2.0,
+          "min_dot": 0.5,
+          "cooldown_property": "interaction_cooldown",
+          "cooldown": 0.25,
+          "requires": { "property": "keycard", "amount": 1.0 },
+          "actions": [
+            { "type": "property.add", "target": "entity.switch", "key": "use_count", "value": 1 }
+          ],
+          "locked_actions": [
+            { "type": "property.set", "target": "entity.player", "key": "locked_feedback", "value": true }
+          ],
+          "cooldown_actions": [
+            { "type": "property.set", "target": "entity.player", "key": "cooldown_feedback", "value": true }
+          ]
+        }
+      ]
+    }
+  ],
+  "signals": ["signal.use"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.use",
+        "actions": [
+          { "type": "interaction.use", "actor": "entity.player", "target_tag": "usable" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player", "entity.switch"]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "interaction.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int use = sdl3d_game_data_find_signal(runtime, "signal.use");
+    ASSERT_GE(use, 0);
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *sw = sdl3d_game_data_find_actor(runtime, "entity.switch");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(sw, nullptr);
+
+    sdl3d_signal_emit(bus, use, nullptr);
+    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "locked_feedback", false));
+    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 0);
+
+    sdl3d_properties_set_bool(player->props, "locked_feedback", false);
+    sdl3d_properties_set_int(player->props, "keycard", 1);
+    sdl3d_signal_emit(bus, use, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 1);
+    EXPECT_NEAR(sdl3d_properties_get_float(sw->props, "interaction_cooldown", 0.0f), 0.25f, 0.0001f);
+
+    sdl3d_signal_emit(bus, use, nullptr);
+    EXPECT_TRUE(sdl3d_properties_get_bool(player->props, "cooldown_feedback", false));
+    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 1);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    sdl3d_signal_emit(bus, use, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 2);
+
+    sdl3d_properties_set_float(player->props, "yaw", 3.14159f);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    sdl3d_signal_emit(bus, use, nullptr);
+    EXPECT_EQ(sdl3d_properties_get_int(sw->props, "use_count", -1), 2);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidInteractionPrimitives)
+{
+    const std::filesystem::path dir = unique_test_dir("invalid_interaction");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+    write_text(dir / "invalid_interactable.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Interaction", "id": "test.invalid_interaction", "version": "0.1.0" },
+  "world": { "name": "world.invalid_interaction", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "components": [
+        { "type": "interactable", "range": -1.0, "actions": [] }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_interactable.game.json").string().c_str(), session, &runtime,
+                                           error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("interactable range, min_dot, and cooldown values are invalid"),
+              std::string::npos)
+        << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+
+    write_text(dir / "invalid_use.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Use", "id": "test.invalid_use", "version": "0.1.0" },
+  "world": { "name": "world.invalid_use", "kind": "fixed_screen" },
+  "entities": [{ "name": "entity.player" }],
+  "signals": ["signal.use"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.use",
+        "actions": [
+          { "type": "interaction.use", "actor": "entity.player", "min_dot": 2.0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_load_file((dir / "invalid_use.game.json").string().c_str(), session, &runtime, error,
+                                           sizeof(error)));
+    EXPECT_NE(std::string(error).find("interaction.use range/min_dot are invalid"), std::string::npos) << error;
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ActivePooledActorsRenderAndEmitParticles)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_render");

@@ -2812,16 +2812,16 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb",      "collision.circle",
-        "combat.health",      "control.axis_1d",     "controller.fps_sector",
-        "lifecycle.ttl",      "light.directional",   "light.point",
-        "light.spot",         "motion.grid_agent",   "motion.oscillate",
-        "motion.patrol",      "motion.scroll_wrap",  "motion.sector_velocity_3d",
-        "motion.spin",        "motion.velocity_2d",  "motion.velocity_3d",
-        "particles.emitter",  "pickup.respawn",      "property.decay",
-        "render.cube",        "render.model",        "render.sphere",
-        "render.sprite",      "status_effect.timer", "weapon.projectile",
-        "weapon.state",
+        "adapter.controller", "collision.aabb",     "collision.circle",
+        "combat.health",      "control.axis_1d",    "controller.fps_sector",
+        "lifecycle.ttl",      "light.directional",  "light.point",
+        "light.spot",         "motion.grid_agent",  "motion.oscillate",
+        "motion.patrol",      "motion.scroll_wrap", "motion.sector_velocity_3d",
+        "motion.spin",        "motion.velocity_2d", "motion.velocity_3d",
+        "interactable",       "particles.emitter",  "pickup.respawn",
+        "property.decay",     "render.cube",        "render.model",
+        "render.sphere",      "render.sprite",      "status_effect.timer",
+        "weapon.projectile",  "weapon.state",
     };
 
     if (type == NULL)
@@ -2969,6 +2969,71 @@ static bool validate_weapon_state_component(validation_context *ctx, yyjson_val 
     yyjson_val *consume_reserve = obj_get(component, "consume_reserve");
     if (consume_reserve != NULL && !yyjson_is_bool(consume_reserve))
         return validation_error(ctx, path, "weapon.state consume_reserve must be a boolean");
+    return true;
+}
+
+static bool validate_interactable_requires(validation_context *ctx, yyjson_val *requires, const char *path)
+{
+    if (requires == NULL)
+        return true;
+    if (!yyjson_is_obj(requires))
+        return validation_error(ctx, path, "interactable requires must be an object");
+    const char *property = json_string(requires, "property");
+    if (property == NULL)
+        property = json_string(requires, "resource");
+    if (property == NULL || property[0] == '\0')
+        return validation_error(ctx, path, "interactable requires needs a non-empty property or resource");
+    yyjson_val *amount = obj_get(requires, "amount");
+    if (amount != NULL && (!yyjson_is_num(amount) || yyjson_get_num(amount) < 0.0))
+        return validation_error(ctx, path, "interactable requires amount must be non-negative");
+    yyjson_val *consume = obj_get(requires, "consume");
+    if (consume != NULL && !yyjson_is_bool(consume))
+        return validation_error(ctx, path, "interactable requires consume must be a boolean");
+    return true;
+}
+
+static bool validate_interactable_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                            validation_names *names)
+{
+    yyjson_val *range = obj_get(component, "range");
+    yyjson_val *min_dot = obj_get(component, "min_dot");
+    yyjson_val *cooldown = obj_get(component, "cooldown");
+    if ((range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) < 0.0)) ||
+        (cooldown != NULL && (!yyjson_is_num(cooldown) || yyjson_get_num(cooldown) < 0.0)) ||
+        (min_dot != NULL &&
+         (!yyjson_is_num(min_dot) || yyjson_get_num(min_dot) < -1.0 || yyjson_get_num(min_dot) > 1.0)))
+    {
+        return validation_error(ctx, path, "interactable range, min_dot, and cooldown values are invalid");
+    }
+    const char *string_fields[] = {"prompt", "prompt_key", "yaw_property", "cooldown_property"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        if (!validate_non_empty_string_field(ctx, component, path, "interactable", string_fields[i]))
+            return false;
+    }
+    if (!validate_interactable_requires(ctx, obj_get(component, "requires"), path))
+        return false;
+    const char *signal_keys[] = {"signal", "on_locked", "on_cooldown"};
+    for (size_t i = 0; i < SDL_arraysize(signal_keys); ++i)
+    {
+        if (!validate_optional_signal_field(ctx, component, path, names, signal_keys[i]))
+            return false;
+    }
+    const char *action_keys[] = {"actions", "locked_actions", "cooldown_actions"};
+    for (size_t i = 0; i < SDL_arraysize(action_keys); ++i)
+    {
+        yyjson_val *actions = obj_get(component, action_keys[i]);
+        if (actions != NULL && !validate_action_array(ctx, actions, path, names))
+            return false;
+    }
+    if (obj_get(component, "actions") == NULL && json_string(component, "signal") == NULL &&
+        obj_get(component, "locked_actions") == NULL && json_string(component, "on_locked") == NULL &&
+        obj_get(component, "cooldown_actions") == NULL && json_string(component, "on_cooldown") == NULL)
+    {
+        return validation_error(ctx, path,
+                                "interactable requires actions, signal, locked_actions, on_locked, cooldown_actions, "
+                                "or on_cooldown");
+    }
     return true;
 }
 
@@ -4759,6 +4824,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!validate_weapon_state_component(ctx, component, path))
                     return false;
             }
+            else if (SDL_strcmp(type, "interactable") == 0)
+            {
+                if (!validate_interactable_component(ctx, component, path, names))
+                    return false;
+            }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
             {
                 if (!require_ref(ctx, &names->actions, "input action", json_string(component, "action"), path) ||
@@ -5122,6 +5192,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             else if (SDL_strcmp(type, "weapon.state") == 0)
             {
                 if (!validate_weapon_state_component(ctx, component, component_path))
+                    return false;
+            }
+            else if (SDL_strcmp(type, "interactable") == 0)
+            {
+                if (!validate_interactable_component(ctx, component, component_path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "weapon.projectile") == 0)
@@ -6119,6 +6194,42 @@ static bool validate_weapon_hitscan_action(validation_context *ctx, yyjson_val *
            (miss_actions == NULL || validate_action_array(ctx, miss_actions, json_path, names));
 }
 
+static bool validate_interaction_use_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names)
+{
+    yyjson_val *actor_value = obj_get(action, "actor");
+    yyjson_val *actor_from_payload_value = obj_get(action, "actor_from_payload");
+    const char *actor = json_string(action, "actor");
+    const char *actor_from_payload = json_string(action, "actor_from_payload");
+    if ((actor == NULL && actor_from_payload == NULL) || (actor != NULL && actor_from_payload != NULL))
+        return validation_error(ctx, json_path, "interaction.use requires exactly one of actor or actor_from_payload");
+    if (actor_value != NULL && !yyjson_is_str(actor_value))
+        return validation_error(ctx, json_path, "interaction.use actor must be a string");
+    if (actor_from_payload_value != NULL && !yyjson_is_str(actor_from_payload_value))
+        return validation_error(ctx, json_path, "interaction.use actor_from_payload must be a string");
+    if (actor != NULL && !require_actor_ref(ctx, names, actor, json_path))
+        return false;
+    if (actor_from_payload != NULL && actor_from_payload[0] == '\0')
+        return validation_error(ctx, json_path, "interaction.use actor_from_payload must be non-empty");
+
+    yyjson_val *range = obj_get(action, "range");
+    yyjson_val *min_dot = obj_get(action, "min_dot");
+    if ((range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) < 0.0)) ||
+        (min_dot != NULL &&
+         (!yyjson_is_num(min_dot) || yyjson_get_num(min_dot) < -1.0 || yyjson_get_num(min_dot) > 1.0)))
+    {
+        return validation_error(ctx, json_path, "interaction.use range/min_dot are invalid");
+    }
+    if (!validate_non_empty_string_field(ctx, action, json_path, "interaction.use", "yaw_property") ||
+        !validate_non_empty_string_field(ctx, action, json_path, "interaction.use", "target_tag") ||
+        !validate_non_empty_string_field(ctx, action, json_path, "interaction.use", "interactable_tag"))
+    {
+        return false;
+    }
+    yyjson_val *miss_actions = obj_get(action, "miss_actions");
+    return miss_actions == NULL || validate_action_array(ctx, miss_actions, json_path, names);
+}
+
 static bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                 validation_names *names)
 {
@@ -6294,6 +6405,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return validate_weapon_reload_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "weapon.hitscan") == 0)
         return validate_weapon_hitscan_action(ctx, action, json_path, names);
+    if (SDL_strcmp(type, "interaction.use") == 0)
+        return validate_interaction_use_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||
         SDL_strcmp(type, "sector_door.toggle") == 0)
     {
