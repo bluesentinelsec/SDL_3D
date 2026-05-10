@@ -117,6 +117,7 @@ typedef struct sensor_contact_pair_state
 typedef struct sensor_entry
 {
     game_data_sensor_type type;
+    yyjson_val *json;
     const char *name;
     const char *entity;
     const char *other;
@@ -787,6 +788,12 @@ static bool actor_pool_request_despawn(sdl3d_game_data_runtime *runtime, actor_p
                                        sdl3d_registered_actor *actor, int index, const char *reason);
 static bool apply_actor_pool_scene_exit_policies(sdl3d_game_data_runtime *runtime, const char *from_scene,
                                                  const char *to_scene);
+static sdl3d_registered_actor *action_source_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   const sdl3d_properties *payload);
+static bool actor_matches_target_filter(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *target,
+                                        const sdl3d_registered_actor *source, yyjson_val *json,
+                                        const sdl3d_properties *payload, const char *fallback_tag,
+                                        bool fallback_exclude_source);
 static void actor_lifecycle_defer_begin(sdl3d_game_data_runtime *runtime);
 static void actor_lifecycle_defer_end(sdl3d_game_data_runtime *runtime);
 static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
@@ -14079,6 +14086,9 @@ static bool apply_combat_damage_to_actor(sdl3d_game_data_runtime *runtime, yyjso
 {
     if (actor == NULL)
         return false;
+    sdl3d_registered_actor *source = action_source_actor(runtime, action, payload);
+    if (!actor_matches_target_filter(runtime, actor, source, action, payload, NULL, false))
+        return true;
     amount = SDL_max(amount, 0.0f);
 
     const char *health_key = combat_action_property(action, "health_property", "health");
@@ -14538,22 +14548,10 @@ static bool execute_status_effect_apply_action(sdl3d_game_data_runtime *runtime,
 }
 
 static bool actor_matches_weapon_target(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *actor,
-                                        const sdl3d_registered_actor *source, const char *tag, bool exclude_source)
+                                        const sdl3d_registered_actor *source, yyjson_val *action, const char *tag,
+                                        bool exclude_source)
 {
-    if (actor == NULL || !actor->active)
-        return false;
-    if (exclude_source && source != NULL && actor == source)
-        return false;
-    if (tag == NULL || tag[0] == '\0')
-        return true;
-
-    yyjson_val *entity = find_entity_json(runtime, actor->name);
-    if (entity_json_has_tags(entity, &tag, 1))
-        return true;
-
-    int actor_index = -1;
-    const actor_pool_runtime *pool = find_actor_pool_for_actor_const(runtime, actor->name, &actor_index);
-    return pool != NULL && actor_index >= 0 && entity_json_has_tags(pool->archetype_json, &tag, 1);
+    return actor_matches_target_filter(runtime, actor, source, action, NULL, tag, exclude_source);
 }
 
 static bool ray_sphere_intersection(sdl3d_vec3 origin, sdl3d_vec3 direction, sdl3d_vec3 center, float radius,
@@ -14594,7 +14592,7 @@ static sdl3d_registered_actor *find_hitscan_actor_target(sdl3d_game_data_runtime
         if (!active_scene_has_entity_internal(runtime, entity_name))
             continue;
         sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, entity_name);
-        if (!actor_matches_weapon_target(runtime, actor, source, tag, exclude_source))
+        if (!actor_matches_weapon_target(runtime, actor, source, action, tag, exclude_source))
             continue;
         const float radius =
             SDL_max(weapon_actor_numeric_property(
@@ -14618,7 +14616,7 @@ static sdl3d_registered_actor *find_hitscan_actor_target(sdl3d_game_data_runtime
         {
             sdl3d_registered_actor *actor = sdl3d_game_data_find_actor(runtime, pool->actor_names[actor_index]);
             if (!actor_pool_actor_is_active(pool, actor, actor_index) ||
-                !actor_matches_weapon_target(runtime, actor, source, tag, exclude_source))
+                !actor_matches_weapon_target(runtime, actor, source, action, tag, exclude_source))
             {
                 continue;
             }
@@ -15098,6 +15096,190 @@ static bool actor_has_authored_tag(const sdl3d_game_data_runtime *runtime, const
     return pool != NULL && actor_index >= 0 && entity_json_has_tags(pool->archetype_json, &tag, 1);
 }
 
+static yyjson_val *target_filter_json(yyjson_val *json)
+{
+    yyjson_val *filter = obj_get(json, "target_filter");
+    return yyjson_is_obj(filter) ? filter : json;
+}
+
+static const char *target_filter_string(yyjson_val *json, const char *key, const char *fallback)
+{
+    yyjson_val *filter = target_filter_json(json);
+    const char *value = json_string(filter, key, NULL);
+    if (value != NULL)
+        return value;
+    return filter != json ? json_string(json, key, fallback) : fallback;
+}
+
+static bool target_filter_bool(yyjson_val *json, const char *key, bool fallback)
+{
+    yyjson_val *filter = target_filter_json(json);
+    yyjson_val *value = obj_get(filter, key);
+    if (yyjson_is_bool(value))
+        return yyjson_get_bool(value);
+    return filter != json ? json_bool(json, key, fallback) : fallback;
+}
+
+static bool target_filter_string_array_contains(yyjson_val *json, const char *key, const char *value)
+{
+    if (value == NULL || value[0] == '\0')
+        return false;
+    yyjson_val *filter = target_filter_json(json);
+    yyjson_val *array = obj_get(filter, key);
+    if (array == NULL && filter != json)
+        array = obj_get(json, key);
+    if (yyjson_is_str(array))
+        return SDL_strcmp(yyjson_get_str(array), value) == 0;
+    for (size_t i = 0; yyjson_is_arr(array) && i < yyjson_arr_size(array); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(array, i);
+        if (yyjson_is_str(entry) && SDL_strcmp(yyjson_get_str(entry), value) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool target_filter_actor_has_any_tag(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *actor,
+                                            yyjson_val *json, const char *key)
+{
+    yyjson_val *filter = target_filter_json(json);
+    yyjson_val *tags = obj_get(filter, key);
+    if (tags == NULL && filter != json)
+        tags = obj_get(json, key);
+    if (yyjson_is_str(tags))
+        return actor_has_authored_tag(runtime, actor, yyjson_get_str(tags));
+    for (size_t i = 0; yyjson_is_arr(tags) && i < yyjson_arr_size(tags); ++i)
+    {
+        yyjson_val *tag = yyjson_arr_get(tags, i);
+        if (yyjson_is_str(tag) && actor_has_authored_tag(runtime, actor, yyjson_get_str(tag)))
+            return true;
+    }
+    return false;
+}
+
+static bool target_filter_actor_has_blocked_tag(const sdl3d_game_data_runtime *runtime,
+                                                const sdl3d_registered_actor *actor, yyjson_val *json, const char *key)
+{
+    yyjson_val *filter = target_filter_json(json);
+    yyjson_val *tags = obj_get(filter, key);
+    if (tags == NULL && filter != json)
+        tags = obj_get(json, key);
+    if (yyjson_is_str(tags))
+        return actor_has_authored_tag(runtime, actor, yyjson_get_str(tags));
+    for (size_t i = 0; yyjson_is_arr(tags) && i < yyjson_arr_size(tags); ++i)
+    {
+        yyjson_val *tag = yyjson_arr_get(tags, i);
+        if (yyjson_is_str(tag) && actor_has_authored_tag(runtime, actor, yyjson_get_str(tag)))
+            return true;
+    }
+    return false;
+}
+
+static const char *actor_faction(const sdl3d_registered_actor *actor, const char *property)
+{
+    return actor != NULL && property != NULL && property[0] != '\0'
+               ? sdl3d_properties_get_string(actor->props, property, "")
+               : "";
+}
+
+static const char *faction_relationship(const sdl3d_game_data_runtime *runtime, const char *source_faction,
+                                        const char *target_faction)
+{
+    if (source_faction == NULL || source_faction[0] == '\0' || target_faction == NULL || target_faction[0] == '\0')
+        return "neutral";
+
+    yyjson_val *factions = obj_get(runtime_root(runtime), "factions");
+    yyjson_val *source = obj_get(factions, source_faction);
+    const char *authored = json_string(source, target_faction, NULL);
+    if (authored != NULL)
+        return authored;
+    authored = json_string(source, "default", NULL);
+    if (authored != NULL)
+        return authored;
+    authored = json_string(factions, "default_relationship", NULL);
+    if (authored != NULL)
+        return authored;
+    return SDL_strcmp(source_faction, target_faction) == 0 ? "friendly" : "hostile";
+}
+
+static sdl3d_registered_actor *action_source_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                   const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *source =
+        actor_from_payload_key(runtime, payload, target_filter_string(action, "source_from_payload", NULL));
+    if (source == NULL)
+        source = sdl3d_game_data_find_actor(runtime, target_filter_string(action, "source", NULL));
+    return source;
+}
+
+static bool actor_matches_target_filter(const sdl3d_game_data_runtime *runtime, const sdl3d_registered_actor *target,
+                                        const sdl3d_registered_actor *source, yyjson_val *json,
+                                        const sdl3d_properties *payload, const char *fallback_tag,
+                                        bool fallback_exclude_source)
+{
+    if (target == NULL || !target->active)
+        return false;
+    const char *tag = target_filter_string(json, "target_tag", fallback_tag);
+    if (tag == NULL)
+        tag = target_filter_string(json, "affected_tag", NULL);
+    if (tag == NULL)
+        tag = target_filter_string(json, "hit_tag", NULL);
+    if (tag != NULL && tag[0] != '\0' && !actor_has_authored_tag(runtime, target, tag))
+        return false;
+    if (target_filter_actor_has_any_tag(runtime, target, json, "include_tags") == false &&
+        (obj_get(target_filter_json(json), "include_tags") != NULL || obj_get(json, "include_tags") != NULL))
+        return false;
+    if (target_filter_actor_has_blocked_tag(runtime, target, json, "exclude_tags"))
+        return false;
+
+    const bool exclude_source =
+        target_filter_bool(json, "exclude_source", target_filter_bool(json, "exclude_self", fallback_exclude_source));
+    if (exclude_source && source != NULL && target == source)
+        return false;
+
+    const char *owner_property =
+        target_filter_string(json, "owner_property", target_filter_string(json, "owner_actor_property", "owner"));
+    const bool exclude_owner = target_filter_bool(json, "exclude_owner", false);
+    if (exclude_owner && source != NULL && owner_property != NULL && owner_property[0] != '\0')
+    {
+        const char *source_owner = sdl3d_properties_get_string(source->props, owner_property, NULL);
+        if (source_owner != NULL && target->name != NULL && SDL_strcmp(source_owner, target->name) == 0)
+            return false;
+        const char *target_owner = sdl3d_properties_get_string(target->props, owner_property, NULL);
+        if (target_owner != NULL && source->name != NULL && SDL_strcmp(target_owner, source->name) == 0)
+            return false;
+    }
+
+    const char *faction_property = target_filter_string(json, "faction_property", "faction");
+    const char *source_faction_property = target_filter_string(json, "source_faction_property", faction_property);
+    const char *target_faction = actor_faction(target, faction_property);
+    const char *source_faction = target_filter_string(json, "source_faction", NULL);
+    const char *source_faction_from_payload = target_filter_string(json, "source_faction_from_payload", NULL);
+    if (source_faction_from_payload != NULL && payload != NULL)
+        source_faction = sdl3d_properties_get_string(payload, source_faction_from_payload, source_faction);
+    if ((source_faction == NULL || source_faction[0] == '\0') && source != NULL)
+        source_faction = actor_faction(source, source_faction_property);
+
+    const char *required_target_faction = target_filter_string(json, "target_faction", NULL);
+    if (required_target_faction != NULL && required_target_faction[0] != '\0' &&
+        SDL_strcmp(target_faction, required_target_faction) != 0)
+        return false;
+    if (target_filter_string_array_contains(json, "include_factions", target_faction) == false &&
+        (obj_get(target_filter_json(json), "include_factions") != NULL || obj_get(json, "include_factions") != NULL))
+        return false;
+    if (target_filter_string_array_contains(json, "exclude_factions", target_faction))
+        return false;
+
+    const char *relationship = target_filter_string(json, "relationship", NULL);
+    if (relationship != NULL && relationship[0] != '\0' && SDL_strcmp(relationship, "any") != 0)
+    {
+        const char *actual = faction_relationship(runtime, source_faction, target_faction);
+        if (SDL_strcmp(actual, relationship) != 0)
+            return false;
+    }
+    return true;
+}
+
 static bool interaction_actor_in_front(const sdl3d_registered_actor *source, const sdl3d_registered_actor *target,
                                        yyjson_val *action, yyjson_val *component)
 {
@@ -15455,8 +15637,7 @@ static bool execute_effect_explosion_action(sdl3d_game_data_runtime *runtime, yy
     for (int i = 0; i < targets.count && affected < max_targets; ++i)
     {
         sdl3d_registered_actor *target = targets.items[i];
-        if (!runtime_actor_is_active(runtime, target) || (exclude_source && source != NULL && target == source) ||
-            !actor_has_authored_tag(runtime, target, tag))
+        if (!actor_matches_target_filter(runtime, target, source, action, payload, tag, exclude_source))
         {
             continue;
         }
@@ -16281,6 +16462,7 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
     {
         yyjson_val *sensor = yyjson_arr_get(sensors, (size_t)i);
         sensor_entry *entry = &runtime->sensors[i];
+        entry->json = sensor;
         const char *type = json_string(sensor, "type", "");
         if (SDL_strcmp(type, "sensor.bounds_exit") == 0)
             entry->type = GAME_DATA_SENSOR_BOUNDS_EXIT;
@@ -17053,14 +17235,17 @@ static bool sector_platform_apply_crush_policy(sdl3d_game_data_runtime *runtime,
     for (int i = 0; i < actors.count; ++i)
     {
         sdl3d_registered_actor *actor = actors.items[i];
-        if (!runtime_actor_is_active(runtime, actor) || !actor_has_authored_tag(runtime, actor, tag))
-            continue;
         if (actor_sector_index_for_sensor(platform->level, NULL, actor) != platform->sector_index)
             continue;
         if (actor->position.y > floor_y + clearance)
             continue;
 
         sdl3d_properties *payload = sector_platform_crush_payload(platform, actor, floor_y, floor_delta, damage);
+        if (!actor_matches_target_filter(runtime, actor, NULL, platform->json, payload, tag, false))
+        {
+            sdl3d_properties_destroy(payload);
+            continue;
+        }
         if (damage > 0.0f)
             ok = apply_combat_damage_to_actor(runtime, platform->json, payload, actor, damage) && ok;
         ok = execute_optional_action_array(runtime, actions, payload) && ok;
@@ -17903,6 +18088,12 @@ static void update_sensor_contact_pair(sdl3d_game_data_runtime *runtime, sensor_
         return;
 
     const bool active = actors_contact_2d(actor, other);
+    if (active && !actor_matches_target_filter(runtime, other, actor, sensor->json, NULL, sensor->other_tag, false))
+    {
+        state->active = false;
+        state->seen = true;
+        return;
+    }
     const bool stay =
         sensor->edge != NULL && (SDL_strcmp(sensor->edge, "stay") == 0 || SDL_strcmp(sensor->edge, "overlap") == 0);
     if (active && (stay || !state->active))
@@ -18039,7 +18230,9 @@ static void update_sector_sensor_actor(sdl3d_game_data_runtime *runtime, sensor_
         return;
 
     const int current_sector = actor_sector_index_for_sensor(level, sensor, actor);
-    const bool active = current_sector == target_sector;
+    const bool active =
+        current_sector == target_sector &&
+        actor_matches_target_filter(runtime, actor, NULL, sensor->json, NULL, sensor->entity_tag, false);
     const char *sector_name = "";
     if (target_sector >= 0 && target_sector < level->sector_count && level->sector_names[target_sector] != NULL)
         sector_name = level->sector_names[target_sector];
@@ -18100,7 +18293,9 @@ static void update_volume_sensor_actor(sdl3d_game_data_runtime *runtime, sensor_
     if (state == NULL)
         return;
 
-    const bool active = point_in_sensor_volume(sensor, actor->position);
+    const bool active =
+        point_in_sensor_volume(sensor, actor->position) &&
+        actor_matches_target_filter(runtime, actor, NULL, sensor->json, NULL, sensor->entity_tag, false);
     const bool should_emit = sensor_edge_is_exit(sensor)   ? (!active && state->active)
                              : sensor_edge_is_stay(sensor) ? active
                                                            : (active && !state->active);
