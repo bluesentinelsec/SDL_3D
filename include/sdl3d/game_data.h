@@ -1001,6 +1001,55 @@ extern "C"
     bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, const char *name,
                                           sdl3d_game_data_sector_level *out_level);
 
+    /** @brief Runtime-owned node resolved from an authored sector navigation graph. */
+    typedef struct sdl3d_game_data_sector_nav_node
+    {
+        /** @brief Authored node name. */
+        const char *name;
+        /** @brief Sector index in the graph's sector level, or -1 when unresolved. */
+        int sector_index;
+        /** @brief World-space navigation anchor position. */
+        sdl3d_vec3 position;
+    } sdl3d_game_data_sector_nav_node;
+
+    /**
+     * @brief Find the nearest authored navigation node in a sector navigation graph.
+     *
+     * If @p position is inside the graph's sector level, nodes in that sector
+     * are preferred. If no same-sector node exists, the nearest node in the
+     * graph is returned. The returned node name is runtime-owned.
+     */
+    bool sdl3d_game_data_sector_nav_nearest_node(const sdl3d_game_data_runtime *runtime, const char *graph_name,
+                                                 sdl3d_vec3 position, sdl3d_game_data_sector_nav_node *out_node);
+
+    /**
+     * @brief Resolve an authored sector navigation path between two world positions.
+     *
+     * The start and goal positions are first anchored to nearest nodes in the
+     * graph, then Dijkstra search is run across authored links. @p out_nodes
+     * may be NULL when the caller only needs @p out_node_count or @p out_cost.
+     * When @p out_nodes is non-NULL, @p max_nodes must be large enough for the
+     * full path or the function returns false.
+     */
+    bool sdl3d_game_data_sector_nav_path(const sdl3d_game_data_runtime *runtime, const char *graph_name,
+                                         sdl3d_vec3 start, sdl3d_vec3 goal, sdl3d_game_data_sector_nav_node *out_nodes,
+                                         int max_nodes, int *out_node_count, float *out_cost);
+
+    /**
+     * @brief Return whether an authored sector navigation path exists between two positions.
+     */
+    bool sdl3d_game_data_sector_nav_path_available(const sdl3d_game_data_runtime *runtime, const char *graph_name,
+                                                   sdl3d_vec3 start, sdl3d_vec3 goal);
+
+    /**
+     * @brief Resolve the next node after the start anchor on a sector navigation path.
+     *
+     * If the start and goal anchor to the same node, that node is returned.
+     */
+    bool sdl3d_game_data_sector_nav_next_node(const sdl3d_game_data_runtime *runtime, const char *graph_name,
+                                              sdl3d_vec3 start, sdl3d_vec3 goal,
+                                              sdl3d_game_data_sector_nav_node *out_node);
+
     /**
      * @brief Iterate sector levels declared by the active scene.
      *

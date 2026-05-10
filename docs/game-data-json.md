@@ -44,6 +44,7 @@ Every root game file is a JSON object.
 | `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
 | `sector_level_fragments` | no | Composition-only material/sector/light fragments merged into named sector levels before validation. |
+| `sector_navigation` | no | Authored sector navigation graphs for AI/path queries in sector worlds. |
 | `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
 | `sector_platforms` | no | Runtime moving floor/ceiling sectors for lifts, elevators, and oscillating platforms. |
 | `actor_archetypes` | no | Templates used by placed actor instances and runtime actor pools. |
@@ -558,6 +559,47 @@ data-authored debug/profile controls without custom host-side input code.
 Renderer, controller, and editor phases should consume runtime descriptors
 instead of parsing JSON directly. `world.kind` remains a high-level statement
 of spatial intent; `sector_levels` is the concrete sector-world data.
+
+## Sector Navigation
+
+`sector_navigation` declares reusable navigation graphs over authored
+`sector_levels`. The graph is intentionally explicit: authors decide which
+sector anchors are connected, which keeps AI pathing structurally correct even
+when the rendered sector mesh is complex.
+
+```json
+{
+  "sector_navigation": [
+    {
+      "name": "nav.level_1",
+      "sector_level": "sector.level_1",
+      "nodes": [
+        { "name": "start", "sector": "start_room", "position": [5.0, 1.0, 4.0] },
+        { "name": "hall", "sector": "north_hall", "position": [12.0, 1.0, 4.0] },
+        { "name": "arena", "sector": "arena", "position": [22.0, 1.0, 10.0] }
+      ],
+      "links": [
+        { "from": "start", "to": "hall" },
+        { "from": "hall", "to": "arena", "cost": 3.5 }
+      ]
+    }
+  ]
+}
+```
+
+Validation requires unique graph and node names, a valid `sector_level`, a
+non-empty `nodes` array, exact vec3 node `position` values, exactly one of
+`sector` or `sector_index` per node, link endpoints that reference declared
+nodes, optional boolean `bidirectional`, and positive optional `cost`. Links are
+bidirectional by default. When `cost` is omitted, runtime path queries use the
+world-space distance between linked nodes.
+
+Lua and C runtime helpers can query the nearest node, path availability, full
+node paths, or the next node toward a goal. Nearest-node lookup first prefers
+nodes in the sector containing the query position, then falls back to the
+nearest graph node. Keep dense per-frame steering in engine components or
+lightweight Lua; use sector navigation for high-level decisions such as patrol
+routes, chase goals, retreat points, and encounter scripting.
 
 `sector_doors` add dynamic, collidable door panels to sector/FPS scenes without
 hard-coding them in a demo host. A door has one or two axis-aligned panels,

@@ -77,6 +77,7 @@ typedef struct validation_names
     name_table grid_maps;
     name_table grid_pickup_layers;
     name_table sector_levels;
+    name_table sector_navigation;
     name_table sector_doors;
     name_table sector_platforms;
     name_table signals;
@@ -1901,6 +1902,7 @@ static bool import_section_name_allowed(const char *name)
                                           "grid_pickup_layers",
                                           "sector_levels",
                                           "sector_level_fragments",
+                                          "sector_navigation",
                                           "sector_doors",
                                           "sector_platforms",
                                           "actor_archetypes",
@@ -3270,6 +3272,23 @@ static bool collect_sector_levels(validation_context *ctx, yyjson_val *root, val
     return true;
 }
 
+static bool collect_sector_navigation(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *graphs = obj_get(root, "sector_navigation");
+    for (size_t i = 0; yyjson_is_arr(graphs) && i < yyjson_arr_size(graphs); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.sector_navigation[%zu]", i);
+        yyjson_val *graph = yyjson_arr_get(graphs, i);
+        if (!require_unique_name(ctx, &names->sector_navigation, "sector navigation graph", json_string(graph, "name"),
+                                 path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool collect_sector_doors(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *doors = obj_get(root, "sector_doors");
@@ -3931,16 +3950,16 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_grid_maps(ctx, root, names) && collect_grid_pickup_layers(ctx, root, names) &&
-           collect_sector_levels(ctx, root, names) && collect_sector_doors(ctx, root, names) &&
-           collect_sector_platforms(ctx, root, names) && collect_actor_archetypes(ctx, root, names) &&
-           collect_actor_pools(ctx, root, names) && collect_scripts(ctx, root, names) &&
-           collect_adapters(ctx, root, names) && collect_input_actions(ctx, root, names) &&
-           collect_input_assignment_sets(ctx, root, names) && collect_input_profiles(ctx, root, names) &&
-           collect_network_input_channels(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
-           collect_images(ctx, root, names) && collect_models(ctx, root, names) &&
-           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
-           collect_sensors(ctx, root, names);
+           collect_sector_levels(ctx, root, names) && collect_sector_navigation(ctx, root, names) &&
+           collect_sector_doors(ctx, root, names) && collect_sector_platforms(ctx, root, names) &&
+           collect_actor_archetypes(ctx, root, names) && collect_actor_pools(ctx, root, names) &&
+           collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
+           collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
+           collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
+           collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
+           collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
+           collect_models(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
+           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -5084,6 +5103,127 @@ static bool sector_level_has_sector_index(yyjson_val *root, const char *level_na
     yyjson_val *level = find_sector_level_json(root, level_name);
     yyjson_val *sectors = obj_get(level, "sectors");
     return yyjson_is_arr(sectors) && sector_index >= 0 && (size_t)sector_index < yyjson_arr_size(sectors);
+}
+
+static bool validate_sector_navigation(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *graphs = obj_get(root, "sector_navigation");
+    if (graphs == NULL)
+        return true;
+    if (!yyjson_is_arr(graphs))
+        return validation_error(ctx, "$.sector_navigation", "sector_navigation must be an array");
+
+    for (size_t graph_index = 0; graph_index < yyjson_arr_size(graphs); ++graph_index)
+    {
+        char graph_path[PATH_BUFFER_SIZE];
+        format_path(graph_path, sizeof(graph_path), "$.sector_navigation[%zu]", graph_index);
+        yyjson_val *graph = yyjson_arr_get(graphs, graph_index);
+        yyjson_val *nodes = obj_get(graph, "nodes");
+        yyjson_val *links = obj_get(graph, "links");
+        name_table node_names;
+        SDL_zero(node_names);
+        bool ok = true;
+
+        if (!yyjson_is_obj(graph))
+        {
+            ok = validation_error(ctx, graph_path, "sector navigation graph entries must be objects");
+            goto done;
+        }
+        const char *level = json_string(graph, "sector_level");
+        if (!require_ref(ctx, &names->sector_levels, "sector level", level, graph_path))
+        {
+            ok = false;
+            goto done;
+        }
+        if (!yyjson_is_arr(nodes) || yyjson_arr_size(nodes) <= 0 || yyjson_arr_size(nodes) > 1024)
+        {
+            ok = validation_error(ctx, graph_path, "sector navigation nodes must be a non-empty array of <=1024 nodes");
+            goto done;
+        }
+        if (links != NULL && !yyjson_is_arr(links))
+        {
+            ok = validation_error(ctx, graph_path, "sector navigation links must be an array");
+            goto done;
+        }
+
+        for (size_t node_index = 0; ok && node_index < yyjson_arr_size(nodes); ++node_index)
+        {
+            char node_path[PATH_BUFFER_SIZE];
+            format_path(node_path, sizeof(node_path), "%s.nodes[%zu]", graph_path, node_index);
+            yyjson_val *node = yyjson_arr_get(nodes, node_index);
+            if (!yyjson_is_obj(node))
+            {
+                ok = validation_error(ctx, node_path, "sector navigation nodes must be objects");
+                break;
+            }
+            if (!require_unique_name(ctx, &node_names, "sector navigation node", json_string(node, "name"), node_path))
+            {
+                ok = false;
+                break;
+            }
+            if (!is_exact_vec_array(obj_get(node, "position"), 3))
+            {
+                ok = validation_error(ctx, node_path, "sector navigation node position must be a vec3");
+                break;
+            }
+            const char *sector = json_string(node, "sector");
+            yyjson_val *sector_index = obj_get(node, "sector_index");
+            if ((sector == NULL && sector_index == NULL) || (sector != NULL && sector_index != NULL))
+            {
+                ok = validation_error(ctx, node_path,
+                                      "sector navigation node requires exactly one of sector or sector_index");
+                break;
+            }
+            if (sector != NULL && !sector_level_has_sector_name(root, level, sector))
+            {
+                ok = validation_error(ctx, node_path, "unknown sector navigation node sector '%s'", sector);
+                break;
+            }
+            if (sector_index != NULL &&
+                (!yyjson_is_int(sector_index) ||
+                 !sector_level_has_sector_index(root, level, (int)yyjson_get_int(sector_index))))
+            {
+                ok = validation_error(ctx, node_path, "sector navigation node sector_index is out of range");
+                break;
+            }
+        }
+
+        for (size_t link_index = 0; ok && yyjson_is_arr(links) && link_index < yyjson_arr_size(links); ++link_index)
+        {
+            char link_path[PATH_BUFFER_SIZE];
+            format_path(link_path, sizeof(link_path), "%s.links[%zu]", graph_path, link_index);
+            yyjson_val *link = yyjson_arr_get(links, link_index);
+            if (!yyjson_is_obj(link))
+            {
+                ok = validation_error(ctx, link_path, "sector navigation links must be objects");
+                break;
+            }
+            if (!require_ref(ctx, &node_names, "sector navigation node", json_string(link, "from"), link_path) ||
+                !require_ref(ctx, &node_names, "sector navigation node", json_string(link, "to"), link_path))
+            {
+                ok = false;
+                break;
+            }
+            yyjson_val *bidirectional = obj_get(link, "bidirectional");
+            yyjson_val *cost = obj_get(link, "cost");
+            if (bidirectional != NULL && !yyjson_is_bool(bidirectional))
+            {
+                ok = validation_error(ctx, link_path, "sector navigation link bidirectional must be a boolean");
+                break;
+            }
+            if (cost != NULL && (!yyjson_is_num(cost) || yyjson_get_num(cost) <= 0.0))
+            {
+                ok = validation_error(ctx, link_path, "sector navigation link cost must be positive");
+                break;
+            }
+        }
+
+    done:
+        name_table_destroy(&node_names);
+        if (!ok)
+            return false;
+    }
+    return true;
 }
 
 static bool validate_sector_platforms(validation_context *ctx, yyjson_val *root, validation_names *names)
@@ -9229,7 +9369,8 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_world_metadata(ctx, root) && validate_input_bindings(ctx, root) &&
            validate_input_assignment_sets(ctx, root) && validate_input_profiles(ctx, root, names) &&
            validate_grid_maps(ctx, root) && validate_grid_pickup_layers(ctx, root, names) &&
-           validate_sector_levels(ctx, root) && validate_components(ctx, root, names) &&
+           validate_sector_levels(ctx, root) && validate_sector_navigation(ctx, root, names) &&
+           validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_sector_doors(ctx, root, names) && validate_sector_platforms(ctx, root, names) &&
@@ -9257,6 +9398,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->grid_maps);
     name_table_destroy(&names->grid_pickup_layers);
     name_table_destroy(&names->sector_levels);
+    name_table_destroy(&names->sector_navigation);
     name_table_destroy(&names->sector_doors);
     name_table_destroy(&names->sector_platforms);
     name_table_destroy(&names->signals);

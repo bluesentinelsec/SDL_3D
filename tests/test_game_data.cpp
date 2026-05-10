@@ -9598,6 +9598,118 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredSectorNavigationQueries)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_navigation");
+    write_text(dir / "scripts" / "nav.lua",
+               R"lua(
+local nav = {}
+function nav.inspect(_, _, ctx)
+    local start = Vec3(1.0, 1.0, 1.0)
+    local goal = Vec3(9.0, 1.0, 1.0)
+    local next_node = ctx:sector_nav_next_node("nav.test", start, goal)
+    ctx:state_set("lua_path_available", ctx:sector_nav_path_available("nav.test", start, goal))
+    ctx:state_set("lua_next_node", next_node ~= nil and next_node.name or "none")
+    local path = ctx:sector_nav_path("nav.test", start, goal)
+    ctx:state_set("lua_path_count", path ~= nil and #path or 0)
+end
+return nav
+)lua");
+    write_text(dir / "sector_navigation.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Sector Navigation Test" },
+  "scripts": [
+    { "id": "script.nav", "path": "scripts/nav.lua", "module": "test.nav" }
+  ],
+  "adapters": [
+    { "name": "adapter.nav.inspect", "kind": "action", "script": "script.nav", "function": "inspect" }
+  ],
+  "signals": ["signal.nav.inspect"],
+  "logic": {
+    "bindings": [
+      { "signal": "signal.nav.inspect", "actions": [{ "type": "adapter.invoke", "adapter": "adapter.nav.inspect" }] }
+    ]
+  },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [
+        { "name": "floor", "albedo": [0.7, 0.7, 0.7, 1.0] },
+        { "name": "wall", "albedo": [0.2, 0.25, 0.35, 1.0] }
+      ],
+      "sectors": [
+        { "name": "room", "points": [[0, 0], [4, 0], [4, 4], [0, 4]], "floor_y": 0.0, "ceil_y": 3.0, "floor_material": "floor", "ceil_material": "wall", "wall_material": "wall" },
+        { "name": "hall", "points": [[4, 0], [8, 0], [8, 4], [4, 4]], "floor_y": 0.0, "ceil_y": 3.0, "floor_material": "floor", "ceil_material": "wall", "wall_material": "wall" },
+        { "name": "goal", "points": [[8, 0], [12, 0], [12, 4], [8, 4]], "floor_y": 0.0, "ceil_y": 3.0, "floor_material": "floor", "ceil_material": "wall", "wall_material": "wall" },
+        { "name": "isolated", "points": [[20, 0], [24, 0], [24, 4], [20, 4]], "floor_y": 0.0, "ceil_y": 3.0, "floor_material": "floor", "ceil_material": "wall", "wall_material": "wall" }
+      ]
+    }
+  ],
+  "sector_navigation": [
+    {
+      "name": "nav.test",
+      "sector_level": "sector.test",
+      "nodes": [
+        { "name": "room.center", "sector": "room", "position": [2.0, 1.0, 2.0] },
+        { "name": "hall.center", "sector": "hall", "position": [6.0, 1.0, 2.0] },
+        { "name": "goal.center", "sector": "goal", "position": [10.0, 1.0, 2.0] },
+        { "name": "isolated.center", "sector": "isolated", "position": [22.0, 1.0, 2.0] }
+      ],
+      "links": [
+        { "from": "room.center", "to": "hall.center" },
+        { "from": "hall.center", "to": "goal.center" }
+      ]
+    }
+  ]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "sector_navigation.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    sdl3d_game_data_sector_nav_node nearest{};
+    ASSERT_TRUE(
+        sdl3d_game_data_sector_nav_nearest_node(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f), &nearest));
+    EXPECT_STREQ(nearest.name, "room.center");
+    EXPECT_EQ(nearest.sector_index, 0);
+
+    sdl3d_game_data_sector_nav_node path[4]{};
+    int node_count = 0;
+    float cost = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_sector_nav_path(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                                sdl3d_vec3_make(9.0f, 1.0f, 1.0f), path, 4, &node_count, &cost));
+    ASSERT_EQ(node_count, 3);
+    EXPECT_STREQ(path[0].name, "room.center");
+    EXPECT_STREQ(path[1].name, "hall.center");
+    EXPECT_STREQ(path[2].name, "goal.center");
+    EXPECT_GT(cost, 0.0f);
+
+    sdl3d_game_data_sector_nav_node next{};
+    ASSERT_TRUE(sdl3d_game_data_sector_nav_next_node(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                                     sdl3d_vec3_make(9.0f, 1.0f, 1.0f), &next));
+    EXPECT_STREQ(next.name, "hall.center");
+    EXPECT_FALSE(sdl3d_game_data_sector_nav_path_available(runtime, "nav.test", sdl3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                                           sdl3d_vec3_make(22.0f, 1.0f, 2.0f)));
+
+    const int signal = sdl3d_game_data_find_signal(runtime, "signal.nav.inspect");
+    ASSERT_GE(signal, 0);
+    sdl3d_signal_emit(sdl3d_game_session_get_signal_bus(session), signal, nullptr);
+    const sdl3d_properties *scene_state = sdl3d_game_data_scene_state(runtime);
+    EXPECT_TRUE(sdl3d_properties_get_bool(scene_state, "lua_path_available", false));
+    EXPECT_STREQ(sdl3d_properties_get_string(scene_state, "lua_next_node", ""), "hall.center");
+    EXPECT_EQ(sdl3d_properties_get_int(scene_state, "lua_path_count", 0), 3);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
 {
     const std::filesystem::path dir = unique_test_dir("sector_level_scene");
@@ -9683,6 +9795,79 @@ TEST(GameDataRuntime, ResolvesActiveSceneSectorLevelInstances)
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidSectorNavigationGraphs)
+{
+    const std::filesystem::path dir = unique_test_dir("sector_navigation_invalid");
+    struct InvalidSectorNavigationCase
+    {
+        const char *name;
+        const char *navigation_json;
+        const char *error_substring;
+    };
+    const InvalidSectorNavigationCase cases[] = {
+        {"unknown_sector",
+         R"json([{
+           "name": "nav.bad",
+           "sector_level": "sector.test",
+           "nodes": [{ "name": "a", "sector": "missing", "position": [1.0, 1.0, 1.0] }]
+         }])json",
+         "unknown sector navigation node sector"},
+        {"unknown_link_node",
+         R"json([{
+           "name": "nav.bad",
+           "sector_level": "sector.test",
+           "nodes": [{ "name": "a", "sector": "room", "position": [1.0, 1.0, 1.0] }],
+           "links": [{ "from": "a", "to": "missing" }]
+         }])json",
+         "unknown sector navigation node reference"},
+        {"bad_cost",
+         R"json([{
+           "name": "nav.bad",
+           "sector_level": "sector.test",
+           "nodes": [
+             { "name": "a", "sector": "room", "position": [1.0, 1.0, 1.0] },
+             { "name": "b", "sector": "room", "position": [2.0, 1.0, 1.0] }
+           ],
+           "links": [{ "from": "a", "to": "b", "cost": 0.0 }]
+         }])json",
+         "sector navigation link cost must be positive"},
+    };
+
+    for (const auto &test_case : cases)
+    {
+        const std::string game_json = std::string(R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Sector Navigation" },
+  "sector_levels": [
+    {
+      "name": "sector.test",
+      "materials": [
+        { "name": "floor", "albedo": [0.7, 0.7, 0.7, 1.0] },
+        { "name": "wall", "albedo": [0.2, 0.25, 0.35, 1.0] }
+      ],
+      "sectors": [{
+        "name": "room",
+        "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+        "floor_y": 0.0,
+        "ceil_y": 3.0,
+        "floor_material": "floor",
+        "ceil_material": "wall",
+        "wall_material": "wall"
+      }]
+    }
+  ],
+  "sector_navigation": )json") + test_case.navigation_json +
+                                      "\n}\n";
+        write_text(dir / (std::string(test_case.name) + ".game.json"), game_json.c_str());
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(
+            (dir / (std::string(test_case.name) + ".game.json")).string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.error_substring), std::string::npos) << error;
+    }
     remove_test_dir(dir);
 }
 
