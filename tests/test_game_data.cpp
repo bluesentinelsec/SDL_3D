@@ -2003,6 +2003,79 @@ TEST(GameDataRuntime, DataGameRuntimeDirectStartPassesSceneState)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, DataGameRuntimeDirectStartsFocusedFpsDojoScenes)
+{
+    const std::filesystem::path data_path = fps_mechanics_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(data_path)) << data_path;
+    const std::string root = data_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + data_path.filename().string();
+
+    struct DojoDirectStartCase
+    {
+        const char *scene;
+        const char *scene_key;
+        sdl3d_vec3 expected_position;
+        const char *ui_title;
+    };
+    const DojoDirectStartCase scenes[] = {
+        {"scene.dojo.movement", "movement", sdl3d_vec3_make(3.0f, 1.6f, 4.0f), "ui.dojo.movement.title"},
+        {"scene.dojo.combat_resources", "combat_resources", sdl3d_vec3_make(21.0f, 1.6f, 5.0f),
+         "ui.dojo.combat_resources.title"},
+        {"scene.dojo.hazards", "hazards", sdl3d_vec3_make(16.0f, 1.6f, 5.0f), "ui.dojo.hazards.title"},
+        {"scene.dojo.navigation", "navigation", sdl3d_vec3_make(4.0f, 1.6f, 14.0f), "ui.dojo.navigation.title"},
+    };
+
+    for (const DojoDirectStartCase &scene : scenes)
+    {
+        sdl3d_game_session *session = nullptr;
+        ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+        sdl3d_data_game_runtime_desc desc{};
+        sdl3d_data_game_runtime_desc_init(&desc);
+        desc.session = session;
+        desc.media_dir = SDL3D_MEDIA_DIR;
+        desc.data_asset_path = asset_path.c_str();
+        desc.mount_assets = mount_test_directory_assets;
+        desc.mount_userdata = const_cast<char *>(root.c_str());
+        desc.initial_scene_override = scene.scene;
+        desc.skip_app_flow_startup = true;
+
+        char error[512]{};
+        sdl3d_data_game_runtime *runtime = nullptr;
+        ASSERT_TRUE(sdl3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error)))
+            << scene.scene << ": " << error;
+        sdl3d_game_data_runtime *data = sdl3d_data_game_runtime_data(runtime);
+        ASSERT_NE(data, nullptr);
+        EXPECT_STREQ(sdl3d_game_data_active_scene(data), scene.scene);
+
+        sdl3d_registered_actor *player = sdl3d_game_data_find_actor(data, "entity.player");
+        ASSERT_NE(player, nullptr);
+        EXPECT_STREQ(sdl3d_properties_get_string(player->props, "dojo_scene", ""), scene.scene_key);
+        expect_vec3_near(player->position, scene.expected_position);
+
+        bool saw_title = false;
+        auto find_direct_start_dojo_title = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
+            auto *args = static_cast<std::pair<const char *, bool *> *>(userdata);
+            if (std::string(text->name) == args->first)
+            {
+                *args->second = true;
+                return false;
+            }
+            return true;
+        };
+        std::pair<const char *, bool *> title_args{scene.ui_title, &saw_title};
+        ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(data, find_direct_start_dojo_title, &title_args));
+        EXPECT_TRUE(saw_title) << scene.ui_title;
+
+        sdl3d_game_context ctx{};
+        ctx.session = session;
+        EXPECT_TRUE(sdl3d_data_game_runtime_update_frame(runtime, &ctx, 0.016f));
+
+        sdl3d_data_game_runtime_destroy(runtime);
+        sdl3d_game_session_destroy(session);
+    }
+}
+
 TEST(GameDataRuntime, DataGameRuntimeRefreshesInputProfilesOnGamepadHotplug)
 {
     sdl3d_game_session *session = nullptr;
