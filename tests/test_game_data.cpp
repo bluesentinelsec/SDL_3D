@@ -7210,6 +7210,9 @@ TEST(GameDataRuntime, LightingDojoLoadsSectorLocalLightingShowcase)
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.lighting_dojo.showcase"));
     EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.player"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.sample.warm_probe"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.sample.blue_probe"), nullptr);
+    EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.sample.lab_probe"), nullptr);
     EXPECT_NE(slayer3d_game_data_find_actor(runtime, "entity.mock.lab_robot"), nullptr);
 
     slayer3d_game_data_sector_level level{};
@@ -7224,7 +7227,8 @@ TEST(GameDataRuntime, LightingDojoLoadsSectorLocalLightingShowcase)
         {
             saw_dark = true;
             EXPECT_TRUE(level.sectors[i].has_lighting);
-            EXPECT_LT(level.sectors[i].lighting_level, 64.0f);
+            EXPECT_GT(level.sectors[i].lighting_level, 90.0f);
+            EXPECT_LT(level.sectors[i].lighting_level, 140.0f);
         }
         if (name == "green_toxic_room")
         {

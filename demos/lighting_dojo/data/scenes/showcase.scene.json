@@ -16,6 +16,9 @@
     "entity.sample.bright",
     "entity.sample.red",
     "entity.sample.green",
+    "entity.sample.warm_probe",
+    "entity.sample.blue_probe",
+    "entity.sample.lab_probe",
     "entity.mock.lab_robot"
   ],
   "input": {

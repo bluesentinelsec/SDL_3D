@@ -18,7 +18,7 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 192, "color": [1.0, 1.0, 1.0, 0.0] }
+          "lighting": { "level": 178, "color": [1.0, 1.0, 1.0, 0.0] }
         },
         {
           "name": "dark_room",
@@ -28,7 +28,7 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 48, "color": [0.45, 0.50, 0.65, 0.3] }
+          "lighting": { "level": 112, "color": [0.65, 0.72, 0.95, 0.18] }
         },
         {
           "name": "fullbright_room",
@@ -38,7 +38,7 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 255, "color": [1.0, 1.0, 1.0, 0.0] }
+          "lighting": { "level": 214, "color": [1.0, 1.0, 1.0, 0.0] }
         },
         {
           "name": "warm_hall",
@@ -48,7 +48,7 @@
           "floor_material": "floor.warning",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 176, "color": [1.0, 0.46, 0.14, 0.85] }
+          "lighting": { "level": 166, "color": [1.0, 0.58, 0.24, 0.48] }
         },
         {
           "name": "blue_hall",
@@ -58,7 +58,7 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 142, "color": [0.20, 0.42, 1.0, 1.0] }
+          "lighting": { "level": 154, "color": [0.34, 0.58, 1.0, 0.55] }
         },
         {
           "name": "red_alarm_room",
@@ -68,7 +68,7 @@
           "floor_material": "floor.warning",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 160, "color": [1.0, 0.08, 0.05, 1.0] }
+          "lighting": { "level": 158, "color": [1.0, 0.22, 0.15, 0.55] }
         },
         {
           "name": "green_toxic_room",
@@ -78,7 +78,7 @@
           "floor_material": "floor.warning",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 150, "color": [0.18, 1.0, 0.35, 1.0] }
+          "lighting": { "level": 150, "color": [0.30, 1.0, 0.42, 0.55] }
         },
         {
           "name": "mixed_light_lab",
@@ -88,7 +88,7 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 126, "color": [0.72, 0.64, 1.0, 0.45] }
+          "lighting": { "level": 146, "color": [0.76, 0.70, 1.0, 0.32] }
         },
         {
           "name": "connector_a",
@@ -98,7 +98,7 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 128, "color": [1.0, 1.0, 1.0, 0.0] }
+          "lighting": { "level": 145, "color": [0.88, 0.92, 1.0, 0.10] }
         },
         {
           "name": "connector_b",
@@ -108,7 +108,7 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 144, "color": [0.7, 0.85, 1.0, 0.35] }
+          "lighting": { "level": 162, "color": [0.76, 0.88, 1.0, 0.22] }
         },
         {
           "name": "connector_c",
@@ -118,7 +118,7 @@
           "floor_material": "floor.warning",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 150, "color": [1.0, 0.2, 0.1, 0.85] }
+          "lighting": { "level": 158, "color": [1.0, 0.34, 0.20, 0.42] }
         },
         {
           "name": "connector_d",
@@ -128,7 +128,7 @@
           "floor_material": "floor.warning",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 146, "color": [0.45, 1.0, 0.35, 0.8] }
+          "lighting": { "level": 152, "color": [0.44, 1.0, 0.42, 0.40] }
         },
         {
           "name": "connector_e",
@@ -138,14 +138,14 @@
           "floor_material": "floor.concrete",
           "ceil_material": "ceiling.dark",
           "wall_material": "wall.panel",
-          "lighting": { "level": 130, "color": [0.65, 0.8, 1.0, 0.5] }
+          "lighting": { "level": 145, "color": [0.74, 0.86, 1.0, 0.30] }
         }
       ],
       "lights": [
-        { "position": [4.0, 2.8, 4.0], "color": [1.0, 0.95, 0.85], "intensity": 0.8, "range": 6.0 },
-        { "position": [4.0, 2.4, 13.0], "color": [1.0, 0.55, 0.18], "intensity": 1.4, "range": 7.0 },
-        { "position": [14.0, 2.4, 13.0], "color": [0.25, 0.55, 1.0], "intensity": 1.2, "range": 7.0 },
-        { "position": [45.0, 3.2, 13.0], "color": [1.0, 0.95, 0.55], "intensity": 1.8, "range": 8.0 }
+        { "position": [4.0, 2.8, 4.0], "color": [1.0, 0.95, 0.85], "intensity": 0.65, "range": 5.5 },
+        { "position": [4.0, 2.4, 13.0], "color": [1.0, 0.55, 0.18], "intensity": 0.85, "range": 6.0 },
+        { "position": [14.0, 2.4, 13.0], "color": [0.25, 0.55, 1.0], "intensity": 0.8, "range": 6.0 },
+        { "position": [45.0, 3.2, 13.0], "color": [1.0, 0.95, 0.55], "intensity": 1.0, "range": 7.0 }
       ]
     }
   ]
