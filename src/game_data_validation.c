@@ -8143,9 +8143,24 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
         format_path(path, sizeof(path), "$.world.cameras[%zu]", i);
         yyjson_val *camera = yyjson_arr_get(cameras, i);
         const char *type = json_string(camera, "type");
+        yyjson_val *fov = obj_get(camera, "fov");
         yyjson_val *fovy = obj_get(camera, "fovy");
+        if (fov != NULL && fovy != NULL)
+            return validation_error(ctx, path, "camera must not define both fov and fovy");
+        if (fov != NULL && (!yyjson_is_num(fov) || yyjson_get_num(fov) <= 0.0 || yyjson_get_num(fov) >= 180.0))
+            return validation_error(ctx, path, "camera fov must be in the range (0, 180)");
         if (fovy != NULL && (!yyjson_is_num(fovy) || yyjson_get_num(fovy) <= 0.0 || yyjson_get_num(fovy) >= 180.0))
             return validation_error(ctx, path, "camera fovy must be in the range (0, 180)");
+        yyjson_val *fov_axis = obj_get(camera, "fov_axis");
+        if (fov_axis != NULL && (!yyjson_is_str(fov_axis) || (SDL_strcmp(yyjson_get_str(fov_axis), "vertical") != 0 &&
+                                                              SDL_strcmp(yyjson_get_str(fov_axis), "horizontal") != 0)))
+            return validation_error(ctx, path, "camera fov_axis must be 'vertical' or 'horizontal'");
+        yyjson_val *fov_key = obj_get(camera, "fov_key");
+        if (fov_key != NULL && (!yyjson_is_str(fov_key) || yyjson_get_str(fov_key)[0] == '\0'))
+            return validation_error(ctx, path, "camera fov_key must be a non-empty string");
+        yyjson_val *fov_axis_key = obj_get(camera, "fov_axis_key");
+        if (fov_axis_key != NULL && (!yyjson_is_str(fov_axis_key) || yyjson_get_str(fov_axis_key)[0] == '\0'))
+            return validation_error(ctx, path, "camera fov_axis_key must be a non-empty string");
         yyjson_val *size = obj_get(camera, "size");
         if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 0.0))
             return validation_error(ctx, path, "camera size must be positive");

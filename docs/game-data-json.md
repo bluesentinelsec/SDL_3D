@@ -342,22 +342,46 @@ camera with their `camera` field, and logic actions can switch cameras with
 Camera types:
 
 - `orthographic`: fixed position/target/up with `size`.
-- `perspective`: fixed position/target/up with `fovy`. If omitted, the
-  vertical field of view defaults to 90 degrees.
+- `perspective`: fixed position/target/up with `fov` and optional `fov_axis`.
+  `fov_axis` may be `vertical` or `horizontal`; omitted cameras use vertical
+  FOV. The legacy `fovy` field is still accepted as a vertical-FOV alias when
+  `fov` is absent. If omitted, the vertical field of view defaults to 90
+  degrees.
 - `chase`: follows an actor named by `target_entity`. The forward vector comes
   from a Vec3 actor property such as `velocity` or an authored
   `camera_forward`, with `fallback_forward` used when that property is near
   zero. Use `chase_distance: 0` for actor-perspective cameras and larger
-  values for behind-the-actor chase cameras. If omitted, `fovy` defaults to 90
-  degrees.
+  values for behind-the-actor chase cameras. If omitted, FOV defaults to 90
+  degrees on the vertical axis.
 - `fps`: reads a first-person sector controller from `target_entity` and
   renders from that actor's eye position. If the controller has not updated
   yet, the camera falls back to the actor's `yaw`, `pitch`, and `view_smooth`
   properties. The controller also publishes a normalized view direction to
   `camera_forward` by default; override this with `forward_property` when a
   game wants a different property name for projectile or camera logic. If
-  omitted, `fovy` defaults to 90 degrees.
+  omitted, FOV defaults to 90 degrees on the vertical axis.
 - `adapter`: delegates camera ownership to a native or Lua adapter.
+
+Perspective, chase, and FPS cameras can be tuned at runtime with scene state:
+
+```json
+{
+  "name": "camera.player",
+  "type": "fps",
+  "target_entity": "entity.player",
+  "fov": 90.0,
+  "fov_axis": "horizontal",
+  "fov_key": "settings.camera.fov",
+  "fov_axis_key": "settings.camera.fov_axis"
+}
+```
+
+`fov_key` reads a numeric scene-state value. `fov_axis_key` reads a string scene
+state value and accepts `vertical` or `horizontal`. Invalid runtime values fall
+back to the authored camera values. Use horizontal FOV for FPS-style settings
+when designers want values like "90 degrees" to mean the player's visible
+left-to-right angle; at 16:9, a 90-degree horizontal FOV renders with a vertical
+FOV of roughly 58.7 degrees.
 
 ## Storage And Persistence
 

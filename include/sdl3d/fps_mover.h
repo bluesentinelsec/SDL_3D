@@ -113,7 +113,7 @@ extern "C"
      * Build a camera looking along the mover's facing. The camera position
      * includes the view-smooth offset so stair transitions appear smooth.
      */
-    sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fovy);
+    sdl3d_camera3d sdl3d_fps_mover_camera(const sdl3d_fps_mover *mover, float fov);
 
 #ifdef __cplusplus
 }

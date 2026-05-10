@@ -2192,7 +2192,8 @@ extern "C"
      *
      * Adapter cameras are game-specific and return false here because their
      * final pose is computed by game code or script. Orthographic cameras use
-     * `size` as sdl3d_camera3d::fovy; perspective cameras use `fovy`.
+     * `size` as sdl3d_camera3d::fovy; perspective cameras use `fov` or the
+     * legacy `fovy` field with an optional `fov_axis`.
      */
     bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const char *name,
                                     sdl3d_camera3d *out_camera);

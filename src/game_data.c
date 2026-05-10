@@ -4140,6 +4140,53 @@ static bool scene_state_bool(const sdl3d_game_data_runtime *runtime, const char 
     return fallback;
 }
 
+static float scene_state_float(const sdl3d_game_data_runtime *runtime, const char *key, float fallback)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+        return fallback;
+    const sdl3d_value *value = sdl3d_properties_get_value(runtime->scene_state, key);
+    if (value == NULL)
+        return fallback;
+    if (value->type == SDL3D_VALUE_FLOAT)
+        return value->as_float;
+    if (value->type == SDL3D_VALUE_INT)
+        return (float)value->as_int;
+    return fallback;
+}
+
+static bool camera_fov_degrees_valid(float value)
+{
+    return value > 0.0f && value < 180.0f;
+}
+
+static sdl3d_camera_fov_axis parse_camera_fov_axis(const char *value, sdl3d_camera_fov_axis fallback)
+{
+    if (value == NULL)
+        return fallback;
+    if (SDL_strcasecmp(value, "vertical") == 0)
+        return SDL3D_CAMERA_FOV_VERTICAL;
+    if (SDL_strcasecmp(value, "horizontal") == 0)
+        return SDL3D_CAMERA_FOV_HORIZONTAL;
+    return fallback;
+}
+
+static float camera_fov_degrees(const sdl3d_game_data_runtime *runtime, yyjson_val *camera_json, float fallback)
+{
+    const float authored = json_float(camera_json, "fov", json_float(camera_json, "fovy", fallback));
+    const float valid_authored = camera_fov_degrees_valid(authored) ? authored : fallback;
+    const float runtime_value = scene_state_float(runtime, json_string(camera_json, "fov_key", NULL), valid_authored);
+    return camera_fov_degrees_valid(runtime_value) ? runtime_value : valid_authored;
+}
+
+static sdl3d_camera_fov_axis camera_fov_axis(const sdl3d_game_data_runtime *runtime, yyjson_val *camera_json)
+{
+    const sdl3d_camera_fov_axis authored =
+        parse_camera_fov_axis(json_string(camera_json, "fov_axis", NULL), SDL3D_CAMERA_FOV_VERTICAL);
+    return parse_camera_fov_axis(scene_state_string(runtime, json_string(camera_json, "fov_axis_key", NULL),
+                                                    json_string(camera_json, "fov_axis", NULL)),
+                                 authored);
+}
+
 static sdl3d_transition_type parse_transition_type(const char *value, sdl3d_transition_type fallback)
 {
     if (value == NULL)
@@ -5588,11 +5635,13 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
         if (target == NULL)
             return false;
 
-        const float fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        const float fov = camera_fov_degrees(runtime, camera_json, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        const sdl3d_camera_fov_axis fov_axis = camera_fov_axis(runtime, camera_json);
         const fps_controller_runtime *controller = find_fps_controller_const(runtime, target->name);
         if (controller != NULL && controller->initialized)
         {
-            *out_camera = sdl3d_fps_mover_camera(&controller->mover, fovy);
+            *out_camera = sdl3d_fps_mover_camera(&controller->mover, fov);
+            out_camera->fov_axis = fov_axis;
             return true;
         }
 
@@ -5605,7 +5654,8 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
             target->props, json_string(camera_json, "pitch_property", "pitch"), json_float(camera_json, "pitch", 0.0f));
         fallback_mover.view_smooth = sdl3d_properties_get_float(
             target->props, json_string(camera_json, "view_smooth_property", "view_smooth"), 0.0f);
-        *out_camera = sdl3d_fps_mover_camera(&fallback_mover, fovy);
+        *out_camera = sdl3d_fps_mover_camera(&fallback_mover, fov);
+        out_camera->fov_axis = fov_axis;
         return true;
     }
 
@@ -5651,7 +5701,8 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
         out_camera->target = sdl3d_vec3_make(anchor.x + velocity.x * lookahead, anchor.y + velocity.y * lookahead,
                                              anchor.z + target_z_offset);
         out_camera->up = json_vec3(camera_json, "up", sdl3d_vec3_make(0.0f, 0.0f, 1.0f));
-        out_camera->fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fovy = camera_fov_degrees(runtime, camera_json, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fov_axis = camera_fov_axis(runtime, camera_json);
         out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
         return true;
     }
@@ -5667,7 +5718,8 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
     else
     {
         out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
-        out_camera->fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fovy = camera_fov_degrees(runtime, camera_json, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+        out_camera->fov_axis = camera_fov_axis(runtime, camera_json);
     }
     return true;
 }

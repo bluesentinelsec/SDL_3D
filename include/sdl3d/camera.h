@@ -17,17 +17,25 @@ extern "C"
         SDL3D_CAMERA_ORTHOGRAPHIC = 1
     } sdl3d_camera_projection;
 
+    typedef enum sdl3d_camera_fov_axis
+    {
+        SDL3D_CAMERA_FOV_VERTICAL = 0,
+        SDL3D_CAMERA_FOV_HORIZONTAL = 1
+    } sdl3d_camera_fov_axis;
+
     typedef struct sdl3d_camera3d
     {
         sdl3d_vec3 position;
         sdl3d_vec3 target;
         sdl3d_vec3 up;
         /*
-         * For SDL3D_CAMERA_PERSPECTIVE: vertical field-of-view in degrees.
+         * For SDL3D_CAMERA_PERSPECTIVE: field-of-view in degrees. fov_axis
+         * selects whether this value is vertical or horizontal.
          * For SDL3D_CAMERA_ORTHOGRAPHIC: vertical view volume in world units.
          */
         float fovy;
         sdl3d_camera_projection projection;
+        sdl3d_camera_fov_axis fov_axis;
     } sdl3d_camera3d;
 
     /*

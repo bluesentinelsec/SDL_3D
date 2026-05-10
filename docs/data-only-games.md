@@ -138,7 +138,7 @@ build/debug/sdl3d_runner \
 ```
 
 The starter proves the data-only shape for common FPS primitives: WASD/mouse
-input, an FPS sector controller, a 90-degree FOV camera, a sector room,
+input, an FPS sector controller, an FPS camera, a sector room,
 navigation graph, reticle/FPS/resource HUD text, pause menu, projectile weapon,
 projectile pool, pickup archetype, resource-station archetype, and editor
 palette metadata. It uses colored geometry and built-in fonts so it remains

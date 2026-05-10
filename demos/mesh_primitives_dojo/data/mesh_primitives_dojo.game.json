@@ -32,7 +32,10 @@
         "name": "camera.mesh_primitives.player",
         "type": "fps",
         "target_entity": "entity.player",
-        "fovy": 90.0,
+        "fov": 90.0,
+        "fov_axis": "horizontal",
+        "fov_key": "camera.fov",
+        "fov_axis_key": "camera.fov_axis",
         "active": true
       }
     ]

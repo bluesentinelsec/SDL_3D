@@ -7050,7 +7050,8 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
     sdl3d_camera3d camera{};
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.mesh_primitives.player", &camera));
     EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
-    EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+    EXPECT_FLOAT_EQ(camera.fovy, 90.0f);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_HORIZONTAL);
 
     ASSERT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
     sdl3d_light sun{};
@@ -7108,6 +7109,16 @@ TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
         "type": "perspective",
         "position": [0.0, 0.0, 2.0],
         "target": [0.0, 0.0, 0.0]
+      },
+      {
+        "name": "camera.runtime_fov",
+        "type": "perspective",
+        "position": [0.0, 0.0, 2.0],
+        "target": [0.0, 0.0, 0.0],
+        "fov": 75.0,
+        "fov_axis": "vertical",
+        "fov_key": "camera.fov",
+        "fov_axis_key": "camera.fov_axis"
       }
     ]
   }
@@ -7130,6 +7141,19 @@ TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.default", &camera));
     EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
     EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_VERTICAL);
+
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
+    EXPECT_FLOAT_EQ(camera.fovy, 75.0f);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_VERTICAL);
+
+    sdl3d_properties *scene_state = sdl3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    sdl3d_properties_set_float(scene_state, "camera.fov", 90.0f);
+    sdl3d_properties_set_string(scene_state, "camera.fov_axis", "horizontal");
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.runtime_fov", &camera));
+    EXPECT_FLOAT_EQ(camera.fovy, 90.0f);
+    EXPECT_EQ(camera.fov_axis, SDL3D_CAMERA_FOV_HORIZONTAL);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
@@ -7179,6 +7203,36 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
   }
 })json",
             "camera fovy must be in the range",
+        },
+        {
+            "bad_fov_axis",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad FOV Axis" },
+  "world": {
+    "name": "world.bad",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.bad", "type": "perspective", "fov": 90.0, "fov_axis": "diagonal" }
+    ]
+  }
+})json",
+            "camera fov_axis must be",
+        },
+        {
+            "ambiguous_fov",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Ambiguous FOV" },
+  "world": {
+    "name": "world.bad",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.bad", "type": "perspective", "fov": 90.0, "fovy": 60.0 }
+    ]
+  }
+})json",
+            "must not define both fov and fovy",
         },
     };
 
