@@ -53,8 +53,9 @@
         "name": "ui.mesh_primitives.title",
         "text": "Mesh Primitives Dojo",
         "font": "font.mesh_primitives.hud",
-        "position": [0.02, 0.03],
-        "anchor": "top_left",
+        "x": 0.02,
+        "y": 0.03,
+        "normalized": true,
         "color": [235, 240, 250, 230],
         "scale": 0.85
       },
@@ -62,10 +63,41 @@
         "name": "ui.mesh_primitives.help",
         "text": "WASD move  Mouse look  Space jump  P pause  Esc quit",
         "font": "font.mesh_primitives.hud",
-        "position": [0.02, 0.07],
-        "anchor": "top_left",
+        "x": 0.02,
+        "y": 0.075,
+        "normalized": true,
         "color": [205, 215, 230, 210],
         "scale": 0.65
+      },
+      {
+        "name": "ui.mesh_primitives.labels.row1",
+        "text": "Front row: cube  sphere  capsule  cylinder  cone  torus  pyramid",
+        "font": "font.mesh_primitives.hud",
+        "x": 0.02,
+        "y": 0.125,
+        "normalized": true,
+        "color": [185, 200, 220, 200],
+        "scale": 0.52
+      },
+      {
+        "name": "ui.mesh_primitives.labels.row2",
+        "text": "Middle row: wedge  plane  disc  hemisphere  rounded box  pipe  arrow",
+        "font": "font.mesh_primitives.hud",
+        "x": 0.02,
+        "y": 0.165,
+        "normalized": true,
+        "color": [185, 200, 220, 200],
+        "scale": 0.52
+      },
+      {
+        "name": "ui.mesh_primitives.labels.row3",
+        "text": "Back row: billboard plane  composite robot  composite ship  composite portal",
+        "font": "font.mesh_primitives.hud",
+        "x": 0.02,
+        "y": 0.205,
+        "normalized": true,
+        "color": [185, 200, 220, 200],
+        "scale": 0.52
       },
       {
         "name": "ui.mesh_primitives.fps",
@@ -74,8 +106,10 @@
         "bindings": [
           { "type": "metric", "metric": "fps" }
         ],
-        "position": [0.985, 0.03],
-        "anchor": "top_right",
+        "x": 0.985,
+        "y": 0.03,
+        "normalized": true,
+        "align": "right",
         "color": [180, 235, 190, 230],
         "scale": 0.72
       },
@@ -83,8 +117,10 @@
         "name": "ui.mesh_primitives.reticle",
         "text": "+",
         "font": "font.mesh_primitives.hud",
-        "position": [0.5, 0.5],
-        "anchor": "center",
+        "x": 0.5,
+        "y": 0.5,
+        "normalized": true,
+        "align": "center",
         "color": [255, 255, 255, 180],
         "scale": 0.9
       }

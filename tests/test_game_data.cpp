@@ -7092,6 +7092,7 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
     struct UiCapture
     {
         bool saw_fps = false;
+        int label_count = 0;
     } ui_capture;
     auto capture_ui = [](void *userdata, const sdl3d_game_data_ui_text *text) -> bool {
         auto *capture = static_cast<UiCapture *>(userdata);
@@ -7099,11 +7100,21 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
         {
             capture->saw_fps = true;
             EXPECT_NE(text->format, nullptr);
+            EXPECT_TRUE(text->normalized);
+            EXPECT_FLOAT_EQ(text->x, 0.985f);
+            EXPECT_FLOAT_EQ(text->y, 0.03f);
+        }
+        if (std::string(text->name).find("ui.mesh_primitives.labels.") == 0)
+        {
+            ++capture->label_count;
+            EXPECT_TRUE(text->normalized);
+            EXPECT_GT(text->y, 0.1f);
         }
         return true;
     };
     ASSERT_TRUE(sdl3d_game_data_for_each_ui_text(runtime, capture_ui, &ui_capture));
     EXPECT_TRUE(ui_capture.saw_fps);
+    EXPECT_EQ(ui_capture.label_count, 3);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

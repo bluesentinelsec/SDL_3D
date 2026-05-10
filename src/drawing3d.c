@@ -1616,6 +1616,21 @@ bool sdl3d_draw_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, cons
                                     NULL, NULL);
 }
 
+bool sdl3d_draw_static_mesh(sdl3d_render_context *context, const sdl3d_mesh *mesh, const sdl3d_texture2d *texture,
+                            sdl3d_color tint)
+{
+    if (context != NULL && context->shading_mode != SDL3D_SHADING_UNLIT && mesh != NULL && mesh->normals != NULL)
+    {
+        sdl3d_lighting_params lp;
+        sdl3d_build_lighting_params(context, &lp);
+        lp.roughness = 1.0f;
+        return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), &lp, NULL, true,
+                                        NULL, NULL);
+    }
+    return sdl3d_draw_mesh_internal(context, mesh, texture, NULL, sdl3d_color_to_modulate(tint), NULL, NULL, true, NULL,
+                                    NULL);
+}
+
 /* ------------------------------------------------------------------ */
 /* Model node hierarchy helpers                                        */
 /* ------------------------------------------------------------------ */

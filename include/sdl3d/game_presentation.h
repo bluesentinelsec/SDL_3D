@@ -158,6 +158,42 @@ extern "C"
         sdl3d_asset_resolver *assets;               /**< Resolver used for lazy loads; not owned. */
     } sdl3d_game_data_model_cache;
 
+    /** @brief One cached procedural mesh generated from an authored render.mesh_primitive descriptor. */
+    typedef struct sdl3d_game_data_mesh_primitive_cache_entry
+    {
+        sdl3d_game_data_mesh_primitive_kind primitive; /**< Cached primitive kind. */
+        sdl3d_vec3 size;                               /**< Cached authored size. */
+        float radius;                                  /**< Cached primary radius. */
+        float radius_top;                              /**< Cached top radius for cones/cylinders. */
+        float radius_bottom;                           /**< Cached bottom radius for cones/cylinders. */
+        float height;                                  /**< Cached height. */
+        float major_radius;                            /**< Cached torus/tube major radius. */
+        float minor_radius;                            /**< Cached torus/tube minor radius. */
+        float bevel_radius;                            /**< Cached rounded-box bevel radius. */
+        float arc_angle;                               /**< Cached tube arc angle. */
+        int slices;                                    /**< Cached longitudinal segment count. */
+        int rings;                                     /**< Cached ring/bevel segment count. */
+        int tube_segments;                             /**< Cached tube segment count. */
+        sdl3d_mesh mesh;                               /**< Owned immutable mesh arrays. */
+        bool loaded;                                   /**< True once @ref mesh owns geometry. */
+    } sdl3d_game_data_mesh_primitive_cache_entry;
+
+    /**
+     * @brief Runtime cache for static procedural meshes referenced by authored render data.
+     *
+     * The cache owns generated immutable vertex/index arrays. Hardware backends can
+     * then cache GPU buffers for these stable meshes instead of rebuilding and
+     * uploading procedural geometry every frame.
+     */
+    typedef struct sdl3d_game_data_mesh_primitive_cache
+    {
+        sdl3d_game_data_mesh_primitive_cache_entry *entries; /**< Cached generated meshes. */
+        int count;                                           /**< Number of cache entries. */
+        int capacity;                                        /**< Allocated cache slots. */
+        int hits;                                            /**< Lookup hits, useful for tests/profiling. */
+        int misses;                                          /**< Mesh builds, useful for tests/profiling. */
+    } sdl3d_game_data_mesh_primitive_cache;
+
     /**
      * @brief Result produced by the generic authored menu controller.
      *
@@ -274,6 +310,7 @@ extern "C"
         sdl3d_game_data_particle_cache *particle_cache; /**< Particle cache used by authored emitters. */
         sdl3d_game_data_sprite_cache *sprite_cache;     /**< Sprite cache used by authored render.sprite data. */
         sdl3d_game_data_model_cache *model_cache;       /**< Model cache used by authored render.model data. */
+        sdl3d_game_data_mesh_primitive_cache *mesh_primitive_cache; /**< Cache for authored procedural meshes. */
         const sdl3d_game_data_app_flow *app_flow;       /**< Optional app flow whose transitions are drawn. */
         const sdl3d_game_data_ui_metrics *metrics;      /**< Optional UI metrics. */
         const sdl3d_game_data_render_eval *render_eval; /**< Optional primitive effect evaluation inputs. */
@@ -360,6 +397,12 @@ extern "C"
      * @brief Free all models owned by a world model cache.
      */
     void sdl3d_game_data_model_cache_free(sdl3d_game_data_model_cache *cache);
+
+    /** @brief Initialize a procedural mesh primitive cache. */
+    void sdl3d_game_data_mesh_primitive_cache_init(sdl3d_game_data_mesh_primitive_cache *cache);
+
+    /** @brief Free all generated mesh primitive geometry owned by @p cache. */
+    void sdl3d_game_data_mesh_primitive_cache_free(sdl3d_game_data_mesh_primitive_cache *cache);
 
     /**
      * @brief Draw active-scene authored sector levels.

@@ -1419,7 +1419,12 @@ Reusable components include:
   `segments`/`slices`, `rings`, and `tube_segments`. This is the stable
   data/runtime representation for procedural mesh primitives. The generic
   presentation path renders every primitive as shaded solid geometry by
-  default, with optional wire-only or solid-plus-wire modes.
+  default, with optional wire-only or solid-plus-wire modes. Solid procedural
+  primitives are generated through a presentation cache when hosts provide one,
+  so repeated static placeholder geometry can reuse stable CPU mesh data and
+  hardware backends can keep GPU buffers instead of rebuilding geometry every
+  frame. Wire overlays are useful for inspection, but they still add extra line
+  work and should be used selectively in large scenes.
 - `render.composite`: expands one actor into multiple procedural
   `render.mesh_primitive` parts. Use `parts` as a non-empty array of mesh
   primitive descriptors. Part `offset` values are local offsets from the owning
