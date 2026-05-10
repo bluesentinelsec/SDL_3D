@@ -6,6 +6,8 @@
     "version": "0.1.0"
   },
   "imports": [
+    { "path": "fragments/input/fps_controls.json", "sections": ["input"] },
+    { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/world/showcase.brushes.json", "sections": ["brush_worlds"] },
     { "path": "fragments/actors/lights.json", "sections": ["entities"] }
   ],
@@ -41,11 +43,9 @@
     "ambient_light": [0.16, 0.17, 0.18],
     "cameras": [
       {
-        "name": "camera.brush_geometry.overview",
-        "type": "perspective",
-        "position": [15.0, 8.0, 17.0],
-        "target": [0.0, 2.2, 0.0],
-        "up": [0.0, 1.0, 0.0],
+        "name": "camera.brush_geometry.player",
+        "type": "fps",
+        "target_entity": "entity.brush_geometry.player",
         "fov": 90.0,
         "fov_axis": "horizontal",
         "active": true
