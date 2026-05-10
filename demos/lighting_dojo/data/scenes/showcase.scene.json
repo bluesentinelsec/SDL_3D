@@ -1,0 +1,153 @@
+{
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.lighting_dojo.showcase",
+  "camera": "camera.lighting_dojo.player",
+  "updates_game": true,
+  "renders_world": true,
+  "entities": [
+    "entity.player",
+    "entity.light.neutral",
+    "entity.light.warm",
+    "entity.light.blue",
+    "entity.light.lab.left",
+    "entity.light.lab.right",
+    "entity.sample.neutral",
+    "entity.sample.dark",
+    "entity.sample.bright",
+    "entity.sample.red",
+    "entity.sample.green",
+    "entity.sample.warm_probe",
+    "entity.sample.blue_probe",
+    "entity.sample.lab_probe",
+    "entity.mock.lab_robot"
+  ],
+  "input": {
+    "mouse_capture": "unpaused",
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump",
+      "action.lighting.sector.toggle",
+      "action.lighting.dynamic.toggle",
+      "action.lighting.actor.toggle",
+      "action.lighting.bloom.toggle",
+      "action.pause"
+    ]
+  },
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.lighting_dojo.showcase",
+        "variant": "lightmapped",
+        "position": [0.0, 0.0, 0.0],
+        "sector_lighting_key": "lighting.dojo.sector_lighting",
+        "portal_culling": true
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.lighting_dojo.title",
+        "text": "Lighting Dojo",
+        "font": "font.lighting_dojo.hud",
+        "x": 0.02,
+        "y": 0.03,
+        "normalized": true,
+        "color": [235, 240, 250, 230],
+        "scale": 0.82
+      },
+      {
+        "name": "ui.lighting_dojo.help",
+        "text": "WASD move  Mouse look  Space jump  1 sector  2 point lights  3 actor lighting  4 bloom",
+        "font": "font.lighting_dojo.hud",
+        "x": 0.02,
+        "y": 0.075,
+        "normalized": true,
+        "color": [205, 215, 230, 210],
+        "scale": 0.62
+      },
+      {
+        "name": "ui.lighting_dojo.legend",
+        "text": "Rooms: neutral, dark, fullbright, warm, blue, red, toxic green, mixed dynamic lights",
+        "font": "font.lighting_dojo.hud",
+        "x": 0.02,
+        "y": 0.115,
+        "normalized": true,
+        "color": [185, 200, 220, 200],
+        "scale": 0.52
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_sector",
+        "font": "font.lighting_dojo.hud",
+        "format": "1 Sector %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.sector_lighting", "default": true }],
+        "x": 0.02,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_dynamic",
+        "font": "font.lighting_dojo.hud",
+        "format": "2 Point %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.dynamic_lights", "default": true }],
+        "x": 0.125,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_actor",
+        "font": "font.lighting_dojo.hud",
+        "format": "3 Actors %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.actor_primitives", "default": true }],
+        "x": 0.23,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.lighting_dojo.toggle_bloom",
+        "font": "font.lighting_dojo.hud",
+        "format": "4 Bloom %d",
+        "bindings": [{ "type": "scene_state", "key": "lighting.dojo.bloom", "default": true }],
+        "x": 0.335,
+        "y": 0.155,
+        "normalized": true,
+        "color": [210, 225, 240, 210],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.lighting_dojo.fps",
+        "font": "font.lighting_dojo.hud",
+        "format": "FPS %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "fps" }
+        ],
+        "x": 0.985,
+        "y": 0.03,
+        "normalized": true,
+        "align": "right",
+        "color": [180, 235, 190, 230],
+        "scale": 0.72
+      },
+      {
+        "name": "ui.lighting_dojo.reticle",
+        "text": "+",
+        "font": "font.lighting_dojo.hud",
+        "x": 0.5,
+        "y": 0.5,
+        "normalized": true,
+        "align": "center",
+        "color": [255, 255, 255, 180],
+        "scale": 0.9
+      }
+    ]
+  }
+}

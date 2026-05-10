@@ -1,0 +1,23 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "input": {
+    "contexts": [
+      {
+        "name": "input.lighting_dojo",
+        "actions": [
+          { "name": "action.move.forward", "bindings": [{ "device": "keyboard", "key": "W" }] },
+          { "name": "action.move.back", "bindings": [{ "device": "keyboard", "key": "S" }] },
+          { "name": "action.move.left", "bindings": [{ "device": "keyboard", "key": "A" }] },
+          { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
+          { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
+          { "name": "action.pause", "bindings": [{ "device": "keyboard", "key": "P" }] },
+          { "name": "action.lighting.sector.toggle", "bindings": [{ "device": "keyboard", "key": "1" }] },
+          { "name": "action.lighting.dynamic.toggle", "bindings": [{ "device": "keyboard", "key": "2" }] },
+          { "name": "action.lighting.actor.toggle", "bindings": [{ "device": "keyboard", "key": "3" }] },
+          { "name": "action.lighting.bloom.toggle", "bindings": [{ "device": "keyboard", "key": "4" }] },
+          { "name": "action.exit", "bindings": [{ "device": "keyboard", "key": "ESCAPE" }] }
+        ]
+      }
+    ]
+  }
+}

@@ -2806,6 +2806,24 @@ static bool is_exact_vec_array(yyjson_val *value, size_t count)
     return yyjson_is_arr(value) && yyjson_arr_size(value) == count && is_vec_array(value, count);
 }
 
+static bool is_exact_vec3_or_vec4_array(yyjson_val *value)
+{
+    return is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
+}
+
+static bool numeric_array_values_in_range(yyjson_val *value, double min_value, double max_value)
+{
+    if (!yyjson_is_arr(value))
+        return false;
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_num(entry) || yyjson_get_num(entry) < min_value || yyjson_get_num(entry) > max_value)
+            return false;
+    }
+    return true;
+}
+
 static bool is_wave_axis_value(yyjson_val *value)
 {
     if (value == NULL || yyjson_is_num(value))
@@ -2898,6 +2916,12 @@ static bool validate_render_mesh_primitive_component(validation_context *ctx, yy
     yyjson_val *wire_color = obj_get(component, "wire_color");
     if (wire_color != NULL && !is_vec_array(wire_color, 3))
         return validation_error(ctx, path, "render.mesh_primitive wire_color must be a vec3 or vec4");
+    yyjson_val *lighting = obj_get(component, "lighting");
+    if (lighting != NULL && !yyjson_is_bool(lighting))
+        return validation_error(ctx, path, "render.mesh_primitive lighting must be a boolean");
+    yyjson_val *lighting_key = obj_get(component, "lighting_key");
+    if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
+        return validation_error(ctx, path, "render.mesh_primitive lighting_key must be non-empty");
     yyjson_val *size = obj_get(component, "size");
     if (size != NULL && !is_vec_array(size, 3))
         return validation_error(ctx, path, "render.mesh_primitive size must be a vec3");
@@ -4777,6 +4801,30 @@ static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
                 ok = validation_error(ctx, sector_path, "sector damage_per_second must be non-negative");
                 break;
             }
+            yyjson_val *lighting = obj_get(sector, "lighting");
+            if (lighting != NULL)
+            {
+                if (!yyjson_is_obj(lighting))
+                {
+                    ok = validation_error(ctx, sector_path, "sector lighting must be an object");
+                    break;
+                }
+                yyjson_val *lighting_level = obj_get(lighting, "level");
+                if (lighting_level != NULL && (!yyjson_is_int(lighting_level) || yyjson_get_int(lighting_level) < 0 ||
+                                               yyjson_get_int(lighting_level) > 255))
+                {
+                    ok = validation_error(ctx, sector_path, "sector lighting level must be an integer in [0, 255]");
+                    break;
+                }
+                yyjson_val *color = obj_get(lighting, "color");
+                if (color != NULL &&
+                    (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 1.0)))
+                {
+                    ok = validation_error(ctx, sector_path,
+                                          "sector lighting color must be a vec3 or vec4 with values in [0, 1]");
+                    break;
+                }
+            }
         }
 
         if (ok && lights != NULL)
@@ -5118,6 +5166,12 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *color = obj_get(component, "color");
                 if (color != NULL && !is_vec_array(color, 3))
                     return validation_error(ctx, path, "light component color must be a vec3");
+                yyjson_val *enabled = obj_get(component, "enabled");
+                if (enabled != NULL && !yyjson_is_bool(enabled))
+                    return validation_error(ctx, path, "light component enabled must be a boolean");
+                yyjson_val *enabled_key = obj_get(component, "enabled_key");
+                if (enabled_key != NULL && !is_non_empty_string(component, "enabled_key"))
+                    return validation_error(ctx, path, "light component enabled_key must be non-empty");
             }
             else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
                      SDL_strcmp(type, "render.mesh_primitive") == 0 || SDL_strcmp(type, "render.composite") == 0 ||
@@ -5126,6 +5180,9 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
                     return validation_error(ctx, path, "render primitive lighting must be a boolean");
+                yyjson_val *lighting_key = obj_get(component, "lighting_key");
+                if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
+                    return validation_error(ctx, path, "render primitive lighting_key must be non-empty");
                 if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
                     SDL_strcmp(type, "render.mesh_primitive") == 0 || SDL_strcmp(type, "render.composite") == 0)
                 {
@@ -5575,8 +5632,26 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                                             "lifecycle.ttl property names and reason must be non-empty strings");
                 }
             }
+            else if (SDL_strncmp(type, "light.", 6) == 0)
+            {
+                yyjson_val *color = obj_get(component, "color");
+                if (color != NULL && !is_vec_array(color, 3))
+                    return validation_error(ctx, component_path, "light component color must be a vec3");
+                yyjson_val *enabled = obj_get(component, "enabled");
+                if (enabled != NULL && !yyjson_is_bool(enabled))
+                    return validation_error(ctx, component_path, "light component enabled must be a boolean");
+                yyjson_val *enabled_key = obj_get(component, "enabled_key");
+                if (enabled_key != NULL && !is_non_empty_string(component, "enabled_key"))
+                    return validation_error(ctx, component_path, "light component enabled_key must be non-empty");
+            }
             else if (SDL_strcmp(type, "render.cube") == 0)
             {
+                yyjson_val *lighting = obj_get(component, "lighting");
+                if (lighting != NULL && !yyjson_is_bool(lighting))
+                    return validation_error(ctx, component_path, "render primitive lighting must be a boolean");
+                yyjson_val *lighting_key = obj_get(component, "lighting_key");
+                if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
+                    return validation_error(ctx, component_path, "render primitive lighting_key must be non-empty");
                 yyjson_val *size = obj_get(component, "size");
                 if (size != NULL && !is_vec_array(size, 3))
                     return validation_error(ctx, component_path, "render.cube size must be a vec3");
@@ -7050,6 +7125,31 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validate_action_array(ctx, actions, json_path, names);
         return require_ref(ctx, &names->signals, "signal", signal, json_path);
     }
+    if (SDL_strcmp(type, "sector_lighting.set") == 0)
+    {
+        const char *sector_level = json_string(action, "sector_level");
+        const char *sector = json_string(action, "sector");
+        yyjson_val *sector_index = obj_get(action, "sector_index");
+        if (!require_ref(ctx, &names->sector_levels, "sector level", sector_level, json_path))
+            return false;
+        if ((sector == NULL && sector_index == NULL) || (sector != NULL && sector_index != NULL))
+            return validation_error(ctx, json_path,
+                                    "sector_lighting.set requires exactly one of sector or sector_index");
+        if (sector != NULL && sector[0] == '\0')
+            return validation_error(ctx, json_path, "sector_lighting.set sector must be non-empty");
+        if (sector_index != NULL && (!yyjson_is_int(sector_index) || yyjson_get_int(sector_index) < 0))
+            return validation_error(ctx, json_path, "sector_lighting.set sector_index must be non-negative");
+        yyjson_val *level = obj_get(action, "level");
+        if (level != NULL && (!yyjson_is_num(level) || yyjson_get_num(level) < 0.0 || yyjson_get_num(level) > 255.0))
+            return validation_error(ctx, json_path, "sector_lighting.set level must be in [0, 255]");
+        yyjson_val *color = obj_get(action, "color");
+        if (color != NULL && (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 1.0)))
+        {
+            return validation_error(ctx, json_path,
+                                    "sector_lighting.set color must be a vec3 or vec4 with values in [0, 1]");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "projectile.fire") == 0)
     {
         return validate_projectile_fire_shape(ctx, action, json_path, names, true);
@@ -8510,6 +8610,12 @@ static bool validate_lights(validation_context *ctx, yyjson_val *root, validatio
         char path[PATH_BUFFER_SIZE];
         format_path(path, sizeof(path), "$.world.lights[%zu]", i);
         yyjson_val *light = yyjson_arr_get(lights, i);
+        yyjson_val *enabled = obj_get(light, "enabled");
+        if (enabled != NULL && !yyjson_is_bool(enabled))
+            return validation_error(ctx, path, "light enabled must be a boolean");
+        yyjson_val *enabled_key = obj_get(light, "enabled_key");
+        if (enabled_key != NULL && !is_non_empty_string(light, "enabled_key"))
+            return validation_error(ctx, path, "light enabled_key must be non-empty");
         const char *target_entity = json_string(light, "target_entity");
         if (target_entity != NULL && !require_ref(ctx, &names->entities, "entity", target_entity, path))
             return false;
@@ -8991,6 +9097,12 @@ static bool validate_scene_sector_levels(validation_context *ctx, yyjson_val *sc
         yyjson_val *portal_culling_key = obj_get(entry, "portal_culling_key");
         if (portal_culling_key != NULL && !is_non_empty_string(entry, "portal_culling_key"))
             return validation_error(ctx, entry_path, "scene sector level portal_culling_key must be non-empty");
+        yyjson_val *sector_lighting = obj_get(entry, "sector_lighting");
+        if (sector_lighting != NULL && !yyjson_is_bool(sector_lighting))
+            return validation_error(ctx, entry_path, "scene sector level sector_lighting must be a boolean");
+        yyjson_val *sector_lighting_key = obj_get(entry, "sector_lighting_key");
+        if (sector_lighting_key != NULL && !is_non_empty_string(entry, "sector_lighting_key"))
+            return validation_error(ctx, entry_path, "scene sector level sector_lighting_key must be non-empty");
     }
     return true;
 }

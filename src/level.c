@@ -198,6 +198,7 @@ typedef enum
 typedef struct
 {
     int acc_index;
+    int sector_index;
     int first_vertex;
     int vertex_count;
     lm_surface_type type;
@@ -385,8 +386,9 @@ static float max4(float a, float b, float c, float d)
     return value > d ? value : d;
 }
 
-static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, const macc *acc, int first_vertex, float x0,
-                                   float z0, float x1, float z1, float bot0, float top0, float bot1, float top1)
+static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, int sector_index, const macc *acc,
+                                   int first_vertex, float x0, float z0, float x1, float z1, float bot0, float top0,
+                                   float bot1, float top1)
 {
     float dx = x1 - x0;
     float dz = z1 - z0;
@@ -402,6 +404,7 @@ static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, const m
 
     SDL_zero(surface);
     surface.acc_index = acc_index;
+    surface.sector_index = sector_index;
     surface.first_vertex = first_vertex;
     surface.vertex_count = acc->vc - first_vertex;
     surface.type = LM_SURFACE_WALL;
@@ -427,8 +430,8 @@ static bool lm_record_wall_surface(lm_surface_list *list, int acc_index, const m
     return lm_surface_list_append(list, &surface);
 }
 
-static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, const macc *acc, int first_vertex,
-                                         const slayer3d_sector *sector, bool floor_surface)
+static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, int sector_index, const macc *acc,
+                                         int first_vertex, const slayer3d_sector *sector, bool floor_surface)
 {
     lm_surface surface;
     slayer3d_vec3 normal = floor_surface ? slayer3d_sector_floor_normal(sector) : slayer3d_sector_ceil_normal(sector);
@@ -442,6 +445,7 @@ static bool lm_record_floor_ceil_surface(lm_surface_list *list, int acc_index, c
 
     SDL_zero(surface);
     surface.acc_index = acc_index;
+    surface.sector_index = sector_index;
     surface.first_vertex = first_vertex;
     surface.vertex_count = acc->vc - first_vertex;
     surface.type = floor_surface ? LM_SURFACE_FLOOR : LM_SURFACE_CEILING;
@@ -579,6 +583,70 @@ static Uint8 lm_channel_clamp(float value)
     return (Uint8)(value + 0.5f);
 }
 
+static float clamp01(float value)
+{
+    if (value <= 0.0f)
+    {
+        return 0.0f;
+    }
+    if (value >= 1.0f)
+    {
+        return 1.0f;
+    }
+    return value;
+}
+
+static void sector_lighting_rgb(const slayer3d_sector *sector, float out_rgb[3])
+{
+    if (out_rgb == NULL)
+    {
+        return;
+    }
+    out_rgb[0] = 1.0f;
+    out_rgb[1] = 1.0f;
+    out_rgb[2] = 1.0f;
+    if (sector == NULL || !sector->has_lighting)
+    {
+        return;
+    }
+
+    const float level = SDL_clamp(sector->lighting_level, 0.0f, 255.0f) / 255.0f;
+    const float influence = clamp01(sector->lighting_color[3]);
+    for (int i = 0; i < 3; ++i)
+    {
+        const float tint = 1.0f + (clamp01(sector->lighting_color[i]) - 1.0f) * influence;
+        out_rgb[i] = level * tint;
+    }
+}
+
+static void sector_modulate_rgba(const slayer3d_sector *sector, const float *rgba, float out_rgba[4])
+{
+    float lighting[3];
+    if (out_rgba == NULL)
+    {
+        return;
+    }
+    if (rgba == NULL)
+    {
+        out_rgba[0] = 1.0f;
+        out_rgba[1] = 1.0f;
+        out_rgba[2] = 1.0f;
+        out_rgba[3] = 1.0f;
+    }
+    else
+    {
+        SDL_memcpy(out_rgba, rgba, sizeof(float) * 4U);
+    }
+    if (sector == NULL || !sector->has_lighting)
+    {
+        return;
+    }
+    sector_lighting_rgb(sector, lighting);
+    out_rgba[0] *= lighting[0];
+    out_rgba[1] *= lighting[1];
+    out_rgba[2] *= lighting[2];
+}
+
 static bool lm_build_texture(slayer3d_level *out)
 {
     slayer3d_image image;
@@ -621,8 +689,8 @@ static bool lm_build_texture(slayer3d_level *out)
     return true;
 }
 
-static bool lm_bake_lightmap(const lm_surface_list *list, const slayer3d_level_light *lights, int light_count,
-                             slayer3d_level *out)
+static bool lm_bake_lightmap(const lm_surface_list *list, const slayer3d_sector *sectors,
+                             const slayer3d_level_light *lights, int light_count, slayer3d_level *out)
 {
     const int atlas_w = out->lightmap_width;
     const int atlas_h = out->lightmap_height;
@@ -653,13 +721,24 @@ static bool lm_bake_lightmap(const lm_surface_list *list, const slayer3d_level_l
         {
             for (int x = 0; x < surface->atlas_w; ++x)
             {
+                float sector_light[3] = {0.2f, 0.2f, 0.2f};
+                const slayer3d_sector *sector =
+                    sectors != NULL && surface->sector_index >= 0 ? &sectors[surface->sector_index] : NULL;
                 float s = surface->atlas_w > 1 ? (float)x / (float)(surface->atlas_w - 1) : 0.0f;
                 float t = surface->atlas_h > 1 ? (float)y / (float)(surface->atlas_h - 1) : 0.0f;
                 float wx, wy, wz;
-                float lr = 51.0f;
-                float lg = 51.0f;
-                float lb = 51.0f;
+                float lr;
+                float lg;
+                float lb;
                 int atlas_index;
+
+                if (sector != NULL && sector->has_lighting)
+                {
+                    sector_lighting_rgb(sector, sector_light);
+                }
+                lr = sector_light[0] * 255.0f;
+                lg = sector_light[1] * 255.0f;
+                lb = sector_light[2] * 255.0f;
 
                 if (surface->type == LM_SURFACE_WALL)
                 {
@@ -786,13 +865,16 @@ static bool add_floor_ceil(macc *a, const slayer3d_sector *s, bool floor_surface
     return true;
 }
 
-static bool add_wall_and_lightmap(macc *wall_acc, lm_surface_list *surf_list, int wall_acc_index, float x0, float z0,
-                                  float x1, float z1, float bot0, float top0, float bot1, float top1,
-                                  const slayer3d_level_material *material)
+static bool add_wall_and_lightmap(macc *wall_acc, lm_surface_list *surf_list, int wall_acc_index, int sector_index,
+                                  const slayer3d_sector *sector, float x0, float z0, float x1, float z1, float bot0,
+                                  float top0, float bot1, float top1, const slayer3d_level_material *material)
 {
+    float rgba[4];
     int vb = wall_acc->vc;
-    return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, material->albedo, material->tex_scale) &&
-           lm_record_wall_surface(surf_list, wall_acc_index, wall_acc, vb, x0, z0, x1, z1, bot0, top0, bot1, top1);
+    sector_modulate_rgba(sector, material->albedo, rgba);
+    return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, rgba, material->tex_scale) &&
+           lm_record_wall_surface(surf_list, wall_acc_index, sector_index, wall_acc, vb, x0, z0, x1, z1, bot0, top0,
+                                  bot1, top1);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1035,9 +1117,11 @@ static bool mark_dirty_sector_neighbors(const edge_info *edges, int edge_count, 
 }
 
 static bool add_wall_runtime(macc *wall_acc, float x0, float z0, float x1, float z1, float bot0, float top0, float bot1,
-                             float top1, const slayer3d_level_material *material)
+                             float top1, const slayer3d_sector *sector, const slayer3d_level_material *material)
 {
-    return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, material->albedo, material->tex_scale);
+    float rgba[4];
+    sector_modulate_rgba(sector, material->albedo, rgba);
+    return add_wall(wall_acc, x0, z0, x1, z1, bot0, top0, bot1, top1, rgba, material->tex_scale);
 }
 
 static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_count, const edge_info *edges,
@@ -1070,7 +1154,9 @@ static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_c
         if (fi >= 0)
         {
             macc *floor_acc = &accs[s * material_count + fi];
-            if (!add_floor_ceil(floor_acc, sec, true, materials[fi].albedo, materials[fi].tex_scale))
+            float rgba[4];
+            sector_modulate_rgba(sec, materials[fi].albedo, rgba);
+            if (!add_floor_ceil(floor_acc, sec, true, rgba, materials[fi].tex_scale))
             {
                 return false;
             }
@@ -1078,7 +1164,9 @@ static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_c
         if (ci >= 0)
         {
             macc *ceil_acc = &accs[s * material_count + ci];
-            if (!add_floor_ceil(ceil_acc, sec, false, materials[ci].albedo, materials[ci].tex_scale))
+            float rgba[4];
+            sector_modulate_rgba(sec, materials[ci].albedo, rgba);
+            if (!add_floor_ceil(ceil_acc, sec, false, rgba, materials[ci].tex_scale))
             {
                 return false;
             }
@@ -1141,7 +1229,7 @@ static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_c
             {
                 if (!add_wall_runtime(wall_acc, ax, az, bx, bz, slayer3d_sector_floor_at(sec, ax, az),
                                       slayer3d_sector_ceil_at(sec, ax, az), slayer3d_sector_floor_at(sec, bx, bz),
-                                      slayer3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
+                                      slayer3d_sector_ceil_at(sec, bx, bz), sec, &materials[wi]))
                 {
                     return false;
                 }
@@ -1181,7 +1269,7 @@ static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_c
                         if (!add_wall_runtime(wall_acc, wx0, wz0, wx1, wz1, slayer3d_sector_floor_at(sec, wx0, wz0),
                                               slayer3d_sector_ceil_at(sec, wx0, wz0),
                                               slayer3d_sector_floor_at(sec, wx1, wz1),
-                                              slayer3d_sector_ceil_at(sec, wx1, wz1), &materials[wi]))
+                                              slayer3d_sector_ceil_at(sec, wx1, wz1), sec, &materials[wi]))
                         {
                             return false;
                         }
@@ -1203,7 +1291,7 @@ static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_c
                     if (sec_floor0 < other_floor0 - 0.001f || sec_floor1 < other_floor1 - 0.001f)
                     {
                         if (!add_wall_runtime(wall_acc, ox0, oz0, ox1, oz1, sec_floor0, other_floor0, sec_floor1,
-                                              other_floor1, &materials[wi]))
+                                              other_floor1, sec, &materials[wi]))
                         {
                             return false;
                         }
@@ -1211,7 +1299,7 @@ static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_c
                     if (sec_ceil0 > other_ceil0 + 0.001f || sec_ceil1 > other_ceil1 + 0.001f)
                     {
                         if (!add_wall_runtime(wall_acc, ox0, oz0, ox1, oz1, other_ceil0, sec_ceil0, other_ceil1,
-                                              sec_ceil1, &materials[wi]))
+                                              sec_ceil1, sec, &materials[wi]))
                         {
                             return false;
                         }
@@ -1223,7 +1311,7 @@ static bool build_dirty_sector_accs(const slayer3d_sector *sectors, int sector_c
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                     if (!add_wall_runtime(wall_acc, wx0, wz0, bx, bz, slayer3d_sector_floor_at(sec, wx0, wz0),
                                           slayer3d_sector_ceil_at(sec, wx0, wz0), slayer3d_sector_floor_at(sec, bx, bz),
-                                          slayer3d_sector_ceil_at(sec, bx, bz), &materials[wi]))
+                                          slayer3d_sector_ceil_at(sec, bx, bz), sec, &materials[wi]))
                     {
                         return false;
                     }
@@ -1389,8 +1477,10 @@ bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, cons
             int floor_acc_index = s * material_count + fi;
             macc *floor_acc = &accs[floor_acc_index];
             int vb = floor_acc->vc;
-            if (!add_floor_ceil(floor_acc, sec, true, materials[fi].albedo, materials[fi].tex_scale) ||
-                !lm_record_floor_ceil_surface(&surf_list, floor_acc_index, floor_acc, vb, sec, true))
+            float rgba[4];
+            sector_modulate_rgba(sec, materials[fi].albedo, rgba);
+            if (!add_floor_ceil(floor_acc, sec, true, rgba, materials[fi].tex_scale) ||
+                !lm_record_floor_ceil_surface(&surf_list, floor_acc_index, s, floor_acc, vb, sec, true))
             {
                 goto fail;
             }
@@ -1400,8 +1490,10 @@ bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, cons
             int ceil_acc_index = s * material_count + ci;
             macc *ceil_acc = &accs[ceil_acc_index];
             int vb = ceil_acc->vc;
-            if (!add_floor_ceil(ceil_acc, sec, false, materials[ci].albedo, materials[ci].tex_scale) ||
-                !lm_record_floor_ceil_surface(&surf_list, ceil_acc_index, ceil_acc, vb, sec, false))
+            float rgba[4];
+            sector_modulate_rgba(sec, materials[ci].albedo, rgba);
+            if (!add_floor_ceil(ceil_acc, sec, false, rgba, materials[ci].tex_scale) ||
+                !lm_record_floor_ceil_surface(&surf_list, ceil_acc_index, s, ceil_acc, vb, sec, false))
             {
                 goto fail;
             }
@@ -1487,7 +1579,7 @@ bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, cons
 
             if (novl == 0)
             {
-                if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ax, az, bx, bz,
+                if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, s, sec, ax, az, bx, bz,
                                            slayer3d_sector_floor_at(sec, ax, az), slayer3d_sector_ceil_at(sec, ax, az),
                                            slayer3d_sector_floor_at(sec, bx, bz), slayer3d_sector_ceil_at(sec, bx, bz),
                                            &materials[wi]))
@@ -1513,7 +1605,7 @@ bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, cons
                     {
                         float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
                         float wx1 = ax + (bx - ax) * overlaps[oi].t0, wz1 = az + (bz - az) * overlaps[oi].t0;
-                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, wx0, wz0, wx1, wz1,
+                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, s, sec, wx0, wz0, wx1, wz1,
                                                    slayer3d_sector_floor_at(sec, wx0, wz0),
                                                    slayer3d_sector_ceil_at(sec, wx0, wz0),
                                                    slayer3d_sector_floor_at(sec, wx1, wz1),
@@ -1535,15 +1627,15 @@ bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, cons
                     float other_ceil1 = slayer3d_sector_ceil_at(other, ox1, oz1);
                     if (sec_floor0 < other_floor0 - 0.001f || sec_floor1 < other_floor1 - 0.001f)
                     {
-                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ox0, oz0, ox1, oz1, sec_floor0,
-                                                   other_floor0, sec_floor1, other_floor1, &materials[wi]))
+                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, s, sec, ox0, oz0, ox1, oz1,
+                                                   sec_floor0, other_floor0, sec_floor1, other_floor1, &materials[wi]))
                         {
                             goto fail;
                         }
                     }
                     if (sec_ceil0 > other_ceil0 + 0.001f || sec_ceil1 > other_ceil1 + 0.001f)
                     {
-                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, ox0, oz0, ox1, oz1,
+                        if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, s, sec, ox0, oz0, ox1, oz1,
                                                    other_ceil0, sec_ceil0, other_ceil1, sec_ceil1, &materials[wi]))
                         {
                             goto fail;
@@ -1554,7 +1646,7 @@ bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, cons
                 if (cursor < 1.0f - 0.001f)
                 {
                     float wx0 = ax + (bx - ax) * cursor, wz0 = az + (bz - az) * cursor;
-                    if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, wx0, wz0, bx, bz,
+                    if (!add_wall_and_lightmap(wall_acc, &surf_list, wall_acc_index, s, sec, wx0, wz0, bx, bz,
                                                slayer3d_sector_floor_at(sec, wx0, wz0),
                                                slayer3d_sector_ceil_at(sec, wx0, wz0),
                                                slayer3d_sector_floor_at(sec, bx, bz),
@@ -1631,7 +1723,7 @@ bool slayer3d_build_level(const slayer3d_sector *sectors, int sector_count, cons
                 lm_assign_surface_uvs(&accs[surface->acc_index], surface, atlas_w, atlas_h);
             }
 
-            if (!lm_bake_lightmap(&surf_list, lights, light_count, out) || !lm_build_texture(out))
+            if (!lm_bake_lightmap(&surf_list, sectors, lights, light_count, out) || !lm_build_texture(out))
             {
                 goto fail;
             }

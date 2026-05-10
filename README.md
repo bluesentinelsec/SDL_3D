@@ -38,7 +38,8 @@ targets. The generic `slayer3d_runner` can launch games from:
 The demo games are compatibility proofs for engine capabilities. New demo work
 should strengthen reusable systems instead of adding one-off host code.
 The repository also includes data-only dojos for focused primitive and mechanic
-tuning, including FPS mechanics and procedural mesh primitive showcases.
+tuning, including FPS mechanics, procedural mesh primitives, and sector-local
+lighting showcases.
 
 Default authored display and world conventions are intentionally simple:
 Slayer 3D games target a 1280x720 logical canvas that is letterboxed to preserve

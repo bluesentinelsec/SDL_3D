@@ -192,6 +192,11 @@ simple lighting, and places authored actors far enough apart that each
 procedural mesh primitive can be inspected from the same FPS runtime path future
 games will use.
 
+`demos/lighting_dojo` is the reference shape for sector-local lighting
+showcases. It uses connected sector rooms and hallways with varied brightness
+and tint values, plus lit primitives and dynamic lights, so lighting behavior
+can be inspected from the same generic runner path as gameplay.
+
 Use optional `editor` metadata beside the authored object it describes. This
 keeps future editor palettes and prefab browsers grounded in the same JSON that
 runtime validation sees. Metadata should describe categories, previews, bounds,

@@ -88,6 +88,7 @@ The root `render` object configures frame-level presentation defaults:
     "lighting": true,
     "lighting_key": "render_lighting_enabled",
     "bloom": true,
+    "bloom_key": "render_bloom_enabled",
     "ssao": true,
     "profile": "modern",
     "profile_key": "render_profile"
@@ -483,7 +484,24 @@ sector metadata, and baked lights are authored in JSON and loaded into runtime
           "ceil_y": 4.0,
           "floor_material": "rock_floor",
           "ceil_material": "wall_metal",
-          "wall_material": "wall_metal"
+          "wall_material": "wall_metal",
+          "lighting": {
+            "level": 176,
+            "color": [1.0, 0.72, 0.45, 0.65]
+          }
+        },
+        {
+          "name": "blue_hallway",
+          "points": [[10, 2], [18, 2], [18, 6], [10, 6]],
+          "floor_y": 0.0,
+          "ceil_y": 4.0,
+          "floor_material": "rock_floor",
+          "ceil_material": "wall_metal",
+          "wall_material": "wall_metal",
+          "lighting": {
+            "level": 96,
+            "color": [0.25, 0.45, 1.0, 1.0]
+          }
         },
         {
           "name": "hazard_basin",
@@ -526,14 +544,51 @@ Validation requires:
 - valid material references
 - optional `floor_normal`, `ceil_normal`, and `push_velocity` as vec3 arrays
 - non-negative `ambient_sound_id` and `damage_per_second`
+- optional `lighting` as an object with `level` integer in `[0, 255]` and
+  optional `color` vec3/vec4 values in `[0, 1]`
 - optional lights with `position` vec3, optional `color` vec3, non-negative
   `intensity`, and positive `range`
 
+Sector `lighting` is a Doom/Build-style local brightness and tint term. Missing
+`lighting` preserves the legacy sector look. When present, `level` defaults to
+`255` and `color` defaults to white. `color[3]`, when supplied, is tint
+influence rather than transparency: `0` applies brightness only, `1` fully
+applies the RGB tint, and values between them blend between white and the
+authored RGB. Sector-local lighting is baked cheaply into sector floor, ceiling,
+wall, step, and portal surfaces. Lit actor render components inside the active
+scene's sector levels also receive the same sector-local modulation for sprites,
+3D models, and mesh primitives. Components with `"lighting": false` are left
+unchanged. Batched pickup layers and particles currently keep their authored
+colors; use per-actor primitives when per-sector tint correctness matters for
+those effects. Sector-local lighting composes with authored baked/static lights
+and dynamic scene lights; it does not affect UI.
+
 At load time Slayer 3D builds three runtime variants per sector level:
 
-- `lightmapped`: baked lights plus lightmap atlas data
-- `vertex_baked`: baked vertex lighting without a lightmap atlas
-- `unlit`: raw material color/texture without baked lights
+- `lightmapped`: sector-local lighting plus baked static lights in a lightmap
+  atlas
+- `vertex_baked`: sector-local lighting plus baked static lights in vertex
+  colors, without a lightmap atlas
+- `unlit`: material color/texture modulated by sector-local lighting, without
+  baked static lights
+
+Tools and data logic can update a sector at runtime with `sector_lighting.set`:
+
+```json
+{
+  "type": "sector_lighting.set",
+  "sector_level": "sector.level_1",
+  "sector": "red_hallway",
+  "level": 128,
+  "color": [1.0, 0.1, 0.05, 1.0]
+}
+```
+
+Use either `sector` or `sector_index`. Runtime updates rebuild the affected
+level's render variants atomically, so they are suitable for editor preview and
+occasional scripted changes. Avoid changing many large sectors every frame;
+prefer authored sector values plus dynamic lights for high-frequency lighting
+effects.
 
 Scenes render sector levels by declaring instances under `world.sector_levels`:
 
@@ -558,6 +613,8 @@ Scenes render sector levels by declaring instances under `world.sector_levels`:
         "variant": "lightmapped",
         "variant_key": "render_sector_variant",
         "position": [0.0, 0.0, 0.0],
+        "sector_lighting": true,
+        "sector_lighting_key": "render_sector_lighting",
         "portal_culling": true,
         "portal_culling_key": "render_portal_culling"
       }
@@ -574,11 +631,15 @@ world primitives. Use `asset://` image paths for pack-file and embedded builds.
 `level` references a top-level sector level. `variant` defaults to
 `lightmapped` and may be `lightmapped`, `vertex_baked`, or `unlit`.
 `position` defaults to the origin and translates the level as a whole.
-`portal_culling` defaults to `true`; when enabled, generic presentation
-computes visibility from the active camera before drawing the level.
-`variant_key` and `portal_culling_key` are optional scene-state keys. When
-present, they override `variant` and `portal_culling` at runtime. This supports
-data-authored debug/profile controls without custom host-side input code.
+`sector_lighting` defaults to `true`; when disabled, the instance uses matching
+runtime variants built without sector-local lighting and actor primitives in the
+instance no longer receive sector-local color modulation. `portal_culling`
+defaults to `true`; when enabled, generic presentation computes visibility from
+the active camera before drawing the level. `variant_key`,
+`sector_lighting_key`, and `portal_culling_key` are optional scene-state keys.
+When present, they override `variant`, `sector_lighting`, and `portal_culling`
+at runtime. This supports data-authored debug/profile controls without custom
+host-side input code.
 
 Renderer, controller, and editor phases should consume runtime descriptors
 instead of parsing JSON directly. `world.kind` remains a high-level statement
@@ -1396,7 +1457,10 @@ Reusable components include:
 - `motion.oscillate` and `motion.spin`: simple authored movement effects.
 - `light.point`, `light.spot`, and `light.directional`: actor-attached light
   components. They work on static actors and active pooled actors. Component
-  lights inherit the actor transform and may use an `offset`.
+  lights inherit the actor transform and may use an `offset`. `enabled` defaults
+  to `true`; `enabled_key` reads a scene-state boolean at draw time so debug
+  menus and data-authored profile controls can disable a light group without
+  removing actors.
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
@@ -1412,8 +1476,11 @@ Reusable components include:
   `tube_segment`. `billboard_plane` is a flat 3D placeholder plane; use
   `render.sprite` when you need an actual texture-backed camera-facing
   billboard. These descriptors use the same transform, `color`, `texture`,
-  `lighting`, and `emissive` fields as other render primitives where
-  applicable, and add `draw_mode`: `solid` (default), `wire`, or `solid_wire`.
+  `lighting`, `lighting_key`, and `emissive` fields as other render primitives
+  where applicable, and add `draw_mode`: `solid` (default), `wire`, or
+  `solid_wire`. `lighting_key` reads a scene-state boolean and is useful for
+  isolating whether actor primitives, sector-local lighting, or dynamic lights
+  are driving a scene.
   Dimension fields include `size`, `radius`, `height`, `radius_top`,
   `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
   `segments`/`slices`, `rings`, and `tube_segments`. This is the stable

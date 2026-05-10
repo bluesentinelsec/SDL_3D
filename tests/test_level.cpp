@@ -139,6 +139,68 @@ TEST(SLAYER3DSectorMetadata, DamageRateIsClampedAndScalesByDelta)
     EXPECT_FLOAT_EQ(slayer3d_sector_damage_for_delta(nullptr, 1.0f), 0.0f);
 }
 
+TEST(SLAYER3DLevelBuilder, SectorLightingTintsGeneratedSurfaceColors)
+{
+    slayer3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                           MakeLevelMaterial("wall.png")};
+    slayer3d_sector sector = MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f);
+    slayer3d_level level{};
+
+    sector.has_lighting = true;
+    sector.lighting_level = 128.0f;
+    sector.lighting_color[0] = 1.0f;
+    sector.lighting_color[1] = 0.0f;
+    sector.lighting_color[2] = 0.0f;
+    sector.lighting_color[3] = 1.0f;
+
+    ASSERT_TRUE(slayer3d_build_level(&sector, 1, materials, 3, nullptr, 0, &level)) << SDL_GetError();
+    const slayer3d_mesh *floor = FindSectorMaterialMesh(level, 0, sector.floor_material);
+    ASSERT_NE(floor, nullptr);
+    ASSERT_NE(floor->colors, nullptr);
+    ASSERT_GE(floor->vertex_count, 1);
+    EXPECT_NEAR(floor->colors[0], 128.0f / 255.0f, 0.001f);
+    EXPECT_NEAR(floor->colors[1], 0.0f, 0.001f);
+    EXPECT_NEAR(floor->colors[2], 0.0f, 0.001f);
+    EXPECT_NEAR(floor->colors[3], 1.0f, 0.001f);
+
+    slayer3d_free_level(&level);
+}
+
+TEST(SLAYER3DLevelBuilder, SectorLightingChangesLightmapBase)
+{
+    slayer3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
+                                           MakeLevelMaterial("wall.png")};
+    slayer3d_sector sector = MakeSquareSector(0.0f, 0.0f, 4.0f, 4.0f);
+    slayer3d_level_light light{};
+    slayer3d_level level{};
+
+    sector.has_lighting = true;
+    sector.lighting_level = 64.0f;
+    sector.lighting_color[0] = 0.0f;
+    sector.lighting_color[1] = 0.0f;
+    sector.lighting_color[2] = 1.0f;
+    sector.lighting_color[3] = 1.0f;
+
+    light.position[0] = 1000.0f;
+    light.position[1] = 1000.0f;
+    light.position[2] = 1000.0f;
+    light.color[0] = 1.0f;
+    light.color[1] = 1.0f;
+    light.color[2] = 1.0f;
+    light.intensity = 1.0f;
+    light.range = 1.0f;
+
+    ASSERT_TRUE(slayer3d_build_level(&sector, 1, materials, 3, &light, 1, &level)) << SDL_GetError();
+    ASSERT_NE(level.lightmap_pixels, nullptr);
+    ASSERT_GT(level.lightmap_width, 0);
+    ASSERT_GT(level.lightmap_height, 0);
+    EXPECT_EQ(level.lightmap_pixels[0], 0);
+    EXPECT_EQ(level.lightmap_pixels[1], 0);
+    EXPECT_EQ(level.lightmap_pixels[2], 64);
+
+    slayer3d_free_level(&level);
+}
+
 TEST(SLAYER3DLevelBuilder, BuildsIndependentSectorMaterialChunks)
 {
     const slayer3d_level_material materials[] = {MakeLevelMaterial("floor.png"), MakeLevelMaterial("ceil.png"),
