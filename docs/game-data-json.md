@@ -602,6 +602,60 @@ If no door is in range and in front of the actor, the interaction is treated as
 a successful no-op so use-button bindings can be authored without extra guard
 conditions.
 
+Generic actor interaction uses an `interactable` component and the
+`interaction.use` action. Prefer this for switches, levers, consoles, pickup
+stations, keyed locks, and actor-driven world triggers. Sector doors can still
+use `sector_door.*` actions inside the interactable's action list:
+
+```json
+{
+  "name": "entity.security_switch",
+  "tags": ["usable"],
+  "transform": { "position": [4.0, 1.0, 8.0] },
+  "properties": {
+    "interaction_cooldown": { "type": "float", "value": 0.0 }
+  },
+  "components": [
+    {
+      "type": "interactable",
+      "prompt_key": "prompt.use.security_switch",
+      "range": 2.0,
+      "min_dot": 0.2,
+      "cooldown_property": "interaction_cooldown",
+      "cooldown": 0.25,
+      "requires": { "property": "blue_key", "amount": 1, "consume": false },
+      "actions": [
+        { "type": "sector_door.open", "target": "door.security" }
+      ],
+      "locked_actions": [
+        { "type": "scene_state.set", "key": "prompt", "value": "Needs blue key" }
+      ],
+      "cooldown_actions": [
+        { "type": "scene_state.set", "key": "prompt", "value": "Wait..." }
+      ]
+    }
+  ]
+}
+```
+
+```json
+{ "type": "interaction.use", "actor": "entity.player", "target_tag": "usable" }
+```
+
+`interaction.use` finds the nearest active actor with an `interactable`
+component in range and in front of the source actor. Yaw defaults to the
+source actor's `yaw` property; override it with `yaw_property`. `range` and
+`min_dot` on the action override component defaults for that use attempt. If no
+target is found, `miss_actions` may run; otherwise the action is a successful
+no-op.
+
+Interaction payloads include `actor_name`, `source_actor_name`,
+`interactable_actor_name`, `target_actor_name`, `prompt_key`,
+`interaction_status`, `locked`, and `distance`. Requirements read numeric
+properties from the source actor. Use `consume: true` for one-shot keys,
+currency, or charges. `cooldown_property` is stored on the interactable and is
+decremented by the component while the actor is active.
+
 `sector_platforms` move authored sector floors over time and rebuild sector
 render/collision variants when the movement exceeds `rebuild_min_delta`. Use
 them for elevators, lifts, moving bridges, and other deterministic sector
