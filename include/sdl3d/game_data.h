@@ -408,7 +408,43 @@ extern "C"
         SDL3D_GAME_DATA_RENDER_SPRITE = 4,
         /** @brief 3D model primitive backed by an authored model asset. */
         SDL3D_GAME_DATA_RENDER_MODEL = 5,
+        /** @brief Procedural mesh primitive selected by @ref sdl3d_game_data_mesh_primitive_kind. */
+        SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE = 6,
     } sdl3d_game_data_render_primitive_type;
+
+    /** @brief Procedural mesh shape selected by a `render.mesh_primitive` component. */
+    typedef enum sdl3d_game_data_mesh_primitive_kind
+    {
+        /** @brief Invalid or unknown procedural mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID = 0,
+        /** @brief Box/cube mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE = 1,
+        /** @brief Sphere mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_SPHERE = 2,
+        /** @brief Capsule mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE = 3,
+        /** @brief Cylinder mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER = 4,
+        /** @brief Cone mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE = 5,
+        /** @brief Torus mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS = 6,
+        /** @brief Square-pyramid mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID = 7,
+        /** @brief Wedge/ramp mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE = 8,
+    } sdl3d_game_data_mesh_primitive_kind;
+
+    /** @brief Draw mode selected by authored procedural mesh primitives. */
+    typedef enum sdl3d_game_data_render_draw_mode
+    {
+        /** @brief Draw a solid shaded primitive. */
+        SDL3D_GAME_DATA_RENDER_DRAW_SOLID = 0,
+        /** @brief Draw only primitive wire edges. */
+        SDL3D_GAME_DATA_RENDER_DRAW_WIRE = 1,
+        /** @brief Draw a solid shaded primitive with wire edges overlaid. */
+        SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE = 2,
+    } sdl3d_game_data_render_draw_mode;
 
     /**
      * @brief Read-only descriptor for an authored render primitive component.
@@ -423,6 +459,10 @@ extern "C"
         const char *entity_name;
         /** @brief Primitive type declared by the component. */
         sdl3d_game_data_render_primitive_type type;
+        /** @brief Procedural mesh kind for SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE. */
+        sdl3d_game_data_mesh_primitive_kind mesh_primitive;
+        /** @brief Draw mode for SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE. */
+        sdl3d_game_data_render_draw_mode draw_mode;
         /** @brief Current world-space position from the owning actor plus optional component offset. */
         sdl3d_vec3 position;
         /** @brief Optional world-space instance positions for batched primitives. */
@@ -441,8 +481,22 @@ extern "C"
         int slices;
         /** @brief Sphere latitudinal rings for SDL3D_GAME_DATA_RENDER_SPHERE. */
         int rings;
+        /** @brief Mesh primitive height for capsule, cylinder, cone, pyramid, and wedge primitives. */
+        float height;
+        /** @brief Mesh primitive top radius for cylinder/cone-style primitives. */
+        float radius_top;
+        /** @brief Mesh primitive bottom radius for cylinder/cone-style primitives. */
+        float radius_bottom;
+        /** @brief Torus major radius for SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS. */
+        float major_radius;
+        /** @brief Torus minor/tube radius for SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS. */
+        float minor_radius;
+        /** @brief Secondary tessellation count, such as torus tube segments. */
+        int tube_segments;
         /** @brief Authored tint color. */
         sdl3d_color color;
+        /** @brief Optional wire overlay color for mesh primitive wire draw modes. */
+        sdl3d_color wire_color;
         /** @brief Optional image asset id used as an albedo texture by primitives that support textures. */
         const char *texture_image;
         /** @brief Optional sprite asset id for SDL3D_GAME_DATA_RENDER_SPRITE. */

@@ -2817,16 +2817,16 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller", "collision.aabb",     "collision.circle",
-        "combat.health",      "control.axis_1d",    "controller.fps_sector",
-        "lifecycle.ttl",      "light.directional",  "light.point",
-        "light.spot",         "motion.grid_agent",  "motion.oscillate",
-        "motion.patrol",      "motion.scroll_wrap", "motion.sector_velocity_3d",
-        "motion.spin",        "motion.velocity_2d", "motion.velocity_3d",
-        "interactable",       "particles.emitter",  "pickup.respawn",
-        "property.decay",     "render.cube",        "render.model",
-        "render.sphere",      "render.sprite",      "status_effect.timer",
-        "weapon.projectile",  "weapon.state",
+        "adapter.controller",  "collision.aabb",     "collision.circle",
+        "combat.health",       "control.axis_1d",    "controller.fps_sector",
+        "lifecycle.ttl",       "light.directional",  "light.point",
+        "light.spot",          "motion.grid_agent",  "motion.oscillate",
+        "motion.patrol",       "motion.scroll_wrap", "motion.sector_velocity_3d",
+        "motion.spin",         "motion.velocity_2d", "motion.velocity_3d",
+        "interactable",        "particles.emitter",  "pickup.respawn",
+        "property.decay",      "render.cube",        "render.mesh_primitive",
+        "render.model",        "render.sphere",      "render.sprite",
+        "status_effect.timer", "weapon.projectile",  "weapon.state",
     };
 
     if (type == NULL)
@@ -2837,6 +2837,80 @@ static bool is_supported_component_type(const char *type)
             return true;
     }
     return false;
+}
+
+static bool render_mesh_primitive_kind_valid(const char *primitive)
+{
+    const char *known[] = {"cube", "sphere", "capsule", "cylinder", "cone", "torus", "pyramid", "wedge"};
+    for (size_t i = 0; primitive != NULL && i < SDL_arraysize(known); ++i)
+    {
+        if (SDL_strcmp(primitive, known[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool render_draw_mode_valid(const char *draw_mode)
+{
+    return draw_mode != NULL && (SDL_strcmp(draw_mode, "solid") == 0 || SDL_strcmp(draw_mode, "wire") == 0 ||
+                                 SDL_strcmp(draw_mode, "solid_wire") == 0);
+}
+
+static bool validate_render_mesh_primitive_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                                     const validation_names *names)
+{
+    const char *primitive = json_string(component, "primitive");
+    if (!render_mesh_primitive_kind_valid(primitive))
+        return validation_error(ctx, path, "render.mesh_primitive primitive is unknown");
+    yyjson_val *draw_mode = obj_get(component, "draw_mode");
+    if (draw_mode != NULL && (!yyjson_is_str(draw_mode) || !render_draw_mode_valid(yyjson_get_str(draw_mode))))
+        return validation_error(ctx, path, "render.mesh_primitive draw_mode is unknown");
+    yyjson_val *texture_value = obj_get(component, "texture");
+    if (texture_value != NULL && !is_non_empty_string(component, "texture"))
+        return validation_error(ctx, path, "render.mesh_primitive texture must be a non-empty image asset id");
+    const char *texture = json_string(component, "texture");
+    if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, path))
+        return false;
+    yyjson_val *wire_color = obj_get(component, "wire_color");
+    if (wire_color != NULL && !is_vec_array(wire_color, 3))
+        return validation_error(ctx, path, "render.mesh_primitive wire_color must be a vec3 or vec4");
+    yyjson_val *size = obj_get(component, "size");
+    if (size != NULL && !is_vec_array(size, 3))
+        return validation_error(ctx, path, "render.mesh_primitive size must be a vec3");
+    yyjson_val *size_property = obj_get(component, "size_property");
+    if (size_property != NULL && !is_non_empty_string(component, "size_property"))
+        return validation_error(ctx, path, "render.mesh_primitive size_property must be non-empty");
+    const char *positive_numbers[] = {"radius", "height", "major_radius", "minor_radius"};
+    for (size_t i = 0; i < SDL_arraysize(positive_numbers); ++i)
+    {
+        yyjson_val *value = obj_get(component, positive_numbers[i]);
+        if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0))
+            return validation_error(ctx, path, "render.mesh_primitive dimensions must be positive numbers");
+    }
+    const char *non_negative_numbers[] = {"radius_top", "radius_bottom"};
+    for (size_t i = 0; i < SDL_arraysize(non_negative_numbers); ++i)
+    {
+        yyjson_val *value = obj_get(component, non_negative_numbers[i]);
+        if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+            return validation_error(ctx, path, "render.mesh_primitive radii must be non-negative numbers");
+    }
+    const char *positive_ints[] = {"segments", "slices", "rings", "tube_segments"};
+    for (size_t i = 0; i < SDL_arraysize(positive_ints); ++i)
+    {
+        yyjson_val *value = obj_get(component, positive_ints[i]);
+        if (value != NULL && (!yyjson_is_int(value) || yyjson_get_int(value) < 3))
+            return validation_error(ctx, path, "render.mesh_primitive tessellation values must be integers >= 3");
+    }
+    yyjson_val *rotation_axis = obj_get(component, "rotation_axis");
+    if (rotation_axis != NULL && !is_vec_array(rotation_axis, 3))
+        return validation_error(ctx, path, "render.mesh_primitive rotation_axis must be a vec3");
+    yyjson_val *rotation_angle = obj_get(component, "rotation_angle");
+    if (rotation_angle != NULL && !yyjson_is_num(rotation_angle))
+        return validation_error(ctx, path, "render.mesh_primitive rotation_angle must be a number");
+    yyjson_val *rotation_property = obj_get(component, "rotation_property");
+    if (rotation_property != NULL && !is_non_empty_string(component, "rotation_property"))
+        return validation_error(ctx, path, "render.mesh_primitive rotation_property must be non-empty");
+    return true;
 }
 
 static bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path,
@@ -4994,12 +5068,14 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     return validation_error(ctx, path, "light component color must be a vec3");
             }
             else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
-                     SDL_strcmp(type, "render.sprite") == 0 || SDL_strcmp(type, "render.model") == 0)
+                     SDL_strcmp(type, "render.mesh_primitive") == 0 || SDL_strcmp(type, "render.sprite") == 0 ||
+                     SDL_strcmp(type, "render.model") == 0)
             {
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
                     return validation_error(ctx, path, "render primitive lighting must be a boolean");
-                if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0)
+                if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
+                    SDL_strcmp(type, "render.mesh_primitive") == 0)
                 {
                     yyjson_val *texture_value = obj_get(component, "texture");
                     if (texture_value != NULL && !is_non_empty_string(component, "texture"))
@@ -5017,6 +5093,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     yyjson_val *size_property = obj_get(component, "size_property");
                     if (size_property != NULL && !is_non_empty_string(component, "size_property"))
                         return validation_error(ctx, path, "render.cube size_property must be non-empty");
+                }
+                if (SDL_strcmp(type, "render.mesh_primitive") == 0)
+                {
+                    if (!validate_render_mesh_primitive_component(ctx, component, path, names))
+                        return false;
                 }
                 if (SDL_strcmp(type, "render.sphere") == 0)
                 {
@@ -5451,6 +5532,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                                             "render.cube texture must be a non-empty image asset id");
                 const char *texture = json_string(component, "texture");
                 if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, component_path))
+                    return false;
+            }
+            else if (SDL_strcmp(type, "render.mesh_primitive") == 0)
+            {
+                if (!validate_render_mesh_primitive_component(ctx, component, component_path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "render.sprite") == 0)

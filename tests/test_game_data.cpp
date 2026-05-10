@@ -8905,6 +8905,221 @@ TEST(GameDataRuntime, ActivePooledActorsRenderAndEmitParticles)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
+{
+    const std::filesystem::path dir = unique_test_dir("mesh_primitives");
+    write_text(dir / "mesh_primitives.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Mesh Primitives", "id": "test.mesh_primitives", "version": "0.1.0" },
+  "world": { "name": "world.mesh_primitives", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.mesh.cube",
+      "active": true,
+      "transform": { "position": [1.0, 0.0, 0.0] },
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "cube", "size": [1.0, 2.0, 3.0], "draw_mode": "solid_wire", "wire_color": [255, 0, 0, 255] }
+      ]
+    },
+    {
+      "name": "entity.mesh.sphere",
+      "active": true,
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "sphere", "radius": 0.25, "segments": 12, "rings": 6 }
+      ]
+    },
+    {
+      "name": "entity.mesh.capsule",
+      "active": true,
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "capsule", "radius": 0.3, "height": 1.8 }
+      ]
+    },
+    {
+      "name": "entity.mesh.cylinder",
+      "active": true,
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "cylinder", "radius_top": 0.4, "radius_bottom": 0.6, "height": 1.5, "draw_mode": "wire" }
+      ]
+    },
+    {
+      "name": "entity.mesh.cone",
+      "active": true,
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "cone", "radius": 0.7, "height": 1.2, "radius_top": 0.0 }
+      ]
+    },
+    {
+      "name": "entity.mesh.torus",
+      "active": true,
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "torus", "major_radius": 0.8, "minor_radius": 0.15, "segments": 32, "tube_segments": 10 }
+      ]
+    },
+    {
+      "name": "entity.mesh.pyramid",
+      "active": true,
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "pyramid", "size": [1.0, 1.4, 1.0] }
+      ]
+    },
+    {
+      "name": "entity.mesh.wedge",
+      "active": true,
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "wedge", "size": [1.0, 0.5, 1.5], "lighting": false }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "mesh_primitives.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+
+    struct MeshCapture
+    {
+        int count = 0;
+        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE + 1] = {};
+    } capture;
+    auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
+        auto *mesh_capture = static_cast<MeshCapture *>(userdata);
+        if (primitive->type != SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+            return true;
+        mesh_capture->count++;
+        EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
+        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
+        if (primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID ||
+            primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE)
+        {
+            return false;
+        }
+        mesh_capture->seen[primitive->mesh_primitive] = true;
+        EXPECT_TRUE(primitive->lighting_enabled || primitive->mesh_primitive == SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
+        if (std::string(primitive->entity_name) == "entity.mesh.cube")
+        {
+            EXPECT_EQ(primitive->draw_mode, SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE);
+            EXPECT_NEAR(primitive->size.y, 2.0f, 0.0001f);
+            EXPECT_EQ(primitive->wire_color.r, 255);
+        }
+        if (std::string(primitive->entity_name) == "entity.mesh.cylinder")
+        {
+            EXPECT_EQ(primitive->draw_mode, SDL3D_GAME_DATA_RENDER_DRAW_WIRE);
+            EXPECT_NEAR(primitive->radius_top, 0.4f, 0.0001f);
+            EXPECT_NEAR(primitive->radius_bottom, 0.6f, 0.0001f);
+            EXPECT_NEAR(primitive->height, 1.5f, 0.0001f);
+        }
+        if (std::string(primitive->entity_name) == "entity.mesh.cone")
+        {
+            EXPECT_NEAR(primitive->radius_top, 0.0f, 0.0001f);
+            EXPECT_NEAR(primitive->radius_bottom, 0.7f, 0.0001f);
+        }
+        if (std::string(primitive->entity_name) == "entity.mesh.torus")
+        {
+            EXPECT_NEAR(primitive->major_radius, 0.8f, 0.0001f);
+            EXPECT_NEAR(primitive->minor_radius, 0.15f, 0.0001f);
+            EXPECT_EQ(primitive->tube_segments, 10);
+        }
+        return true;
+    };
+
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
+    EXPECT_EQ(capture.count, 8);
+    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE; ++kind)
+        EXPECT_TRUE(capture.seen[kind]) << kind;
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
+{
+    const std::filesystem::path dir = unique_test_dir("invalid_mesh_primitive");
+    write_text(dir / "bad_kind.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
+  "world": { "name": "world.bad_mesh_primitive", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.bad",
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "octahedron" }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "bad_segments.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
+  "world": { "name": "world.bad_mesh_primitive", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.bad",
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "torus", "segments": 2 }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "bad_draw_mode.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
+  "world": { "name": "world.bad_mesh_primitive", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.bad",
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "cube", "draw_mode": "xray" }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "renders_world": true
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(
+        sdl3d_game_data_validate_file((dir / "bad_kind.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("render.mesh_primitive primitive is unknown"), std::string::npos) << error;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_segments.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("render.mesh_primitive tessellation values must be integers >= 3"),
+              std::string::npos)
+        << error;
+    SDL_zeroa(error);
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "bad_draw_mode.game.json").string().c_str(), nullptr, error,
+                                               sizeof(error)));
+    EXPECT_NE(std::string(error).find("render.mesh_primitive draw_mode is unknown"), std::string::npos) << error;
+
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, ActorPoolsApplySceneExitPolicies)
 {
     const std::filesystem::path dir = unique_test_dir("actor_pool_scene_policy");

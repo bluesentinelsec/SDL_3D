@@ -1380,6 +1380,18 @@ Reusable components include:
   face is UV-mapped to the full image and tinted by `color`. The property path
   is useful for grid wall runs and other pooled actors that need per-instance
   dimensions.
+- `render.mesh_primitive`: declares a procedural placeholder mesh descriptor.
+  The canonical `primitive` values are `cube`, `sphere`, `capsule`,
+  `cylinder`, `cone`, `torus`, `pyramid`, and `wedge`. These descriptors use
+  the same transform, `color`, `texture`, `lighting`, and `emissive` fields as
+  other render primitives where applicable, and add `draw_mode`: `solid`
+  (default), `wire`, or `solid_wire`. Dimension fields include `size`,
+  `radius`, `height`, `radius_top`, `radius_bottom`, `major_radius`,
+  `minor_radius`, `segments`/`slices`, `rings`, and `tube_segments`. This is the
+  stable data/runtime representation for procedural mesh primitives. Rendering
+  support for the full primitive set is provided by the procedural mesh
+  presentation path; until that path is enabled, existing `render.cube` and
+  `render.sphere` remain the production drawing components.
 - `render.model`: renders an authored `assets.models` entry with `model`,
   optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
   animation playback via `animation_clip` and `animation_time_property`.
