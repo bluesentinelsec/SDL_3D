@@ -1,0 +1,54 @@
+{
+  "schema": "sdl3d.game.v0",
+  "metadata": {
+    "name": "SDL3D Mesh Primitives Dojo",
+    "id": "demo.mesh_primitives_dojo",
+    "version": "0.1.0"
+  },
+  "imports": [
+    { "path": "fragments/input/fps_controls.json", "sections": ["input"] },
+    { "path": "fragments/world/graybox_room.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/actors/player.json", "sections": ["entities"] },
+    { "path": "fragments/actors/primitives.json", "sections": ["entities"] }
+  ],
+  "app": {
+    "title": "SDL3D Mesh Primitives Dojo",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": { "renderer": "opengl", "vsync": true },
+    "pause": { "action": "action.pause" },
+    "quit": { "action": "action.exit" },
+    "input_policy": { "global_actions": ["action.exit"] }
+  },
+  "world": {
+    "name": "world.mesh_primitives_dojo",
+    "kind": "sector",
+    "units": "meters",
+    "meters_per_unit": 1.0,
+    "ambient_light": [0.18, 0.18, 0.19],
+    "cameras": [
+      {
+        "name": "camera.mesh_primitives.player",
+        "type": "fps",
+        "target_entity": "entity.player",
+        "fovy": 90.0,
+        "active": true
+      }
+    ]
+  },
+  "assets": {
+    "fonts": [
+      { "id": "font.mesh_primitives.hud", "builtin": "Inter", "size": 22 }
+    ]
+  },
+  "render": {
+    "lighting": true,
+    "bloom": false,
+    "clear_color": [0.045, 0.05, 0.06]
+  },
+  "scenes": {
+    "initial": "scene.mesh_primitives.showcase",
+    "files": ["scenes/showcase.scene.json"]
+  }
+}

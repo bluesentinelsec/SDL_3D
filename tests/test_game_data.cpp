@@ -375,6 +375,11 @@ std::filesystem::path fps_mechanics_dojo_data_path()
     return demo_data_path("fps_mechanics_dojo", "fps_mechanics_dojo.game.json");
 }
 
+std::filesystem::path mesh_primitives_dojo_data_path()
+{
+    return demo_data_path("mesh_primitives_dojo", "mesh_primitives_dojo.game.json");
+}
+
 std::filesystem::path fps_template_data_path()
 {
     return demo_data_path("templates/fps", "fps_template.game.json");
@@ -7004,6 +7009,84 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
 
     EXPECT_TRUE(sdl3d_game_data_sector_nav_path_available(runtime, "nav.dojo.arena", sdl3d_vec3_make(4.0f, 1.0f, 4.0f),
                                                           sdl3d_vec3_make(24.0f, 1.0f, 6.0f)));
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
+{
+    const std::filesystem::path dojo_path = mesh_primitives_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    sdl3d_game_config config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
+                                                     app_error, sizeof(app_error)))
+        << app_error;
+    EXPECT_STREQ(config.title, "SDL3D Mesh Primitives Dojo");
+    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.mesh_primitives.showcase"));
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.player"), nullptr);
+    EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.sun"), nullptr);
+
+    const char *units = nullptr;
+    float meters_per_unit = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+
+    sdl3d_camera3d camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.mesh_primitives.player", &camera));
+    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+
+    ASSERT_EQ(sdl3d_game_data_world_light_count(runtime), 1);
+    sdl3d_light sun{};
+    ASSERT_TRUE(sdl3d_game_data_get_world_light(runtime, 0, &sun));
+    EXPECT_EQ(sun.type, SDL3D_LIGHT_DIRECTIONAL);
+    EXPECT_NEAR(sun.direction.y, -1.0f, 0.0001f);
+    EXPECT_NEAR(sun.color[0], 1.0f, 0.0001f);
+
+    struct MeshDojoCapture
+    {
+        int count = 0;
+        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE + 1] = {};
+        bool saw_solid_wire = false;
+    } capture;
+    auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
+        auto *mesh_capture = static_cast<MeshDojoCapture *>(userdata);
+        if (primitive->type != SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+            return true;
+        mesh_capture->count++;
+        EXPECT_TRUE(primitive->lighting_enabled) << primitive->entity_name;
+        EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
+        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
+        if (primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID &&
+            primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE)
+        {
+            mesh_capture->seen[primitive->mesh_primitive] = true;
+        }
+        if (primitive->draw_mode == SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE)
+            mesh_capture->saw_solid_wire = true;
+        return true;
+    };
+    ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
+    EXPECT_EQ(capture.count, 8);
+    EXPECT_TRUE(capture.saw_solid_wire);
+    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE; ++kind)
+        EXPECT_TRUE(capture.seen[kind]) << kind;
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);

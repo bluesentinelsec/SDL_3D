@@ -1,0 +1,71 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.mesh_primitives.showcase",
+  "camera": "camera.mesh_primitives.player",
+  "updates_game": true,
+  "renders_world": true,
+  "entities": [
+    "entity.player",
+    "entity.sun",
+    "entity.mesh.cube",
+    "entity.mesh.sphere",
+    "entity.mesh.capsule",
+    "entity.mesh.cylinder",
+    "entity.mesh.cone",
+    "entity.mesh.torus",
+    "entity.mesh.pyramid",
+    "entity.mesh.wedge"
+  ],
+  "input": {
+    "mouse_capture": "unpaused",
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump",
+      "action.pause"
+    ]
+  },
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.mesh_primitives.graybox_room",
+        "variant": "lightmapped",
+        "position": [0.0, 0.0, 0.0],
+        "portal_culling": true
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.mesh_primitives.title",
+        "text": "Mesh Primitives Dojo",
+        "font": "font.mesh_primitives.hud",
+        "position": [0.02, 0.03],
+        "anchor": "top_left",
+        "color": [235, 240, 250, 230],
+        "scale": 0.85
+      },
+      {
+        "name": "ui.mesh_primitives.help",
+        "text": "WASD move  Mouse look  Space jump  P pause  Esc quit",
+        "font": "font.mesh_primitives.hud",
+        "position": [0.02, 0.07],
+        "anchor": "top_left",
+        "color": [205, 215, 230, 210],
+        "scale": 0.65
+      },
+      {
+        "name": "ui.mesh_primitives.reticle",
+        "text": "+",
+        "font": "font.mesh_primitives.hud",
+        "position": [0.5, 0.5],
+        "anchor": "center",
+        "color": [255, 255, 255, 180],
+        "scale": 0.9
+      }
+    ]
+  }
+}

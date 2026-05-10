@@ -161,6 +161,17 @@ Focused dojo scenes should use authored scene-enter setup to place the player
 near the mechanic being tuned. That keeps the workflow equivalent to the final
 runner path while avoiding splash/title/campaign flow during development.
 
+`demos/mesh_primitives_dojo` is a graybox showcase for procedural 3D placeholder
+geometry. It uses a sector-bounded room, one directional sun light, an FPS
+camera, and one differently colored actor for each `render.mesh_primitive`
+shape:
+
+```sh
+build/debug/sdl3d_runner \
+  --root demos/mesh_primitives_dojo/data \
+  --data asset://mesh_primitives_dojo.game.json
+```
+
 ## Data-Only Parity Checklist
 
 Before treating a game as data-only, validate the runner-backed game path:
