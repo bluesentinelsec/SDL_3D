@@ -6666,6 +6666,56 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return validate_interaction_use_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "effect.explosion") == 0)
         return validate_effect_explosion_action(ctx, action, json_path, names);
+    if (SDL_strcmp(type, "noise.emit") == 0)
+    {
+        const char *source = json_string(action, "source");
+        const char *actor = json_string(action, "actor");
+        const char *target = json_string(action, "target");
+        if (source != NULL && !require_actor_ref(ctx, names, source, json_path))
+            return false;
+        if (actor != NULL && !require_actor_ref(ctx, names, actor, json_path))
+            return false;
+        if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
+            return false;
+
+        const char *payload_fields[] = {"source_from_payload", "actor_from_payload", "target_from_payload",
+                                        "from_payload"};
+        for (size_t i = 0; i < SDL_arraysize(payload_fields); ++i)
+        {
+            yyjson_val *value = obj_get(action, payload_fields[i]);
+            if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+                return validation_error(ctx, json_path, "noise.emit %s must be a non-empty string", payload_fields[i]);
+        }
+
+        yyjson_val *from = obj_get(action, "from");
+        if (from != NULL && (!yyjson_is_str(from) || yyjson_get_str(from)[0] == '\0'))
+            return validation_error(ctx, json_path, "noise.emit from must be a non-empty actor reference");
+        const char *from_actor = json_string(action, "from");
+        if (from_actor != NULL && !require_actor_ref(ctx, names, from_actor, json_path))
+            return false;
+        yyjson_val *position = obj_get(action, "position");
+        yyjson_val *offset = obj_get(action, "offset");
+        if (position != NULL && !is_vec_array(position, 3))
+            return validation_error(ctx, json_path, "noise.emit position must be a vec3");
+        if (offset != NULL && !is_vec_array(offset, 3))
+            return validation_error(ctx, json_path, "noise.emit offset must be a vec3");
+        yyjson_val *radius = obj_get(action, "radius");
+        yyjson_val *range = obj_get(action, "range");
+        yyjson_val *loudness = obj_get(action, "loudness");
+        yyjson_val *duration = obj_get(action, "duration");
+        yyjson_val *duration_seconds = obj_get(action, "duration_seconds");
+        if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) <= 0.0))
+            return validation_error(ctx, json_path, "noise.emit radius must be positive");
+        if (range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) <= 0.0))
+            return validation_error(ctx, json_path, "noise.emit range must be positive");
+        if (loudness != NULL && (!yyjson_is_num(loudness) || yyjson_get_num(loudness) < 0.0))
+            return validation_error(ctx, json_path, "noise.emit loudness must be non-negative");
+        if (duration != NULL && (!yyjson_is_num(duration) || yyjson_get_num(duration) <= 0.0))
+            return validation_error(ctx, json_path, "noise.emit duration must be positive");
+        if (duration_seconds != NULL && (!yyjson_is_num(duration_seconds) || yyjson_get_num(duration_seconds) <= 0.0))
+            return validation_error(ctx, json_path, "noise.emit duration_seconds must be positive");
+        return true;
+    }
     if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||
         SDL_strcmp(type, "sector_door.toggle") == 0)
     {
@@ -7311,6 +7361,53 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
         {
             if (!require_ref(ctx, &names->actions, "input action", json_string(sensor, "action"), path) ||
                 !require_ref(ctx, &names->signals, "signal", json_string(sensor, "on_pressed"), path))
+                return false;
+            continue;
+        }
+        if (SDL_strcmp(type, "sensor.hearing") == 0)
+        {
+            const char *actor = json_string(sensor, "actor");
+            if (actor == NULL)
+                actor = json_string(sensor, "entity");
+            const char *actor_tag = json_string(sensor, "actor_tag");
+            if (actor_tag == NULL)
+                actor_tag = json_string(sensor, "observer_tag");
+            yyjson_val *actions = obj_get(sensor, "actions");
+            const char *edge = json_string(sensor, "edge");
+            const char *signal = json_string(sensor, "on_enter");
+            if (edge != NULL && (SDL_strcmp(edge, "stay") == 0 || SDL_strcmp(edge, "overlap") == 0))
+            {
+                const char *on_stay = json_string(sensor, "on_stay");
+                signal = on_stay != NULL ? on_stay : signal;
+            }
+            else if (edge != NULL && SDL_strcmp(edge, "exit") == 0)
+            {
+                const char *on_exit = json_string(sensor, "on_exit");
+                signal = on_exit != NULL ? on_exit : signal;
+            }
+
+            if ((actor == NULL && actor_tag == NULL) || (actor != NULL && actor_tag != NULL))
+                return validation_error(ctx, path, "sensor.hearing requires exactly one of actor or actor_tag");
+            if (actor != NULL && !require_actor_ref(ctx, names, actor, path))
+                return false;
+            if (actor_tag != NULL && actor_tag[0] == '\0')
+                return validation_error(ctx, path, "sensor.hearing actor_tag must be non-empty");
+            yyjson_val *target_tag = obj_get(sensor, "target_tag");
+            if (target_tag != NULL && (!yyjson_is_str(target_tag) || yyjson_get_str(target_tag)[0] == '\0'))
+                return validation_error(ctx, path, "sensor.hearing target_tag must be non-empty");
+            yyjson_val *range = obj_get(sensor, "range");
+            if (range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) <= 0.0))
+                return validation_error(ctx, path, "sensor.hearing range must be positive");
+            if (edge != NULL && SDL_strcmp(edge, "enter") != 0 && SDL_strcmp(edge, "stay") != 0 &&
+                SDL_strcmp(edge, "overlap") != 0 && SDL_strcmp(edge, "exit") != 0)
+            {
+                return validation_error(ctx, path, "sensor.hearing edge must be enter, stay, overlap, or exit");
+            }
+            if (actions != NULL && !validate_action_array(ctx, actions, path, names))
+                return false;
+            if (actions == NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
+                return false;
+            if (!validate_target_filter_fields(ctx, sensor, path, "sensor.hearing"))
                 return false;
             continue;
         }

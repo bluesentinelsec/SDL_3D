@@ -50,6 +50,7 @@ typedef enum game_data_sensor_type
     GAME_DATA_SENSOR_BOUNDS_EXIT,
     GAME_DATA_SENSOR_BOUNDS_REFLECT,
     GAME_DATA_SENSOR_CONTACT_2D,
+    GAME_DATA_SENSOR_HEARING,
     GAME_DATA_SENSOR_INPUT_PRESSED,
     GAME_DATA_SENSOR_PERCEPTION,
     GAME_DATA_SENSOR_SECTOR,
@@ -111,6 +112,8 @@ typedef struct sensor_contact_pair_state
 {
     const char *actor_name;
     const char *other_actor_name;
+    bool owns_actor_name;
+    bool owns_other_actor_name;
     bool active;
     bool seen;
 } sensor_contact_pair_state;
@@ -156,6 +159,17 @@ typedef struct wave_schedule_entry
     float elapsed;
     bool initialized;
 } wave_schedule_entry;
+
+typedef struct noise_event_runtime
+{
+    unsigned int id;
+    char key[32];
+    const char *source_actor_name;
+    sdl3d_vec3 position;
+    float radius;
+    float loudness;
+    float remaining_seconds;
+} noise_event_runtime;
 
 typedef struct sensor_actor_list
 {
@@ -517,6 +531,10 @@ typedef struct sdl3d_game_data_runtime
     int sensor_count;
     wave_schedule_entry *wave_schedules;
     int wave_schedule_count;
+    noise_event_runtime *noise_events;
+    int noise_event_count;
+    int noise_event_capacity;
+    unsigned int next_noise_event_id;
     input_binding_spec *input_bindings;
     int input_binding_count;
     int input_binding_capacity;
@@ -15770,6 +15788,68 @@ static bool execute_sector_door_interact_action(sdl3d_game_data_runtime *runtime
     return ok;
 }
 
+static sdl3d_registered_actor *noise_source_actor(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                                  const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *source =
+        actor_from_payload_key(runtime, payload, json_string(action, "source_from_payload", NULL));
+    if (source == NULL)
+        source = actor_from_payload_key(runtime, payload, json_string(action, "actor_from_payload", NULL));
+    if (source == NULL)
+        source = actor_from_payload_key(runtime, payload, json_string(action, "target_from_payload", NULL));
+    if (source == NULL)
+        source = sdl3d_game_data_find_actor(runtime, json_string(action, "source", NULL));
+    if (source == NULL)
+        source = sdl3d_game_data_find_actor(runtime, json_string(action, "actor", NULL));
+    if (source == NULL)
+        source = sdl3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
+    return source;
+}
+
+static bool runtime_add_noise_event(sdl3d_game_data_runtime *runtime, const char *source_actor_name,
+                                    sdl3d_vec3 position, float radius, float loudness, float duration)
+{
+    if (runtime == NULL || radius <= 0.0f || duration <= 0.0f)
+        return false;
+    if (runtime->noise_event_count >= runtime->noise_event_capacity)
+    {
+        const int new_capacity = runtime->noise_event_capacity > 0 ? runtime->noise_event_capacity * 2 : 16;
+        noise_event_runtime *events =
+            (noise_event_runtime *)SDL_realloc(runtime->noise_events, (size_t)new_capacity * sizeof(*events));
+        if (events == NULL)
+            return false;
+        SDL_memset(events + runtime->noise_event_capacity, 0,
+                   (size_t)(new_capacity - runtime->noise_event_capacity) * sizeof(*events));
+        runtime->noise_events = events;
+        runtime->noise_event_capacity = new_capacity;
+    }
+
+    noise_event_runtime *event = &runtime->noise_events[runtime->noise_event_count++];
+    SDL_zero(*event);
+    event->id = ++runtime->next_noise_event_id;
+    if (event->id == 0U)
+        event->id = ++runtime->next_noise_event_id;
+    SDL_snprintf(event->key, sizeof(event->key), "noise.%u", event->id);
+    event->source_actor_name = source_actor_name;
+    event->position = position;
+    event->radius = radius;
+    event->loudness = loudness;
+    event->remaining_seconds = duration;
+    return true;
+}
+
+static bool execute_noise_emit_action(sdl3d_game_data_runtime *runtime, yyjson_val *action,
+                                      const sdl3d_properties *payload)
+{
+    sdl3d_registered_actor *source = noise_source_actor(runtime, action, payload);
+    const sdl3d_vec3 fallback = source != NULL ? source->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const sdl3d_vec3 position = actor_spawn_position_from_action(runtime, action, payload, fallback);
+    const float radius = SDL_max(json_float(action, "radius", json_float(action, "range", 16.0f)), 0.0f);
+    const float loudness = SDL_max(json_float(action, "loudness", 1.0f), 0.0f);
+    const float duration = SDL_max(json_float(action, "duration", json_float(action, "duration_seconds", 0.1f)), 0.0f);
+    return runtime_add_noise_event(runtime, source != NULL ? source->name : NULL, position, radius, loudness, duration);
+}
+
 static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *action, const sdl3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -16116,6 +16196,8 @@ static bool execute_one_action(sdl3d_game_data_runtime *runtime, yyjson_val *act
         return execute_interaction_use_action(runtime, action, payload);
     if (SDL_strcmp(type, "effect.explosion") == 0)
         return execute_effect_explosion_action(runtime, action, payload);
+    if (SDL_strcmp(type, "noise.emit") == 0)
+        return execute_noise_emit_action(runtime, action, payload);
 
     if (SDL_strcmp(type, "projectile.fire") == 0)
         return execute_projectile_fire_action(runtime, action, payload);
@@ -16478,6 +16560,8 @@ static bool load_sensors(sdl3d_game_data_runtime *runtime, yyjson_val *logic)
             entry->type = GAME_DATA_SENSOR_CONTACT_2D;
         else if (SDL_strcmp(type, "collision.on_overlap") == 0)
             entry->type = GAME_DATA_SENSOR_CONTACT_2D;
+        else if (SDL_strcmp(type, "sensor.hearing") == 0)
+            entry->type = GAME_DATA_SENSOR_HEARING;
         else if (SDL_strcmp(type, "sensor.input_pressed") == 0)
             entry->type = GAME_DATA_SENSOR_INPUT_PRESSED;
         else if (SDL_strcmp(type, "sensor.perception") == 0)
@@ -17996,6 +18080,22 @@ static bool collect_sensor_endpoint_actors(sdl3d_game_data_runtime *runtime, con
     return true;
 }
 
+static bool sensor_contact_name_is_transient(const char *name)
+{
+    return name != NULL && SDL_strncmp(name, "noise.", 6) == 0;
+}
+
+static void sensor_contact_pair_destroy(sensor_contact_pair_state *state)
+{
+    if (state == NULL)
+        return;
+    if (state->owns_actor_name)
+        SDL_free((char *)state->actor_name);
+    if (state->owns_other_actor_name)
+        SDL_free((char *)state->other_actor_name);
+    SDL_zero(*state);
+}
+
 static sensor_contact_pair_state *sensor_contact_pair_state_for(sensor_entry *sensor, const char *actor_name,
                                                                 const char *other_actor_name)
 {
@@ -18027,8 +18127,31 @@ static sensor_contact_pair_state *sensor_contact_pair_state_for(sensor_entry *se
 
     sensor_contact_pair_state *state = &sensor->contact_pairs[sensor->contact_pair_count++];
     SDL_zero(*state);
-    state->actor_name = actor_name;
-    state->other_actor_name = other_actor_name;
+    if (sensor_contact_name_is_transient(actor_name))
+    {
+        state->actor_name = SDL_strdup(actor_name);
+        state->owns_actor_name = true;
+    }
+    else
+    {
+        state->actor_name = actor_name;
+    }
+    if (sensor_contact_name_is_transient(other_actor_name))
+    {
+        state->other_actor_name = SDL_strdup(other_actor_name);
+        state->owns_other_actor_name = true;
+    }
+    else
+    {
+        state->other_actor_name = other_actor_name;
+    }
+    if ((state->owns_actor_name && state->actor_name == NULL) ||
+        (state->owns_other_actor_name && state->other_actor_name == NULL))
+    {
+        sensor_contact_pair_destroy(state);
+        --sensor->contact_pair_count;
+        return NULL;
+    }
     return state;
 }
 
@@ -18084,12 +18207,26 @@ static void sensor_contact_states_end(sensor_entry *sensor)
     if (sensor == NULL)
         return;
     bool any_active = false;
+    int write_index = 0;
     for (int i = 0; i < sensor->contact_pair_count; ++i)
     {
-        if (!sensor->contact_pairs[i].seen)
-            sensor->contact_pairs[i].active = false;
-        any_active = any_active || sensor->contact_pairs[i].active;
+        sensor_contact_pair_state *state = &sensor->contact_pairs[i];
+        if (!state->seen)
+        {
+            if (sensor_contact_name_is_transient(state->actor_name) ||
+                sensor_contact_name_is_transient(state->other_actor_name))
+            {
+                sensor_contact_pair_destroy(state);
+                continue;
+            }
+            state->active = false;
+        }
+        any_active = any_active || state->active;
+        if (write_index != i)
+            sensor->contact_pairs[write_index] = *state;
+        ++write_index;
     }
+    sensor->contact_pair_count = write_index;
     sensor->was_active = any_active;
 }
 
@@ -18502,6 +18639,130 @@ static void update_perception_sensor(sdl3d_game_data_runtime *runtime, sensor_en
     sensor_actor_list_free(&targets);
 }
 
+static float noise_event_audibility(const sensor_entry *sensor, const noise_event_runtime *event,
+                                    const sdl3d_registered_actor *listener, float *out_distance)
+{
+    if (sensor == NULL || event == NULL || listener == NULL)
+        return 0.0f;
+    const sdl3d_vec3 delta = sdl3d_vec3_sub(event->position, listener->position);
+    const float distance = sdl3d_vec3_length(delta);
+    if (out_distance != NULL)
+        *out_distance = distance;
+    const float radius = SDL_min(sensor->range, event->radius);
+    if (radius <= 0.0f || distance > radius)
+        return 0.0f;
+    return event->loudness * SDL_clamp(1.0f - distance / radius, 0.0f, 1.0f);
+}
+
+static sdl3d_properties *create_hearing_sensor_payload(const sensor_entry *sensor, const noise_event_runtime *event,
+                                                       const sdl3d_registered_actor *listener,
+                                                       const sdl3d_registered_actor *source, float distance,
+                                                       float audibility)
+{
+    sdl3d_properties *payload = sdl3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+
+    sdl3d_properties_set_string(payload, "actor_name",
+                                listener != NULL && listener->name != NULL ? listener->name : "");
+    sdl3d_properties_set_string(payload, "listener_actor_name",
+                                listener != NULL && listener->name != NULL ? listener->name : "");
+    sdl3d_properties_set_string(payload, "source_actor_name",
+                                event != NULL && event->source_actor_name != NULL ? event->source_actor_name : "");
+    sdl3d_properties_set_string(payload, "target_actor_name",
+                                source != NULL && source->name != NULL ? source->name : "");
+    sdl3d_properties_set_int(payload, "noise_id", event != NULL ? (int)event->id : 0);
+    sdl3d_properties_set_vec3(payload, "noise_position",
+                              event != NULL ? event->position : sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    sdl3d_properties_set_float(payload, "noise_radius", event != NULL ? event->radius : 0.0f);
+    sdl3d_properties_set_float(payload, "noise_loudness", event != NULL ? event->loudness : 0.0f);
+    sdl3d_properties_set_float(payload, "distance", distance);
+    sdl3d_properties_set_float(payload, "hearing_distance", distance);
+    sdl3d_properties_set_float(payload, "audibility", audibility);
+    sdl3d_properties_set_float(payload, "range", sensor != NULL ? sensor->range : 0.0f);
+    return payload;
+}
+
+static void emit_hearing_sensor_signal(sdl3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                       const noise_event_runtime *event, sdl3d_registered_actor *listener,
+                                       sdl3d_registered_actor *source, float distance, float audibility)
+{
+    sdl3d_signal_bus *bus = runtime_bus(runtime);
+    if (bus == NULL || sensor == NULL || sensor->signal_id < 0)
+        return;
+
+    sdl3d_properties *payload = create_hearing_sensor_payload(sensor, event, listener, source, distance, audibility);
+    sdl3d_signal_emit(bus, sensor->signal_id, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static void execute_hearing_sensor_actions(sdl3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                           const noise_event_runtime *event, sdl3d_registered_actor *listener,
+                                           sdl3d_registered_actor *source, float distance, float audibility)
+{
+    if (runtime == NULL || sensor == NULL || !yyjson_is_arr(sensor->actions))
+        return;
+
+    sdl3d_properties *payload = create_hearing_sensor_payload(sensor, event, listener, source, distance, audibility);
+    if (payload != NULL)
+        (void)execute_action_array(runtime, sensor->actions, payload);
+    sdl3d_properties_destroy(payload);
+}
+
+static void update_hearing_sensor_listener(sdl3d_game_data_runtime *runtime, sensor_entry *sensor,
+                                           sdl3d_registered_actor *listener)
+{
+    if (!runtime_actor_is_active(runtime, listener))
+        return;
+
+    for (int event_index = 0; event_index < runtime->noise_event_count; ++event_index)
+    {
+        const noise_event_runtime *event = &runtime->noise_events[event_index];
+        if (event->remaining_seconds <= 0.0f)
+            continue;
+
+        sdl3d_registered_actor *source = sdl3d_game_data_find_actor(runtime, event->source_actor_name);
+        if (event->source_actor_name != NULL &&
+            !actor_matches_target_filter(runtime, source, listener, sensor->json, NULL, sensor->other_tag, true))
+        {
+            continue;
+        }
+
+        float distance = 0.0f;
+        const float audibility = noise_event_audibility(sensor, event, listener, &distance);
+        const bool active = audibility > 0.0f;
+        sensor_contact_pair_state *state = sensor_contact_pair_state_for(sensor, listener->name, event->key);
+        if (state == NULL)
+            continue;
+
+        const bool should_emit = sensor_edge_is_exit(sensor)   ? (!active && state->active)
+                                 : sensor_edge_is_stay(sensor) ? active
+                                                               : (active && !state->active);
+        if (should_emit)
+        {
+            emit_hearing_sensor_signal(runtime, sensor, event, listener, source, distance, audibility);
+            execute_hearing_sensor_actions(runtime, sensor, event, listener, source, distance, audibility);
+        }
+        state->active = active;
+        state->seen = true;
+    }
+}
+
+static void update_hearing_sensor(sdl3d_game_data_runtime *runtime, sensor_entry *sensor)
+{
+    sensor_actor_list listeners;
+    SDL_zero(listeners);
+
+    sensor_contact_states_begin(sensor);
+    if (collect_sensor_endpoint_actors(runtime, sensor->entity, sensor->entity_tag, &listeners))
+    {
+        for (int i = 0; i < listeners.count; ++i)
+            update_hearing_sensor_listener(runtime, sensor, listeners.items[i]);
+    }
+    sensor_contact_states_end(sensor);
+    sensor_actor_list_free(&listeners);
+}
+
 static void update_sensors(sdl3d_game_data_runtime *runtime)
 {
     for (int i = 0; i < runtime->sensor_count; ++i)
@@ -18525,6 +18786,11 @@ static void update_sensors(sdl3d_game_data_runtime *runtime)
         if (sensor->type == GAME_DATA_SENSOR_PERCEPTION)
         {
             update_perception_sensor(runtime, sensor);
+            continue;
+        }
+        if (sensor->type == GAME_DATA_SENSOR_HEARING)
+        {
+            update_hearing_sensor(runtime, sensor);
             continue;
         }
 
@@ -18571,6 +18837,26 @@ static void update_sensors(sdl3d_game_data_runtime *runtime)
             }
         }
     }
+}
+
+static void update_noise_events(sdl3d_game_data_runtime *runtime, float dt)
+{
+    if (runtime == NULL || runtime->noise_event_count <= 0)
+        return;
+
+    int write_index = 0;
+    for (int read_index = 0; read_index < runtime->noise_event_count; ++read_index)
+    {
+        noise_event_runtime event = runtime->noise_events[read_index];
+        event.remaining_seconds -= dt;
+        if (event.remaining_seconds > 0.0f)
+        {
+            if (write_index != read_index)
+                runtime->noise_events[write_index] = event;
+            ++write_index;
+        }
+    }
+    runtime->noise_event_count = write_index;
 }
 
 static float json_random_axis(sdl3d_game_data_runtime *runtime, yyjson_val *value, float fallback)
@@ -18692,6 +18978,7 @@ bool sdl3d_game_data_update(sdl3d_game_data_runtime *runtime, float dt)
     update_motion_components(runtime, root, dt);
     update_wave_schedules(runtime, dt);
     update_sensors(runtime);
+    update_noise_events(runtime, dt);
     actor_lifecycle_defer_end(runtime);
     return true;
 }
@@ -21273,9 +21560,14 @@ void sdl3d_game_data_destroy(sdl3d_game_data_runtime *runtime)
     SDL_free(runtime->adapters);
     SDL_free(runtime->bindings);
     for (int i = 0; i < runtime->sensor_count; ++i)
+    {
+        for (int pair_index = 0; pair_index < runtime->sensors[i].contact_pair_count; ++pair_index)
+            sensor_contact_pair_destroy(&runtime->sensors[i].contact_pairs[pair_index]);
         SDL_free(runtime->sensors[i].contact_pairs);
+    }
     SDL_free(runtime->sensors);
     SDL_free(runtime->wave_schedules);
+    SDL_free(runtime->noise_events);
     SDL_free(runtime->input_bindings);
     SDL_free(runtime->ui_states);
     SDL_free(runtime->animations);

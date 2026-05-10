@@ -11155,6 +11155,133 @@ TEST(GameDataRuntime, RunsAuthoredPerceptionSensorsWithSectorLineOfSightAndTarge
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredHearingSensorsForNoiseEventsAndTargetFilters)
+{
+    const std::filesystem::path dir = unique_test_dir("hearing_sensors");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.listener", "entity.enemy", "entity.friend", "entity.far_enemy"]
+})json");
+    write_text(dir / "hearing_sensors.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Hearing Sensor Test" },
+  "world": { "name": "world.test", "kind": "sector" },
+  "signals": ["signal.enemy.noise", "signal.friend.noise", "signal.far.noise"],
+  "factions": {
+    "player": { "enemy": "hostile", "civilian": "friendly" },
+    "enemy": { "player": "hostile" },
+    "civilian": { "player": "friendly" }
+  },
+  "entities": [
+    {
+      "name": "entity.listener",
+      "active": true,
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "faction": { "type": "string", "value": "player" },
+        "heard_count": { "type": "int", "value": 0 },
+        "last_source": { "type": "string", "value": "" },
+        "last_audibility": { "type": "float", "value": 0.0 }
+      }
+    },
+    {
+      "name": "entity.enemy",
+      "active": true,
+      "tags": ["noisy"],
+      "transform": { "position": [2.0, 0.0, 0.0] },
+      "properties": { "faction": { "type": "string", "value": "enemy" } }
+    },
+    {
+      "name": "entity.friend",
+      "active": true,
+      "tags": ["noisy"],
+      "transform": { "position": [1.0, 0.0, 0.0] },
+      "properties": { "faction": { "type": "string", "value": "civilian" } }
+    },
+    {
+      "name": "entity.far_enemy",
+      "active": true,
+      "tags": ["noisy"],
+      "transform": { "position": [12.0, 0.0, 0.0] },
+      "properties": { "faction": { "type": "string", "value": "enemy" } }
+    }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.enemy.noise",
+        "actions": [{ "type": "noise.emit", "source": "entity.enemy", "radius": 6.0, "duration": 0.25 }]
+      },
+      {
+        "signal": "signal.friend.noise",
+        "actions": [{ "type": "noise.emit", "source": "entity.friend", "radius": 6.0, "duration": 0.25 }]
+      },
+      {
+        "signal": "signal.far.noise",
+        "actions": [{ "type": "noise.emit", "source": "entity.far_enemy", "radius": 6.0, "duration": 0.25 }]
+      }
+    ],
+    "sensors": [
+      {
+        "name": "sensor.listener.hears_hostile",
+        "type": "sensor.hearing",
+        "actor": "entity.listener",
+        "target_tag": "noisy",
+        "range": 8.0,
+        "edge": "enter",
+        "target_filter": { "relationship": "hostile" },
+        "actions": [
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "heard_count", "value": 1 },
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "last_source", "value_from_payload": "source_actor_name" },
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "last_audibility", "value_from_payload": "audibility" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "hearing_sensors.game.json").string().c_str(), session, &runtime,
+                                          error, sizeof(error)))
+        << error;
+    sdl3d_registered_actor *listener = sdl3d_game_data_find_actor(runtime, "entity.listener");
+    ASSERT_NE(listener, nullptr);
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.enemy.noise"), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(listener->props, "last_source", ""), "entity.enemy");
+    EXPECT_GT(sdl3d_properties_get_float(listener->props, "last_audibility", 0.0f), 0.0f);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.friend.noise"), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 1);
+    EXPECT_STREQ(sdl3d_properties_get_string(listener->props, "last_source", ""), "entity.enemy");
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.far.noise"), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 1);
+
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.25f));
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.enemy.noise"), nullptr);
+    ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(sdl3d_properties_get_int(listener->props, "heard_count", 0), 2);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
 {
     const std::filesystem::path dir = unique_test_dir("sector_doors_invalid");
@@ -11239,6 +11366,36 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
               ]
             })json",
             "sensor.perception fov_degrees",
+        },
+        {
+            "invalid_hearing_sensor",
+            R"json([])json",
+            R"json({
+              "sensors": [
+                {
+                  "type": "sensor.hearing",
+                  "actor": "entity.player",
+                  "range": 0,
+                  "actions": [
+                    { "type": "property.set", "target_from_payload": "actor_name", "key": "alert", "value": true }
+                  ]
+                }
+              ]
+            })json",
+            "sensor.hearing range",
+        },
+        {
+            "invalid_noise_action",
+            R"json([])json",
+            R"json({
+              "bindings": [
+                {
+                  "signal": "signal.run",
+                  "actions": [{ "type": "noise.emit", "source": "entity.player", "radius": 0 }]
+                }
+              ]
+            })json",
+            "noise.emit radius",
         },
     };
 

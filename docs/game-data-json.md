@@ -1788,6 +1788,51 @@ and `observer_actor_name` for the observer, `target_actor_name` and
 `other_actor_name` for the seen target, `sector_level`, `distance`,
 `perception_distance`, `range`, `origin`, and `target_position`.
 
+`noise.emit` creates a short-lived runtime noise event. It does not play audio
+by itself; pair it with `audio.play_sfx` when the game should also make an
+audible sound. A noise can come from `source`, `actor`, `target`, the matching
+`*_from_payload` fields, `from`, `from_payload`, or a literal `position` plus
+optional `offset`.
+
+```json
+{
+  "type": "noise.emit",
+  "source": "entity.imp",
+  "radius": 14.0,
+  "loudness": 1.0,
+  "duration": 0.25
+}
+```
+
+`sensor.hearing` lets actors react to those noise events. Use exactly one of
+`actor` or `actor_tag` to select listeners. `range` caps the listener's hearing
+range; the effective hearing radius is the smaller of the sensor range and the
+noise radius. Use `target_filter` to restrict the source actor by tag, owner, or
+faction relationship.
+
+```json
+{
+  "name": "sensor.guard.hears_hostile",
+  "type": "sensor.hearing",
+  "actor": "entity.guard",
+  "target_tag": "noisy",
+  "range": 18.0,
+  "target_filter": { "relationship": "hostile" },
+  "edge": "enter",
+  "actions": [
+    { "type": "property.set", "target": "entity.guard", "key": "alerted", "value": true },
+    { "type": "property.set", "target": "entity.guard", "key": "last_noise", "value_from_payload": "noise_position" }
+  ]
+}
+```
+
+The hearing payload includes `actor_name` and `listener_actor_name` for the
+listener, `source_actor_name`, `target_actor_name` when the noise source is an
+actor, `noise_id`, `noise_position`, `noise_radius`, `noise_loudness`,
+`distance`, `hearing_distance`, `audibility`, and `range`. `audibility` is
+linearly attenuated from the event loudness at the source to zero at the
+effective radius.
+
 `sensor.volume` detects whether an actor is inside an authored axis-aligned 3D
 box. It supports the same `enter`, `stay` / `overlap`, and `exit` edges and
 publishes `actor_name` to actions or signals. Use it for trigger volumes such
