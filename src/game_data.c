@@ -19940,6 +19940,149 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
     fps_brush_publish_diagnostics(&diagnostics, component, actor);
 }
 
+static slayer3d_game_data_brush_trace_shape brush_velocity_shape_from_string(const char *shape)
+{
+    if (SDL_strcmp(shape != NULL ? shape : "", "sphere") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_TRACE_SPHERE;
+    if (SDL_strcmp(shape != NULL ? shape : "", "aabb") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_TRACE_AABB;
+    return SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+}
+
+static slayer3d_vec3 brush_velocity_extents(yyjson_val *component, const slayer3d_registered_actor *actor,
+                                            slayer3d_game_data_brush_trace_shape shape)
+{
+    if (shape == SLAYER3D_GAME_DATA_BRUSH_TRACE_SPHERE)
+    {
+        const float radius =
+            SDL_max(json_float(component, "radius", actor_numeric_property(actor, "radius", 0.0f)), 0.0f);
+        return slayer3d_vec3_make(radius, 0.0f, 0.0f);
+    }
+    if (shape == SLAYER3D_GAME_DATA_BRUSH_TRACE_AABB)
+    {
+        const char *extents_property = json_string(component, "extents_property", "extents");
+        return json_vec3_value(obj_get(component, "extents"), actor_vec_property(actor, extents_property));
+    }
+    return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+}
+
+static unsigned int brush_velocity_contents_mask(yyjson_val *component)
+{
+    return brush_flags_from_json(obj_get(component, "contents_mask"), brush_content_flag_from_string,
+                                 SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID |
+                                     SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP);
+}
+
+static void brush_velocity_publish_impact_diagnostics(const slayer3d_game_data_brush_trace_result *result,
+                                                      yyjson_val *component, slayer3d_registered_actor *actor)
+{
+    if (result == NULL || component == NULL || actor == NULL)
+        return;
+    slayer3d_properties_set_string(actor->props,
+                                   json_string(component, "last_impact_brush_property", "last_impact_brush"),
+                                   result->brush_name != NULL ? result->brush_name : "");
+    slayer3d_properties_set_string(actor->props,
+                                   json_string(component, "last_impact_world_property", "last_impact_world"),
+                                   result->world_name != NULL ? result->world_name : "");
+    slayer3d_properties_set_string(actor->props,
+                                   json_string(component, "last_impact_material_property", "last_impact_material"),
+                                   result->material_name != NULL ? result->material_name : "");
+    slayer3d_properties_set_vec3(actor->props,
+                                 json_string(component, "last_impact_position_property", "last_impact_position"),
+                                 result->end_position);
+    slayer3d_properties_set_vec3(
+        actor->props, json_string(component, "last_impact_normal_property", "last_impact_normal"), result->normal);
+    slayer3d_properties_set_int(actor->props,
+                                json_string(component, "last_impact_contents_property", "last_impact_contents"),
+                                (int)SDL_min(result->contents, (unsigned int)SDL_MAX_SINT32));
+    slayer3d_properties_set_int(
+        actor->props, json_string(component, "last_impact_surface_flags_property", "last_impact_surface_flags"),
+        (int)SDL_min(result->surface_flags, (unsigned int)SDL_MAX_SINT32));
+}
+
+static slayer3d_properties *brush_velocity_impact_payload(const slayer3d_registered_actor *actor, slayer3d_vec3 start,
+                                                          slayer3d_vec3 end, slayer3d_vec3 velocity,
+                                                          const slayer3d_game_data_brush_trace_result *result)
+{
+    slayer3d_properties *payload = slayer3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+    slayer3d_properties_set_string(payload, "actor_name", actor != NULL && actor->name != NULL ? actor->name : "");
+    slayer3d_properties_set_string(payload, "moving_actor_name",
+                                   actor != NULL && actor->name != NULL ? actor->name : "");
+    slayer3d_properties_set_vec3(payload, "trace_start", start);
+    slayer3d_properties_set_vec3(payload, "trace_end", end);
+    slayer3d_properties_set_vec3(payload, "velocity", velocity);
+    slayer3d_properties_set_bool(payload, "hit_brush", result != NULL && result->hit);
+    slayer3d_properties_set_string(payload, "hit_brush_world",
+                                   result != NULL && result->world_name != NULL ? result->world_name : "");
+    slayer3d_properties_set_string(payload, "hit_brush_name",
+                                   result != NULL && result->brush_name != NULL ? result->brush_name : "");
+    slayer3d_properties_set_string(payload, "hit_material",
+                                   result != NULL && result->material_name != NULL ? result->material_name : "");
+    slayer3d_properties_set_vec3(payload, "hit_position",
+                                 result != NULL ? result->end_position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(payload, "hit_normal",
+                                 result != NULL ? result->normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_float(payload, "hit_fraction", result != NULL ? result->fraction : 1.0f);
+    slayer3d_properties_set_float(payload, "hit_distance",
+                                  result != NULL ? slayer3d_vec3_length(slayer3d_vec3_sub(result->end_position, start))
+                                                 : 0.0f);
+    slayer3d_properties_set_int(payload, "hit_contents",
+                                result != NULL ? (int)SDL_min(result->contents, (unsigned int)SDL_MAX_SINT32) : 0);
+    slayer3d_properties_set_int(payload, "hit_surface_flags",
+                                result != NULL ? (int)SDL_min(result->surface_flags, (unsigned int)SDL_MAX_SINT32) : 0);
+    return payload;
+}
+
+static bool update_brush_velocity_motion(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                         slayer3d_registered_actor *actor, int actor_id, int pool_index,
+                                         int actor_index, float dt)
+{
+    const char *property = json_string(component, "property", "velocity");
+    const slayer3d_vec3 velocity = actor_vec_property(actor, property);
+    if (actor == NULL || slayer3d_vec3_length_squared(velocity) <= 0.000001f)
+        return true;
+
+    slayer3d_game_data_brush_trace_desc trace;
+    SDL_zero(trace);
+    trace.start = actor->position;
+    trace.end = slayer3d_vec3_make(actor->position.x + velocity.x * dt, actor->position.y + velocity.y * dt,
+                                   actor->position.z + velocity.z * dt);
+    trace.shape = brush_velocity_shape_from_string(json_string(component, "shape", "point"));
+    trace.extents = brush_velocity_extents(component, actor, trace.shape);
+    trace.contents_mask = brush_velocity_contents_mask(component);
+
+    slayer3d_game_data_brush_trace_result result;
+    const bool traced = json_bool(component, "slide", false)
+                            ? slayer3d_game_data_slide_active_brush_worlds(runtime, &trace, 4, &result)
+                            : slayer3d_game_data_trace_active_brush_worlds(runtime, &trace, &result);
+    if (!traced)
+        return false;
+
+    actor_set_position(actor, result.end_position);
+    if (!result.hit)
+        return true;
+
+    brush_velocity_publish_impact_diagnostics(&result, component, actor);
+    slayer3d_properties *payload = brush_velocity_impact_payload(actor, trace.start, trace.end, velocity, &result);
+    const bool ok = execute_optional_action_array(runtime, obj_get(component, "impact_actions"), payload);
+    emit_optional_signal(runtime, component, "on_impact", payload);
+    slayer3d_properties_destroy(payload);
+    if (!ok)
+        return false;
+
+    if (json_bool(component, "despawn_on_hit", true))
+    {
+        if (actor_id > 0)
+            (void)actor_pool_request_despawn(runtime, &runtime->actor_pools[pool_index], actor, actor_index,
+                                             json_string(component, "reason", "brush impact"));
+        else
+            actor->active = false;
+    }
+    return true;
+}
+
 static void update_sector_doors(slayer3d_game_data_runtime *runtime, float dt)
 {
     for (int i = 0; runtime != NULL && i < runtime->sector_door_count; ++i)
@@ -20362,6 +20505,13 @@ static void update_motion_components(slayer3d_game_data_runtime *runtime, yyjson
                             actor->active = false;
                         break;
                     }
+                }
+                else if (SDL_strcmp(type, "motion.brush_velocity_3d") == 0)
+                {
+                    if (!update_brush_velocity_motion(runtime, component, actor, actor_id, pool_index, i, dt))
+                        break;
+                    if (!runtime_actor_is_active(runtime, actor))
+                        break;
                 }
                 else if (SDL_strcmp(type, "motion.scroll_wrap") == 0)
                 {

@@ -5,6 +5,7 @@
 
 #include "game_data_validation.h"
 
+#include <float.h>
 #include <stdarg.h>
 
 #include <SDL3/SDL_iostream.h>
@@ -2849,6 +2850,7 @@ static bool is_supported_component_type(const char *type)
         "light.directional",
         "light.point",
         "light.spot",
+        "motion.brush_velocity_3d",
         "motion.grid_agent",
         "motion.oscillate",
         "motion.patrol",
@@ -3097,6 +3099,56 @@ static bool validate_fps_brush_component(validation_context *ctx, yyjson_val *co
                                     "controller.fps_brush diagnostic property names must be non-empty strings");
     }
     return true;
+}
+
+static bool brush_velocity_shape_valid(const char *shape)
+{
+    return shape == NULL || SDL_strcmp(shape, "point") == 0 || SDL_strcmp(shape, "sphere") == 0 ||
+           SDL_strcmp(shape, "aabb") == 0;
+}
+
+static bool validate_brush_velocity_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                              validation_names *names)
+{
+    const char *shape = json_string(component, "shape");
+    if (!brush_velocity_shape_valid(shape))
+        return validation_error(ctx, path, "motion.brush_velocity_3d shape must be point, sphere, or aabb");
+
+    const char *string_fields[] = {"property",
+                                   "extents_property",
+                                   "reason",
+                                   "last_impact_brush_property",
+                                   "last_impact_world_property",
+                                   "last_impact_material_property",
+                                   "last_impact_position_property",
+                                   "last_impact_normal_property",
+                                   "last_impact_contents_property",
+                                   "last_impact_surface_flags_property"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        if (!validate_non_empty_string_field(ctx, component, path, "motion.brush_velocity_3d", string_fields[i]))
+            return false;
+    }
+
+    yyjson_val *radius = obj_get(component, "radius");
+    if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) < 0.0))
+        return validation_error(ctx, path, "motion.brush_velocity_3d radius must be non-negative");
+    yyjson_val *extents = obj_get(component, "extents");
+    if (extents != NULL && (!is_exact_vec_array(extents, 3) || !numeric_array_values_in_range(extents, 0.0, DBL_MAX)))
+        return validation_error(ctx, path, "motion.brush_velocity_3d extents must be a non-negative vec3");
+
+    yyjson_val *slide = obj_get(component, "slide");
+    yyjson_val *despawn_on_hit = obj_get(component, "despawn_on_hit");
+    if ((slide != NULL && !yyjson_is_bool(slide)) || (despawn_on_hit != NULL && !yyjson_is_bool(despawn_on_hit)))
+        return validation_error(ctx, path, "motion.brush_velocity_3d slide and despawn_on_hit must be booleans");
+
+    char contents_path[PATH_BUFFER_SIZE];
+    format_path(contents_path, sizeof(contents_path), "%s.contents_mask", path);
+    yyjson_val *impact_actions = obj_get(component, "impact_actions");
+    return validate_brush_string_or_string_array(ctx, obj_get(component, "contents_mask"), contents_path,
+                                                 "brush content", brush_content_name_valid, false) &&
+           validate_optional_signal_field(ctx, component, path, names, "on_impact") &&
+           (impact_actions == NULL || validate_action_array(ctx, impact_actions, path, names));
 }
 
 static bool validate_combat_health_component(validation_context *ctx, yyjson_val *component, const char *path)
@@ -5493,6 +5545,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (property != NULL && !is_non_empty_string(component, "property"))
                     return validation_error(ctx, path, "%s property must be non-empty", type);
             }
+            else if (SDL_strcmp(type, "motion.brush_velocity_3d") == 0)
+            {
+                if (!validate_brush_velocity_component(ctx, component, path, names))
+                    return false;
+            }
             else if (SDL_strcmp(type, "lifecycle.ttl") == 0)
             {
                 yyjson_val *ttl = obj_get(component, "ttl");
@@ -5970,6 +6027,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *property = obj_get(component, "property");
                 if (property != NULL && !is_non_empty_string(component, "property"))
                     return validation_error(ctx, component_path, "%s property must be non-empty", type);
+            }
+            else if (SDL_strcmp(type, "motion.brush_velocity_3d") == 0)
+            {
+                if (!validate_brush_velocity_component(ctx, component, component_path, names))
+                    return false;
             }
             else if (SDL_strcmp(type, "motion.sector_velocity_3d") == 0)
             {
