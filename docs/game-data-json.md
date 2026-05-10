@@ -44,6 +44,7 @@ Every root game file is a JSON object.
 | `grid_pickup_layers` | no | Dense grid-indexed pickup layers rendered and collected without one actor per pickup. |
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
 | `sector_level_fragments` | no | Composition-only material/sector/light fragments merged into named sector levels before validation. |
+| `brush_worlds` | no | Native convex-brush worlds for true 3D FPS-style spaces. |
 | `sector_navigation` | no | Authored sector navigation graphs for AI/path queries in sector worlds. |
 | `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
 | `sector_platforms` | no | Runtime moving floor/ceiling sectors for lifts, elevators, and oscillating platforms. |
@@ -125,6 +126,7 @@ a JSON object with schema `slayer3d.fragment.v0`.
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/world/e1m1.materials.json", "sections": ["sector_level_fragments"] },
     { "path": "fragments/world/e1m1.sectors.json", "sections": ["sector_level_fragments"] },
+    { "path": "fragments/world/keep_01.brushes.json", "sections": ["brush_worlds"] },
     { "path": "fragments/world/e1m1.doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/world/e1m1.platforms.json", "sections": ["sector_platforms"] },
     { "path": "fragments/input/profiles.json", "sections": ["input"] },
@@ -448,6 +450,98 @@ metrics share the same scale vocabulary.
 World kinds may include fixed-screen playfields, tile grids, room graphs,
 sector/portal maps, brush worlds, or general 3D scenes as engine support
 grows.
+
+## Brush Worlds
+
+`brush_worlds` describe native true-3D worlds built from authored convex
+brushes. This is the foundation for Quake-like spaces: vertical rooms,
+overhangs, ramps, clips, trigger volumes, and future brush collision/render
+acceleration. Sector worlds remain supported; choose brush worlds when a level
+needs real 3D geometry rather than a sector/portal floor plan.
+
+Slice 1 loads and validates brush data. Mesh compilation, collision traces,
+lighting integration, and FPS controller support are intentionally layered on
+top in later slices.
+
+```json
+{
+  "brush_worlds": [
+    {
+      "name": "brush.keep_01",
+      "units": "meters",
+      "meters_per_unit": 1.0,
+      "materials": [
+        {
+          "name": "stone_wall",
+          "texture": "asset://textures/stone_wall.png",
+          "albedo": [0.8, 0.8, 0.8, 1.0],
+          "roughness": 0.9,
+          "tex_scale": 2.0
+        }
+      ],
+      "brushes": [
+        {
+          "name": "brush.start_room",
+          "tags": ["room", "solid"],
+          "contents": ["solid", "player_clip"],
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  8 }, "material": "stone_wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "stone_wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  4 }, "material": "stone_wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "stone_wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  8 }, "material": "stone_wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "stone_wall" }
+          ]
+        }
+      ]
+    }
+  ]
+}
+```
+
+Validation requires:
+
+- unique brush world names
+- `units` omitted or `"meters"`, with positive `meters_per_unit`
+- non-empty `materials` with unique names
+- material `albedo` as vec3/vec4 values in `[0, 1]`
+- non-negative `metallic` and `roughness`
+- positive `tex_scale`
+- optional material `texture` as a non-empty existing asset path
+- non-empty `brushes` with unique names
+- optional unique non-empty brush `tags`
+- `contents` as one value or an array of unique values: `solid`,
+  `player_clip`, `projectile_clip`, `trigger`, `water`, `lava`, or `sky`
+- each brush to contain at least four `faces`
+- each face to declare `plane.normal` as a non-zero vec3 and
+  `plane.distance` as a number
+- each face `material` to reference a declared material by name or index
+- optional `surface_flags` as one value or an array of unique values:
+  `nocollide`, `slick`, `ladder`, `emissive`, or `portal_candidate`
+
+Scenes instantiate brush worlds through `world.brush_worlds`:
+
+```json
+{
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.keep_01",
+  "world": {
+    "brush_worlds": [
+      {
+        "world": "brush.keep_01",
+        "position": [0.0, 0.0, 0.0],
+        "acceleration": true,
+        "debug_wireframe": false
+      }
+    ]
+  }
+}
+```
+
+`acceleration_key` and `debug_wireframe_key` may name scene-state booleans that
+override the authored defaults. Runtime, editor, and future renderer/collision
+code should use `slayer3d_game_data_get_brush_world()` and
+`slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
 
 ## Sector Levels
 
