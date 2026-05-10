@@ -124,6 +124,8 @@ static bool asset_path_exists(validation_context *ctx, const char *asset_path, c
                               const char *asset_kind);
 static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
 static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
+static bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                          const char *type);
 static bool validate_imports_with_stack(validation_context *ctx, yyjson_val *root, import_validation_stack *stack);
 static bool validate_imports(validation_context *ctx, yyjson_val *root);
 static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyjson_val *sections,
@@ -1893,6 +1895,7 @@ static bool import_section_name_allowed(const char *name)
                                           "transitions",
                                           "ui",
                                           "editor",
+                                          "factions",
                                           "entities",
                                           "grid_maps",
                                           "grid_pickup_layers",
@@ -5170,6 +5173,8 @@ static bool validate_sector_platforms(validation_context *ctx, yyjson_val *root,
         {
             return false;
         }
+        if (!validate_target_filter_fields(ctx, platform, path, "sector platform"))
+            return false;
         yyjson_val *actions = obj_get(platform, "crush_actions");
         if (actions != NULL && !validate_action_array(ctx, actions, path, names))
             return false;
@@ -5896,7 +5901,7 @@ static bool validate_combat_target_action(validation_context *ctx, yyjson_val *a
     yyjson_val *damage_type = obj_get(action, "damage_type");
     if (damage_type != NULL && !yyjson_is_str(damage_type))
         return validation_error(ctx, json_path, "%s damage_type must be a string", type);
-    return true;
+    return validate_target_filter_fields(ctx, action, json_path, type);
 }
 
 static bool validate_combat_amount_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -5960,6 +5965,136 @@ static bool validate_optional_signal_field(validation_context *ctx, yyjson_val *
 {
     const char *signal = json_string(json, field);
     return signal == NULL || require_ref(ctx, &names->signals, "signal", signal, json_path);
+}
+
+static bool faction_relationship_valid(const char *value)
+{
+    return value != NULL && (SDL_strcmp(value, "friendly") == 0 || SDL_strcmp(value, "hostile") == 0 ||
+                             SDL_strcmp(value, "neutral") == 0 || SDL_strcmp(value, "ignored") == 0);
+}
+
+static bool target_filter_relationship_valid(const char *value)
+{
+    return value != NULL && (SDL_strcmp(value, "any") == 0 || faction_relationship_valid(value));
+}
+
+static bool validate_string_or_string_array(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                            const char *type, const char *field)
+{
+    yyjson_val *value = obj_get(json, field);
+    if (value == NULL)
+        return true;
+    if (yyjson_is_str(value))
+        return yyjson_get_str(value)[0] != '\0' ||
+               validation_error(ctx, json_path, "%s %s must contain non-empty strings", type, field);
+    if (!yyjson_is_arr(value))
+        return validation_error(ctx, json_path, "%s %s must be a string or string array", type, field);
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_str(entry) || yyjson_get_str(entry)[0] == '\0')
+            return validation_error(ctx, json_path, "%s %s must contain non-empty strings", type, field);
+    }
+    return true;
+}
+
+static bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                          const char *type)
+{
+    if (json == NULL)
+        return true;
+    yyjson_val *filter = obj_get(json, "target_filter");
+    if (filter != NULL && !yyjson_is_obj(filter))
+        return validation_error(ctx, json_path, "%s target_filter must be an object", type);
+    yyjson_val *sources[] = {json, filter};
+    for (size_t s = 0; s < SDL_arraysize(sources); ++s)
+    {
+        yyjson_val *source = sources[s];
+        if (source == NULL)
+            continue;
+        const char *string_fields[] = {"target_tag",       "affected_tag",
+                                       "hit_tag",          "target_faction",
+                                       "source_faction",   "source_faction_from_payload",
+                                       "faction_property", "source_faction_property",
+                                       "owner_property",   "owner_actor_property"};
+        for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+        {
+            if (!validate_non_empty_string_field(ctx, source, json_path, type, string_fields[i]))
+                return false;
+        }
+        const char *array_fields[] = {"include_tags", "exclude_tags", "include_factions", "exclude_factions"};
+        for (size_t i = 0; i < SDL_arraysize(array_fields); ++i)
+        {
+            if (!validate_string_or_string_array(ctx, source, json_path, type, array_fields[i]))
+                return false;
+        }
+        const char *bool_fields[] = {"exclude_source", "exclude_self", "exclude_owner"};
+        for (size_t i = 0; i < SDL_arraysize(bool_fields); ++i)
+        {
+            yyjson_val *value = obj_get(source, bool_fields[i]);
+            if (value != NULL && !yyjson_is_bool(value))
+                return validation_error(ctx, json_path, "%s %s must be a boolean", type, bool_fields[i]);
+        }
+        const char *relationship = json_string(source, "relationship");
+        if (relationship != NULL && !target_filter_relationship_valid(relationship))
+            return validation_error(ctx, json_path,
+                                    "%s relationship must be any, friendly, hostile, neutral, or ignored", type);
+    }
+    return true;
+}
+
+static bool validate_factions(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *factions = obj_get(root, "factions");
+    if (factions == NULL)
+        return true;
+    if (!yyjson_is_obj(factions))
+        return validation_error(ctx, "$.factions", "factions must be an object");
+    const char *default_relationship = json_string(factions, "default_relationship");
+    if (default_relationship != NULL && !faction_relationship_valid(default_relationship))
+    {
+        return validation_error(ctx, "$.factions",
+                                "factions default_relationship must be friendly, hostile, neutral, or ignored");
+    }
+
+    yyjson_val *key;
+    yyjson_val *value;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(factions, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        value = yyjson_obj_iter_get_val(key);
+        if (SDL_strcmp(name != NULL ? name : "", "default_relationship") == 0)
+            continue;
+        if (name == NULL || name[0] == '\0')
+            return validation_error(ctx, "$.factions", "faction names must be non-empty");
+        if (!yyjson_is_obj(value))
+        {
+            char path[PATH_BUFFER_SIZE];
+            format_path(path, sizeof(path), "$.factions.%s", name);
+            return validation_error(ctx, path, "faction entries must be objects");
+        }
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.factions.%s", name);
+        yyjson_val *rel_key;
+        yyjson_val *rel_value;
+        yyjson_obj_iter rel_iter;
+        yyjson_obj_iter_init(value, &rel_iter);
+        while ((rel_key = yyjson_obj_iter_next(&rel_iter)) != NULL)
+        {
+            const char *target = yyjson_get_str(rel_key);
+            rel_value = yyjson_obj_iter_get_val(rel_key);
+            if (target == NULL || target[0] == '\0' || !yyjson_is_str(rel_value) ||
+                !faction_relationship_valid(yyjson_get_str(rel_value)))
+            {
+                return validation_error(
+                    ctx, path,
+                    "faction relationships must map non-empty faction names to friendly, hostile, neutral, or ignored");
+            }
+        }
+    }
+    return true;
 }
 
 static bool validate_resource_grant(validation_context *ctx, yyjson_val *grant, const char *json_path,
@@ -6226,7 +6361,8 @@ static bool validate_weapon_hitscan_action(validation_context *ctx, yyjson_val *
     }
     yyjson_val *actions = obj_get(action, "actions");
     yyjson_val *miss_actions = obj_get(action, "miss_actions");
-    return (actions == NULL || validate_action_array(ctx, actions, json_path, names)) &&
+    return validate_target_filter_fields(ctx, action, json_path, "weapon.hitscan") &&
+           (actions == NULL || validate_action_array(ctx, actions, json_path, names)) &&
            (miss_actions == NULL || validate_action_array(ctx, miss_actions, json_path, names));
 }
 
@@ -6346,7 +6482,8 @@ static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val
         return validation_error(ctx, json_path, "effect.explosion max_targets must be a non-negative integer");
 
     yyjson_val *actions = obj_get(action, "actions");
-    return (actions == NULL || validate_action_array(ctx, actions, json_path, names)) &&
+    return validate_target_filter_fields(ctx, action, json_path, "effect.explosion") &&
+           (actions == NULL || validate_action_array(ctx, actions, json_path, names)) &&
            validate_optional_signal_field(ctx, action, json_path, names, "on_hit");
 }
 
@@ -7166,6 +7303,8 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
             {
                 return validation_error(ctx, path, "collision edge must be enter, stay, or overlap");
             }
+            if (!validate_target_filter_fields(ctx, sensor, path, "sensor.contact_2d"))
+                return false;
             continue;
         }
         if (SDL_strcmp(type, "sensor.input_pressed") == 0)
@@ -7232,6 +7371,8 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
                 return false;
             if (actions == NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
                 return false;
+            if (!validate_target_filter_fields(ctx, sensor, path, "sensor.sector"))
+                return false;
             continue;
         }
         if (SDL_strcmp(type, "sensor.volume") == 0)
@@ -7280,6 +7421,8 @@ static bool validate_logic(validation_context *ctx, yyjson_val *root, validation
             if (actions != NULL && !validate_action_array(ctx, actions, path, names))
                 return false;
             if (actions == NULL && !require_ref(ctx, &names->signals, "signal", signal, path))
+                return false;
+            if (!validate_target_filter_fields(ctx, sensor, path, "sensor.volume"))
                 return false;
             continue;
         }
@@ -8855,7 +8998,7 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
 
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
-    return validate_storage(ctx, root) && validate_persistence(ctx, root, names) &&
+    return validate_storage(ctx, root) && validate_persistence(ctx, root, names) && validate_factions(ctx, root) &&
            validate_input_bindings(ctx, root) && validate_input_assignment_sets(ctx, root) &&
            validate_input_profiles(ctx, root, names) && validate_grid_maps(ctx, root) &&
            validate_grid_pickup_layers(ctx, root, names) && validate_sector_levels(ctx, root) &&

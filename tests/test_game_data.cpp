@@ -7322,6 +7322,192 @@ TEST(GameDataRuntime, EffectExplosionAppliesRadialDamageImpulseAndActions)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, TargetFiltersApplyFactionAndOwnerRules)
+{
+    const std::filesystem::path dir = unique_test_dir("target_filters");
+    write_text(dir / "target_filters.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Target Filters", "id": "test.target_filters", "version": "0.1.0" },
+  "world": { "name": "world.target_filters", "kind": "fixed_screen" },
+  "factions": {
+    "player": { "player": "friendly", "monster": "hostile", "neutral": "neutral" },
+    "monster": { "player": "hostile", "monster": "friendly", "neutral": "neutral" },
+    "neutral": { "player": "neutral", "monster": "neutral", "neutral": "friendly" }
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "tags": ["combatant"],
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "faction": { "type": "string", "value": "player" },
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    },
+    {
+      "name": "entity.projectile",
+      "active": true,
+      "tags": ["projectile"],
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "faction": { "type": "string", "value": "player" },
+        "owner": { "type": "string", "value": "entity.player" }
+      }
+    },
+    {
+      "name": "entity.enemy",
+      "active": true,
+      "tags": ["combatant"],
+      "transform": { "position": [1.0, 0.0, 0.0] },
+      "properties": {
+        "faction": { "type": "string", "value": "monster" },
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    },
+    {
+      "name": "entity.ally",
+      "active": true,
+      "tags": ["combatant"],
+      "transform": { "position": [1.0, 0.0, 1.0] },
+      "properties": {
+        "faction": { "type": "string", "value": "player" },
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    },
+    {
+      "name": "entity.neutral",
+      "active": true,
+      "tags": ["combatant"],
+      "transform": { "position": [1.0, 0.0, -1.0] },
+      "properties": {
+        "faction": { "type": "string", "value": "neutral" },
+        "health": { "type": "float", "value": 100.0 },
+        "max_health": { "type": "float", "value": 100.0 }
+      }
+    }
+  ],
+  "signals": ["signal.blast", "signal.filtered_damage"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.blast",
+        "actions": [
+          {
+            "type": "effect.explosion",
+            "source": "entity.projectile",
+            "radius": 3.0,
+            "falloff": "constant",
+            "damage": 20.0,
+            "target_filter": {
+              "relationship": "hostile",
+              "include_tags": ["combatant"],
+              "exclude_owner": true,
+              "exclude_source": true
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.filtered_damage",
+        "actions": [
+          {
+            "type": "combat.damage",
+            "source": "entity.player",
+            "target": "entity.ally",
+            "amount": 20.0,
+            "target_filter": { "relationship": "hostile" }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.player", "entity.projectile", "entity.enemy", "entity.ally", "entity.neutral"]
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(sdl3d_game_data_load_file((dir / "target_filters.game.json").string().c_str(), session, &runtime, error,
+                                          sizeof(error)))
+        << error;
+    sdl3d_signal_bus *bus = sdl3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.blast"), nullptr);
+    sdl3d_signal_emit(bus, sdl3d_game_data_find_signal(runtime, "signal.filtered_damage"), nullptr);
+
+    sdl3d_registered_actor *player = sdl3d_game_data_find_actor(runtime, "entity.player");
+    sdl3d_registered_actor *enemy = sdl3d_game_data_find_actor(runtime, "entity.enemy");
+    sdl3d_registered_actor *ally = sdl3d_game_data_find_actor(runtime, "entity.ally");
+    sdl3d_registered_actor *neutral = sdl3d_game_data_find_actor(runtime, "entity.neutral");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(enemy, nullptr);
+    ASSERT_NE(ally, nullptr);
+    ASSERT_NE(neutral, nullptr);
+
+    EXPECT_NEAR(sdl3d_properties_get_float(player->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(enemy->props, "health", 0.0f), 80.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(ally->props, "health", 0.0f), 100.0f, 0.001f);
+    EXPECT_NEAR(sdl3d_properties_get_float(neutral->props, "health", 0.0f), 100.0f, 0.001f);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidFactionAndTargetFilterData)
+{
+    const std::filesystem::path dir = unique_test_dir("invalid_target_filters");
+    write_text(dir / "invalid_target_filters.game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Invalid Target Filters", "id": "test.invalid_target_filters", "version": "0.1.0" },
+  "world": { "name": "world.invalid_target_filters", "kind": "fixed_screen" },
+  "factions": {
+    "player": { "monster": "very_hostile" }
+  },
+  "entities": [{ "name": "entity.actor", "active": true }],
+  "signals": ["signal.test"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.test",
+        "actions": [
+          {
+            "type": "effect.explosion",
+            "source": "entity.actor",
+            "radius": 1.0,
+            "target_filter": { "relationship": "hostile" }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "sdl3d.scene.v0", "name": "scene.play", "entities": ["entity.actor"] })json");
+
+    char error[512]{};
+    EXPECT_FALSE(sdl3d_game_data_validate_file((dir / "invalid_target_filters.game.json").string().c_str(), nullptr,
+                                               error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("faction relationships"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, EffectExplosionSupportsBoundedChainReactions)
 {
     const std::filesystem::path dir = unique_test_dir("effect_explosion_chain");

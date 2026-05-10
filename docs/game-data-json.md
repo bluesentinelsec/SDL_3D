@@ -164,6 +164,8 @@ Import rules:
 - `actor_instances` and `sector_level_fragments` are composition-time authoring
   helpers; they are expanded into normal `entities` and `sector_levels` before
   ordinary validation and runtime loading
+- `factions` is mergeable so combat relationship policy can live in shared
+  gameplay fragments
 - `editor` metadata is mergeable so templates and future editor palettes can
   live beside the fragments they describe
 
@@ -1495,6 +1497,56 @@ Prefer combat actions over raw `property.add` for gameplay health because they
 centralize armor absorption, clamping, alive/dead state, and signal emission.
 Raw property actions remain useful for simple meters, counters, and diagnostic
 state.
+
+### Factions And Target Filters
+
+Games can author a reusable faction relationship matrix at the root:
+
+```json
+{
+  "factions": {
+    "player": { "player": "friendly", "monster": "hostile", "neutral": "neutral" },
+    "monster": { "player": "hostile", "monster": "friendly", "neutral": "neutral" },
+    "neutral": { "player": "neutral", "monster": "neutral", "neutral": "friendly" }
+  }
+}
+```
+
+Actors participate by storing a string property, `faction` by default. If no
+matrix entry exists, actors in the same faction are treated as `friendly`,
+actors in different non-empty factions are treated as `hostile`, and missing
+factions are treated as `neutral`.
+
+Combat damage, hitscan weapons, explosions, contact/sector/volume sensors, and
+sector platform crush hazards accept `target_filter`:
+
+```json
+{
+  "type": "effect.explosion",
+  "source": "entity.player_rocket",
+  "radius": 4.0,
+  "damage": 45.0,
+  "target_filter": {
+    "relationship": "hostile",
+    "include_tags": ["combatant"],
+    "exclude_owner": true,
+    "owner_property": "owner",
+    "exclude_source": true
+  }
+}
+```
+
+Supported filters include `relationship` (`any`, `friendly`, `hostile`,
+`neutral`, or `ignored`), `target_faction`, `include_factions`,
+`exclude_factions`, `target_tag`, `include_tags`, `exclude_tags`,
+`exclude_source` / `exclude_self`, `exclude_owner`, `owner_property`,
+`faction_property`, `source_faction`, `source_faction_from_payload`, and
+`source_faction_property`. String-list fields accept either one string or an
+array of strings.
+
+Use filters instead of duplicating tag-only logic. They keep friendly fire,
+trap ownership, neutral NPCs, projectile owners, and world-owned hazards
+data-authored and consistent across combat, sensors, and effects.
 
 `effect.explosion` applies an authored radial effect around a position or actor.
 It is suitable for grenades, exploding barrels, blast spells, mines, traps, and
