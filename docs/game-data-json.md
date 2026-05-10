@@ -546,6 +546,17 @@ override the authored defaults. Runtime and editor code should use
 Brush render meshes are available through `brush_world.render_model` and are
 drawn by the generic data-game frame path.
 
+Collision, weapon, sensor, and editor systems can query brush worlds through
+the generic trace helpers. `slayer3d_game_data_trace_brush_world()` traces in a
+named brush world's local space; `slayer3d_game_data_trace_active_brush_worlds()`
+traces in active-scene world space and honors each `world.brush_worlds`
+instance's placement. Traces support point/ray, swept sphere, and swept AABB
+shapes, filter against `contents` masks, ignore `nocollide` faces, and report
+the hit fraction, plane normal, brush, material, contents, and surface flags.
+`slayer3d_game_data_slide_brush_world()` and
+`slayer3d_game_data_slide_active_brush_worlds()` layer deterministic
+plane-sliding over those traces for controllers and projectile movement.
+
 ## Sector Levels
 
 `sector_levels` describe sector/portal worlds as data. This is the reusable

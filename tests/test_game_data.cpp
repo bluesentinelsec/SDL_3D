@@ -10681,6 +10681,176 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
     }
 }
 
+TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_world_traces");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [
+      { "world": "brush.trace", "position": [10.0, 0.0, 0.0] }
+    ]
+  }
+})json");
+    write_text(dir / "brush_trace.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Trace Test" },
+  "world": { "name": "world.brush_trace", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.trace",
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.5, 0.5, 0.55, 1.0] },
+        { "name": "mat.ramp", "albedo": [0.8, 0.5, 0.25, 1.0] },
+        { "name": "mat.trigger", "albedo": [0.25, 0.8, 0.9, 0.35] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "contents": ["solid", "player_clip"],
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  4 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  3 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  4 }, "material": "mat.wall", "surface_flags": "slick" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.ramp",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1, 0, 0], "distance":  9 }, "material": "mat.ramp" },
+            { "plane": { "normal": [-1, 0, 0], "distance": -6 }, "material": "mat.ramp" },
+            { "plane": { "normal": [ 0, 0, 1], "distance":  3 }, "material": "mat.ramp" },
+            { "plane": { "normal": [ 0, 0,-1], "distance":  0 }, "material": "mat.ramp" },
+            { "plane": { "normal": [ 0,-1, 0], "distance":  0 }, "material": "mat.ramp" },
+            { "plane": { "normal": [-0.5, 1, 0], "distance": -2.5 }, "material": "mat.ramp" }
+          ]
+        },
+        {
+          "name": "brush.trigger",
+          "contents": "trigger",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  8 }, "material": "mat.trigger" },
+            { "plane": { "normal": [-1,  0,  0], "distance": -6 }, "material": "mat.trigger" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  2 }, "material": "mat.trigger" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [ 0,  0,  1], "distance": -5 }, "material": "mat.trigger" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  7 }, "material": "mat.trigger" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "brush_trace.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_trace_desc trace{};
+    slayer3d_game_data_brush_trace_result result{};
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    trace.start = slayer3d_vec3_make(-2.0f, 1.0f, 2.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 1.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_FALSE(result.start_solid);
+    EXPECT_NEAR(result.fraction, 0.5f, 0.001f);
+    EXPECT_STREQ(result.brush_name, "brush.box");
+    EXPECT_NEAR(result.normal.x, -1.0f, 0.0001f);
+
+    trace.start = slayer3d_vec3_make(2.0f, 1.0f, 6.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 1.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_STREQ(result.material_name, "mat.wall");
+    EXPECT_EQ(result.surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_SLICK);
+    EXPECT_NEAR(result.normal.z, 1.0f, 0.0001f);
+
+    trace.start = slayer3d_vec3_make(-2.0f, 4.0f, 2.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 4.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_FALSE(result.hit);
+    EXPECT_FLOAT_EQ(result.fraction, 1.0f);
+
+    trace.start = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 1.0f, 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_TRUE(result.start_solid);
+    EXPECT_FLOAT_EQ(result.fraction, 0.0f);
+
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_SPHERE;
+    trace.extents = slayer3d_vec3_make(0.5f, 0.0f, 0.0f);
+    trace.start = slayer3d_vec3_make(-2.0f, 1.0f, 2.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 1.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_NEAR(result.fraction, 0.375f, 0.001f);
+
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_AABB;
+    trace.extents = slayer3d_vec3_make(0.25f, 0.5f, 0.25f);
+    trace.start = slayer3d_vec3_make(-2.0f, 1.0f, 2.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 1.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_NEAR(result.fraction, 0.4375f, 0.001f);
+
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.extents = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER;
+    trace.start = slayer3d_vec3_make(7.0f, 1.0f, -8.0f);
+    trace.end = slayer3d_vec3_make(7.0f, 1.0f, -6.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_STREQ(result.brush_name, "brush.trigger");
+    EXPECT_EQ(result.contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER);
+
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_FALSE(result.hit);
+
+    trace.start = slayer3d_vec3_make(7.0f, 5.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(7.0f, -1.0f, 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.trace", &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_STREQ(result.brush_name, "brush.ramp");
+    EXPECT_GT(result.normal.y, 0.8f);
+    EXPECT_LT(result.normal.x, -0.4f);
+
+    trace.start = slayer3d_vec3_make(8.0f, 1.0f, 2.0f);
+    trace.end = slayer3d_vec3_make(12.0f, 1.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_active_brush_worlds(runtime, &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_STREQ(result.world_name, "brush.trace");
+    EXPECT_STREQ(result.brush_name, "brush.box");
+    EXPECT_NEAR(result.end_position.x, 10.0f, 0.001f);
+
+    trace.start = slayer3d_vec3_make(-2.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 1.0f, 3.0f);
+    ASSERT_TRUE(slayer3d_game_data_slide_brush_world(runtime, "brush.trace", &trace, 4, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_STREQ(result.brush_name, "brush.box");
+    EXPECT_NEAR(result.end_position.x, -0.0005f, 0.001f);
+    EXPECT_GT(result.end_position.z, 2.9f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, SectorLightingModulatesLitActorsAndCanUpdateAtRuntime)
 {
     const std::filesystem::path dir = unique_test_dir("sector_lighting_runtime");
