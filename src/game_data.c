@@ -6182,6 +6182,20 @@ static sdl3d_game_data_mesh_primitive_kind mesh_primitive_kind_from_string(const
         return SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID;
     if (SDL_strcmp(name, "wedge") == 0)
         return SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE;
+    if (SDL_strcmp(name, "plane") == 0 || SDL_strcmp(name, "quad") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE;
+    if (SDL_strcmp(name, "disc") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC;
+    if (SDL_strcmp(name, "hemisphere") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE;
+    if (SDL_strcmp(name, "rounded_box") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX;
+    if (SDL_strcmp(name, "tube_segment") == 0 || SDL_strcmp(name, "pipe") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT;
+    if (SDL_strcmp(name, "arrow") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW;
+    if (SDL_strcmp(name, "billboard_plane") == 0)
+        return SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE;
     return SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID;
 }
 
@@ -6194,6 +6208,35 @@ static sdl3d_game_data_render_draw_mode render_draw_mode_from_string(const char 
     if (SDL_strcmp(name, "solid_wire") == 0)
         return SDL3D_GAME_DATA_RENDER_DRAW_SOLID_WIRE;
     return SDL3D_GAME_DATA_RENDER_DRAW_SOLID;
+}
+
+static void populate_mesh_primitive_descriptor(const sdl3d_registered_actor *actor, yyjson_val *component,
+                                               sdl3d_game_data_render_primitive *primitive)
+{
+    if (component == NULL || primitive == NULL)
+        return;
+    primitive->type = SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE;
+    primitive->mesh_primitive = mesh_primitive_kind_from_string(json_string(component, "primitive", NULL));
+    primitive->draw_mode = render_draw_mode_from_string(json_string(component, "draw_mode", NULL));
+    primitive->size = json_vec3(component, "size", primitive->size);
+    const char *size_property = json_string(component, "size_property", NULL);
+    if (actor != NULL && size_property != NULL)
+        primitive->size = sdl3d_properties_get_vec3(actor->props, size_property, primitive->size);
+    primitive->radius = json_float(component, "radius", primitive->radius);
+    primitive->height =
+        json_float(component, "height", primitive->height > 0.0f ? primitive->height : primitive->size.y);
+    primitive->radius_top = json_float(component, "radius_top", primitive->radius);
+    primitive->radius_bottom = json_float(component, "radius_bottom", primitive->radius);
+    primitive->major_radius = json_float(component, "major_radius", primitive->major_radius);
+    primitive->minor_radius = json_float(component, "minor_radius", primitive->minor_radius);
+    primitive->bevel_radius =
+        json_float(component, "bevel_radius", json_float(component, "radius", primitive->bevel_radius));
+    primitive->arc_angle = json_float(component, "arc_angle", primitive->arc_angle);
+    primitive->slices = SDL_max(json_int(component, "slices", json_int(component, "segments", primitive->slices)), 3);
+    primitive->rings = SDL_max(json_int(component, "rings", primitive->rings), 3);
+    primitive->tube_segments = SDL_max(json_int(component, "tube_segments", primitive->tube_segments), 3);
+    if (primitive->mesh_primitive == SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE)
+        primitive->radius_top = json_float(component, "radius_top", 0.0f);
 }
 
 static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
@@ -6228,6 +6271,18 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
         primitive.emissive_color =
             primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
         primitive.wire_color = json_color(component, "wire_color", (sdl3d_color){0, 0, 0, 255});
+        primitive.size = sdl3d_vec3_make(1.0f, 1.0f, 1.0f);
+        primitive.radius = 0.5f;
+        primitive.height = primitive.size.y;
+        primitive.radius_top = primitive.radius;
+        primitive.radius_bottom = primitive.radius;
+        primitive.major_radius = 0.5f;
+        primitive.minor_radius = 0.15f;
+        primitive.bevel_radius = 0.15f;
+        primitive.arc_angle = 3.1415927f;
+        primitive.slices = 24;
+        primitive.rings = 8;
+        primitive.tube_segments = primitive.rings;
 
         if (SDL_strcmp(type, "render.cube") == 0)
         {
@@ -6246,24 +6301,44 @@ static bool emit_actor_render_primitives(const sdl3d_game_data_runtime *runtime,
         }
         else if (SDL_strcmp(type, "render.mesh_primitive") == 0)
         {
-            primitive.type = SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE;
-            primitive.mesh_primitive = mesh_primitive_kind_from_string(json_string(component, "primitive", NULL));
-            primitive.draw_mode = render_draw_mode_from_string(json_string(component, "draw_mode", NULL));
-            primitive.size = json_vec3(component, "size", sdl3d_vec3_make(1.0f, 1.0f, 1.0f));
-            const char *size_property = json_string(component, "size_property", NULL);
-            if (size_property != NULL)
-                primitive.size = sdl3d_properties_get_vec3(actor->props, size_property, primitive.size);
-            primitive.radius = json_float(component, "radius", 0.5f);
-            primitive.height = json_float(component, "height", primitive.size.y);
-            primitive.radius_top = json_float(component, "radius_top", primitive.radius);
-            primitive.radius_bottom = json_float(component, "radius_bottom", primitive.radius);
-            primitive.major_radius = json_float(component, "major_radius", 0.5f);
-            primitive.minor_radius = json_float(component, "minor_radius", 0.15f);
-            primitive.slices = SDL_max(json_int(component, "slices", json_int(component, "segments", 24)), 3);
-            primitive.rings = SDL_max(json_int(component, "rings", 8), 3);
-            primitive.tube_segments = SDL_max(json_int(component, "tube_segments", primitive.rings), 3);
-            if (primitive.mesh_primitive == SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE)
-                primitive.radius_top = json_float(component, "radius_top", 0.0f);
+            populate_mesh_primitive_descriptor(actor, component, &primitive);
+        }
+        else if (SDL_strcmp(type, "render.composite") == 0)
+        {
+            yyjson_val *parts = obj_get(component, "parts");
+            if (!yyjson_is_arr(parts))
+                continue;
+            for (size_t p = 0; p < yyjson_arr_size(parts); ++p)
+            {
+                yyjson_val *part = yyjson_arr_get(parts, p);
+                sdl3d_game_data_render_primitive part_primitive = primitive;
+                const sdl3d_vec3 part_offset = json_vec3(part, "offset", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+                part_primitive.position.x += part_offset.x;
+                part_primitive.position.y += part_offset.y;
+                part_primitive.position.z += part_offset.z;
+                part_primitive.rotation_axis = json_vec3(part, "rotation_axis", part_primitive.rotation_axis);
+                part_primitive.rotation_angle = json_float(part, "rotation_angle", part_primitive.rotation_angle);
+                const char *part_rotation_property = json_string(part, "rotation_property", NULL);
+                if (part_rotation_property != NULL)
+                    part_primitive.rotation_angle +=
+                        sdl3d_properties_get_float(actor->props, part_rotation_property, 0.0f);
+                part_primitive.color = json_color(part, "color", part_primitive.color);
+                part_primitive.texture_image = json_string(part, "texture", part_primitive.texture_image);
+                part_primitive.lighting_enabled = json_bool(part, "lighting", part_primitive.lighting_enabled);
+                part_primitive.emissive = json_bool(part, "emissive", part_primitive.emissive);
+                part_primitive.emissive_color =
+                    part_primitive.emissive ? sdl3d_vec3_make(0.2f, 0.2f, 0.2f) : part_primitive.emissive_color;
+                part_primitive.wire_color = json_color(part, "wire_color", part_primitive.wire_color);
+                populate_mesh_primitive_descriptor(actor, part, &part_primitive);
+                if (eval != NULL)
+                {
+                    apply_render_effects(runtime, component, eval, &part_primitive);
+                    apply_render_effects(runtime, part, eval, &part_primitive);
+                }
+                if (!callback(userdata, &part_primitive))
+                    return false;
+            }
+            continue;
         }
         else if (SDL_strcmp(type, "render.sprite") == 0)
         {

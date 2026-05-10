@@ -11,7 +11,7 @@
       "sectors": [
         {
           "name": "showcase_room",
-          "points": [[0, 0], [26, 0], [26, 24], [0, 24]],
+          "points": [[0, 0], [52, 0], [52, 48], [0, 48]],
           "floor_y": 0.0,
           "ceil_y": 7.0,
           "floor_material": "floor.gray",

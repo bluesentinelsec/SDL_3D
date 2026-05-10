@@ -7063,7 +7063,7 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
     struct MeshDojoCapture
     {
         int count = 0;
-        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE + 1] = {};
+        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
         bool saw_solid_wire = false;
     } capture;
     auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
@@ -7073,9 +7073,9 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
         mesh_capture->count++;
         EXPECT_TRUE(primitive->lighting_enabled) << primitive->entity_name;
         EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
-        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
+        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
         if (primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID &&
-            primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE)
+            primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
         {
             mesh_capture->seen[primitive->mesh_primitive] = true;
         }
@@ -7084,9 +7084,9 @@ TEST(GameDataRuntime, MeshPrimitivesDojoLoadsGrayboxShowcase)
         return true;
     };
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
-    EXPECT_EQ(capture.count, 8);
+    EXPECT_GE(capture.count, 15);
     EXPECT_TRUE(capture.saw_solid_wire);
-    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE; ++kind)
+    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE; ++kind)
         EXPECT_TRUE(capture.seen[kind]) << kind;
 
     sdl3d_game_data_destroy(runtime);
@@ -9107,6 +9107,24 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
       "components": [
         { "type": "render.mesh_primitive", "primitive": "wedge", "size": [1.0, 0.5, 1.5], "lighting": false }
       ]
+    },
+    {
+      "name": "entity.mesh.composite",
+      "active": true,
+      "components": [
+        {
+          "type": "render.composite",
+          "parts": [
+            { "primitive": "plane", "size": [1.2, 0.8, 0.05] },
+            { "primitive": "disc", "radius": 0.4, "segments": 16 },
+            { "primitive": "hemisphere", "radius": 0.45, "segments": 16, "rings": 8 },
+            { "primitive": "rounded_box", "size": [0.9, 0.7, 0.5], "bevel_radius": 0.1, "rings": 4 },
+            { "primitive": "pipe", "major_radius": 0.55, "minor_radius": 0.08, "arc_angle": 1.5707964, "segments": 12, "tube_segments": 8 },
+            { "primitive": "arrow", "radius": 0.2, "height": 1.0, "segments": 12 },
+            { "primitive": "billboard_plane", "size": [0.8, 0.8, 0.05] }
+          ]
+        }
+      ]
     }
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
@@ -9130,7 +9148,7 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
     struct MeshCapture
     {
         int count = 0;
-        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE + 1] = {};
+        bool seen[SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE + 1] = {};
     } capture;
     auto capture_mesh = [](void *userdata, const sdl3d_game_data_render_primitive *primitive) -> bool {
         auto *mesh_capture = static_cast<MeshCapture *>(userdata);
@@ -9138,9 +9156,9 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
             return true;
         mesh_capture->count++;
         EXPECT_GT(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID);
-        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE);
+        EXPECT_LE(primitive->mesh_primitive, SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE);
         if (primitive->mesh_primitive <= SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID ||
-            primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE)
+            primitive->mesh_primitive > SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE)
         {
             return false;
         }
@@ -9174,8 +9192,8 @@ TEST(GameDataRuntime, EmitsAuthoredMeshPrimitiveDescriptors)
     };
 
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_mesh, &capture));
-    EXPECT_EQ(capture.count, 8);
-    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE; ++kind)
+    EXPECT_EQ(capture.count, 15);
+    for (int kind = SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE; kind <= SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE; ++kind)
         EXPECT_TRUE(capture.seen[kind]) << kind;
 
     sdl3d_game_data_destroy(runtime);

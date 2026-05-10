@@ -433,6 +433,20 @@ extern "C"
         SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID = 7,
         /** @brief Wedge/ramp mesh primitive. */
         SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE = 8,
+        /** @brief Flat rectangular plane/quad mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE = 9,
+        /** @brief Flat circular disc mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC = 10,
+        /** @brief Half-sphere dome mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE = 11,
+        /** @brief Rounded box mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX = 12,
+        /** @brief Curved pipe/tube segment mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT = 13,
+        /** @brief Arrow marker mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW = 14,
+        /** @brief Flat vertical billboard-style plane mesh primitive. */
+        SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE = 15,
     } sdl3d_game_data_mesh_primitive_kind;
 
     /** @brief Draw mode selected by authored procedural mesh primitives. */
@@ -491,6 +505,10 @@ extern "C"
         float major_radius;
         /** @brief Torus minor/tube radius for SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS. */
         float minor_radius;
+        /** @brief Rounded-box bevel radius for SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX. */
+        float bevel_radius;
+        /** @brief Arc angle in radians for SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT. */
+        float arc_angle;
         /** @brief Secondary tessellation count, such as torus tube segments. */
         int tube_segments;
         /** @brief Authored tint color. */
@@ -2252,8 +2270,9 @@ extern "C"
     /**
      * @brief Iterate active authored render primitive components.
      *
-     * Components currently supported by this iterator are `render.cube` and
-     * `render.sphere`. Iteration skips inactive actors.
+     * Components currently supported by this iterator include `render.cube`,
+     * `render.sphere`, `render.mesh_primitive`, `render.composite`,
+     * `render.sprite`, and `render.model`. Iteration skips inactive actors.
      */
     bool sdl3d_game_data_for_each_render_primitive(const sdl3d_game_data_runtime *runtime,
                                                    sdl3d_game_data_render_primitive_fn callback, void *userdata);

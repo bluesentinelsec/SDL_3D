@@ -10,6 +10,5 @@ build/debug/sdl3d_runner \
 ```
 
 The room is a large sector-bounded square using untextured gray materials, a
-single directional sun light, an FPS camera/controller, and one authored entity
-for each primitive kind: cube, sphere, capsule, cylinder, cone, torus, pyramid,
-and wedge.
+single directional sun light, an FPS camera/controller, one authored entity for
+each primitive kind, and a few mock actors assembled with `render.composite`.

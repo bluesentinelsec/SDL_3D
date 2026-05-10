@@ -163,8 +163,8 @@ runner path while avoiding splash/title/campaign flow during development.
 
 `demos/mesh_primitives_dojo` is a graybox showcase for procedural 3D placeholder
 geometry. It uses a sector-bounded room, one directional sun light, an FPS
-camera, and one differently colored actor for each `render.mesh_primitive`
-shape:
+camera, one differently colored actor for each `render.mesh_primitive` shape,
+and composite mock actors assembled from primitive parts:
 
 ```sh
 build/debug/sdl3d_runner \

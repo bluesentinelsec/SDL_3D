@@ -1406,15 +1406,27 @@ Reusable components include:
   dimensions.
 - `render.mesh_primitive`: declares a procedural placeholder mesh descriptor.
   The canonical `primitive` values are `cube`, `sphere`, `capsule`,
-  `cylinder`, `cone`, `torus`, `pyramid`, and `wedge`. These descriptors use
-  the same transform, `color`, `texture`, `lighting`, and `emissive` fields as
-  other render primitives where applicable, and add `draw_mode`: `solid`
-  (default), `wire`, or `solid_wire`. Dimension fields include `size`,
-  `radius`, `height`, `radius_top`, `radius_bottom`, `major_radius`,
-  `minor_radius`, `segments`/`slices`, `rings`, and `tube_segments`. This is the
-  stable data/runtime representation for procedural mesh primitives. The
-  generic presentation path renders every primitive as shaded solid geometry by
+  `cylinder`, `cone`, `torus`, `pyramid`, `wedge`, `plane`, `quad`, `disc`,
+  `hemisphere`, `rounded_box`, `tube_segment`, `pipe`, `arrow`, and
+  `billboard_plane`. `quad` is an alias for `plane`; `pipe` is an alias for
+  `tube_segment`. `billboard_plane` is a flat 3D placeholder plane; use
+  `render.sprite` when you need an actual texture-backed camera-facing
+  billboard. These descriptors use the same transform, `color`, `texture`,
+  `lighting`, and `emissive` fields as other render primitives where
+  applicable, and add `draw_mode`: `solid` (default), `wire`, or `solid_wire`.
+  Dimension fields include `size`, `radius`, `height`, `radius_top`,
+  `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
+  `segments`/`slices`, `rings`, and `tube_segments`. This is the stable
+  data/runtime representation for procedural mesh primitives. The generic
+  presentation path renders every primitive as shaded solid geometry by
   default, with optional wire-only or solid-plus-wire modes.
+- `render.composite`: expands one actor into multiple procedural
+  `render.mesh_primitive` parts. Use `parts` as a non-empty array of mesh
+  primitive descriptors. Part `offset` values are local offsets from the owning
+  actor, and part fields such as `color`, `lighting`, `draw_mode`, dimensions,
+  and rotation override the composite defaults. This is intended for quick
+  proof-of-concept actors such as robots, ships, decorations, pickups, markers,
+  and editor placeholders before bespoke model assets exist.
 - `render.model`: renders an authored `assets.models` entry with `model`,
   optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
   animation playback via `animation_clip` and `animation_time_property`.

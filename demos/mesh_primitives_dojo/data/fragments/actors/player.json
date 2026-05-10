@@ -5,7 +5,7 @@
       "name": "entity.player",
       "active": true,
       "tags": ["player", "fps_actor"],
-      "transform": { "position": [13.0, 1.6, 4.0] },
+      "transform": { "position": [26.0, 1.6, 6.0] },
       "properties": {
         "yaw": { "type": "float", "value": 3.1415927 },
         "pitch": { "type": "float", "value": 0.0 },

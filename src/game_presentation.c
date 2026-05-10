@@ -868,6 +868,28 @@ static bool draw_mesh_primitive_solid(primitive_draw_context *context,
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
         return sdl3d_draw_wedge(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
                                 primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+        return sdl3d_draw_quad(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                               (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return sdl3d_draw_disc(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                               primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return sdl3d_draw_hemisphere(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                     primitive->rings, primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return sdl3d_draw_rounded_box(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                      primitive->bevel_radius, primitive->rings, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return sdl3d_draw_tube_segment(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
+                                       primitive->minor_radius, primitive->arc_angle, primitive->slices,
+                                       primitive->tube_segments, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+        return sdl3d_draw_arrow(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                primitive->height, primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        return sdl3d_draw_quad(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                               (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->color);
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
     default:
         return false;
@@ -912,6 +934,28 @@ static bool draw_mesh_primitive_wires(primitive_draw_context *context,
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
         return sdl3d_draw_wedge_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
                                       primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+        return sdl3d_draw_quad_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                     (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return sdl3d_draw_disc_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                     primitive->slices, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return sdl3d_draw_hemisphere_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                           primitive->rings, primitive->slices, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return sdl3d_draw_rounded_box_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                            primitive->bevel_radius, primitive->rings, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return sdl3d_draw_tube_segment_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                             primitive->major_radius, primitive->minor_radius, primitive->arc_angle,
+                                             primitive->slices, primitive->tube_segments, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+        return sdl3d_draw_arrow_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                      primitive->height, primitive->slices, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        return sdl3d_draw_quad_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                     (sdl3d_vec2){primitive->size.x, primitive->size.y}, primitive->wire_color);
     case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
     default:
         return false;

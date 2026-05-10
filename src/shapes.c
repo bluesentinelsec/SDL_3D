@@ -359,6 +359,137 @@ bool sdl3d_draw_plane(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_ve
     return result;
 }
 
+bool sdl3d_draw_quad(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec2 size, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_quad") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_quad"))
+    {
+        return false;
+    }
+
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    const float positions[12] = {
+        center.x - hx, center.y - hy, center.z, center.x + hx, center.y - hy, center.z,
+        center.x + hx, center.y + hy, center.z, center.x - hx, center.y + hy, center.z,
+    };
+    const float normals[12] = {
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+    };
+    const unsigned int indices[6] = {0, 1, 2, 0, 2, 3};
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = (float *)positions;
+    mesh.normals = (float *)normals;
+    mesh.indices = (unsigned int *)indices;
+    mesh.vertex_count = 4;
+    mesh.index_count = 6;
+    return sdl3d_draw_mesh(context, &mesh, NULL, color);
+}
+
+bool sdl3d_draw_quad_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec2 size, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_quad_wires") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_quad_wires"))
+    {
+        return false;
+    }
+
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    const sdl3d_vec3 p[4] = {
+        sdl3d_vec3_make(center.x - hx, center.y - hy, center.z),
+        sdl3d_vec3_make(center.x + hx, center.y - hy, center.z),
+        sdl3d_vec3_make(center.x + hx, center.y + hy, center.z),
+        sdl3d_vec3_make(center.x - hx, center.y + hy, center.z),
+    };
+    static const int edges[4][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}};
+    for (int i = 0; i < 4; ++i)
+    {
+        if (!sdl3d_draw_line_3d(context, p[edges[i][0]], p[edges[i][1]], color))
+            return false;
+    }
+    return true;
+}
+
+bool sdl3d_draw_disc(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int segments, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(radius, "radius", "sdl3d_draw_disc"))
+        return false;
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_disc requires segments >= 3.");
+
+    const int vert_count = segments + 1;
+    const int idx_count = segments * 3;
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
+    positions[0] = center.x;
+    positions[1] = center.y;
+    positions[2] = center.z;
+    normals[0] = 0.0f;
+    normals[1] = 0.0f;
+    normals[2] = 1.0f;
+    for (int i = 0; i < segments; ++i)
+    {
+        const float a = (float)i / (float)segments * SDL3D_SHAPES_PI * 2.0f;
+        const int vi = i + 1;
+        positions[vi * 3 + 0] = center.x + SDL_cosf(a) * radius;
+        positions[vi * 3 + 1] = center.y + SDL_sinf(a) * radius;
+        positions[vi * 3 + 2] = center.z;
+        normals[vi * 3 + 0] = 0.0f;
+        normals[vi * 3 + 1] = 0.0f;
+        normals[vi * 3 + 2] = 1.0f;
+    }
+    for (int i = 0; i < segments; ++i)
+    {
+        indices[i * 3 + 0] = 0U;
+        indices[i * 3 + 1] = (unsigned int)(i + 1);
+        indices[i * 3 + 2] = (unsigned int)((i + 1) % segments + 1);
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+    const bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
+}
+
+bool sdl3d_draw_disc_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int segments,
+                           sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(radius, "radius", "sdl3d_draw_disc_wires"))
+        return false;
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_disc_wires requires segments >= 3.");
+    sdl3d_vec3 previous = sdl3d_vec3_make(center.x + radius, center.y, center.z);
+    for (int i = 1; i <= segments; ++i)
+    {
+        const float a = (float)i / (float)segments * SDL3D_SHAPES_PI * 2.0f;
+        const sdl3d_vec3 next =
+            sdl3d_vec3_make(center.x + SDL_cosf(a) * radius, center.y + SDL_sinf(a) * radius, center.z);
+        if (!sdl3d_draw_line_3d(context, previous, next, color))
+            return false;
+        previous = next;
+    }
+    return true;
+}
+
 bool sdl3d_draw_grid(sdl3d_render_context *context, int slices, float spacing, sdl3d_color color)
 {
     if (slices < 1)
@@ -594,6 +725,139 @@ bool sdl3d_draw_sphere_wires(sdl3d_render_context *context, sdl3d_vec3 center, f
             }
             previous = next;
         }
+    }
+    return true;
+}
+
+bool sdl3d_draw_hemisphere(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
+                           sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(radius, "radius", "sdl3d_draw_hemisphere"))
+        return false;
+    if (rings < 2)
+        return SDL_SetError("sdl3d_draw_hemisphere requires rings >= 2.");
+    if (slices < 3)
+        return SDL_SetError("sdl3d_draw_hemisphere requires slices >= 3.");
+
+    const int curved_vertices = (rings + 1) * (slices + 1);
+    const int cap_center = curved_vertices;
+    const int vert_count = curved_vertices + 1;
+    const int idx_count = rings * slices * 6 + slices * 3;
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
+    const float y_offset = radius * 0.5f;
+    for (int r = 0; r <= rings; ++r)
+    {
+        const float t = (float)r / (float)rings;
+        const float theta = t * SDL3D_SHAPES_PI * 0.5f;
+        const float ring_radius = SDL_sinf(theta) * radius;
+        const float y = SDL_cosf(theta) * radius - y_offset;
+        for (int s = 0; s <= slices; ++s)
+        {
+            const float phi = (float)s / (float)slices * SDL3D_SHAPES_PI * 2.0f;
+            const float x = SDL_cosf(phi) * ring_radius;
+            const float z = SDL_sinf(phi) * ring_radius;
+            const int vi = r * (slices + 1) + s;
+            positions[vi * 3 + 0] = center.x + x;
+            positions[vi * 3 + 1] = center.y + y;
+            positions[vi * 3 + 2] = center.z + z;
+            const sdl3d_vec3 normal = sdl3d_vec3_normalize(sdl3d_vec3_make(x, y + y_offset, z));
+            normals[vi * 3 + 0] = normal.x;
+            normals[vi * 3 + 1] = normal.y;
+            normals[vi * 3 + 2] = normal.z;
+        }
+    }
+
+    int ii = 0;
+    for (int r = 0; r < rings; ++r)
+    {
+        for (int s = 0; s < slices; ++s)
+        {
+            const unsigned int a = (unsigned int)(r * (slices + 1) + s);
+            const unsigned int b = a + 1U;
+            const unsigned int c = (unsigned int)((r + 1) * (slices + 1) + s);
+            const unsigned int d = c + 1U;
+            indices[ii++] = a;
+            indices[ii++] = c;
+            indices[ii++] = b;
+            indices[ii++] = b;
+            indices[ii++] = c;
+            indices[ii++] = d;
+        }
+    }
+
+    positions[cap_center * 3 + 0] = center.x;
+    positions[cap_center * 3 + 1] = center.y - y_offset;
+    positions[cap_center * 3 + 2] = center.z;
+    normals[cap_center * 3 + 0] = 0.0f;
+    normals[cap_center * 3 + 1] = -1.0f;
+    normals[cap_center * 3 + 2] = 0.0f;
+    const int base_row = rings * (slices + 1);
+    for (int s = 0; s < slices; ++s)
+    {
+        indices[ii++] = (unsigned int)cap_center;
+        indices[ii++] = (unsigned int)(base_row + s + 1);
+        indices[ii++] = (unsigned int)(base_row + s);
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+    const bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
+}
+
+bool sdl3d_draw_hemisphere_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
+                                 sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(radius, "radius", "sdl3d_draw_hemisphere_wires"))
+        return false;
+    if (rings < 2)
+        return SDL_SetError("sdl3d_draw_hemisphere_wires requires rings >= 2.");
+    if (slices < 3)
+        return SDL_SetError("sdl3d_draw_hemisphere_wires requires slices >= 3.");
+
+    const float y_offset = radius * 0.5f;
+    for (int r = 1; r <= rings; ++r)
+    {
+        const float theta = (float)r / (float)rings * SDL3D_SHAPES_PI * 0.5f;
+        const float ring_radius = SDL_sinf(theta) * radius;
+        const float y = center.y + SDL_cosf(theta) * radius - y_offset;
+        sdl3d_vec3 previous = sdl3d_vec3_make(center.x + ring_radius, y, center.z);
+        for (int s = 1; s <= slices; ++s)
+        {
+            const float phi = (float)s / (float)slices * SDL3D_SHAPES_PI * 2.0f;
+            const sdl3d_vec3 next =
+                sdl3d_vec3_make(center.x + SDL_cosf(phi) * ring_radius, y, center.z + SDL_sinf(phi) * ring_radius);
+            if (!sdl3d_draw_line_3d(context, previous, next, color))
+                return false;
+            previous = next;
+        }
+    }
+    for (int s = 0; s < slices; ++s)
+    {
+        const float phi = (float)s / (float)slices * SDL3D_SHAPES_PI * 2.0f;
+        const sdl3d_vec3 pole = sdl3d_vec3_make(center.x, center.y + radius - y_offset, center.z);
+        const sdl3d_vec3 edge =
+            sdl3d_vec3_make(center.x + SDL_cosf(phi) * radius, center.y - y_offset, center.z + SDL_sinf(phi) * radius);
+        if (!sdl3d_draw_line_3d(context, pole, edge, color))
+            return false;
     }
     return true;
 }
@@ -1074,6 +1338,322 @@ bool sdl3d_draw_torus_wires(sdl3d_render_context *context, sdl3d_vec3 center, fl
         }
     }
     return true;
+}
+
+bool sdl3d_draw_tube_segment(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius, float minor_radius,
+                             float arc_angle, int segments, int tube_segments, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_positive(major_radius, "major_radius", "sdl3d_draw_tube_segment") ||
+        !sdl3d_shape_require_positive(minor_radius, "minor_radius", "sdl3d_draw_tube_segment") ||
+        !sdl3d_shape_require_positive(arc_angle, "arc_angle", "sdl3d_draw_tube_segment"))
+    {
+        return false;
+    }
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_tube_segment requires segments >= 3.");
+    if (tube_segments < 3)
+        return SDL_SetError("sdl3d_draw_tube_segment requires tube_segments >= 3.");
+
+    const int arc_vertices = segments + 1;
+    const int tube_vertices = tube_segments + 1;
+    const int vert_count = arc_vertices * tube_vertices;
+    const int idx_count = segments * tube_segments * 6;
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
+    const float start_angle = -arc_angle * 0.5f;
+    for (int a = 0; a <= segments; ++a)
+    {
+        const float u = start_angle + (float)a / (float)segments * arc_angle;
+        const sdl3d_vec3 radial = sdl3d_vec3_make(SDL_cosf(u), 0.0f, SDL_sinf(u));
+        const sdl3d_vec3 ring_center =
+            sdl3d_vec3_make(center.x + radial.x * major_radius, center.y, center.z + radial.z * major_radius);
+        for (int t = 0; t <= tube_segments; ++t)
+        {
+            const float v = (float)t / (float)tube_segments * SDL3D_SHAPES_PI * 2.0f;
+            const sdl3d_vec3 normal =
+                sdl3d_vec3_normalize(sdl3d_vec3_make(radial.x * SDL_cosf(v), SDL_sinf(v), radial.z * SDL_cosf(v)));
+            const int vi = a * tube_vertices + t;
+            positions[vi * 3 + 0] = ring_center.x + normal.x * minor_radius;
+            positions[vi * 3 + 1] = ring_center.y + normal.y * minor_radius;
+            positions[vi * 3 + 2] = ring_center.z + normal.z * minor_radius;
+            normals[vi * 3 + 0] = normal.x;
+            normals[vi * 3 + 1] = normal.y;
+            normals[vi * 3 + 2] = normal.z;
+        }
+    }
+
+    int ii = 0;
+    for (int a = 0; a < segments; ++a)
+    {
+        for (int t = 0; t < tube_segments; ++t)
+        {
+            const unsigned int p00 = (unsigned int)(a * tube_vertices + t);
+            const unsigned int p01 = p00 + 1U;
+            const unsigned int p10 = (unsigned int)((a + 1) * tube_vertices + t);
+            const unsigned int p11 = p10 + 1U;
+            indices[ii++] = p00;
+            indices[ii++] = p10;
+            indices[ii++] = p01;
+            indices[ii++] = p01;
+            indices[ii++] = p10;
+            indices[ii++] = p11;
+        }
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+    const bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
+}
+
+bool sdl3d_draw_tube_segment_wires(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius,
+                                   float minor_radius, float arc_angle, int segments, int tube_segments,
+                                   sdl3d_color color)
+{
+    if (!sdl3d_shape_require_positive(major_radius, "major_radius", "sdl3d_draw_tube_segment_wires") ||
+        !sdl3d_shape_require_positive(minor_radius, "minor_radius", "sdl3d_draw_tube_segment_wires") ||
+        !sdl3d_shape_require_positive(arc_angle, "arc_angle", "sdl3d_draw_tube_segment_wires"))
+    {
+        return false;
+    }
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_tube_segment_wires requires segments >= 3.");
+    if (tube_segments < 3)
+        return SDL_SetError("sdl3d_draw_tube_segment_wires requires tube_segments >= 3.");
+
+    const float start_angle = -arc_angle * 0.5f;
+    for (int a = 0; a <= segments; ++a)
+    {
+        const float u = start_angle + (float)a / (float)segments * arc_angle;
+        const sdl3d_vec3 radial = sdl3d_vec3_make(SDL_cosf(u), 0.0f, SDL_sinf(u));
+        const sdl3d_vec3 ring_center =
+            sdl3d_vec3_make(center.x + radial.x * major_radius, center.y, center.z + radial.z * major_radius);
+        sdl3d_vec3 previous = sdl3d_vec3_make(ring_center.x + radial.x * minor_radius, ring_center.y,
+                                              ring_center.z + radial.z * minor_radius);
+        for (int t = 1; t <= tube_segments; ++t)
+        {
+            const float v = (float)t / (float)tube_segments * SDL3D_SHAPES_PI * 2.0f;
+            const sdl3d_vec3 normal =
+                sdl3d_vec3_normalize(sdl3d_vec3_make(radial.x * SDL_cosf(v), SDL_sinf(v), radial.z * SDL_cosf(v)));
+            const sdl3d_vec3 next =
+                sdl3d_vec3_make(ring_center.x + normal.x * minor_radius, ring_center.y + normal.y * minor_radius,
+                                ring_center.z + normal.z * minor_radius);
+            if (!sdl3d_draw_line_3d(context, previous, next, color))
+                return false;
+            previous = next;
+        }
+    }
+
+    for (int t = 0; t < tube_segments; ++t)
+    {
+        const float v = (float)t / (float)tube_segments * SDL3D_SHAPES_PI * 2.0f;
+        sdl3d_vec3 previous = sdl3d_vec3_make(0.0f, 0.0f, 0.0f);
+        bool has_previous = false;
+        for (int a = 0; a <= segments; ++a)
+        {
+            const float u = start_angle + (float)a / (float)segments * arc_angle;
+            const sdl3d_vec3 radial = sdl3d_vec3_make(SDL_cosf(u), 0.0f, SDL_sinf(u));
+            const sdl3d_vec3 ring_center =
+                sdl3d_vec3_make(center.x + radial.x * major_radius, center.y, center.z + radial.z * major_radius);
+            const sdl3d_vec3 normal =
+                sdl3d_vec3_normalize(sdl3d_vec3_make(radial.x * SDL_cosf(v), SDL_sinf(v), radial.z * SDL_cosf(v)));
+            const sdl3d_vec3 next =
+                sdl3d_vec3_make(ring_center.x + normal.x * minor_radius, ring_center.y + normal.y * minor_radius,
+                                ring_center.z + normal.z * minor_radius);
+            if (has_previous && !sdl3d_draw_line_3d(context, previous, next, color))
+                return false;
+            previous = next;
+            has_previous = true;
+        }
+    }
+    return true;
+}
+
+static sdl3d_vec3 sdl3d_shape_clamp_vec3(sdl3d_vec3 value, sdl3d_vec3 min_value, sdl3d_vec3 max_value)
+{
+    return sdl3d_vec3_make(SDL_clamp(value.x, min_value.x, max_value.x), SDL_clamp(value.y, min_value.y, max_value.y),
+                           SDL_clamp(value.z, min_value.z, max_value.z));
+}
+
+static void sdl3d_shape_rounded_box_project(sdl3d_vec3 local, sdl3d_vec3 inner, float radius, sdl3d_vec3 *out_position,
+                                            sdl3d_vec3 *out_normal)
+{
+    const sdl3d_vec3 clamped = sdl3d_shape_clamp_vec3(local, sdl3d_vec3_make(-inner.x, -inner.y, -inner.z), inner);
+    sdl3d_vec3 normal = sdl3d_vec3_sub(local, clamped);
+    const float len_sq = normal.x * normal.x + normal.y * normal.y + normal.z * normal.z;
+    if (len_sq <= 0.000001f)
+        normal = sdl3d_vec3_make(0.0f, 1.0f, 0.0f);
+    else
+        normal = sdl3d_vec3_normalize(normal);
+    *out_position = sdl3d_vec3_add(clamped, sdl3d_vec3_scale(normal, radius));
+    *out_normal = normal;
+}
+
+bool sdl3d_draw_rounded_box(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, float radius,
+                            int segments, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_rounded_box") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_rounded_box") ||
+        !sdl3d_shape_require_nonnegative(size.z, "size.z", "sdl3d_draw_rounded_box") ||
+        !sdl3d_shape_require_nonnegative(radius, "radius", "sdl3d_draw_rounded_box"))
+    {
+        return false;
+    }
+    if (segments < 1)
+        return SDL_SetError("sdl3d_draw_rounded_box requires segments >= 1.");
+    const float max_radius = SDL_min(size.x, SDL_min(size.y, size.z)) * 0.5f;
+    radius = SDL_min(radius, max_radius);
+    if (radius <= 0.000001f)
+        return sdl3d_draw_cube(context, center, size, color);
+
+    const int grid = SDL_max(segments + 2, 3);
+    const int face_vertices = grid * grid;
+    const int vert_count = face_vertices * 6;
+    const int idx_count = (grid - 1) * (grid - 1) * 6 * 6;
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3U * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
+    const sdl3d_vec3 half = sdl3d_vec3_scale(size, 0.5f);
+    const sdl3d_vec3 inner =
+        sdl3d_vec3_make(SDL_max(half.x - radius, 0.0f), SDL_max(half.y - radius, 0.0f), SDL_max(half.z - radius, 0.0f));
+    int vi = 0;
+    for (int face = 0; face < 6; ++face)
+    {
+        const int axis = face / 2;
+        const float sign = (face % 2) == 0 ? -1.0f : 1.0f;
+        for (int y = 0; y < grid; ++y)
+        {
+            const float v = -1.0f + 2.0f * (float)y / (float)(grid - 1);
+            for (int x = 0; x < grid; ++x)
+            {
+                const float u = -1.0f + 2.0f * (float)x / (float)(grid - 1);
+                sdl3d_vec3 local;
+                if (axis == 0)
+                    local = sdl3d_vec3_make(sign * half.x, u * half.y, v * half.z);
+                else if (axis == 1)
+                    local = sdl3d_vec3_make(u * half.x, sign * half.y, v * half.z);
+                else
+                    local = sdl3d_vec3_make(u * half.x, v * half.y, sign * half.z);
+                sdl3d_vec3 projected;
+                sdl3d_vec3 normal;
+                sdl3d_shape_rounded_box_project(local, inner, radius, &projected, &normal);
+                positions[vi * 3 + 0] = center.x + projected.x;
+                positions[vi * 3 + 1] = center.y + projected.y;
+                positions[vi * 3 + 2] = center.z + projected.z;
+                normals[vi * 3 + 0] = normal.x;
+                normals[vi * 3 + 1] = normal.y;
+                normals[vi * 3 + 2] = normal.z;
+                ++vi;
+            }
+        }
+    }
+
+    int ii = 0;
+    for (int face = 0; face < 6; ++face)
+    {
+        const int base = face * face_vertices;
+        for (int y = 0; y < grid - 1; ++y)
+        {
+            for (int x = 0; x < grid - 1; ++x)
+            {
+                const unsigned int a = (unsigned int)(base + y * grid + x);
+                const unsigned int b = a + 1U;
+                const unsigned int c = (unsigned int)(base + (y + 1) * grid + x);
+                const unsigned int d = c + 1U;
+                indices[ii++] = a;
+                indices[ii++] = c;
+                indices[ii++] = b;
+                indices[ii++] = b;
+                indices[ii++] = c;
+                indices[ii++] = d;
+            }
+        }
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+    const bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
+}
+
+bool sdl3d_draw_rounded_box_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, float radius,
+                                  int segments, sdl3d_color color)
+{
+    (void)radius;
+    (void)segments;
+    return sdl3d_draw_cube_wires(context, center, size, color);
+}
+
+bool sdl3d_draw_arrow(sdl3d_render_context *context, sdl3d_vec3 center, float radius, float height, int segments,
+                      sdl3d_color color)
+{
+    if (!sdl3d_shape_require_positive(radius, "radius", "sdl3d_draw_arrow") ||
+        !sdl3d_shape_require_positive(height, "height", "sdl3d_draw_arrow"))
+    {
+        return false;
+    }
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_arrow requires segments >= 3.");
+    const float shaft_height = height * 0.65f;
+    const float head_height = height - shaft_height;
+    const float shaft_radius = radius * 0.35f;
+    const sdl3d_vec3 shaft_center = sdl3d_vec3_make(center.x, center.y - height * 0.5f + shaft_height * 0.5f, center.z);
+    const sdl3d_vec3 head_center = sdl3d_vec3_make(center.x, center.y + height * 0.5f - head_height * 0.5f, center.z);
+    return sdl3d_draw_cylinder(context, shaft_center, shaft_radius, shaft_radius, shaft_height, segments, color) &&
+           sdl3d_draw_cylinder(context, head_center, 0.0f, radius, head_height, segments, color);
+}
+
+bool sdl3d_draw_arrow_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, float height, int segments,
+                            sdl3d_color color)
+{
+    if (!sdl3d_shape_require_positive(radius, "radius", "sdl3d_draw_arrow_wires") ||
+        !sdl3d_shape_require_positive(height, "height", "sdl3d_draw_arrow_wires"))
+    {
+        return false;
+    }
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_arrow_wires requires segments >= 3.");
+    const float shaft_height = height * 0.65f;
+    const float head_height = height - shaft_height;
+    const float shaft_radius = radius * 0.35f;
+    const sdl3d_vec3 shaft_center = sdl3d_vec3_make(center.x, center.y - height * 0.5f + shaft_height * 0.5f, center.z);
+    const sdl3d_vec3 head_center = sdl3d_vec3_make(center.x, center.y + height * 0.5f - head_height * 0.5f, center.z);
+    return sdl3d_draw_cylinder_wires(context, shaft_center, shaft_radius, shaft_radius, shaft_height, segments,
+                                     color) &&
+           sdl3d_draw_cylinder_wires(context, head_center, 0.0f, radius, head_height, segments, color);
 }
 
 bool sdl3d_draw_pyramid(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color)

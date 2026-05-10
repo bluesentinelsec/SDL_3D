@@ -14,7 +14,17 @@
     "entity.mesh.cone",
     "entity.mesh.torus",
     "entity.mesh.pyramid",
-    "entity.mesh.wedge"
+    "entity.mesh.wedge",
+    "entity.mesh.plane",
+    "entity.mesh.disc",
+    "entity.mesh.hemisphere",
+    "entity.mesh.rounded_box",
+    "entity.mesh.pipe",
+    "entity.mesh.arrow",
+    "entity.mesh.billboard_plane",
+    "entity.mock.robot",
+    "entity.mock.ship",
+    "entity.mock.portal"
   ],
   "input": {
     "mouse_capture": "unpaused",

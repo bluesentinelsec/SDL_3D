@@ -61,6 +61,22 @@ extern "C"
     bool sdl3d_draw_plane(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec2 size, sdl3d_color color);
 
     /*
+     * Flat quad in the local XY plane, centered at `center`, with outward
+     * normal +Z. `size` gives the extent along local X and Y.
+     */
+    bool sdl3d_draw_quad(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec2 size, sdl3d_color color);
+    bool sdl3d_draw_quad_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec2 size, sdl3d_color color);
+
+    /*
+     * Flat disc in the local XY plane, centered at `center`, with outward
+     * normal +Z. `segments` must be >= 3.
+     */
+    bool sdl3d_draw_disc(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int segments,
+                         sdl3d_color color);
+    bool sdl3d_draw_disc_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int segments,
+                               sdl3d_color color);
+
+    /*
      * Grid in the local XZ plane centered at the origin. Draws
      * `slices + 1` lines per axis. `slices` must be >= 1 and `spacing`
      * must be positive.
@@ -101,6 +117,16 @@ extern "C"
                                  sdl3d_color color);
 
     /*
+     * Hemisphere dome aligned with +Y and centered around `center`. The
+     * curved surface is capped by a flat base. `rings` must be >= 2 and
+     * `slices` must be >= 3.
+     */
+    bool sdl3d_draw_hemisphere(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings, int slices,
+                               sdl3d_color color);
+    bool sdl3d_draw_hemisphere_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, int rings,
+                                     int slices, sdl3d_color color);
+
+    /*
      * Cylinder (or truncated cone when top and bottom radii differ)
      * aligned with the local +Y axis, centered vertically at `center`.
      * `slices` must be >= 3. Both radii must be non-negative; a zero
@@ -131,6 +157,34 @@ extern "C"
                           int segments, int tube_segments, sdl3d_color color);
     bool sdl3d_draw_torus_wires(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius,
                                 float minor_radius, int segments, int tube_segments, sdl3d_color color);
+
+    /*
+     * Curved tube segment around the local +Y axis. `arc_angle` is in
+     * radians; values near 2*pi form a full torus-like pipe.
+     */
+    bool sdl3d_draw_tube_segment(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius,
+                                 float minor_radius, float arc_angle, int segments, int tube_segments,
+                                 sdl3d_color color);
+    bool sdl3d_draw_tube_segment_wires(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius,
+                                       float minor_radius, float arc_angle, int segments, int tube_segments,
+                                       sdl3d_color color);
+
+    /*
+     * Rounded box centered in local space. `radius` is clamped to half the
+     * smallest size axis. `segments` controls bevel tessellation.
+     */
+    bool sdl3d_draw_rounded_box(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, float radius,
+                                int segments, sdl3d_color color);
+    bool sdl3d_draw_rounded_box_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, float radius,
+                                      int segments, sdl3d_color color);
+
+    /*
+     * Arrow marker aligned along local +Y, centered in local space.
+     */
+    bool sdl3d_draw_arrow(sdl3d_render_context *context, sdl3d_vec3 center, float radius, float height, int segments,
+                          sdl3d_color color);
+    bool sdl3d_draw_arrow_wires(sdl3d_render_context *context, sdl3d_vec3 center, float radius, float height,
+                                int segments, sdl3d_color color);
 
     /*
      * Square pyramid centered in local space. `size.x` and `size.z` define

@@ -2817,16 +2817,37 @@ static bool is_wave_axis_value(yyjson_val *value)
 static bool is_supported_component_type(const char *type)
 {
     const char *known[] = {
-        "adapter.controller",  "collision.aabb",     "collision.circle",
-        "combat.health",       "control.axis_1d",    "controller.fps_sector",
-        "lifecycle.ttl",       "light.directional",  "light.point",
-        "light.spot",          "motion.grid_agent",  "motion.oscillate",
-        "motion.patrol",       "motion.scroll_wrap", "motion.sector_velocity_3d",
-        "motion.spin",         "motion.velocity_2d", "motion.velocity_3d",
-        "interactable",        "particles.emitter",  "pickup.respawn",
-        "property.decay",      "render.cube",        "render.mesh_primitive",
-        "render.model",        "render.sphere",      "render.sprite",
-        "status_effect.timer", "weapon.projectile",  "weapon.state",
+        "adapter.controller",
+        "collision.aabb",
+        "collision.circle",
+        "combat.health",
+        "control.axis_1d",
+        "controller.fps_sector",
+        "lifecycle.ttl",
+        "light.directional",
+        "light.point",
+        "light.spot",
+        "motion.grid_agent",
+        "motion.oscillate",
+        "motion.patrol",
+        "motion.scroll_wrap",
+        "motion.sector_velocity_3d",
+        "motion.spin",
+        "motion.velocity_2d",
+        "motion.velocity_3d",
+        "interactable",
+        "particles.emitter",
+        "pickup.respawn",
+        "property.decay",
+        "render.composite",
+        "render.cube",
+        "render.mesh_primitive",
+        "render.model",
+        "render.sphere",
+        "render.sprite",
+        "status_effect.timer",
+        "weapon.projectile",
+        "weapon.state",
     };
 
     if (type == NULL)
@@ -2841,7 +2862,9 @@ static bool is_supported_component_type(const char *type)
 
 static bool render_mesh_primitive_kind_valid(const char *primitive)
 {
-    const char *known[] = {"cube", "sphere", "capsule", "cylinder", "cone", "torus", "pyramid", "wedge"};
+    const char *known[] = {"cube",        "sphere",       "capsule", "cylinder", "cone",           "torus",
+                           "pyramid",     "wedge",        "plane",   "quad",     "disc",           "hemisphere",
+                           "rounded_box", "tube_segment", "pipe",    "arrow",    "billboard_plane"};
     for (size_t i = 0; primitive != NULL && i < SDL_arraysize(known); ++i)
     {
         if (SDL_strcmp(primitive, known[i]) == 0)
@@ -2910,6 +2933,34 @@ static bool validate_render_mesh_primitive_component(validation_context *ctx, yy
     yyjson_val *rotation_property = obj_get(component, "rotation_property");
     if (rotation_property != NULL && !is_non_empty_string(component, "rotation_property"))
         return validation_error(ctx, path, "render.mesh_primitive rotation_property must be non-empty");
+    yyjson_val *bevel_radius = obj_get(component, "bevel_radius");
+    if (bevel_radius != NULL && (!yyjson_is_num(bevel_radius) || yyjson_get_num(bevel_radius) < 0.0))
+        return validation_error(ctx, path, "render.mesh_primitive bevel_radius must be a non-negative number");
+    yyjson_val *arc_angle = obj_get(component, "arc_angle");
+    if (arc_angle != NULL && (!yyjson_is_num(arc_angle) || yyjson_get_num(arc_angle) <= 0.0))
+        return validation_error(ctx, path, "render.mesh_primitive arc_angle must be a positive number");
+    return true;
+}
+
+static bool validate_render_composite_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                                const validation_names *names)
+{
+    yyjson_val *parts = obj_get(component, "parts");
+    if (!yyjson_is_arr(parts) || yyjson_arr_size(parts) == 0)
+        return validation_error(ctx, path, "render.composite parts must be a non-empty array");
+    for (size_t i = 0; i < yyjson_arr_size(parts); ++i)
+    {
+        yyjson_val *part = yyjson_arr_get(parts, i);
+        if (!yyjson_is_obj(part))
+            return validation_error(ctx, path, "render.composite parts must be objects");
+        const char *type = json_string(part, "type");
+        if (type == NULL)
+            type = "render.mesh_primitive";
+        if (SDL_strcmp(type, "render.mesh_primitive") != 0)
+            return validation_error(ctx, path, "render.composite parts must be render.mesh_primitive descriptors");
+        if (!validate_render_mesh_primitive_component(ctx, part, path, names))
+            return false;
+    }
     return true;
 }
 
@@ -5068,14 +5119,14 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     return validation_error(ctx, path, "light component color must be a vec3");
             }
             else if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
-                     SDL_strcmp(type, "render.mesh_primitive") == 0 || SDL_strcmp(type, "render.sprite") == 0 ||
-                     SDL_strcmp(type, "render.model") == 0)
+                     SDL_strcmp(type, "render.mesh_primitive") == 0 || SDL_strcmp(type, "render.composite") == 0 ||
+                     SDL_strcmp(type, "render.sprite") == 0 || SDL_strcmp(type, "render.model") == 0)
             {
                 yyjson_val *lighting = obj_get(component, "lighting");
                 if (lighting != NULL && !yyjson_is_bool(lighting))
                     return validation_error(ctx, path, "render primitive lighting must be a boolean");
                 if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
-                    SDL_strcmp(type, "render.mesh_primitive") == 0)
+                    SDL_strcmp(type, "render.mesh_primitive") == 0 || SDL_strcmp(type, "render.composite") == 0)
                 {
                     yyjson_val *texture_value = obj_get(component, "texture");
                     if (texture_value != NULL && !is_non_empty_string(component, "texture"))
@@ -5097,6 +5148,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (SDL_strcmp(type, "render.mesh_primitive") == 0)
                 {
                     if (!validate_render_mesh_primitive_component(ctx, component, path, names))
+                        return false;
+                }
+                if (SDL_strcmp(type, "render.composite") == 0)
+                {
+                    if (!validate_render_composite_component(ctx, component, path, names))
                         return false;
                 }
                 if (SDL_strcmp(type, "render.sphere") == 0)
@@ -5537,6 +5593,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             else if (SDL_strcmp(type, "render.mesh_primitive") == 0)
             {
                 if (!validate_render_mesh_primitive_component(ctx, component, component_path, names))
+                    return false;
+            }
+            else if (SDL_strcmp(type, "render.composite") == 0)
+            {
+                if (!validate_render_composite_component(ctx, component, component_path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "render.sprite") == 0)
