@@ -381,6 +381,11 @@ typedef struct sector_level_runtime
     slayer3d_level unlit_without_sector_lighting;
 } sector_level_runtime;
 
+typedef struct brush_world_runtime
+{
+    slayer3d_game_data_brush_world desc;
+} brush_world_runtime;
+
 typedef struct sector_door_runtime
 {
     yyjson_val *json;
@@ -579,6 +584,8 @@ typedef struct slayer3d_game_data_runtime
     int grid_pickup_layer_count;
     sector_level_runtime *sector_levels;
     int sector_level_count;
+    brush_world_runtime *brush_worlds;
+    int brush_world_count;
     sector_door_runtime *sector_doors;
     int sector_door_count;
     sector_platform_runtime *sector_platforms;
@@ -791,6 +798,7 @@ static void copy_property_value(slayer3d_properties *target, const char *key, co
 static yyjson_val *obj_get(yyjson_val *object, const char *key);
 static const char *json_string(yyjson_val *object, const char *key, const char *fallback);
 static yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime);
+static const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 static actor_pool_runtime *find_actor_pool(slayer3d_game_data_runtime *runtime, const char *name);
 static const actor_pool_runtime *find_actor_pool_const(const slayer3d_game_data_runtime *runtime, const char *name);
 static actor_pool_runtime *find_actor_pool_for_actor(slayer3d_game_data_runtime *runtime, const char *actor_name,
@@ -2640,6 +2648,27 @@ static slayer3d_vec3 json_vec3(yyjson_val *object, const char *key, slayer3d_vec
     return json_vec3_value(obj_get(object, key), fallback);
 }
 
+static slayer3d_vec4 json_vec4_value(yyjson_val *value, slayer3d_vec4 fallback)
+{
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) < 3)
+        return fallback;
+
+    yyjson_val *x = yyjson_arr_get(value, 0);
+    yyjson_val *y = yyjson_arr_get(value, 1);
+    yyjson_val *z = yyjson_arr_get(value, 2);
+    yyjson_val *w = yyjson_arr_get(value, 3);
+    if (!yyjson_is_num(x) || !yyjson_is_num(y) || !yyjson_is_num(z))
+        return fallback;
+
+    return slayer3d_vec4_make((float)yyjson_get_num(x), (float)yyjson_get_num(y), (float)yyjson_get_num(z),
+                              yyjson_is_num(w) ? (float)yyjson_get_num(w) : fallback.w);
+}
+
+static slayer3d_vec4 json_vec4(yyjson_val *object, const char *key, slayer3d_vec4 fallback)
+{
+    return json_vec4_value(obj_get(object, key), fallback);
+}
+
 static bool json_vec2_value(yyjson_val *value, float fallback_x, float fallback_y, float *out_x, float *out_y)
 {
     if (out_x == NULL || out_y == NULL)
@@ -3544,6 +3573,211 @@ static bool load_sector_levels(slayer3d_game_data_runtime *runtime, yyjson_val *
             !build_sector_level_variants(level, error_buffer, error_buffer_size))
         {
             return false;
+        }
+    }
+    return true;
+}
+
+static unsigned int brush_content_flag_from_string(const char *name)
+{
+    if (SDL_strcmp(name != NULL ? name : "", "solid") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    if (SDL_strcmp(name != NULL ? name : "", "player_clip") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    if (SDL_strcmp(name != NULL ? name : "", "projectile_clip") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP;
+    if (SDL_strcmp(name != NULL ? name : "", "trigger") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER;
+    if (SDL_strcmp(name != NULL ? name : "", "water") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER;
+    if (SDL_strcmp(name != NULL ? name : "", "lava") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA;
+    if (SDL_strcmp(name != NULL ? name : "", "sky") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY;
+    return 0u;
+}
+
+static unsigned int brush_surface_flag_from_string(const char *name)
+{
+    if (SDL_strcmp(name != NULL ? name : "", "nocollide") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_SURFACE_NO_COLLIDE;
+    if (SDL_strcmp(name != NULL ? name : "", "slick") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_SURFACE_SLICK;
+    if (SDL_strcmp(name != NULL ? name : "", "ladder") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_SURFACE_LADDER;
+    if (SDL_strcmp(name != NULL ? name : "", "emissive") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_SURFACE_EMISSIVE;
+    if (SDL_strcmp(name != NULL ? name : "", "portal_candidate") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_SURFACE_PORTAL_CANDIDATE;
+    return 0u;
+}
+
+static unsigned int brush_flags_from_json(yyjson_val *value, unsigned int (*flag_from_string)(const char *name),
+                                          unsigned int fallback)
+{
+    if (yyjson_is_str(value))
+    {
+        const unsigned int flag = flag_from_string(yyjson_get_str(value));
+        return flag != 0u ? flag : fallback;
+    }
+    if (!yyjson_is_arr(value))
+        return fallback;
+
+    unsigned int flags = 0u;
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (yyjson_is_str(entry))
+            flags |= flag_from_string(yyjson_get_str(entry));
+    }
+    return flags != 0u ? flags : fallback;
+}
+
+static int brush_material_index_from_ref(const slayer3d_game_data_brush_material *materials, int material_count,
+                                         yyjson_val *ref)
+{
+    if (yyjson_is_int(ref))
+    {
+        const int index = (int)yyjson_get_int(ref);
+        return index >= 0 && index < material_count ? index : -1;
+    }
+    if (yyjson_is_str(ref))
+    {
+        const char *name = yyjson_get_str(ref);
+        for (int i = 0; i < material_count; ++i)
+        {
+            if (materials[i].name != NULL && SDL_strcmp(materials[i].name, name) == 0)
+                return i;
+        }
+    }
+    return -1;
+}
+
+static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                              int error_buffer_size)
+{
+    yyjson_val *worlds = obj_get(root, "brush_worlds");
+    if (worlds == NULL)
+        return true;
+    if (!yyjson_is_arr(worlds))
+    {
+        set_error(error_buffer, error_buffer_size, "brush_worlds must be an array");
+        return false;
+    }
+
+    runtime->brush_world_count = (int)yyjson_arr_size(worlds);
+    runtime->brush_worlds =
+        (brush_world_runtime *)SDL_calloc((size_t)runtime->brush_world_count, sizeof(*runtime->brush_worlds));
+    if (runtime->brush_worlds == NULL && runtime->brush_world_count > 0)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate brush worlds");
+        return false;
+    }
+
+    for (int world_index = 0; world_index < runtime->brush_world_count; ++world_index)
+    {
+        yyjson_val *world_json = yyjson_arr_get(worlds, (size_t)world_index);
+        yyjson_val *materials_json = obj_get(world_json, "materials");
+        yyjson_val *brushes_json = obj_get(world_json, "brushes");
+        slayer3d_game_data_brush_world *world = &runtime->brush_worlds[world_index].desc;
+
+        world->name = SDL_strdup(json_string(world_json, "name", ""));
+        world->units = SDL_strdup(json_string(world_json, "units", "meters"));
+        world->meters_per_unit = json_float(world_json, "meters_per_unit", 1.0f);
+        world->material_count = (int)yyjson_arr_size(materials_json);
+        world->brush_count = (int)yyjson_arr_size(brushes_json);
+        if (world->name == NULL || world->units == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate brush world strings");
+            return false;
+        }
+
+        slayer3d_game_data_brush_material *materials =
+            (slayer3d_game_data_brush_material *)SDL_calloc((size_t)world->material_count, sizeof(*materials));
+        slayer3d_game_data_brush *brushes =
+            (slayer3d_game_data_brush *)SDL_calloc((size_t)world->brush_count, sizeof(*brushes));
+        if ((materials == NULL && world->material_count > 0) || (brushes == NULL && world->brush_count > 0))
+        {
+            SDL_free(materials);
+            SDL_free(brushes);
+            set_error(error_buffer, error_buffer_size, "failed to allocate brush world data");
+            return false;
+        }
+        world->materials = materials;
+        world->brushes = brushes;
+
+        for (int material_index = 0; material_index < world->material_count; ++material_index)
+        {
+            yyjson_val *material_json = yyjson_arr_get(materials_json, (size_t)material_index);
+            slayer3d_game_data_brush_material *material = &materials[material_index];
+            material->name = SDL_strdup(json_string(material_json, "name", ""));
+            const char *texture = json_string(material_json, "texture", NULL);
+            material->texture = texture != NULL ? SDL_strdup(texture) : NULL;
+            material->albedo = json_vec4(material_json, "albedo", slayer3d_vec4_make(1.0f, 1.0f, 1.0f, 1.0f));
+            material->metallic = json_float(material_json, "metallic", 0.0f);
+            material->roughness = json_float(material_json, "roughness", 1.0f);
+            material->tex_scale = json_float(material_json, "tex_scale", 1.0f);
+            if (material->name == NULL || (texture != NULL && material->texture == NULL))
+            {
+                set_error(error_buffer, error_buffer_size, "failed to allocate brush material strings");
+                return false;
+            }
+        }
+
+        for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+        {
+            yyjson_val *brush_json = yyjson_arr_get(brushes_json, (size_t)brush_index);
+            yyjson_val *tags_json = obj_get(brush_json, "tags");
+            yyjson_val *faces_json = obj_get(brush_json, "faces");
+            slayer3d_game_data_brush *brush = &brushes[brush_index];
+            brush->name = SDL_strdup(json_string(brush_json, "name", ""));
+            brush->contents = brush_flags_from_json(obj_get(brush_json, "contents"), brush_content_flag_from_string,
+                                                    SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+            brush->tag_count = yyjson_is_arr(tags_json) ? (int)yyjson_arr_size(tags_json) : 0;
+            brush->face_count = (int)yyjson_arr_size(faces_json);
+            if (brush->name == NULL)
+            {
+                set_error(error_buffer, error_buffer_size, "failed to allocate brush name");
+                return false;
+            }
+
+            const char **tags =
+                brush->tag_count > 0 ? (const char **)SDL_calloc((size_t)brush->tag_count, sizeof(*tags)) : NULL;
+            slayer3d_game_data_brush_face *faces =
+                (slayer3d_game_data_brush_face *)SDL_calloc((size_t)brush->face_count, sizeof(*faces));
+            if ((tags == NULL && brush->tag_count > 0) || (faces == NULL && brush->face_count > 0))
+            {
+                SDL_free(tags);
+                SDL_free(faces);
+                set_error(error_buffer, error_buffer_size, "failed to allocate brush entries");
+                return false;
+            }
+            brush->tags = tags;
+            brush->faces = faces;
+
+            for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
+            {
+                tags[tag_index] = SDL_strdup(yyjson_get_str(yyjson_arr_get(tags_json, (size_t)tag_index)));
+                if (tags[tag_index] == NULL)
+                {
+                    set_error(error_buffer, error_buffer_size, "failed to allocate brush tag");
+                    return false;
+                }
+            }
+
+            for (int face_index = 0; face_index < brush->face_count; ++face_index)
+            {
+                yyjson_val *face_json = yyjson_arr_get(faces_json, (size_t)face_index);
+                yyjson_val *plane_json = obj_get(face_json, "plane");
+                slayer3d_game_data_brush_face *face = &faces[face_index];
+                face->normal = json_vec3(plane_json, "normal", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+                face->distance = json_float(plane_json, "distance", 0.0f);
+                face->material_index =
+                    brush_material_index_from_ref(materials, world->material_count, obj_get(face_json, "material"));
+                face->material_name = face->material_index >= 0 ? materials[face->material_index].name : NULL;
+                face->surface_flags =
+                    brush_flags_from_json(obj_get(face_json, "surface_flags"), brush_surface_flag_from_string, 0u);
+            }
         }
     }
     return true;
@@ -7557,6 +7791,35 @@ bool slayer3d_game_data_get_sector_level(const slayer3d_game_data_runtime *runti
     return true;
 }
 
+static const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->brush_world_count; ++i)
+    {
+        const brush_world_runtime *world = &runtime->brush_worlds[i];
+        if (world->desc.name != NULL && SDL_strcmp(world->desc.name, name) == 0)
+            return world;
+    }
+    return NULL;
+}
+
+bool slayer3d_game_data_get_brush_world(const slayer3d_game_data_runtime *runtime, const char *name,
+                                        slayer3d_game_data_brush_world *out_world)
+{
+    if (out_world != NULL)
+        SDL_zero(*out_world);
+    if (runtime == NULL || name == NULL || out_world == NULL)
+        return false;
+
+    const brush_world_runtime *world = find_brush_world_runtime(runtime, name);
+    if (world == NULL)
+        return false;
+
+    *out_world = world->desc;
+    return true;
+}
+
 static slayer3d_game_data_sector_level_variant sector_level_variant_from_string(const char *variant,
                                                                                 const slayer3d_level **out_level,
                                                                                 const sector_level_runtime *level,
@@ -7630,6 +7893,43 @@ bool slayer3d_game_data_for_each_sector_level_instance(const slayer3d_game_data_
         instance.portal_culling = scene_state_bool(runtime, json_string(entry, "portal_culling_key", NULL),
                                                    json_bool(entry, "portal_culling", true));
         instance.sector_lighting_enabled = sector_lighting_enabled;
+        if (!callback(userdata, &instance))
+            return true;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_for_each_brush_world_instance(const slayer3d_game_data_runtime *runtime,
+                                                      slayer3d_game_data_brush_world_instance_fn callback,
+                                                      void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    yyjson_val *instances = obj_get(obj_get(scene != NULL ? scene->root : NULL, "world"), "brush_worlds");
+    if (instances == NULL)
+        return true;
+    if (!yyjson_is_arr(instances))
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(instances); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(instances, i);
+        const char *world_name = json_string(entry, "world", NULL);
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+        if (world_runtime == NULL)
+            return false;
+
+        slayer3d_game_data_brush_world_instance instance;
+        SDL_zero(instance);
+        instance.world_name = world_runtime->desc.name;
+        instance.world = &world_runtime->desc;
+        instance.position = json_vec3(entry, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        instance.acceleration_enabled = scene_state_bool(runtime, json_string(entry, "acceleration_key", NULL),
+                                                         json_bool(entry, "acceleration", true));
+        instance.debug_wireframe = scene_state_bool(runtime, json_string(entry, "debug_wireframe_key", NULL),
+                                                    json_bool(entry, "debug_wireframe", false));
         if (!callback(userdata, &instance))
             return true;
     }
@@ -20582,6 +20882,7 @@ bool slayer3d_game_data_load_asset_with_options(slayer3d_asset_resolver *assets,
               load_grid_maps(runtime, root, error_buffer, error_buffer_size) &&
               load_grid_pickup_layers(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_levels(runtime, root, error_buffer, error_buffer_size) &&
+              load_brush_worlds(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_doors(runtime, root, error_buffer, error_buffer_size) &&
               load_sector_platforms(runtime, root, error_buffer, error_buffer_size) &&
               load_actor_pools(runtime, root, error_buffer, error_buffer_size) &&
@@ -22744,6 +23045,28 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         slayer3d_free_level(&runtime->sector_levels[i].vertex_baked_without_sector_lighting);
         slayer3d_free_level(&runtime->sector_levels[i].unlit_without_sector_lighting);
     }
+    for (int i = 0; i < runtime->brush_world_count; ++i)
+    {
+        slayer3d_game_data_brush_world *world = &runtime->brush_worlds[i].desc;
+        SDL_free((void *)world->name);
+        SDL_free((void *)world->units);
+        for (int material_index = 0; material_index < world->material_count; ++material_index)
+        {
+            SDL_free((void *)world->materials[material_index].name);
+            SDL_free((void *)world->materials[material_index].texture);
+        }
+        for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+        {
+            const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+            SDL_free((void *)brush->name);
+            for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
+                SDL_free((void *)brush->tags[tag_index]);
+            SDL_free((void *)brush->tags);
+            SDL_free((void *)brush->faces);
+        }
+        SDL_free((void *)world->materials);
+        SDL_free((void *)world->brushes);
+    }
     for (int i = 0; i < runtime->actor_pool_count; ++i)
     {
         SDL_free(runtime->actor_pools[i].name);
@@ -22805,6 +23128,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     SDL_free(runtime->grid_actor_indices);
     SDL_free(runtime->grid_pickup_layers);
     SDL_free(runtime->sector_levels);
+    SDL_free(runtime->brush_worlds);
     SDL_free(runtime->sector_doors);
     SDL_free(runtime->sector_platforms);
     SDL_free(runtime->fps_controllers);

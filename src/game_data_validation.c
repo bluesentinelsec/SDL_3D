@@ -77,6 +77,7 @@ typedef struct validation_names
     name_table grid_maps;
     name_table grid_pickup_layers;
     name_table sector_levels;
+    name_table brush_worlds;
     name_table sector_navigation;
     name_table sector_doors;
     name_table sector_platforms;
@@ -1902,6 +1903,7 @@ static bool import_section_name_allowed(const char *name)
                                           "grid_pickup_layers",
                                           "sector_levels",
                                           "sector_level_fragments",
+                                          "brush_worlds",
                                           "sector_navigation",
                                           "sector_doors",
                                           "sector_platforms",
@@ -3422,6 +3424,27 @@ static bool collect_sector_levels(validation_context *ctx, yyjson_val *root, val
     return true;
 }
 
+static bool collect_brush_worlds(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *worlds = obj_get(root, "brush_worlds");
+    if (worlds == NULL)
+        return true;
+    if (!yyjson_is_arr(worlds))
+        return validation_error(ctx, "$.brush_worlds", "brush_worlds must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(worlds); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.brush_worlds[%zu]", i);
+        yyjson_val *world = yyjson_arr_get(worlds, i);
+        if (!yyjson_is_obj(world))
+            return validation_error(ctx, path, "brush world entries must be objects");
+        if (!require_unique_name(ctx, &names->brush_worlds, "brush world", json_string(world, "name"), path))
+            return false;
+    }
+    return true;
+}
+
 static bool collect_sector_navigation(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *graphs = obj_get(root, "sector_navigation");
@@ -4100,16 +4123,17 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
 {
     return collect_signals(ctx, root, names) && collect_entities(ctx, root, names) &&
            collect_grid_maps(ctx, root, names) && collect_grid_pickup_layers(ctx, root, names) &&
-           collect_sector_levels(ctx, root, names) && collect_sector_navigation(ctx, root, names) &&
-           collect_sector_doors(ctx, root, names) && collect_sector_platforms(ctx, root, names) &&
-           collect_actor_archetypes(ctx, root, names) && collect_actor_pools(ctx, root, names) &&
-           collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
-           collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
-           collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
-           collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
-           collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
-           collect_models(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
-           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
+           collect_sector_levels(ctx, root, names) && collect_brush_worlds(ctx, root, names) &&
+           collect_sector_navigation(ctx, root, names) && collect_sector_doors(ctx, root, names) &&
+           collect_sector_platforms(ctx, root, names) && collect_actor_archetypes(ctx, root, names) &&
+           collect_actor_pools(ctx, root, names) && collect_scripts(ctx, root, names) &&
+           collect_adapters(ctx, root, names) && collect_input_actions(ctx, root, names) &&
+           collect_input_assignment_sets(ctx, root, names) && collect_input_profiles(ctx, root, names) &&
+           collect_network_input_channels(ctx, root, names) && collect_cameras(ctx, root, names) &&
+           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
+           collect_images(ctx, root, names) && collect_models(ctx, root, names) &&
+           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
+           collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -4638,6 +4662,97 @@ static bool sector_level_material_ref_valid(yyjson_val *materials, const name_ta
     return false;
 }
 
+static bool brush_content_name_valid(const char *name)
+{
+    static const char *const names[] = {"solid", "player_clip", "projectile_clip", "trigger", "water", "lava", "sky"};
+    for (size_t i = 0; name != NULL && i < SDL_arraysize(names); ++i)
+    {
+        if (SDL_strcmp(name, names[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool brush_surface_flag_name_valid(const char *name)
+{
+    static const char *const names[] = {"nocollide", "slick", "ladder", "emissive", "portal_candidate"};
+    for (size_t i = 0; name != NULL && i < SDL_arraysize(names); ++i)
+    {
+        if (SDL_strcmp(name, names[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *value, const char *path,
+                                                  const char *label, bool (*name_valid)(const char *name),
+                                                  bool allow_empty)
+{
+    if (value == NULL)
+        return true;
+    if (yyjson_is_str(value))
+    {
+        const char *name = yyjson_get_str(value);
+        if (name == NULL || name[0] == '\0' || (name_valid != NULL && !name_valid(name)))
+            return validation_error(ctx, path, "%s value is unknown", label);
+        return true;
+    }
+    if (!yyjson_is_arr(value))
+        return validation_error(ctx, path, "%s must be a string or string array", label);
+    if (!allow_empty && yyjson_arr_size(value) <= 0)
+        return validation_error(ctx, path, "%s array must be non-empty", label);
+
+    name_table names;
+    SDL_zero(names);
+    bool ok = true;
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        char entry_path[PATH_BUFFER_SIZE];
+        format_path(entry_path, sizeof(entry_path), "%s[%zu]", path, i);
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_str(entry) || yyjson_get_str(entry) == NULL || yyjson_get_str(entry)[0] == '\0')
+        {
+            ok = validation_error(ctx, entry_path, "%s entries must be non-empty strings", label);
+            break;
+        }
+        const char *name = yyjson_get_str(entry);
+        if (name_valid != NULL && !name_valid(name))
+        {
+            ok = validation_error(ctx, entry_path, "%s value is unknown", label);
+            break;
+        }
+        if (!require_unique_name(ctx, &names, label, name, entry_path))
+        {
+            ok = false;
+            break;
+        }
+    }
+    name_table_destroy(&names);
+    return ok;
+}
+
+static bool brush_material_ref_valid(yyjson_val *materials, const name_table *material_names, yyjson_val *ref)
+{
+    if (yyjson_is_int(ref))
+    {
+        const int index = (int)yyjson_get_int(ref);
+        return index >= 0 && index < (int)yyjson_arr_size(materials);
+    }
+    if (yyjson_is_str(ref))
+        return name_table_contains(material_names, yyjson_get_str(ref));
+    return false;
+}
+
+static bool vec3_nonzero(yyjson_val *value)
+{
+    if (!is_exact_vec_array(value, 3))
+        return false;
+    const double x = yyjson_get_num(yyjson_arr_get(value, 0));
+    const double y = yyjson_get_num(yyjson_arr_get(value, 1));
+    const double z = yyjson_get_num(yyjson_arr_get(value, 2));
+    return x * x + y * y + z * z > 0.000001;
+}
+
 static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
 {
     yyjson_val *levels = obj_get(root, "sector_levels");
@@ -4865,6 +4980,210 @@ static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
     done:
         name_table_destroy(&material_names);
         name_table_destroy(&sector_names);
+        if (!ok)
+            return false;
+    }
+    return true;
+}
+
+static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *worlds = obj_get(root, "brush_worlds");
+    if (worlds == NULL)
+        return true;
+    if (!yyjson_is_arr(worlds))
+        return validation_error(ctx, "$.brush_worlds", "brush_worlds must be an array");
+
+    for (size_t world_index = 0; world_index < yyjson_arr_size(worlds); ++world_index)
+    {
+        char world_path[PATH_BUFFER_SIZE];
+        format_path(world_path, sizeof(world_path), "$.brush_worlds[%zu]", world_index);
+        yyjson_val *world = yyjson_arr_get(worlds, world_index);
+        yyjson_val *materials = obj_get(world, "materials");
+        yyjson_val *brushes = obj_get(world, "brushes");
+        name_table material_names;
+        name_table brush_names;
+        SDL_zero(material_names);
+        SDL_zero(brush_names);
+        bool ok = true;
+
+        if (!yyjson_is_obj(world))
+        {
+            ok = validation_error(ctx, world_path, "brush world entries must be objects");
+            goto done;
+        }
+
+        const char *units = json_string(world, "units");
+        if (units != NULL && SDL_strcmp(units, "meters") != 0)
+        {
+            ok = validation_error(ctx, world_path, "brush world units must be meters");
+            goto done;
+        }
+        yyjson_val *meters_per_unit = obj_get(world, "meters_per_unit");
+        if (meters_per_unit != NULL && (!yyjson_is_num(meters_per_unit) || yyjson_get_num(meters_per_unit) <= 0.0))
+        {
+            ok = validation_error(ctx, world_path, "brush world meters_per_unit must be positive");
+            goto done;
+        }
+        if (!yyjson_is_arr(materials) || yyjson_arr_size(materials) <= 0)
+        {
+            ok = validation_error(ctx, world_path, "brush world materials must be a non-empty array");
+            goto done;
+        }
+        if (!yyjson_is_arr(brushes) || yyjson_arr_size(brushes) <= 0)
+        {
+            ok = validation_error(ctx, world_path, "brush world brushes must be a non-empty array");
+            goto done;
+        }
+
+        for (size_t material_index = 0; ok && material_index < yyjson_arr_size(materials); ++material_index)
+        {
+            char material_path[PATH_BUFFER_SIZE];
+            format_path(material_path, sizeof(material_path), "%s.materials[%zu]", world_path, material_index);
+            yyjson_val *material = yyjson_arr_get(materials, material_index);
+            if (!yyjson_is_obj(material))
+            {
+                ok = validation_error(ctx, material_path, "brush material entries must be objects");
+                break;
+            }
+            if (!require_unique_name(ctx, &material_names, "brush material", json_string(material, "name"),
+                                     material_path))
+            {
+                ok = false;
+                break;
+            }
+            yyjson_val *albedo = obj_get(material, "albedo");
+            if (albedo != NULL &&
+                (!is_exact_vec3_or_vec4_array(albedo) || !numeric_array_values_in_range(albedo, 0.0, 1.0)))
+            {
+                ok = validation_error(ctx, material_path,
+                                      "brush material albedo must be a vec3 or vec4 with values in [0, 1]");
+                break;
+            }
+            yyjson_val *metallic = obj_get(material, "metallic");
+            yyjson_val *roughness = obj_get(material, "roughness");
+            yyjson_val *tex_scale = obj_get(material, "tex_scale");
+            if ((metallic != NULL && (!yyjson_is_num(metallic) || yyjson_get_num(metallic) < 0.0)) ||
+                (roughness != NULL && (!yyjson_is_num(roughness) || yyjson_get_num(roughness) < 0.0)))
+            {
+                ok = validation_error(ctx, material_path, "brush material metallic and roughness must be non-negative");
+                break;
+            }
+            if (tex_scale != NULL && (!yyjson_is_num(tex_scale) || yyjson_get_num(tex_scale) <= 0.0))
+            {
+                ok = validation_error(ctx, material_path, "brush material tex_scale must be positive");
+                break;
+            }
+            const char *texture = json_string(material, "texture");
+            if (texture != NULL && texture[0] == '\0')
+            {
+                ok = validation_error(ctx, material_path, "brush material texture must be non-empty when present");
+                break;
+            }
+            if (texture != NULL && !asset_path_exists(ctx, texture, material_path, "brush material texture"))
+            {
+                ok = false;
+                break;
+            }
+        }
+
+        for (size_t brush_index = 0; ok && brush_index < yyjson_arr_size(brushes); ++brush_index)
+        {
+            char brush_path[PATH_BUFFER_SIZE];
+            format_path(brush_path, sizeof(brush_path), "%s.brushes[%zu]", world_path, brush_index);
+            yyjson_val *brush = yyjson_arr_get(brushes, brush_index);
+            yyjson_val *faces = obj_get(brush, "faces");
+            if (!yyjson_is_obj(brush))
+            {
+                ok = validation_error(ctx, brush_path, "brush entries must be objects");
+                break;
+            }
+            if (!require_unique_name(ctx, &brush_names, "brush", json_string(brush, "name"), brush_path))
+            {
+                ok = false;
+                break;
+            }
+
+            yyjson_val *tags = obj_get(brush, "tags");
+            if (tags != NULL)
+            {
+                if (!yyjson_is_arr(tags))
+                {
+                    ok = validation_error(ctx, brush_path, "brush tags must be an array");
+                    break;
+                }
+                name_table tag_names;
+                SDL_zero(tag_names);
+                for (size_t tag_index = 0; ok && tag_index < yyjson_arr_size(tags); ++tag_index)
+                {
+                    char tag_path[PATH_BUFFER_SIZE];
+                    format_path(tag_path, sizeof(tag_path), "%s.tags[%zu]", brush_path, tag_index);
+                    yyjson_val *tag = yyjson_arr_get(tags, tag_index);
+                    if (!yyjson_is_str(tag) || yyjson_get_str(tag) == NULL || yyjson_get_str(tag)[0] == '\0')
+                    {
+                        ok = validation_error(ctx, tag_path, "brush tags must be non-empty strings");
+                        break;
+                    }
+                    if (!require_unique_name(ctx, &tag_names, "brush tag", yyjson_get_str(tag), tag_path))
+                        ok = false;
+                }
+                name_table_destroy(&tag_names);
+                if (!ok)
+                    break;
+            }
+
+            char contents_path[PATH_BUFFER_SIZE];
+            format_path(contents_path, sizeof(contents_path), "%s.contents", brush_path);
+            if (!validate_brush_string_or_string_array(ctx, obj_get(brush, "contents"), contents_path, "brush content",
+                                                       brush_content_name_valid, false))
+            {
+                ok = false;
+                break;
+            }
+            if (!yyjson_is_arr(faces) || yyjson_arr_size(faces) < 4)
+            {
+                ok = validation_error(ctx, brush_path, "brush faces must contain at least 4 entries");
+                break;
+            }
+            for (size_t face_index = 0; ok && face_index < yyjson_arr_size(faces); ++face_index)
+            {
+                char face_path[PATH_BUFFER_SIZE];
+                char plane_path[PATH_BUFFER_SIZE];
+                char flags_path[PATH_BUFFER_SIZE];
+                format_path(face_path, sizeof(face_path), "%s.faces[%zu]", brush_path, face_index);
+                format_path(plane_path, sizeof(plane_path), "%s.plane", face_path);
+                format_path(flags_path, sizeof(flags_path), "%s.surface_flags", face_path);
+                yyjson_val *face = yyjson_arr_get(faces, face_index);
+                yyjson_val *plane = obj_get(face, "plane");
+                if (!yyjson_is_obj(face))
+                {
+                    ok = validation_error(ctx, face_path, "brush face entries must be objects");
+                    break;
+                }
+                if (!yyjson_is_obj(plane) || !vec3_nonzero(obj_get(plane, "normal")) ||
+                    !yyjson_is_num(obj_get(plane, "distance")))
+                {
+                    ok = validation_error(ctx, plane_path,
+                                          "brush face plane requires non-zero normal vec3 and numeric distance");
+                    break;
+                }
+                if (!brush_material_ref_valid(materials, &material_names, obj_get(face, "material")))
+                {
+                    ok = validation_error(ctx, face_path, "brush face material must reference a declared material");
+                    break;
+                }
+                if (!validate_brush_string_or_string_array(ctx, obj_get(face, "surface_flags"), flags_path,
+                                                           "brush surface flag", brush_surface_flag_name_valid, true))
+                {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+
+    done:
+        name_table_destroy(&material_names);
+        name_table_destroy(&brush_names);
         if (!ok)
             return false;
     }
@@ -9107,6 +9426,52 @@ static bool validate_scene_sector_levels(validation_context *ctx, yyjson_val *sc
     return true;
 }
 
+static bool validate_scene_brush_worlds(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
+                                        validation_names *names)
+{
+    yyjson_val *world = obj_get(scene_root, "world");
+    if (world == NULL)
+        return true;
+    if (!yyjson_is_obj(world))
+        return validation_error(ctx, json_path, "scene world must be an object");
+
+    yyjson_val *brush_worlds = obj_get(world, "brush_worlds");
+    if (brush_worlds == NULL)
+        return true;
+    char worlds_path[PATH_BUFFER_SIZE];
+    format_path(worlds_path, sizeof(worlds_path), "%s.world.brush_worlds", json_path);
+    if (!yyjson_is_arr(brush_worlds))
+        return validation_error(ctx, worlds_path, "scene world.brush_worlds must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(brush_worlds); ++i)
+    {
+        char entry_path[PATH_BUFFER_SIZE];
+        format_path(entry_path, sizeof(entry_path), "%s[%zu]", worlds_path, i);
+        yyjson_val *entry = yyjson_arr_get(brush_worlds, i);
+        if (!yyjson_is_obj(entry))
+            return validation_error(ctx, entry_path, "scene brush world entries must be objects");
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(entry, "world"), entry_path))
+            return false;
+
+        yyjson_val *position = obj_get(entry, "position");
+        if (position != NULL && !is_exact_vec_array(position, 3))
+            return validation_error(ctx, entry_path, "scene brush world position must be a vec3 array");
+        yyjson_val *acceleration = obj_get(entry, "acceleration");
+        if (acceleration != NULL && !yyjson_is_bool(acceleration))
+            return validation_error(ctx, entry_path, "scene brush world acceleration must be a boolean");
+        yyjson_val *debug_wireframe = obj_get(entry, "debug_wireframe");
+        if (debug_wireframe != NULL && !yyjson_is_bool(debug_wireframe))
+            return validation_error(ctx, entry_path, "scene brush world debug_wireframe must be a boolean");
+        yyjson_val *acceleration_key = obj_get(entry, "acceleration_key");
+        if (acceleration_key != NULL && !is_non_empty_string(entry, "acceleration_key"))
+            return validation_error(ctx, entry_path, "scene brush world acceleration_key must be non-empty");
+        yyjson_val *debug_wireframe_key = obj_get(entry, "debug_wireframe_key");
+        if (debug_wireframe_key != NULL && !is_non_empty_string(entry, "debug_wireframe_key"))
+            return validation_error(ctx, entry_path, "scene brush world debug_wireframe_key must be non-empty");
+    }
+    return true;
+}
+
 static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
                                   validation_names *names)
 {
@@ -9166,6 +9531,8 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         return false;
 
     if (!validate_scene_sector_levels(ctx, root, json_path, names))
+        return false;
+    if (!validate_scene_brush_worlds(ctx, root, json_path, names))
         return false;
     if (!validate_scene_skybox(ctx, root, json_path, names))
         return false;
@@ -9645,8 +10012,8 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_world_metadata(ctx, root) && validate_input_bindings(ctx, root) &&
            validate_input_assignment_sets(ctx, root) && validate_input_profiles(ctx, root, names) &&
            validate_grid_maps(ctx, root) && validate_grid_pickup_layers(ctx, root, names) &&
-           validate_sector_levels(ctx, root) && validate_sector_navigation(ctx, root, names) &&
-           validate_components(ctx, root, names) &&
+           validate_sector_levels(ctx, root) && validate_brush_worlds(ctx, root) &&
+           validate_sector_navigation(ctx, root, names) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_sector_doors(ctx, root, names) && validate_sector_platforms(ctx, root, names) &&
@@ -9674,6 +10041,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->grid_maps);
     name_table_destroy(&names->grid_pickup_layers);
     name_table_destroy(&names->sector_levels);
+    name_table_destroy(&names->brush_worlds);
     name_table_destroy(&names->sector_navigation);
     name_table_destroy(&names->sector_doors);
     name_table_destroy(&names->sector_platforms);

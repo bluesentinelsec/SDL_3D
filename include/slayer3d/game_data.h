@@ -343,6 +343,121 @@ extern "C"
         bool sector_lighting_enabled;
     } slayer3d_game_data_sector_level_instance;
 
+    enum
+    {
+        /** @brief Brush blocks actor and projectile movement unless masked out by caller. */
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID = 1u << 0,
+        /** @brief Brush blocks player movement but may be ignored by other traces. */
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP = 1u << 1,
+        /** @brief Brush blocks projectile traces but may be ignored by actors. */
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP = 1u << 2,
+        /** @brief Brush is a gameplay trigger volume rather than blocking geometry. */
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER = 1u << 3,
+        /** @brief Brush represents water contents. */
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER = 1u << 4,
+        /** @brief Brush represents lava or damaging liquid contents. */
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA = 1u << 5,
+        /** @brief Brush surface should be treated as sky by renderers. */
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY = 1u << 6,
+    };
+
+    enum
+    {
+        /** @brief Face does not emit collision geometry. */
+        SLAYER3D_GAME_DATA_BRUSH_SURFACE_NO_COLLIDE = 1u << 0,
+        /** @brief Face has low-friction movement semantics. */
+        SLAYER3D_GAME_DATA_BRUSH_SURFACE_SLICK = 1u << 1,
+        /** @brief Face can be climbed by compatible controllers. */
+        SLAYER3D_GAME_DATA_BRUSH_SURFACE_LADDER = 1u << 2,
+        /** @brief Face should contribute emissive material response. */
+        SLAYER3D_GAME_DATA_BRUSH_SURFACE_EMISSIVE = 1u << 3,
+        /** @brief Face is a candidate for future portal/visibility tooling. */
+        SLAYER3D_GAME_DATA_BRUSH_SURFACE_PORTAL_CANDIDATE = 1u << 4,
+    };
+
+    /** @brief Runtime-owned material referenced by authored brush faces. */
+    typedef struct slayer3d_game_data_brush_material
+    {
+        /** @brief Stable authored material name. */
+        const char *name;
+        /** @brief Optional asset:// texture image path. */
+        const char *texture;
+        /** @brief Linear RGBA material factor, default white. */
+        slayer3d_vec4 albedo;
+        /** @brief Authored metallic factor for future material systems. */
+        float metallic;
+        /** @brief Authored roughness factor for future material systems. */
+        float roughness;
+        /** @brief Positive texture scale hint. */
+        float tex_scale;
+    } slayer3d_game_data_brush_material;
+
+    /** @brief One plane-bounded face on an authored convex brush. */
+    typedef struct slayer3d_game_data_brush_face
+    {
+        /** @brief Plane normal. Validation requires a non-zero vector. */
+        slayer3d_vec3 normal;
+        /** @brief Plane distance in normal-dot-position form. */
+        float distance;
+        /** @brief Index into the brush world's material array. */
+        int material_index;
+        /** @brief Resolved material name, or NULL when no material was authored. */
+        const char *material_name;
+        /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_SURFACE_* flags. */
+        unsigned int surface_flags;
+    } slayer3d_game_data_brush_face;
+
+    /** @brief Authored convex brush loaded into runtime-owned data. */
+    typedef struct slayer3d_game_data_brush
+    {
+        /** @brief Stable authored brush name. */
+        const char *name;
+        /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_CONTENT_* flags. */
+        unsigned int contents;
+        /** @brief Optional authored tags for editor/runtime queries. */
+        const char *const *tags;
+        /** @brief Number of entries in @p tags. */
+        int tag_count;
+        /** @brief Convex brush faces. */
+        const slayer3d_game_data_brush_face *faces;
+        /** @brief Number of entries in @p faces. */
+        int face_count;
+    } slayer3d_game_data_brush;
+
+    /** @brief Runtime-owned native brush world. */
+    typedef struct slayer3d_game_data_brush_world
+    {
+        /** @brief Stable authored brush world name. */
+        const char *name;
+        /** @brief Authored unit label, normally `meters`. */
+        const char *units;
+        /** @brief Conversion factor from authored units to meters. */
+        float meters_per_unit;
+        /** @brief Runtime material palette for brush faces. */
+        const slayer3d_game_data_brush_material *materials;
+        /** @brief Number of entries in @p materials. */
+        int material_count;
+        /** @brief Authored convex brushes. */
+        const slayer3d_game_data_brush *brushes;
+        /** @brief Number of entries in @p brushes. */
+        int brush_count;
+    } slayer3d_game_data_brush_world;
+
+    /** @brief Active-scene instance of an authored brush world. */
+    typedef struct slayer3d_game_data_brush_world_instance
+    {
+        /** @brief Authored brush world name. */
+        const char *world_name;
+        /** @brief Runtime-owned brush world descriptor. */
+        const slayer3d_game_data_brush_world *world;
+        /** @brief World-space translation applied before rendering/collision queries. */
+        slayer3d_vec3 position;
+        /** @brief Whether renderers/collision systems should use future acceleration data. */
+        bool acceleration_enabled;
+        /** @brief Whether debug wireframe should be requested for this instance. */
+        bool debug_wireframe;
+    } slayer3d_game_data_brush_world_instance;
+
     /**
      * @brief Callback for active authored sector level instances.
      *
@@ -350,6 +465,14 @@ extern "C"
      */
     typedef bool (*slayer3d_game_data_sector_level_instance_fn)(
         void *userdata, const slayer3d_game_data_sector_level_instance *instance);
+
+    /**
+     * @brief Callback for active authored brush world instances.
+     *
+     * Return false to stop iteration early.
+     */
+    typedef bool (*slayer3d_game_data_brush_world_instance_fn)(void *userdata,
+                                                               const slayer3d_game_data_brush_world_instance *instance);
 
     /**
      * @brief Runtime metrics used when evaluating data-authored UI bindings.
@@ -1075,6 +1198,21 @@ extern "C"
     bool slayer3d_game_data_get_sector_level(const slayer3d_game_data_runtime *runtime, const char *name,
                                              slayer3d_game_data_sector_level *out_level);
 
+    /**
+     * @brief Look up a JSON-authored brush world by name.
+     *
+     * This exposes loaded native brush-world data to renderer, collision,
+     * controller, sensor, and editor systems without making callers parse JSON.
+     * The returned pointers are runtime-owned.
+     *
+     * @param runtime Loaded game data runtime.
+     * @param name Authored brush world name.
+     * @param out_world Receives runtime-owned brush world pointers.
+     * @return true when @p name resolves to an authored brush world.
+     */
+    bool slayer3d_game_data_get_brush_world(const slayer3d_game_data_runtime *runtime, const char *name,
+                                            slayer3d_game_data_brush_world *out_world);
+
     /** @brief Runtime-owned node resolved from an authored sector navigation graph. */
     typedef struct slayer3d_game_data_sector_nav_node
     {
@@ -1161,6 +1299,18 @@ extern "C"
     bool slayer3d_game_data_for_each_sector_level_instance(const slayer3d_game_data_runtime *runtime,
                                                            slayer3d_game_data_sector_level_instance_fn callback,
                                                            void *userdata);
+
+    /**
+     * @brief Iterate brush worlds declared by the active scene.
+     *
+     * The active scene owns placement and debug policy through
+     * `world.brush_worlds`. This helper is renderer-agnostic so tests,
+     * editors, and future brush render/collision systems can inspect the same
+     * resolved instances.
+     */
+    bool slayer3d_game_data_for_each_brush_world_instance(const slayer3d_game_data_runtime *runtime,
+                                                          slayer3d_game_data_brush_world_instance_fn callback,
+                                                          void *userdata);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity

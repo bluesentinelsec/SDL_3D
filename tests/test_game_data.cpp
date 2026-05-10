@@ -134,6 +134,16 @@ struct SectorLevelInstanceCapture
     bool sector_lighting_enabled = true;
 };
 
+struct BrushWorldInstanceCapture
+{
+    int count = 0;
+    std::string world_name;
+    const slayer3d_game_data_brush_world *world = nullptr;
+    slayer3d_vec3 position{};
+    bool acceleration_enabled = true;
+    bool debug_wireframe = false;
+};
+
 struct SectorDoorRenderCapture
 {
     int door_primitives = 0;
@@ -1522,6 +1532,18 @@ bool capture_sector_level_instance(void *userdata, const slayer3d_game_data_sect
     capture->position = instance->position;
     capture->portal_culling = instance->portal_culling;
     capture->sector_lighting_enabled = instance->sector_lighting_enabled;
+    return true;
+}
+
+bool capture_brush_world_instance(void *userdata, const slayer3d_game_data_brush_world_instance *instance)
+{
+    auto *capture = static_cast<BrushWorldInstanceCapture *>(userdata);
+    capture->count++;
+    capture->world_name = instance->world_name != nullptr ? instance->world_name : "";
+    capture->world = instance->world;
+    capture->position = instance->position;
+    capture->acceleration_enabled = instance->acceleration_enabled;
+    capture->debug_wireframe = instance->debug_wireframe;
     return true;
 }
 
@@ -10318,6 +10340,263 @@ TEST(GameDataRuntime, LoadsAuthoredSectorLevels)
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_worlds");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [
+      {
+        "world": "brush.test",
+        "position": [1.0, 2.0, 3.0],
+        "acceleration": false,
+        "debug_wireframe": true
+      }
+    ]
+  }
+})json");
+    write_text(dir / "brush_world.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush World Test" },
+  "world": { "name": "world.brush_test", "kind": "brush", "units": "meters", "meters_per_unit": 1.0 },
+  "brush_worlds": [
+    {
+      "name": "brush.test",
+      "units": "meters",
+      "meters_per_unit": 1.0,
+      "materials": [
+        {
+          "name": "mat.wall",
+          "albedo": [0.25, 0.35, 0.45, 1.0],
+          "metallic": 0.0,
+          "roughness": 0.8,
+          "tex_scale": 2.0
+        }
+      ],
+      "brushes": [
+        {
+          "name": "brush.room",
+          "tags": ["solid", "room"],
+          "contents": ["solid", "player_clip"],
+          "faces": [
+            { "plane": { "normal": [ 1.0,  0.0,  0.0], "distance":  4.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1.0,  0.0,  0.0], "distance":  0.0 }, "material": 0 },
+            { "plane": { "normal": [ 0.0,  1.0,  0.0], "distance":  3.0 }, "material": "mat.wall", "surface_flags": ["slick"] },
+            { "plane": { "normal": [ 0.0, -1.0,  0.0], "distance":  0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0.0,  0.0,  1.0], "distance":  4.0 }, "material": "mat.wall", "surface_flags": "emissive" },
+            { "plane": { "normal": [ 0.0,  0.0, -1.0], "distance":  0.0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "brush_world.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.test", &world));
+    EXPECT_STREQ(world.name, "brush.test");
+    EXPECT_STREQ(world.units, "meters");
+    EXPECT_FLOAT_EQ(world.meters_per_unit, 1.0f);
+    ASSERT_EQ(world.material_count, 1);
+    EXPECT_STREQ(world.materials[0].name, "mat.wall");
+    EXPECT_FLOAT_EQ(world.materials[0].albedo.z, 0.45f);
+    EXPECT_FLOAT_EQ(world.materials[0].roughness, 0.8f);
+    EXPECT_FLOAT_EQ(world.materials[0].tex_scale, 2.0f);
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_STREQ(world.brushes[0].name, "brush.room");
+    EXPECT_EQ(world.brushes[0].contents,
+              SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+    ASSERT_EQ(world.brushes[0].tag_count, 2);
+    EXPECT_STREQ(world.brushes[0].tags[1], "room");
+    ASSERT_EQ(world.brushes[0].face_count, 6);
+    EXPECT_FLOAT_EQ(world.brushes[0].faces[0].normal.x, 1.0f);
+    EXPECT_FLOAT_EQ(world.brushes[0].faces[0].distance, 4.0f);
+    EXPECT_EQ(world.brushes[0].faces[1].material_index, 0);
+    EXPECT_STREQ(world.brushes[0].faces[1].material_name, "mat.wall");
+    EXPECT_EQ(world.brushes[0].faces[2].surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_SLICK);
+    EXPECT_EQ(world.brushes[0].faces[4].surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_EMISSIVE);
+
+    slayer3d_game_data_brush_world missing{};
+    EXPECT_FALSE(slayer3d_game_data_get_brush_world(runtime, "brush.missing", &missing));
+    EXPECT_EQ(missing.name, nullptr);
+
+    BrushWorldInstanceCapture capture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_brush_world_instance(runtime, capture_brush_world_instance, &capture));
+    EXPECT_EQ(capture.count, 1);
+    EXPECT_EQ(capture.world_name, "brush.test");
+    ASSERT_NE(capture.world, nullptr);
+    EXPECT_STREQ(capture.world->name, "brush.test");
+    expect_vec3_near(capture.position, slayer3d_vec3_make(1.0f, 2.0f, 3.0f));
+    EXPECT_FALSE(capture.acceleration_enabled);
+    EXPECT_TRUE(capture.debug_wireframe);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
+{
+    struct Case
+    {
+        const char *name;
+        const char *brush_world_json;
+        const char *scene_json;
+        const char *error;
+    };
+    const Case cases[] = {
+        {
+            "bad_material_ref",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.missing" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush face material must reference a declared material",
+        },
+        {
+            "zero_normal",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [0, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush face plane requires non-zero normal vec3",
+        },
+        {
+            "bad_content",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "contents": ["opaque"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush content value is unknown",
+        },
+        {
+            "bad_scene_ref",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.good",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": { "brush_worlds": [{ "world": "brush.missing" }] }
+})json",
+            "unknown brush world reference",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path dir = unique_test_dir(test_case.name);
+        write_text(dir / "scenes" / "play.scene.json", test_case.scene_json != nullptr ? test_case.scene_json : R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play"
+})json");
+        std::string brush_world_section = test_case.brush_world_json;
+        const size_t section_start = brush_world_section.find("\"brush_worlds\"");
+        const size_t section_end = brush_world_section.rfind('}');
+        ASSERT_NE(section_start, std::string::npos) << test_case.name;
+        ASSERT_NE(section_end, std::string::npos) << test_case.name;
+        brush_world_section = brush_world_section.substr(section_start, section_end - section_start);
+        const std::string game_json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid Brush World" },
+  "world": { "name": "world.invalid", "kind": "brush" },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] },
+)json") + brush_world_section + "\n}";
+        write_text(dir / "bad_brush.game.json", game_json.c_str());
+
+        slayer3d_game_session *session = nullptr;
+        ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+        char error[512]{};
+        slayer3d_game_data_runtime *runtime = nullptr;
+        EXPECT_FALSE(slayer3d_game_data_load_file((dir / "bad_brush.game.json").string().c_str(), session, &runtime,
+                                                  error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.error), std::string::npos) << test_case.name << ": " << error;
+        slayer3d_game_data_destroy(runtime);
+        slayer3d_game_session_destroy(session);
+        remove_test_dir(dir);
+    }
 }
 
 TEST(GameDataRuntime, SectorLightingModulatesLitActorsAndCanUpdateAtRuntime)
