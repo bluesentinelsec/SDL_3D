@@ -7723,6 +7723,18 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
     yyjson_val *app = obj_get(root, "app");
     if (!yyjson_is_obj(app))
         return true;
+    static const char *const app_dimension_fields[] = {"width",         "height",        "window_width",
+                                                       "window_height", "logical_width", "logical_height"};
+    for (size_t i = 0; i < SDL_arraysize(app_dimension_fields); ++i)
+    {
+        yyjson_val *dimension = obj_get(app, app_dimension_fields[i]);
+        if (dimension != NULL && (!yyjson_is_int(dimension) || yyjson_get_int(dimension) <= 0))
+        {
+            char path[PATH_BUFFER_SIZE];
+            format_path(path, sizeof(path), "$.app.%s", app_dimension_fields[i]);
+            return validation_error(ctx, path, "app dimensions must be positive integers");
+        }
+    }
     const char *start_signal = json_string(app, "start_signal");
     if (start_signal != NULL && !require_ref(ctx, &names->signals, "signal", start_signal, "$.app.start_signal"))
         return false;
@@ -7742,6 +7754,16 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
     yyjson_val *window = obj_get(app, "window");
     if (window != NULL && !yyjson_is_obj(window))
         return validation_error(ctx, "$.app.window", "window must be an object");
+    for (size_t i = 0; i < SDL_arraysize(app_dimension_fields); ++i)
+    {
+        yyjson_val *dimension = obj_get(window, app_dimension_fields[i]);
+        if (dimension != NULL && (!yyjson_is_int(dimension) || yyjson_get_int(dimension) <= 0))
+        {
+            char path[PATH_BUFFER_SIZE];
+            format_path(path, sizeof(path), "$.app.window.%s", app_dimension_fields[i]);
+            return validation_error(ctx, path, "app window dimensions must be positive integers");
+        }
+    }
     const char *window_apply_signal = json_string(window, "apply_signal");
     if (window_apply_signal != NULL &&
         !require_ref(ctx, &names->signals, "signal", window_apply_signal, "$.app.window.apply_signal"))
@@ -7895,6 +7917,12 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
         format_path(path, sizeof(path), "$.world.cameras[%zu]", i);
         yyjson_val *camera = yyjson_arr_get(cameras, i);
         const char *type = json_string(camera, "type");
+        yyjson_val *fovy = obj_get(camera, "fovy");
+        if (fovy != NULL && (!yyjson_is_num(fovy) || yyjson_get_num(fovy) <= 0.0 || yyjson_get_num(fovy) >= 180.0))
+            return validation_error(ctx, path, "camera fovy must be in the range (0, 180)");
+        yyjson_val *size = obj_get(camera, "size");
+        if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 0.0))
+            return validation_error(ctx, path, "camera size must be positive");
         if (SDL_strcmp(type != NULL ? type : "", "adapter") == 0)
         {
             const char *adapter = json_string(camera, "adapter");
@@ -7917,6 +7945,23 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
                 return false;
         }
     }
+    return true;
+}
+
+static bool validate_world_metadata(validation_context *ctx, yyjson_val *root)
+{
+    yyjson_val *world = obj_get(root, "world");
+    if (world == NULL)
+        return true;
+    if (!yyjson_is_obj(world))
+        return validation_error(ctx, "$.world", "world must be an object");
+
+    yyjson_val *units = obj_get(world, "units");
+    if (units != NULL && (!yyjson_is_str(units) || yyjson_get_str(units)[0] == '\0'))
+        return validation_error(ctx, "$.world.units", "world units must be a non-empty string");
+    yyjson_val *meters_per_unit = obj_get(world, "meters_per_unit");
+    if (meters_per_unit != NULL && (!yyjson_is_num(meters_per_unit) || yyjson_get_num(meters_per_unit) <= 0.0))
+        return validation_error(ctx, "$.world.meters_per_unit", "world meters_per_unit must be positive");
     return true;
 }
 
@@ -9181,10 +9226,10 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
 static bool validate_details(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     return validate_storage(ctx, root) && validate_persistence(ctx, root, names) && validate_factions(ctx, root) &&
-           validate_input_bindings(ctx, root) && validate_input_assignment_sets(ctx, root) &&
-           validate_input_profiles(ctx, root, names) && validate_grid_maps(ctx, root) &&
-           validate_grid_pickup_layers(ctx, root, names) && validate_sector_levels(ctx, root) &&
-           validate_components(ctx, root, names) &&
+           validate_world_metadata(ctx, root) && validate_input_bindings(ctx, root) &&
+           validate_input_assignment_sets(ctx, root) && validate_input_profiles(ctx, root, names) &&
+           validate_grid_maps(ctx, root) && validate_grid_pickup_layers(ctx, root, names) &&
+           validate_sector_levels(ctx, root) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
            validate_sector_doors(ctx, root, names) && validate_sector_platforms(ctx, root, names) &&

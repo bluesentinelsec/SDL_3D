@@ -9,8 +9,6 @@
 #include "sdl3d/logic.h"
 #include "sdl3d/time.h"
 
-#define SDL3D_GAME_DEFAULT_WIDTH 1280
-#define SDL3D_GAME_DEFAULT_HEIGHT 720
 #define SDL3D_GAME_DEFAULT_FIXED_DT (1.0f / 60.0f)
 #define SDL3D_GAME_DEFAULT_MAX_TICKS 8
 
@@ -389,9 +387,9 @@ static bool sdl3d_game_create_context(const sdl3d_game_config *config, sdl3d_gam
     sdl3d_window_config window_config;
     sdl3d_game_session_desc session_desc;
     const int logical_width =
-        (config != NULL && config->logical_width > 0) ? config->logical_width : SDL3D_GAME_DEFAULT_WIDTH;
+        (config != NULL && config->logical_width > 0) ? config->logical_width : SDL3D_GAME_DEFAULT_LOGICAL_WIDTH;
     const int logical_height =
-        (config != NULL && config->logical_height > 0) ? config->logical_height : SDL3D_GAME_DEFAULT_HEIGHT;
+        (config != NULL && config->logical_height > 0) ? config->logical_height : SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT;
 
     sdl3d_init_window_config(&window_config);
     window_config.width = (config != NULL && config->width > 0) ? config->width : logical_width;

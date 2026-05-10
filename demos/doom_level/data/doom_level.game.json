@@ -26,7 +26,10 @@
   ],
   "app": {
     "title": "SDL3D Doom Level",
-    "window": { "width": 1280, "height": 720, "renderer": "opengl", "vsync": true },
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": { "renderer": "opengl", "vsync": true },
     "audio": { "enabled": true },
     "startup_transition": "startup",
     "pause": { "action": "action.pause" },
@@ -38,13 +41,15 @@
   "world": {
     "name": "world.doom_level",
     "kind": "sector",
+    "units": "meters",
+    "meters_per_unit": 1.0,
     "ambient_light": [0.18, 0.18, 0.2],
     "cameras": [
       {
         "name": "camera.doom.player",
         "type": "fps",
         "target_entity": "entity.player",
-        "fovy": 65.0,
+        "fovy": 90.0,
         "active": true
       },
       {
@@ -52,7 +57,7 @@
         "type": "perspective",
         "position": [4.0, 3.25, 25.2],
         "target": [4.0, 0.15, 18.4],
-        "fovy": 70.0
+        "fovy": 90.0
       }
     ]
   },

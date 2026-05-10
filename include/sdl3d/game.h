@@ -30,6 +30,17 @@ extern "C"
 {
 #endif
 
+/**
+ * @brief Default authored virtual resolution for SDL3D games.
+ *
+ * The managed loop presents this logical resolution with letterboxing by
+ * default so games can scale to user displays while preserving aspect ratio.
+ */
+#define SDL3D_GAME_DEFAULT_LOGICAL_WIDTH 1280
+
+/** @brief Default authored virtual height for SDL3D games. */
+#define SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT 720
+
     /** @brief Opaque game-session container for genre-neutral runtime services. */
     typedef struct sdl3d_game_session sdl3d_game_session;
 

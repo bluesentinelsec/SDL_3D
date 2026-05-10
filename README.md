@@ -32,6 +32,12 @@ targets. The generic `sdl3d_runner` can launch games from:
 The demo games are compatibility proofs for engine capabilities. New demo work
 should strengthen reusable systems instead of adding one-off host code.
 
+Default authored display and world conventions are intentionally simple:
+SDL3D games target a 1280x720 logical canvas that is letterboxed to preserve
+aspect ratio on the user's display, one world unit represents one meter, and
+perspective/FPS cameras default to a 90 degree vertical field of view unless a
+game authors a different value.
+
 ## Repository Layout
 
 - `include/`: public C headers

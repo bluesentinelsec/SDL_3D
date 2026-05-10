@@ -48,6 +48,15 @@ extern "C"
     /** @brief Maximum bytes stored for one dynamic menu row label or value, including room for terminator. */
 #define SDL3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY 256U
 
+    /** @brief Default vertical field-of-view for authored perspective, chase, and FPS cameras. */
+#define SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES 90.0f
+
+    /** @brief Default world unit label. SDL3D convention is one authored world unit equals one meter. */
+#define SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS "meters"
+
+    /** @brief Default scale from authored world units to real-world meters. */
+#define SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT 1.0f
+
     /** @brief Opaque runtime created from one game JSON document. */
     typedef struct sdl3d_game_data_runtime sdl3d_game_data_runtime;
 
@@ -2093,6 +2102,17 @@ extern "C"
      */
     bool sdl3d_game_data_get_camera_float(const sdl3d_game_data_runtime *runtime, const char *camera_name,
                                           const char *property_name, float *out_value);
+
+    /**
+     * @brief Read the authored world unit convention.
+     *
+     * Games may omit these fields; SDL3D then reports the engine default:
+     * units="meters" and meters_per_unit=1.0. This is metadata for tools,
+     * editors, physics tuning, and documentation. The renderer interprets all
+     * authored positions consistently as world units.
+     */
+    bool sdl3d_game_data_get_world_units(const sdl3d_game_data_runtime *runtime, const char **out_units,
+                                         float *out_meters_per_unit);
 
     /** @brief Return the number of authored world lights. */
     int sdl3d_game_data_world_light_count(const sdl3d_game_data_runtime *runtime);

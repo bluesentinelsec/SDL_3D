@@ -14,7 +14,10 @@
   ],
   "app": {
     "title": "SDL3D FPS Mechanics Dojo",
-    "window": { "width": 1280, "height": 720, "renderer": "opengl", "vsync": true },
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": { "renderer": "opengl", "vsync": true },
     "pause": { "action": "action.pause" },
     "quit": { "action": "action.exit" },
     "input_policy": { "global_actions": ["action.exit"] }
@@ -22,13 +25,15 @@
   "world": {
     "name": "world.fps_mechanics_dojo",
     "kind": "sector",
+    "units": "meters",
+    "meters_per_unit": 1.0,
     "ambient_light": [0.16, 0.16, 0.2],
     "cameras": [
       {
         "name": "camera.dojo.player",
         "type": "fps",
         "target_entity": "entity.player",
-        "fovy": 68.0,
+        "fovy": 90.0,
         "active": true
       }
     ]
