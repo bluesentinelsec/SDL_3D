@@ -940,3 +940,284 @@ bool sdl3d_draw_capsule_wires(sdl3d_render_context *context, sdl3d_vec3 start, s
     }
     return sdl3d_draw_capsule_solid(context, start, end, radius, slices, rings, color, true);
 }
+
+static void sdl3d_shape_store_vertex(float *positions, float *normals, int index, sdl3d_vec3 position,
+                                     sdl3d_vec3 normal)
+{
+    positions[index * 3 + 0] = position.x;
+    positions[index * 3 + 1] = position.y;
+    positions[index * 3 + 2] = position.z;
+    normals[index * 3 + 0] = normal.x;
+    normals[index * 3 + 1] = normal.y;
+    normals[index * 3 + 2] = normal.z;
+}
+
+static sdl3d_vec3 sdl3d_shape_face_normal(sdl3d_vec3 a, sdl3d_vec3 b, sdl3d_vec3 c)
+{
+    return sdl3d_vec3_normalize(sdl3d_vec3_cross(sdl3d_vec3_sub(b, a), sdl3d_vec3_sub(c, a)));
+}
+
+bool sdl3d_draw_torus(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius, float minor_radius,
+                      int segments, int tube_segments, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_positive(major_radius, "major_radius", "sdl3d_draw_torus") ||
+        !sdl3d_shape_require_positive(minor_radius, "minor_radius", "sdl3d_draw_torus"))
+    {
+        return false;
+    }
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_torus requires segments >= 3.");
+    if (tube_segments < 3)
+        return SDL_SetError("sdl3d_draw_torus requires tube_segments >= 3.");
+
+    const int verts_per_ring = tube_segments + 1;
+    const int vert_count = (segments + 1) * verts_per_ring;
+    const int idx_count = segments * tube_segments * 6;
+    float *positions = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    float *normals = (float *)SDL_malloc((size_t)vert_count * 3 * sizeof(float));
+    unsigned int *indices = (unsigned int *)SDL_malloc((size_t)idx_count * sizeof(unsigned int));
+    if (positions == NULL || normals == NULL || indices == NULL)
+    {
+        SDL_free(positions);
+        SDL_free(normals);
+        SDL_free(indices);
+        return SDL_OutOfMemory();
+    }
+
+    for (int i = 0; i <= segments; ++i)
+    {
+        const float u = 2.0f * SDL3D_SHAPES_PI * (float)i / (float)segments;
+        const float cu = SDL_cosf(u);
+        const float su = SDL_sinf(u);
+        for (int j = 0; j <= tube_segments; ++j)
+        {
+            const float v = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)tube_segments;
+            const float cv = SDL_cosf(v);
+            const float sv = SDL_sinf(v);
+            const int vi = i * verts_per_ring + j;
+            const float radial = major_radius + minor_radius * cv;
+            const sdl3d_vec3 normal = sdl3d_vec3_make(cv * cu, sv, cv * su);
+            const sdl3d_vec3 position =
+                sdl3d_vec3_make(center.x + radial * cu, center.y + minor_radius * sv, center.z + radial * su);
+            sdl3d_shape_store_vertex(positions, normals, vi, position, normal);
+        }
+    }
+
+    int ii = 0;
+    for (int i = 0; i < segments; ++i)
+    {
+        for (int j = 0; j < tube_segments; ++j)
+        {
+            const unsigned int v00 = (unsigned int)(i * verts_per_ring + j);
+            const unsigned int v01 = v00 + 1U;
+            const unsigned int v10 = (unsigned int)((i + 1) * verts_per_ring + j);
+            const unsigned int v11 = v10 + 1U;
+            indices[ii++] = v00;
+            indices[ii++] = v11;
+            indices[ii++] = v10;
+            indices[ii++] = v00;
+            indices[ii++] = v01;
+            indices[ii++] = v11;
+        }
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = vert_count;
+    mesh.index_count = idx_count;
+    const bool result = sdl3d_draw_mesh(context, &mesh, NULL, color);
+    SDL_free(positions);
+    SDL_free(normals);
+    SDL_free(indices);
+    return result;
+}
+
+bool sdl3d_draw_torus_wires(sdl3d_render_context *context, sdl3d_vec3 center, float major_radius, float minor_radius,
+                            int segments, int tube_segments, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_positive(major_radius, "major_radius", "sdl3d_draw_torus_wires") ||
+        !sdl3d_shape_require_positive(minor_radius, "minor_radius", "sdl3d_draw_torus_wires"))
+    {
+        return false;
+    }
+    if (segments < 3)
+        return SDL_SetError("sdl3d_draw_torus_wires requires segments >= 3.");
+    if (tube_segments < 3)
+        return SDL_SetError("sdl3d_draw_torus_wires requires tube_segments >= 3.");
+
+    for (int i = 0; i < segments; ++i)
+    {
+        const float u0 = 2.0f * SDL3D_SHAPES_PI * (float)i / (float)segments;
+        const float u1 = 2.0f * SDL3D_SHAPES_PI * (float)(i + 1) / (float)segments;
+        const float cu0 = SDL_cosf(u0), su0 = SDL_sinf(u0);
+        const float cu1 = SDL_cosf(u1), su1 = SDL_sinf(u1);
+        for (int j = 0; j < tube_segments; ++j)
+        {
+            const float v0 = 2.0f * SDL3D_SHAPES_PI * (float)j / (float)tube_segments;
+            const float v1 = 2.0f * SDL3D_SHAPES_PI * (float)(j + 1) / (float)tube_segments;
+            const float cv0 = SDL_cosf(v0), sv0 = SDL_sinf(v0);
+            const float cv1 = SDL_cosf(v1), sv1 = SDL_sinf(v1);
+            const sdl3d_vec3 p00 =
+                sdl3d_vec3_make(center.x + (major_radius + minor_radius * cv0) * cu0, center.y + minor_radius * sv0,
+                                center.z + (major_radius + minor_radius * cv0) * su0);
+            const sdl3d_vec3 p01 =
+                sdl3d_vec3_make(center.x + (major_radius + minor_radius * cv1) * cu0, center.y + minor_radius * sv1,
+                                center.z + (major_radius + minor_radius * cv1) * su0);
+            const sdl3d_vec3 p10 =
+                sdl3d_vec3_make(center.x + (major_radius + minor_radius * cv0) * cu1, center.y + minor_radius * sv0,
+                                center.z + (major_radius + minor_radius * cv0) * su1);
+            if (!sdl3d_draw_line_3d(context, p00, p01, color) || !sdl3d_draw_line_3d(context, p00, p10, color))
+                return false;
+        }
+    }
+    return true;
+}
+
+bool sdl3d_draw_pyramid(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_pyramid") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_pyramid") ||
+        !sdl3d_shape_require_nonnegative(size.z, "size.z", "sdl3d_draw_pyramid"))
+    {
+        return false;
+    }
+
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    const float hz = size.z * 0.5f;
+    const sdl3d_vec3 apex = sdl3d_vec3_make(center.x, center.y + hy, center.z);
+    const sdl3d_vec3 bl = sdl3d_vec3_make(center.x - hx, center.y - hy, center.z - hz);
+    const sdl3d_vec3 br = sdl3d_vec3_make(center.x + hx, center.y - hy, center.z - hz);
+    const sdl3d_vec3 tr = sdl3d_vec3_make(center.x + hx, center.y - hy, center.z + hz);
+    const sdl3d_vec3 tl = sdl3d_vec3_make(center.x - hx, center.y - hy, center.z + hz);
+    const sdl3d_vec3 faces[6][3] = {
+        {bl, apex, br}, {br, apex, tr}, {tr, apex, tl}, {tl, apex, bl}, {bl, br, tr}, {bl, tr, tl},
+    };
+    float positions[18 * 3];
+    float normals[18 * 3];
+    unsigned int indices[18];
+    for (int f = 0; f < 6; ++f)
+    {
+        const sdl3d_vec3 normal = sdl3d_shape_face_normal(faces[f][0], faces[f][1], faces[f][2]);
+        for (int v = 0; v < 3; ++v)
+        {
+            const int vi = f * 3 + v;
+            sdl3d_shape_store_vertex(positions, normals, vi, faces[f][v], normal);
+            indices[vi] = (unsigned int)vi;
+        }
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = 18;
+    mesh.index_count = 18;
+    return sdl3d_draw_mesh(context, &mesh, NULL, color);
+}
+
+bool sdl3d_draw_pyramid_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_pyramid_wires") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_pyramid_wires") ||
+        !sdl3d_shape_require_nonnegative(size.z, "size.z", "sdl3d_draw_pyramid_wires"))
+    {
+        return false;
+    }
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    const float hz = size.z * 0.5f;
+    const sdl3d_vec3 p[5] = {
+        sdl3d_vec3_make(center.x - hx, center.y - hy, center.z - hz),
+        sdl3d_vec3_make(center.x + hx, center.y - hy, center.z - hz),
+        sdl3d_vec3_make(center.x + hx, center.y - hy, center.z + hz),
+        sdl3d_vec3_make(center.x - hx, center.y - hy, center.z + hz),
+        sdl3d_vec3_make(center.x, center.y + hy, center.z),
+    };
+    static const int edges[8][2] = {{0, 1}, {1, 2}, {2, 3}, {3, 0}, {0, 4}, {1, 4}, {2, 4}, {3, 4}};
+    for (int i = 0; i < 8; ++i)
+    {
+        if (!sdl3d_draw_line_3d(context, p[edges[i][0]], p[edges[i][1]], color))
+            return false;
+    }
+    return true;
+}
+
+bool sdl3d_draw_wedge(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_wedge") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_wedge") ||
+        !sdl3d_shape_require_nonnegative(size.z, "size.z", "sdl3d_draw_wedge"))
+    {
+        return false;
+    }
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    const float hz = size.z * 0.5f;
+    const sdl3d_vec3 p[6] = {
+        sdl3d_vec3_make(center.x - hx, center.y - hy, center.z - hz),
+        sdl3d_vec3_make(center.x + hx, center.y - hy, center.z - hz),
+        sdl3d_vec3_make(center.x - hx, center.y - hy, center.z + hz),
+        sdl3d_vec3_make(center.x + hx, center.y - hy, center.z + hz),
+        sdl3d_vec3_make(center.x - hx, center.y + hy, center.z + hz),
+        sdl3d_vec3_make(center.x + hx, center.y + hy, center.z + hz),
+    };
+    const sdl3d_vec3 triangles[8][3] = {
+        {p[0], p[3], p[1]}, {p[0], p[2], p[3]}, {p[2], p[5], p[3]}, {p[2], p[4], p[5]},
+        {p[0], p[4], p[2]}, {p[0], p[1], p[5]}, {p[0], p[5], p[4]}, {p[1], p[3], p[5]},
+    };
+    float positions[24 * 3];
+    float normals[24 * 3];
+    unsigned int indices[24];
+    for (int f = 0; f < 8; ++f)
+    {
+        const sdl3d_vec3 normal = sdl3d_shape_face_normal(triangles[f][0], triangles[f][1], triangles[f][2]);
+        for (int v = 0; v < 3; ++v)
+        {
+            const int vi = f * 3 + v;
+            sdl3d_shape_store_vertex(positions, normals, vi, triangles[f][v], normal);
+            indices[vi] = (unsigned int)vi;
+        }
+    }
+
+    sdl3d_mesh mesh;
+    SDL_zerop(&mesh);
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.indices = indices;
+    mesh.vertex_count = 24;
+    mesh.index_count = 24;
+    return sdl3d_draw_mesh(context, &mesh, NULL, color);
+}
+
+bool sdl3d_draw_wedge_wires(sdl3d_render_context *context, sdl3d_vec3 center, sdl3d_vec3 size, sdl3d_color color)
+{
+    if (!sdl3d_shape_require_nonnegative(size.x, "size.x", "sdl3d_draw_wedge_wires") ||
+        !sdl3d_shape_require_nonnegative(size.y, "size.y", "sdl3d_draw_wedge_wires") ||
+        !sdl3d_shape_require_nonnegative(size.z, "size.z", "sdl3d_draw_wedge_wires"))
+    {
+        return false;
+    }
+    const float hx = size.x * 0.5f;
+    const float hy = size.y * 0.5f;
+    const float hz = size.z * 0.5f;
+    const sdl3d_vec3 p[6] = {
+        sdl3d_vec3_make(center.x - hx, center.y - hy, center.z - hz),
+        sdl3d_vec3_make(center.x + hx, center.y - hy, center.z - hz),
+        sdl3d_vec3_make(center.x - hx, center.y - hy, center.z + hz),
+        sdl3d_vec3_make(center.x + hx, center.y - hy, center.z + hz),
+        sdl3d_vec3_make(center.x - hx, center.y + hy, center.z + hz),
+        sdl3d_vec3_make(center.x + hx, center.y + hy, center.z + hz),
+    };
+    static const int edges[9][2] = {{0, 1}, {0, 2}, {1, 3}, {2, 3}, {2, 4}, {3, 5}, {4, 5}, {0, 4}, {1, 5}};
+    for (int i = 0; i < 9; ++i)
+    {
+        if (!sdl3d_draw_line_3d(context, p[edges[i][0]], p[edges[i][1]], color))
+            return false;
+    }
+    return true;
+}

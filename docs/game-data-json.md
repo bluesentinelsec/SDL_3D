@@ -1388,10 +1388,9 @@ Reusable components include:
   (default), `wire`, or `solid_wire`. Dimension fields include `size`,
   `radius`, `height`, `radius_top`, `radius_bottom`, `major_radius`,
   `minor_radius`, `segments`/`slices`, `rings`, and `tube_segments`. This is the
-  stable data/runtime representation for procedural mesh primitives. Rendering
-  support for the full primitive set is provided by the procedural mesh
-  presentation path; until that path is enabled, existing `render.cube` and
-  `render.sphere` remain the production drawing components.
+  stable data/runtime representation for procedural mesh primitives. The
+  generic presentation path renders every primitive as shaded solid geometry by
+  default, with optional wire-only or solid-plus-wire modes.
 - `render.model`: renders an authored `assets.models` entry with `model`,
   optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
   animation playback via `animation_clip` and `animation_time_property`.

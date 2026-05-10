@@ -821,6 +821,121 @@ static bool append_sphere_draw_batch(primitive_draw_context *context, const sdl3
     return true;
 }
 
+static const sdl3d_texture2d *primitive_texture(primitive_draw_context *context,
+                                                const sdl3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || primitive == NULL || primitive->texture_image == NULL || context->image_cache == NULL)
+        return NULL;
+    sdl3d_game_data_image_cache_entry *entry =
+        find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
+    return entry != NULL ? &entry->texture : NULL;
+}
+
+static bool draw_mesh_primitive_solid(primitive_draw_context *context,
+                                      const sdl3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || primitive == NULL)
+        return false;
+    const sdl3d_texture2d *texture = primitive_texture(context, primitive);
+    switch (primitive->mesh_primitive)
+    {
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+        return sdl3d_draw_cube_textured(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                        sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.0f, texture, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        return sdl3d_draw_sphere_textured(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                          primitive->rings, primitive->slices, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), 0.0f,
+                                          texture, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE: {
+        const float cylinder_span = SDL_max(primitive->height - primitive->radius * 2.0f, 0.0f);
+        const sdl3d_vec3 start = sdl3d_vec3_make(0.0f, -cylinder_span * 0.5f, 0.0f);
+        const sdl3d_vec3 end = sdl3d_vec3_make(0.0f, cylinder_span * 0.5f, 0.0f);
+        return sdl3d_draw_capsule(context->renderer, start, end, primitive->radius, primitive->slices, primitive->rings,
+                                  primitive->color);
+    }
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+        return sdl3d_draw_cylinder(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
+                                   primitive->radius_bottom, primitive->height, primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        return sdl3d_draw_cylinder(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
+                                   primitive->radius_bottom, primitive->height, primitive->slices, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+        return sdl3d_draw_torus(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
+                                primitive->minor_radius, primitive->slices, primitive->tube_segments, primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+        return sdl3d_draw_pyramid(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                  primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+        return sdl3d_draw_wedge(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                primitive->color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        return false;
+    }
+}
+
+static bool draw_mesh_primitive_wires(primitive_draw_context *context,
+                                      const sdl3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || primitive == NULL)
+        return false;
+    switch (primitive->mesh_primitive)
+    {
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+        return sdl3d_draw_cube_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                     primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        return sdl3d_draw_sphere_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius,
+                                       primitive->rings, primitive->slices, primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE: {
+        const float cylinder_span = SDL_max(primitive->height - primitive->radius * 2.0f, 0.0f);
+        const sdl3d_vec3 start = sdl3d_vec3_make(0.0f, -cylinder_span * 0.5f, 0.0f);
+        const sdl3d_vec3 end = sdl3d_vec3_make(0.0f, cylinder_span * 0.5f, 0.0f);
+        return sdl3d_draw_capsule_wires(context->renderer, start, end, primitive->radius, primitive->slices,
+                                        primitive->rings, primitive->wire_color);
+    }
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+        return sdl3d_draw_cylinder_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
+                                         primitive->radius_bottom, primitive->height, primitive->slices,
+                                         primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        return sdl3d_draw_cylinder_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->radius_top,
+                                         primitive->radius_bottom, primitive->height, primitive->slices,
+                                         primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+        return sdl3d_draw_torus_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->major_radius,
+                                      primitive->minor_radius, primitive->slices, primitive->tube_segments,
+                                      primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+        return sdl3d_draw_pyramid_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                        primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+        return sdl3d_draw_wedge_wires(context->renderer, sdl3d_vec3_make(0.0f, 0.0f, 0.0f), primitive->size,
+                                      primitive->wire_color);
+    case SDL3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        return false;
+    }
+}
+
+static bool draw_mesh_primitive(primitive_draw_context *context, const sdl3d_game_data_render_primitive *primitive)
+{
+    if (!sdl3d_push_matrix(context->renderer))
+        return false;
+    bool ok = sdl3d_translate(context->renderer, primitive->position.x, primitive->position.y, primitive->position.z);
+    const float axis_length_sq = primitive->rotation_axis.x * primitive->rotation_axis.x +
+                                 primitive->rotation_axis.y * primitive->rotation_axis.y +
+                                 primitive->rotation_axis.z * primitive->rotation_axis.z;
+    if (ok && axis_length_sq > 0.000001f && SDL_fabsf(primitive->rotation_angle) > 0.000001f)
+        ok = sdl3d_rotate(context->renderer, primitive->rotation_axis, primitive->rotation_angle);
+    if (ok && primitive->draw_mode != SDL3D_GAME_DATA_RENDER_DRAW_WIRE)
+        ok = draw_mesh_primitive_solid(context, primitive);
+    if (ok && primitive->draw_mode != SDL3D_GAME_DATA_RENDER_DRAW_SOLID)
+        ok = draw_mesh_primitive_wires(context, primitive);
+    const bool pop_ok = sdl3d_pop_matrix(context->renderer);
+    return ok && pop_ok;
+}
+
 static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitive *primitive)
 {
     primitive_draw_context *context = (primitive_draw_context *)userdata;
@@ -838,29 +953,22 @@ static bool draw_primitive(void *userdata, const sdl3d_game_data_render_primitiv
                        primitive->emissive_color.z);
     if (primitive->type == SDL3D_GAME_DATA_RENDER_CUBE)
     {
-        const sdl3d_texture2d *texture = NULL;
-        if (primitive->texture_image != NULL && context->image_cache != NULL)
-        {
-            sdl3d_game_data_image_cache_entry *entry =
-                find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
-            texture = entry != NULL ? &entry->texture : NULL;
-        }
+        const sdl3d_texture2d *texture = primitive_texture(context, primitive);
         if (!sdl3d_draw_cube_textured(context->renderer, primitive->position, primitive->size, primitive->rotation_axis,
                                       primitive->rotation_angle, texture, primitive->color))
             return false;
     }
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE)
     {
-        const sdl3d_texture2d *texture = NULL;
-        if (primitive->texture_image != NULL && context->image_cache != NULL)
-        {
-            sdl3d_game_data_image_cache_entry *entry =
-                find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
-            texture = entry != NULL ? &entry->texture : NULL;
-        }
+        const sdl3d_texture2d *texture = primitive_texture(context, primitive);
         if (!sdl3d_draw_sphere_textured(context->renderer, primitive->position, primitive->radius, primitive->rings,
                                         primitive->slices, primitive->rotation_axis, primitive->rotation_angle, texture,
                                         primitive->color))
+            return false;
+    }
+    else if (primitive->type == SDL3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+    {
+        if (!draw_mesh_primitive(context, primitive))
             return false;
     }
     else if (primitive->type == SDL3D_GAME_DATA_RENDER_SPHERE_BATCH)

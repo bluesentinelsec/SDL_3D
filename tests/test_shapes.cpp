@@ -596,6 +596,71 @@ TEST_F(SDL3DShapesFixture, CapsuleAcceptsArbitraryAxis)
     EXPECT_TRUE(PixelEquals(p, kRed));
 }
 
+TEST_F(SDL3DShapesFixture, TorusPyramidAndWedgeRender)
+{
+    WindowRenderer wr(128, 128);
+    ASSERT_TRUE(wr.ok());
+    ContextOwner c;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &c.ctx));
+
+    ASSERT_TRUE(sdl3d_set_backface_culling_enabled(c.ctx, true));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_torus(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.55f, 0.18f, 24, 8, kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+    EXPECT_GT(CountColor(c.ctx, kRed), 100);
+
+    ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_pyramid(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.2f, 1.2f, 1.2f), kGreen));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+    EXPECT_GT(CountColor(c.ctx, kGreen), 100);
+
+    ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_wedge(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.2f, 1.0f, 1.2f), kBlue));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+    EXPECT_GT(CountColor(c.ctx, kBlue), 100);
+}
+
+TEST_F(SDL3DShapesFixture, NewPrimitiveWiresDrawWithoutFilling)
+{
+    WindowRenderer wr(128, 128);
+    ASSERT_TRUE(wr.ok());
+    ContextOwner c;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &c.ctx));
+
+    ASSERT_TRUE(sdl3d_clear_render_context(c.ctx, kBlack));
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    ASSERT_TRUE(sdl3d_draw_torus_wires(c.ctx, sdl3d_vec3_make(-0.8f, 0, 0), 0.35f, 0.12f, 16, 6, kGreen));
+    ASSERT_TRUE(
+        sdl3d_draw_pyramid_wires(c.ctx, sdl3d_vec3_make(0.6f, 0, 0), sdl3d_vec3_make(0.7f, 0.8f, 0.7f), kGreen));
+    ASSERT_TRUE(sdl3d_draw_wedge_wires(c.ctx, sdl3d_vec3_make(0, -0.9f, 0), sdl3d_vec3_make(0.7f, 0.6f, 0.7f), kGreen));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+
+    const int total = sdl3d_get_render_context_width(c.ctx) * sdl3d_get_render_context_height(c.ctx);
+    const int green = CountColor(c.ctx, kGreen);
+    EXPECT_GT(green, 20);
+    EXPECT_LT(green, total / 2);
+}
+
+TEST_F(SDL3DShapesFixture, RejectsBadNewPrimitiveArguments)
+{
+    WindowRenderer wr(64, 64);
+    ASSERT_TRUE(wr.ok());
+    ContextOwner c;
+    ASSERT_TRUE(sdl3d_create_render_context(wr.window(), wr.renderer(), nullptr, &c.ctx));
+
+    ASSERT_TRUE(sdl3d_begin_mode_3d(c.ctx, MakeCamera()));
+    EXPECT_FALSE(sdl3d_draw_torus(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.0f, 0.1f, 8, 6, kRed));
+    EXPECT_FALSE(sdl3d_draw_torus(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.5f, 0.1f, 2, 6, kRed));
+    EXPECT_FALSE(sdl3d_draw_torus_wires(c.ctx, sdl3d_vec3_make(0, 0, 0), 0.5f, 0.1f, 8, 2, kRed));
+    EXPECT_FALSE(sdl3d_draw_pyramid(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(-1.0f, 1.0f, 1.0f), kRed));
+    EXPECT_FALSE(sdl3d_draw_wedge(c.ctx, sdl3d_vec3_make(0, 0, 0), sdl3d_vec3_make(1.0f, -1.0f, 1.0f), kRed));
+    ASSERT_TRUE(sdl3d_end_mode_3d(c.ctx));
+}
+
 /* --- Matrix-stack composition ------------------------------------------- */
 
 TEST_F(SDL3DShapesFixture, CubeHonorsModelMatrixStack)
