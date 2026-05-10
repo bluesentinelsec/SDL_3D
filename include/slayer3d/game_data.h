@@ -461,6 +461,65 @@ extern "C"
         bool debug_wireframe;
     } slayer3d_game_data_brush_world_instance;
 
+    /** @brief Collision shape used by a brush-world trace. */
+    typedef enum slayer3d_game_data_brush_trace_shape
+    {
+        /** @brief Infinitesimal point/ray trace. */
+        SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT = 0,
+        /** @brief Swept sphere trace with radius from `extents.x`. */
+        SLAYER3D_GAME_DATA_BRUSH_TRACE_SPHERE = 1,
+        /** @brief Swept axis-aligned box trace using xyz half-extents. */
+        SLAYER3D_GAME_DATA_BRUSH_TRACE_AABB = 2,
+    } slayer3d_game_data_brush_trace_shape;
+
+    /** @brief Input descriptor for tracing through authored brush worlds. */
+    typedef struct slayer3d_game_data_brush_trace_desc
+    {
+        /** @brief Trace start point in world coordinates. */
+        slayer3d_vec3 start;
+        /** @brief Trace end point in world coordinates. */
+        slayer3d_vec3 end;
+        /** @brief Shape to sweep along start-to-end. */
+        slayer3d_game_data_brush_trace_shape shape;
+        /** @brief Sphere radius in x, or AABB half-extents for xyz. */
+        slayer3d_vec3 extents;
+        /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_CONTENT_* flags to collide with. */
+        unsigned int contents_mask;
+    } slayer3d_game_data_brush_trace_desc;
+
+    /** @brief Deterministic result from an authored brush-world trace. */
+    typedef struct slayer3d_game_data_brush_trace_result
+    {
+        /** @brief True when the trace touches a brush matching the contents mask. */
+        bool hit;
+        /** @brief True when the trace starts inside a matching brush. */
+        bool start_solid;
+        /** @brief True when the trace remains inside a matching brush. */
+        bool all_solid;
+        /** @brief First hit fraction in [0, 1] along start-to-end. */
+        float fraction;
+        /** @brief End position at @p fraction. */
+        slayer3d_vec3 end_position;
+        /** @brief Hit point on the swept shape origin path. */
+        slayer3d_vec3 point;
+        /** @brief Outward collision plane normal, or zero when starting solid. */
+        slayer3d_vec3 normal;
+        /** @brief Authored brush world name. */
+        const char *world_name;
+        /** @brief Authored brush name. */
+        const char *brush_name;
+        /** @brief Authored face material name for plane hits, or NULL. */
+        const char *material_name;
+        /** @brief Brush index in the authored world, or -1. */
+        int brush_index;
+        /** @brief Face index that produced the collision normal, or -1. */
+        int face_index;
+        /** @brief Contents bitmask on the hit brush. */
+        unsigned int contents;
+        /** @brief Surface flags on the hit face. */
+        unsigned int surface_flags;
+    } slayer3d_game_data_brush_trace_result;
+
     /**
      * @brief Callback for active authored sector level instances.
      *
@@ -1215,6 +1274,50 @@ extern "C"
      */
     bool slayer3d_game_data_get_brush_world(const slayer3d_game_data_runtime *runtime, const char *name,
                                             slayer3d_game_data_brush_world *out_world);
+
+    /**
+     * @brief Trace a point, sphere, or AABB through one named brush world.
+     *
+     * Coordinates are local to the named brush world. Use
+     * slayer3d_game_data_trace_active_brush_worlds() for active-scene
+     * world-space queries that honor `world.brush_worlds` placement.
+     *
+     * The function tests only brushes whose `contents` overlap
+     * `desc.contents_mask`. It returns true for a valid query regardless of
+     * whether a hit occurred; inspect `out_result.hit`.
+     */
+    bool slayer3d_game_data_trace_brush_world(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                              const slayer3d_game_data_brush_trace_desc *desc,
+                                              slayer3d_game_data_brush_trace_result *out_result);
+
+    /**
+     * @brief Trace a point, sphere, or AABB through brush worlds in the active scene.
+     *
+     * Input and output positions are world-space. The closest hit across all
+     * active-scene brush world instances is returned.
+     */
+    bool slayer3d_game_data_trace_active_brush_worlds(const slayer3d_game_data_runtime *runtime,
+                                                      const slayer3d_game_data_brush_trace_desc *desc,
+                                                      slayer3d_game_data_brush_trace_result *out_result);
+
+    /**
+     * @brief Move through one named brush world while sliding along hit planes.
+     *
+     * This is a thin deterministic helper over brush traces. It repeatedly
+     * traces the requested movement, projects the remaining motion along the
+     * blocking plane, and returns the final non-penetrating end position in
+     * `out_result.end_position`. The first blocking hit metadata is preserved.
+     */
+    bool slayer3d_game_data_slide_brush_world(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                              const slayer3d_game_data_brush_trace_desc *desc, int max_bumps,
+                                              slayer3d_game_data_brush_trace_result *out_result);
+
+    /**
+     * @brief Active-scene world-space variant of slayer3d_game_data_slide_brush_world().
+     */
+    bool slayer3d_game_data_slide_active_brush_worlds(const slayer3d_game_data_runtime *runtime,
+                                                      const slayer3d_game_data_brush_trace_desc *desc, int max_bumps,
+                                                      slayer3d_game_data_brush_trace_result *out_result);
 
     /** @brief Runtime-owned node resolved from an authored sector navigation graph. */
     typedef struct slayer3d_game_data_sector_nav_node
