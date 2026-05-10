@@ -1,0 +1,63 @@
+{
+  "schema": "sdl3d.scene.v0",
+  "name": "scene.dojo.hazards",
+  "on_enter_signal": "signal.dojo.scene.hazards.enter",
+  "camera": "camera.dojo.player",
+  "updates_game": true,
+  "renders_world": true,
+  "entities": [
+    "entity.player"
+  ],
+  "input": {
+    "mouse_capture": "unpaused",
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right",
+      "action.jump",
+      "action.pause"
+    ]
+  },
+  "world": {
+    "sector_levels": [
+      {
+        "level": "sector.dojo.arena",
+        "variant": "lightmapped",
+        "position": [0.0, 0.0, 0.0],
+        "portal_culling": true
+      }
+    ]
+  },
+  "ui": {
+    "text": [
+      {
+        "name": "ui.dojo.hazards.title",
+        "text": "Hazards Dojo: toxic sector + lift crusher",
+        "font": "font.dojo.hud",
+        "position": [0.02, 0.03],
+        "anchor": "top_left",
+        "color": [255, 180, 150, 235],
+        "scale": 0.8
+      },
+      {
+        "name": "ui.dojo.hazards.damage",
+        "text": "Hazard {target.entity.player.dojo_hazard_damage} Crush {target.entity.player.dojo_crush_damage}",
+        "font": "font.dojo.hud",
+        "position": [0.02, 0.07],
+        "anchor": "top_left",
+        "color": [255, 150, 120, 220],
+        "scale": 0.75
+      },
+      {
+        "name": "ui.dojo.hazards.reticle",
+        "text": "+",
+        "font": "font.dojo.hud",
+        "position": [0.5, 0.5],
+        "anchor": "center",
+        "color": [255, 255, 255, 210],
+        "scale": 1.0
+      }
+    ]
+  }
+}
