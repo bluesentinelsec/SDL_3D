@@ -185,6 +185,10 @@ The runtime installs a small `sdl3d` table for low-level access and utility help
 - `sdl3d.grid_walkable(map, col, row)`
 - `sdl3d.grid_neighbors(map, col, row)`
 - `sdl3d.grid_next_step(map, start_col, start_row, goal_col, goal_row)`
+- `sdl3d.sector_nav_nearest(graph, x, y, z)`
+- `sdl3d.sector_nav_path_available(graph, sx, sy, sz, gx, gy, gz)`
+- `sdl3d.sector_nav_next_node(graph, sx, sy, sz, gx, gy, gz)`
+- `sdl3d.sector_nav_path(graph, sx, sy, sz, gx, gy, gz)`
 - `sdl3d.log(message)`
 - `sdl3d.storage.*`
 - `sdl3d.json.*`
@@ -215,6 +219,36 @@ game-specific decisions such as ghost target selection, spawn point selection,
 tile-trigger behavior, and authored maze debugging. Keep frequent movement
 integration in `motion.grid_agent`; use Lua to choose desired directions and
 high-level policy.
+
+## Sector Navigation
+
+Lua can query JSON-authored `sector_navigation` graphs for sector/FPS AI and
+encounter scripting:
+
+```lua
+local enemy = ctx:actor("entity.orc")
+local player = ctx:actor("entity.player")
+local next_node = ctx:sector_nav_next_node("nav.level_1", enemy, player)
+
+if next_node ~= nil then
+  enemy:set_vec3("desired_position", Vec3(next_node.x, next_node.y, next_node.z))
+end
+```
+
+Context helpers accept an actor wrapper, a `Vec3`, or a table with `x`, `y`,
+and `z` fields:
+
+- `ctx:sector_nav_nearest(graph, position)` returns a node table or `nil`
+- `ctx:sector_nav_path_available(graph, start, goal)` returns a boolean
+- `ctx:sector_nav_next_node(graph, start, goal)` returns the next node table or `nil`
+- `ctx:sector_nav_path(graph, start, goal)` returns an array of node tables with a `cost` field, or `nil`
+
+Node tables include `name`, `sector_index`, `x`, `y`, `z`, and numeric array
+entries `[1]`, `[2]`, `[3]`. Path queries anchor the start and goal positions
+to the nearest graph nodes, preferring nodes in the same sector when possible,
+then run Dijkstra over authored links. This is intended for high-level routing;
+avoid running many full path queries every frame for large actor crowds. Cache
+route intent in Lua or move dense steering into a reusable engine component.
 
 ## Actor Pools
 

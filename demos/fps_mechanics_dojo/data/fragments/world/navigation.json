@@ -1,0 +1,20 @@
+{
+  "schema": "sdl3d.fragment.v0",
+  "sector_navigation": [
+    {
+      "name": "nav.dojo.arena",
+      "sector_level": "sector.dojo.arena",
+      "nodes": [
+        { "name": "start.center", "sector": "start", "position": [5.0, 1.0, 5.0] },
+        { "name": "teleporter.center", "sector": "teleporter_room", "position": [14.0, 1.0, 5.0] },
+        { "name": "hazard.center", "sector": "hazard_lane", "position": [23.0, 1.0, 5.0] },
+        { "name": "lift.center", "sector": "lift_room", "position": [5.0, 1.0, 14.0] }
+      ],
+      "links": [
+        { "from": "start.center", "to": "teleporter.center" },
+        { "from": "teleporter.center", "to": "hazard.center" },
+        { "from": "start.center", "to": "lift.center" }
+      ]
+    }
+  ]
+}

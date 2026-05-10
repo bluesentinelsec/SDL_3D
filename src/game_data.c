@@ -2012,6 +2012,112 @@ static int lua_grid_next_step(lua_State *lua)
     return 2;
 }
 
+static void lua_push_sector_nav_node(lua_State *lua, const sdl3d_game_data_sector_nav_node *node)
+{
+    if (node == NULL || node->name == NULL)
+    {
+        lua_pushnil(lua);
+        return;
+    }
+    lua_newtable(lua);
+    lua_pushstring(lua, node->name);
+    lua_setfield(lua, -2, "name");
+    lua_pushinteger(lua, node->sector_index);
+    lua_setfield(lua, -2, "sector_index");
+    lua_pushnumber(lua, (lua_Number)node->position.x);
+    lua_setfield(lua, -2, "x");
+    lua_pushnumber(lua, (lua_Number)node->position.y);
+    lua_setfield(lua, -2, "y");
+    lua_pushnumber(lua, (lua_Number)node->position.z);
+    lua_setfield(lua, -2, "z");
+    lua_pushnumber(lua, (lua_Number)node->position.x);
+    lua_rawseti(lua, -2, 1);
+    lua_pushnumber(lua, (lua_Number)node->position.y);
+    lua_rawseti(lua, -2, 2);
+    lua_pushnumber(lua, (lua_Number)node->position.z);
+    lua_rawseti(lua, -2, 3);
+}
+
+static sdl3d_vec3 lua_vec3_args(lua_State *lua, int first_index)
+{
+    return sdl3d_vec3_make((float)luaL_checknumber(lua, first_index), (float)luaL_checknumber(lua, first_index + 1),
+                           (float)luaL_checknumber(lua, first_index + 2));
+}
+
+static int lua_sector_nav_nearest(lua_State *lua)
+{
+    sdl3d_game_data_sector_nav_node node;
+    const char *graph = luaL_checkstring(lua, 1);
+    const sdl3d_vec3 position = lua_vec3_args(lua, 2);
+    if (!sdl3d_game_data_sector_nav_nearest_node(lua_runtime(lua), graph, position, &node))
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    lua_push_sector_nav_node(lua, &node);
+    return 1;
+}
+
+static int lua_sector_nav_path_available(lua_State *lua)
+{
+    const char *graph = luaL_checkstring(lua, 1);
+    const sdl3d_vec3 start = lua_vec3_args(lua, 2);
+    const sdl3d_vec3 goal = lua_vec3_args(lua, 5);
+    lua_pushboolean(lua, sdl3d_game_data_sector_nav_path_available(lua_runtime(lua), graph, start, goal));
+    return 1;
+}
+
+static int lua_sector_nav_next_node(lua_State *lua)
+{
+    sdl3d_game_data_sector_nav_node node;
+    const char *graph = luaL_checkstring(lua, 1);
+    const sdl3d_vec3 start = lua_vec3_args(lua, 2);
+    const sdl3d_vec3 goal = lua_vec3_args(lua, 5);
+    if (!sdl3d_game_data_sector_nav_next_node(lua_runtime(lua), graph, start, goal, &node))
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+    lua_push_sector_nav_node(lua, &node);
+    return 1;
+}
+
+static int lua_sector_nav_path(lua_State *lua)
+{
+    const char *graph = luaL_checkstring(lua, 1);
+    const sdl3d_vec3 start = lua_vec3_args(lua, 2);
+    const sdl3d_vec3 goal = lua_vec3_args(lua, 5);
+    int node_count = 0;
+    float cost = 0.0f;
+    if (!sdl3d_game_data_sector_nav_path(lua_runtime(lua), graph, start, goal, NULL, 0, &node_count, &cost) ||
+        node_count <= 0)
+    {
+        lua_pushnil(lua);
+        return 1;
+    }
+
+    sdl3d_game_data_sector_nav_node *nodes =
+        (sdl3d_game_data_sector_nav_node *)SDL_malloc(sizeof(sdl3d_game_data_sector_nav_node) * (size_t)node_count);
+    if (nodes == NULL ||
+        !sdl3d_game_data_sector_nav_path(lua_runtime(lua), graph, start, goal, nodes, node_count, &node_count, &cost))
+    {
+        SDL_free(nodes);
+        lua_pushnil(lua);
+        return 1;
+    }
+
+    lua_newtable(lua);
+    for (int i = 0; i < node_count; ++i)
+    {
+        lua_push_sector_nav_node(lua, &nodes[i]);
+        lua_rawseti(lua, -2, i + 1);
+    }
+    lua_pushnumber(lua, (lua_Number)cost);
+    lua_setfield(lua, -2, "cost");
+    SDL_free(nodes);
+    return 1;
+}
+
 static void install_lua_helpers(lua_State *lua)
 {
     static const char *source_parts[] = {
@@ -2259,6 +2365,53 @@ static void install_lua_helpers(lua_State *lua)
         "        grid_pickup_count = function(self_or_layer, maybe_layer)\n"
         "            return sdl3d.grid_pickup_count(maybe_layer or self_or_layer)\n"
         "        end,\n",
+        "        sector_nav_nearest = function(self_or_graph, maybe_graph, maybe_position)\n"
+        "            local graph, position\n"
+        "            if type(self_or_graph) == 'table' and self_or_graph.adapter ~= nil then\n"
+        "                graph, position = maybe_graph, maybe_position\n"
+        "            else\n"
+        "                graph, position = self_or_graph, maybe_graph\n"
+        "            end\n"
+        "            if type(position) == 'table' and position.position ~= nil then position = position.position end\n"
+        "            position = as_vec3(position)\n"
+        "            return sdl3d.sector_nav_nearest(graph, position.x, position.y, position.z)\n"
+        "        end,\n"
+        "        sector_nav_path_available = function(self_or_graph, maybe_graph, maybe_start, maybe_goal)\n"
+        "            local graph, start, goal\n"
+        "            if type(self_or_graph) == 'table' and self_or_graph.adapter ~= nil then\n"
+        "                graph, start, goal = maybe_graph, maybe_start, maybe_goal\n"
+        "            else\n"
+        "                graph, start, goal = self_or_graph, maybe_graph, maybe_start\n"
+        "            end\n"
+        "            if type(start) == 'table' and start.position ~= nil then start = start.position end\n"
+        "            if type(goal) == 'table' and goal.position ~= nil then goal = goal.position end\n"
+        "            start, goal = as_vec3(start), as_vec3(goal)\n"
+        "            return sdl3d.sector_nav_path_available(graph, start.x, start.y, start.z, goal.x, goal.y, goal.z)\n"
+        "        end,\n"
+        "        sector_nav_next_node = function(self_or_graph, maybe_graph, maybe_start, maybe_goal)\n"
+        "            local graph, start, goal\n"
+        "            if type(self_or_graph) == 'table' and self_or_graph.adapter ~= nil then\n"
+        "                graph, start, goal = maybe_graph, maybe_start, maybe_goal\n"
+        "            else\n"
+        "                graph, start, goal = self_or_graph, maybe_graph, maybe_start\n"
+        "            end\n"
+        "            if type(start) == 'table' and start.position ~= nil then start = start.position end\n"
+        "            if type(goal) == 'table' and goal.position ~= nil then goal = goal.position end\n"
+        "            start, goal = as_vec3(start), as_vec3(goal)\n"
+        "            return sdl3d.sector_nav_next_node(graph, start.x, start.y, start.z, goal.x, goal.y, goal.z)\n"
+        "        end,\n"
+        "        sector_nav_path = function(self_or_graph, maybe_graph, maybe_start, maybe_goal)\n"
+        "            local graph, start, goal\n"
+        "            if type(self_or_graph) == 'table' and self_or_graph.adapter ~= nil then\n"
+        "                graph, start, goal = maybe_graph, maybe_start, maybe_goal\n"
+        "            else\n"
+        "                graph, start, goal = self_or_graph, maybe_graph, maybe_start\n"
+        "            end\n"
+        "            if type(start) == 'table' and start.position ~= nil then start = start.position end\n"
+        "            if type(goal) == 'table' and goal.position ~= nil then goal = goal.position end\n"
+        "            start, goal = as_vec3(start), as_vec3(goal)\n"
+        "            return sdl3d.sector_nav_path(graph, start.x, start.y, start.z, goal.x, goal.y, goal.z)\n"
+        "        end,\n",
         "        state_get = function(self_or_key, maybe_key, fallback)\n"
         "            if type(self_or_key) == 'table' and self_or_key.adapter ~= nil then\n"
         "                return sdl3d.state_get(maybe_key, fallback)\n"
@@ -2382,6 +2535,10 @@ static void register_lua_api(sdl3d_game_data_runtime *runtime, sdl3d_script_engi
     SDL3D_LUA_BIND("grid_pickup_at", lua_grid_pickup_at);
     SDL3D_LUA_BIND("grid_collect_at", lua_grid_collect_at);
     SDL3D_LUA_BIND("grid_pickup_count", lua_grid_pickup_count);
+    SDL3D_LUA_BIND("sector_nav_nearest", lua_sector_nav_nearest);
+    SDL3D_LUA_BIND("sector_nav_path_available", lua_sector_nav_path_available);
+    SDL3D_LUA_BIND("sector_nav_next_node", lua_sector_nav_next_node);
+    SDL3D_LUA_BIND("sector_nav_path", lua_sector_nav_path);
     SDL3D_LUA_BIND("log", lua_log);
     SDL3D_LUA_BIND("storage_read", lua_storage_read);
     SDL3D_LUA_BIND("storage_write", lua_storage_write);
@@ -6460,6 +6617,286 @@ static int sector_level_find_sector_name(const sector_level_runtime *level, cons
             return i;
     }
     return -1;
+}
+
+static yyjson_val *find_sector_navigation_graph(const sdl3d_game_data_runtime *runtime, const char *graph_name)
+{
+    yyjson_val *graphs = obj_get(runtime_root(runtime), "sector_navigation");
+    for (size_t i = 0; graph_name != NULL && yyjson_is_arr(graphs) && i < yyjson_arr_size(graphs); ++i)
+    {
+        yyjson_val *graph = yyjson_arr_get(graphs, i);
+        const char *name = json_string(graph, "name", NULL);
+        if (name != NULL && SDL_strcmp(name, graph_name) == 0)
+            return graph;
+    }
+    return NULL;
+}
+
+static const sector_level_runtime *sector_navigation_level(const sdl3d_game_data_runtime *runtime, yyjson_val *graph)
+{
+    return find_sector_level_runtime(runtime, json_string(graph, "sector_level", NULL));
+}
+
+static int sector_navigation_node_count(yyjson_val *graph)
+{
+    yyjson_val *nodes = obj_get(graph, "nodes");
+    return yyjson_is_arr(nodes) ? (int)yyjson_arr_size(nodes) : 0;
+}
+
+static yyjson_val *sector_navigation_node_at(yyjson_val *graph, int index)
+{
+    yyjson_val *nodes = obj_get(graph, "nodes");
+    return index >= 0 && yyjson_is_arr(nodes) && index < (int)yyjson_arr_size(nodes)
+               ? yyjson_arr_get(nodes, (size_t)index)
+               : NULL;
+}
+
+static int sector_navigation_node_sector_index(const sector_level_runtime *level, yyjson_val *node)
+{
+    if (level == NULL || node == NULL)
+        return -1;
+    const int authored_index = json_int(node, "sector_index", -1);
+    if (authored_index >= 0 && authored_index < level->sector_count)
+        return authored_index;
+    return sector_level_find_sector_name(level, json_string(node, "sector", NULL));
+}
+
+static bool sector_navigation_read_node(const sdl3d_game_data_runtime *runtime, yyjson_val *graph, int index,
+                                        sdl3d_game_data_sector_nav_node *out_node)
+{
+    const sector_level_runtime *level = sector_navigation_level(runtime, graph);
+    yyjson_val *node = sector_navigation_node_at(graph, index);
+    if (level == NULL || node == NULL || out_node == NULL)
+        return false;
+
+    out_node->name = json_string(node, "name", NULL);
+    out_node->sector_index = sector_navigation_node_sector_index(level, node);
+    out_node->position = json_vec3(node, "position", sdl3d_vec3_make(0.0f, 0.0f, 0.0f));
+    return out_node->name != NULL && out_node->sector_index >= 0;
+}
+
+static int sector_navigation_find_node_index(yyjson_val *graph, const char *node_name)
+{
+    const int node_count = sector_navigation_node_count(graph);
+    for (int i = 0; node_name != NULL && i < node_count; ++i)
+    {
+        yyjson_val *node = sector_navigation_node_at(graph, i);
+        const char *name = json_string(node, "name", NULL);
+        if (name != NULL && SDL_strcmp(name, node_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static float sector_navigation_distance_squared(sdl3d_vec3 a, sdl3d_vec3 b)
+{
+    const float dx = a.x - b.x;
+    const float dy = a.y - b.y;
+    const float dz = a.z - b.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static float sector_navigation_link_default_cost(const sdl3d_game_data_runtime *runtime, yyjson_val *graph, int from,
+                                                 int to)
+{
+    sdl3d_game_data_sector_nav_node from_node;
+    sdl3d_game_data_sector_nav_node to_node;
+    if (!sector_navigation_read_node(runtime, graph, from, &from_node) ||
+        !sector_navigation_read_node(runtime, graph, to, &to_node))
+    {
+        return 1.0f;
+    }
+    return SDL_sqrtf(sector_navigation_distance_squared(from_node.position, to_node.position));
+}
+
+static int sector_navigation_nearest_index(const sdl3d_game_data_runtime *runtime, yyjson_val *graph,
+                                           sdl3d_vec3 position)
+{
+    const sector_level_runtime *level = sector_navigation_level(runtime, graph);
+    const int node_count = sector_navigation_node_count(graph);
+    if (level == NULL || node_count <= 0)
+        return -1;
+
+    const int containing_sector =
+        sdl3d_level_find_sector_at(&level->lightmapped, level->sectors, position.x, position.z, position.y);
+    int best_index = -1;
+    float best_distance = 1.0e30f;
+    for (int pass = 0; pass < 2 && best_index < 0; ++pass)
+    {
+        const bool same_sector_only = pass == 0 && containing_sector >= 0;
+        for (int i = 0; i < node_count; ++i)
+        {
+            sdl3d_game_data_sector_nav_node node;
+            if (!sector_navigation_read_node(runtime, graph, i, &node))
+                continue;
+            if (same_sector_only && node.sector_index != containing_sector)
+                continue;
+            const float distance = sector_navigation_distance_squared(position, node.position);
+            if (best_index < 0 || distance < best_distance)
+            {
+                best_index = i;
+                best_distance = distance;
+            }
+        }
+    }
+    return best_index;
+}
+
+bool sdl3d_game_data_sector_nav_nearest_node(const sdl3d_game_data_runtime *runtime, const char *graph_name,
+                                             sdl3d_vec3 position, sdl3d_game_data_sector_nav_node *out_node)
+{
+    yyjson_val *graph = find_sector_navigation_graph(runtime, graph_name);
+    const int index = sector_navigation_nearest_index(runtime, graph, position);
+    return index >= 0 && sector_navigation_read_node(runtime, graph, index, out_node);
+}
+
+bool sdl3d_game_data_sector_nav_path(const sdl3d_game_data_runtime *runtime, const char *graph_name, sdl3d_vec3 start,
+                                     sdl3d_vec3 goal, sdl3d_game_data_sector_nav_node *out_nodes, int max_nodes,
+                                     int *out_node_count, float *out_cost)
+{
+    if (out_node_count != NULL)
+        *out_node_count = 0;
+    if (out_cost != NULL)
+        *out_cost = 0.0f;
+
+    yyjson_val *graph = find_sector_navigation_graph(runtime, graph_name);
+    const int node_count = sector_navigation_node_count(graph);
+    const int start_index = sector_navigation_nearest_index(runtime, graph, start);
+    const int goal_index = sector_navigation_nearest_index(runtime, graph, goal);
+    if (graph == NULL || node_count <= 0 || start_index < 0 || goal_index < 0)
+        return false;
+
+    float *distances = (float *)SDL_malloc(sizeof(float) * (size_t)node_count);
+    int *previous = (int *)SDL_malloc(sizeof(int) * (size_t)node_count);
+    bool *visited = (bool *)SDL_calloc((size_t)node_count, sizeof(bool));
+    int *reverse_path = (int *)SDL_malloc(sizeof(int) * (size_t)node_count);
+    if (distances == NULL || previous == NULL || visited == NULL || reverse_path == NULL)
+    {
+        SDL_free(distances);
+        SDL_free(previous);
+        SDL_free(visited);
+        SDL_free(reverse_path);
+        return false;
+    }
+
+    for (int i = 0; i < node_count; ++i)
+    {
+        distances[i] = 1.0e30f;
+        previous[i] = -1;
+    }
+    distances[start_index] = 0.0f;
+
+    for (;;)
+    {
+        int current = -1;
+        float current_distance = 1.0e30f;
+        for (int i = 0; i < node_count; ++i)
+        {
+            if (!visited[i] && distances[i] < current_distance)
+            {
+                current = i;
+                current_distance = distances[i];
+            }
+        }
+        if (current < 0 || current == goal_index)
+            break;
+        visited[current] = true;
+
+        yyjson_val *links = obj_get(graph, "links");
+        for (size_t link_index = 0; yyjson_is_arr(links) && link_index < yyjson_arr_size(links); ++link_index)
+        {
+            yyjson_val *link = yyjson_arr_get(links, link_index);
+            const int from = sector_navigation_find_node_index(graph, json_string(link, "from", NULL));
+            const int to = sector_navigation_find_node_index(graph, json_string(link, "to", NULL));
+            const bool bidirectional = json_bool(link, "bidirectional", true);
+            int neighbor = -1;
+            if (from == current)
+                neighbor = to;
+            else if (bidirectional && to == current)
+                neighbor = from;
+            if (neighbor < 0 || neighbor >= node_count || visited[neighbor])
+                continue;
+
+            const float cost = SDL_max(
+                json_float(link, "cost", sector_navigation_link_default_cost(runtime, graph, current, neighbor)),
+                0.0001f);
+            const float candidate = distances[current] + cost;
+            if (candidate < distances[neighbor])
+            {
+                distances[neighbor] = candidate;
+                previous[neighbor] = current;
+            }
+        }
+    }
+
+    bool ok = start_index == goal_index || previous[goal_index] >= 0;
+    int path_count = 0;
+    if (ok)
+    {
+        for (int node = goal_index; node >= 0 && path_count < node_count; node = previous[node])
+            reverse_path[path_count++] = node;
+        if (path_count <= 0 || reverse_path[path_count - 1] != start_index)
+            ok = false;
+    }
+
+    if (ok)
+    {
+        if (out_node_count != NULL)
+            *out_node_count = path_count;
+        if (out_cost != NULL)
+            *out_cost = distances[goal_index];
+        if (out_nodes != NULL)
+        {
+            if (max_nodes < path_count)
+            {
+                ok = false;
+            }
+            else
+            {
+                for (int i = 0; i < path_count; ++i)
+                {
+                    const int source_index = reverse_path[path_count - 1 - i];
+                    if (!sector_navigation_read_node(runtime, graph, source_index, &out_nodes[i]))
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    SDL_free(distances);
+    SDL_free(previous);
+    SDL_free(visited);
+    SDL_free(reverse_path);
+    return ok;
+}
+
+bool sdl3d_game_data_sector_nav_path_available(const sdl3d_game_data_runtime *runtime, const char *graph_name,
+                                               sdl3d_vec3 start, sdl3d_vec3 goal)
+{
+    return sdl3d_game_data_sector_nav_path(runtime, graph_name, start, goal, NULL, 0, NULL, NULL);
+}
+
+bool sdl3d_game_data_sector_nav_next_node(const sdl3d_game_data_runtime *runtime, const char *graph_name,
+                                          sdl3d_vec3 start, sdl3d_vec3 goal, sdl3d_game_data_sector_nav_node *out_node)
+{
+    int node_count = 0;
+    if (!sdl3d_game_data_sector_nav_path(runtime, graph_name, start, goal, NULL, 0, &node_count, NULL) ||
+        node_count <= 0)
+        return false;
+
+    sdl3d_game_data_sector_nav_node *nodes =
+        (sdl3d_game_data_sector_nav_node *)SDL_malloc(sizeof(sdl3d_game_data_sector_nav_node) * (size_t)node_count);
+    if (nodes == NULL)
+        return false;
+    const bool ok =
+        sdl3d_game_data_sector_nav_path(runtime, graph_name, start, goal, nodes, node_count, &node_count, NULL);
+    if (ok && out_node != NULL)
+        *out_node = nodes[node_count > 1 ? 1 : 0];
+    SDL_free(nodes);
+    return ok;
 }
 
 bool sdl3d_game_data_get_sector_level(const sdl3d_game_data_runtime *runtime, const char *name,
