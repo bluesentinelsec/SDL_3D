@@ -5431,7 +5431,7 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
         if (target == NULL)
             return false;
 
-        const float fovy = json_float(camera_json, "fovy", 65.0f);
+        const float fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
         const fps_controller_runtime *controller = find_fps_controller_const(runtime, target->name);
         if (controller != NULL && controller->initialized)
         {
@@ -5494,7 +5494,7 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
         out_camera->target = sdl3d_vec3_make(anchor.x + velocity.x * lookahead, anchor.y + velocity.y * lookahead,
                                              anchor.z + target_z_offset);
         out_camera->up = json_vec3(camera_json, "up", sdl3d_vec3_make(0.0f, 0.0f, 1.0f));
-        out_camera->fovy = json_float(camera_json, "fovy", 60.0f);
+        out_camera->fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
         out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
         return true;
     }
@@ -5510,7 +5510,7 @@ bool sdl3d_game_data_get_camera(const sdl3d_game_data_runtime *runtime, const ch
     else
     {
         out_camera->projection = SDL3D_CAMERA_PERSPECTIVE;
-        out_camera->fovy = json_float(camera_json, "fovy", 60.0f);
+        out_camera->fovy = json_float(camera_json, "fovy", SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
     }
     return true;
 }
@@ -5532,6 +5532,22 @@ bool sdl3d_game_data_get_camera_float(const sdl3d_game_data_runtime *runtime, co
 
     *out_value = (float)yyjson_get_num(value);
     return true;
+}
+
+bool sdl3d_game_data_get_world_units(const sdl3d_game_data_runtime *runtime, const char **out_units,
+                                     float *out_meters_per_unit)
+{
+    if (out_units != NULL)
+        *out_units = NULL;
+    if (out_meters_per_unit != NULL)
+        *out_meters_per_unit = 0.0f;
+    if (runtime == NULL || out_units == NULL || out_meters_per_unit == NULL)
+        return false;
+
+    yyjson_val *world = obj_get(runtime_root(runtime), "world");
+    *out_units = json_string(world, "units", SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    *out_meters_per_unit = json_float(world, "meters_per_unit", SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    return *out_units != NULL && (*out_units)[0] != '\0' && *out_meters_per_unit > 0.0f;
 }
 
 int sdl3d_game_data_world_light_count(const sdl3d_game_data_runtime *runtime)
@@ -19163,6 +19179,10 @@ static bool apply_app_config_from_root(yyjson_val *root, sdl3d_game_config *out_
             SDL_snprintf(title_buffer, (size_t)title_buffer_size, "%s", window_title);
             out_config->title = title_buffer;
         }
+        out_config->width = json_int(window, "window_width", json_int(window, "width", out_config->width));
+        out_config->height = json_int(window, "window_height", json_int(window, "height", out_config->height));
+        out_config->logical_width = json_int(window, "logical_width", out_config->logical_width);
+        out_config->logical_height = json_int(window, "logical_height", out_config->logical_height);
 #if defined(SDL3D_PRODUCTION_BUILD)
         const char *mode = json_string(window, "production_display_mode", json_string(window, "display_mode", NULL));
 #else

@@ -270,6 +270,14 @@ The optional `app` object configures the managed loop before the window exists:
 }
 ```
 
+The standard authored virtual resolution is 1280x720. The managed window path
+presents the logical resolution with letterboxing, so the game scales up or down
+to the user's display while preserving the authored 16:9 aspect ratio. Prefer
+root-level `logical_width` and `logical_height` for this virtual canvas. The
+optional `app.window.width` and `app.window.height` fields describe an initial
+desktop window size; they do not change the authored layout scale unless
+`app.window.logical_width` and `app.window.logical_height` are also set.
+
 `pause.action` toggles the managed runtime pause state when the active scene
 allows the action and `pause.allowed_if` is absent or true. `quit.action`
 requests shutdown through the managed app flow; when `quit.transition` names an
@@ -333,18 +341,21 @@ camera with their `camera` field, and logic actions can switch cameras with
 Camera types:
 
 - `orthographic`: fixed position/target/up with `size`.
-- `perspective`: fixed position/target/up with `fovy`.
+- `perspective`: fixed position/target/up with `fovy`. If omitted, the
+  vertical field of view defaults to 90 degrees.
 - `chase`: follows an actor named by `target_entity`. The forward vector comes
   from a Vec3 actor property such as `velocity` or an authored
   `camera_forward`, with `fallback_forward` used when that property is near
   zero. Use `chase_distance: 0` for actor-perspective cameras and larger
-  values for behind-the-actor chase cameras.
+  values for behind-the-actor chase cameras. If omitted, `fovy` defaults to 90
+  degrees.
 - `fps`: reads a first-person sector controller from `target_entity` and
   renders from that actor's eye position. If the controller has not updated
   yet, the camera falls back to the actor's `yaw`, `pitch`, and `view_smooth`
   properties. The controller also publishes a normalized view direction to
   `camera_forward` by default; override this with `forward_property` when a
-  game wants a different property name for projectile or camera logic.
+  game wants a different property name for projectile or camera logic. If
+  omitted, `fovy` defaults to 90 degrees.
 - `adapter`: delegates camera ownership to a native or Lua adapter.
 
 ## Storage And Persistence
@@ -393,7 +404,8 @@ any other specific world type.
   "world": {
     "name": "world.main",
     "kind": "fixed_screen",
-    "units": "world_units",
+    "units": "meters",
+    "meters_per_unit": 1.0,
     "axes": { "horizontal": "x", "vertical": "y", "depth": "z" },
     "bounds": { "min": [-9.0, -5.0, -1.0], "max": [9.0, 5.0, 2.0] },
     "cameras": [],
@@ -401,6 +413,11 @@ any other specific world type.
   }
 }
 ```
+
+SDL3D's default world convention is one authored world unit equals one meter
+(`units: "meters"`, `meters_per_unit: 1.0`). Author these fields explicitly in
+new games and demos so editors, physics tuning, movement speeds, and level
+metrics share the same scale vocabulary.
 
 World kinds may include fixed-screen playfields, tile grids, room graphs,
 sector/portal maps, brush worlds, or general 3D scenes as engine support

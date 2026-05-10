@@ -6844,6 +6844,17 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
     const std::filesystem::path dojo_path = fps_mechanics_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
 
+    sdl3d_game_config config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(dojo_path.string().c_str(), &config, title, sizeof(title),
+                                                     app_error, sizeof(app_error)))
+        << app_error;
+    EXPECT_STREQ(config.title, "SDL3D FPS Mechanics Dojo");
+    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
     char error[512]{};
@@ -6857,12 +6868,125 @@ TEST(GameDataRuntime, EditorMetadataValidatesAndFpsMechanicsDojoLoads)
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_pad"), nullptr);
     EXPECT_NE(sdl3d_game_data_find_actor(runtime, "entity.dojo.teleporter_destination"), nullptr);
 
+    const char *units = nullptr;
+    float meters_per_unit = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    sdl3d_camera3d camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.dojo.player", &camera));
+    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+
     RenderPrimitiveCapture render{};
     ASSERT_TRUE(sdl3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
     EXPECT_GE(render.cubes, 3);
 
     sdl3d_game_data_destroy(runtime);
     sdl3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
+{
+    const std::filesystem::path dir = unique_test_dir("world_camera_defaults");
+    write_text(dir / "game.json",
+               R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "World Camera Defaults" },
+  "world": {
+    "name": "world.defaults",
+    "kind": "3d",
+    "cameras": [
+      {
+        "name": "camera.default",
+        "type": "perspective",
+        "position": [0.0, 0.0, 2.0],
+        "target": [0.0, 0.0, 0.0]
+      }
+    ]
+  }
+})json");
+
+    sdl3d_game_session *session = nullptr;
+    ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    sdl3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(
+        sdl3d_game_data_load_file((dir / "game.json").string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char *units = nullptr;
+    float meters_per_unit = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
+    sdl3d_camera3d camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.default", &camera));
+    EXPECT_EQ(camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
+
+    sdl3d_game_data_destroy(runtime);
+    sdl3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
+{
+    const std::filesystem::path dir = unique_test_dir("world_display_camera_validation");
+    struct Case
+    {
+        const char *name;
+        const char *json;
+        const char *expected_error;
+    };
+    const Case cases[] = {
+        {
+            "bad_logical_width",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad Logical Width" },
+  "app": { "logical_width": 0 },
+  "world": { "name": "world.bad", "kind": "3d" }
+})json",
+            "app dimensions must be positive integers",
+        },
+        {
+            "bad_world_scale",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad World Scale" },
+  "world": { "name": "world.bad", "kind": "3d", "units": "meters", "meters_per_unit": 0.0 }
+})json",
+            "world meters_per_unit must be positive",
+        },
+        {
+            "bad_fovy",
+            R"json({
+  "schema": "sdl3d.game.v0",
+  "metadata": { "name": "Bad FOV" },
+  "world": {
+    "name": "world.bad",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.bad", "type": "perspective", "fovy": 180.0 }
+    ]
+  }
+})json",
+            "camera fovy must be in the range",
+        },
+    };
+
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        write_text(path, test_case.json);
+        char error[512]{};
+        EXPECT_FALSE(sdl3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
@@ -10537,6 +10661,17 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
         sdl3d_free_image(&image);
     }
 
+    sdl3d_game_config config{};
+    char title[128]{};
+    char app_error[512]{};
+    ASSERT_TRUE(sdl3d_game_data_load_app_config_file(doom_path.string().c_str(), &config, title, sizeof(title),
+                                                     app_error, sizeof(app_error)))
+        << app_error;
+    EXPECT_STREQ(config.title, "SDL3D Doom Level");
+    EXPECT_EQ(config.logical_width, SDL3D_GAME_DEFAULT_LOGICAL_WIDTH);
+    EXPECT_EQ(config.logical_height, SDL3D_GAME_DEFAULT_LOGICAL_HEIGHT);
+    EXPECT_EQ(config.backend, SDL3D_BACKEND_OPENGL);
+
     sdl3d_game_session *session = nullptr;
     ASSERT_TRUE(sdl3d_game_session_create(nullptr, &session));
     char error[512]{};
@@ -10546,6 +10681,11 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     ASSERT_NE(runtime, nullptr);
 
     ASSERT_TRUE(sdl3d_game_data_set_active_scene(runtime, "scene.doom_level.play"));
+    const char *units = nullptr;
+    float meters_per_unit = 0.0f;
+    ASSERT_TRUE(sdl3d_game_data_get_world_units(runtime, &units, &meters_per_unit));
+    EXPECT_STREQ(units, SDL3D_GAME_DATA_DEFAULT_WORLD_UNITS);
+    EXPECT_FLOAT_EQ(meters_per_unit, SDL3D_GAME_DATA_DEFAULT_METERS_PER_UNIT);
     sdl3d_game_data_scene_skybox skybox{};
     ASSERT_TRUE(sdl3d_game_data_get_active_scene_skybox(runtime, &skybox));
     EXPECT_STREQ(skybox.pos_x, "image.doom.skybox.px");
@@ -10751,8 +10891,13 @@ TEST(GameDataRuntime, DoomLevelDataLoadsAuthoredSectorDoors)
     EXPECT_TRUE(damage_rect_visible);
     EXPECT_GT(resolved_damage_rect.color.a, 90);
     EXPECT_LT(resolved_damage_rect.color.a, 120);
+    sdl3d_camera3d player_camera{};
+    ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.doom.player", &player_camera));
+    EXPECT_EQ(player_camera.projection, SDL3D_CAMERA_PERSPECTIVE);
+    EXPECT_FLOAT_EQ(player_camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
     sdl3d_camera3d surveillance_camera{};
     ASSERT_TRUE(sdl3d_game_data_get_camera(runtime, "camera.doom.surveillance", &surveillance_camera));
+    EXPECT_FLOAT_EQ(surveillance_camera.fovy, SDL3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES);
     EXPECT_STREQ(sdl3d_game_data_active_camera(runtime), "camera.doom.player");
     player->position = sdl3d_vec3_make(43.0f, 0.5f, 89.0f);
     ASSERT_TRUE(sdl3d_game_data_update(runtime, 0.016f));
