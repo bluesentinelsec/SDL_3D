@@ -8,8 +8,10 @@
   "imports": [
     { "path": "fragments/input/fps_controls.json", "sections": ["input"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
+    { "path": "fragments/actors/gameplay_targets.json", "sections": ["entities"] },
     { "path": "fragments/world/showcase.brushes.json", "sections": ["brush_worlds"] },
-    { "path": "fragments/actors/lights.json", "sections": ["entities"] }
+    { "path": "fragments/actors/lights.json", "sections": ["entities"] },
+    { "path": "fragments/logic/brush_gameplay_sensors.json", "sections": ["logic"] }
   ],
   "app": {
     "title": "Slayer 3D Brush Geometry Dojo",
@@ -60,6 +62,7 @@
   "render": {
     "lighting": true,
     "bloom": false,
+    "ssao": false,
     "clear_color": [0.035, 0.04, 0.05]
   },
   "presentation": {

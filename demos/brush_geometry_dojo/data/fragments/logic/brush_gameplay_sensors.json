@@ -1,0 +1,61 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.brush_geometry.trigger_enter",
+        "type": "sensor.brush_contents",
+        "actor": "entity.brush_geometry.player",
+        "contents_mask": "trigger",
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "property.set",
+            "target_from_payload": "actor_name",
+            "key": "brush_trigger_active",
+            "value": true
+          },
+          {
+            "type": "property.set",
+            "target_from_payload": "actor_name",
+            "key": "last_trigger_brush",
+            "value_from_payload": "brush_name"
+          }
+        ]
+      },
+      {
+        "name": "sensor.brush_geometry.trigger_exit",
+        "type": "sensor.brush_contents",
+        "actor": "entity.brush_geometry.player",
+        "contents_mask": "trigger",
+        "edge": "exit",
+        "actions": [
+          {
+            "type": "property.set",
+            "target_from_payload": "actor_name",
+            "key": "brush_trigger_active",
+            "value": false
+          }
+        ]
+      },
+      {
+        "name": "sensor.brush_geometry.line_of_sight",
+        "type": "sensor.brush_perception",
+        "observer": "entity.brush_geometry.player",
+        "target_tag": "brush_target",
+        "contents_mask": ["solid", "player_clip"],
+        "range": 18.0,
+        "fov_degrees": 150.0,
+        "edge": "stay",
+        "actions": [
+          {
+            "type": "property.add",
+            "target_from_payload": "target_actor_name",
+            "key": "spotted",
+            "value": 1
+          }
+        ]
+      }
+    ]
+  }
+}

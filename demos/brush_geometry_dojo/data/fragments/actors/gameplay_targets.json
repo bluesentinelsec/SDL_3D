@@ -1,0 +1,41 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.brush_geometry.visible_target",
+      "active": true,
+      "tags": ["brush_target"],
+      "transform": { "position": [-4.8, 1.0, 8.4] },
+      "properties": {
+        "spotted": { "type": "int", "value": 0 }
+      },
+      "components": [
+        {
+          "type": "render.rounded_box",
+          "size": [0.75, 1.5, 0.75],
+          "radius": 0.12,
+          "color": [90, 210, 255, 255],
+          "lighting": true
+        }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.occluded_target",
+      "active": true,
+      "tags": ["brush_target"],
+      "transform": { "position": [0.0, 1.0, -4.0] },
+      "properties": {
+        "spotted": { "type": "int", "value": 0 }
+      },
+      "components": [
+        {
+          "type": "render.rounded_box",
+          "size": [0.75, 1.5, 0.75],
+          "radius": 0.12,
+          "color": [255, 120, 85, 255],
+          "lighting": true
+        }
+      ]
+    }
+  ]
+}
