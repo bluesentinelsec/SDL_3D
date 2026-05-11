@@ -108,9 +108,6 @@ static bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjso
 static bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
 static int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
-static bool load_editor_metadata(yyjson_val *editor, slayer3d_game_data_editor_metadata *out_metadata,
-                                 char *error_buffer, int error_buffer_size);
-static void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata);
 static bool sensor_actor_list_add(sensor_actor_list *list, slayer3d_registered_actor *actor);
 static void sensor_actor_list_free(sensor_actor_list *list);
 static bool collect_sensor_endpoint_actors(slayer3d_game_data_runtime *runtime, const char *actor_name, const char *tag,
@@ -263,7 +260,6 @@ static bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtim
 static void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
 static void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
 static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
-static const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name);
 static bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row);
 static char grid_map_cell(const grid_map_runtime *map, int col, int row);
 static bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, slayer3d_vec3 *out_position);
@@ -287,8 +283,6 @@ static bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, gr
 #include "game_data/game_data_json_helpers.inc"
 
 #include "game_data/game_data_grid_runtime.inc"
-
-#include "game_data/game_data_world_loaders.inc"
 
 #include "game_data/game_data_scene_lookup.inc"
 

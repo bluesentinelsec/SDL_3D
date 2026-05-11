@@ -70,7 +70,7 @@ static bool grid_map_world_to_cell(const grid_map_runtime *map, float x, float y
     return true;
 }
 
-static const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name)
+const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;

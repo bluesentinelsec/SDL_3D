@@ -147,6 +147,7 @@ target_sources(
         src/game.c
         src/game_data_brush.c
         src/game_data.c
+        src/game_data_world_loaders.c
         src/game_data_world_queries.c
         src/game_data_standard_options.c
         src/game_presentation.c

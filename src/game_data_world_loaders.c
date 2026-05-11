@@ -1,8 +1,20 @@
-/* Grid, sector, brush, door, and platform loaders.
- * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
+/**
+ * @file game_data_world_loaders.c
+ * @brief Grid, sector, brush, door, and platform loaders for authored game data.
+ */
 
-static bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                           int error_buffer_size)
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
+
+#include "slayer3d/door.h"
+#include "slayer3d/level.h"
+#include "slayer3d/math.h"
+
+static bool load_editor_metadata(yyjson_val *editor, slayer3d_game_data_editor_metadata *out_metadata,
+                                 char *error_buffer, int error_buffer_size);
+
+bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *maps = obj_get(root, "grid_maps");
     if (maps == NULL)
@@ -82,33 +94,8 @@ static bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root
     return true;
 }
 
-static slayer3d_color json_color_value(yyjson_val *value, slayer3d_color fallback)
-{
-    if (!yyjson_is_arr(value) || yyjson_arr_size(value) < 3)
-        return fallback;
-
-    yyjson_val *r = yyjson_arr_get(value, 0);
-    yyjson_val *g = yyjson_arr_get(value, 1);
-    yyjson_val *b = yyjson_arr_get(value, 2);
-    yyjson_val *a = yyjson_arr_get(value, 3);
-    if (!yyjson_is_num(r) || !yyjson_is_num(g) || !yyjson_is_num(b))
-        return fallback;
-
-    return (slayer3d_color){
-        (Uint8)SDL_clamp((int)yyjson_get_num(r), 0, 255),
-        (Uint8)SDL_clamp((int)yyjson_get_num(g), 0, 255),
-        (Uint8)SDL_clamp((int)yyjson_get_num(b), 0, 255),
-        yyjson_is_num(a) ? (Uint8)SDL_clamp((int)yyjson_get_num(a), 0, 255) : fallback.a,
-    };
-}
-
-static slayer3d_color json_color(yyjson_val *object, const char *key, slayer3d_color fallback)
-{
-    return json_color_value(obj_get(object, key), fallback);
-}
-
-static bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                                    int error_buffer_size)
+bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                             int error_buffer_size)
 {
     yyjson_val *layers = obj_get(root, "grid_pickup_layers");
     if (layers == NULL)
@@ -191,32 +178,6 @@ static void strip_sector_level_lightmap(slayer3d_level *level)
         SDL_free(level->model.meshes[i].lightmap_uvs);
         level->model.meshes[i].lightmap_uvs = NULL;
     }
-}
-
-static bool json_float_array(yyjson_val *value, float *out_values, int count, const float *fallback)
-{
-    if (out_values == NULL || count <= 0)
-        return false;
-
-    if (!yyjson_is_arr(value) || yyjson_arr_size(value) < (size_t)count)
-    {
-        if (fallback != NULL)
-            SDL_memcpy(out_values, fallback, (size_t)count * sizeof(*out_values));
-        return fallback != NULL;
-    }
-
-    for (int i = 0; i < count; ++i)
-    {
-        yyjson_val *entry = yyjson_arr_get(value, (size_t)i);
-        if (!yyjson_is_num(entry))
-        {
-            if (fallback != NULL)
-                SDL_memcpy(out_values, fallback, (size_t)count * sizeof(*out_values));
-            return fallback != NULL;
-        }
-        out_values[i] = (float)yyjson_get_num(entry);
-    }
-    return true;
 }
 
 static int sector_material_index(yyjson_val *materials, yyjson_val *ref, bool allow_none)
@@ -437,9 +398,8 @@ static bool build_sector_level_variants(sector_level_runtime *level, char *error
     return ok;
 }
 
-static bool set_sector_level_geometry(sector_level_runtime *level, int sector_index,
-                                      const slayer3d_sector_geometry *geometry, char *error_buffer,
-                                      int error_buffer_size)
+bool set_sector_level_geometry(sector_level_runtime *level, int sector_index, const slayer3d_sector_geometry *geometry,
+                               char *error_buffer, int error_buffer_size)
 {
     if (level == NULL || geometry == NULL || sector_index < 0 || sector_index >= level->sector_count)
     {
@@ -516,8 +476,8 @@ static bool set_sector_level_geometry(sector_level_runtime *level, int sector_in
     return true;
 }
 
-static bool load_sector_levels(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                               int error_buffer_size)
+bool load_sector_levels(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                        int error_buffer_size)
 {
     yyjson_val *levels = obj_get(root, "sector_levels");
     if (levels == NULL)
@@ -562,7 +522,7 @@ static bool load_sector_levels(slayer3d_game_data_runtime *runtime, yyjson_val *
     return true;
 }
 
-static unsigned int brush_content_flag_from_string(const char *name)
+unsigned int brush_content_flag_from_string(const char *name)
 {
     if (SDL_strcmp(name != NULL ? name : "", "solid") == 0)
         return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
@@ -596,8 +556,8 @@ static unsigned int brush_surface_flag_from_string(const char *name)
     return 0u;
 }
 
-static unsigned int brush_flags_from_json(yyjson_val *value, unsigned int (*flag_from_string)(const char *name),
-                                          unsigned int fallback)
+unsigned int brush_flags_from_json(yyjson_val *value, unsigned int (*flag_from_string)(const char *name),
+                                   unsigned int fallback)
 {
     if (yyjson_is_str(value))
     {
@@ -637,8 +597,7 @@ static int brush_material_index_from_ref(const slayer3d_game_data_brush_material
     return -1;
 }
 
-static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                              int error_buffer_size)
+bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *worlds = obj_get(root, "brush_worlds");
     if (worlds == NULL)
@@ -895,7 +854,7 @@ fail:
     return false;
 }
 
-static void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata)
+void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata)
 {
     if (metadata == NULL)
         return;
@@ -914,8 +873,7 @@ static void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata)
     SDL_zero(*metadata);
 }
 
-static bool load_sector_doors(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                              int error_buffer_size)
+bool load_sector_doors(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *doors = obj_get(root, "sector_doors");
     if (doors == NULL)
@@ -973,8 +931,8 @@ static bool load_sector_doors(slayer3d_game_data_runtime *runtime, yyjson_val *r
     return true;
 }
 
-static bool load_sector_platforms(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                                  int error_buffer_size)
+bool load_sector_platforms(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                           int error_buffer_size)
 {
     yyjson_val *platforms = obj_get(root, "sector_platforms");
     if (platforms == NULL)
