@@ -7364,8 +7364,8 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.brush_geometry.showcase", &world));
     ASSERT_NE(world.render_model, nullptr);
-    EXPECT_EQ(world.material_count, 6);
-    EXPECT_GE(world.brush_count, 9);
+    EXPECT_EQ(world.material_count, 7);
+    EXPECT_GE(world.brush_count, 10);
     EXPECT_GE(world.render_model->mesh_count, 6);
     int rendered_vertices = 0;
     for (int i = 0; i < world.render_model->mesh_count; ++i)
@@ -7395,6 +7395,29 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
     EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
     EXPECT_NEAR(camera.position.y, 1.6f, 0.05f);
+
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.player");
+    slayer3d_registered_actor *visible = slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.visible_target");
+    slayer3d_registered_actor *occluded =
+        slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.occluded_target");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(visible, nullptr);
+    ASSERT_NE(occluded, nullptr);
+    EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
+    ASSERT_GE(forward, 0);
+    slayer3d_input_set_action_override(input, forward, 1.0f);
+    for (int i = 0; i < 6; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(3000 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    }
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "brush_trigger_active", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_trigger_brush", ""), "brush.trigger.los_demo");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -11003,8 +11026,18 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     ASSERT_TRUE(slayer3d_game_data_slide_brush_world(runtime, "brush.trace", &trace, 4, &result));
     EXPECT_TRUE(result.hit);
     EXPECT_STREQ(result.brush_name, "brush.box");
-    EXPECT_NEAR(result.end_position.x, -0.0005f, 0.001f);
+    EXPECT_NEAR(result.end_position.x, -0.0035f, 0.001f);
     EXPECT_GT(result.end_position.z, 2.9f);
+
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_AABB;
+    trace.extents = slayer3d_vec3_make(0.25f, 0.5f, 0.25f);
+    trace.start = slayer3d_vec3_make(-2.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(2.0f, 1.0f, 6.0f);
+    ASSERT_TRUE(slayer3d_game_data_slide_brush_world(runtime, "brush.trace", &trace, 6, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_STREQ(result.brush_name, "brush.box");
+    EXPECT_NEAR(result.end_position.x, -0.25375f, 0.002f);
+    EXPECT_GT(result.end_position.z, 5.9f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -11178,6 +11211,18 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     expect_vec3_near(
         slayer3d_properties_get_vec3(player->props, "camera_forward", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
         slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
+
+    slayer3d_input_set_action_override(input, forward, 0.0f);
+    const int jump = slayer3d_game_data_find_action(runtime, "action.jump");
+    ASSERT_GE(jump, 0);
+    const float grounded_y = player->position.y;
+    slayer3d_input_set_action_override(input, jump, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 2000), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_GT(player->position.y, grounded_y);
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "vertical_velocity", 0.0f), 0.0f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true));
+    slayer3d_input_set_action_override(input, jump, 0.0f);
 
     slayer3d_camera3d camera{};
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));

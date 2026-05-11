@@ -6,6 +6,8 @@
   "renders_world": true,
   "entities": [
     "entity.brush_geometry.player",
+    "entity.brush_geometry.visible_target",
+    "entity.brush_geometry.occluded_target",
     "entity.brush_geometry.sun",
     "entity.brush_geometry.blue_fill"
   ],
@@ -77,6 +79,33 @@
         "align": "right",
         "color": [180, 235, 190, 230],
         "scale": 0.72
+      },
+      {
+        "name": "ui.brush_geometry.trigger_state",
+        "font": "font.brush_geometry.hud",
+        "format": "TRIGGER %d",
+        "bindings": [
+          { "type": "property", "entity": "entity.brush_geometry.player", "key": "brush_trigger_active" }
+        ],
+        "x": 0.02,
+        "y": 0.925,
+        "normalized": true,
+        "color": [105, 225, 255, 230],
+        "scale": 0.62
+      },
+      {
+        "name": "ui.brush_geometry.perception_state",
+        "font": "font.brush_geometry.hud",
+        "format": "LOS visible %d blocked %d",
+        "bindings": [
+          { "type": "property", "entity": "entity.brush_geometry.visible_target", "key": "spotted" },
+          { "type": "property", "entity": "entity.brush_geometry.occluded_target", "key": "spotted" }
+        ],
+        "x": 0.02,
+        "y": 0.955,
+        "normalized": true,
+        "color": [210, 220, 235, 220],
+        "scale": 0.62
       }
     ]
   }

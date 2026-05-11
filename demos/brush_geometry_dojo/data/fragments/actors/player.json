@@ -10,7 +10,9 @@
         "pitch": { "type": "float", "value": 0.0 },
         "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
         "on_ground": { "type": "bool", "value": false },
-        "vertical_velocity": { "type": "float", "value": 0.0 }
+        "vertical_velocity": { "type": "float", "value": 0.0 },
+        "brush_trigger_active": { "type": "bool", "value": false },
+        "last_trigger_brush": { "type": "string", "value": "none" }
       },
       "components": [
         {

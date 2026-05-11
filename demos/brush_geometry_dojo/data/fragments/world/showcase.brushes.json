@@ -11,7 +11,8 @@
         { "name": "mat.ceiling", "albedo": [0.33, 0.34, 0.38, 1.0], "roughness": 0.92, "tex_scale": 4.0 },
         { "name": "mat.ramp", "albedo": [0.64, 0.48, 0.32, 1.0], "roughness": 0.78, "tex_scale": 3.0 },
         { "name": "mat.accent_blue", "albedo": [0.20, 0.40, 0.86, 1.0], "roughness": 0.72, "tex_scale": 3.0 },
-        { "name": "mat.accent_red", "albedo": [0.78, 0.22, 0.18, 1.0], "roughness": 0.76, "tex_scale": 3.0 }
+        { "name": "mat.accent_red", "albedo": [0.78, 0.22, 0.18, 1.0], "roughness": 0.76, "tex_scale": 3.0 },
+        { "name": "mat.trigger", "albedo": [0.08, 0.75, 0.95, 0.32], "roughness": 0.5, "tex_scale": 2.0 }
       ],
       "brushes": [
         {
@@ -129,6 +130,19 @@
             { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.accent_red" },
             { "plane": { "normal": [0, 0, 1], "distance": 1.0 }, "material": "mat.accent_red" },
             { "plane": { "normal": [0, 0, -1], "distance": 1.0 }, "material": "mat.accent_red" }
+          ]
+        },
+        {
+          "name": "brush.trigger.los_demo",
+          "contents": "trigger",
+          "tags": ["gameplay", "trigger"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 3.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 3.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0, 1, 0], "distance": 2.2 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0, 0, 1], "distance": 9.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0, 0, -1], "distance": -7.0 }, "material": "mat.trigger" }
           ]
         }
       ]
