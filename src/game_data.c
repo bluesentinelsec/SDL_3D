@@ -592,6 +592,8 @@ typedef struct slayer3d_game_data_runtime
     brush_world_runtime *brush_worlds;
     int brush_world_count;
     slayer3d_game_data_brush_diagnostics brush_diagnostics;
+    Uint64 world_model_trace_count;
+    Uint64 world_model_point_query_count;
     sector_door_runtime *sector_doors;
     int sector_door_count;
     sector_platform_runtime *sector_platforms;

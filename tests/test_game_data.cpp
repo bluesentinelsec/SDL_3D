@@ -146,6 +146,17 @@ struct BrushWorldInstanceCapture
     bool debug_wireframe = false;
 };
 
+struct WorldModelInstanceCapture
+{
+    int count = 0;
+    int sectors = 0;
+    int brushes = 0;
+    bool saw_sector_bounds = false;
+    bool saw_brush_bounds = false;
+    slayer3d_bounding_box sector_bounds{};
+    slayer3d_bounding_box brush_bounds{};
+};
+
 struct SectorDoorRenderCapture
 {
     int door_primitives = 0;
@@ -1552,6 +1563,32 @@ bool capture_brush_world_instance(void *userdata, const slayer3d_game_data_brush
     capture->acceleration_enabled = instance->acceleration_enabled;
     capture->lighting_enabled = instance->lighting_enabled;
     capture->debug_wireframe = instance->debug_wireframe;
+    return true;
+}
+
+bool capture_world_model_instance(void *userdata, const slayer3d_game_data_world_model_instance *instance)
+{
+    auto *capture = static_cast<WorldModelInstanceCapture *>(userdata);
+    capture->count++;
+    if (instance->type == SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL)
+    {
+        capture->sectors++;
+        EXPECT_STREQ(instance->name, "sector.world_model");
+        EXPECT_STREQ(instance->variant_name, "lightmapped");
+        EXPECT_NE(instance->sector_level, nullptr);
+        EXPECT_NE(instance->sectors, nullptr);
+        EXPECT_EQ(instance->sector_count, 1);
+        capture->saw_sector_bounds = instance->has_bounds;
+        capture->sector_bounds = instance->bounds;
+    }
+    else if (instance->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
+    {
+        capture->brushes++;
+        EXPECT_STREQ(instance->name, "brush.world_model");
+        EXPECT_NE(instance->brush_world, nullptr);
+        capture->saw_brush_bounds = instance->has_bounds;
+        capture->brush_bounds = instance->bounds;
+    }
     return true;
 }
 
@@ -11345,6 +11382,147 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     EXPECT_EQ(diagnostics.render_mesh_culled, 1u);
     EXPECT_EQ(diagnostics.render_mesh_draws, 2u);
     EXPECT_EQ(diagnostics.render_triangles_submitted, 48u);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, WorldModelInterfaceEnumeratesQueriesAndTracesSectorAndBrushWorlds)
+{
+    const std::filesystem::path dir = unique_test_dir("world_model_interface");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "sector_levels": [
+      { "level": "sector.world_model", "variant": "lightmapped" }
+    ],
+    "brush_worlds": [
+      { "world": "brush.world_model", "position": [10.0, 0.0, 0.0] }
+    ]
+  }
+})json");
+    write_text(dir / "world_model.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "World Model Interface Test" },
+  "world": { "name": "world.model_interface", "kind": "mixed" },
+  "sector_levels": [
+    {
+      "name": "sector.world_model",
+      "materials": [
+        { "name": "floor", "albedo": [0.25, 0.25, 0.25, 1.0] },
+        { "name": "wall", "albedo": [0.55, 0.55, 0.55, 1.0] }
+      ],
+      "sectors": [
+        {
+          "name": "room",
+          "points": [[0, 0], [4, 0], [4, 4], [0, 4]],
+          "floor_y": 0.0,
+          "ceil_y": 3.0,
+          "floor_material": "floor",
+          "ceil_material": "floor",
+          "wall_material": "wall"
+        }
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.world_model",
+      "materials": [{ "name": "mat.wall", "albedo": [0.8, 0.2, 0.2, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.cube",
+          "contents": ["solid", "player_clip"],
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "world_model.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    WorldModelInstanceCapture capture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_world_model_instance(runtime, capture_world_model_instance, &capture));
+    EXPECT_EQ(capture.count, 2);
+    EXPECT_EQ(capture.sectors, 1);
+    EXPECT_EQ(capture.brushes, 1);
+    EXPECT_TRUE(capture.saw_sector_bounds);
+    EXPECT_TRUE(capture.saw_brush_bounds);
+    EXPECT_NEAR(capture.sector_bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(capture.sector_bounds.max.z, 4.0f, 0.001f);
+    EXPECT_NEAR(capture.brush_bounds.min.x, 10.0f, 0.001f);
+    EXPECT_NEAR(capture.brush_bounds.max.x, 12.0f, 0.001f);
+
+    slayer3d_game_data_world_point_result point{};
+    ASSERT_TRUE(
+        slayer3d_game_data_query_world_model_point(runtime, slayer3d_vec3_make(1.0f, 1.0f, 1.0f), 0, 0, &point));
+    EXPECT_TRUE(point.inside);
+    EXPECT_EQ(point.type, SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL);
+    EXPECT_STREQ(point.world_name, "sector.world_model");
+    EXPECT_STREQ(point.element_name, "room");
+    EXPECT_EQ(point.element_index, 0);
+
+    ASSERT_TRUE(slayer3d_game_data_query_world_model_point(runtime, slayer3d_vec3_make(11.0f, 1.0f, 1.0f),
+                                                           SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_BRUSH_WORLDS,
+                                                           SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, &point));
+    EXPECT_TRUE(point.inside);
+    EXPECT_EQ(point.type, SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
+    EXPECT_STREQ(point.world_name, "brush.world_model");
+    EXPECT_STREQ(point.element_name, "brush.cube");
+    EXPECT_EQ(point.contents, SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+
+    slayer3d_game_data_world_trace_desc trace{};
+    slayer3d_game_data_world_trace_result result{};
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.start = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(6.0f, 1.0f, 1.0f);
+    trace.model_filter = SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_SECTOR_LEVELS;
+    ASSERT_TRUE(slayer3d_game_data_trace_world_models(runtime, &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_EQ(result.type, SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL);
+    EXPECT_STREQ(result.world_name, "sector.world_model");
+    EXPECT_STREQ(result.element_name, "room");
+    EXPECT_LT(result.fraction, 1.0f);
+
+    trace.start = slayer3d_vec3_make(8.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(11.0f, 1.0f, 1.0f);
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    trace.model_filter = SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_BRUSH_WORLDS;
+    ASSERT_TRUE(slayer3d_game_data_trace_world_models(runtime, &trace, &result));
+    EXPECT_TRUE(result.hit);
+    EXPECT_EQ(result.type, SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
+    EXPECT_STREQ(result.world_name, "brush.world_model");
+    EXPECT_STREQ(result.element_name, "brush.cube");
+    EXPECT_STREQ(result.material_name, "mat.wall");
+    EXPECT_NEAR(result.end_position.x, 10.0f, 0.001f);
+    EXPECT_NEAR(result.normal.x, -1.0f, 0.001f);
+
+    slayer3d_game_data_world_model_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_world_model_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.active_sector_level_instances, 1u);
+    EXPECT_EQ(diagnostics.active_brush_world_instances, 1u);
+    EXPECT_EQ(diagnostics.world_trace_count, 2u);
+    EXPECT_EQ(diagnostics.point_query_count, 2u);
+    EXPECT_GE(diagnostics.brush.trace_count, 2u);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
