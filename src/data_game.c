@@ -11,6 +11,8 @@
 #include "slayer3d/signal_bus.h"
 #include "slayer3d/transition.h"
 
+#include "mouse_trace_internal.h"
+
 struct slayer3d_data_game_runtime
 {
     slayer3d_asset_resolver *assets;
@@ -95,11 +97,20 @@ static void data_game_release_mouse_capture(slayer3d_data_game_runtime *runtime,
         return;
     }
 
+    const bool before = SDL_GetWindowRelativeMouseMode(ctx->window);
+    slayer3d_mouse_tracef("data_game.mouse_capture.release",
+                          "runtime=%p scene='%s' paused=%d before_relative=%d applied=%d enabled=%d", (void *)runtime,
+                          runtime->data != NULL ? slayer3d_game_data_active_scene(runtime->data) : "<none>",
+                          ctx->paused ? 1 : 0, before ? 1 : 0, runtime->mouse_capture_applied ? 1 : 0,
+                          runtime->mouse_capture_enabled ? 1 : 0);
     if (SDL_SetWindowRelativeMouseMode(ctx->window, false))
     {
         float dx = 0.0f;
         float dy = 0.0f;
         (void)SDL_GetRelativeMouseState(&dx, &dy);
+        slayer3d_mouse_tracef("data_game.mouse_capture.release.flush",
+                              "runtime=%p relative_delta_flushed=(%.3f,%.3f) after_relative=%d", (void *)runtime, dx,
+                              dy, SDL_GetWindowRelativeMouseMode(ctx->window) ? 1 : 0);
         slayer3d_input_discard_mouse_motion(slayer3d_game_session_get_input(ctx->session));
     }
     runtime->mouse_capture_enabled = false;
@@ -111,6 +122,12 @@ static void data_game_apply_scene_mouse_capture(slayer3d_data_game_runtime *runt
         return;
 
     const bool capture = slayer3d_game_data_active_scene_mouse_capture(runtime->data, ctx->paused);
+    const bool before = SDL_GetWindowRelativeMouseMode(ctx->window);
+    slayer3d_mouse_tracef("data_game.mouse_capture.apply",
+                          "runtime=%p scene='%s' paused=%d requested=%d before_relative=%d applied=%d enabled=%d",
+                          (void *)runtime, slayer3d_game_data_active_scene(runtime->data), ctx->paused ? 1 : 0,
+                          capture ? 1 : 0, before ? 1 : 0, runtime->mouse_capture_applied ? 1 : 0,
+                          runtime->mouse_capture_enabled ? 1 : 0);
     if (runtime->mouse_capture_applied && runtime->mouse_capture_enabled == capture)
         return;
 
@@ -119,6 +136,10 @@ static void data_game_apply_scene_mouse_capture(slayer3d_data_game_runtime *runt
         float dx = 0.0f;
         float dy = 0.0f;
         (void)SDL_GetRelativeMouseState(&dx, &dy);
+        slayer3d_mouse_tracef("data_game.mouse_capture.apply.flush",
+                              "runtime=%p requested=%d relative_delta_flushed=(%.3f,%.3f) after_relative=%d",
+                              (void *)runtime, capture ? 1 : 0, dx, dy,
+                              SDL_GetWindowRelativeMouseMode(ctx->window) ? 1 : 0);
         slayer3d_input_discard_mouse_motion(slayer3d_game_session_get_input(ctx->session));
     }
     runtime->mouse_capture_applied = true;

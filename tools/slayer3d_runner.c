@@ -11,6 +11,7 @@
 
 #include "slayer3d/slayer3d.h"
 
+#include "mouse_trace_internal.h"
 #include "slayer3d_fused.h"
 #include "slayer3d_runner_cli.h"
 #include "slayer3d_runner_state.h"
@@ -271,6 +272,12 @@ static bool runner_init(slayer3d_game_context *ctx, void *userdata)
     desc.initial_scene_payload = initial_state;
     desc.skip_app_flow_startup = state->args.scene != NULL && state->args.scene[0] != '\0';
 
+    slayer3d_mouse_tracef(
+        "runner.init", "data='%s' scene_override='%s' mount_kind=%d mount_path='%s' media='%s' window=%p session=%p",
+        state->args.data_asset_path != NULL ? state->args.data_asset_path : "",
+        state->args.scene != NULL ? state->args.scene : "", (int)state->args.mount_kind,
+        state->args.mount_path != NULL ? state->args.mount_path : "",
+        state->args.media_dir != NULL ? state->args.media_dir : "", (void *)ctx->window, (void *)ctx->session);
     if (!slayer3d_data_game_runtime_create(&desc, &state->runtime, error, (int)sizeof(error)))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D runner data load failed: %s", error);

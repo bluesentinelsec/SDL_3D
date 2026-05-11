@@ -9,6 +9,8 @@
 #include "slayer3d/logic.h"
 #include "slayer3d/time.h"
 
+#include "mouse_trace_internal.h"
+
 #define SLAYER3D_GAME_DEFAULT_FIXED_DT (1.0f / 60.0f)
 #define SLAYER3D_GAME_DEFAULT_MAX_TICKS 8
 
@@ -516,6 +518,13 @@ int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_ca
         while (SDL_PollEvent(&event))
         {
             ctx.input_event_consumed = false;
+            if (event.type == SDL_EVENT_MOUSE_MOTION)
+            {
+                slayer3d_mouse_tracef(
+                    "game.poll.mouse_motion", "window=%p x=%.3f y=%.3f xrel=%.3f yrel=%.3f relative=%d paused=%d",
+                    (void *)ctx.window, event.motion.x, event.motion.y, event.motion.xrel, event.motion.yrel,
+                    ctx.window != NULL && SDL_GetWindowRelativeMouseMode(ctx.window) ? 1 : 0, ctx.paused ? 1 : 0);
+            }
 
             if (event.type == SDL_EVENT_QUIT)
             {
