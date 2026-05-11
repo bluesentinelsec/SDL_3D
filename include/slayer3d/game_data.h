@@ -611,6 +611,137 @@ extern "C"
         Uint64 render_triangles_submitted;
     } slayer3d_game_data_brush_diagnostics;
 
+    /** @brief Runtime world model implementation kind. */
+    typedef enum slayer3d_game_data_world_model_type
+    {
+        /** @brief Invalid or unavailable world model type. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID = 0,
+        /** @brief Sector/portal world model built from 2.5D sector geometry. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL = 1,
+        /** @brief Convex brush world model built from true 3D brush planes. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD = 2,
+    } slayer3d_game_data_world_model_type;
+
+    enum
+    {
+        /** @brief Include authored sector level instances in generic world-model queries. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_SECTOR_LEVELS = 1u << 0,
+        /** @brief Include authored brush world instances in generic world-model queries. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_BRUSH_WORLDS = 1u << 1,
+        /** @brief Include every supported authored world model in generic world-model queries. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_ALL =
+            SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_SECTOR_LEVELS | SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_BRUSH_WORLDS,
+    };
+
+    /** @brief Active-scene world model instance descriptor for editor/tooling code. */
+    typedef struct slayer3d_game_data_world_model_instance
+    {
+        /** @brief Runtime implementation kind. */
+        slayer3d_game_data_world_model_type type;
+        /** @brief Authored world model name, such as a sector level or brush world id. */
+        const char *name;
+        /** @brief Optional authored variant/debug label, such as a sector level variant. */
+        const char *variant_name;
+        /** @brief World-space translation applied to this model instance. */
+        slayer3d_vec3 position;
+        /** @brief World-space bounds for the instance when known. */
+        slayer3d_bounding_box bounds;
+        /** @brief True when @p bounds contains usable world-space bounds. */
+        bool has_bounds;
+        /** @brief Sector level for sector instances, otherwise NULL. */
+        const slayer3d_level *sector_level;
+        /** @brief Runtime sectors for sector instances, otherwise NULL. */
+        const slayer3d_sector *sectors;
+        /** @brief Number of entries in @p sectors. */
+        int sector_count;
+        /** @brief Brush world for brush instances, otherwise NULL. */
+        const slayer3d_game_data_brush_world *brush_world;
+    } slayer3d_game_data_world_model_instance;
+
+    /** @brief Generic trace descriptor for active world model queries. */
+    typedef struct slayer3d_game_data_world_trace_desc
+    {
+        /** @brief Trace start point in world coordinates. */
+        slayer3d_vec3 start;
+        /** @brief Trace end point in world coordinates. */
+        slayer3d_vec3 end;
+        /** @brief Shape to sweep. Sector levels currently support point traces; brush worlds support all values. */
+        slayer3d_game_data_brush_trace_shape shape;
+        /** @brief Sphere radius in x, or AABB half-extents for xyz. */
+        slayer3d_vec3 extents;
+        /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_CONTENT_* flags for brush traces. */
+        unsigned int contents_mask;
+        /** @brief Bitmask of SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_* flags, or 0 for all models. */
+        unsigned int model_filter;
+    } slayer3d_game_data_world_trace_desc;
+
+    /** @brief Generic trace/pick result for active world model queries. */
+    typedef struct slayer3d_game_data_world_trace_result
+    {
+        /** @brief True when the trace intersected or exited a matching world model. */
+        bool hit;
+        /** @brief True when the trace starts inside a matching solid brush. */
+        bool start_solid;
+        /** @brief True when the trace remains inside a matching solid brush. */
+        bool all_solid;
+        /** @brief Implementation that produced the hit. */
+        slayer3d_game_data_world_model_type type;
+        /** @brief Authored world model name. */
+        const char *world_name;
+        /** @brief Authored sector/brush name when available. */
+        const char *element_name;
+        /** @brief Authored material name for brush face hits, or NULL. */
+        const char *material_name;
+        /** @brief Sector or brush index, or -1 when unavailable. */
+        int element_index;
+        /** @brief Brush face index, or -1 when unavailable. */
+        int face_index;
+        /** @brief First hit fraction in [0, 1] along start-to-end. */
+        float fraction;
+        /** @brief End position at @p fraction. */
+        slayer3d_vec3 end_position;
+        /** @brief Hit point on the swept shape origin path. */
+        slayer3d_vec3 point;
+        /** @brief Hit plane normal for brush traces, or zero for sector exit traces. */
+        slayer3d_vec3 normal;
+        /** @brief Brush contents bitmask, or 0 for sector traces. */
+        unsigned int contents;
+        /** @brief Brush surface flags, or 0 for sector traces. */
+        unsigned int surface_flags;
+    } slayer3d_game_data_world_trace_result;
+
+    /** @brief Generic point-contents result for active world model queries. */
+    typedef struct slayer3d_game_data_world_point_result
+    {
+        /** @brief True when the point lies inside a matching world model volume. */
+        bool inside;
+        /** @brief Implementation that contains the point. */
+        slayer3d_game_data_world_model_type type;
+        /** @brief Authored world model name. */
+        const char *world_name;
+        /** @brief Authored sector/brush name when available. */
+        const char *element_name;
+        /** @brief Sector or brush index, or -1 when unavailable. */
+        int element_index;
+        /** @brief Brush contents bitmask, or 0 for sector point queries. */
+        unsigned int contents;
+    } slayer3d_game_data_world_point_result;
+
+    /** @brief Generic world-model diagnostics for editor/debug UI. */
+    typedef struct slayer3d_game_data_world_model_diagnostics
+    {
+        /** @brief Active sector level instances enumerated by the last diagnostic query. */
+        Uint64 active_sector_level_instances;
+        /** @brief Active brush world instances enumerated by the last diagnostic query. */
+        Uint64 active_brush_world_instances;
+        /** @brief Cumulative generic world trace requests. */
+        Uint64 world_trace_count;
+        /** @brief Cumulative generic point-contents requests. */
+        Uint64 point_query_count;
+        /** @brief Existing brush-world trace/render diagnostics. */
+        slayer3d_game_data_brush_diagnostics brush;
+    } slayer3d_game_data_world_model_diagnostics;
+
     /**
      * @brief Callback for active authored sector level instances.
      *
@@ -626,6 +757,16 @@ extern "C"
      */
     typedef bool (*slayer3d_game_data_brush_world_instance_fn)(void *userdata,
                                                                const slayer3d_game_data_brush_world_instance *instance);
+
+    /**
+     * @brief Callback for active authored world model instances.
+     *
+     * Return false to stop iteration early. The descriptor and all nested
+     * pointers are valid only for the duration of the callback; strings and
+     * native world pointers are runtime-owned.
+     */
+    typedef bool (*slayer3d_game_data_world_model_instance_fn)(void *userdata,
+                                                               const slayer3d_game_data_world_model_instance *instance);
 
     /**
      * @brief Runtime metrics used when evaluating data-authored UI bindings.
@@ -1525,6 +1666,52 @@ extern "C"
     bool slayer3d_game_data_for_each_brush_world_instance(const slayer3d_game_data_runtime *runtime,
                                                           slayer3d_game_data_brush_world_instance_fn callback,
                                                           void *userdata);
+
+    /**
+     * @brief Iterate all active scene world model instances through a common descriptor.
+     *
+     * This is the editor/tooling-facing enumeration layer over sector and
+     * brush worlds. It allows tools to inspect placement, bounds, and stable
+     * world references without branching over the authored scene JSON shape.
+     */
+    bool slayer3d_game_data_for_each_world_model_instance(const slayer3d_game_data_runtime *runtime,
+                                                          slayer3d_game_data_world_model_instance_fn callback,
+                                                          void *userdata);
+
+    /**
+     * @brief Trace through active scene world model instances.
+     *
+     * Brush worlds use the existing brush trace implementation. Sector levels
+     * currently support point traces that detect exiting sector volume; shaped
+     * traces are ignored for sector models and still evaluated against brush
+     * models when included by @p desc.model_filter.
+     */
+    bool slayer3d_game_data_trace_world_models(const slayer3d_game_data_runtime *runtime,
+                                               const slayer3d_game_data_world_trace_desc *desc,
+                                               slayer3d_game_data_world_trace_result *out_result);
+
+    /**
+     * @brief Query which active world model volume contains a point.
+     *
+     * The first matching sector or brush volume in active-scene order is
+     * returned. Set @p model_filter to a bitmask of
+     * SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_* values, or 0 for all models.
+     * Set @p brush_contents_mask to a bitmask of
+     * SLAYER3D_GAME_DATA_BRUSH_CONTENT_* values for brush point queries, or 0
+     * for every brush contents type.
+     */
+    bool slayer3d_game_data_query_world_model_point(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 point,
+                                                    unsigned int model_filter, unsigned int brush_contents_mask,
+                                                    slayer3d_game_data_world_point_result *out_result);
+
+    /**
+     * @brief Copy generic world-model diagnostics for debug UI and editor tools.
+     *
+     * Instance counts reflect the currently active scene at call time. Trace
+     * and point-query counts are cumulative until the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_world_model_diagnostics(const slayer3d_game_data_runtime *runtime,
+                                                        slayer3d_game_data_world_model_diagnostics *out_diagnostics);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity

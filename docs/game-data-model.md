@@ -94,6 +94,16 @@ World-specific systems should be optional modules. A sector renderer should not
 leak sector assumptions into a fixed-screen game; a tile-map system should not
 force grid assumptions into a 3D scene.
 
+Editor and tooling code should prefer the generic world-model query layer over
+parsing authored scene JSON directly. The game-data runtime can enumerate active
+world instances, return world-space bounds, perform generic trace and
+point-contents queries, and expose diagnostics with stable references back to
+the underlying sector level or brush world. Sector and brush implementations
+remain distinct internally, but tools can start from the shared
+`slayer3d_game_data_for_each_world_model_instance`,
+`slayer3d_game_data_trace_world_models`, and
+`slayer3d_game_data_query_world_model_point` APIs.
+
 ## Data Boundary
 
 Use JSON for:
