@@ -10,8 +10,8 @@
         { "name": "mat.wall", "albedo": [0.42, 0.44, 0.47, 1.0], "roughness": 0.86, "tex_scale": 4.0 },
         { "name": "mat.ceiling", "albedo": [0.33, 0.34, 0.38, 1.0], "roughness": 0.92, "tex_scale": 4.0 },
         { "name": "mat.ramp", "albedo": [0.64, 0.48, 0.32, 1.0], "roughness": 0.78, "tex_scale": 3.0 },
-        { "name": "mat.accent_blue", "albedo": [0.20, 0.40, 0.86, 1.0], "roughness": 0.72, "tex_scale": 3.0 },
-        { "name": "mat.accent_red", "albedo": [0.78, 0.22, 0.18, 1.0], "roughness": 0.76, "tex_scale": 3.0 },
+        { "name": "mat.accent_blue", "albedo": [0.20, 0.40, 0.86, 1.0], "emissive": [0.02, 0.05, 0.12], "roughness": 0.72, "tex_scale": 3.0 },
+        { "name": "mat.accent_red", "albedo": [0.78, 0.22, 0.18, 1.0], "emissive": [0.10, 0.02, 0.01], "roughness": 0.76, "tex_scale": 3.0 },
         { "name": "mat.trigger", "albedo": [0.08, 0.75, 0.95, 0.32], "roughness": 0.5, "tex_scale": 2.0 }
       ],
       "brushes": [
@@ -22,7 +22,7 @@
           "faces": [
             { "plane": { "normal": [1, 0, 0], "distance": 18.0 }, "material": "mat.floor" },
             { "plane": { "normal": [-1, 0, 0], "distance": 18.0 }, "material": "mat.floor" },
-            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat.floor" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat.floor", "uv": { "scale": [0.5, 0.5], "offset": [0.0, 0.0] } },
             { "plane": { "normal": [0, -1, 0], "distance": 0.5 }, "material": "mat.floor" },
             { "plane": { "normal": [0, 0, 1], "distance": 18.0 }, "material": "mat.floor" },
             { "plane": { "normal": [0, 0, -1], "distance": 18.0 }, "material": "mat.floor" }
@@ -100,7 +100,7 @@
           "faces": [
             { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat.ramp" },
             { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat.ramp" },
-            { "plane": { "normal": [-0.25, 1.0, 0.0], "distance": 2.5 }, "material": "mat.ramp" },
+            { "plane": { "normal": [-0.25, 1.0, 0.0], "distance": 2.5 }, "material": "mat.ramp", "uv": { "scale": [1.0, 1.0], "offset": [0.25, 0.0], "rotation_degrees": 15.0 } },
             { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.ramp" },
             { "plane": { "normal": [0, 0, 1], "distance": 2.25 }, "material": "mat.ramp" },
             { "plane": { "normal": [0, 0, -1], "distance": 2.25 }, "material": "mat.ramp" }

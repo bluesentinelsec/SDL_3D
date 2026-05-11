@@ -389,6 +389,8 @@ extern "C"
         float metallic;
         /** @brief Authored roughness factor for future material systems. */
         float roughness;
+        /** @brief Additive emissive RGB material factor. */
+        slayer3d_vec3 emissive;
         /** @brief Positive texture scale hint. */
         float tex_scale;
     } slayer3d_game_data_brush_material;
@@ -404,6 +406,12 @@ extern "C"
         int material_index;
         /** @brief Resolved material name, or NULL when no material was authored. */
         const char *material_name;
+        /** @brief Per-face UV scale multiplier, default {1, 1}. */
+        float uv_scale[2];
+        /** @brief Per-face UV offset, applied after scale/rotation. */
+        float uv_offset[2];
+        /** @brief Per-face UV rotation in degrees. */
+        float uv_rotation_degrees;
         /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_SURFACE_* flags. */
         unsigned int surface_flags;
     } slayer3d_game_data_brush_face;
@@ -457,6 +465,8 @@ extern "C"
         slayer3d_vec3 position;
         /** @brief Whether renderers/collision systems should use future acceleration data. */
         bool acceleration_enabled;
+        /** @brief Whether brush surfaces participate in dynamic lighting for this instance. */
+        bool lighting_enabled;
         /** @brief Whether debug wireframe should be requested for this instance. */
         bool debug_wireframe;
     } slayer3d_game_data_brush_world_instance;

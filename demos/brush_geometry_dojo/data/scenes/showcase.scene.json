@@ -28,6 +28,7 @@
         "world": "brush.brush_geometry.showcase",
         "position": [0.0, 0.0, 0.0],
         "acceleration": true,
+        "lighting": true,
         "debug_wireframe": false
       }
     ]

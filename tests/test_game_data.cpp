@@ -142,6 +142,7 @@ struct BrushWorldInstanceCapture
     const slayer3d_game_data_brush_world *world = nullptr;
     slayer3d_vec3 position{};
     bool acceleration_enabled = true;
+    bool lighting_enabled = true;
     bool debug_wireframe = false;
 };
 
@@ -1549,6 +1550,7 @@ bool capture_brush_world_instance(void *userdata, const slayer3d_game_data_brush
     capture->world = instance->world;
     capture->position = instance->position;
     capture->acceleration_enabled = instance->acceleration_enabled;
+    capture->lighting_enabled = instance->lighting_enabled;
     capture->debug_wireframe = instance->debug_wireframe;
     return true;
 }
@@ -7368,6 +7370,14 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(world.material_count, 7);
     EXPECT_GE(world.brush_count, 10);
     EXPECT_GE(world.render_model->mesh_count, 6);
+    auto find_material = [&world](const char *name) -> const slayer3d_game_data_brush_material * {
+        for (int i = 0; i < world.material_count; ++i)
+        {
+            if (world.materials[i].name != nullptr && SDL_strcmp(world.materials[i].name, name) == 0)
+                return &world.materials[i];
+        }
+        return nullptr;
+    };
     auto find_brush = [&world](const char *name) -> const slayer3d_game_data_brush * {
         for (int i = 0; i < world.brush_count; ++i)
         {
@@ -7390,6 +7400,20 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
         }
         return range;
     };
+    const slayer3d_game_data_brush_material *blue_material = find_material("mat.accent_blue");
+    ASSERT_NE(blue_material, nullptr);
+    EXPECT_GT(blue_material->emissive.z, 0.0f);
+    bool saw_model_emissive = false;
+    for (int i = 0; i < world.render_model->material_count; ++i)
+    {
+        const slayer3d_material &material = world.render_model->materials[i];
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.accent_blue") == 0)
+        {
+            saw_model_emissive = true;
+            EXPECT_GT(material.emissive[2], 0.0f);
+        }
+    }
+    EXPECT_TRUE(saw_model_emissive);
     const slayer3d_game_data_brush *pillar = find_brush("brush.pillar.center");
     const slayer3d_game_data_brush *overhang_west = find_brush("brush.bridge.overhang_west");
     const slayer3d_game_data_brush *overhang_east = find_brush("brush.bridge.overhang_east");
@@ -7401,6 +7425,20 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const auto east_x = x_range(overhang_east);
     EXPECT_LT(west_x.second, pillar_x.first);
     EXPECT_GT(east_x.first, pillar_x.second);
+    const slayer3d_game_data_brush *floor = find_brush("brush.room.floor");
+    ASSERT_NE(floor, nullptr);
+    bool saw_floor_uv = false;
+    for (int i = 0; i < floor->face_count; ++i)
+    {
+        const slayer3d_game_data_brush_face &face = floor->faces[i];
+        if (SDL_fabsf(face.normal.y - 1.0f) <= 0.001f)
+        {
+            saw_floor_uv = true;
+            EXPECT_FLOAT_EQ(face.uv_scale[0], 0.5f);
+            EXPECT_FLOAT_EQ(face.uv_scale[1], 0.5f);
+        }
+    }
+    EXPECT_TRUE(saw_floor_uv);
     int rendered_vertices = 0;
     for (int i = 0; i < world.render_model->mesh_count; ++i)
     {
@@ -7421,6 +7459,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(capture.count, 1);
     EXPECT_EQ(capture.world_name, "brush.brush_geometry.showcase");
     EXPECT_TRUE(capture.acceleration_enabled);
+    EXPECT_TRUE(capture.lighting_enabled);
 
     ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 2);
     slayer3d_camera3d camera{};
@@ -10635,6 +10674,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
         "world": "brush.test",
         "position": [1.0, 2.0, 3.0],
         "acceleration": false,
+        "lighting": false,
         "debug_wireframe": true
       }
     ]
@@ -10661,6 +10701,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
         {
           "name": "mat.trim",
           "albedo": [0.85, 0.55, 0.20, 1.0],
+          "emissive": [0.4, 0.2, 0.05],
           "roughness": 0.7
         }
       ],
@@ -10672,7 +10713,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
           "faces": [
             { "plane": { "normal": [ 1.0,  0.0,  0.0], "distance":  4.0 }, "material": "mat.wall" },
             { "plane": { "normal": [-1.0,  0.0,  0.0], "distance":  0.0 }, "material": 0 },
-            { "plane": { "normal": [ 0.0,  1.0,  0.0], "distance":  3.0 }, "material": "mat.wall", "surface_flags": ["slick"] },
+            { "plane": { "normal": [ 0.0,  1.0,  0.0], "distance":  3.0 }, "material": "mat.wall", "surface_flags": ["slick"], "uv": { "scale": [2.0, 0.5], "offset": [0.25, -0.5], "rotation_degrees": 90.0 } },
             { "plane": { "normal": [ 0.0, -1.0,  0.0], "distance":  0.0 }, "material": "mat.wall" },
             { "plane": { "normal": [ 0.0,  0.0,  1.0], "distance":  4.0 }, "material": "mat.trim", "surface_flags": "emissive" },
             { "plane": { "normal": [ 0.0,  0.0, -1.0], "distance":  0.0 }, "material": "mat.wall" }
@@ -10704,6 +10745,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_FLOAT_EQ(world.materials[0].roughness, 0.8f);
     EXPECT_FLOAT_EQ(world.materials[0].tex_scale, 2.0f);
     EXPECT_STREQ(world.materials[1].name, "mat.trim");
+    EXPECT_FLOAT_EQ(world.materials[1].emissive.x, 0.4f);
     ASSERT_EQ(world.brush_count, 1);
     EXPECT_STREQ(world.brushes[0].name, "brush.room");
     EXPECT_EQ(world.brushes[0].contents,
@@ -10716,10 +10758,16 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_EQ(world.brushes[0].faces[1].material_index, 0);
     EXPECT_STREQ(world.brushes[0].faces[1].material_name, "mat.wall");
     EXPECT_EQ(world.brushes[0].faces[2].surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_SLICK);
+    EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_scale[0], 2.0f);
+    EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_scale[1], 0.5f);
+    EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_offset[0], 0.25f);
+    EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_offset[1], -0.5f);
+    EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_rotation_degrees, 90.0f);
     EXPECT_EQ(world.brushes[0].faces[4].material_index, 1);
     EXPECT_EQ(world.brushes[0].faces[4].surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_EMISSIVE);
     ASSERT_NE(world.render_model, nullptr);
     ASSERT_EQ(world.render_model->material_count, 2);
+    EXPECT_FLOAT_EQ(world.render_model->materials[1].emissive[0], 0.4f);
     ASSERT_EQ(world.render_model->mesh_count, 2);
     EXPECT_EQ(world.render_model->meshes[0].material_index, 0);
     EXPECT_EQ(world.render_model->meshes[0].vertex_count, 30);
@@ -10743,6 +10791,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_STREQ(capture.world->name, "brush.test");
     expect_vec3_near(capture.position, slayer3d_vec3_make(1.0f, 2.0f, 3.0f));
     EXPECT_FALSE(capture.acceleration_enabled);
+    EXPECT_FALSE(capture.lighting_enabled);
     EXPECT_TRUE(capture.debug_wireframe);
 
     slayer3d_game_data_destroy(runtime);
@@ -10834,6 +10883,54 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
             "brush content value is unknown",
         },
         {
+            "bad_emissive",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "materials": [{ "name": "mat.bad", "emissive": [0.1, -0.2, 0.3] }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.bad" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.bad" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.bad" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.bad" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush material emissive must be a non-negative vec3",
+        },
+        {
+            "bad_uv_scale",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good", "uv": { "scale": [1, 0] } },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush face uv scale must be a positive vec2",
+        },
+        {
             "bad_scene_ref",
             R"json({
   "brush_worlds": [
@@ -10860,6 +10957,34 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
   "world": { "brush_worlds": [{ "world": "brush.missing" }] }
 })json",
             "unknown brush world reference",
+        },
+        {
+            "bad_lighting_flag",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.good",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": { "brush_worlds": [{ "world": "brush.good", "lighting": "yes" }] }
+})json",
+            "scene brush world lighting must be a boolean",
         },
     };
 
