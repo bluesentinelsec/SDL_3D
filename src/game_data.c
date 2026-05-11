@@ -13949,6 +13949,50 @@ typedef struct ui_value
     };
 } ui_value;
 
+static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runtime, const char *metric,
+                                         ui_value *out_value)
+{
+    if (runtime == NULL || metric == NULL || out_value == NULL || SDL_strncmp(metric, "brush.", 6) != 0)
+        return false;
+
+    slayer3d_game_data_brush_diagnostics diagnostics;
+    if (!slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics))
+        return false;
+
+    const char *name = metric + 6;
+    Uint64 value = 0u;
+    if (SDL_strcmp(name, "trace_count") == 0)
+        value = diagnostics.trace_count;
+    else if (SDL_strcmp(name, "world_instance_count") == 0)
+        value = diagnostics.world_instance_count;
+    else if (SDL_strcmp(name, "world_bounds_reject_count") == 0)
+        value = diagnostics.world_bounds_reject_count;
+    else if (SDL_strcmp(name, "brush_count") == 0)
+        value = diagnostics.brush_count;
+    else if (SDL_strcmp(name, "contents_reject_count") == 0)
+        value = diagnostics.contents_reject_count;
+    else if (SDL_strcmp(name, "bounds_reject_count") == 0)
+        value = diagnostics.bounds_reject_count;
+    else if (SDL_strcmp(name, "collision_candidate_count") == 0)
+        value = diagnostics.collision_candidate_count;
+    else if (SDL_strcmp(name, "hit_count") == 0)
+        value = diagnostics.hit_count;
+    else if (SDL_strcmp(name, "render_mesh_submissions") == 0)
+        value = diagnostics.render_mesh_submissions;
+    else if (SDL_strcmp(name, "render_mesh_culled") == 0)
+        value = diagnostics.render_mesh_culled;
+    else if (SDL_strcmp(name, "render_mesh_draws") == 0)
+        value = diagnostics.render_mesh_draws;
+    else if (SDL_strcmp(name, "render_triangles_submitted") == 0)
+        value = diagnostics.render_triangles_submitted;
+    else
+        return false;
+
+    out_value->type = UI_VALUE_UINT64;
+    out_value->as_uint64 = value;
+    return true;
+}
+
 static bool read_ui_binding_value(const slayer3d_game_data_runtime *runtime, yyjson_val *binding,
                                   const slayer3d_game_data_ui_metrics *metrics, ui_value *out_value)
 {
@@ -13979,6 +14023,8 @@ static bool read_ui_binding_value(const slayer3d_game_data_runtime *runtime, yyj
             out_value->as_bool = metrics != NULL && metrics->paused;
             return true;
         }
+        if (read_brush_diagnostic_metric(runtime, metric, out_value))
+            return true;
         return false;
     }
 
@@ -14080,6 +14126,27 @@ static bool format_bound_ui_text(const char *format, const ui_value *values, int
     if (value_count == 2 && values[0].type == UI_VALUE_FLOAT && values[1].type == UI_VALUE_UINT64)
     {
         SDL_snprintf(buffer, buffer_size, format, values[0].as_float, (unsigned long long)values[1].as_uint64);
+        return true;
+    }
+    if (value_count == 2 && values[0].type == UI_VALUE_UINT64 && values[1].type == UI_VALUE_UINT64)
+    {
+        SDL_snprintf(buffer, buffer_size, format, (unsigned long long)values[0].as_uint64,
+                     (unsigned long long)values[1].as_uint64);
+        return true;
+    }
+    if (value_count == 3 && values[0].type == UI_VALUE_UINT64 && values[1].type == UI_VALUE_UINT64 &&
+        values[2].type == UI_VALUE_UINT64)
+    {
+        SDL_snprintf(buffer, buffer_size, format, (unsigned long long)values[0].as_uint64,
+                     (unsigned long long)values[1].as_uint64, (unsigned long long)values[2].as_uint64);
+        return true;
+    }
+    if (value_count == 4 && values[0].type == UI_VALUE_UINT64 && values[1].type == UI_VALUE_UINT64 &&
+        values[2].type == UI_VALUE_UINT64 && values[3].type == UI_VALUE_UINT64)
+    {
+        SDL_snprintf(buffer, buffer_size, format, (unsigned long long)values[0].as_uint64,
+                     (unsigned long long)values[1].as_uint64, (unsigned long long)values[2].as_uint64,
+                     (unsigned long long)values[3].as_uint64);
         return true;
     }
     return false;

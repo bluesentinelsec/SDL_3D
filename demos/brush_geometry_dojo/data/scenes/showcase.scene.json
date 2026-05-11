@@ -82,6 +82,40 @@
         "scale": 0.72
       },
       {
+        "name": "ui.brush_geometry.trace_diagnostics",
+        "font": "font.brush_geometry.hud",
+        "format": "TRACE %llu BRUSH %llu CAND %llu HIT %llu",
+        "bindings": [
+          { "type": "metric", "metric": "brush.trace_count" },
+          { "type": "metric", "metric": "brush.brush_count" },
+          { "type": "metric", "metric": "brush.collision_candidate_count" },
+          { "type": "metric", "metric": "brush.hit_count" }
+        ],
+        "x": 0.985,
+        "y": 0.063,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.render_diagnostics",
+        "font": "font.brush_geometry.hud",
+        "format": "RENDER %llu/%llu CULL %llu TRI %llu",
+        "bindings": [
+          { "type": "metric", "metric": "brush.render_mesh_draws" },
+          { "type": "metric", "metric": "brush.render_mesh_submissions" },
+          { "type": "metric", "metric": "brush.render_mesh_culled" },
+          { "type": "metric", "metric": "brush.render_triangles_submitted" }
+        ],
+        "x": 0.985,
+        "y": 0.091,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
         "name": "ui.brush_geometry.trigger_state",
         "font": "font.brush_geometry.hud",
         "format": "TRIGGER %d",
