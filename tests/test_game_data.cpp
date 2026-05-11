@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <cfloat>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
@@ -7367,6 +7368,39 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(world.material_count, 7);
     EXPECT_GE(world.brush_count, 10);
     EXPECT_GE(world.render_model->mesh_count, 6);
+    auto find_brush = [&world](const char *name) -> const slayer3d_game_data_brush * {
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            if (world.brushes[i].name != nullptr && SDL_strcmp(world.brushes[i].name, name) == 0)
+                return &world.brushes[i];
+        }
+        return nullptr;
+    };
+    auto x_range = [](const slayer3d_game_data_brush *brush) {
+        std::pair<float, float> range{-FLT_MAX, FLT_MAX};
+        if (brush == nullptr)
+            return range;
+        for (int i = 0; i < brush->face_count; ++i)
+        {
+            const slayer3d_game_data_brush_face &face = brush->faces[i];
+            if (SDL_fabsf(face.normal.x - 1.0f) <= 0.001f)
+                range.second = SDL_min(range.second, face.distance);
+            else if (SDL_fabsf(face.normal.x + 1.0f) <= 0.001f)
+                range.first = SDL_max(range.first, -face.distance);
+        }
+        return range;
+    };
+    const slayer3d_game_data_brush *pillar = find_brush("brush.pillar.center");
+    const slayer3d_game_data_brush *overhang_west = find_brush("brush.bridge.overhang_west");
+    const slayer3d_game_data_brush *overhang_east = find_brush("brush.bridge.overhang_east");
+    ASSERT_NE(pillar, nullptr);
+    ASSERT_NE(overhang_west, nullptr);
+    ASSERT_NE(overhang_east, nullptr);
+    const auto pillar_x = x_range(pillar);
+    const auto west_x = x_range(overhang_west);
+    const auto east_x = x_range(overhang_east);
+    EXPECT_LT(west_x.second, pillar_x.first);
+    EXPECT_GT(east_x.first, pillar_x.second);
     int rendered_vertices = 0;
     for (int i = 0; i < world.render_model->mesh_count; ++i)
     {
@@ -11223,6 +11257,13 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     EXPECT_GT(slayer3d_properties_get_float(player->props, "vertical_velocity", 0.0f), 0.0f);
     EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true));
     slayer3d_input_set_action_override(input, jump, 0.0f);
+    for (int i = 0; i < 6; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(2016 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    }
+    EXPECT_GT(player->position.y, grounded_y + 0.15f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true));
 
     slayer3d_camera3d camera{};
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));
