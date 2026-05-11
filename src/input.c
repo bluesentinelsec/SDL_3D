@@ -66,6 +66,8 @@ struct slayer3d_input_manager
     float mouse_wheel_x_accum;
     float mouse_wheel_y_accum;
     bool discard_mouse_motion_until_update;
+    bool discard_next_mouse_motion;
+    bool discarded_mouse_motion_since_request;
 
     bool key_down[SDL_SCANCODE_COUNT];
     int key_down_modifiers[SDL_SCANCODE_COUNT];
@@ -1247,20 +1249,32 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
             input->key_released_modifiers_this_frame[event->key.scancode] |= modifiers;
         }
         break;
-    case SDL_EVENT_MOUSE_MOTION:
+    case SDL_EVENT_MOUSE_MOTION: {
+        const bool discard_motion = input->discard_mouse_motion_until_update || input->discard_next_mouse_motion;
         slayer3d_mouse_tracef(
             "input.event.mouse_motion",
-            "input=%p x=%.3f y=%.3f xrel=%.3f yrel=%.3f accum_before=(%.3f,%.3f) discard_until_update=%d",
+            "input=%p x=%.3f y=%.3f xrel=%.3f yrel=%.3f accum_before=(%.3f,%.3f) discard_until_update=%d "
+            "discard_next=%d",
             (void *)input, event->motion.x, event->motion.y, event->motion.xrel, event->motion.yrel,
-            input->mouse_dx_accum, input->mouse_dy_accum, input->discard_mouse_motion_until_update ? 1 : 0);
-        if (!input->discard_mouse_motion_until_update)
+            input->mouse_dx_accum, input->mouse_dy_accum, input->discard_mouse_motion_until_update ? 1 : 0,
+            input->discard_next_mouse_motion ? 1 : 0);
+        if (discard_motion)
+        {
+            input->discarded_mouse_motion_since_request = true;
+            if (!input->discard_mouse_motion_until_update)
+            {
+                input->discard_next_mouse_motion = false;
+            }
+        }
+        else
         {
             input->mouse_dx_accum += event->motion.xrel;
             input->mouse_dy_accum += event->motion.yrel;
         }
-        slayer3d_mouse_tracef("input.event.mouse_motion.applied", "input=%p accum_after=(%.3f,%.3f)", (void *)input,
-                              input->mouse_dx_accum, input->mouse_dy_accum);
+        slayer3d_mouse_tracef("input.event.mouse_motion.applied", "input=%p discarded=%d accum_after=(%.3f,%.3f)",
+                              (void *)input, discard_motion ? 1 : 0, input->mouse_dx_accum, input->mouse_dy_accum);
         break;
+    }
     case SDL_EVENT_MOUSE_WHEEL:
         input->mouse_wheel_x_accum += event->wheel.x;
         input->mouse_wheel_y_accum += event->wheel.y;
@@ -1378,6 +1392,8 @@ void slayer3d_input_discard_mouse_motion(slayer3d_input_manager *input)
     input->mouse_dx_accum = 0.0f;
     input->mouse_dy_accum = 0.0f;
     input->discard_mouse_motion_until_update = true;
+    input->discard_next_mouse_motion = true;
+    input->discarded_mouse_motion_since_request = false;
 }
 
 const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *input, int tick)
@@ -1417,10 +1433,17 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
     next.tick = tick;
     next.mouse_dx = input->mouse_dx_accum;
     next.mouse_dy = input->mouse_dy_accum;
-    slayer3d_mouse_tracef("input.update.begin", "input=%p tick=%d snapshot_mouse=(%.3f,%.3f) discard_until_update=%d",
-                          (void *)input, tick, next.mouse_dx, next.mouse_dy,
-                          input->discard_mouse_motion_until_update ? 1 : 0);
+    slayer3d_mouse_tracef(
+        "input.update.begin",
+        "input=%p tick=%d snapshot_mouse=(%.3f,%.3f) discard_until_update=%d discard_next=%d discarded_since=%d",
+        (void *)input, tick, next.mouse_dx, next.mouse_dy, input->discard_mouse_motion_until_update ? 1 : 0,
+        input->discard_next_mouse_motion ? 1 : 0, input->discarded_mouse_motion_since_request ? 1 : 0);
+    if (input->discard_mouse_motion_until_update && input->discarded_mouse_motion_since_request)
+    {
+        input->discard_next_mouse_motion = false;
+    }
     input->discard_mouse_motion_until_update = false;
+    input->discarded_mouse_motion_since_request = false;
     next.any_pressed = slayer3d_input_physical_any_pressed(input);
     input->pressed_scancode = slayer3d_input_first_pressed_scancode(input);
     input->pressed_mouse_button = slayer3d_input_first_pressed_mouse_button(input);
