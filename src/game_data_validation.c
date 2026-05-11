@@ -129,6 +129,10 @@ static void format_path(char *buffer, size_t buffer_size, const char *format, ..
 static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
 static bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path,
                                           const char *type);
+static bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, const char *json_path,
+                                     validation_names *names, bool allow_templates);
+static bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
+                                            const char *json_path);
 static bool validate_imports_with_stack(validation_context *ctx, yyjson_val *root, import_validation_stack *stack);
 static bool validate_imports(validation_context *ctx, yyjson_val *root);
 static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyjson_val *sections,
@@ -5099,7 +5103,7 @@ static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
     return true;
 }
 
-static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
+static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *worlds = obj_get(root, "brush_worlds");
     if (worlds == NULL)
@@ -5116,8 +5120,10 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
         yyjson_val *brushes = obj_get(world, "brushes");
         name_table material_names;
         name_table brush_names;
+        name_table editor_stable_ids;
         SDL_zero(material_names);
         SDL_zero(brush_names);
+        SDL_zero(editor_stable_ids);
         bool ok = true;
 
         if (!yyjson_is_obj(world))
@@ -5137,6 +5143,16 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
         {
             ok = validation_error(ctx, world_path, "brush world meters_per_unit must be positive");
             goto done;
+        }
+        {
+            char editor_path[PATH_BUFFER_SIZE];
+            format_path(editor_path, sizeof(editor_path), "%s.editor", world_path);
+            if (!validate_editor_metadata(ctx, obj_get(world, "editor"), editor_path, names, false) ||
+                !require_unique_editor_stable_id(ctx, &editor_stable_ids, world, world_path))
+            {
+                ok = false;
+                goto done;
+            }
         }
         if (!yyjson_is_arr(materials) || yyjson_arr_size(materials) <= 0)
         {
@@ -5164,6 +5180,16 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
             {
                 ok = false;
                 break;
+            }
+            {
+                char editor_path[PATH_BUFFER_SIZE];
+                format_path(editor_path, sizeof(editor_path), "%s.editor", material_path);
+                if (!validate_editor_metadata(ctx, obj_get(material, "editor"), editor_path, names, false) ||
+                    !require_unique_editor_stable_id(ctx, &editor_stable_ids, material, material_path))
+                {
+                    ok = false;
+                    break;
+                }
             }
             yyjson_val *albedo = obj_get(material, "albedo");
             if (albedo != NULL &&
@@ -5222,6 +5248,16 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
             {
                 ok = false;
                 break;
+            }
+            {
+                char editor_path[PATH_BUFFER_SIZE];
+                format_path(editor_path, sizeof(editor_path), "%s.editor", brush_path);
+                if (!validate_editor_metadata(ctx, obj_get(brush, "editor"), editor_path, names, false) ||
+                    !require_unique_editor_stable_id(ctx, &editor_stable_ids, brush, brush_path))
+                {
+                    ok = false;
+                    break;
+                }
             }
 
             yyjson_val *tags = obj_get(brush, "tags");
@@ -5293,6 +5329,16 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
                     ok = validation_error(ctx, face_path, "brush face material must reference a declared material");
                     break;
                 }
+                {
+                    char editor_path[PATH_BUFFER_SIZE];
+                    format_path(editor_path, sizeof(editor_path), "%s.editor", face_path);
+                    if (!validate_editor_metadata(ctx, obj_get(face, "editor"), editor_path, names, false) ||
+                        !require_unique_editor_stable_id(ctx, &editor_stable_ids, face, face_path))
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
                 if (!validate_brush_string_or_string_array(ctx, obj_get(face, "surface_flags"), flags_path,
                                                            "brush surface flag", brush_surface_flag_name_valid, true))
                 {
@@ -5331,6 +5377,7 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
     done:
         name_table_destroy(&material_names);
         name_table_destroy(&brush_names);
+        name_table_destroy(&editor_stable_ids);
         if (!ok)
             return false;
     }
@@ -6446,8 +6493,12 @@ static bool validate_editor_metadata(validation_context *ctx, yyjson_val *metada
         return validation_error(ctx, json_path, "editor metadata must be an object");
 
     if (!editor_string_field_valid(ctx, metadata, "display_name", json_path) ||
+        !editor_string_field_valid(ctx, metadata, "stable_id", json_path) ||
         !editor_string_field_valid(ctx, metadata, "description", json_path) ||
         !editor_string_field_valid(ctx, metadata, "category", json_path) ||
+        !editor_string_field_valid(ctx, metadata, "group", json_path) ||
+        !editor_string_field_valid(ctx, metadata, "prefab", json_path) ||
+        !editor_string_field_valid(ctx, metadata, "archetype", json_path) ||
         !editor_string_field_valid(ctx, metadata, "icon", json_path) ||
         !editor_string_field_valid(ctx, metadata, "preview_asset", json_path) ||
         !editor_tags_valid(ctx, obj_get(metadata, "tags"), json_path) ||
@@ -6534,6 +6585,18 @@ static bool validate_editor_metadata_tree(validation_context *ctx, yyjson_val *r
             return false;
     }
     return true;
+}
+
+static bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
+                                            const char *json_path)
+{
+    yyjson_val *editor = obj_get(json, "editor");
+    const char *stable_id = json_string(editor, "stable_id");
+    if (stable_id == NULL)
+        return true;
+    char path[PATH_BUFFER_SIZE];
+    format_path(path, sizeof(path), "%s.editor", json_path);
+    return require_unique_name(ctx, stable_ids, "editor stable id", stable_id, path);
 }
 
 static bool is_tween_easing(const char *easing)
@@ -10371,7 +10434,7 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_world_metadata(ctx, root) && validate_input_bindings(ctx, root) &&
            validate_input_assignment_sets(ctx, root) && validate_input_profiles(ctx, root, names) &&
            validate_grid_maps(ctx, root) && validate_grid_pickup_layers(ctx, root, names) &&
-           validate_sector_levels(ctx, root) && validate_brush_worlds(ctx, root) &&
+           validate_sector_levels(ctx, root) && validate_brush_worlds(ctx, root, names) &&
            validate_sector_navigation(ctx, root, names) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
