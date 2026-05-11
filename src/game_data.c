@@ -691,6 +691,9 @@ static int sector_level_find_sector_name(const sector_level_runtime *level, cons
 static void modulate_color_by_sector_lighting(slayer3d_color *color, const slayer3d_sector *sector);
 static int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
+static bool load_editor_metadata(yyjson_val *editor, slayer3d_game_data_editor_metadata *out_metadata,
+                                 char *error_buffer, int error_buffer_size);
+static void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata);
 
 static float game_data_random01(slayer3d_game_data_runtime *runtime)
 {
@@ -3697,6 +3700,8 @@ static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *r
             set_error(error_buffer, error_buffer_size, "failed to allocate brush world strings");
             return false;
         }
+        if (!load_editor_metadata(obj_get(world_json, "editor"), &world->editor, error_buffer, error_buffer_size))
+            return false;
 
         slayer3d_game_data_brush_material *materials =
             (slayer3d_game_data_brush_material *)SDL_calloc((size_t)world->material_count, sizeof(*materials));
@@ -3729,6 +3734,9 @@ static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *r
                 set_error(error_buffer, error_buffer_size, "failed to allocate brush material strings");
                 return false;
             }
+            if (!load_editor_metadata(obj_get(material_json, "editor"), &material->editor, error_buffer,
+                                      error_buffer_size))
+                return false;
         }
 
         for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
@@ -3747,6 +3755,8 @@ static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *r
                 set_error(error_buffer, error_buffer_size, "failed to allocate brush name");
                 return false;
             }
+            if (!load_editor_metadata(obj_get(brush_json, "editor"), &brush->editor, error_buffer, error_buffer_size))
+                return false;
 
             const char **tags =
                 brush->tag_count > 0 ? (const char **)SDL_calloc((size_t)brush->tag_count, sizeof(*tags)) : NULL;
@@ -3788,6 +3798,8 @@ static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *r
                 face->uv_rotation_degrees = json_float(uv_json, "rotation_degrees", 0.0f);
                 face->surface_flags =
                     brush_flags_from_json(obj_get(face_json, "surface_flags"), brush_surface_flag_from_string, 0u);
+                if (!load_editor_metadata(obj_get(face_json, "editor"), &face->editor, error_buffer, error_buffer_size))
+                    return false;
             }
         }
 
@@ -3817,6 +3829,114 @@ static slayer3d_bounding_box json_bounds(yyjson_val *value, slayer3d_bounding_bo
         json_vec3(value, "min", fallback.min),
         json_vec3(value, "max", fallback.max),
     };
+}
+
+static bool load_editor_metadata(yyjson_val *editor, slayer3d_game_data_editor_metadata *out_metadata,
+                                 char *error_buffer, int error_buffer_size)
+{
+    if (out_metadata == NULL)
+        return false;
+    SDL_zero(*out_metadata);
+    if (!yyjson_is_obj(editor))
+        return true;
+
+    const char *stable_id = json_string(editor, "stable_id", NULL);
+    const char *display_name = json_string(editor, "display_name", NULL);
+    const char *description = json_string(editor, "description", NULL);
+    const char *category = json_string(editor, "category", NULL);
+    const char *group = json_string(editor, "group", NULL);
+    const char *prefab = json_string(editor, "prefab", NULL);
+    const char *archetype = json_string(editor, "archetype", NULL);
+    const char *icon = json_string(editor, "icon", NULL);
+    const char *preview_asset = json_string(editor, "preview_asset", NULL);
+    yyjson_val *snap = obj_get(editor, "snap");
+    yyjson_val *tags = obj_get(editor, "tags");
+
+#define DUP_EDITOR_STRING(field, source)                                                                               \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if ((source) != NULL)                                                                                          \
+        {                                                                                                              \
+            (field) = SDL_strdup(source);                                                                              \
+            if ((field) == NULL)                                                                                       \
+            {                                                                                                          \
+                set_error(error_buffer, error_buffer_size, "failed to allocate editor metadata string");               \
+                goto fail;                                                                                             \
+            }                                                                                                          \
+        }                                                                                                              \
+    } while (0)
+
+    DUP_EDITOR_STRING(out_metadata->stable_id, stable_id);
+    DUP_EDITOR_STRING(out_metadata->display_name, display_name);
+    DUP_EDITOR_STRING(out_metadata->description, description);
+    DUP_EDITOR_STRING(out_metadata->category, category);
+    DUP_EDITOR_STRING(out_metadata->group, group);
+    DUP_EDITOR_STRING(out_metadata->prefab, prefab);
+    DUP_EDITOR_STRING(out_metadata->archetype, archetype);
+    DUP_EDITOR_STRING(out_metadata->icon, icon);
+    DUP_EDITOR_STRING(out_metadata->preview_asset, preview_asset);
+#undef DUP_EDITOR_STRING
+
+    out_metadata->tag_count = yyjson_is_arr(tags) ? (int)yyjson_arr_size(tags) : 0;
+    if (out_metadata->tag_count > 0)
+    {
+        const char **tag_storage = (const char **)SDL_calloc((size_t)out_metadata->tag_count, sizeof(*tag_storage));
+        if (tag_storage == NULL)
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate editor metadata tags");
+            goto fail;
+        }
+        out_metadata->tags = tag_storage;
+        for (int i = 0; i < out_metadata->tag_count; ++i)
+        {
+            tag_storage[i] = SDL_strdup(yyjson_get_str(yyjson_arr_get(tags, (size_t)i)));
+            if (tag_storage[i] == NULL)
+            {
+                set_error(error_buffer, error_buffer_size, "failed to allocate editor metadata tag");
+                goto fail;
+            }
+        }
+    }
+
+    yyjson_val *grid = obj_get(snap, "grid");
+    out_metadata->snap_grid = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    if (yyjson_is_num(grid))
+    {
+        const float value = (float)yyjson_get_num(grid);
+        out_metadata->snap_grid = slayer3d_vec3_make(value, value, value);
+        out_metadata->has_snap_grid = true;
+    }
+    else if (yyjson_is_arr(grid) && yyjson_arr_size(grid) >= 3)
+    {
+        out_metadata->snap_grid = json_vec3_value(grid, out_metadata->snap_grid);
+        out_metadata->has_snap_grid = true;
+    }
+    out_metadata->snap_rotation_degrees = json_float(snap, "rotation_degrees", 0.0f);
+    out_metadata->snap_align_to_floor = json_bool(snap, "align_to_floor", false);
+    return true;
+
+fail:
+    free_editor_metadata(out_metadata);
+    return false;
+}
+
+static void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata)
+{
+    if (metadata == NULL)
+        return;
+    SDL_free((void *)metadata->stable_id);
+    SDL_free((void *)metadata->display_name);
+    SDL_free((void *)metadata->description);
+    SDL_free((void *)metadata->category);
+    SDL_free((void *)metadata->group);
+    SDL_free((void *)metadata->prefab);
+    SDL_free((void *)metadata->archetype);
+    SDL_free((void *)metadata->icon);
+    SDL_free((void *)metadata->preview_asset);
+    for (int i = 0; i < metadata->tag_count; ++i)
+        SDL_free((void *)metadata->tags[i]);
+    SDL_free((void *)metadata->tags);
+    SDL_zero(*metadata);
 }
 
 static bool load_sector_doors(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
@@ -24148,20 +24268,30 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     {
         slayer3d_game_data_brush_world *world = &runtime->brush_worlds[i].desc;
         slayer3d_free_model(&runtime->brush_worlds[i].render_model);
+        free_editor_metadata(&world->editor);
         SDL_free((void *)world->name);
         SDL_free((void *)world->units);
         for (int material_index = 0; material_index < world->material_count; ++material_index)
         {
-            SDL_free((void *)world->materials[material_index].name);
-            SDL_free((void *)world->materials[material_index].texture);
+            slayer3d_game_data_brush_material *material =
+                (slayer3d_game_data_brush_material *)&world->materials[material_index];
+            free_editor_metadata(&material->editor);
+            SDL_free((void *)material->name);
+            SDL_free((void *)material->texture);
         }
         for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
         {
-            const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+            slayer3d_game_data_brush *brush = (slayer3d_game_data_brush *)&world->brushes[brush_index];
             SDL_free((void *)brush->name);
+            free_editor_metadata(&brush->editor);
             for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
                 SDL_free((void *)brush->tags[tag_index]);
             SDL_free((void *)brush->tags);
+            for (int face_index = 0; face_index < brush->face_count; ++face_index)
+            {
+                slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[face_index];
+                free_editor_metadata(&face->editor);
+            }
             SDL_free((void *)brush->faces);
         }
         SDL_free((void *)world->materials);

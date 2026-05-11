@@ -5,9 +5,39 @@
       "name": "brush.brush_geometry.showcase",
       "units": "meters",
       "meters_per_unit": 1.0,
+      "editor": {
+        "stable_id": "brush_world.showcase.v1",
+        "display_name": "Brush Geometry Showcase",
+        "category": "dojos/brush",
+        "group": "showcase",
+        "tags": ["brush", "dojo", "true_3d"],
+        "snap": { "grid": [0.5, 0.25, 0.5], "rotation_degrees": 15.0, "align_to_floor": true }
+      },
       "materials": [
-        { "name": "mat.floor", "albedo": [0.24, 0.25, 0.27, 1.0], "roughness": 0.9, "tex_scale": 4.0 },
-        { "name": "mat.wall", "albedo": [0.42, 0.44, 0.47, 1.0], "roughness": 0.86, "tex_scale": 4.0 },
+        {
+          "name": "mat.floor",
+          "albedo": [0.24, 0.25, 0.27, 1.0],
+          "roughness": 0.9,
+          "tex_scale": 4.0,
+          "editor": {
+            "stable_id": "brush_material.showcase.floor.v1",
+            "display_name": "Neutral Floor",
+            "category": "materials/brush",
+            "tags": ["floor", "neutral"]
+          }
+        },
+        {
+          "name": "mat.wall",
+          "albedo": [0.42, 0.44, 0.47, 1.0],
+          "roughness": 0.86,
+          "tex_scale": 4.0,
+          "editor": {
+            "stable_id": "brush_material.showcase.wall.v1",
+            "display_name": "Neutral Wall",
+            "category": "materials/brush",
+            "tags": ["wall", "neutral"]
+          }
+        },
         { "name": "mat.ceiling", "albedo": [0.33, 0.34, 0.38, 1.0], "roughness": 0.92, "tex_scale": 4.0 },
         { "name": "mat.ramp", "albedo": [0.64, 0.48, 0.32, 1.0], "roughness": 0.78, "tex_scale": 3.0 },
         { "name": "mat.accent_blue", "albedo": [0.20, 0.40, 0.86, 1.0], "emissive": [0.02, 0.05, 0.12], "roughness": 0.72, "tex_scale": 3.0 },
@@ -19,10 +49,28 @@
           "name": "brush.room.floor",
           "contents": "solid",
           "tags": ["room", "floor"],
+          "editor": {
+            "stable_id": "brush.showcase.room.floor.v1",
+            "display_name": "Room Floor",
+            "category": "brushes/architecture",
+            "group": "room_shell",
+            "tags": ["floor", "shell"],
+            "snap": { "grid": 0.5, "align_to_floor": true }
+          },
           "faces": [
             { "plane": { "normal": [1, 0, 0], "distance": 18.0 }, "material": "mat.floor" },
             { "plane": { "normal": [-1, 0, 0], "distance": 18.0 }, "material": "mat.floor" },
-            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat.floor", "uv": { "scale": [0.5, 0.5], "offset": [0.0, 0.0] } },
+            {
+              "plane": { "normal": [0, 1, 0], "distance": 0.0 },
+              "material": "mat.floor",
+              "uv": { "scale": [0.5, 0.5], "offset": [0.0, 0.0] },
+              "editor": {
+                "stable_id": "brush_face.showcase.room.floor.top.v1",
+                "display_name": "Walkable Floor Surface",
+                "category": "faces/walkable",
+                "group": "room_shell"
+              }
+            },
             { "plane": { "normal": [0, -1, 0], "distance": 0.5 }, "material": "mat.floor" },
             { "plane": { "normal": [0, 0, 1], "distance": 18.0 }, "material": "mat.floor" },
             { "plane": { "normal": [0, 0, -1], "distance": 18.0 }, "material": "mat.floor" }

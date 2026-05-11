@@ -10714,13 +10714,27 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
       "name": "brush.test",
       "units": "meters",
       "meters_per_unit": 1.0,
+      "editor": {
+        "stable_id": "brush_world.test.v1",
+        "display_name": "Brush Test World",
+        "category": "tests/brush",
+        "group": "runtime",
+        "tags": ["brush", "runtime"],
+        "snap": { "grid": [0.5, 0.25, 0.5], "rotation_degrees": 15.0, "align_to_floor": true }
+      },
       "materials": [
         {
           "name": "mat.wall",
           "albedo": [0.25, 0.35, 0.45, 1.0],
           "metallic": 0.0,
           "roughness": 0.8,
-          "tex_scale": 2.0
+          "tex_scale": 2.0,
+          "editor": {
+            "stable_id": "brush_material.test.wall.v1",
+            "display_name": "Test Wall",
+            "category": "materials/test",
+            "tags": ["wall"]
+          }
         },
         {
           "name": "mat.trim",
@@ -10734,10 +10748,26 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
           "name": "brush.room",
           "tags": ["solid", "room"],
           "contents": ["solid", "player_clip"],
+          "editor": {
+            "stable_id": "brush.test.room.v1",
+            "display_name": "Runtime Test Room",
+            "group": "room",
+            "prefab": "prefab.test.room"
+          },
           "faces": [
             { "plane": { "normal": [ 1.0,  0.0,  0.0], "distance":  4.0 }, "material": "mat.wall" },
             { "plane": { "normal": [-1.0,  0.0,  0.0], "distance":  0.0 }, "material": 0 },
-            { "plane": { "normal": [ 0.0,  1.0,  0.0], "distance":  3.0 }, "material": "mat.wall", "surface_flags": ["slick"], "uv": { "scale": [2.0, 0.5], "offset": [0.25, -0.5], "rotation_degrees": 90.0 } },
+            {
+              "plane": { "normal": [ 0.0,  1.0,  0.0], "distance":  3.0 },
+              "material": "mat.wall",
+              "surface_flags": ["slick"],
+              "uv": { "scale": [2.0, 0.5], "offset": [0.25, -0.5], "rotation_degrees": 90.0 },
+              "editor": {
+                "stable_id": "brush_face.test.room.ceiling.v1",
+                "display_name": "Room Ceiling Face",
+                "group": "room_faces"
+              }
+            },
             { "plane": { "normal": [ 0.0, -1.0,  0.0], "distance":  0.0 }, "material": "mat.wall" },
             { "plane": { "normal": [ 0.0,  0.0,  1.0], "distance":  4.0 }, "material": "mat.trim", "surface_flags": "emissive" },
             { "plane": { "normal": [ 0.0,  0.0, -1.0], "distance":  0.0 }, "material": "mat.wall" }
@@ -10763,15 +10793,32 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_STREQ(world.name, "brush.test");
     EXPECT_STREQ(world.units, "meters");
     EXPECT_FLOAT_EQ(world.meters_per_unit, 1.0f);
+    EXPECT_STREQ(world.editor.stable_id, "brush_world.test.v1");
+    EXPECT_STREQ(world.editor.display_name, "Brush Test World");
+    EXPECT_STREQ(world.editor.category, "tests/brush");
+    EXPECT_STREQ(world.editor.group, "runtime");
+    ASSERT_EQ(world.editor.tag_count, 2);
+    EXPECT_STREQ(world.editor.tags[1], "runtime");
+    EXPECT_TRUE(world.editor.has_snap_grid);
+    expect_vec3_near(world.editor.snap_grid, slayer3d_vec3_make(0.5f, 0.25f, 0.5f));
+    EXPECT_FLOAT_EQ(world.editor.snap_rotation_degrees, 15.0f);
+    EXPECT_TRUE(world.editor.snap_align_to_floor);
     ASSERT_EQ(world.material_count, 2);
     EXPECT_STREQ(world.materials[0].name, "mat.wall");
     EXPECT_FLOAT_EQ(world.materials[0].albedo.z, 0.45f);
     EXPECT_FLOAT_EQ(world.materials[0].roughness, 0.8f);
     EXPECT_FLOAT_EQ(world.materials[0].tex_scale, 2.0f);
+    EXPECT_STREQ(world.materials[0].editor.stable_id, "brush_material.test.wall.v1");
+    EXPECT_STREQ(world.materials[0].editor.display_name, "Test Wall");
+    ASSERT_EQ(world.materials[0].editor.tag_count, 1);
+    EXPECT_STREQ(world.materials[0].editor.tags[0], "wall");
     EXPECT_STREQ(world.materials[1].name, "mat.trim");
     EXPECT_FLOAT_EQ(world.materials[1].emissive.x, 0.4f);
     ASSERT_EQ(world.brush_count, 1);
     EXPECT_STREQ(world.brushes[0].name, "brush.room");
+    EXPECT_STREQ(world.brushes[0].editor.stable_id, "brush.test.room.v1");
+    EXPECT_STREQ(world.brushes[0].editor.display_name, "Runtime Test Room");
+    EXPECT_STREQ(world.brushes[0].editor.prefab, "prefab.test.room");
     EXPECT_EQ(world.brushes[0].contents,
               SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
     ASSERT_EQ(world.brushes[0].tag_count, 2);
@@ -10787,6 +10834,8 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_offset[0], 0.25f);
     EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_offset[1], -0.5f);
     EXPECT_FLOAT_EQ(world.brushes[0].faces[2].uv_rotation_degrees, 90.0f);
+    EXPECT_STREQ(world.brushes[0].faces[2].editor.stable_id, "brush_face.test.room.ceiling.v1");
+    EXPECT_STREQ(world.brushes[0].faces[2].editor.display_name, "Room Ceiling Face");
     EXPECT_EQ(world.brushes[0].faces[4].material_index, 1);
     EXPECT_EQ(world.brushes[0].faces[4].surface_flags, SLAYER3D_GAME_DATA_BRUSH_SURFACE_EMISSIVE);
     ASSERT_NE(world.render_model, nullptr);
@@ -11009,6 +11058,33 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
   "world": { "brush_worlds": [{ "world": "brush.good", "lighting": "yes" }] }
 })json",
             "scene brush world lighting must be a boolean",
+        },
+        {
+            "duplicate_editor_stable_id",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "editor": { "stable_id": "stable.duplicate" },
+      "materials": [
+        { "name": "mat.good", "editor": { "stable_id": "stable.duplicate" } }
+      ],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "duplicate editor stable id",
         },
     };
 

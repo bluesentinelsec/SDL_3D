@@ -470,6 +470,12 @@ in later slices.
       "name": "brush.keep_01",
       "units": "meters",
       "meters_per_unit": 1.0,
+      "editor": {
+        "stable_id": "brush_world.keep_01.v1",
+        "display_name": "Keep 01",
+        "category": "levels/brush",
+        "snap": { "grid": [0.5, 0.25, 0.5], "rotation_degrees": 15.0 }
+      },
       "materials": [
         {
           "name": "stone_wall",
@@ -477,7 +483,12 @@ in later slices.
           "albedo": [0.8, 0.8, 0.8, 1.0],
           "emissive": [0.0, 0.0, 0.0],
           "roughness": 0.9,
-          "tex_scale": 2.0
+          "tex_scale": 2.0,
+          "editor": {
+            "stable_id": "material.keep_01.stone_wall.v1",
+            "display_name": "Stone Wall",
+            "category": "materials/walls"
+          }
         }
       ],
       "brushes": [
@@ -485,11 +496,20 @@ in later slices.
           "name": "brush.start_room",
           "tags": ["room", "solid"],
           "contents": ["solid", "player_clip"],
+          "editor": {
+            "stable_id": "brush.keep_01.start_room.v1",
+            "display_name": "Start Room",
+            "group": "start_area"
+          },
           "faces": [
             {
               "plane": { "normal": [ 1,  0,  0], "distance":  8 },
               "material": "stone_wall",
-              "uv": { "scale": [1.0, 1.0], "offset": [0.0, 0.0], "rotation_degrees": 0.0 }
+              "uv": { "scale": [1.0, 1.0], "offset": [0.0, 0.0], "rotation_degrees": 0.0 },
+              "editor": {
+                "stable_id": "face.keep_01.start_room.east.v1",
+                "display_name": "East Wall"
+              }
             },
             { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "stone_wall" },
             { "plane": { "normal": [ 0,  1,  0], "distance":  4 }, "material": "stone_wall" },
@@ -508,6 +528,8 @@ Validation requires:
 
 - unique brush world names
 - `units` omitted or `"meters"`, with positive `meters_per_unit`
+- optional `editor` metadata on brush worlds, materials, brushes, and faces;
+  `editor.stable_id` values must be unique inside each brush world
 - non-empty `materials` with unique names
 - material `albedo` as vec3/vec4 values in `[0, 1]`
 - non-negative `metallic` and `roughness`
@@ -577,6 +599,13 @@ instrumentation; reset them with
 derived from the generic render-context stats exposed by
 `slayer3d_get_render_stats()`, because brush worlds compile to static model
 meshes that use the same frustum culling path as other models.
+
+Editor metadata attached to brush worlds, materials, brushes, and faces is
+loaded into the runtime descriptors returned by
+`slayer3d_game_data_get_brush_world()`. Tooling can use this metadata for
+stable selection ids, hierarchy grouping, palette filtering, snap hints,
+prefab/archetype references, and face inspectors while still previewing the
+same runtime brush mesh that the game renders.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
@@ -1259,9 +1288,12 @@ Runtime spawning uses preallocated pools:
 Pools support deterministic spawn/despawn, scene-exit policy, lifecycle safety,
 metrics, and Lua helpers.
 
-`entities`, `actor_archetypes`, `actor_instances`, and `actor_pools` may carry
-an optional `editor` object. The runtime ignores this metadata during gameplay;
-it exists for editors, dojos, palette browsers, prefab previews, and validation.
+`entities`, `actor_archetypes`, `actor_instances`, `actor_pools`, and brush
+world objects may carry an optional `editor` object. The runtime ignores this
+metadata during gameplay; it exists for editors, dojos, palette browsers,
+prefab previews, and validation. Brush editor metadata is also exposed through
+the loaded brush-world descriptors so tools can inspect worlds without
+reparsing JSON.
 
 ```json
 {
@@ -1286,6 +1318,8 @@ Supported editor fields:
 
 - `display_name`, `description`, `category`, `icon`, and `preview_asset`:
   non-empty strings when present
+- `stable_id`, `group`, `prefab`, and `archetype`: non-empty strings when
+  present; brush-world stable ids are validated as unique inside each world
 - `tags`: array of non-empty strings
 - `preview`: object with optional `primitive`, `asset`, and `color`; primitive
   may be `none`, `cube`, `sphere`, `capsule`, `sprite`, `model`, `light`,
