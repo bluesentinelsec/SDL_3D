@@ -300,8 +300,6 @@ static bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, gr
 
 #include "game_data/game_data_scene_flow_runtime.inc"
 
-#include "game_data/game_data_runtime_collections.inc"
-
 #include "game_data/game_data_network_sessions.inc"
 
 #include "game_data/game_data_menu_ui.inc"

@@ -1,4 +1,11 @@
-/* Runtime collection storage helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_runtime_collections.c
+ * @brief Runtime collection storage helpers for authored dynamic-list UI and session data.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
 
 static runtime_collection *find_runtime_collection(slayer3d_game_data_runtime *runtime, const char *collection_name)
 {
@@ -12,8 +19,8 @@ static runtime_collection *find_runtime_collection(slayer3d_game_data_runtime *r
     return NULL;
 }
 
-static const runtime_collection *find_runtime_collection_const(const slayer3d_game_data_runtime *runtime,
-                                                               const char *collection_name)
+const runtime_collection *find_runtime_collection_const(const slayer3d_game_data_runtime *runtime,
+                                                        const char *collection_name)
 {
     if (runtime == NULL || collection_name == NULL || collection_name[0] == '\0')
         return NULL;
@@ -87,8 +94,8 @@ static slayer3d_properties *runtime_collection_ensure_row(runtime_collection *co
     return collection->rows[row_index];
 }
 
-static bool runtime_collection_field_to_string(const runtime_collection *collection, int row_index,
-                                               const char *field_name, char *buffer, size_t buffer_size)
+bool runtime_collection_field_to_string(const runtime_collection *collection, int row_index, const char *field_name,
+                                        char *buffer, size_t buffer_size)
 {
     if (collection == NULL || row_index < 0 || row_index >= collection->row_count || field_name == NULL ||
         field_name[0] == '\0' || buffer == NULL || buffer_size == 0U || collection->rows[row_index] == NULL)

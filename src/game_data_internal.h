@@ -620,6 +620,10 @@ bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key
 yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime);
 const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime);
 const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name);
+const runtime_collection *find_runtime_collection_const(const slayer3d_game_data_runtime *runtime,
+                                                        const char *collection_name);
+bool runtime_collection_field_to_string(const runtime_collection *collection, int row_index, const char *field_name,
+                                        char *buffer, size_t buffer_size);
 sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
 const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
