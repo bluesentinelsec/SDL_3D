@@ -555,7 +555,10 @@ code should use
 `slayer3d_game_data_get_brush_world()` and
 `slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
 Brush render meshes are available through `brush_world.render_model` and are
-drawn by the generic data-game frame path.
+drawn by the generic data-game frame path. During load, brush worlds also
+precompute local AABBs for each brush and for the whole world. When
+`acceleration` is enabled on a scene instance, active-scene trace queries use
+those bounds as a broad phase before exact plane clipping.
 
 Collision, weapon, sensor, and editor systems can query brush worlds through
 the generic trace helpers. `slayer3d_game_data_trace_brush_world()` traces in a
@@ -567,6 +570,9 @@ the hit fraction, plane normal, brush, material, contents, and surface flags.
 `slayer3d_game_data_slide_brush_world()` and
 `slayer3d_game_data_slide_active_brush_worlds()` layer deterministic
 plane-sliding over those traces for controllers and projectile movement.
+`slayer3d_game_data_get_brush_diagnostics()` exposes cumulative trace counters
+for debug UI, tests, and future editor instrumentation; reset them with
+`slayer3d_game_data_reset_brush_diagnostics()`.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
