@@ -2314,6 +2314,9 @@ bool slayer3d_game_data_draw_brush_worlds_with_assets(const slayer3d_game_data_r
     if (runtime == NULL || renderer == NULL)
         return false;
 
+    slayer3d_render_stats before_stats;
+    SDL_zero(before_stats);
+    const bool have_before_stats = slayer3d_get_render_stats(renderer, &before_stats);
     brush_world_draw_context context;
     SDL_zero(context);
     context.renderer = renderer;
@@ -2321,6 +2324,13 @@ bool slayer3d_game_data_draw_brush_worlds_with_assets(const slayer3d_game_data_r
     context.ok = true;
     const bool iterated =
         slayer3d_game_data_for_each_brush_world_instance(runtime, draw_brush_world_instance, &context);
+    slayer3d_render_stats after_stats;
+    SDL_zero(after_stats);
+    if (have_before_stats && slayer3d_get_render_stats(renderer, &after_stats))
+    {
+        slayer3d_game_data_accumulate_brush_render_diagnostics((slayer3d_game_data_runtime *)runtime, &before_stats,
+                                                               &after_stats);
+    }
     return iterated && context.ok;
 }
 

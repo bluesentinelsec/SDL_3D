@@ -29,6 +29,7 @@
 #include "slayer3d/network.h"
 #include "slayer3d/network_replication.h"
 #include "slayer3d/properties.h"
+#include "slayer3d/render_context.h"
 #include "slayer3d/sprite_asset.h"
 #include "slayer3d/storage.h"
 #include "slayer3d/transition.h"
@@ -557,6 +558,14 @@ extern "C"
         Uint64 collision_candidate_count;
         /** @brief Local brush-world trace evaluations that produced a hit. */
         Uint64 hit_count;
+        /** @brief Brush-world model meshes submitted to the renderer. */
+        Uint64 render_mesh_submissions;
+        /** @brief Brush-world model meshes rejected by renderer frustum culling. */
+        Uint64 render_mesh_culled;
+        /** @brief Brush-world model meshes accepted by the renderer. */
+        Uint64 render_mesh_draws;
+        /** @brief Approximate brush-world triangles submitted after renderer culling. */
+        Uint64 render_triangles_submitted;
     } slayer3d_game_data_brush_diagnostics;
 
     /**
@@ -1369,6 +1378,11 @@ extern "C"
 
     /** @brief Reset accumulated brush-world trace diagnostics to zero. */
     void slayer3d_game_data_reset_brush_diagnostics(slayer3d_game_data_runtime *runtime);
+
+    /** @brief Add render-context stat deltas to accumulated brush diagnostics. */
+    void slayer3d_game_data_accumulate_brush_render_diagnostics(slayer3d_game_data_runtime *runtime,
+                                                                const slayer3d_render_stats *before,
+                                                                const slayer3d_render_stats *after);
 
     /** @brief Runtime-owned node resolved from an authored sector navigation graph. */
     typedef struct slayer3d_game_data_sector_nav_node
