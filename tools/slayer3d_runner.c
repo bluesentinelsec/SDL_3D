@@ -279,6 +279,7 @@ static bool runner_init(slayer3d_game_context *ctx, void *userdata)
     }
     slayer3d_properties_destroy(initial_state);
 
+    slayer3d_data_game_runtime_apply_mouse_capture(state->runtime, ctx);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D runner loaded data asset: %s", state->args.data_asset_path);
     return true;
 }

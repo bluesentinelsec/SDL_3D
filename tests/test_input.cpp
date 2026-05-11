@@ -248,6 +248,25 @@ TEST(Input, MouseDeltaAccumulation)
     EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_mouse_dy(input.input));
 }
 
+TEST(Input, DiscardsMouseMotionUntilNextSnapshot)
+{
+    InputPtr input;
+
+    push_mouse_motion(input.input, 8.0f, -5.0f);
+    slayer3d_input_discard_mouse_motion(input.input);
+    push_mouse_motion(input.input, 100.0f, 50.0f);
+    slayer3d_input_update(input.input, 10);
+    EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_mouse_dx(input.input));
+    EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_mouse_dy(input.input));
+
+    push_mouse_motion(input.input, 2.0f, 3.0f);
+    slayer3d_input_update(input.input, 11);
+    EXPECT_FLOAT_EQ(2.0f, slayer3d_input_get_mouse_dx(input.input));
+    EXPECT_FLOAT_EQ(3.0f, slayer3d_input_get_mouse_dy(input.input));
+
+    slayer3d_input_discard_mouse_motion(nullptr);
+}
+
 TEST(Input, MouseAxisBindingUsesScale)
 {
     InputPtr input;

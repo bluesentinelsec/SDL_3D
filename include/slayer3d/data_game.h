@@ -116,6 +116,17 @@ extern "C"
     void slayer3d_data_game_runtime_release_mouse_capture(slayer3d_data_game_runtime *runtime,
                                                           slayer3d_game_context *ctx);
 
+    /**
+     * @brief Apply the active scene's authored relative mouse capture policy.
+     *
+     * Generic hosts may call this after runtime creation, before the first
+     * frame is polled, so FPS scenes start with the correct capture state. The
+     * runtime also refreshes this policy during frame updates as scenes and
+     * pause state change.
+     */
+    void slayer3d_data_game_runtime_apply_mouse_capture(slayer3d_data_game_runtime *runtime,
+                                                        slayer3d_game_context *ctx);
+
     /** @brief Return the runtime-owned asset resolver, or NULL. */
     slayer3d_asset_resolver *slayer3d_data_game_runtime_assets(const slayer3d_data_game_runtime *runtime);
 

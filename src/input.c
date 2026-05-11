@@ -63,6 +63,7 @@ struct slayer3d_input_manager
     float mouse_dy_accum;
     float mouse_wheel_x_accum;
     float mouse_wheel_y_accum;
+    bool discard_mouse_motion_until_update;
 
     bool key_down[SDL_SCANCODE_COUNT];
     int key_down_modifiers[SDL_SCANCODE_COUNT];
@@ -1244,8 +1245,11 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
         }
         break;
     case SDL_EVENT_MOUSE_MOTION:
-        input->mouse_dx_accum += event->motion.xrel;
-        input->mouse_dy_accum += event->motion.yrel;
+        if (!input->discard_mouse_motion_until_update)
+        {
+            input->mouse_dx_accum += event->motion.xrel;
+            input->mouse_dy_accum += event->motion.yrel;
+        }
         break;
     case SDL_EVENT_MOUSE_WHEEL:
         input->mouse_wheel_x_accum += event->wheel.x;
@@ -1352,6 +1356,18 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
     }
 }
 
+void slayer3d_input_discard_mouse_motion(slayer3d_input_manager *input)
+{
+    if (input == NULL)
+    {
+        return;
+    }
+
+    input->mouse_dx_accum = 0.0f;
+    input->mouse_dy_accum = 0.0f;
+    input->discard_mouse_motion_until_update = true;
+}
+
 const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *input, int tick)
 {
     if (input == NULL)
@@ -1389,6 +1405,7 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
     next.tick = tick;
     next.mouse_dx = input->mouse_dx_accum;
     next.mouse_dy = input->mouse_dy_accum;
+    input->discard_mouse_motion_until_update = false;
     next.any_pressed = slayer3d_input_physical_any_pressed(input);
     input->pressed_scancode = slayer3d_input_first_pressed_scancode(input);
     input->pressed_mouse_button = slayer3d_input_first_pressed_mouse_button(input);
