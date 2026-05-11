@@ -1691,8 +1691,10 @@ static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const sla
     slayer3d_vec4 mesh_modulate = tint_modulate;
     bool ok = true;
 
+    ++context->stats.model_mesh_submissions;
     if (!slayer3d_mesh_is_visible(context, mesh))
     {
+        ++context->stats.model_mesh_culled;
         return true;
     }
 
@@ -1790,6 +1792,12 @@ static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const sla
 
         ok = slayer3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr,
                                          joint_matrices, true, NULL, NULL);
+    }
+    if (ok)
+    {
+        ++context->stats.model_mesh_draws;
+        context->stats.model_triangles_submitted +=
+            (Uint64)((mesh->index_count > 0 ? mesh->index_count : mesh->vertex_count) / 3);
     }
     return ok;
 }

@@ -33,6 +33,7 @@ struct slayer3d_render_context
     slayer3d_backend_interface backend_iface;
     int width;
     int height;
+    slayer3d_render_stats stats;
 
     float near_plane;
     float far_plane;

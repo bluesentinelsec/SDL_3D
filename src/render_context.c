@@ -412,6 +412,30 @@ int slayer3d_get_render_context_height(const slayer3d_render_context *context)
     return context->height;
 }
 
+bool slayer3d_get_render_stats(const slayer3d_render_context *context, slayer3d_render_stats *out_stats)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (out_stats == NULL)
+    {
+        return SDL_InvalidParamError("out_stats");
+    }
+
+    *out_stats = context->stats;
+    return true;
+}
+
+void slayer3d_reset_render_stats(slayer3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        return;
+    }
+    SDL_zero(context->stats);
+}
+
 bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color)
 {
     if (context == NULL)

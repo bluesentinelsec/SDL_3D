@@ -7959,6 +7959,28 @@ void slayer3d_game_data_reset_brush_diagnostics(slayer3d_game_data_runtime *runt
     SDL_zero(runtime->brush_diagnostics);
 }
 
+void slayer3d_game_data_accumulate_brush_render_diagnostics(slayer3d_game_data_runtime *runtime,
+                                                            const slayer3d_render_stats *before,
+                                                            const slayer3d_render_stats *after)
+{
+    if (runtime == NULL || before == NULL || after == NULL)
+        return;
+
+    runtime->brush_diagnostics.render_mesh_submissions +=
+        after->model_mesh_submissions >= before->model_mesh_submissions
+            ? after->model_mesh_submissions - before->model_mesh_submissions
+            : 0u;
+    runtime->brush_diagnostics.render_mesh_culled += after->model_mesh_culled >= before->model_mesh_culled
+                                                         ? after->model_mesh_culled - before->model_mesh_culled
+                                                         : 0u;
+    runtime->brush_diagnostics.render_mesh_draws +=
+        after->model_mesh_draws >= before->model_mesh_draws ? after->model_mesh_draws - before->model_mesh_draws : 0u;
+    runtime->brush_diagnostics.render_triangles_submitted +=
+        after->model_triangles_submitted >= before->model_triangles_submitted
+            ? after->model_triangles_submitted - before->model_triangles_submitted
+            : 0u;
+}
+
 typedef struct brush_named_trace_context
 {
     const slayer3d_game_data_runtime *runtime;

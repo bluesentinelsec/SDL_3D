@@ -11229,6 +11229,23 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     EXPECT_EQ(diagnostics.brush_count, 0u);
     EXPECT_EQ(diagnostics.collision_candidate_count, 0u);
 
+    slayer3d_render_stats before_stats{};
+    slayer3d_render_stats after_stats{};
+    before_stats.model_mesh_submissions = 4;
+    before_stats.model_mesh_culled = 1;
+    before_stats.model_mesh_draws = 3;
+    before_stats.model_triangles_submitted = 48;
+    after_stats.model_mesh_submissions = 7;
+    after_stats.model_mesh_culled = 2;
+    after_stats.model_mesh_draws = 5;
+    after_stats.model_triangles_submitted = 96;
+    slayer3d_game_data_accumulate_brush_render_diagnostics(runtime, &before_stats, &after_stats);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.render_mesh_submissions, 3u);
+    EXPECT_EQ(diagnostics.render_mesh_culled, 1u);
+    EXPECT_EQ(diagnostics.render_mesh_draws, 2u);
+    EXPECT_EQ(diagnostics.render_triangles_submitted, 48u);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);

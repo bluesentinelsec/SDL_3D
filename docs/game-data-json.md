@@ -571,8 +571,12 @@ the hit fraction, plane normal, brush, material, contents, and surface flags.
 `slayer3d_game_data_slide_active_brush_worlds()` layer deterministic
 plane-sliding over those traces for controllers and projectile movement.
 `slayer3d_game_data_get_brush_diagnostics()` exposes cumulative trace counters
-for debug UI, tests, and future editor instrumentation; reset them with
-`slayer3d_game_data_reset_brush_diagnostics()`.
+and brush render-counter deltas for debug UI, tests, and future editor
+instrumentation; reset them with
+`slayer3d_game_data_reset_brush_diagnostics()`. Brush render diagnostics are
+derived from the generic render-context stats exposed by
+`slayer3d_get_render_stats()`, because brush worlds compile to static model
+meshes that use the same frustum culling path as other models.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:

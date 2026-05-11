@@ -216,6 +216,35 @@ slayer3d_texture2d MakeSolidTexture(slayer3d_color color)
     EXPECT_TRUE(slayer3d_create_texture_from_image(&image, &texture)) << SDL_GetError();
     return texture;
 }
+
+void FillTriangleMesh(slayer3d_mesh &mesh, float x_offset, float z)
+{
+    static float positions[2][9];
+    static unsigned int indices[2][3];
+    const int slot = x_offset > 100.0f ? 1 : 0;
+    positions[slot][0] = x_offset - 0.5f;
+    positions[slot][1] = -0.5f;
+    positions[slot][2] = z;
+    positions[slot][3] = x_offset + 0.5f;
+    positions[slot][4] = -0.5f;
+    positions[slot][5] = z;
+    positions[slot][6] = x_offset;
+    positions[slot][7] = 0.5f;
+    positions[slot][8] = z;
+    indices[slot][0] = 0;
+    indices[slot][1] = 1;
+    indices[slot][2] = 2;
+
+    SDL_zero(mesh);
+    mesh.positions = positions[slot];
+    mesh.vertex_count = 3;
+    mesh.indices = indices[slot];
+    mesh.index_count = 3;
+    mesh.material_index = -1;
+    mesh.has_local_bounds = true;
+    mesh.local_bounds.min = slayer3d_vec3_make(x_offset - 0.5f, -0.5f, z);
+    mesh.local_bounds.max = slayer3d_vec3_make(x_offset + 0.5f, 0.5f, z);
+}
 } // namespace
 
 /* --- Lifecycle ----------------------------------------------------------- */
@@ -276,6 +305,47 @@ TEST_F(SLAYER3DDrawingFixture, DrawOutsideModeRejected)
     SDL_ClearError();
     EXPECT_FALSE(slayer3d_draw_point_3d(ctx, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), kRed));
     EXPECT_NE(*SDL_GetError(), '\0');
+
+    slayer3d_destroy_render_context(ctx);
+}
+
+TEST_F(SLAYER3DDrawingFixture, RenderStatsTrackModelMeshCulling)
+{
+    WindowRenderer wr;
+    ASSERT_TRUE(wr.ok());
+    slayer3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx)) << SDL_GetError();
+
+    slayer3d_mesh meshes[2]{};
+    FillTriangleMesh(meshes[0], 0.0f, 0.0f);
+    FillTriangleMesh(meshes[1], 1000.0f, 0.0f);
+    slayer3d_model model{};
+    model.meshes = meshes;
+    model.mesh_count = 2;
+
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.model_mesh_submissions, 0u);
+
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, MakeCamera())) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_draw_model_ex(ctx, &model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                       slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f, slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                       kRed))
+        << SDL_GetError();
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx)) << SDL_GetError();
+
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.model_mesh_submissions, 2u);
+    EXPECT_EQ(stats.model_mesh_culled, 1u);
+    EXPECT_EQ(stats.model_mesh_draws, 1u);
+    EXPECT_EQ(stats.model_triangles_submitted, 1u);
+
+    slayer3d_reset_render_stats(ctx);
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.model_mesh_submissions, 0u);
+    EXPECT_EQ(stats.model_mesh_culled, 0u);
+    EXPECT_EQ(stats.model_mesh_draws, 0u);
+    EXPECT_EQ(stats.model_triangles_submitted, 0u);
 
     slayer3d_destroy_render_context(ctx);
 }

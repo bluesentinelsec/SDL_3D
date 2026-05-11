@@ -41,6 +41,19 @@ extern "C"
         SDL_RendererLogicalPresentation logical_presentation;
     } slayer3d_render_context_config;
 
+    /** @brief Cumulative render submission counters for profiling/debug UI. */
+    typedef struct slayer3d_render_stats
+    {
+        /** @brief Model meshes submitted to the render path before visibility culling. */
+        Uint64 model_mesh_submissions;
+        /** @brief Model meshes rejected by render-context frustum culling. */
+        Uint64 model_mesh_culled;
+        /** @brief Model meshes accepted for drawing. */
+        Uint64 model_mesh_draws;
+        /** @brief Approximate triangles submitted by accepted model meshes. */
+        Uint64 model_triangles_submitted;
+    } slayer3d_render_stats;
+
     /**
      * @brief High-level window configuration.
      *
@@ -170,6 +183,8 @@ extern "C"
     slayer3d_backend slayer3d_get_render_context_backend(const slayer3d_render_context *context);
     int slayer3d_get_render_context_width(const slayer3d_render_context *context);
     int slayer3d_get_render_context_height(const slayer3d_render_context *context);
+    bool slayer3d_get_render_stats(const slayer3d_render_context *context, slayer3d_render_stats *out_stats);
+    void slayer3d_reset_render_stats(slayer3d_render_context *context);
     bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color);
     bool slayer3d_clear_render_context_rect(slayer3d_render_context *context, const SDL_Rect *rect,
                                             slayer3d_color color);
