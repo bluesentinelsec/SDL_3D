@@ -475,6 +475,7 @@ in later slices.
           "name": "stone_wall",
           "texture": "asset://textures/stone_wall.png",
           "albedo": [0.8, 0.8, 0.8, 1.0],
+          "emissive": [0.0, 0.0, 0.0],
           "roughness": 0.9,
           "tex_scale": 2.0
         }
@@ -485,7 +486,11 @@ in later slices.
           "tags": ["room", "solid"],
           "contents": ["solid", "player_clip"],
           "faces": [
-            { "plane": { "normal": [ 1,  0,  0], "distance":  8 }, "material": "stone_wall" },
+            {
+              "plane": { "normal": [ 1,  0,  0], "distance":  8 },
+              "material": "stone_wall",
+              "uv": { "scale": [1.0, 1.0], "offset": [0.0, 0.0], "rotation_degrees": 0.0 }
+            },
             { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "stone_wall" },
             { "plane": { "normal": [ 0,  1,  0], "distance":  4 }, "material": "stone_wall" },
             { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "stone_wall" },
@@ -506,6 +511,7 @@ Validation requires:
 - non-empty `materials` with unique names
 - material `albedo` as vec3/vec4 values in `[0, 1]`
 - non-negative `metallic` and `roughness`
+- optional material `emissive` as a non-negative RGB vec3
 - positive `tex_scale`
 - optional material `texture` as a non-empty existing asset path
 - non-empty `brushes` with unique names
@@ -517,6 +523,9 @@ Validation requires:
 - each face to declare `plane.normal` as a non-zero vec3 and
   `plane.distance` as a number
 - each face `material` to reference a declared material by name or index
+- optional face `uv` object with positive vec2 `scale`, vec2 `offset`, and
+  numeric `rotation_degrees`; UV transforms are applied after the material's
+  world-unit `tex_scale`
 - optional `surface_flags` as one value or an array of unique values:
   `nocollide`, `slick`, `ladder`, `emissive`, or `portal_candidate`
 
@@ -532,6 +541,7 @@ Scenes instantiate brush worlds through `world.brush_worlds`:
         "world": "brush.keep_01",
         "position": [0.0, 0.0, 0.0],
         "acceleration": true,
+        "lighting": true,
         "debug_wireframe": false
       }
     ]
@@ -539,8 +549,9 @@ Scenes instantiate brush worlds through `world.brush_worlds`:
 }
 ```
 
-`acceleration_key` and `debug_wireframe_key` may name scene-state booleans that
-override the authored defaults. Runtime and editor code should use
+`acceleration_key`, `lighting_key`, and `debug_wireframe_key` may name
+scene-state booleans that override the authored defaults. Runtime and editor
+code should use
 `slayer3d_game_data_get_brush_world()` and
 `slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
 Brush render meshes are available through `brush_world.render_model` and are

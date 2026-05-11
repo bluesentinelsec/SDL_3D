@@ -2814,6 +2814,19 @@ static bool is_exact_vec3_or_vec4_array(yyjson_val *value)
     return is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
 }
 
+static bool numeric_array_values_positive(yyjson_val *value)
+{
+    if (!yyjson_is_arr(value))
+        return false;
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_num(entry) || yyjson_get_num(entry) <= 0.0)
+            return false;
+    }
+    return true;
+}
+
 static bool numeric_array_values_in_range(yyjson_val *value, double min_value, double max_value)
 {
     if (!yyjson_is_arr(value))
@@ -5162,11 +5175,18 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
             }
             yyjson_val *metallic = obj_get(material, "metallic");
             yyjson_val *roughness = obj_get(material, "roughness");
+            yyjson_val *emissive = obj_get(material, "emissive");
             yyjson_val *tex_scale = obj_get(material, "tex_scale");
             if ((metallic != NULL && (!yyjson_is_num(metallic) || yyjson_get_num(metallic) < 0.0)) ||
                 (roughness != NULL && (!yyjson_is_num(roughness) || yyjson_get_num(roughness) < 0.0)))
             {
                 ok = validation_error(ctx, material_path, "brush material metallic and roughness must be non-negative");
+                break;
+            }
+            if (emissive != NULL &&
+                (!is_exact_vec_array(emissive, 3) || !numeric_array_values_in_range(emissive, 0.0, DBL_MAX)))
+            {
+                ok = validation_error(ctx, material_path, "brush material emissive must be a non-negative vec3");
                 break;
             }
             if (tex_scale != NULL && (!yyjson_is_num(tex_scale) || yyjson_get_num(tex_scale) <= 0.0))
@@ -5255,6 +5275,7 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
                 format_path(flags_path, sizeof(flags_path), "%s.surface_flags", face_path);
                 yyjson_val *face = yyjson_arr_get(faces, face_index);
                 yyjson_val *plane = obj_get(face, "plane");
+                yyjson_val *uv = obj_get(face, "uv");
                 if (!yyjson_is_obj(face))
                 {
                     ok = validation_error(ctx, face_path, "brush face entries must be objects");
@@ -5277,6 +5298,32 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root)
                 {
                     ok = false;
                     break;
+                }
+                if (uv != NULL)
+                {
+                    if (!yyjson_is_obj(uv))
+                    {
+                        ok = validation_error(ctx, face_path, "brush face uv must be an object");
+                        break;
+                    }
+                    yyjson_val *scale = obj_get(uv, "scale");
+                    yyjson_val *offset = obj_get(uv, "offset");
+                    yyjson_val *rotation = obj_get(uv, "rotation_degrees");
+                    if (scale != NULL && (!is_exact_vec_array(scale, 2) || !numeric_array_values_positive(scale)))
+                    {
+                        ok = validation_error(ctx, face_path, "brush face uv scale must be a positive vec2");
+                        break;
+                    }
+                    if (offset != NULL && !is_exact_vec_array(offset, 2))
+                    {
+                        ok = validation_error(ctx, face_path, "brush face uv offset must be a vec2");
+                        break;
+                    }
+                    if (rotation != NULL && !yyjson_is_num(rotation))
+                    {
+                        ok = validation_error(ctx, face_path, "brush face uv rotation_degrees must be a number");
+                        break;
+                    }
                 }
             }
         }
@@ -9720,12 +9767,18 @@ static bool validate_scene_brush_worlds(validation_context *ctx, yyjson_val *sce
         yyjson_val *acceleration = obj_get(entry, "acceleration");
         if (acceleration != NULL && !yyjson_is_bool(acceleration))
             return validation_error(ctx, entry_path, "scene brush world acceleration must be a boolean");
+        yyjson_val *lighting = obj_get(entry, "lighting");
+        if (lighting != NULL && !yyjson_is_bool(lighting))
+            return validation_error(ctx, entry_path, "scene brush world lighting must be a boolean");
         yyjson_val *debug_wireframe = obj_get(entry, "debug_wireframe");
         if (debug_wireframe != NULL && !yyjson_is_bool(debug_wireframe))
             return validation_error(ctx, entry_path, "scene brush world debug_wireframe must be a boolean");
         yyjson_val *acceleration_key = obj_get(entry, "acceleration_key");
         if (acceleration_key != NULL && !is_non_empty_string(entry, "acceleration_key"))
             return validation_error(ctx, entry_path, "scene brush world acceleration_key must be non-empty");
+        yyjson_val *lighting_key = obj_get(entry, "lighting_key");
+        if (lighting_key != NULL && !is_non_empty_string(entry, "lighting_key"))
+            return validation_error(ctx, entry_path, "scene brush world lighting_key must be non-empty");
         yyjson_val *debug_wireframe_key = obj_get(entry, "debug_wireframe_key");
         if (debug_wireframe_key != NULL && !is_non_empty_string(entry, "debug_wireframe_key"))
             return validation_error(ctx, entry_path, "scene brush world debug_wireframe_key must be non-empty");

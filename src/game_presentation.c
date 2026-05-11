@@ -2266,6 +2266,10 @@ static bool draw_brush_world_instance(void *userdata, const slayer3d_game_data_b
         ok = slayer3d_translate(context->renderer, instance->position.x, instance->position.y, instance->position.z);
     }
 
+    const bool restore_lighting = slayer3d_is_lighting_enabled(context->renderer);
+    if (!instance->lighting_enabled)
+        slayer3d_set_lighting_enabled(context->renderer, false);
+
     if (ok)
     {
         ok = slayer3d_draw_model_ex_with_assets(
@@ -2289,6 +2293,8 @@ static bool draw_brush_world_instance(void *userdata, const slayer3d_game_data_b
             ok = false;
         }
     }
+    if (!instance->lighting_enabled)
+        slayer3d_set_lighting_enabled(context->renderer, restore_lighting);
     if (pushed && !slayer3d_pop_matrix(context->renderer))
         ok = false;
     if (!ok)

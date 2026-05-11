@@ -231,6 +231,9 @@ static bool brush_model_copy_materials(const slayer3d_game_data_brush_world *wor
         dst->albedo[3] = src->albedo.w;
         dst->metallic = src->metallic;
         dst->roughness = src->roughness;
+        dst->emissive[0] = src->emissive.x;
+        dst->emissive[1] = src->emissive.y;
+        dst->emissive[2] = src->emissive.z;
         if (src->texture != NULL)
             dst->albedo_map = SDL_strdup(src->texture);
         if (dst->name == NULL || (src->texture != NULL && dst->albedo_map == NULL))
@@ -364,6 +367,11 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
             slayer3d_mesh *mesh = &model->meshes[mesh_for_material];
             const slayer3d_game_data_brush_material *material = &world->materials[face->material_index];
             const float tex_scale = SDL_max(material->tex_scale, 0.0001f);
+            const float uv_scale_x = face->uv_scale[0] != 0.0f ? face->uv_scale[0] : 1.0f;
+            const float uv_scale_y = face->uv_scale[1] != 0.0f ? face->uv_scale[1] : 1.0f;
+            const float uv_rotation = face->uv_rotation_degrees * SDL_PI_F / 180.0f;
+            const float uv_cos = SDL_cosf(uv_rotation);
+            const float uv_sin = SDL_sinf(uv_rotation);
             const slayer3d_color color = brush_material_color(material);
             const float rgba[4] = {
                 (float)color.r / 255.0f,
@@ -385,8 +393,10 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
                     mesh->normals[vertex * 3 + 0] = normal.x;
                     mesh->normals[vertex * 3 + 1] = normal.y;
                     mesh->normals[vertex * 3 + 2] = normal.z;
-                    mesh->uvs[vertex * 2 + 0] = slayer3d_vec3_dot(verts[corner], u) / tex_scale;
-                    mesh->uvs[vertex * 2 + 1] = slayer3d_vec3_dot(verts[corner], v) / tex_scale;
+                    const float base_u = slayer3d_vec3_dot(verts[corner], u) / tex_scale;
+                    const float base_v = slayer3d_vec3_dot(verts[corner], v) / tex_scale;
+                    mesh->uvs[vertex * 2 + 0] = (base_u * uv_cos - base_v * uv_sin) * uv_scale_x + face->uv_offset[0];
+                    mesh->uvs[vertex * 2 + 1] = (base_u * uv_sin + base_v * uv_cos) * uv_scale_y + face->uv_offset[1];
                     mesh->colors[vertex * 4 + 0] = rgba[0];
                     mesh->colors[vertex * 4 + 1] = rgba[1];
                     mesh->colors[vertex * 4 + 2] = rgba[2];

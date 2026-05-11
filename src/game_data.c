@@ -3720,6 +3720,7 @@ static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *r
             material->albedo = json_vec4(material_json, "albedo", slayer3d_vec4_make(1.0f, 1.0f, 1.0f, 1.0f));
             material->metallic = json_float(material_json, "metallic", 0.0f);
             material->roughness = json_float(material_json, "roughness", 1.0f);
+            material->emissive = json_vec3(material_json, "emissive", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
             material->tex_scale = json_float(material_json, "tex_scale", 1.0f);
             if (material->name == NULL || (texture != NULL && material->texture == NULL))
             {
@@ -3779,6 +3780,10 @@ static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *r
                 face->material_index =
                     brush_material_index_from_ref(materials, world->material_count, obj_get(face_json, "material"));
                 face->material_name = face->material_index >= 0 ? materials[face->material_index].name : NULL;
+                yyjson_val *uv_json = obj_get(face_json, "uv");
+                (void)json_vec2_value(obj_get(uv_json, "scale"), 1.0f, 1.0f, &face->uv_scale[0], &face->uv_scale[1]);
+                (void)json_vec2_value(obj_get(uv_json, "offset"), 0.0f, 0.0f, &face->uv_offset[0], &face->uv_offset[1]);
+                face->uv_rotation_degrees = json_float(uv_json, "rotation_degrees", 0.0f);
                 face->surface_flags =
                     brush_flags_from_json(obj_get(face_json, "surface_flags"), brush_surface_flag_from_string, 0u);
             }
@@ -8061,6 +8066,8 @@ bool slayer3d_game_data_for_each_brush_world_instance(const slayer3d_game_data_r
         instance.position = json_vec3(entry, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
         instance.acceleration_enabled = scene_state_bool(runtime, json_string(entry, "acceleration_key", NULL),
                                                          json_bool(entry, "acceleration", true));
+        instance.lighting_enabled =
+            scene_state_bool(runtime, json_string(entry, "lighting_key", NULL), json_bool(entry, "lighting", true));
         instance.debug_wireframe = scene_state_bool(runtime, json_string(entry, "debug_wireframe_key", NULL),
                                                     json_bool(entry, "debug_wireframe", false));
         if (!callback(userdata, &instance))
