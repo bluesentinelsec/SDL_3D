@@ -206,7 +206,7 @@ static bool entity_json_has_tag(yyjson_val *entity, const char *tag)
     return false;
 }
 
-static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count)
+bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count)
 {
     if (tag_count <= 0)
         return false;

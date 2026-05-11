@@ -1,4 +1,11 @@
-/* Signal and action lookup helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_action_lookup.c
+ * @brief Signal, action, and actor lookup helpers for authored game data.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
 
 int slayer3d_game_data_find_signal(const slayer3d_game_data_runtime *runtime, const char *name)
 {
@@ -24,7 +31,7 @@ int slayer3d_game_data_find_action(const slayer3d_game_data_runtime *runtime, co
     return -1;
 }
 
-static const char *find_action_name(const slayer3d_game_data_runtime *runtime, int action_id)
+const char *find_action_name(const slayer3d_game_data_runtime *runtime, int action_id)
 {
     if (runtime == NULL || action_id < 0)
         return NULL;
