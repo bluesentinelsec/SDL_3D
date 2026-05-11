@@ -11219,9 +11219,24 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
     ASSERT_NE(player, nullptr);
     const float initial_z = player->position.z;
+    const float initial_y = player->position.y;
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
+    slayer3d_camera3d initial_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &initial_camera));
+    for (int i = 0; i < 8; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(900 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        slayer3d_camera3d idle_camera{};
+        ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &idle_camera));
+        EXPECT_NEAR(player->position.y, initial_y, 0.03f);
+        EXPECT_NEAR(idle_camera.position.y, initial_camera.position.y, 0.03f);
+        EXPECT_NEAR(idle_camera.target.y - idle_camera.position.y, initial_camera.target.y - initial_camera.position.y,
+                    0.03f);
+    }
+
     const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
     ASSERT_GE(forward, 0);
     slayer3d_input_set_action_override(input, forward, 1.0f);
@@ -11264,6 +11279,23 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     }
     EXPECT_GT(player->position.y, grounded_y + 0.15f);
     EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "on_ground", true));
+    float previous_jump_y = player->position.y;
+    bool landed = false;
+    for (int i = 0; i < 120; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(2100 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        const float jump_y = player->position.y;
+        EXPECT_GT(jump_y - previous_jump_y, -0.12f);
+        previous_jump_y = jump_y;
+        if (slayer3d_properties_get_bool(player->props, "on_ground", false))
+        {
+            landed = true;
+            break;
+        }
+    }
+    EXPECT_TRUE(landed);
+    EXPECT_NEAR(player->position.y, grounded_y, 0.04f);
 
     slayer3d_camera3d camera{};
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));

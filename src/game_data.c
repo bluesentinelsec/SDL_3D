@@ -19200,7 +19200,7 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
     fps_brush_diagnostics diagnostics;
     fps_brush_diagnostics_init(&diagnostics);
     slayer3d_vec3 body_center = fps_brush_eye_to_body_center(mover, mover->position);
-    if (mover->on_ground || mover->vertical_velocity <= 0.0f)
+    if (mover->on_ground)
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     if (fps_controller_action_pressed(runtime, input, jump_action))
@@ -19255,6 +19255,7 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
         }
     }
 
+    const bool allow_ground_snap = mover->on_ground && mover->vertical_velocity <= 0.0f;
     mover->vertical_velocity -= mover->config.gravity * SDL_max(dt, 0.0f);
     const slayer3d_vec3 vertical_end =
         slayer3d_vec3_make(body_center.x, body_center.y + mover->vertical_velocity * SDL_max(dt, 0.0f), body_center.z);
@@ -19283,7 +19284,7 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
         body_center = vertical_end;
     }
 
-    if (!mover->on_ground && mover->vertical_velocity <= 0.0f)
+    if (!mover->on_ground && allow_ground_snap)
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     mover->position = fps_brush_body_center_to_eye(mover, body_center);
