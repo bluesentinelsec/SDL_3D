@@ -161,7 +161,6 @@ target_sources(
         src/fps_mover.c
         src/level.c
         src/model.c
-        src/mouse_trace.c
         src/obj_loader.c
         src/network.c
         src/network_replication.c
@@ -314,7 +313,7 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     add_executable(slayer3d_runner tools/slayer3d_runner.c tools/slayer3d_runner_cli.c tools/slayer3d_runner_state.c tools/slayer3d_fused.c)
     target_link_libraries(slayer3d_runner PRIVATE Slayer3D::slayer3d slayer3d_argtable3)
     target_compile_features(slayer3d_runner PRIVATE c_std_17)
-    target_include_directories(slayer3d_runner PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_include_directories(slayer3d_runner PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
     target_compile_definitions(slayer3d_runner PRIVATE SLAYER3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
     slayer3d_enable_warnings(slayer3d_runner)
     slayer3d_enable_sanitizers(slayer3d_runner)

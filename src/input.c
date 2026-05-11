@@ -7,8 +7,6 @@
 
 #include <stdint.h>
 
-#include "mouse_trace_internal.h"
-
 #define SLAYER3D_INPUT_DEFAULT_DEADZONE 0.15f
 #define SLAYER3D_INPUT_MAX_MOUSE_BUTTONS 16
 #define SLAYER3D_INPUT_DEMO_MAGIC "SLAYER3DEMO"
@@ -1004,7 +1002,6 @@ slayer3d_input_manager *slayer3d_input_create(void)
     input->deadzone = SLAYER3D_INPUT_DEFAULT_DEADZONE;
     input->pressed_scancode = SDL_SCANCODE_UNKNOWN;
     input->pressed_gamepad_button = SDL_GAMEPAD_BUTTON_INVALID;
-    slayer3d_mouse_tracef("input.create", "input=%p deadzone=%.3f", (void *)input, input->deadzone);
     slayer3d_input_refresh_gamepads(input);
     return input;
 }
@@ -1251,13 +1248,6 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
         break;
     case SDL_EVENT_MOUSE_MOTION: {
         const bool discard_motion = input->discard_mouse_motion_until_update || input->discard_next_mouse_motion;
-        slayer3d_mouse_tracef(
-            "input.event.mouse_motion",
-            "input=%p x=%.3f y=%.3f xrel=%.3f yrel=%.3f accum_before=(%.3f,%.3f) discard_until_update=%d "
-            "discard_next=%d",
-            (void *)input, event->motion.x, event->motion.y, event->motion.xrel, event->motion.yrel,
-            input->mouse_dx_accum, input->mouse_dy_accum, input->discard_mouse_motion_until_update ? 1 : 0,
-            input->discard_next_mouse_motion ? 1 : 0);
         if (discard_motion)
         {
             input->discarded_mouse_motion_since_request = true;
@@ -1271,8 +1261,6 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
             input->mouse_dx_accum += event->motion.xrel;
             input->mouse_dy_accum += event->motion.yrel;
         }
-        slayer3d_mouse_tracef("input.event.mouse_motion.applied", "input=%p discarded=%d accum_after=(%.3f,%.3f)",
-                              (void *)input, discard_motion ? 1 : 0, input->mouse_dx_accum, input->mouse_dy_accum);
         break;
     }
     case SDL_EVENT_MOUSE_WHEEL:
@@ -1387,8 +1375,6 @@ void slayer3d_input_discard_mouse_motion(slayer3d_input_manager *input)
         return;
     }
 
-    slayer3d_mouse_tracef("input.discard_mouse_motion", "input=%p accum_before=(%.3f,%.3f)", (void *)input,
-                          input->mouse_dx_accum, input->mouse_dy_accum);
     input->mouse_dx_accum = 0.0f;
     input->mouse_dy_accum = 0.0f;
     input->discard_mouse_motion_until_update = true;
@@ -1433,11 +1419,6 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
     next.tick = tick;
     next.mouse_dx = input->mouse_dx_accum;
     next.mouse_dy = input->mouse_dy_accum;
-    slayer3d_mouse_tracef(
-        "input.update.begin",
-        "input=%p tick=%d snapshot_mouse=(%.3f,%.3f) discard_until_update=%d discard_next=%d discarded_since=%d",
-        (void *)input, tick, next.mouse_dx, next.mouse_dy, input->discard_mouse_motion_until_update ? 1 : 0,
-        input->discard_next_mouse_motion ? 1 : 0, input->discarded_mouse_motion_since_request ? 1 : 0);
     if (input->discard_mouse_motion_until_update && input->discarded_mouse_motion_since_request)
     {
         input->discard_next_mouse_motion = false;
@@ -1491,9 +1472,6 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
     input->snapshot = next;
     (void)slayer3d_demo_recorder_append(input->recorder, &input->snapshot);
     slayer3d_input_reset_transients(input);
-    slayer3d_mouse_tracef("input.update.end", "input=%p tick=%d stored_mouse=(%.3f,%.3f) any_pressed=%d", (void *)input,
-                          input->snapshot.tick, input->snapshot.mouse_dx, input->snapshot.mouse_dy,
-                          input->snapshot.any_pressed ? 1 : 0);
     return &input->snapshot;
 }
 

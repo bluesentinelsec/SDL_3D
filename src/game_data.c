@@ -18,7 +18,6 @@
 #include "game_data_validation.h"
 #include "lauxlib.h"
 #include "lua.h"
-#include "mouse_trace_internal.h"
 #include "network_replication_schema.h"
 #include "script_internal.h"
 #include "slayer3d/actor_controller.h"
@@ -6012,13 +6011,6 @@ bool slayer3d_game_data_get_camera(const slayer3d_game_data_runtime *runtime, co
         {
             *out_camera = slayer3d_fps_mover_camera(&controller->mover, fov);
             out_camera->fov_axis = fov_axis;
-            slayer3d_mouse_tracef(
-                "game_data.camera.fps",
-                "name='%s' target='%s' controller=1 pos=(%.3f,%.3f,%.3f) cam_target=(%.3f,%.3f,%.3f) yaw=%.5f "
-                "pitch=%.5f smooth=%.3f fov=%.3f",
-                name, target->name != NULL ? target->name : "<unnamed>", out_camera->position.x, out_camera->position.y,
-                out_camera->position.z, out_camera->target.x, out_camera->target.y, out_camera->target.z,
-                controller->mover.yaw, controller->mover.pitch, controller->mover.view_smooth, fov);
             return true;
         }
 
@@ -6033,13 +6025,6 @@ bool slayer3d_game_data_get_camera(const slayer3d_game_data_runtime *runtime, co
             target->props, json_string(camera_json, "view_smooth_property", "view_smooth"), 0.0f);
         *out_camera = slayer3d_fps_mover_camera(&fallback_mover, fov);
         out_camera->fov_axis = fov_axis;
-        slayer3d_mouse_tracef(
-            "game_data.camera.fps",
-            "name='%s' target='%s' controller=0 pos=(%.3f,%.3f,%.3f) cam_target=(%.3f,%.3f,%.3f) yaw=%.5f "
-            "pitch=%.5f smooth=%.3f fov=%.3f",
-            name, target->name != NULL ? target->name : "<unnamed>", out_camera->position.x, out_camera->position.y,
-            out_camera->position.z, out_camera->target.x, out_camera->target.y, out_camera->target.z,
-            fallback_mover.yaw, fallback_mover.pitch, fallback_mover.view_smooth, fov);
         return true;
     }
 
@@ -18766,14 +18751,6 @@ static bool initialize_fps_controller_runtime(slayer3d_game_data_runtime *runtim
     controller->mover.pitch = slayer3d_properties_get_float(
         actor->props, json_string(component, "pitch_property", "pitch"), json_float(component, "spawn_pitch", 0.0f));
     controller->initialized = true;
-    slayer3d_mouse_tracef(
-        "game_data.fps_controller.init",
-        "entity='%s' component='%s' pos=(%.3f,%.3f,%.3f) yaw=%.5f pitch=%.5f move=%.3f jump=%.3f gravity=%.3f "
-        "height=%.3f radius=%.3f",
-        actor->name != NULL ? actor->name : "<unnamed>", json_string(component, "type", "<unknown>"),
-        controller->mover.position.x, controller->mover.position.y, controller->mover.position.z, controller->mover.yaw,
-        controller->mover.pitch, config.move_speed, config.jump_velocity, config.gravity, config.player_height,
-        config.player_radius);
     fps_controller_publish_actor_state(controller, component, actor);
     return true;
 }
@@ -19215,17 +19192,8 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
     const float mouse_dx = mouse_look && input != NULL ? slayer3d_input_get_mouse_dx(input) : 0.0f;
     const float mouse_dy = mouse_look && input != NULL ? slayer3d_input_get_mouse_dy(input) : 0.0f;
     const float mouse_sensitivity = json_float(component, "mouse_sensitivity", 0.002f);
-    const float yaw_before = mover->yaw;
-    const float pitch_before = mover->pitch;
-    const slayer3d_vec3 position_before = mover->position;
     mover->yaw += mouse_dx * mouse_sensitivity;
     mover->pitch = fps_brush_clampf(mover->pitch - mouse_dy * mouse_sensitivity, -1.4f, 1.4f);
-    slayer3d_mouse_tracef(
-        "game_data.fps_brush.input",
-        "entity='%s' mouse_look=%d mouse=(%.3f,%.3f) sensitivity=%.6f yaw %.5f->%.5f pitch %.5f->%.5f "
-        "pos_before=(%.3f,%.3f,%.3f)",
-        actor->name != NULL ? actor->name : "<unnamed>", mouse_look ? 1 : 0, mouse_dx, mouse_dy, mouse_sensitivity,
-        yaw_before, mover->yaw, pitch_before, mover->pitch, position_before.x, position_before.y, position_before.z);
 
     const unsigned int contents_mask = fps_brush_contents_mask(component);
     const float walkable_normal_y = fps_brush_walkable_normal_y(component);
@@ -19328,15 +19296,6 @@ static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyj
     }
     fps_controller_publish_actor_state(controller, component, actor);
     fps_brush_publish_diagnostics(&diagnostics, component, actor);
-    slayer3d_mouse_tracef("game_data.fps_brush.output",
-                          "entity='%s' pos=(%.3f,%.3f,%.3f) yaw=%.5f pitch=%.5f on_ground=%d vertical_velocity=%.5f "
-                          "body_center=(%.3f,%.3f,%.3f) stepped=%d collision='%s' floor='%s'",
-                          actor->name != NULL ? actor->name : "<unnamed>", mover->position.x, mover->position.y,
-                          mover->position.z, mover->yaw, mover->pitch, mover->on_ground ? 1 : 0,
-                          mover->vertical_velocity, body_center.x, body_center.y, body_center.z,
-                          diagnostics.stepped_up ? 1 : 0,
-                          diagnostics.collision_brush != NULL ? diagnostics.collision_brush : "",
-                          diagnostics.floor_brush != NULL ? diagnostics.floor_brush : "");
 }
 
 static slayer3d_game_data_brush_trace_shape brush_velocity_shape_from_string(const char *shape)
