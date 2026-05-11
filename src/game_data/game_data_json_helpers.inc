@@ -1,12 +1,11 @@
-/* JSON helper functions shared by game-data runtime subsystems. Included by src/game_data.c to preserve internal
- * linkage. */
+/* JSON helper functions shared by game-data runtime subsystems. */
 
-static yyjson_val *obj_get(yyjson_val *object, const char *key)
+yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
     return yyjson_is_obj(object) ? yyjson_obj_get(object, key) : NULL;
 }
 
-static const char *json_string(yyjson_val *object, const char *key, const char *fallback)
+const char *json_string(yyjson_val *object, const char *key, const char *fallback)
 {
     yyjson_val *value = obj_get(object, key);
     return yyjson_is_str(value) ? yyjson_get_str(value) : fallback;
@@ -29,19 +28,19 @@ static char first_json_string_char(yyjson_val *object, const char *key, char fal
 
 static void load_storage_config(slayer3d_game_data_runtime *runtime, yyjson_val *root);
 
-static bool json_bool(yyjson_val *object, const char *key, bool fallback)
+bool json_bool(yyjson_val *object, const char *key, bool fallback)
 {
     yyjson_val *value = obj_get(object, key);
     return yyjson_is_bool(value) ? yyjson_get_bool(value) : fallback;
 }
 
-static float json_float(yyjson_val *object, const char *key, float fallback)
+float json_float(yyjson_val *object, const char *key, float fallback)
 {
     yyjson_val *value = obj_get(object, key);
     return yyjson_is_num(value) ? (float)yyjson_get_num(value) : fallback;
 }
 
-static int json_int(yyjson_val *object, const char *key, int fallback)
+int json_int(yyjson_val *object, const char *key, int fallback)
 {
     yyjson_val *value = obj_get(object, key);
     return yyjson_is_int(value) ? (int)yyjson_get_int(value) : fallback;
@@ -72,7 +71,7 @@ static slayer3d_vec3 json_vec3_value(yyjson_val *value, slayer3d_vec3 fallback)
                               yyjson_is_num(z) ? (float)yyjson_get_num(z) : fallback.z);
 }
 
-static slayer3d_vec3 json_vec3(yyjson_val *object, const char *key, slayer3d_vec3 fallback)
+slayer3d_vec3 json_vec3(yyjson_val *object, const char *key, slayer3d_vec3 fallback)
 {
     return json_vec3_value(obj_get(object, key), fallback);
 }

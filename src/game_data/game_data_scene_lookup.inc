@@ -1,7 +1,6 @@
-/* Runtime scene, entity, asset, and controller lookup helpers. Included by src/game_data.c to preserve internal
- * linkage. */
+/* Runtime scene, entity, asset, and controller lookup helpers. */
 
-static yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime)
+yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime)
 {
     return runtime != NULL && runtime->doc != NULL ? yyjson_doc_get_root(runtime->doc) : NULL;
 }
@@ -13,7 +12,7 @@ static scene_entry *active_scene_entry(slayer3d_game_data_runtime *runtime)
     return &runtime->scenes[runtime->active_scene_index];
 }
 
-static const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime)
+const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->active_scene_index < 0 || runtime->active_scene_index >= runtime->scene_count)
         return NULL;
@@ -546,14 +545,14 @@ static bool parse_render_profile(const char *value, slayer3d_render_profile *out
     return true;
 }
 
-static const char *scene_state_string(const slayer3d_game_data_runtime *runtime, const char *key, const char *fallback)
+const char *scene_state_string(const slayer3d_game_data_runtime *runtime, const char *key, const char *fallback)
 {
     if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
         return fallback;
     return slayer3d_properties_get_string(runtime->scene_state, key, fallback);
 }
 
-static bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key, bool fallback)
+bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key, bool fallback)
 {
     if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
         return fallback;
