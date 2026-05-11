@@ -607,21 +607,45 @@ const char *json_string(yyjson_val *object, const char *key, const char *fallbac
 bool json_bool(yyjson_val *object, const char *key, bool fallback);
 float json_float(yyjson_val *object, const char *key, float fallback);
 int json_int(yyjson_val *object, const char *key, int fallback);
+bool json_float_array(yyjson_val *value, float *out_values, int count, const float *fallback);
+slayer3d_color json_color_value(yyjson_val *value, slayer3d_color fallback);
+slayer3d_color json_color(yyjson_val *object, const char *key, slayer3d_color fallback);
+bool json_vec2_value(yyjson_val *value, float fallback_x, float fallback_y, float *out_x, float *out_y);
+slayer3d_vec3 json_vec3_value(yyjson_val *value, slayer3d_vec3 fallback);
 slayer3d_vec3 json_vec3(yyjson_val *object, const char *key, slayer3d_vec3 fallback);
+slayer3d_vec4 json_vec4(yyjson_val *object, const char *key, slayer3d_vec4 fallback);
 const char *scene_state_string(const slayer3d_game_data_runtime *runtime, const char *key, const char *fallback);
 bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key, bool fallback);
 
 yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime);
 const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime);
+const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name);
 sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
 const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
 const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
+bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
+bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                             int error_buffer_size);
+bool load_sector_levels(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                        int error_buffer_size);
+bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                       int error_buffer_size);
+bool load_sector_doors(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                       int error_buffer_size);
+bool load_sector_platforms(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                           int error_buffer_size);
+void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata);
+unsigned int brush_content_flag_from_string(const char *name);
+unsigned int brush_flags_from_json(yyjson_val *value, unsigned int (*flag_from_string)(const char *name),
+                                   unsigned int fallback);
 slayer3d_sector *copy_sectors_without_sector_lighting(const sector_level_runtime *level);
 bool build_sector_level_variant_set(sector_level_runtime *level, const slayer3d_sector *sectors,
                                     slayer3d_level *out_lightmapped, slayer3d_level *out_vertex_baked,
                                     slayer3d_level *out_unlit, const char *stage, char *error_buffer,
                                     int error_buffer_size);
+bool set_sector_level_geometry(sector_level_runtime *level, int sector_index, const slayer3d_sector_geometry *geometry,
+                               char *error_buffer, int error_buffer_size);
 void modulate_color_by_sector_lighting(slayer3d_color *color, const slayer3d_sector *sector);
 
 #endif
