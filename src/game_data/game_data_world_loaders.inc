@@ -366,7 +366,7 @@ static bool load_sector_level_lights(sector_level_runtime *level, yyjson_val *li
     return true;
 }
 
-static slayer3d_sector *copy_sectors_without_sector_lighting(const sector_level_runtime *level)
+slayer3d_sector *copy_sectors_without_sector_lighting(const sector_level_runtime *level)
 {
     if (level == NULL || level->sector_count <= 0)
         return NULL;
@@ -387,10 +387,9 @@ static slayer3d_sector *copy_sectors_without_sector_lighting(const sector_level_
     return sectors;
 }
 
-static bool build_sector_level_variant_set(sector_level_runtime *level, const slayer3d_sector *sectors,
-                                           slayer3d_level *lightmapped, slayer3d_level *vertex_baked,
-                                           slayer3d_level *unlit, const char *label, char *error_buffer,
-                                           int error_buffer_size)
+bool build_sector_level_variant_set(sector_level_runtime *level, const slayer3d_sector *sectors,
+                                    slayer3d_level *lightmapped, slayer3d_level *vertex_baked, slayer3d_level *unlit,
+                                    const char *label, char *error_buffer, int error_buffer_size)
 {
     if (!slayer3d_build_level(sectors, level->sector_count, level->materials, level->material_count, level->lights,
                               level->light_count, lightmapped))

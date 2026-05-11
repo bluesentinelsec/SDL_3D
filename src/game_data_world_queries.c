@@ -1,4 +1,15 @@
-/* Scene, sector, brush, and world query helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_world_queries.c
+ * @brief Scene, sector, brush, and generic world-model query helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
+
+#include "game_data_brush_internal.h"
+#include "slayer3d/collision.h"
+#include "slayer3d/math.h"
 
 const char *slayer3d_game_data_active_scene(const slayer3d_game_data_runtime *runtime)
 {
@@ -28,7 +39,7 @@ const slayer3d_properties *slayer3d_game_data_scene_state(const slayer3d_game_da
     return runtime != NULL ? runtime->scene_state : NULL;
 }
 
-static sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name)
+sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -41,13 +52,12 @@ static sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_dat
     return NULL;
 }
 
-static const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime,
-                                                             const char *name)
+const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     return find_sector_level_runtime_mutable((slayer3d_game_data_runtime *)runtime, name);
 }
 
-static int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name)
+int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name)
 {
     if (level == NULL || sector_name == NULL)
         return -1;
@@ -108,7 +118,7 @@ static Uint8 color_channel_from_float(float value)
     return (Uint8)(value + 0.5f);
 }
 
-static void modulate_color_by_sector_lighting(slayer3d_color *color, const slayer3d_sector *sector)
+void modulate_color_by_sector_lighting(slayer3d_color *color, const slayer3d_sector *sector)
 {
     if (color == NULL || sector == NULL || !sector->has_lighting)
         return;
@@ -582,7 +592,7 @@ bool slayer3d_game_data_get_sector_level(const slayer3d_game_data_runtime *runti
     return true;
 }
 
-static const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name)
+const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
