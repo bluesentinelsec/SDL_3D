@@ -7,7 +7,50 @@
 
 #include <SDL3/SDL_stdinc.h>
 
+#include "slayer3d/collision.h"
 #include "slayer3d/math.h"
+
+static void brush_bounds_add_point(slayer3d_bounding_box *bounds, bool *has_bounds, slayer3d_vec3 point)
+{
+    if (bounds == NULL || has_bounds == NULL)
+        return;
+    if (!*has_bounds)
+    {
+        bounds->min = point;
+        bounds->max = point;
+        *has_bounds = true;
+        return;
+    }
+    bounds->min.x = SDL_min(bounds->min.x, point.x);
+    bounds->min.y = SDL_min(bounds->min.y, point.y);
+    bounds->min.z = SDL_min(bounds->min.z, point.z);
+    bounds->max.x = SDL_max(bounds->max.x, point.x);
+    bounds->max.y = SDL_max(bounds->max.y, point.y);
+    bounds->max.z = SDL_max(bounds->max.z, point.z);
+}
+
+slayer3d_bounding_box slayer3d_game_data_brush_trace_bounds(const slayer3d_game_data_brush_trace_desc *desc)
+{
+    slayer3d_vec3 extents = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (desc != NULL)
+    {
+        if (desc->shape == SLAYER3D_GAME_DATA_BRUSH_TRACE_SPHERE)
+            extents = slayer3d_vec3_make(SDL_max(desc->extents.x, 0.0f), SDL_max(desc->extents.x, 0.0f),
+                                         SDL_max(desc->extents.x, 0.0f));
+        else if (desc->shape == SLAYER3D_GAME_DATA_BRUSH_TRACE_AABB)
+            extents = slayer3d_vec3_make(SDL_max(desc->extents.x, 0.0f), SDL_max(desc->extents.y, 0.0f),
+                                         SDL_max(desc->extents.z, 0.0f));
+    }
+
+    const slayer3d_vec3 start = desc != NULL ? desc->start : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 end = desc != NULL ? desc->end : start;
+    return (slayer3d_bounding_box){
+        slayer3d_vec3_make(SDL_min(start.x, end.x) - extents.x, SDL_min(start.y, end.y) - extents.y,
+                           SDL_min(start.z, end.z) - extents.z),
+        slayer3d_vec3_make(SDL_max(start.x, end.x) + extents.x, SDL_max(start.y, end.y) + extents.y,
+                           SDL_max(start.z, end.z) + extents.z),
+    };
+}
 
 static bool brush_plane_normalized(const slayer3d_game_data_brush_face *face, slayer3d_vec3 *out_normal,
                                    float *out_distance)
@@ -210,6 +253,50 @@ static void brush_mesh_bounds_add(slayer3d_mesh *mesh, slayer3d_vec3 p)
     mesh->local_bounds.max.x = SDL_max(mesh->local_bounds.max.x, p.x);
     mesh->local_bounds.max.y = SDL_max(mesh->local_bounds.max.y, p.y);
     mesh->local_bounds.max.z = SDL_max(mesh->local_bounds.max.z, p.z);
+}
+
+bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_world *world)
+{
+    if (world == NULL)
+        return false;
+
+    int max_face_count = 0;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+        max_face_count = SDL_max(max_face_count, world->brushes[brush_index].face_count);
+    const int polygon_capacity = SDL_max(16, max_face_count * 2 + 8);
+    slayer3d_vec3 *polygon = (slayer3d_vec3 *)SDL_malloc((size_t)polygon_capacity * sizeof(*polygon));
+    if (polygon == NULL)
+        return world->brush_count <= 0;
+
+    bool world_has_bounds = false;
+    slayer3d_bounding_box world_bounds;
+    SDL_zero(world_bounds);
+    slayer3d_game_data_brush *brushes = (slayer3d_game_data_brush *)world->brushes;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        slayer3d_game_data_brush *brush = &brushes[brush_index];
+        bool brush_has_bounds = false;
+        slayer3d_bounding_box brush_bounds;
+        SDL_zero(brush_bounds);
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            const int count = brush_build_face_polygon(brush, face_index, polygon, polygon_capacity, NULL, NULL, NULL);
+            for (int vertex_index = 0; vertex_index < count; ++vertex_index)
+                brush_bounds_add_point(&brush_bounds, &brush_has_bounds, polygon[vertex_index]);
+        }
+        brush->has_bounds = brush_has_bounds;
+        if (brush_has_bounds)
+        {
+            brush->bounds = brush_bounds;
+            brush_bounds_add_point(&world_bounds, &world_has_bounds, brush_bounds.min);
+            brush_bounds_add_point(&world_bounds, &world_has_bounds, brush_bounds.max);
+        }
+    }
+    world->has_bounds = world_has_bounds;
+    if (world_has_bounds)
+        world->bounds = world_bounds;
+    SDL_free(polygon);
+    return true;
 }
 
 static bool brush_model_copy_materials(const slayer3d_game_data_brush_world *world, slayer3d_model *model)
@@ -559,13 +646,42 @@ bool slayer3d_game_data_brush_world_trace_local(const slayer3d_game_data_brush_w
                                                 const slayer3d_game_data_brush_trace_desc *desc,
                                                 slayer3d_game_data_brush_trace_result *out_result)
 {
+    return slayer3d_game_data_brush_world_trace_local_with_diagnostics(world, desc, true, out_result, NULL);
+}
+
+bool slayer3d_game_data_brush_world_trace_local_with_diagnostics(const slayer3d_game_data_brush_world *world,
+                                                                 const slayer3d_game_data_brush_trace_desc *desc,
+                                                                 bool acceleration_enabled,
+                                                                 slayer3d_game_data_brush_trace_result *out_result,
+                                                                 slayer3d_game_data_brush_diagnostics *diagnostics)
+{
     slayer3d_game_data_brush_trace_result closest = slayer3d_game_data_brush_trace_default_result(desc);
     if (world == NULL || desc == NULL || out_result == NULL || !slayer3d_game_data_brush_trace_shape_valid(desc))
         return false;
+    if (diagnostics != NULL)
+        ++diagnostics->trace_count;
+
+    const slayer3d_bounding_box trace_bounds = slayer3d_game_data_brush_trace_bounds(desc);
 
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
         const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if (diagnostics != NULL)
+            ++diagnostics->brush_count;
+        if ((brush->contents & desc->contents_mask) == 0u)
+        {
+            if (diagnostics != NULL)
+                ++diagnostics->contents_reject_count;
+            continue;
+        }
+        if (acceleration_enabled && brush->has_bounds && !slayer3d_check_aabb_aabb(trace_bounds, brush->bounds))
+        {
+            if (diagnostics != NULL)
+                ++diagnostics->bounds_reject_count;
+            continue;
+        }
+        if (diagnostics != NULL)
+            ++diagnostics->collision_candidate_count;
         slayer3d_game_data_brush_trace_result candidate = slayer3d_game_data_brush_trace_default_result(desc);
         if (!brush_trace_one_brush(brush, desc, &candidate))
             continue;
@@ -590,6 +706,8 @@ bool slayer3d_game_data_brush_world_trace_local(const slayer3d_game_data_brush_w
     }
 
     *out_result = closest;
+    if (diagnostics != NULL && closest.hit)
+        ++diagnostics->hit_count;
     return true;
 }
 

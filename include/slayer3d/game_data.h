@@ -431,6 +431,10 @@ extern "C"
         const slayer3d_game_data_brush_face *faces;
         /** @brief Number of entries in @p faces. */
         int face_count;
+        /** @brief Precomputed local-space bounds for broad-phase trace rejection. */
+        slayer3d_bounding_box bounds;
+        /** @brief True when @p bounds is valid. */
+        bool has_bounds;
     } slayer3d_game_data_brush;
 
     /** @brief Runtime-owned native brush world. */
@@ -452,6 +456,10 @@ extern "C"
         int brush_count;
         /** @brief Runtime-compiled static render mesh for visible brush faces, or NULL when empty. */
         const slayer3d_model *render_model;
+        /** @brief Precomputed local-space bounds spanning all bounded brushes. */
+        slayer3d_bounding_box bounds;
+        /** @brief True when @p bounds is valid. */
+        bool has_bounds;
     } slayer3d_game_data_brush_world;
 
     /** @brief Active-scene instance of an authored brush world. */
@@ -529,6 +537,27 @@ extern "C"
         /** @brief Surface flags on the hit face. */
         unsigned int surface_flags;
     } slayer3d_game_data_brush_trace_result;
+
+    /** @brief Runtime counters for brush-world trace broad-phase and narrow-phase work. */
+    typedef struct slayer3d_game_data_brush_diagnostics
+    {
+        /** @brief Number of valid local brush-world trace evaluations. */
+        Uint64 trace_count;
+        /** @brief Active-scene brush world instances visited by trace requests. */
+        Uint64 world_instance_count;
+        /** @brief Active-scene brush world instances rejected by world bounds. */
+        Uint64 world_bounds_reject_count;
+        /** @brief Authored brushes considered by local trace loops. */
+        Uint64 brush_count;
+        /** @brief Brushes rejected because contents did not overlap the trace mask. */
+        Uint64 contents_reject_count;
+        /** @brief Brushes rejected by precomputed brush bounds. */
+        Uint64 bounds_reject_count;
+        /** @brief Brushes that reached exact plane-based trace tests. */
+        Uint64 collision_candidate_count;
+        /** @brief Local brush-world trace evaluations that produced a hit. */
+        Uint64 hit_count;
+    } slayer3d_game_data_brush_diagnostics;
 
     /**
      * @brief Callback for active authored sector level instances.
@@ -1328,6 +1357,18 @@ extern "C"
     bool slayer3d_game_data_slide_active_brush_worlds(const slayer3d_game_data_runtime *runtime,
                                                       const slayer3d_game_data_brush_trace_desc *desc, int max_bumps,
                                                       slayer3d_game_data_brush_trace_result *out_result);
+
+    /**
+     * @brief Copy accumulated brush-world trace diagnostics.
+     *
+     * Diagnostics are cumulative until reset and are intended for tests,
+     * debug UI, and future editor instrumentation.
+     */
+    bool slayer3d_game_data_get_brush_diagnostics(const slayer3d_game_data_runtime *runtime,
+                                                  slayer3d_game_data_brush_diagnostics *out_diagnostics);
+
+    /** @brief Reset accumulated brush-world trace diagnostics to zero. */
+    void slayer3d_game_data_reset_brush_diagnostics(slayer3d_game_data_runtime *runtime);
 
     /** @brief Runtime-owned node resolved from an authored sector navigation graph. */
     typedef struct slayer3d_game_data_sector_nav_node

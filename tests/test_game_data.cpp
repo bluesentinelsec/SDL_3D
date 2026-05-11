@@ -11099,6 +11099,14 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     ASSERT_TRUE(slayer3d_game_data_load_file((dir / "brush_trace.game.json").string().c_str(), session, &runtime, error,
                                              sizeof(error)))
         << error;
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.trace", &world));
+    EXPECT_TRUE(world.has_bounds);
+    EXPECT_NEAR(world.bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(world.bounds.max.x, 9.0f, 0.001f);
+    ASSERT_EQ(world.brush_count, 3);
+    EXPECT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.max.y, 3.0f, 0.001f);
 
     slayer3d_game_data_brush_trace_desc trace{};
     slayer3d_game_data_brush_trace_result result{};
@@ -11112,6 +11120,15 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     EXPECT_NEAR(result.fraction, 0.5f, 0.001f);
     EXPECT_STREQ(result.brush_name, "brush.box");
     EXPECT_NEAR(result.normal.x, -1.0f, 0.0001f);
+    slayer3d_game_data_brush_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.trace_count, 1u);
+    EXPECT_EQ(diagnostics.brush_count, 3u);
+    EXPECT_EQ(diagnostics.contents_reject_count, 1u);
+    EXPECT_EQ(diagnostics.bounds_reject_count, 1u);
+    EXPECT_EQ(diagnostics.collision_candidate_count, 1u);
+    EXPECT_EQ(diagnostics.hit_count, 1u);
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
 
     trace.start = slayer3d_vec3_make(2.0f, 1.0f, 6.0f);
     trace.end = slayer3d_vec3_make(2.0f, 1.0f, 2.0f);
@@ -11197,6 +11214,20 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     EXPECT_STREQ(result.brush_name, "brush.box");
     EXPECT_NEAR(result.end_position.x, -0.25375f, 0.002f);
     EXPECT_GT(result.end_position.z, 5.9f);
+
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.extents = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    trace.start = slayer3d_vec3_make(-100.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(-90.0f, 1.0f, 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_trace_active_brush_worlds(runtime, &trace, &result));
+    EXPECT_FALSE(result.hit);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.world_instance_count, 1u);
+    EXPECT_EQ(diagnostics.world_bounds_reject_count, 1u);
+    EXPECT_EQ(diagnostics.brush_count, 0u);
+    EXPECT_EQ(diagnostics.collision_candidate_count, 0u);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

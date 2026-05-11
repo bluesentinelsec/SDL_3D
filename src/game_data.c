@@ -22,6 +22,7 @@
 #include "script_internal.h"
 #include "slayer3d/actor_controller.h"
 #include "slayer3d/asset.h"
+#include "slayer3d/collision.h"
 #include "slayer3d/door.h"
 #include "slayer3d/fps_mover.h"
 #include "slayer3d/input.h"
@@ -590,6 +591,7 @@ typedef struct slayer3d_game_data_runtime
     int sector_level_count;
     brush_world_runtime *brush_worlds;
     int brush_world_count;
+    slayer3d_game_data_brush_diagnostics brush_diagnostics;
     sector_door_runtime *sector_doors;
     int sector_door_count;
     sector_platform_runtime *sector_platforms;
@@ -3787,6 +3789,13 @@ static bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *r
                 face->surface_flags =
                     brush_flags_from_json(obj_get(face_json, "surface_flags"), brush_surface_flag_from_string, 0u);
             }
+        }
+
+        if (!slayer3d_game_data_brush_world_build_acceleration(world))
+        {
+            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' acceleration data",
+                       world->name != NULL ? world->name : "<unnamed>");
+            return false;
         }
 
         if (!slayer3d_game_data_brush_world_compile_render_model(world,
@@ -7849,7 +7858,8 @@ bool slayer3d_game_data_trace_brush_world(const slayer3d_game_data_runtime *runt
     const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
     if (world_runtime == NULL)
         return false;
-    return slayer3d_game_data_brush_world_trace_local(&world_runtime->desc, desc, out_result);
+    return slayer3d_game_data_brush_world_trace_local_with_diagnostics(
+        &world_runtime->desc, desc, true, out_result, &((slayer3d_game_data_runtime *)runtime)->brush_diagnostics);
 }
 
 typedef struct brush_scene_trace_context
@@ -7874,9 +7884,28 @@ static bool trace_brush_world_instance(void *userdata, const slayer3d_game_data_
     slayer3d_game_data_brush_trace_desc local_desc = *context->world_desc;
     local_desc.start = slayer3d_vec3_sub(local_desc.start, instance->position);
     local_desc.end = slayer3d_vec3_sub(local_desc.end, instance->position);
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(context->runtime, instance->world_name);
+    if (world_runtime == NULL)
+    {
+        context->ok = false;
+        return false;
+    }
+    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
+    ++mutable_runtime->brush_diagnostics.world_instance_count;
+    if (instance->acceleration_enabled && world_runtime->desc.has_bounds)
+    {
+        const slayer3d_bounding_box trace_bounds = slayer3d_game_data_brush_trace_bounds(&local_desc);
+        if (!slayer3d_check_aabb_aabb(trace_bounds, world_runtime->desc.bounds))
+        {
+            ++mutable_runtime->brush_diagnostics.world_bounds_reject_count;
+            return true;
+        }
+    }
 
     slayer3d_game_data_brush_trace_result local_result;
-    if (!slayer3d_game_data_trace_brush_world(context->runtime, instance->world_name, &local_desc, &local_result))
+    if (!slayer3d_game_data_brush_world_trace_local_with_diagnostics(&world_runtime->desc, &local_desc,
+                                                                     instance->acceleration_enabled, &local_result,
+                                                                     &mutable_runtime->brush_diagnostics))
     {
         context->ok = false;
         return false;
@@ -7912,6 +7941,22 @@ bool slayer3d_game_data_trace_active_brush_worlds(const slayer3d_game_data_runti
 
     *out_result = context.closest;
     return true;
+}
+
+bool slayer3d_game_data_get_brush_diagnostics(const slayer3d_game_data_runtime *runtime,
+                                              slayer3d_game_data_brush_diagnostics *out_diagnostics)
+{
+    if (runtime == NULL || out_diagnostics == NULL)
+        return false;
+    *out_diagnostics = runtime->brush_diagnostics;
+    return true;
+}
+
+void slayer3d_game_data_reset_brush_diagnostics(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    SDL_zero(runtime->brush_diagnostics);
 }
 
 typedef struct brush_named_trace_context
