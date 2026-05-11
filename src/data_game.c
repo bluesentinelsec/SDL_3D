@@ -95,7 +95,13 @@ static void data_game_release_mouse_capture(slayer3d_data_game_runtime *runtime,
         return;
     }
 
-    SDL_SetWindowRelativeMouseMode(ctx->window, false);
+    if (SDL_SetWindowRelativeMouseMode(ctx->window, false))
+    {
+        float dx = 0.0f;
+        float dy = 0.0f;
+        (void)SDL_GetRelativeMouseState(&dx, &dy);
+        slayer3d_input_discard_mouse_motion(slayer3d_game_session_get_input(ctx->session));
+    }
     runtime->mouse_capture_enabled = false;
 }
 
@@ -108,7 +114,13 @@ static void data_game_apply_scene_mouse_capture(slayer3d_data_game_runtime *runt
     if (runtime->mouse_capture_applied && runtime->mouse_capture_enabled == capture)
         return;
 
-    SDL_SetWindowRelativeMouseMode(ctx->window, capture);
+    if (SDL_SetWindowRelativeMouseMode(ctx->window, capture))
+    {
+        float dx = 0.0f;
+        float dy = 0.0f;
+        (void)SDL_GetRelativeMouseState(&dx, &dy);
+        slayer3d_input_discard_mouse_motion(slayer3d_game_session_get_input(ctx->session));
+    }
     runtime->mouse_capture_applied = true;
     runtime->mouse_capture_enabled = capture;
 }
@@ -1017,6 +1029,11 @@ void slayer3d_data_game_runtime_destroy(slayer3d_data_game_runtime *runtime)
 void slayer3d_data_game_runtime_release_mouse_capture(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     data_game_release_mouse_capture(runtime, ctx);
+}
+
+void slayer3d_data_game_runtime_apply_mouse_capture(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
+{
+    data_game_apply_scene_mouse_capture(runtime, ctx);
 }
 
 slayer3d_asset_resolver *slayer3d_data_game_runtime_assets(const slayer3d_data_game_runtime *runtime)

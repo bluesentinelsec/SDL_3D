@@ -107,12 +107,25 @@
           ]
         },
         {
-          "name": "brush.bridge.overhang",
+          "name": "brush.bridge.overhang_west",
+          "contents": "solid",
+          "tags": ["showcase", "overhang"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": -1.15 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 10.0 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, 1, 0], "distance": 4.25 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, -1, 0], "distance": -3.55 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1.0 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1.0 }, "material": "mat.accent_blue" }
+          ]
+        },
+        {
+          "name": "brush.bridge.overhang_east",
           "contents": "solid",
           "tags": ["showcase", "overhang"],
           "faces": [
             { "plane": { "normal": [1, 0, 0], "distance": 10.0 }, "material": "mat.accent_blue" },
-            { "plane": { "normal": [-1, 0, 0], "distance": 10.0 }, "material": "mat.accent_blue" },
+            { "plane": { "normal": [-1, 0, 0], "distance": -1.15 }, "material": "mat.accent_blue" },
             { "plane": { "normal": [0, 1, 0], "distance": 4.25 }, "material": "mat.accent_blue" },
             { "plane": { "normal": [0, -1, 0], "distance": -3.55 }, "material": "mat.accent_blue" },
             { "plane": { "normal": [0, 0, 1], "distance": 1.0 }, "material": "mat.accent_blue" },

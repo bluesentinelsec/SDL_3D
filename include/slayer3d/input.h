@@ -341,6 +341,18 @@ extern "C"
      */
     const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *input, int tick);
 
+    /**
+     * @brief Discard pending mouse motion around a relative-capture transition.
+     *
+     * This is intended for relative mouse capture transitions, where the
+     * platform may report synthetic cursor recenter/focus motion that should
+     * not be interpreted as player look input. Motion is ignored until the
+     * next input snapshot; if no motion arrives before that snapshot, the next
+     * motion event is also ignored to handle delayed platform artifacts. Safe
+     * to call with NULL.
+     */
+    void slayer3d_input_discard_mouse_motion(slayer3d_input_manager *input);
+
     /* ================================================================== */
     /* Queries                                                            */
     /* ================================================================== */
