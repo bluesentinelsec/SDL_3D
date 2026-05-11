@@ -3433,8 +3433,8 @@ extern "C"
      * @brief Resolve UI text content from data-authored bindings.
      *
      * Literal `text` entries are copied directly. Entries with `bindings`
-     * resolve engine metrics and actor properties, then format them using the
-     * descriptor's `format` string.
+     * resolve engine metrics, brush diagnostics, scene state, and actor
+     * properties, then format them using the descriptor's `format` string.
      */
     bool slayer3d_game_data_format_ui_text(const slayer3d_game_data_runtime *runtime,
                                            const slayer3d_game_data_ui_text *text,

@@ -7479,6 +7479,30 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
 
+    slayer3d_render_stats before_stats{};
+    slayer3d_render_stats after_stats{};
+    after_stats.model_mesh_submissions = 7;
+    after_stats.model_mesh_culled = 2;
+    after_stats.model_mesh_draws = 5;
+    after_stats.model_triangles_submitted = 128;
+    slayer3d_game_data_accumulate_brush_render_diagnostics(runtime, &before_stats, &after_stats);
+    bool saw_render_diagnostics = false;
+    char render_diagnostics[128]{};
+    auto find_render_diagnostics = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        if (std::string(text->name) != "ui.brush_geometry.render_diagnostics")
+            return true;
+        auto *args = static_cast<std::tuple<slayer3d_game_data_runtime *, bool *, char *> *>(userdata);
+        *std::get<1>(*args) = true;
+        slayer3d_game_data_ui_metrics metrics{};
+        EXPECT_TRUE(slayer3d_game_data_format_ui_text(std::get<0>(*args), text, &metrics, std::get<2>(*args), 128));
+        return false;
+    };
+    std::tuple<slayer3d_game_data_runtime *, bool *, char *> render_diagnostics_args{runtime, &saw_render_diagnostics,
+                                                                                     render_diagnostics};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_render_diagnostics, &render_diagnostics_args));
+    EXPECT_TRUE(saw_render_diagnostics);
+    EXPECT_STREQ(render_diagnostics, "RENDER 5/7 CULL 2 TRI 128");
+
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");

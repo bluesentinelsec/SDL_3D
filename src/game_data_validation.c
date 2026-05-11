@@ -9055,6 +9055,37 @@ static bool validate_data_condition(validation_context *ctx, yyjson_val *conditi
     return validation_error(ctx, path, "unsupported condition type '%s'", type != NULL ? type : "<missing>");
 }
 
+static bool ui_metric_name_valid(const char *metric)
+{
+    if (metric == NULL || metric[0] == '\0')
+        return false;
+
+    static const char *const metrics[] = {
+        "fps",
+        "frame",
+        "paused",
+        "brush.trace_count",
+        "brush.world_instance_count",
+        "brush.world_bounds_reject_count",
+        "brush.brush_count",
+        "brush.contents_reject_count",
+        "brush.bounds_reject_count",
+        "brush.collision_candidate_count",
+        "brush.hit_count",
+        "brush.render_mesh_submissions",
+        "brush.render_mesh_culled",
+        "brush.render_mesh_draws",
+        "brush.render_triangles_submitted",
+    };
+
+    for (size_t i = 0; i < SDL_arraysize(metrics); ++i)
+    {
+        if (SDL_strcmp(metric, metrics[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
 static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *ui = obj_get(root, "ui");
@@ -9102,7 +9133,14 @@ static bool validate_ui(validation_context *ctx, yyjson_val *root, validation_na
                 if (!is_non_empty_string(binding, "key"))
                     return validation_error(ctx, binding_path, "UI property binding requires a non-empty key");
             }
-            else if (SDL_strcmp(type != NULL ? type : "", "metric") != 0)
+            else if (SDL_strcmp(type != NULL ? type : "", "metric") == 0)
+            {
+                const char *metric = json_string(binding, "metric");
+                if (!ui_metric_name_valid(metric))
+                    return validation_error(ctx, binding_path, "unsupported UI metric '%s'",
+                                            metric != NULL ? metric : "<missing>");
+            }
+            else
             {
                 if (SDL_strcmp(type != NULL ? type : "", "scene_state") != 0)
                     return validation_error(ctx, binding_path, "unsupported UI binding type '%s'",
@@ -10164,7 +10202,14 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
                 if (!is_non_empty_string(binding, "key"))
                     return validation_error(ctx, binding_path, "scene UI property binding requires a non-empty key");
             }
-            else if (SDL_strcmp(type != NULL ? type : "", "metric") != 0)
+            else if (SDL_strcmp(type != NULL ? type : "", "metric") == 0)
+            {
+                const char *metric = json_string(binding, "metric");
+                if (!ui_metric_name_valid(metric))
+                    return validation_error(ctx, binding_path, "unsupported scene UI metric '%s'",
+                                            metric != NULL ? metric : "<missing>");
+            }
+            else
             {
                 if (SDL_strcmp(type != NULL ? type : "", "scene_state") != 0)
                     return validation_error(ctx, binding_path, "unsupported scene UI binding type '%s'",

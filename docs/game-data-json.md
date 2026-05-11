@@ -1824,6 +1824,30 @@ keeps HUD text renderable before the first action writes a transient value:
 }
 ```
 
+UI text can also bind engine metrics. `fps`, `frame`, and `paused` are always
+available. Brush-world diagnostics are exposed with `brush.*` metric names so
+debug overlays can inspect collision and render cost without game-specific C:
+
+```json
+{
+  "format": "RENDER %llu/%llu CULL %llu TRI %llu",
+  "bindings": [
+    { "type": "metric", "metric": "brush.render_mesh_draws" },
+    { "type": "metric", "metric": "brush.render_mesh_submissions" },
+    { "type": "metric", "metric": "brush.render_mesh_culled" },
+    { "type": "metric", "metric": "brush.render_triangles_submitted" }
+  ]
+}
+```
+
+Supported brush metrics are `brush.trace_count`,
+`brush.world_instance_count`, `brush.world_bounds_reject_count`,
+`brush.brush_count`, `brush.contents_reject_count`,
+`brush.bounds_reject_count`, `brush.collision_candidate_count`,
+`brush.hit_count`, `brush.render_mesh_submissions`,
+`brush.render_mesh_culled`, `brush.render_mesh_draws`, and
+`brush.render_triangles_submitted`.
+
 `property.set` and `property.add` normally target a fixed actor:
 
 ```json
