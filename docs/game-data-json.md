@@ -2123,6 +2123,26 @@ Use `actor_tag` instead of `actor` to apply a sector sensor to every active
 actor with a matching tag. `sector_index` may be used instead of `sector` when
 the authored sector order is deliberate and stable.
 
+`sensor.brush_contents` detects whether an actor's current point is inside an
+active brush matching an authored `contents_mask`. The default mask is
+`trigger`, making it suitable for trigger volumes in brush worlds. It supports
+`enter`, `stay` / `overlap`, and `exit`; payloads include `actor_name`,
+`brush_world`, `brush_name`, `contents`, `surface_flags`, `hit_position`, and
+`hit_normal`.
+
+```json
+{
+  "name": "sensor.secret.trigger",
+  "type": "sensor.brush_contents",
+  "actor": "entity.player",
+  "contents_mask": "trigger",
+  "edge": "enter",
+  "actions": [
+    { "type": "property.set", "target_from_payload": "actor_name", "key": "found_secret", "value": true }
+  ]
+}
+```
+
 `sensor.perception` detects whether an observer can see one or more targets
 inside a sector level. It combines range, field-of-view, sector line-of-sight,
 and the standard `target_filter` object, so faction-aware AI perception can be
@@ -2156,6 +2176,31 @@ threshold directly; `-1.0` means omnidirectional. `yaw_property` defaults to
 and `observer_actor_name` for the observer, `target_actor_name` and
 `other_actor_name` for the seen target, `sector_level`, `distance`,
 `perception_distance`, `range`, `origin`, and `target_position`.
+
+`sensor.brush_perception` is the brush-world equivalent. It uses active brush
+world traces for line-of-sight instead of a sector level, and `contents_mask`
+selects which brush contents block sight. The default blocker mask is
+`["solid", "player_clip"]`. Payloads include the standard perception fields
+plus brush trace fields such as `hit_brush`, `hit_brush_name`, `hit_material`,
+`hit_contents`, and `hit_surface_flags`.
+
+```json
+{
+  "name": "sensor.guard.brush_los",
+  "type": "sensor.brush_perception",
+  "observer": "entity.guard",
+  "target_tag": "actor",
+  "contents_mask": ["solid", "player_clip"],
+  "range": 20.0,
+  "fov_degrees": 120.0,
+  "target_filter": { "relationship": "hostile" },
+  "edge": "stay",
+  "actions": [
+    { "type": "property.set", "target": "entity.guard", "key": "alerted", "value": true },
+    { "type": "property.set", "target_from_payload": "target_actor_name", "key": "was_seen", "value": true }
+  ]
+}
+```
 
 `noise.emit` creates a short-lived runtime noise event. It does not play audio
 by itself; pair it with `audio.play_sfx` when the game should also make an

@@ -13683,6 +13683,181 @@ TEST(GameDataRuntime, RunsAuthoredHearingSensorsForNoiseEventsAndTargetFilters)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RunsAuthoredBrushContentsAndPerceptionSensors)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_gameplay_sensors");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "entities": ["entity.player", "entity.visible", "entity.blocked"],
+  "world": { "brush_worlds": [{ "world": "brush.sensor" }] }
+})json");
+    write_text(dir / "brush_gameplay_sensors.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Gameplay Sensors Test" },
+  "world": { "name": "world.test", "kind": "brush" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.0, 1.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "in_trigger": { "type": "bool", "value": false },
+        "left_trigger": { "type": "bool", "value": false },
+        "trigger_ticks": { "type": "int", "value": 0 },
+        "last_trigger": { "type": "string", "value": "" }
+      }
+    },
+    {
+      "name": "entity.visible",
+      "active": true,
+      "tags": ["npc"],
+      "transform": { "position": [2.0, 1.0, -3.0] },
+      "properties": {
+        "spotted": { "type": "int", "value": 0 },
+        "last_distance": { "type": "float", "value": 0.0 }
+      }
+    },
+    {
+      "name": "entity.blocked",
+      "active": true,
+      "tags": ["npc"],
+      "transform": { "position": [0.0, 1.0, -3.0] },
+      "properties": {
+        "spotted": { "type": "int", "value": 0 }
+      }
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.sensor",
+      "materials": [
+        { "name": "mat.trigger", "albedo": [0.1, 0.7, 0.9, 0.35] },
+        { "name": "mat.wall", "albedo": [0.3, 0.3, 0.35, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.trigger_zone",
+          "contents": "trigger",
+          "faces": [
+            { "plane": { "normal": [ 1, 0, 0], "distance": 2.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [-1, 0, 0], "distance": -1.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0,  1, 0], "distance": 2.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0, 0,  1], "distance": 2.0 }, "material": "mat.trigger" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0.0 }, "material": "mat.trigger" }
+          ]
+        },
+        {
+          "name": "brush.los_wall",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1, 0, 0], "distance": 0.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 0.5 }, "material": "mat.wall" },
+            { "plane": { "normal": [0,  1, 0], "distance": 2.2 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0,  1], "distance": -1.0 }, "material": "mat.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 2.0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.trigger.enter",
+        "type": "sensor.brush_contents",
+        "actor": "entity.player",
+        "contents_mask": "trigger",
+        "edge": "enter",
+        "actions": [
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "in_trigger", "value": true },
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "last_trigger", "value_from_payload": "brush_name" }
+        ]
+      },
+      {
+        "name": "sensor.trigger.stay",
+        "type": "sensor.brush_contents",
+        "actor": "entity.player",
+        "contents_mask": "trigger",
+        "edge": "stay",
+        "actions": [
+          { "type": "property.add", "target_from_payload": "actor_name", "key": "trigger_ticks", "value": 1 }
+        ]
+      },
+      {
+        "name": "sensor.trigger.exit",
+        "type": "sensor.brush_contents",
+        "actor": "entity.player",
+        "contents_mask": "trigger",
+        "edge": "exit",
+        "actions": [
+          { "type": "property.set", "target_from_payload": "actor_name", "key": "left_trigger", "value": true }
+        ]
+      },
+      {
+        "name": "sensor.brush_los",
+        "type": "sensor.brush_perception",
+        "observer": "entity.player",
+        "target_tag": "npc",
+        "contents_mask": "solid",
+        "range": 8.0,
+        "fov_degrees": 180.0,
+        "edge": "stay",
+        "actions": [
+          { "type": "property.add", "target_from_payload": "target_actor_name", "key": "spotted", "value": 1 },
+          { "type": "property.set", "target_from_payload": "target_actor_name", "key": "last_distance", "value_from_payload": "distance" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "brush_gameplay_sensors.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *visible = slayer3d_game_data_find_actor(runtime, "entity.visible");
+    slayer3d_registered_actor *blocked = slayer3d_game_data_find_actor(runtime, "entity.blocked");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(visible, nullptr);
+    ASSERT_NE(blocked, nullptr);
+
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(player->props, "in_trigger", true));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "trigger_ticks", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(visible->props, "spotted", 0), 1);
+    EXPECT_GT(slayer3d_properties_get_float(visible->props, "last_distance", 0.0f), 3.0f);
+    EXPECT_EQ(slayer3d_properties_get_int(blocked->props, "spotted", 0), 0);
+
+    player->position = slayer3d_vec3_make(1.5f, 1.0f, 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "in_trigger", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_trigger", ""), "brush.trigger_zone");
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "trigger_ticks", 0), 1);
+
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "trigger_ticks", 0), 2);
+
+    player->position = slayer3d_vec3_make(3.0f, 1.0f, 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "left_trigger", false));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
 {
     const std::filesystem::path dir = unique_test_dir("sector_doors_invalid");
@@ -13784,6 +13959,40 @@ TEST(GameDataRuntime, RejectsInvalidSectorDoorsAndActions)
               ]
             })json",
             "sensor.hearing range",
+        },
+        {
+            "invalid_brush_contents_sensor",
+            R"json([])json",
+            R"json({
+              "sensors": [
+                {
+                  "type": "sensor.brush_contents",
+                  "actor": "entity.player",
+                  "contents_mask": ["trigger", "missing_content"],
+                  "actions": [
+                    { "type": "property.set", "target_from_payload": "actor_name", "key": "alert", "value": true }
+                  ]
+                }
+              ]
+            })json",
+            "brush content value is unknown",
+        },
+        {
+            "invalid_brush_perception_sensor",
+            R"json([])json",
+            R"json({
+              "sensors": [
+                {
+                  "type": "sensor.brush_perception",
+                  "observer": "entity.player",
+                  "range": -1,
+                  "actions": [
+                    { "type": "property.set", "target_from_payload": "target_actor_name", "key": "alert", "value": true }
+                  ]
+                }
+              ]
+            })json",
+            "sensor.brush_perception requires exactly one of target or target_tag",
         },
         {
             "invalid_noise_action",

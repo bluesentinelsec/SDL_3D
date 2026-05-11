@@ -52,6 +52,8 @@ typedef enum game_data_sensor_type
     GAME_DATA_SENSOR_CONTACT_2D,
     GAME_DATA_SENSOR_HEARING,
     GAME_DATA_SENSOR_INPUT_PRESSED,
+    GAME_DATA_SENSOR_BRUSH_CONTENTS,
+    GAME_DATA_SENSOR_BRUSH_PERCEPTION,
     GAME_DATA_SENSOR_PERCEPTION,
     GAME_DATA_SENSOR_SECTOR,
     GAME_DATA_SENSOR_VOLUME,
@@ -18874,6 +18876,10 @@ static bool load_sensors(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
             entry->type = GAME_DATA_SENSOR_HEARING;
         else if (SDL_strcmp(type, "sensor.input_pressed") == 0)
             entry->type = GAME_DATA_SENSOR_INPUT_PRESSED;
+        else if (SDL_strcmp(type, "sensor.brush_contents") == 0)
+            entry->type = GAME_DATA_SENSOR_BRUSH_CONTENTS;
+        else if (SDL_strcmp(type, "sensor.brush_perception") == 0)
+            entry->type = GAME_DATA_SENSOR_BRUSH_PERCEPTION;
         else if (SDL_strcmp(type, "sensor.perception") == 0)
             entry->type = GAME_DATA_SENSOR_PERCEPTION;
         else if (SDL_strcmp(type, "sensor.sector") == 0)
@@ -20814,6 +20820,23 @@ static void execute_sensor_actions(slayer3d_game_data_runtime *runtime, const se
     slayer3d_properties_destroy(payload);
 }
 
+static void emit_sensor_payload_signal(slayer3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                       const slayer3d_properties *payload)
+{
+    slayer3d_signal_bus *bus = runtime_bus(runtime);
+    if (bus == NULL || sensor == NULL || sensor->signal_id < 0)
+        return;
+    slayer3d_signal_emit(bus, sensor->signal_id, payload);
+}
+
+static void execute_sensor_payload_actions(slayer3d_game_data_runtime *runtime, const sensor_entry *sensor,
+                                           const slayer3d_properties *payload)
+{
+    if (runtime == NULL || sensor == NULL || !yyjson_is_arr(sensor->actions))
+        return;
+    (void)execute_action_array(runtime, sensor->actions, payload);
+}
+
 static bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor)
 {
     if (runtime == NULL || actor == NULL)
@@ -21120,6 +21143,116 @@ static bool sensor_edge_is_exit(const sensor_entry *sensor)
     return sensor != NULL && sensor->edge != NULL && SDL_strcmp(sensor->edge, "exit") == 0;
 }
 
+static unsigned int sensor_brush_contents_mask(const sensor_entry *sensor, unsigned int fallback)
+{
+    return brush_flags_from_json(sensor != NULL ? obj_get(sensor->json, "contents_mask") : NULL,
+                                 brush_content_flag_from_string, fallback);
+}
+
+static bool trace_active_brush_point_contents(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 point,
+                                              unsigned int contents_mask,
+                                              slayer3d_game_data_brush_trace_result *out_result)
+{
+    slayer3d_game_data_brush_trace_desc trace;
+    SDL_zero(trace);
+    trace.start = point;
+    trace.end = point;
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = contents_mask;
+    return slayer3d_game_data_trace_active_brush_worlds(runtime, &trace, out_result);
+}
+
+static void brush_trace_payload_fields(slayer3d_properties *payload,
+                                       const slayer3d_game_data_brush_trace_result *result)
+{
+    if (payload == NULL)
+        return;
+    const bool hit = result != NULL && result->hit;
+    slayer3d_properties_set_bool(payload, "hit_brush", hit);
+    slayer3d_properties_set_string(payload, "brush_world", hit && result->world_name != NULL ? result->world_name : "");
+    slayer3d_properties_set_string(payload, "hit_brush_world",
+                                   hit && result->world_name != NULL ? result->world_name : "");
+    slayer3d_properties_set_string(payload, "brush_name", hit && result->brush_name != NULL ? result->brush_name : "");
+    slayer3d_properties_set_string(payload, "hit_brush_name",
+                                   hit && result->brush_name != NULL ? result->brush_name : "");
+    slayer3d_properties_set_string(payload, "material",
+                                   hit && result->material_name != NULL ? result->material_name : "");
+    slayer3d_properties_set_string(payload, "hit_material",
+                                   hit && result->material_name != NULL ? result->material_name : "");
+    slayer3d_properties_set_vec3(payload, "hit_position",
+                                 hit ? result->end_position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(payload, "hit_normal", hit ? result->normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_float(payload, "hit_fraction", hit ? result->fraction : 1.0f);
+    slayer3d_properties_set_int(payload, "contents",
+                                hit ? (int)SDL_min(result->contents, (unsigned int)SDL_MAX_SINT32) : 0);
+    slayer3d_properties_set_int(payload, "hit_contents",
+                                hit ? (int)SDL_min(result->contents, (unsigned int)SDL_MAX_SINT32) : 0);
+    slayer3d_properties_set_int(payload, "surface_flags",
+                                hit ? (int)SDL_min(result->surface_flags, (unsigned int)SDL_MAX_SINT32) : 0);
+    slayer3d_properties_set_int(payload, "hit_surface_flags",
+                                hit ? (int)SDL_min(result->surface_flags, (unsigned int)SDL_MAX_SINT32) : 0);
+}
+
+static slayer3d_properties *create_brush_contents_sensor_payload(const sensor_entry *sensor,
+                                                                 const slayer3d_registered_actor *actor,
+                                                                 const slayer3d_game_data_brush_trace_result *result)
+{
+    slayer3d_properties *payload = slayer3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+    slayer3d_properties_set_string(payload, "actor_name", actor != NULL && actor->name != NULL ? actor->name : "");
+    slayer3d_properties_set_string(payload, "sensor_name", sensor != NULL && sensor->name != NULL ? sensor->name : "");
+    slayer3d_properties_set_vec3(payload, "point",
+                                 actor != NULL ? actor->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    brush_trace_payload_fields(payload, result);
+    return payload;
+}
+
+static void update_brush_contents_sensor_actor(slayer3d_game_data_runtime *runtime, sensor_entry *sensor,
+                                               slayer3d_registered_actor *actor)
+{
+    if (!runtime_actor_is_active(runtime, actor))
+        return;
+
+    slayer3d_game_data_brush_trace_result result;
+    const unsigned int mask = sensor_brush_contents_mask(sensor, SLAYER3D_GAME_DATA_BRUSH_CONTENT_TRIGGER);
+    const bool traced = trace_active_brush_point_contents(runtime, actor->position, mask, &result);
+    const bool active =
+        traced && result.hit && result.start_solid &&
+        actor_matches_target_filter(runtime, actor, NULL, sensor->json, NULL, sensor->entity_tag, false);
+    sensor_contact_pair_state *state = sensor_contact_pair_state_for(
+        sensor, actor != NULL ? actor->name : NULL, sensor->name != NULL ? sensor->name : "brush_contents");
+    if (state == NULL)
+        return;
+
+    const bool should_emit = sensor_edge_is_exit(sensor)   ? (!active && state->active)
+                             : sensor_edge_is_stay(sensor) ? active
+                                                           : (active && !state->active);
+    if (should_emit)
+    {
+        slayer3d_properties *payload = create_brush_contents_sensor_payload(sensor, actor, active ? &result : NULL);
+        emit_sensor_payload_signal(runtime, sensor, payload);
+        execute_sensor_payload_actions(runtime, sensor, payload);
+        slayer3d_properties_destroy(payload);
+    }
+    state->active = active;
+    state->seen = true;
+}
+
+static void update_brush_contents_sensor(slayer3d_game_data_runtime *runtime, sensor_entry *sensor)
+{
+    sensor_actor_list actors;
+    SDL_zero(actors);
+    sensor_contact_states_begin(sensor);
+    if (collect_sensor_endpoint_actors(runtime, sensor->entity, sensor->entity_tag, &actors))
+    {
+        for (int i = 0; i < actors.count; ++i)
+            update_brush_contents_sensor_actor(runtime, sensor, actors.items[i]);
+    }
+    sensor_contact_states_end(sensor);
+    sensor_actor_list_free(&actors);
+}
+
 static int sensor_target_sector_index(const sector_level_runtime *level, const sensor_entry *sensor)
 {
     if (level == NULL || sensor == NULL)
@@ -21350,6 +21483,49 @@ static bool perception_sensor_has_line_of_sight(const sensor_entry *sensor, cons
     return !trace.hit || SDL_clamp(trace.fraction, 0.0f, 1.0f) >= 0.995f;
 }
 
+static bool brush_perception_sensor_has_line_of_sight(const slayer3d_game_data_runtime *runtime,
+                                                      const sensor_entry *sensor,
+                                                      const slayer3d_registered_actor *observer,
+                                                      const slayer3d_registered_actor *target, float *out_distance,
+                                                      slayer3d_vec3 *out_origin, slayer3d_vec3 *out_target,
+                                                      slayer3d_game_data_brush_trace_result *out_trace)
+{
+    if (runtime == NULL || sensor == NULL || observer == NULL || target == NULL)
+        return false;
+    if (out_trace != NULL)
+        SDL_zero(*out_trace);
+
+    const slayer3d_vec3 origin = slayer3d_vec3_make(
+        observer->position.x, observer->position.y + sensor->observer_eye_height, observer->position.z);
+    const slayer3d_vec3 target_point =
+        slayer3d_vec3_make(target->position.x, target->position.y + sensor->target_eye_height, target->position.z);
+    const slayer3d_vec3 delta = slayer3d_vec3_sub(target_point, origin);
+    const float distance = slayer3d_vec3_length(delta);
+    if (distance <= 0.000001f || distance > sensor->range)
+        return false;
+
+    if (out_distance != NULL)
+        *out_distance = distance;
+    if (out_origin != NULL)
+        *out_origin = origin;
+    if (out_target != NULL)
+        *out_target = target_point;
+
+    slayer3d_game_data_brush_trace_desc trace;
+    SDL_zero(trace);
+    trace.start = origin;
+    trace.end = target_point;
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = sensor_brush_contents_mask(sensor, SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID |
+                                                                 SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+    slayer3d_game_data_brush_trace_result result;
+    if (!slayer3d_game_data_trace_active_brush_worlds(runtime, &trace, &result))
+        return false;
+    if (out_trace != NULL)
+        *out_trace = result;
+    return !result.hit || SDL_clamp(result.fraction, 0.0f, 1.0f) >= 0.995f;
+}
+
 static slayer3d_properties *create_perception_sensor_payload(const sensor_entry *sensor,
                                                              const sector_level_runtime *level,
                                                              const slayer3d_registered_actor *observer,
@@ -21405,6 +21581,97 @@ static void execute_perception_sensor_actions(slayer3d_game_data_runtime *runtim
     if (payload != NULL)
         (void)execute_action_array(runtime, sensor->actions, payload);
     slayer3d_properties_destroy(payload);
+}
+
+static slayer3d_properties *create_brush_perception_sensor_payload(const sensor_entry *sensor,
+                                                                   const slayer3d_registered_actor *observer,
+                                                                   const slayer3d_registered_actor *target,
+                                                                   float distance, slayer3d_vec3 origin,
+                                                                   slayer3d_vec3 target_point, bool visible,
+                                                                   const slayer3d_game_data_brush_trace_result *trace)
+{
+    slayer3d_properties *payload = slayer3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+
+    slayer3d_properties_set_string(payload, "actor_name",
+                                   observer != NULL && observer->name != NULL ? observer->name : "");
+    slayer3d_properties_set_string(payload, "observer_actor_name",
+                                   observer != NULL && observer->name != NULL ? observer->name : "");
+    slayer3d_properties_set_string(payload, "target_actor_name",
+                                   target != NULL && target->name != NULL ? target->name : "");
+    slayer3d_properties_set_string(payload, "other_actor_name",
+                                   target != NULL && target->name != NULL ? target->name : "");
+    slayer3d_properties_set_string(payload, "sensor_name", sensor != NULL && sensor->name != NULL ? sensor->name : "");
+    slayer3d_properties_set_bool(payload, "line_of_sight", visible);
+    slayer3d_properties_set_bool(payload, "brush_line_of_sight", visible);
+    slayer3d_properties_set_float(payload, "distance", distance);
+    slayer3d_properties_set_float(payload, "perception_distance", distance);
+    slayer3d_properties_set_float(payload, "range", sensor != NULL ? sensor->range : 0.0f);
+    slayer3d_properties_set_vec3(payload, "origin", origin);
+    slayer3d_properties_set_vec3(payload, "target_position", target_point);
+    brush_trace_payload_fields(payload, trace);
+    return payload;
+}
+
+static void update_brush_perception_sensor_pair(slayer3d_game_data_runtime *runtime, sensor_entry *sensor,
+                                                slayer3d_registered_actor *observer, slayer3d_registered_actor *target)
+{
+    if (!runtime_actor_is_active(runtime, observer) || !runtime_actor_is_active(runtime, target) || observer == target)
+        return;
+
+    sensor_contact_pair_state *state = sensor_contact_pair_state_for(sensor, observer->name, target->name);
+    if (state == NULL)
+        return;
+
+    float distance = 0.0f;
+    slayer3d_vec3 origin = observer->position;
+    slayer3d_vec3 target_point = target->position;
+    slayer3d_game_data_brush_trace_result trace;
+    SDL_zero(trace);
+    bool active = actor_matches_target_filter(runtime, target, observer, sensor->json, NULL, sensor->other_tag, true) &&
+                  perception_actor_in_field_of_view(sensor, observer, target) &&
+                  brush_perception_sensor_has_line_of_sight(runtime, sensor, observer, target, &distance, &origin,
+                                                            &target_point, &trace);
+
+    const bool should_emit = sensor_edge_is_exit(sensor)   ? (!active && state->active)
+                             : sensor_edge_is_stay(sensor) ? active
+                                                           : (active && !state->active);
+    if (should_emit)
+    {
+        slayer3d_properties *payload = create_brush_perception_sensor_payload(
+            sensor, observer, target, distance, origin, target_point, active, trace.hit ? &trace : NULL);
+        emit_sensor_payload_signal(runtime, sensor, payload);
+        execute_sensor_payload_actions(runtime, sensor, payload);
+        slayer3d_properties_destroy(payload);
+    }
+    state->active = active;
+    state->seen = true;
+}
+
+static void update_brush_perception_sensor(slayer3d_game_data_runtime *runtime, sensor_entry *sensor)
+{
+    sensor_actor_list observers;
+    sensor_actor_list targets;
+    SDL_zero(observers);
+    SDL_zero(targets);
+
+    sensor_contact_states_begin(sensor);
+    if (collect_sensor_endpoint_actors(runtime, sensor->entity, sensor->entity_tag, &observers) &&
+        collect_sensor_endpoint_actors(runtime, sensor->other, sensor->other_tag, &targets))
+    {
+        for (int observer_index = 0; observer_index < observers.count; ++observer_index)
+        {
+            for (int target_index = 0; target_index < targets.count; ++target_index)
+            {
+                update_brush_perception_sensor_pair(runtime, sensor, observers.items[observer_index],
+                                                    targets.items[target_index]);
+            }
+        }
+    }
+    sensor_contact_states_end(sensor);
+    sensor_actor_list_free(&observers);
+    sensor_actor_list_free(&targets);
 }
 
 static void update_perception_sensor_pair(slayer3d_game_data_runtime *runtime, sensor_entry *sensor,
@@ -21609,6 +21876,16 @@ static void update_sensors(slayer3d_game_data_runtime *runtime)
         if (sensor->type == GAME_DATA_SENSOR_VOLUME)
         {
             update_volume_sensor(runtime, sensor);
+            continue;
+        }
+        if (sensor->type == GAME_DATA_SENSOR_BRUSH_CONTENTS)
+        {
+            update_brush_contents_sensor(runtime, sensor);
+            continue;
+        }
+        if (sensor->type == GAME_DATA_SENSOR_BRUSH_PERCEPTION)
+        {
+            update_brush_perception_sensor(runtime, sensor);
             continue;
         }
         if (sensor->type == GAME_DATA_SENSOR_PERCEPTION)
