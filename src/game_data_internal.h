@@ -17,8 +17,10 @@
 #include "slayer3d/input.h"
 #include "slayer3d/level.h"
 #include "slayer3d/network.h"
+#include "slayer3d/network_replication.h"
 #include "slayer3d/properties.h"
 #include "slayer3d/script.h"
+#include "slayer3d/signal_bus.h"
 #include "slayer3d/timer_pool.h"
 #include "yyjson.h"
 
@@ -400,6 +402,24 @@ typedef struct patrol_controller_runtime
     bool initialized;
 } patrol_controller_runtime;
 
+typedef struct game_data_snapshot_value
+{
+    slayer3d_replication_field_type type;
+    union {
+        bool as_bool;
+        Sint32 as_int32;
+        float as_float32;
+        slayer3d_vec2 as_vec2;
+        slayer3d_vec3 as_vec3;
+    } value;
+} game_data_snapshot_value;
+
+typedef struct game_data_input_value
+{
+    int action_id;
+    float value;
+} game_data_input_value;
+
 typedef enum actor_pool_exhaustion_policy
 {
     ACTOR_POOL_EXHAUST_FAIL,
@@ -621,14 +641,72 @@ slayer3d_vec4 json_vec4_value(yyjson_val *value, slayer3d_vec4 fallback);
 slayer3d_vec4 json_vec4(yyjson_val *object, const char *key, slayer3d_vec4 fallback);
 const char *scene_state_string(const slayer3d_game_data_runtime *runtime, const char *key, const char *fallback);
 bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key, bool fallback);
+float scene_state_float(const slayer3d_game_data_runtime *runtime, const char *key, float fallback);
 
 slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runtime);
+slayer3d_signal_bus *runtime_bus(const slayer3d_game_data_runtime *runtime);
 yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime);
+scene_entry *active_scene_entry(slayer3d_game_data_runtime *runtime);
 const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime);
+scene_entry *find_scene(slayer3d_game_data_runtime *runtime, const char *name);
+const scene_entry *find_scene_const(const slayer3d_game_data_runtime *runtime, const char *name);
+scene_menu_state *find_scene_menu(scene_entry *scene, const char *name);
+const scene_menu_state *find_scene_menu_const(const scene_entry *scene, const char *name);
+sector_door_runtime *find_sector_door(slayer3d_game_data_runtime *runtime, const char *name);
+bool sector_door_in_scene(const sector_door_runtime *door, const char *scene_name);
+bool sector_door_in_active_scene(const slayer3d_game_data_runtime *runtime, const sector_door_runtime *door);
+bool sector_platform_in_scene(const sector_platform_runtime *platform, const char *scene_name);
+bool sector_platform_in_active_scene(const slayer3d_game_data_runtime *runtime,
+                                     const sector_platform_runtime *platform);
+void apply_scene_camera(slayer3d_game_data_runtime *runtime, const scene_entry *scene);
+void emit_scene_enter_signal(slayer3d_game_data_runtime *runtime, const scene_entry *scene, const char *from_scene,
+                             const slayer3d_properties *payload);
+yyjson_val *find_entity_json(const slayer3d_game_data_runtime *runtime, const char *name);
+yyjson_val *find_component_json(yyjson_val *entity, const char *type);
+yyjson_val *find_actor_definition_json(const slayer3d_game_data_runtime *runtime, const char *actor_name);
+yyjson_val *find_font_json(const slayer3d_game_data_runtime *runtime, const char *id);
+yyjson_val *find_image_json(const slayer3d_game_data_runtime *runtime, const char *id);
+yyjson_val *find_model_json(const slayer3d_game_data_runtime *runtime, const char *id);
+yyjson_val *find_sound_json(const slayer3d_game_data_runtime *runtime, const char *id);
+yyjson_val *find_music_json(const slayer3d_game_data_runtime *runtime, const char *id);
+yyjson_val *find_ambient_json(const slayer3d_game_data_runtime *runtime, const char *id);
+yyjson_val *find_sprite_json(const slayer3d_game_data_runtime *runtime, const char *id);
+yyjson_val *find_camera_json(const slayer3d_game_data_runtime *runtime, const char *name);
 const char *find_action_name(const slayer3d_game_data_runtime *runtime, int action_id);
 bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
 bool active_scene_has_entity_internal(const slayer3d_game_data_runtime *runtime, const char *entity_name);
 bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
+bool entity_json_has_all_tags_from_json(yyjson_val *entity, yyjson_val *tags);
+const actor_pool_runtime *find_actor_pool_for_actor_const(const slayer3d_game_data_runtime *runtime,
+                                                          const char *actor_name, int *out_index);
+bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name);
+void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
+slayer3d_vec3 actor_vec_property(const slayer3d_registered_actor *actor, const char *key);
+void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value);
+slayer3d_audio_bus parse_audio_bus(const char *bus, slayer3d_audio_bus fallback);
+slayer3d_backend parse_backend(const char *value, slayer3d_backend fallback);
+slayer3d_window_mode parse_window_mode(const char *value, slayer3d_window_mode fallback);
+slayer3d_tonemap_mode parse_tonemap(const char *value, slayer3d_tonemap_mode fallback);
+bool parse_render_profile(const char *value, slayer3d_render_profile *out_profile);
+float camera_fov_degrees(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json, float fallback);
+slayer3d_camera_fov_axis camera_fov_axis(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json);
+slayer3d_transition_type parse_transition_type(const char *value, slayer3d_transition_type fallback);
+slayer3d_transition_direction parse_transition_direction(const char *value, slayer3d_transition_direction fallback);
+slayer3d_builtin_font parse_builtin_font(const char *value, slayer3d_builtin_font fallback);
+slayer3d_game_data_ui_align parse_ui_align(const char *value, slayer3d_game_data_ui_align fallback);
+slayer3d_game_data_ui_valign parse_ui_valign(const char *value, slayer3d_game_data_ui_valign fallback);
+const char *parse_ui_image_effect(const char *value);
+int axis_index(const char *axis);
+float vec_axis(slayer3d_vec3 value, int axis);
+void set_vec_axis(slayer3d_vec3 *value, int axis, float component);
+fps_controller_runtime *find_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name);
+const fps_controller_runtime *find_fps_controller_const(const slayer3d_game_data_runtime *runtime,
+                                                        const char *entity_name);
+fps_controller_runtime *find_or_add_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
+                                                   yyjson_val *component);
+patrol_controller_runtime *find_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name);
+patrol_controller_runtime *find_or_add_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
+                                                         yyjson_val *component);
 const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name);
 bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row);
 char grid_map_cell(const grid_map_runtime *map, int col, int row);

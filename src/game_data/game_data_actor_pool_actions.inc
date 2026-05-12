@@ -200,8 +200,8 @@ static actor_pool_runtime *find_actor_pool_for_actor(slayer3d_game_data_runtime 
     return NULL;
 }
 
-static const actor_pool_runtime *find_actor_pool_for_actor_const(const slayer3d_game_data_runtime *runtime,
-                                                                 const char *actor_name, int *out_index)
+const actor_pool_runtime *find_actor_pool_for_actor_const(const slayer3d_game_data_runtime *runtime,
+                                                          const char *actor_name, int *out_index)
 {
     if (out_index != NULL)
         *out_index = -1;

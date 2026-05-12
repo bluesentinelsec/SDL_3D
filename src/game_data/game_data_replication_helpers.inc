@@ -419,7 +419,7 @@ static bool game_data_apply_actor_replication_field(slayer3d_game_data_runtime *
     }
 }
 
-static void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value)
+void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value)
 {
     if (target == NULL || key == NULL || value == NULL)
         return;

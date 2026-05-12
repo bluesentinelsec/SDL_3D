@@ -1,11 +1,13 @@
 /* Runtime scene, entity, asset, and controller lookup helpers. */
 
+#include "game_data_internal.h"
+
 yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime)
 {
     return runtime != NULL && runtime->doc != NULL ? yyjson_doc_get_root(runtime->doc) : NULL;
 }
 
-static scene_entry *active_scene_entry(slayer3d_game_data_runtime *runtime)
+scene_entry *active_scene_entry(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->active_scene_index < 0 || runtime->active_scene_index >= runtime->scene_count)
         return NULL;
@@ -19,7 +21,7 @@ const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *ru
     return &runtime->scenes[runtime->active_scene_index];
 }
 
-static scene_entry *find_scene(slayer3d_game_data_runtime *runtime, const char *name)
+scene_entry *find_scene(slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -31,7 +33,7 @@ static scene_entry *find_scene(slayer3d_game_data_runtime *runtime, const char *
     return NULL;
 }
 
-static const scene_entry *find_scene_const(const slayer3d_game_data_runtime *runtime, const char *name)
+const scene_entry *find_scene_const(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -43,7 +45,7 @@ static const scene_entry *find_scene_const(const slayer3d_game_data_runtime *run
     return NULL;
 }
 
-static sector_door_runtime *find_sector_door(slayer3d_game_data_runtime *runtime, const char *name)
+sector_door_runtime *find_sector_door(slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -56,7 +58,7 @@ static sector_door_runtime *find_sector_door(slayer3d_game_data_runtime *runtime
     return NULL;
 }
 
-static bool sector_door_in_scene(const sector_door_runtime *door, const char *scene_name)
+bool sector_door_in_scene(const sector_door_runtime *door, const char *scene_name)
 {
     if (door == NULL)
         return false;
@@ -66,13 +68,13 @@ static bool sector_door_in_scene(const sector_door_runtime *door, const char *sc
     return scene_name != NULL && SDL_strcmp(scene, scene_name) == 0;
 }
 
-static bool sector_door_in_active_scene(const slayer3d_game_data_runtime *runtime, const sector_door_runtime *door)
+bool sector_door_in_active_scene(const slayer3d_game_data_runtime *runtime, const sector_door_runtime *door)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
     return sector_door_in_scene(door, scene != NULL ? scene->name : NULL);
 }
 
-static bool sector_platform_in_scene(const sector_platform_runtime *platform, const char *scene_name)
+bool sector_platform_in_scene(const sector_platform_runtime *platform, const char *scene_name)
 {
     if (platform == NULL)
         return false;
@@ -82,14 +84,13 @@ static bool sector_platform_in_scene(const sector_platform_runtime *platform, co
     return scene_name != NULL && SDL_strcmp(scene, scene_name) == 0;
 }
 
-static bool sector_platform_in_active_scene(const slayer3d_game_data_runtime *runtime,
-                                            const sector_platform_runtime *platform)
+bool sector_platform_in_active_scene(const slayer3d_game_data_runtime *runtime, const sector_platform_runtime *platform)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
     return sector_platform_in_scene(platform, scene != NULL ? scene->name : NULL);
 }
 
-static scene_menu_state *find_scene_menu(scene_entry *scene, const char *name)
+scene_menu_state *find_scene_menu(scene_entry *scene, const char *name)
 {
     if (scene == NULL || name == NULL)
         return NULL;
@@ -102,7 +103,7 @@ static scene_menu_state *find_scene_menu(scene_entry *scene, const char *name)
     return NULL;
 }
 
-static const scene_menu_state *find_scene_menu_const(const scene_entry *scene, const char *name)
+const scene_menu_state *find_scene_menu_const(const scene_entry *scene, const char *name)
 {
     if (scene == NULL || name == NULL)
         return NULL;
@@ -139,7 +140,7 @@ bool active_scene_has_entity_internal(const slayer3d_game_data_runtime *runtime,
     return actor_pool_in_scene(find_actor_pool_for_actor_const(runtime, entity_name, NULL), scene->name);
 }
 
-static void apply_scene_camera(slayer3d_game_data_runtime *runtime, const scene_entry *scene)
+void apply_scene_camera(slayer3d_game_data_runtime *runtime, const scene_entry *scene)
 {
     const char *camera = scene != NULL ? json_string(scene->root, "camera", NULL) : NULL;
     if (runtime != NULL && camera != NULL)
@@ -166,8 +167,8 @@ static slayer3d_properties *create_scene_enter_payload(const char *from_scene, c
     return enter_payload;
 }
 
-static void emit_scene_enter_signal(slayer3d_game_data_runtime *runtime, const scene_entry *scene,
-                                    const char *from_scene, const slayer3d_properties *payload)
+void emit_scene_enter_signal(slayer3d_game_data_runtime *runtime, const scene_entry *scene, const char *from_scene,
+                             const slayer3d_properties *payload)
 {
     if (runtime == NULL || scene == NULL)
         return;
@@ -181,7 +182,7 @@ static void emit_scene_enter_signal(slayer3d_game_data_runtime *runtime, const s
     }
 }
 
-static yyjson_val *find_entity_json(const slayer3d_game_data_runtime *runtime, const char *name)
+yyjson_val *find_entity_json(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     yyjson_val *entities = obj_get(runtime_root(runtime), "entities");
     for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
@@ -218,7 +219,7 @@ bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_c
     return true;
 }
 
-static bool entity_json_has_all_tags_from_json(yyjson_val *entity, yyjson_val *tags)
+bool entity_json_has_all_tags_from_json(yyjson_val *entity, yyjson_val *tags)
 {
     if (!yyjson_is_arr(tags) || yyjson_arr_size(tags) == 0)
         return false;
@@ -232,7 +233,7 @@ static bool entity_json_has_all_tags_from_json(yyjson_val *entity, yyjson_val *t
     return true;
 }
 
-static yyjson_val *find_component_json(yyjson_val *entity, const char *type)
+yyjson_val *find_component_json(yyjson_val *entity, const char *type)
 {
     yyjson_val *components = obj_get(entity, "components");
     for (size_t i = 0; yyjson_is_arr(components) && i < yyjson_arr_size(components); ++i)
@@ -245,7 +246,7 @@ static yyjson_val *find_component_json(yyjson_val *entity, const char *type)
     return NULL;
 }
 
-static yyjson_val *find_actor_definition_json(const slayer3d_game_data_runtime *runtime, const char *actor_name)
+yyjson_val *find_actor_definition_json(const slayer3d_game_data_runtime *runtime, const char *actor_name)
 {
     yyjson_val *entity = find_entity_json(runtime, actor_name);
     if (entity != NULL)
@@ -255,7 +256,7 @@ static yyjson_val *find_actor_definition_json(const slayer3d_game_data_runtime *
     return pool != NULL ? pool->archetype_json : NULL;
 }
 
-static yyjson_val *find_font_json(const slayer3d_game_data_runtime *runtime, const char *id)
+yyjson_val *find_font_json(const slayer3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *fonts = obj_get(obj_get(runtime_root(runtime), "assets"), "fonts");
     for (size_t i = 0; id != NULL && yyjson_is_arr(fonts) && i < yyjson_arr_size(fonts); ++i)
@@ -268,7 +269,7 @@ static yyjson_val *find_font_json(const slayer3d_game_data_runtime *runtime, con
     return NULL;
 }
 
-static yyjson_val *find_image_json(const slayer3d_game_data_runtime *runtime, const char *id)
+yyjson_val *find_image_json(const slayer3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *images = obj_get(obj_get(runtime_root(runtime), "assets"), "images");
     for (size_t i = 0; id != NULL && yyjson_is_arr(images) && i < yyjson_arr_size(images); ++i)
@@ -281,7 +282,7 @@ static yyjson_val *find_image_json(const slayer3d_game_data_runtime *runtime, co
     return NULL;
 }
 
-static yyjson_val *find_model_json(const slayer3d_game_data_runtime *runtime, const char *id)
+yyjson_val *find_model_json(const slayer3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *models = obj_get(obj_get(runtime_root(runtime), "assets"), "models");
     for (size_t i = 0; id != NULL && yyjson_is_arr(models) && i < yyjson_arr_size(models); ++i)
@@ -294,7 +295,7 @@ static yyjson_val *find_model_json(const slayer3d_game_data_runtime *runtime, co
     return NULL;
 }
 
-static yyjson_val *find_sound_json(const slayer3d_game_data_runtime *runtime, const char *id)
+yyjson_val *find_sound_json(const slayer3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *sounds = obj_get(obj_get(runtime_root(runtime), "assets"), "sounds");
     for (size_t i = 0; id != NULL && yyjson_is_arr(sounds) && i < yyjson_arr_size(sounds); ++i)
@@ -307,7 +308,7 @@ static yyjson_val *find_sound_json(const slayer3d_game_data_runtime *runtime, co
     return NULL;
 }
 
-static yyjson_val *find_music_json(const slayer3d_game_data_runtime *runtime, const char *id)
+yyjson_val *find_music_json(const slayer3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *music_assets = obj_get(obj_get(runtime_root(runtime), "assets"), "music");
     for (size_t i = 0; id != NULL && yyjson_is_arr(music_assets) && i < yyjson_arr_size(music_assets); ++i)
@@ -320,7 +321,7 @@ static yyjson_val *find_music_json(const slayer3d_game_data_runtime *runtime, co
     return NULL;
 }
 
-static yyjson_val *find_ambient_json(const slayer3d_game_data_runtime *runtime, const char *id)
+yyjson_val *find_ambient_json(const slayer3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *ambient_assets = obj_get(obj_get(runtime_root(runtime), "assets"), "ambient");
     for (size_t i = 0; id != NULL && yyjson_is_arr(ambient_assets) && i < yyjson_arr_size(ambient_assets); ++i)
@@ -333,7 +334,7 @@ static yyjson_val *find_ambient_json(const slayer3d_game_data_runtime *runtime, 
     return NULL;
 }
 
-static yyjson_val *find_sprite_json(const slayer3d_game_data_runtime *runtime, const char *id)
+yyjson_val *find_sprite_json(const slayer3d_game_data_runtime *runtime, const char *id)
 {
     yyjson_val *sprites = obj_get(obj_get(runtime_root(runtime), "assets"), "sprites");
     for (size_t i = 0; id != NULL && yyjson_is_arr(sprites) && i < yyjson_arr_size(sprites); ++i)
@@ -346,7 +347,7 @@ static yyjson_val *find_sprite_json(const slayer3d_game_data_runtime *runtime, c
     return NULL;
 }
 
-static slayer3d_audio_bus parse_audio_bus(const char *bus, slayer3d_audio_bus fallback)
+slayer3d_audio_bus parse_audio_bus(const char *bus, slayer3d_audio_bus fallback)
 {
     if (bus == NULL)
         return fallback;
@@ -361,7 +362,7 @@ static slayer3d_audio_bus parse_audio_bus(const char *bus, slayer3d_audio_bus fa
     return fallback;
 }
 
-static yyjson_val *find_camera_json(const slayer3d_game_data_runtime *runtime, const char *name)
+yyjson_val *find_camera_json(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     yyjson_val *cameras = obj_get(obj_get(runtime_root(runtime), "world"), "cameras");
     for (size_t i = 0; yyjson_is_arr(cameras) && i < yyjson_arr_size(cameras); ++i)
@@ -374,7 +375,7 @@ static yyjson_val *find_camera_json(const slayer3d_game_data_runtime *runtime, c
     return NULL;
 }
 
-static fps_controller_runtime *find_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name)
+fps_controller_runtime *find_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name)
 {
     if (runtime == NULL || entity_name == NULL)
         return NULL;
@@ -387,8 +388,8 @@ static fps_controller_runtime *find_fps_controller(slayer3d_game_data_runtime *r
     return NULL;
 }
 
-static const fps_controller_runtime *find_fps_controller_const(const slayer3d_game_data_runtime *runtime,
-                                                               const char *entity_name)
+const fps_controller_runtime *find_fps_controller_const(const slayer3d_game_data_runtime *runtime,
+                                                        const char *entity_name)
 {
     if (runtime == NULL || entity_name == NULL)
         return NULL;
@@ -401,8 +402,8 @@ static const fps_controller_runtime *find_fps_controller_const(const slayer3d_ga
     return NULL;
 }
 
-static fps_controller_runtime *find_or_add_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
-                                                          yyjson_val *component)
+fps_controller_runtime *find_or_add_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
+                                                   yyjson_val *component)
 {
     fps_controller_runtime *controller = find_fps_controller(runtime, entity_name);
     if (controller != NULL)
@@ -434,7 +435,7 @@ static fps_controller_runtime *find_or_add_fps_controller(slayer3d_game_data_run
     return controller;
 }
 
-static patrol_controller_runtime *find_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name)
+patrol_controller_runtime *find_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name)
 {
     if (runtime == NULL || entity_name == NULL)
         return NULL;
@@ -447,8 +448,8 @@ static patrol_controller_runtime *find_patrol_controller(slayer3d_game_data_runt
     return NULL;
 }
 
-static patrol_controller_runtime *find_or_add_patrol_controller(slayer3d_game_data_runtime *runtime,
-                                                                const char *entity_name, yyjson_val *component)
+patrol_controller_runtime *find_or_add_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
+                                                         yyjson_val *component)
 {
     patrol_controller_runtime *controller = find_patrol_controller(runtime, entity_name);
     if (controller != NULL)
@@ -480,7 +481,7 @@ static patrol_controller_runtime *find_or_add_patrol_controller(slayer3d_game_da
     return controller;
 }
 
-static slayer3d_backend parse_backend(const char *value, slayer3d_backend fallback)
+slayer3d_backend parse_backend(const char *value, slayer3d_backend fallback)
 {
     if (value == NULL)
         return fallback;
@@ -493,7 +494,7 @@ static slayer3d_backend parse_backend(const char *value, slayer3d_backend fallba
     return fallback;
 }
 
-static slayer3d_window_mode parse_window_mode(const char *value, slayer3d_window_mode fallback)
+slayer3d_window_mode parse_window_mode(const char *value, slayer3d_window_mode fallback)
 {
     if (value == NULL)
         return fallback;
@@ -507,9 +508,7 @@ static slayer3d_window_mode parse_window_mode(const char *value, slayer3d_window
     return fallback;
 }
 
-static void storage_config_from_root(yyjson_val *root, slayer3d_storage_config *out_config);
-
-static slayer3d_tonemap_mode parse_tonemap(const char *value, slayer3d_tonemap_mode fallback)
+slayer3d_tonemap_mode parse_tonemap(const char *value, slayer3d_tonemap_mode fallback)
 {
     if (value == NULL)
         return fallback;
@@ -522,7 +521,7 @@ static slayer3d_tonemap_mode parse_tonemap(const char *value, slayer3d_tonemap_m
     return fallback;
 }
 
-static bool parse_render_profile(const char *value, slayer3d_render_profile *out_profile)
+bool parse_render_profile(const char *value, slayer3d_render_profile *out_profile)
 {
     if (value == NULL || out_profile == NULL)
         return false;
@@ -571,7 +570,7 @@ bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key
     return fallback;
 }
 
-static float scene_state_float(const slayer3d_game_data_runtime *runtime, const char *key, float fallback)
+float scene_state_float(const slayer3d_game_data_runtime *runtime, const char *key, float fallback)
 {
     if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
         return fallback;
@@ -601,7 +600,7 @@ static slayer3d_camera_fov_axis parse_camera_fov_axis(const char *value, slayer3
     return fallback;
 }
 
-static float camera_fov_degrees(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json, float fallback)
+float camera_fov_degrees(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json, float fallback)
 {
     const float authored = json_float(camera_json, "fov", json_float(camera_json, "fovy", fallback));
     const float valid_authored = camera_fov_degrees_valid(authored) ? authored : fallback;
@@ -609,7 +608,7 @@ static float camera_fov_degrees(const slayer3d_game_data_runtime *runtime, yyjso
     return camera_fov_degrees_valid(runtime_value) ? runtime_value : valid_authored;
 }
 
-static slayer3d_camera_fov_axis camera_fov_axis(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json)
+slayer3d_camera_fov_axis camera_fov_axis(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json)
 {
     const slayer3d_camera_fov_axis authored =
         parse_camera_fov_axis(json_string(camera_json, "fov_axis", NULL), SLAYER3D_CAMERA_FOV_VERTICAL);
@@ -618,7 +617,7 @@ static slayer3d_camera_fov_axis camera_fov_axis(const slayer3d_game_data_runtime
                                  authored);
 }
 
-static slayer3d_transition_type parse_transition_type(const char *value, slayer3d_transition_type fallback)
+slayer3d_transition_type parse_transition_type(const char *value, slayer3d_transition_type fallback)
 {
     if (value == NULL)
         return fallback;
@@ -633,8 +632,7 @@ static slayer3d_transition_type parse_transition_type(const char *value, slayer3
     return fallback;
 }
 
-static slayer3d_transition_direction parse_transition_direction(const char *value,
-                                                                slayer3d_transition_direction fallback)
+slayer3d_transition_direction parse_transition_direction(const char *value, slayer3d_transition_direction fallback)
 {
     if (value == NULL)
         return fallback;
@@ -645,7 +643,7 @@ static slayer3d_transition_direction parse_transition_direction(const char *valu
     return fallback;
 }
 
-static slayer3d_builtin_font parse_builtin_font(const char *value, slayer3d_builtin_font fallback)
+slayer3d_builtin_font parse_builtin_font(const char *value, slayer3d_builtin_font fallback)
 {
     if (value == NULL)
         return fallback;
@@ -654,7 +652,7 @@ static slayer3d_builtin_font parse_builtin_font(const char *value, slayer3d_buil
     return fallback;
 }
 
-static slayer3d_game_data_ui_align parse_ui_align(const char *value, slayer3d_game_data_ui_align fallback)
+slayer3d_game_data_ui_align parse_ui_align(const char *value, slayer3d_game_data_ui_align fallback)
 {
     if (value == NULL)
         return fallback;
@@ -667,7 +665,7 @@ static slayer3d_game_data_ui_align parse_ui_align(const char *value, slayer3d_ga
     return fallback;
 }
 
-static slayer3d_game_data_ui_valign parse_ui_valign(const char *value, slayer3d_game_data_ui_valign fallback)
+slayer3d_game_data_ui_valign parse_ui_valign(const char *value, slayer3d_game_data_ui_valign fallback)
 {
     if (value == NULL)
         return fallback;
@@ -680,7 +678,7 @@ static slayer3d_game_data_ui_valign parse_ui_valign(const char *value, slayer3d_
     return fallback;
 }
 
-static const char *parse_ui_image_effect(const char *value)
+const char *parse_ui_image_effect(const char *value)
 {
     if (value == NULL || value[0] == '\0')
         return NULL;
@@ -689,7 +687,7 @@ static const char *parse_ui_image_effect(const char *value)
     return value;
 }
 
-static int axis_index(const char *axis)
+int axis_index(const char *axis)
 {
     if (axis == NULL)
         return -1;
@@ -702,7 +700,7 @@ static int axis_index(const char *axis)
     return -1;
 }
 
-static float vec_axis(slayer3d_vec3 value, int axis)
+float vec_axis(slayer3d_vec3 value, int axis)
 {
     if (axis == 0)
         return value.x;
@@ -713,7 +711,7 @@ static float vec_axis(slayer3d_vec3 value, int axis)
     return 0.0f;
 }
 
-static void set_vec_axis(slayer3d_vec3 *value, int axis, float component)
+void set_vec_axis(slayer3d_vec3 *value, int axis, float component)
 {
     if (value == NULL)
         return;
@@ -725,34 +723,16 @@ static void set_vec_axis(slayer3d_vec3 *value, int axis, float component)
         value->z = component;
 }
 
-static slayer3d_vec3 actor_vec_property(const slayer3d_registered_actor *actor, const char *key)
+slayer3d_vec3 actor_vec_property(const slayer3d_registered_actor *actor, const char *key)
 {
     return actor != NULL ? slayer3d_properties_get_vec3(actor->props, key, slayer3d_vec3_make(0.0f, 0.0f, 0.0f))
                          : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
 }
 
-static void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position)
+void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position)
 {
     if (actor == NULL)
         return;
     actor->position = position;
     slayer3d_properties_set_vec3(actor->props, "origin", position);
 }
-
-typedef struct game_data_snapshot_value
-{
-    slayer3d_replication_field_type type;
-    union {
-        bool as_bool;
-        Sint32 as_int32;
-        float as_float32;
-        slayer3d_vec2 as_vec2;
-        slayer3d_vec3 as_vec3;
-    } value;
-} game_data_snapshot_value;
-
-typedef struct game_data_input_value
-{
-    int action_id;
-    float value;
-} game_data_input_value;
