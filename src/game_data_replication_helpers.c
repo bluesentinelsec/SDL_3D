@@ -1,7 +1,16 @@
-/* Network replication and control codec helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_replication_helpers.c
+ * @brief Network replication and control codec helpers for authored game data.
+ */
 
-static yyjson_val *game_data_find_replication_channel_by_name(const slayer3d_game_data_runtime *runtime,
-                                                              const char *replication_name, int *out_index)
+#include "game_data_internal.h"
+
+#include "network_replication_schema.h"
+
+#include <stdint.h>
+
+yyjson_val *game_data_find_replication_channel_by_name(const slayer3d_game_data_runtime *runtime,
+                                                       const char *replication_name, int *out_index)
 {
     yyjson_val *replication = obj_get(obj_get(runtime_root(runtime), "network"), "replication");
     for (size_t i = 0; yyjson_is_arr(replication) && i < yyjson_arr_size(replication); ++i)
@@ -17,19 +26,19 @@ static yyjson_val *game_data_find_replication_channel_by_name(const slayer3d_gam
     return NULL;
 }
 
-static yyjson_val *game_data_find_replication_channel_by_index(const slayer3d_game_data_runtime *runtime, Uint32 index)
+yyjson_val *game_data_find_replication_channel_by_index(const slayer3d_game_data_runtime *runtime, Uint32 index)
 {
     yyjson_val *replication = obj_get(obj_get(runtime_root(runtime), "network"), "replication");
     return yyjson_is_arr(replication) && index < yyjson_arr_size(replication) ? yyjson_arr_get(replication, index)
                                                                               : NULL;
 }
 
-static bool game_data_replication_channel_is_host_to_client(yyjson_val *channel)
+bool game_data_replication_channel_is_host_to_client(yyjson_val *channel)
 {
     return SDL_strcmp(json_string(channel, "direction", ""), "host_to_client") == 0;
 }
 
-static bool game_data_replication_channel_is_client_to_host(yyjson_val *channel)
+bool game_data_replication_channel_is_client_to_host(yyjson_val *channel)
 {
     return SDL_strcmp(json_string(channel, "direction", ""), "client_to_host") == 0;
 }
@@ -39,7 +48,7 @@ static size_t game_data_replication_field_array_count(yyjson_val *fields)
     return yyjson_is_arr(fields) ? yyjson_arr_size(fields) : 0U;
 }
 
-static size_t game_data_replication_channel_field_count(const slayer3d_game_data_runtime *runtime, yyjson_val *channel)
+size_t game_data_replication_channel_field_count(const slayer3d_game_data_runtime *runtime, yyjson_val *channel)
 {
     size_t count = 0U;
     yyjson_val *actors = obj_get(channel, "actors");
@@ -80,8 +89,8 @@ static bool game_data_add_replication_fields_packet_size(yyjson_val *fields, siz
     return true;
 }
 
-static bool game_data_replication_channel_packet_size(const slayer3d_game_data_runtime *runtime, yyjson_val *channel,
-                                                      size_t *out_size)
+bool game_data_replication_channel_packet_size(const slayer3d_game_data_runtime *runtime, yyjson_val *channel,
+                                               size_t *out_size)
 {
     if (out_size != NULL)
         *out_size = 0U;
@@ -114,13 +123,13 @@ static bool game_data_replication_channel_packet_size(const slayer3d_game_data_r
     return true;
 }
 
-static size_t game_data_replication_channel_input_count(yyjson_val *channel)
+size_t game_data_replication_channel_input_count(yyjson_val *channel)
 {
     yyjson_val *inputs = obj_get(channel, "inputs");
     return yyjson_is_arr(inputs) ? yyjson_arr_size(inputs) : 0U;
 }
 
-static bool game_data_replication_input_packet_size(yyjson_val *channel, size_t *out_size)
+bool game_data_replication_input_packet_size(yyjson_val *channel, size_t *out_size)
 {
     if (out_size != NULL)
         *out_size = 0U;
@@ -139,17 +148,17 @@ static bool game_data_replication_input_packet_size(yyjson_val *channel, size_t 
     return true;
 }
 
-static const char *game_data_replication_input_action(yyjson_val *input)
+const char *game_data_replication_input_action(yyjson_val *input)
 {
     return json_string(input, "action", NULL);
 }
 
-static int game_data_replication_action_id(const slayer3d_game_data_runtime *runtime, yyjson_val *input)
+int game_data_replication_action_id(const slayer3d_game_data_runtime *runtime, yyjson_val *input)
 {
     return slayer3d_game_data_find_action(runtime, game_data_replication_input_action(input));
 }
 
-static slayer3d_game_data_network_direction game_data_network_direction_from_string(const char *direction)
+slayer3d_game_data_network_direction game_data_network_direction_from_string(const char *direction)
 {
     if (direction == NULL)
         return SLAYER3D_GAME_DATA_NETWORK_DIRECTION_INVALID;
@@ -162,7 +171,7 @@ static slayer3d_game_data_network_direction game_data_network_direction_from_str
     return SLAYER3D_GAME_DATA_NETWORK_DIRECTION_INVALID;
 }
 
-static const char *game_data_network_direction_name(slayer3d_game_data_network_direction direction)
+const char *game_data_network_direction_name(slayer3d_game_data_network_direction direction)
 {
     switch (direction)
     {
@@ -177,8 +186,8 @@ static const char *game_data_network_direction_name(slayer3d_game_data_network_d
     }
 }
 
-static yyjson_val *game_data_find_network_control_by_name(const slayer3d_game_data_runtime *runtime,
-                                                          const char *control_name, int *out_index)
+yyjson_val *game_data_find_network_control_by_name(const slayer3d_game_data_runtime *runtime, const char *control_name,
+                                                   int *out_index)
 {
     yyjson_val *controls = obj_get(obj_get(runtime_root(runtime), "network"), "control_messages");
     for (size_t i = 0; yyjson_is_arr(controls) && i < yyjson_arr_size(controls); ++i)
@@ -194,13 +203,13 @@ static yyjson_val *game_data_find_network_control_by_name(const slayer3d_game_da
     return NULL;
 }
 
-static yyjson_val *game_data_find_network_control_by_index(const slayer3d_game_data_runtime *runtime, Uint32 index)
+yyjson_val *game_data_find_network_control_by_index(const slayer3d_game_data_runtime *runtime, Uint32 index)
 {
     yyjson_val *controls = obj_get(obj_get(runtime_root(runtime), "network"), "control_messages");
     return yyjson_is_arr(controls) && index < yyjson_arr_size(controls) ? yyjson_arr_get(controls, index) : NULL;
 }
 
-static bool game_data_network_control_packet_size(size_t *out_size)
+bool game_data_network_control_packet_size(size_t *out_size)
 {
     const size_t size = 4U + 4U + 4U + 4U + SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE;
     if (out_size != NULL)
@@ -208,7 +217,7 @@ static bool game_data_network_control_packet_size(size_t *out_size)
     return true;
 }
 
-static int game_data_network_control_signal_id(const slayer3d_game_data_runtime *runtime, yyjson_val *control)
+int game_data_network_control_signal_id(const slayer3d_game_data_runtime *runtime, yyjson_val *control)
 {
     return slayer3d_game_data_find_signal(runtime, json_string(control, "signal", NULL));
 }
@@ -220,9 +229,9 @@ static const char *game_data_replication_property_key(const char *path)
     return path != NULL && SDL_strncmp(path, prefix, prefix_len) == 0 ? path + prefix_len : NULL;
 }
 
-static bool game_data_read_actor_replication_field(const slayer3d_registered_actor *actor,
-                                                   const slayer3d_replication_field_descriptor *field,
-                                                   game_data_snapshot_value *out_value)
+bool game_data_read_actor_replication_field(const slayer3d_registered_actor *actor,
+                                            const slayer3d_replication_field_descriptor *field,
+                                            game_data_snapshot_value *out_value)
 {
     if (actor == NULL || field == NULL || out_value == NULL || field->path == NULL)
         return false;
@@ -289,7 +298,7 @@ static bool game_data_read_actor_replication_field(const slayer3d_registered_act
     }
 }
 
-static bool game_data_write_snapshot_value(slayer3d_replication_writer *writer, const game_data_snapshot_value *value)
+bool game_data_write_snapshot_value(slayer3d_replication_writer *writer, const game_data_snapshot_value *value)
 {
     if (writer == NULL || value == NULL || !slayer3d_replication_write_field_type(writer, value->type))
         return false;
@@ -313,9 +322,8 @@ static bool game_data_write_snapshot_value(slayer3d_replication_writer *writer, 
     }
 }
 
-static bool game_data_read_snapshot_value(slayer3d_replication_reader *reader,
-                                          slayer3d_replication_field_type expected_type,
-                                          game_data_snapshot_value *out_value)
+bool game_data_read_snapshot_value(slayer3d_replication_reader *reader, slayer3d_replication_field_type expected_type,
+                                   game_data_snapshot_value *out_value)
 {
     if (reader == NULL || out_value == NULL)
         return false;
@@ -344,10 +352,9 @@ static bool game_data_read_snapshot_value(slayer3d_replication_reader *reader,
     }
 }
 
-static bool game_data_apply_actor_replication_field(slayer3d_game_data_runtime *runtime,
-                                                    slayer3d_registered_actor *actor,
-                                                    const slayer3d_replication_field_descriptor *field,
-                                                    const game_data_snapshot_value *value)
+bool game_data_apply_actor_replication_field(slayer3d_game_data_runtime *runtime, slayer3d_registered_actor *actor,
+                                             const slayer3d_replication_field_descriptor *field,
+                                             const game_data_snapshot_value *value)
 {
     if (actor == NULL || field == NULL || value == NULL || field->path == NULL || field->type != value->type)
         return false;

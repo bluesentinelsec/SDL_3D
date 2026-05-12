@@ -1,5 +1,17 @@
-/* Runtime registration, script reload, app config, asset load, and storage helpers. Included by src/game_data.c to
- * preserve internal linkage. */
+/**
+ * @file game_data_load_runtime.c
+ * @brief Runtime registration, script reload, app config, asset loading, and storage helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include "game_data_validation.h"
+
+#include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_log.h>
+
+static void storage_config_from_root(yyjson_val *root, slayer3d_storage_config *out_config);
+static void load_storage_config(slayer3d_game_data_runtime *runtime, yyjson_val *root);
 
 bool slayer3d_game_data_register_adapter(slayer3d_game_data_runtime *runtime, const char *name,
                                          slayer3d_game_data_adapter_fn callback, void *userdata)

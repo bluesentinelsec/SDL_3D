@@ -24,6 +24,8 @@
 #include "slayer3d/timer_pool.h"
 #include "yyjson.h"
 
+typedef struct slayer3d_replication_field_descriptor slayer3d_replication_field_descriptor;
+
 typedef enum game_data_sensor_type
 {
     GAME_DATA_SENSOR_BOUNDS_EXIT,
@@ -622,6 +624,7 @@ typedef struct slayer3d_game_data_runtime
 void set_error(char *buffer, int buffer_size, const char *message);
 void set_errorf(char *buffer, int buffer_size, const char *format, ...);
 char *path_join(const char *base_dir, const char *path);
+char *path_dirname(const char *path);
 
 yyjson_val *obj_get(yyjson_val *object, const char *key);
 const char *json_string(yyjson_val *object, const char *key, const char *fallback);
@@ -698,6 +701,7 @@ void actor_pool_note_spawn_attempt(actor_pool_runtime *pool);
 void actor_pool_note_spawn_success(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool);
 void actor_pool_note_spawn_failure(actor_pool_runtime *pool, const char *reason);
 bool initialize_pooled_actor(actor_pool_runtime *pool, slayer3d_registered_actor *actor, int index, bool active);
+bool actor_pool_initialize_slot(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool, int index, bool active);
 bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
                                 slayer3d_registered_actor *actor, int index, const char *reason);
 slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *runtime,
@@ -769,6 +773,11 @@ void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json,
                           const slayer3d_properties *payload);
 void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
 void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
+bool apply_actor_pool_scene_exit_policies(slayer3d_game_data_runtime *runtime, const char *from_scene,
+                                          const char *to_scene);
+void clear_menu_text_entry_capture(slayer3d_game_data_runtime *runtime);
+int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
+void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
 bool json_scalar_to_value(yyjson_val *json, slayer3d_value *out_value);
 bool set_property_from_value(slayer3d_properties *props, const char *key, const slayer3d_value *value);
 bool start_property_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action);
@@ -929,11 +938,50 @@ void lua_push_actor_wrapper(lua_State *lua, const slayer3d_registered_actor *act
 
 void register_lua_api(slayer3d_game_data_runtime *runtime, slayer3d_script_engine *engine);
 bool load_timers(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size);
+bool load_signals(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
+bool load_entities(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
+bool load_actor_pools(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
+bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
+bool load_bindings(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size);
+bool load_sensors(slayer3d_game_data_runtime *runtime, yyjson_val *logic);
+bool load_wave_schedules(slayer3d_game_data_runtime *runtime, yyjson_val *logic);
+void load_active_camera(slayer3d_game_data_runtime *runtime, yyjson_val *root);
+bool load_scenes(slayer3d_game_data_runtime *runtime, yyjson_val *root, const slayer3d_game_data_load_options *options,
+                 char *error_buffer, int error_buffer_size);
 bool load_script_index_into_engine(slayer3d_game_data_runtime *runtime, slayer3d_asset_resolver *assets,
                                    slayer3d_script_engine *engine, int index, slayer3d_script_ref *module_refs,
                                    bool *loading, bool *loaded, char *error_buffer, int error_buffer_size);
 bool load_scripts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_lua_adapters(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                        int error_buffer_size);
+
+yyjson_val *game_data_find_replication_channel_by_name(const slayer3d_game_data_runtime *runtime,
+                                                       const char *replication_name, int *out_index);
+yyjson_val *game_data_find_replication_channel_by_index(const slayer3d_game_data_runtime *runtime, Uint32 index);
+bool game_data_replication_channel_is_host_to_client(yyjson_val *channel);
+bool game_data_replication_channel_is_client_to_host(yyjson_val *channel);
+size_t game_data_replication_channel_field_count(const slayer3d_game_data_runtime *runtime, yyjson_val *channel);
+bool game_data_replication_channel_packet_size(const slayer3d_game_data_runtime *runtime, yyjson_val *channel,
+                                               size_t *out_size);
+size_t game_data_replication_channel_input_count(yyjson_val *channel);
+bool game_data_replication_input_packet_size(yyjson_val *channel, size_t *out_size);
+const char *game_data_replication_input_action(yyjson_val *input);
+int game_data_replication_action_id(const slayer3d_game_data_runtime *runtime, yyjson_val *input);
+slayer3d_game_data_network_direction game_data_network_direction_from_string(const char *direction);
+const char *game_data_network_direction_name(slayer3d_game_data_network_direction direction);
+yyjson_val *game_data_find_network_control_by_name(const slayer3d_game_data_runtime *runtime, const char *control_name,
+                                                   int *out_index);
+yyjson_val *game_data_find_network_control_by_index(const slayer3d_game_data_runtime *runtime, Uint32 index);
+bool game_data_network_control_packet_size(size_t *out_size);
+int game_data_network_control_signal_id(const slayer3d_game_data_runtime *runtime, yyjson_val *control);
+bool game_data_read_actor_replication_field(const slayer3d_registered_actor *actor,
+                                            const slayer3d_replication_field_descriptor *field,
+                                            game_data_snapshot_value *out_value);
+bool game_data_write_snapshot_value(slayer3d_replication_writer *writer, const game_data_snapshot_value *value);
+bool game_data_read_snapshot_value(slayer3d_replication_reader *reader, slayer3d_replication_field_type type,
+                                   game_data_snapshot_value *out_value);
+bool game_data_apply_actor_replication_field(slayer3d_game_data_runtime *runtime, slayer3d_registered_actor *actor,
+                                             const slayer3d_replication_field_descriptor *field,
+                                             const game_data_snapshot_value *value);
 
 #endif

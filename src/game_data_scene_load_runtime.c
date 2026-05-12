@@ -1,5 +1,13 @@
-/* Scene activity, bindings, sensors, waves, and scene loading helpers. Included by src/game_data.c to preserve internal
- * linkage. */
+/**
+ * @file game_data_scene_load_runtime.c
+ * @brief Scene activity, bindings, sensors, waves, and scene loading helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include "game_data_standard_options.h"
+
+#include <SDL3/SDL_log.h>
 
 float slayer3d_game_data_delta_time(const slayer3d_game_data_runtime *runtime)
 {
@@ -192,8 +200,7 @@ static void execute_binding(void *userdata, int signal_id, const slayer3d_proper
         execute_action_array(binding->runtime, binding->actions, payload);
 }
 
-static bool load_bindings(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer,
-                          int error_buffer_size)
+bool load_bindings(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *bindings = obj_get(logic, "bindings");
     if (!yyjson_is_arr(bindings))
@@ -228,7 +235,7 @@ static bool load_bindings(slayer3d_game_data_runtime *runtime, yyjson_val *logic
     return true;
 }
 
-static bool load_sensors(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
+bool load_sensors(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
 {
     yyjson_val *sensors = obj_get(logic, "sensors");
     if (!yyjson_is_arr(sensors))
@@ -311,7 +318,7 @@ static bool load_sensors(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
     return true;
 }
 
-static bool load_wave_schedules(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
+bool load_wave_schedules(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
 {
     yyjson_val *schedules = obj_get(logic, "wave_schedules");
     if (!yyjson_is_arr(schedules))
@@ -332,7 +339,7 @@ static bool load_wave_schedules(slayer3d_game_data_runtime *runtime, yyjson_val 
     return true;
 }
 
-static void load_active_camera(slayer3d_game_data_runtime *runtime, yyjson_val *root)
+void load_active_camera(slayer3d_game_data_runtime *runtime, yyjson_val *root)
 {
     yyjson_val *cameras = obj_get(obj_get(root, "world"), "cameras");
     for (size_t i = 0; yyjson_is_arr(cameras) && i < yyjson_arr_size(cameras); ++i)
@@ -566,8 +573,8 @@ static void copy_all_properties(slayer3d_properties *target, const slayer3d_prop
     }
 }
 
-static bool load_scenes(slayer3d_game_data_runtime *runtime, yyjson_val *root,
-                        const slayer3d_game_data_load_options *options, char *error_buffer, int error_buffer_size)
+bool load_scenes(slayer3d_game_data_runtime *runtime, yyjson_val *root, const slayer3d_game_data_load_options *options,
+                 char *error_buffer, int error_buffer_size)
 {
     yyjson_val *scenes = obj_get(root, "scenes");
     yyjson_val *files = obj_get(scenes, "files");

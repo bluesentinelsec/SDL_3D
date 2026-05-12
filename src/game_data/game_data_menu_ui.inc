@@ -60,7 +60,7 @@ static int menu_authored_item_row_count(const slayer3d_game_data_runtime *runtim
     return menu_item_is_dynamic_list(item) ? menu_dynamic_list_row_count(runtime, item) : 1;
 }
 
-static int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu)
+int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu)
 {
     yyjson_val *items = menu != NULL ? obj_get(menu->menu, "items") : NULL;
     int count = 0;
@@ -282,7 +282,7 @@ static const char *menu_dynamic_scene_state_value(const slayer3d_game_data_runti
     return NULL;
 }
 
-static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu)
+void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu)
 {
     yyjson_val *item = NULL;
     int dynamic_index = -1;

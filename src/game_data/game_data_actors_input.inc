@@ -170,8 +170,7 @@ static void initialize_actor_from_json(slayer3d_registered_actor *actor, yyjson_
     load_actor_properties(actor, obj_get(entity, "properties"));
 }
 
-static bool load_entities(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                          int error_buffer_size)
+bool load_entities(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     slayer3d_actor_registry *registry = runtime_registry(runtime);
     yyjson_val *entities = obj_get(root, "entities");
@@ -399,8 +398,7 @@ void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime)
     actor_lifecycle_flush(runtime);
 }
 
-static bool actor_pool_initialize_slot(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool, int index,
-                                       bool active)
+bool actor_pool_initialize_slot(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool, int index, bool active)
 {
     if (runtime == NULL || pool == NULL || index < 0 || index >= pool->capacity)
         return false;
@@ -433,8 +431,8 @@ bool initialize_pooled_actor(actor_pool_runtime *pool, slayer3d_registered_actor
     return true;
 }
 
-static bool apply_actor_pool_scene_exit_policies(slayer3d_game_data_runtime *runtime, const char *from_scene,
-                                                 const char *to_scene)
+bool apply_actor_pool_scene_exit_policies(slayer3d_game_data_runtime *runtime, const char *from_scene,
+                                          const char *to_scene)
 {
     if (runtime == NULL || from_scene == NULL)
         return true;
@@ -468,8 +466,7 @@ static bool apply_actor_pool_scene_exit_policies(slayer3d_game_data_runtime *run
     return true;
 }
 
-static bool load_actor_pools(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                             int error_buffer_size)
+bool load_actor_pools(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     slayer3d_actor_registry *registry = runtime_registry(runtime);
     yyjson_val *pools = obj_get(root, "actor_pools");
@@ -589,8 +586,7 @@ static bool load_actor_pools(slayer3d_game_data_runtime *runtime, yyjson_val *ro
     return true;
 }
 
-static bool load_signals(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                         int error_buffer_size)
+bool load_signals(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *signals = obj_get(root, "signals");
     if (!yyjson_is_arr(signals))
@@ -783,7 +779,7 @@ static bool set_action_gamepad_button_binding(slayer3d_game_data_runtime *runtim
     return true;
 }
 
-static bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
+bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     slayer3d_input_manager *input = runtime_input(runtime);
     yyjson_val *input_root = obj_get(root, "input");
