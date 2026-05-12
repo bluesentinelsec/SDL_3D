@@ -1,9 +1,11 @@
-/* Data action execution and presentation helpers.
- * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
+/**
+ * @file game_data_actions.c
+ * @brief Data-authored action dispatcher.
+ */
 
-#include "game_data_conditions_presentation.inc"
+#include "game_data_internal.h"
 
-#include "game_data_actor_pool_actions.inc"
+#include <SDL3/SDL_log.h>
 
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {

@@ -1,18 +1,14 @@
-/* Conditions, UI binding, presentation clock, and animation helpers. Included by game_data_actions.inc to preserve
- * internal linkage. */
+/**
+ * @file game_data_conditions_presentation.c
+ * @brief Data condition evaluation, UI binding resolution, and presentation clocks.
+ */
+
+#include "game_data_internal.h"
 
 int action_signal_id(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *key)
 {
     return slayer3d_game_data_find_signal(runtime, json_string(action, key, NULL));
 }
-
-bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions, const slayer3d_properties *payload);
-bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
-                                   const slayer3d_properties *payload);
-int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
-                                  const slayer3d_registered_actor *actor);
-float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point);
-bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot);
 
 static bool compare_value(const slayer3d_value *left, const char *op, yyjson_val *right)
 {
@@ -859,171 +855,4 @@ bool slayer3d_game_data_format_ui_text(const slayer3d_game_data_runtime *runtime
         return true;
     }
     return false;
-}
-
-static slayer3d_value_type property_type_from_name(const char *name, slayer3d_value_type fallback)
-{
-    if (name == NULL)
-        return fallback;
-    if (SDL_strcmp(name, "int") == 0)
-        return SLAYER3D_VALUE_INT;
-    if (SDL_strcmp(name, "float") == 0 || SDL_strcmp(name, "number") == 0)
-        return SLAYER3D_VALUE_FLOAT;
-    if (SDL_strcmp(name, "vec3") == 0)
-        return SLAYER3D_VALUE_VEC3;
-    if (SDL_strcmp(name, "color") == 0)
-        return SLAYER3D_VALUE_COLOR;
-    return fallback;
-}
-
-static bool start_property_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action)
-{
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
-    const char *key = json_string(action, "key", NULL);
-    yyjson_val *to_json = obj_get(action, "to");
-    if (to_json == NULL)
-        to_json = obj_get(action, "value");
-    if (actor == NULL || key == NULL || to_json == NULL)
-        return false;
-
-    const slayer3d_value *current = slayer3d_properties_get_value(actor->props, key);
-    const char *value_type = json_string(action, "value_type", NULL);
-    const game_data_tween_value_type preferred = tween_preferred_type(value_type, current, NULL);
-
-    game_data_animation animation;
-    SDL_zero(animation);
-    animation.target_type = GAME_DATA_TWEEN_PROPERTY;
-    animation.target = actor->name;
-    animation.key = key;
-    animation.scene = slayer3d_game_data_active_scene(runtime);
-    animation.duration = json_float(action, "duration", 0.0f);
-    animation.easing = parse_tween_easing(json_string(action, "easing", NULL));
-    animation.repeat = parse_tween_repeat(json_string(action, "repeat", NULL));
-    animation.done_signal_id = action_signal_id(runtime, action, "done_signal");
-    animation.property_type =
-        current != NULL ? current->type : property_type_from_name(value_type, SLAYER3D_VALUE_FLOAT);
-
-    yyjson_val *from_json = obj_get(action, "from");
-    if (from_json != NULL)
-    {
-        if (!json_tween_value(from_json, preferred, &animation.from))
-            return false;
-    }
-    else if (!current_property_tween_value(current, preferred, &animation.from, &animation.property_type))
-    {
-        animation.from = preferred == GAME_DATA_TWEEN_COLOR  ? tween_color((slayer3d_color){255, 255, 255, 255})
-                         : preferred == GAME_DATA_TWEEN_VEC3 ? tween_vec3(slayer3d_vec3_make(0.0f, 0.0f, 0.0f))
-                                                             : tween_float(0.0f);
-    }
-
-    if (!json_tween_value(to_json, preferred, &animation.to))
-        return false;
-    if (animation.from.type != animation.to.type)
-        return false;
-    if (animation.to.type == GAME_DATA_TWEEN_VEC3)
-        animation.property_type = SLAYER3D_VALUE_VEC3;
-    else if (animation.to.type == GAME_DATA_TWEEN_COLOR)
-        animation.property_type = SLAYER3D_VALUE_COLOR;
-    else
-        animation.property_type = property_type_from_name(value_type, animation.property_type);
-
-    return start_animation(runtime, &animation);
-}
-
-static bool start_ui_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action)
-{
-    const char *target = json_string(action, "target", json_string(action, "ui", NULL));
-    const char *property = json_string(action, "property", NULL);
-    yyjson_val *to_json = obj_get(action, "to");
-    if (to_json == NULL)
-        to_json = obj_get(action, "value");
-    if (target == NULL || property == NULL || to_json == NULL)
-        return false;
-
-    slayer3d_game_data_ui_state state;
-    slayer3d_game_data_ui_state_init(&state);
-    (void)slayer3d_game_data_get_ui_state(runtime, target, &state);
-    const game_data_tween_value_type preferred =
-        tween_preferred_type(json_string(action, "value_type", NULL), NULL, property);
-
-    game_data_animation animation;
-    SDL_zero(animation);
-    animation.target_type = GAME_DATA_TWEEN_UI;
-    animation.target = target;
-    animation.property = property;
-    animation.scene = slayer3d_game_data_active_scene(runtime);
-    animation.duration = json_float(action, "duration", 0.0f);
-    animation.easing = parse_tween_easing(json_string(action, "easing", NULL));
-    animation.repeat = parse_tween_repeat(json_string(action, "repeat", NULL));
-    animation.done_signal_id = action_signal_id(runtime, action, "done_signal");
-    animation.property_type = SLAYER3D_VALUE_FLOAT;
-
-    yyjson_val *from_json = obj_get(action, "from");
-    if (from_json != NULL)
-    {
-        if (!json_tween_value(from_json, preferred, &animation.from))
-            return false;
-    }
-    else if (!current_ui_tween_value(&state, property, &animation.from))
-    {
-        return false;
-    }
-
-    if (!json_tween_value(to_json, preferred, &animation.to))
-        return false;
-    if (animation.from.type != animation.to.type)
-        return false;
-    return start_animation(runtime, &animation);
-}
-
-bool slayer3d_game_data_update_animations(slayer3d_game_data_runtime *runtime, float dt)
-{
-    if (runtime == NULL)
-        return false;
-
-    reset_animation_scope_if_needed(runtime);
-    const float step = dt > 0.0f ? dt : 0.0f;
-    slayer3d_signal_bus *bus = runtime_bus(runtime);
-    for (int i = 0; i < runtime->animation_count;)
-    {
-        game_data_animation *animation = &runtime->animations[i];
-        animation->elapsed += step;
-
-        bool complete = false;
-        float t = 1.0f;
-        if (animation->duration > 0.0f)
-        {
-            if (animation->repeat == GAME_DATA_TWEEN_REPEAT_LOOP)
-            {
-                t = SDL_fmodf(animation->elapsed, animation->duration) / animation->duration;
-            }
-            else if (animation->repeat == GAME_DATA_TWEEN_REPEAT_PING_PONG)
-            {
-                const float cycle_float = SDL_floorf(animation->elapsed / animation->duration);
-                t = SDL_fmodf(animation->elapsed, animation->duration) / animation->duration;
-                if (((int)cycle_float % 2) != 0)
-                    t = 1.0f - t;
-            }
-            else
-            {
-                complete = animation->elapsed >= animation->duration;
-                t = complete ? 1.0f : animation->elapsed / animation->duration;
-            }
-        }
-
-        const float eased = apply_tween_easing(animation->easing, t);
-        const game_data_tween_value value = interpolate_tween_value(&animation->from, &animation->to, eased);
-        apply_animation_value(runtime, animation, &value);
-
-        if (complete)
-        {
-            if (animation->done_signal_id >= 0 && bus != NULL)
-                slayer3d_signal_emit(bus, animation->done_signal_id, NULL);
-            runtime->animations[i] = runtime->animations[runtime->animation_count - 1];
-            --runtime->animation_count;
-            continue;
-        }
-        ++i;
-    }
-    return true;
 }

@@ -1,5 +1,11 @@
-/* Actor property snapshots and actor pool action helpers. Included by game_data_actions.inc to preserve internal
- * linkage. */
+/**
+ * @file game_data_actor_pool_runtime.c
+ * @brief Actor property snapshots, actor pool allocation, and actor pool data actions.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
 
 static bool json_string_array_contains(yyjson_val *array, const char *value)
 {
@@ -90,7 +96,7 @@ static void copy_selected_properties(slayer3d_properties *target, const slayer3d
     }
 }
 
-static bool snapshot_actor_properties(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool snapshot_actor_properties(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const char *target = json_string(action, "target", NULL);
     const char *name = json_string(action, "name", NULL);
@@ -104,7 +110,7 @@ static bool snapshot_actor_properties(slayer3d_game_data_runtime *runtime, yyjso
     return true;
 }
 
-static bool restore_actor_property_snapshot(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool restore_actor_property_snapshot(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const char *target = json_string(action, "target", NULL);
     const char *name = json_string(action, "name", NULL);
@@ -117,7 +123,7 @@ static bool restore_actor_property_snapshot(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
-static bool reset_actor_properties_to_authored_defaults(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool reset_actor_properties_to_authored_defaults(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const char *target = json_string(action, "target", NULL);
     slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, target);
@@ -156,7 +162,7 @@ actor_pool_runtime *find_actor_pool(slayer3d_game_data_runtime *runtime, const c
     return NULL;
 }
 
-static const actor_pool_runtime *find_actor_pool_const(const slayer3d_game_data_runtime *runtime, const char *name)
+const actor_pool_runtime *find_actor_pool_const(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -180,8 +186,8 @@ static int actor_pool_index_for_actor(const actor_pool_runtime *pool, const char
     return -1;
 }
 
-static actor_pool_runtime *find_actor_pool_for_actor(slayer3d_game_data_runtime *runtime, const char *actor_name,
-                                                     int *out_index)
+actor_pool_runtime *find_actor_pool_for_actor(slayer3d_game_data_runtime *runtime, const char *actor_name,
+                                              int *out_index)
 {
     if (out_index != NULL)
         *out_index = -1;
@@ -365,8 +371,8 @@ slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runti
     return position;
 }
 
-static bool execute_actor_spawn_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                       const slayer3d_properties *payload)
+bool execute_actor_spawn_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                const slayer3d_properties *payload)
 {
     actor_pool_runtime *pool = find_actor_pool(runtime, json_string(action, "pool", NULL));
     actor_pool_note_spawn_attempt(pool);
@@ -406,7 +412,7 @@ static bool execute_actor_spawn_action(slayer3d_game_data_runtime *runtime, yyjs
     return true;
 }
 
-static bool execute_actor_despawn_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool execute_actor_despawn_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const char *target = json_string(action, "target", NULL);
     slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, target);
@@ -422,8 +428,8 @@ static bool execute_actor_despawn_action(slayer3d_game_data_runtime *runtime, yy
     return true;
 }
 
-static bool execute_actor_despawn_action_with_payload(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                      const slayer3d_properties *payload)
+bool execute_actor_despawn_action_with_payload(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                               const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor =
         actor_from_payload_key(runtime, payload, json_string(action, "target_from_payload", NULL));
@@ -439,7 +445,7 @@ static bool execute_actor_despawn_action_with_payload(slayer3d_game_data_runtime
     return true;
 }
 
-static bool execute_actor_despawn_by_tag_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool execute_actor_despawn_by_tag_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const char *tag = json_string(action, "tag", NULL);
     if (runtime == NULL || tag == NULL || tag[0] == '\0')

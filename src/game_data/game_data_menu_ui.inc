@@ -303,7 +303,7 @@ static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runt
         slayer3d_properties_set_string(runtime->scene_state, selected_value_key, selected_value);
 }
 
-static bool json_value_matches_property(yyjson_val *value, const slayer3d_value *property);
+bool json_value_matches_property(yyjson_val *value, const slayer3d_value *property);
 static slayer3d_game_data_menu_pause_command parse_menu_pause_command(const char *pause)
 {
     if (pause == NULL)
@@ -1097,7 +1097,7 @@ slayer3d_game_data_text_entry_capture_status slayer3d_game_data_update_menu_text
     return SLAYER3D_GAME_DATA_TEXT_ENTRY_CAPTURE_WAITING;
 }
 
-static bool set_property_from_json(slayer3d_properties *props, const char *key, yyjson_val *value)
+bool set_property_from_json(slayer3d_properties *props, const char *key, yyjson_val *value)
 {
     if (props == NULL || key == NULL || value == NULL)
         return false;
@@ -1124,7 +1124,7 @@ static bool set_property_from_json(slayer3d_properties *props, const char *key, 
     return false;
 }
 
-static bool json_value_matches_property(yyjson_val *value, const slayer3d_value *property)
+bool json_value_matches_property(yyjson_val *value, const slayer3d_value *property)
 {
     if (value == NULL || property == NULL)
         return false;
