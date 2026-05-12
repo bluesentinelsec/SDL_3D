@@ -108,6 +108,7 @@ static bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjso
 static bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
 static int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
+static void load_storage_config(slayer3d_game_data_runtime *runtime, yyjson_val *root);
 static bool sensor_actor_list_add(sensor_actor_list *list, slayer3d_registered_actor *actor);
 static void sensor_actor_list_free(sensor_actor_list *list);
 static bool collect_sensor_endpoint_actors(slayer3d_game_data_runtime *runtime, const char *actor_name, const char *tag,
@@ -199,7 +200,7 @@ static char *path_join(const char *base_dir, const char *path)
     return joined;
 }
 
-static slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runtime)
+slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runtime)
 {
     return runtime != NULL ? slayer3d_game_session_get_registry(runtime->session) : NULL;
 }
@@ -259,7 +260,6 @@ static bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtim
                                         bool fallback_exclude_source);
 static void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
 static void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
-static bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
 static bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row);
 static char grid_map_cell(const grid_map_runtime *map, int col, int row);
 static bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, slayer3d_vec3 *out_position);
@@ -280,27 +280,19 @@ static bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, gr
 
 #include "game_data/game_data_lua_api.inc"
 
-#include "game_data/game_data_json_helpers.inc"
-
 #include "game_data/game_data_grid_runtime.inc"
 
 #include "game_data/game_data_scene_lookup.inc"
 
 #include "game_data/game_data_replication_helpers.inc"
 
-#include "game_data/game_data_input_device_helpers.inc"
-
 #include "game_data/game_data_adapter_helpers.inc"
-
-#include "game_data/game_data_action_lookup.inc"
 
 #include "game_data/game_data_render_runtime.inc"
 
 #include "game_data/game_data_ui_animation_runtime.inc"
 
 #include "game_data/game_data_scene_flow_runtime.inc"
-
-#include "game_data/game_data_runtime_collections.inc"
 
 #include "game_data/game_data_network_sessions.inc"
 
@@ -313,8 +305,6 @@ static bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, gr
 #include "game_data/game_data_actions.inc"
 
 #include "game_data/game_data_scene_load_runtime.inc"
-
-#include "game_data/game_data_controller_binding_helpers.inc"
 
 #include "game_data/game_data_update_runtime.inc"
 

@@ -1,6 +1,15 @@
-/* Input device name conversion helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_input_device_helpers.c
+ * @brief Authored input device name conversion helpers.
+ */
 
-static SDL_Scancode scancode_from_json(const char *name)
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_mouse.h>
+#include <SDL3/SDL_stdinc.h>
+
+SDL_Scancode scancode_from_json(const char *name)
 {
     if (name == NULL)
         return SDL_SCANCODE_UNKNOWN;
@@ -23,7 +32,7 @@ static SDL_Scancode scancode_from_json(const char *name)
     return SDL_GetScancodeFromName(name);
 }
 
-static const char *scancode_display_name(SDL_Scancode scancode)
+const char *scancode_display_name(SDL_Scancode scancode)
 {
     if (scancode == SDL_SCANCODE_UNKNOWN)
         return "-";
@@ -31,7 +40,7 @@ static const char *scancode_display_name(SDL_Scancode scancode)
     return name != NULL && name[0] != '\0' ? name : "-";
 }
 
-static Uint8 mouse_button_from_json(const char *name)
+Uint8 mouse_button_from_json(const char *name)
 {
     if (name == NULL)
         return 0;
@@ -48,7 +57,7 @@ static Uint8 mouse_button_from_json(const char *name)
     return 0;
 }
 
-static const char *mouse_button_display_name(Uint8 button)
+const char *mouse_button_display_name(Uint8 button)
 {
     switch (button)
     {
@@ -67,7 +76,7 @@ static const char *mouse_button_display_name(Uint8 button)
     }
 }
 
-static slayer3d_mouse_axis mouse_axis_from_json(const char *name, bool *valid)
+slayer3d_mouse_axis mouse_axis_from_json(const char *name, bool *valid)
 {
     if (valid != NULL)
         *valid = true;
@@ -90,7 +99,7 @@ static slayer3d_mouse_axis mouse_axis_from_json(const char *name, bool *valid)
     return SLAYER3D_MOUSE_AXIS_X;
 }
 
-static const char *gamepad_button_display_name(SDL_GamepadButton button)
+const char *gamepad_button_display_name(SDL_GamepadButton button)
 {
     if (button == SDL_GAMEPAD_BUTTON_INVALID)
         return "-";
@@ -98,7 +107,7 @@ static const char *gamepad_button_display_name(SDL_GamepadButton button)
     return name != NULL && name[0] != '\0' ? name : "-";
 }
 
-static SDL_GamepadAxis gamepad_axis_from_json(const char *name)
+SDL_GamepadAxis gamepad_axis_from_json(const char *name)
 {
     if (name == NULL)
         return SDL_GAMEPAD_AXIS_INVALID;
@@ -117,7 +126,7 @@ static SDL_GamepadAxis gamepad_axis_from_json(const char *name)
     return SDL_GAMEPAD_AXIS_INVALID;
 }
 
-static SDL_GamepadButton gamepad_button_from_json(const char *name)
+SDL_GamepadButton gamepad_button_from_json(const char *name)
 {
     if (name == NULL)
         return SDL_GAMEPAD_BUTTON_INVALID;

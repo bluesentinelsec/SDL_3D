@@ -1,4 +1,11 @@
-/* JSON helper functions shared by game-data runtime subsystems. */
+/**
+ * @file game_data_json_helpers.c
+ * @brief JSON helper functions shared by game-data runtime subsystems.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
 
 yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
@@ -11,7 +18,7 @@ const char *json_string(yyjson_val *object, const char *key, const char *fallbac
     return yyjson_is_str(value) ? yyjson_get_str(value) : fallback;
 }
 
-static const char *first_non_empty_string(const char *first, const char *second, const char *fallback)
+const char *first_non_empty_string(const char *first, const char *second, const char *fallback)
 {
     if (first != NULL && first[0] != '\0')
         return first;
@@ -20,13 +27,11 @@ static const char *first_non_empty_string(const char *first, const char *second,
     return fallback;
 }
 
-static char first_json_string_char(yyjson_val *object, const char *key, char fallback)
+char first_json_string_char(yyjson_val *object, const char *key, char fallback)
 {
     const char *value = json_string(object, key, NULL);
     return value != NULL && value[0] != '\0' ? value[0] : fallback;
 }
-
-static void load_storage_config(slayer3d_game_data_runtime *runtime, yyjson_val *root);
 
 bool json_bool(yyjson_val *object, const char *key, bool fallback)
 {
@@ -97,7 +102,7 @@ slayer3d_color json_color(yyjson_val *object, const char *key, slayer3d_color fa
     return json_color_value(obj_get(object, key), fallback);
 }
 
-static int json_int_or_string(yyjson_val *object, const char *key, int fallback)
+int json_int_or_string(yyjson_val *object, const char *key, int fallback)
 {
     yyjson_val *value = obj_get(object, key);
     if (yyjson_is_int(value))
@@ -127,7 +132,7 @@ slayer3d_vec3 json_vec3(yyjson_val *object, const char *key, slayer3d_vec3 fallb
     return json_vec3_value(obj_get(object, key), fallback);
 }
 
-static slayer3d_vec4 json_vec4_value(yyjson_val *value, slayer3d_vec4 fallback)
+slayer3d_vec4 json_vec4_value(yyjson_val *value, slayer3d_vec4 fallback)
 {
     if (!yyjson_is_arr(value) || yyjson_arr_size(value) < 3)
         return fallback;

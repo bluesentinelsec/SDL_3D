@@ -607,19 +607,30 @@ const char *json_string(yyjson_val *object, const char *key, const char *fallbac
 bool json_bool(yyjson_val *object, const char *key, bool fallback);
 float json_float(yyjson_val *object, const char *key, float fallback);
 int json_int(yyjson_val *object, const char *key, int fallback);
+const char *first_non_empty_string(const char *first, const char *second, const char *fallback);
+char first_json_string_char(yyjson_val *object, const char *key, char fallback);
+int json_int_or_string(yyjson_val *object, const char *key, int fallback);
 bool json_float_array(yyjson_val *value, float *out_values, int count, const float *fallback);
 slayer3d_color json_color_value(yyjson_val *value, slayer3d_color fallback);
 slayer3d_color json_color(yyjson_val *object, const char *key, slayer3d_color fallback);
 bool json_vec2_value(yyjson_val *value, float fallback_x, float fallback_y, float *out_x, float *out_y);
 slayer3d_vec3 json_vec3_value(yyjson_val *value, slayer3d_vec3 fallback);
 slayer3d_vec3 json_vec3(yyjson_val *object, const char *key, slayer3d_vec3 fallback);
+slayer3d_vec4 json_vec4_value(yyjson_val *value, slayer3d_vec4 fallback);
 slayer3d_vec4 json_vec4(yyjson_val *object, const char *key, slayer3d_vec4 fallback);
 const char *scene_state_string(const slayer3d_game_data_runtime *runtime, const char *key, const char *fallback);
 bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key, bool fallback);
 
+slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runtime);
 yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime);
 const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime);
+const char *find_action_name(const slayer3d_game_data_runtime *runtime, int action_id);
+bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
 const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name);
+const runtime_collection *find_runtime_collection_const(const slayer3d_game_data_runtime *runtime,
+                                                        const char *collection_name);
+bool runtime_collection_field_to_string(const runtime_collection *collection, int row_index, const char *field_name,
+                                        char *buffer, size_t buffer_size);
 sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
 const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
@@ -647,5 +658,22 @@ bool build_sector_level_variant_set(sector_level_runtime *level, const slayer3d_
 bool set_sector_level_geometry(sector_level_runtime *level, int sector_index, const slayer3d_sector_geometry *geometry,
                                char *error_buffer, int error_buffer_size);
 void modulate_color_by_sector_lighting(slayer3d_color *color, const slayer3d_sector *sector);
+
+SDL_Scancode scancode_from_json(const char *name);
+const char *scancode_display_name(SDL_Scancode scancode);
+Uint8 mouse_button_from_json(const char *name);
+const char *mouse_button_display_name(Uint8 button);
+slayer3d_mouse_axis mouse_axis_from_json(const char *name, bool *valid);
+const char *gamepad_button_display_name(SDL_GamepadButton button);
+SDL_GamepadAxis gamepad_axis_from_json(const char *name);
+SDL_GamepadButton gamepad_button_from_json(const char *name);
+
+int fps_controller_action_id(const slayer3d_game_data_runtime *runtime, yyjson_val *component, const char *name);
+float fps_controller_action_value(const slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
+                                  int action_id);
+bool fps_controller_action_pressed(const slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
+                                   int action_id);
+slayer3d_actor_patrol_mode parse_patrol_mode(const char *value);
+int patrol_signal_id(const slayer3d_game_data_runtime *runtime, yyjson_val *component, const char *name);
 
 #endif
