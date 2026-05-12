@@ -164,7 +164,11 @@ target_sources(
         src/game_data_network_sessions.c
         src/game_data_persistence_audio_actions.c
         src/game_data_property_effect_runtime.c
+        src/game_data_replication_helpers.c
         src/game_data_runtime_collections.c
+        src/game_data_load_runtime.c
+        src/game_data_scene_flow_runtime.c
+        src/game_data_scene_load_runtime.c
         src/game_data_scene_lookup.c
         src/game_data_sensor_runtime.c
         src/game_data_sector_noise_actions.c

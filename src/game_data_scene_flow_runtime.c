@@ -1,5 +1,11 @@
-/* Scene timeline, transition, activity, and menu runtime helpers. Included by src/game_data.c to preserve internal
- * linkage. */
+/**
+ * @file game_data_scene_flow_runtime.c
+ * @brief Scene timeline, transition, activity, and menu selection runtime helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
 
 static yyjson_val *active_skip_policy_json(const slayer3d_game_data_runtime *runtime)
 {
