@@ -58,6 +58,14 @@
   "assets": {
     "fonts": [
       { "id": "font.brush_geometry.hud", "builtin": "Inter", "size": 22 }
+    ],
+    "images": [
+      { "id": "image.brush_geometry.skybox.px", "path": "asset://skyboxes/sky_17/px.png" },
+      { "id": "image.brush_geometry.skybox.nx", "path": "asset://skyboxes/sky_17/nx.png" },
+      { "id": "image.brush_geometry.skybox.py", "path": "asset://skyboxes/sky_17/py.png" },
+      { "id": "image.brush_geometry.skybox.ny", "path": "asset://skyboxes/sky_17/ny.png" },
+      { "id": "image.brush_geometry.skybox.pz", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.brush_geometry.skybox.nz", "path": "asset://skyboxes/sky_17/nz.png" }
     ]
   },
   "render": {

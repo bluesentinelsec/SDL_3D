@@ -1,7 +1,7 @@
 # Brush Geometry Dojo
 
-Data-only showcase for native convex brush rendering, FPS brush movement,
-trigger contents checks, and brush-world line-of-sight sensors.
+Data-only showcase for native textured convex brush rendering, FPS brush
+movement, trigger contents checks, and brush-world line-of-sight sensors.
 
 Move with WASD, look with the mouse, and jump with Space. Walk through the cyan
 trigger volume near the player start to verify `sensor.brush_contents`. The HUD

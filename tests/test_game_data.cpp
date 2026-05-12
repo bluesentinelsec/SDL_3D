@@ -7402,11 +7402,20 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
         << error;
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.brush_geometry.showcase"));
+    slayer3d_game_data_scene_skybox skybox{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.pos_x, "image.brush_geometry.skybox.px");
+    EXPECT_STREQ(skybox.neg_x, "image.brush_geometry.skybox.nx");
+    EXPECT_STREQ(skybox.pos_y, "image.brush_geometry.skybox.py");
+    EXPECT_STREQ(skybox.neg_y, "image.brush_geometry.skybox.ny");
+    EXPECT_STREQ(skybox.pos_z, "image.brush_geometry.skybox.pz");
+    EXPECT_STREQ(skybox.neg_z, "image.brush_geometry.skybox.nz");
+    EXPECT_FLOAT_EQ(skybox.size, 400.0f);
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.brush_geometry.showcase", &world));
     ASSERT_NE(world.render_model, nullptr);
     EXPECT_EQ(world.material_count, 7);
-    EXPECT_GE(world.brush_count, 10);
+    EXPECT_GE(world.brush_count, 19);
     EXPECT_GE(world.render_model->mesh_count, 6);
     auto find_material = [&world](const char *name) -> const slayer3d_game_data_brush_material * {
         for (int i = 0; i < world.material_count; ++i)
@@ -7441,7 +7450,19 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const slayer3d_game_data_brush_material *blue_material = find_material("mat.accent_blue");
     ASSERT_NE(blue_material, nullptr);
     EXPECT_GT(blue_material->emissive.z, 0.0f);
+    const slayer3d_game_data_brush_material *floor_material = find_material("mat.floor");
+    const slayer3d_game_data_brush_material *wall_material = find_material("mat.wall");
+    const slayer3d_game_data_brush_material *ceiling_material = find_material("mat.ceiling");
+    ASSERT_NE(floor_material, nullptr);
+    ASSERT_NE(wall_material, nullptr);
+    ASSERT_NE(ceiling_material, nullptr);
+    EXPECT_STREQ(floor_material->texture, "asset://textures/rock_floor.jpg");
+    EXPECT_STREQ(wall_material->texture, "asset://textures/wall_metal.jpg");
+    EXPECT_STREQ(ceiling_material->texture, "asset://textures/ceiling_metal.jpg");
     bool saw_model_emissive = false;
+    bool saw_model_floor_texture = false;
+    bool saw_model_wall_texture = false;
+    bool saw_model_ceiling_texture = false;
     for (int i = 0; i < world.render_model->material_count; ++i)
     {
         const slayer3d_material &material = world.render_model->materials[i];
@@ -7450,8 +7471,35 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
             saw_model_emissive = true;
             EXPECT_GT(material.emissive[2], 0.0f);
         }
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.floor") == 0)
+        {
+            saw_model_floor_texture = true;
+            ASSERT_NE(material.albedo_map, nullptr);
+            EXPECT_STREQ(material.albedo_map, "asset://textures/rock_floor.jpg");
+        }
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.wall") == 0)
+        {
+            saw_model_wall_texture = true;
+            ASSERT_NE(material.albedo_map, nullptr);
+            EXPECT_STREQ(material.albedo_map, "asset://textures/wall_metal.jpg");
+        }
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.ceiling") == 0)
+        {
+            saw_model_ceiling_texture = true;
+            ASSERT_NE(material.albedo_map, nullptr);
+            EXPECT_STREQ(material.albedo_map, "asset://textures/ceiling_metal.jpg");
+        }
     }
     EXPECT_TRUE(saw_model_emissive);
+    EXPECT_TRUE(saw_model_floor_texture);
+    EXPECT_TRUE(saw_model_wall_texture);
+    EXPECT_TRUE(saw_model_ceiling_texture);
+    ASSERT_NE(find_brush("brush.room.ceiling.north"), nullptr);
+    ASSERT_NE(find_brush("brush.room.ceiling.south"), nullptr);
+    ASSERT_NE(find_brush("brush.room.ceiling.west"), nullptr);
+    ASSERT_NE(find_brush("brush.room.ceiling.east"), nullptr);
+    ASSERT_NE(find_brush("brush.room.wall_south.window_top"), nullptr);
+    ASSERT_NE(find_brush("brush.room.wall_north.window_top"), nullptr);
     const slayer3d_game_data_brush *pillar = find_brush("brush.pillar.center");
     const slayer3d_game_data_brush *overhang_west = find_brush("brush.bridge.overhang_west");
     const slayer3d_game_data_brush *overhang_east = find_brush("brush.bridge.overhang_east");
