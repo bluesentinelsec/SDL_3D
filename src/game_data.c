@@ -105,7 +105,7 @@ static bool set_action_gamepad_button_binding(slayer3d_game_data_runtime *runtim
                                               SDL_GamepadButton button);
 static bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                                 const slayer3d_game_data_ui_metrics *metrics);
-static bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
+bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
 static int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
 static void load_storage_config(slayer3d_game_data_runtime *runtime, yyjson_val *root);
@@ -260,27 +260,7 @@ static bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtim
                                         bool fallback_exclude_source);
 static void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
 static void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
-static bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row);
-static char grid_map_cell(const grid_map_runtime *map, int col, int row);
-static bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, slayer3d_vec3 *out_position);
-static bool grid_map_world_to_cell(const grid_map_runtime *map, float x, float y, int *out_col, int *out_row);
-static bool grid_map_is_walkable(const grid_map_runtime *map, int col, int row);
-static bool grid_map_next_step(const grid_map_runtime *map, int start_col, int start_row, int goal_col, int goal_row,
-                               int *out_col, int *out_row);
-static bool grid_actor_index_register(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map,
-                                      const char *pool_name, slayer3d_registered_actor *actor, int col, int row);
-static void grid_actor_index_clear(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map,
-                                   const char *pool_name);
-static slayer3d_registered_actor *grid_actor_index_find(slayer3d_game_data_runtime *runtime, const char *map_name,
-                                                        const char *pool_name, int col, int row);
-static grid_pickup_layer_runtime *find_grid_pickup_layer(slayer3d_game_data_runtime *runtime, const char *name);
-static bool grid_pickup_layer_reset(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer);
-static bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer, int col,
-                                         int row, grid_pickup_kind_runtime *out_kind);
-
 #include "game_data/game_data_lua_api.inc"
-
-#include "game_data/game_data_grid_runtime.inc"
 
 #include "game_data/game_data_scene_lookup.inc"
 

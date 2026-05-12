@@ -56,7 +56,7 @@ static void execute_sensor_payload_actions(slayer3d_game_data_runtime *runtime, 
     (void)execute_action_array(runtime, sensor->actions, payload);
 }
 
-static bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor)
+bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor)
 {
     if (runtime == NULL || actor == NULL)
         return false;
