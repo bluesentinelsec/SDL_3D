@@ -696,6 +696,9 @@ bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, actor_pool_
                                 slayer3d_registered_actor *actor, int index, const char *reason);
 void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *properties);
 void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
+bool execute_grid_spawn_from_glyphs_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool execute_grid_spawn_runs_from_glyphs_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool execute_grid_pickup_layer_reset_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 slayer3d_vec3 actor_vec_property(const slayer3d_registered_actor *actor, const char *key);
 float actor_numeric_property(const slayer3d_registered_actor *actor, const char *key, float fallback);
 void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value);
@@ -757,6 +760,7 @@ void update_sector_doors(slayer3d_game_data_runtime *runtime, float dt);
 bool update_sector_platforms(slayer3d_game_data_runtime *runtime, float dt);
 void update_control_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt);
 void update_motion_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt);
+void update_sensors(slayer3d_game_data_runtime *runtime);
 void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
                               slayer3d_registered_actor *actor, float dt);
 void update_fps_sector_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,

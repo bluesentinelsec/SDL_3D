@@ -1,4 +1,6 @@
-/* Sensor runtime update helpers. Included by game_data_update_runtime.inc to preserve internal linkage. */
+/* Sensor runtime update helpers. */
+
+#include "game_data_internal.h"
 
 static void emit_sensor_signal(slayer3d_game_data_runtime *runtime, const sensor_entry *sensor,
                                slayer3d_registered_actor *a, slayer3d_registered_actor *b)
@@ -1077,7 +1079,7 @@ static void update_hearing_sensor(slayer3d_game_data_runtime *runtime, sensor_en
     sensor_actor_list_free(&listeners);
 }
 
-static void update_sensors(slayer3d_game_data_runtime *runtime)
+void update_sensors(slayer3d_game_data_runtime *runtime)
 {
     for (int i = 0; i < runtime->sensor_count; ++i)
     {

@@ -1,5 +1,6 @@
-/* Runtime-owned network direct-connect, host, and discovery session helpers. Included by src/game_data.c to preserve
- * internal linkage. */
+/* Runtime-owned network direct-connect, host, and discovery session helpers. */
+
+#include "game_data_internal.h"
 
 static const char *game_data_network_state_name(slayer3d_network_state state)
 {
