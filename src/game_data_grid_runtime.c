@@ -1,6 +1,13 @@
-/* Grid-map and pickup-layer runtime helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_grid_runtime.c
+ * @brief Grid-map and pickup-layer runtime helpers for authored game data.
+ */
 
-static bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row)
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
+
+bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row)
 {
     if (map == NULL || col == NULL || row == NULL || map->width <= 0 || map->height <= 0)
         return false;
@@ -19,14 +26,14 @@ static bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *
     return true;
 }
 
-static char grid_map_cell(const grid_map_runtime *map, int col, int row)
+char grid_map_cell(const grid_map_runtime *map, int col, int row)
 {
     if (!grid_map_normalize_cell(map, &col, &row))
         return '\0';
     return map->cells[row * map->width + col];
 }
 
-static bool grid_map_is_walkable(const grid_map_runtime *map, int col, int row)
+bool grid_map_is_walkable(const grid_map_runtime *map, int col, int row)
 {
     const char cell = grid_map_cell(map, col, row);
     if (cell == '\0' || map == NULL || map->walkable == NULL)
@@ -39,7 +46,7 @@ static bool grid_map_is_walkable(const grid_map_runtime *map, int col, int row)
     return false;
 }
 
-static bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, slayer3d_vec3 *out_position)
+bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, slayer3d_vec3 *out_position)
 {
     if (map == NULL || out_position == NULL || !grid_map_normalize_cell(map, &col, &row))
         return false;
@@ -54,7 +61,7 @@ static int grid_round_to_int(float value)
     return value >= 0.0f ? (int)(value + 0.5f) : (int)(value - 0.5f);
 }
 
-static bool grid_map_world_to_cell(const grid_map_runtime *map, float x, float y, int *out_col, int *out_row)
+bool grid_map_world_to_cell(const grid_map_runtime *map, float x, float y, int *out_col, int *out_row)
 {
     if (map == NULL || out_col == NULL || out_row == NULL || map->cell_width <= 0.0f || map->cell_height <= 0.0f ||
         map->row_direction == 0.0f)
@@ -144,8 +151,7 @@ static grid_actor_index *get_or_create_grid_actor_index(slayer3d_game_data_runti
     return index;
 }
 
-static void grid_actor_index_clear(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map,
-                                   const char *pool_name)
+void grid_actor_index_clear(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map, const char *pool_name)
 {
     grid_actor_index *index = find_grid_actor_index(runtime, map != NULL ? map->name : NULL, pool_name);
     if (index == NULL || index->actors == NULL || index->width <= 0 || index->height <= 0)
@@ -153,8 +159,8 @@ static void grid_actor_index_clear(slayer3d_game_data_runtime *runtime, const gr
     SDL_memset(index->actors, 0, (size_t)index->width * (size_t)index->height * sizeof(*index->actors));
 }
 
-static bool grid_actor_index_register(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map,
-                                      const char *pool_name, slayer3d_registered_actor *actor, int col, int row)
+bool grid_actor_index_register(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map, const char *pool_name,
+                               slayer3d_registered_actor *actor, int col, int row)
 {
     if (actor == NULL || !grid_map_normalize_cell(map, &col, &row))
         return false;
@@ -165,8 +171,8 @@ static bool grid_actor_index_register(slayer3d_game_data_runtime *runtime, const
     return true;
 }
 
-static slayer3d_registered_actor *grid_actor_index_find(slayer3d_game_data_runtime *runtime, const char *map_name,
-                                                        const char *pool_name, int col, int row)
+slayer3d_registered_actor *grid_actor_index_find(slayer3d_game_data_runtime *runtime, const char *map_name,
+                                                 const char *pool_name, int col, int row)
 {
     const grid_map_runtime *map = find_grid_map(runtime, map_name);
     if (!grid_map_normalize_cell(map, &col, &row))
@@ -193,7 +199,7 @@ static slayer3d_registered_actor *grid_actor_index_find(slayer3d_game_data_runti
     return actor;
 }
 
-static grid_pickup_layer_runtime *find_grid_pickup_layer(slayer3d_game_data_runtime *runtime, const char *name)
+grid_pickup_layer_runtime *find_grid_pickup_layer(slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -205,7 +211,7 @@ static grid_pickup_layer_runtime *find_grid_pickup_layer(slayer3d_game_data_runt
     return NULL;
 }
 
-static bool grid_pickup_layer_reset(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer)
+bool grid_pickup_layer_reset(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer)
 {
     (void)runtime;
     if (layer == NULL || layer->map == NULL || layer->cells == NULL)
@@ -231,8 +237,8 @@ static bool grid_pickup_layer_reset(slayer3d_game_data_runtime *runtime, grid_pi
     return true;
 }
 
-static bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer, int col,
-                                         int row, grid_pickup_kind_runtime *out_kind)
+bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer, int col,
+                                  int row, grid_pickup_kind_runtime *out_kind)
 {
     (void)runtime;
     if (out_kind != NULL)
@@ -250,8 +256,8 @@ static bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, gr
     return true;
 }
 
-static bool grid_map_next_step(const grid_map_runtime *map, int start_col, int start_row, int goal_col, int goal_row,
-                               int *out_col, int *out_row)
+bool grid_map_next_step(const grid_map_runtime *map, int start_col, int start_row, int goal_col, int goal_row,
+                        int *out_col, int *out_row)
 {
     if (out_col != NULL)
         *out_col = start_col;

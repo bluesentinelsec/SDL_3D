@@ -625,8 +625,26 @@ slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runt
 yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime);
 const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime);
 const char *find_action_name(const slayer3d_game_data_runtime *runtime, int action_id);
+bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
+bool active_scene_has_entity_internal(const slayer3d_game_data_runtime *runtime, const char *entity_name);
 bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_count);
 const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name);
+bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row);
+char grid_map_cell(const grid_map_runtime *map, int col, int row);
+bool grid_map_is_walkable(const grid_map_runtime *map, int col, int row);
+bool grid_map_cell_to_world(const grid_map_runtime *map, int col, int row, slayer3d_vec3 *out_position);
+bool grid_map_world_to_cell(const grid_map_runtime *map, float x, float y, int *out_col, int *out_row);
+bool grid_map_next_step(const grid_map_runtime *map, int start_col, int start_row, int goal_col, int goal_row,
+                        int *out_col, int *out_row);
+void grid_actor_index_clear(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map, const char *pool_name);
+bool grid_actor_index_register(slayer3d_game_data_runtime *runtime, const grid_map_runtime *map, const char *pool_name,
+                               slayer3d_registered_actor *actor, int col, int row);
+slayer3d_registered_actor *grid_actor_index_find(slayer3d_game_data_runtime *runtime, const char *map_name,
+                                                 const char *pool_name, int col, int row);
+grid_pickup_layer_runtime *find_grid_pickup_layer(slayer3d_game_data_runtime *runtime, const char *name);
+bool grid_pickup_layer_reset(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer);
+bool grid_pickup_layer_collect_at(slayer3d_game_data_runtime *runtime, grid_pickup_layer_runtime *layer, int col,
+                                  int row, grid_pickup_kind_runtime *out_kind);
 const runtime_collection *find_runtime_collection_const(const slayer3d_game_data_runtime *runtime,
                                                         const char *collection_name);
 bool runtime_collection_field_to_string(const runtime_collection *collection, int row_index, const char *field_name,

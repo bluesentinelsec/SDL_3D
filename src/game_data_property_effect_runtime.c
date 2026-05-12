@@ -1,4 +1,11 @@
-/* Runtime property effect update helpers. Included by game_data_update_runtime.inc to preserve internal linkage. */
+/**
+ * @file game_data_property_effect_runtime.c
+ * @brief Runtime property effect update helpers for authored game data.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
 
 static float move_float_toward(float value, float target, float max_delta)
 {

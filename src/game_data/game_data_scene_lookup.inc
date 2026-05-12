@@ -129,7 +129,7 @@ static bool scene_has_entity(const scene_entry *scene, const char *entity_name)
     return false;
 }
 
-static bool active_scene_has_entity_internal(const slayer3d_game_data_runtime *runtime, const char *entity_name)
+bool active_scene_has_entity_internal(const slayer3d_game_data_runtime *runtime, const char *entity_name)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
     if (scene_has_entity(scene, entity_name))

@@ -5,8 +5,6 @@
 
 #include "game_data_motion_runtime.inc"
 
-#include "game_data_property_effect_runtime.inc"
-
 #include "game_data_sensor_runtime.inc"
 
 static void update_noise_events(slayer3d_game_data_runtime *runtime, float dt)
