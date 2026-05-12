@@ -413,6 +413,16 @@ extern "C"
     float slayer3d_input_get_mouse_dy(const slayer3d_input_manager *input);
 
     /**
+     * @brief Return the latest absolute mouse position observed from SDL events.
+     *
+     * Coordinates are in the window/logical space reported by SDL for the
+     * source event. Returns false when no absolute mouse position has been
+     * observed yet or live mouse input is unavailable, such as during demo
+     * playback.
+     */
+    bool slayer3d_input_get_mouse_position(const slayer3d_input_manager *input, float *out_x, float *out_y);
+
+    /**
      * @brief Build a 2D axis pair from four action IDs.
      *
      * The result is (positive_x - negative_x, positive_y - negative_y).

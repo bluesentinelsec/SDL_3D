@@ -9,6 +9,7 @@
 
 #include "game_data_brush_internal.h"
 #include "slayer3d/collision.h"
+#include "slayer3d/game.h"
 #include "slayer3d/math.h"
 
 const char *slayer3d_game_data_active_scene(const slayer3d_game_data_runtime *runtime)
@@ -1617,7 +1618,96 @@ static unsigned int editor_debug_flags_from_json(yyjson_val *value)
     return flags != 0u ? flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
 }
 
-static bool editor_trace_desc_from_json(yyjson_val *selection, slayer3d_game_data_world_trace_desc *out_trace)
+static float editor_scene_state_float(const slayer3d_game_data_runtime *runtime, const char *key, float fallback)
+{
+    return runtime != NULL && key != NULL ? slayer3d_properties_get_float(runtime->scene_state, key, fallback)
+                                          : fallback;
+}
+
+static void editor_default_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height)
+{
+    if (out_width == NULL || out_height == NULL)
+        return;
+
+    yyjson_val *app = obj_get(runtime_root(runtime), "app");
+    yyjson_val *window = obj_get(app, "window");
+    const int width =
+        json_int(app, "logical_width",
+                 json_int(window, "logical_width", json_int(app, "width", SLAYER3D_GAME_DEFAULT_LOGICAL_WIDTH)));
+    const int height =
+        json_int(app, "logical_height",
+                 json_int(window, "logical_height", json_int(app, "height", SLAYER3D_GAME_DEFAULT_LOGICAL_HEIGHT)));
+    *out_width = (float)SDL_max(width, 1);
+    *out_height = (float)SDL_max(height, 1);
+}
+
+static bool editor_trace_screen_point(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
+                                      float viewport_width, float viewport_height, float *out_x, float *out_y)
+{
+    if (out_x == NULL || out_y == NULL)
+        return false;
+
+    *out_x = viewport_width * 0.5f;
+    *out_y = viewport_height * 0.5f;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    if (slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+    {
+        *out_x = mouse_x;
+        *out_y = mouse_y;
+    }
+
+    if (!json_vec2_value(obj_get(trace, "screen"), *out_x, *out_y, out_x, out_y))
+        return false;
+
+    *out_x = json_float(trace, "screen_x", *out_x);
+    *out_y = json_float(trace, "screen_y", *out_y);
+    *out_x = editor_scene_state_float(runtime, json_string(trace, "screen_x_key", NULL), *out_x);
+    *out_y = editor_scene_state_float(runtime, json_string(trace, "screen_y_key", NULL), *out_y);
+    return true;
+}
+
+static bool editor_trace_viewport(const slayer3d_game_data_runtime *runtime, yyjson_val *trace, float *out_width,
+                                  float *out_height)
+{
+    editor_default_viewport(runtime, out_width, out_height);
+    if (!json_vec2_value(obj_get(trace, "viewport"), *out_width, *out_height, out_width, out_height))
+        return false;
+    *out_width = json_float(trace, "viewport_width", *out_width);
+    *out_height = json_float(trace, "viewport_height", *out_height);
+    *out_width = editor_scene_state_float(runtime, json_string(trace, "viewport_width_key", NULL), *out_width);
+    *out_height = editor_scene_state_float(runtime, json_string(trace, "viewport_height_key", NULL), *out_height);
+    return *out_width > 0.0f && *out_height > 0.0f;
+}
+
+static bool editor_camera_screen_trace_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
+                                                 slayer3d_game_data_world_trace_desc *out_trace)
+{
+    const char *camera_name = json_string(trace, "camera", slayer3d_game_data_active_camera(runtime));
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, camera_name, &camera))
+        return false;
+
+    float viewport_width = 0.0f;
+    float viewport_height = 0.0f;
+    if (!editor_trace_viewport(runtime, trace, &viewport_width, &viewport_height))
+        return false;
+
+    float screen_x = 0.0f;
+    float screen_y = 0.0f;
+    if (!editor_trace_screen_point(runtime, trace, viewport_width, viewport_height, &screen_x, &screen_y))
+        return false;
+
+    const float near_distance = SDL_max(json_float(trace, "near", 0.05f), 0.0f);
+    const float far_distance = SDL_max(json_float(trace, "far", 1000.0f), near_distance + 0.001f);
+    return slayer3d_camera3d_screen_ray(&camera, viewport_width, viewport_height, screen_x, screen_y, near_distance,
+                                        far_distance, &out_trace->start, &out_trace->end);
+}
+
+static bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
+                                        slayer3d_game_data_world_trace_desc *out_trace)
 {
     if (out_trace != NULL)
         SDL_zero(*out_trace);
@@ -1626,8 +1716,17 @@ static bool editor_trace_desc_from_json(yyjson_val *selection, slayer3d_game_dat
         return false;
 
     out_trace->shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
-    out_trace->start = json_vec3(trace, "start", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    out_trace->end = json_vec3(trace, "end", out_trace->start);
+    const char *source = json_string(trace, "source", "world");
+    if (SDL_strcmp(source, "camera_screen") == 0)
+    {
+        if (!editor_camera_screen_trace_from_json(runtime, trace, out_trace))
+            return false;
+    }
+    else
+    {
+        out_trace->start = json_vec3(trace, "start", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        out_trace->end = json_vec3(trace, "end", out_trace->start);
+    }
     out_trace->contents_mask =
         brush_flags_from_json(obj_get(trace, "contents_mask"), brush_content_flag_from_string,
                               SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
@@ -1728,7 +1827,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     slayer3d_game_data_world_trace_desc trace;
     slayer3d_game_data_editor_selection selection;
     init_editor_selection(&selection);
-    if (!editor_trace_desc_from_json(selection_json, &trace) ||
+    if (!editor_trace_desc_from_json(runtime, selection_json, &trace) ||
         !slayer3d_game_data_pick_editor_world_model(runtime, &trace, &selection))
     {
         return false;
@@ -1760,7 +1859,7 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
     out_desc->hit_marker_size = json_float(overlay, "hit_marker_size", 0.1f);
 
     yyjson_val *selection_json = obj_get(editor, "selection");
-    if (editor_trace_desc_from_json(selection_json, out_trace))
+    if (editor_trace_desc_from_json(runtime, selection_json, out_trace))
     {
         out_desc->trace = out_trace;
         if (out_selection != NULL && slayer3d_game_data_pick_editor_world_model(runtime, out_trace, out_selection))

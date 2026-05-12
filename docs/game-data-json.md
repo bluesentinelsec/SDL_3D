@@ -634,8 +634,11 @@ face normal through the normal 3D presentation path:
   "editor": {
     "selection": {
       "trace": {
-        "start": [-2.0, 1.0, 1.0],
-        "end": [1.25, 1.0, 1.0],
+        "source": "camera_screen",
+        "camera": "camera.editor.viewport",
+        "viewport": [1280, 720],
+        "near": 0.05,
+        "far": 100.0,
         "model_filter": "brush_worlds",
         "contents_mask": "solid"
       },
@@ -655,6 +658,15 @@ face normal through the normal 3D presentation path:
   }
 }
 ```
+
+Selection traces default to `source: "world"`, where `start` and `end` are
+authored world-space vec3 values. `source: "camera_screen"` derives the ray
+from a camera and screen point using the latest live mouse position by default.
+Tooling can override that point with `screen`, `screen_x`/`screen_y`, or
+`screen_x_key`/`screen_y_key`; viewport dimensions can likewise be authored
+with `viewport`, `viewport_width`/`viewport_height`, or scene-state keys. This
+lets editor dojos and future editor hosts share the same data-authored picking
+primitive.
 
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,

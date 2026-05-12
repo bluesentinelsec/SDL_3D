@@ -10330,7 +10330,144 @@ static bool validate_scene_editor_outputs(validation_context *ctx, yyjson_val *o
     return true;
 }
 
-static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path)
+static bool validate_optional_non_empty_string(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                               const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
+        return validation_error(ctx, json_path, "%s must be a non-empty string", description);
+    return true;
+}
+
+static bool validate_optional_number(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                     const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value))
+        return validation_error(ctx, json_path, "%s must be a number", description);
+    return true;
+}
+
+static bool validate_optional_positive_number(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                              const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0)
+        return validation_error(ctx, json_path, "%s must be positive", description);
+    return true;
+}
+
+static bool validate_optional_non_negative_number(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                                  const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0)
+        return validation_error(ctx, json_path, "%s must be non-negative", description);
+    return true;
+}
+
+static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, yyjson_val *trace,
+                                                      const char *trace_path, validation_names *names)
+{
+    yyjson_val *camera_value = obj_get(trace, "camera");
+    if (!validate_optional_non_empty_string(ctx, camera_value, trace_path, "scene editor camera_screen trace camera"))
+        return false;
+    const char *camera = json_string(trace, "camera");
+    if (camera != NULL && !require_ref(ctx, &names->cameras, "camera", camera, trace_path))
+        return false;
+
+    yyjson_val *screen = obj_get(trace, "screen");
+    if (screen != NULL && !is_exact_vec_array(screen, 2))
+        return validation_error(ctx, trace_path, "scene editor camera_screen trace screen must be a vec2");
+    yyjson_val *viewport = obj_get(trace, "viewport");
+    if (viewport != NULL &&
+        (!is_exact_vec_array(viewport, 2) || !numeric_array_values_in_range(viewport, 0.000001, DBL_MAX)))
+        return validation_error(ctx, trace_path, "scene editor camera_screen trace viewport must be a positive vec2");
+
+    char field_path[PATH_BUFFER_SIZE];
+    static const char *const numeric_keys[] = {"screen_x", "screen_y"};
+    for (size_t i = 0; i < SDL_arraysize(numeric_keys); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", trace_path, numeric_keys[i]);
+        if (!validate_optional_number(ctx, obj_get(trace, numeric_keys[i]), field_path,
+                                      "scene editor camera_screen trace coordinate"))
+            return false;
+    }
+
+    static const char *const positive_keys[] = {"viewport_width", "viewport_height", "far"};
+    for (size_t i = 0; i < SDL_arraysize(positive_keys); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", trace_path, positive_keys[i]);
+        if (!validate_optional_positive_number(ctx, obj_get(trace, positive_keys[i]), field_path,
+                                               "scene editor camera_screen trace value"))
+            return false;
+    }
+    format_path(field_path, sizeof(field_path), "%s.near", trace_path);
+    if (!validate_optional_non_negative_number(ctx, obj_get(trace, "near"), field_path,
+                                               "scene editor camera_screen trace near"))
+        return false;
+
+    static const char *const string_keys[] = {"screen_x_key", "screen_y_key", "viewport_width_key",
+                                              "viewport_height_key"};
+    for (size_t i = 0; i < SDL_arraysize(string_keys); ++i)
+    {
+        format_path(field_path, sizeof(field_path), "%s.%s", trace_path, string_keys[i]);
+        if (!validate_optional_non_empty_string(ctx, obj_get(trace, string_keys[i]), field_path,
+                                                "scene editor camera_screen trace key"))
+            return false;
+    }
+
+    yyjson_val *near_value = obj_get(trace, "near");
+    yyjson_val *far_value = obj_get(trace, "far");
+    if (near_value != NULL && far_value != NULL && yyjson_get_num(far_value) <= yyjson_get_num(near_value))
+        return validation_error(ctx, trace_path, "scene editor camera_screen trace far must be greater than near");
+    return true;
+}
+
+static bool validate_scene_editor_trace(validation_context *ctx, yyjson_val *trace, const char *trace_path,
+                                        validation_names *names)
+{
+    yyjson_val *source_value = obj_get(trace, "source");
+    if (!validate_optional_non_empty_string(ctx, source_value, trace_path, "scene editor selection trace source"))
+        return false;
+    const char *source = source_value != NULL ? yyjson_get_str(source_value) : "world";
+    if (SDL_strcmp(source, "world") == 0)
+    {
+        if (!is_exact_vec_array(obj_get(trace, "start"), 3))
+            return validation_error(ctx, trace_path, "scene editor selection trace requires a start vec3");
+        if (!is_exact_vec_array(obj_get(trace, "end"), 3))
+            return validation_error(ctx, trace_path, "scene editor selection trace requires an end vec3");
+    }
+    else if (SDL_strcmp(source, "camera_screen") == 0)
+    {
+        if (!validate_scene_editor_camera_screen_trace(ctx, trace, trace_path, names))
+            return false;
+    }
+    else
+    {
+        return validation_error(ctx, trace_path,
+                                "scene editor selection trace source must be 'world' or 'camera_screen'");
+    }
+
+    char contents_path[PATH_BUFFER_SIZE];
+    format_path(contents_path, sizeof(contents_path), "%s.contents_mask", trace_path);
+    if (!validate_brush_string_or_string_array(ctx, obj_get(trace, "contents_mask"), contents_path, "brush content",
+                                               brush_content_name_valid, false))
+        return false;
+    char filter_path[PATH_BUFFER_SIZE];
+    format_path(filter_path, sizeof(filter_path), "%s.model_filter", trace_path);
+    if (!validate_string_or_string_array_names(ctx, obj_get(trace, "model_filter"), filter_path, "world model filter",
+                                               editor_model_filter_name_valid))
+        return false;
+    return true;
+}
+
+static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
+                                          validation_names *names)
 {
     yyjson_val *editor = obj_get(scene_root, "editor");
     if (editor == NULL)
@@ -10350,19 +10487,7 @@ static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *s
             return validation_error(ctx, selection_path, "scene editor selection requires a trace object");
         char trace_path[PATH_BUFFER_SIZE];
         format_path(trace_path, sizeof(trace_path), "%s.trace", selection_path);
-        if (!is_exact_vec_array(obj_get(trace, "start"), 3))
-            return validation_error(ctx, trace_path, "scene editor selection trace requires a start vec3");
-        if (!is_exact_vec_array(obj_get(trace, "end"), 3))
-            return validation_error(ctx, trace_path, "scene editor selection trace requires an end vec3");
-        char contents_path[PATH_BUFFER_SIZE];
-        format_path(contents_path, sizeof(contents_path), "%s.contents_mask", trace_path);
-        if (!validate_brush_string_or_string_array(ctx, obj_get(trace, "contents_mask"), contents_path, "brush content",
-                                                   brush_content_name_valid, false))
-            return false;
-        char filter_path[PATH_BUFFER_SIZE];
-        format_path(filter_path, sizeof(filter_path), "%s.model_filter", trace_path);
-        if (!validate_string_or_string_array_names(ctx, obj_get(trace, "model_filter"), filter_path,
-                                                   "world model filter", editor_model_filter_name_valid))
+        if (!validate_scene_editor_trace(ctx, trace, trace_path, names))
             return false;
         char outputs_path[PATH_BUFFER_SIZE];
         format_path(outputs_path, sizeof(outputs_path), "%s.outputs", selection_path);
@@ -10435,7 +10560,7 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
         return false;
     if (!validate_scene_skybox(ctx, root, json_path, names))
         return false;
-    if (!validate_scene_editor_tooling(ctx, root, json_path))
+    if (!validate_scene_editor_tooling(ctx, root, json_path, names))
         return false;
 
     char phases_path[PATH_BUFFER_SIZE];

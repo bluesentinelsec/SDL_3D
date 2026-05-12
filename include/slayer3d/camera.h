@@ -47,6 +47,18 @@ extern "C"
                                             int backbuffer_height, float near_plane, float far_plane,
                                             slayer3d_mat4 *out_view, slayer3d_mat4 *out_projection);
 
+    /**
+     * @brief Build a world-space picking ray from a camera and screen point.
+     *
+     * The screen point is in the same pixel/logical coordinate space as the
+     * supplied viewport dimensions, with (0,0) at the top-left corner. The
+     * generated segment starts at @p near_distance and ends at @p far_distance
+     * along the camera ray.
+     */
+    bool slayer3d_camera3d_screen_ray(const slayer3d_camera3d *camera, float viewport_width, float viewport_height,
+                                      float screen_x, float screen_y, float near_distance, float far_distance,
+                                      slayer3d_vec3 *out_start, slayer3d_vec3 *out_end);
+
 #ifdef __cplusplus
 }
 #endif

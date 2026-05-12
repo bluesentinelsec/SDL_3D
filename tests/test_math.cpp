@@ -334,6 +334,43 @@ TEST(SLAYER3DCamera, OrthographicProducesUnitNDC)
     EXPECT_PRED_FORMAT3(Near, clip_bot.y / clip_bot.w, -1.0f, 1e-4f);
 }
 
+TEST(SLAYER3DCamera, ScreenRayMatchesPerspectiveCenterAndFovAxis)
+{
+    slayer3d_camera3d camera = {
+        {0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 90.0f, SLAYER3D_CAMERA_PERSPECTIVE};
+    camera.fov_axis = SLAYER3D_CAMERA_FOV_HORIZONTAL;
+
+    slayer3d_vec3 start{};
+    slayer3d_vec3 end{};
+    ASSERT_TRUE(slayer3d_camera3d_screen_ray(&camera, 1600.0f, 900.0f, 800.0f, 450.0f, 1.0f, 10.0f, &start, &end));
+    EXPECT_PRED_FORMAT3(Near, start.x, 0.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, start.y, 0.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, start.z, 4.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, end.z, -5.0f, 1e-5f);
+
+    ASSERT_TRUE(slayer3d_camera3d_screen_ray(&camera, 1600.0f, 900.0f, 1600.0f, 450.0f, 1.0f, 10.0f, &start, &end));
+    const slayer3d_vec3 dir = slayer3d_vec3_normalize(slayer3d_vec3_sub(end, start));
+    EXPECT_PRED_FORMAT3(Near, dir.x, 0.7071067f, 1e-4f);
+    EXPECT_PRED_FORMAT3(Near, dir.y, 0.0f, 1e-4f);
+    EXPECT_PRED_FORMAT3(Near, dir.z, -0.7071067f, 1e-4f);
+}
+
+TEST(SLAYER3DCamera, ScreenRayOffsetsOrthographicStart)
+{
+    const slayer3d_camera3d camera = {
+        {0.0f, 0.0f, 5.0f}, {0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}, 10.0f, SLAYER3D_CAMERA_ORTHOGRAPHIC};
+
+    slayer3d_vec3 start{};
+    slayer3d_vec3 end{};
+    ASSERT_TRUE(slayer3d_camera3d_screen_ray(&camera, 100.0f, 100.0f, 100.0f, 0.0f, 1.0f, 10.0f, &start, &end));
+    EXPECT_PRED_FORMAT3(Near, start.x, 5.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, start.y, 5.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, start.z, 4.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, end.x, 5.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, end.y, 5.0f, 1e-5f);
+    EXPECT_PRED_FORMAT3(Near, end.z, -5.0f, 1e-5f);
+}
+
 TEST(SLAYER3DCamera, RejectsInvalidArguments)
 {
     const slayer3d_camera3d camera = {
