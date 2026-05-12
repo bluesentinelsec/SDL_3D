@@ -723,12 +723,6 @@ static bool fps_brush_try_step_move(const slayer3d_game_data_runtime *runtime, s
     }
 
     *out_position = slayer3d_vec3_add(down_trace.end_position, slayer3d_vec3_scale(down_trace.normal, 0.01f));
-    const float step_delta = out_position->y - start.y;
-    if (step_delta > FPS_BRUSH_VIEW_SMOOTH_EPSILON)
-    {
-        mover->view_smooth =
-            fps_brush_clampf(mover->view_smooth - step_delta, -mover->config.step_height, mover->config.step_height);
-    }
     mover->on_ground = true;
     mover->vertical_velocity = 0.0f;
     if (diagnostics != NULL)
@@ -771,6 +765,8 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
     slayer3d_vec3 body_center = fps_brush_eye_to_body_center(mover, mover->position);
     if (mover->on_ground)
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
+    const bool smooth_ground_height_change = mover->on_ground;
+    const float smooth_start_eye_y = fps_brush_body_center_to_eye(mover, body_center).y;
 
     if (fps_controller_action_pressed(runtime, input, jump_action))
         slayer3d_fps_mover_jump(mover);
@@ -857,6 +853,16 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     mover->position = fps_brush_body_center_to_eye(mover, body_center);
+    if (smooth_ground_height_change && mover->on_ground)
+    {
+        const float height_delta = mover->position.y - smooth_start_eye_y;
+        if (SDL_fabsf(height_delta) > FPS_BRUSH_VIEW_SMOOTH_EPSILON &&
+            SDL_fabsf(height_delta) <= mover->config.step_height + 0.05f)
+        {
+            mover->view_smooth = fps_brush_clampf(mover->view_smooth - height_delta, -mover->config.step_height,
+                                                  mover->config.step_height);
+        }
+    }
     mover->current_sector = -1;
     if (mover->on_ground)
     {

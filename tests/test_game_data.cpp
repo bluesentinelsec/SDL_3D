@@ -12095,6 +12095,49 @@ TEST(GameDataRuntime, FpsBrushControllerSmoothsStairStepCamera)
     }
     EXPECT_NEAR(previous_camera_y, player->position.y, 0.03f);
 
+    const float top_eye_y = player->position.y;
+    slayer3d_camera3d top_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &top_camera));
+    EXPECT_NEAR(top_camera.position.y, top_eye_y, 0.03f);
+
+    const int back = slayer3d_game_data_find_action(runtime, "action.move.back");
+    ASSERT_GE(back, 0);
+    slayer3d_input_set_action_override(input, back, 1.0f);
+
+    bool descended = false;
+    slayer3d_camera3d descended_camera{};
+    for (int i = 0; i < 80; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(6000 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        if (player->position.y < top_eye_y - 0.20f)
+        {
+            descended = true;
+            ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &descended_camera));
+            break;
+        }
+    }
+
+    ASSERT_TRUE(descended);
+    EXPECT_NEAR(player->position.y, initial_eye_y, 0.04f);
+    EXPECT_GT(descended_camera.position.y, player->position.y + 0.15f);
+    EXPECT_NEAR(descended_camera.position.y, top_camera.position.y, 0.10f);
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "view_smooth", 0.0f), 0.15f);
+
+    slayer3d_input_set_action_override(input, back, 0.0f);
+    previous_camera_y = descended_camera.position.y;
+    for (int i = 0; i < 30; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(7000 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        slayer3d_camera3d camera{};
+        ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));
+        EXPECT_LE(camera.position.y - 0.001f, previous_camera_y);
+        EXPECT_GE(camera.position.y, player->position.y - 0.001f);
+        previous_camera_y = camera.position.y;
+    }
+    EXPECT_NEAR(previous_camera_y, player->position.y, 0.03f);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
