@@ -7402,6 +7402,15 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
         << error;
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.brush_geometry.showcase"));
+    slayer3d_game_data_scene_skybox skybox{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_scene_skybox(runtime, &skybox));
+    EXPECT_STREQ(skybox.pos_x, "image.brush_geometry.skybox.px");
+    EXPECT_STREQ(skybox.neg_x, "image.brush_geometry.skybox.nx");
+    EXPECT_STREQ(skybox.pos_y, "image.brush_geometry.skybox.py");
+    EXPECT_STREQ(skybox.neg_y, "image.brush_geometry.skybox.ny");
+    EXPECT_STREQ(skybox.pos_z, "image.brush_geometry.skybox.pz");
+    EXPECT_STREQ(skybox.neg_z, "image.brush_geometry.skybox.nz");
+    EXPECT_FLOAT_EQ(skybox.size, 400.0f);
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.brush_geometry.showcase", &world));
     ASSERT_NE(world.render_model, nullptr);

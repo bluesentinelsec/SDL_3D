@@ -24,6 +24,15 @@
     ]
   },
   "world": {
+    "skybox": {
+      "pos_x": "image.brush_geometry.skybox.px",
+      "neg_x": "image.brush_geometry.skybox.nx",
+      "pos_y": "image.brush_geometry.skybox.py",
+      "neg_y": "image.brush_geometry.skybox.ny",
+      "pos_z": "image.brush_geometry.skybox.pz",
+      "neg_z": "image.brush_geometry.skybox.nz",
+      "size": 400.0
+    },
     "brush_worlds": [
       {
         "world": "brush.brush_geometry.showcase",
