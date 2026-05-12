@@ -1680,6 +1680,8 @@ static slayer3d_mat4 slayer3d_mat4_from_trs_node(const float *t, const float *r,
  * Draw a single mesh by index, resolving material/texture/lighting.
  * joint_matrices may be NULL for non-skinned draws.
  */
+static char *slayer3d_embedded_texture_cache_key(const slayer3d_model *model, const char *embedded_ref);
+
 static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
                                      const slayer3d_model *model, int mesh_index,
                                      const slayer3d_texture2d *lightmap_texture, slayer3d_vec4 tint_modulate,
@@ -1725,26 +1727,30 @@ static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const sla
                 if (tex_idx >= 0 && tex_idx < model->embedded_texture_count &&
                     model->embedded_textures[tex_idx].pixels != NULL)
                 {
+                    char *embedded_key = slayer3d_embedded_texture_cache_key(model, material->albedo_map);
                     slayer3d_texture_cache_entry *entry = NULL;
-                    for (entry = context->texture_cache; entry != NULL; entry = entry->next)
+                    for (entry = context->texture_cache; embedded_key != NULL && entry != NULL; entry = entry->next)
                     {
-                        if (SDL_strcmp(entry->path, material->albedo_map) == 0)
+                        if (SDL_strcmp(entry->path, embedded_key) == 0)
                         {
                             texture = &entry->texture;
                             break;
                         }
                     }
-                    if (texture == NULL)
+                    if (texture == NULL && embedded_key != NULL)
                     {
                         entry = (slayer3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
                         if (entry != NULL)
                         {
-                            entry->path = SDL_strdup(material->albedo_map);
+                            entry->path = embedded_key;
                             if (slayer3d_create_texture_from_image(&model->embedded_textures[tex_idx], &entry->texture))
                             {
+                                entry->texture.wrap_u = SLAYER3D_TEXTURE_WRAP_REPEAT;
+                                entry->texture.wrap_v = SLAYER3D_TEXTURE_WRAP_REPEAT;
                                 entry->next = context->texture_cache;
                                 context->texture_cache = entry;
                                 texture = &entry->texture;
+                                embedded_key = NULL;
                             }
                             else
                             {
@@ -1753,6 +1759,7 @@ static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const sla
                             }
                         }
                     }
+                    SDL_free(embedded_key);
                 }
             }
             else
@@ -1779,9 +1786,14 @@ static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const sla
             {
                 lp_storage.metallic = material->metallic;
                 lp_storage.roughness = material->roughness;
-                lp_storage.emissive[0] = material->emissive[0];
-                lp_storage.emissive[1] = material->emissive[1];
-                lp_storage.emissive[2] = material->emissive[2];
+                /* Until emissive texture sampling is supported, do not apply
+                 * the factor uniformly when the material expects a mask. */
+                if (material->emissive_map == NULL || material->emissive_map[0] == '\0')
+                {
+                    lp_storage.emissive[0] = material->emissive[0];
+                    lp_storage.emissive[1] = material->emissive[1];
+                    lp_storage.emissive[2] = material->emissive[2];
+                }
             }
             else
             {
@@ -1800,6 +1812,25 @@ static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const sla
             (Uint64)((mesh->index_count > 0 ? mesh->index_count : mesh->vertex_count) / 3);
     }
     return ok;
+}
+
+static char *slayer3d_embedded_texture_cache_key(const slayer3d_model *model, const char *embedded_ref)
+{
+    const char *source = model != NULL && model->source_path != NULL ? model->source_path : "<memory-model>";
+    const char *ref = embedded_ref != NULL ? embedded_ref : "";
+    const size_t source_len = SDL_strlen(source);
+    const size_t ref_len = SDL_strlen(ref);
+    char *key = (char *)SDL_malloc(source_len + ref_len + 3U);
+    if (key == NULL)
+    {
+        SDL_OutOfMemory();
+        return NULL;
+    }
+    SDL_memcpy(key, source, source_len);
+    key[source_len] = ':';
+    key[source_len + 1U] = ':';
+    SDL_memcpy(key + source_len + 2U, ref, ref_len + 1U);
+    return key;
 }
 
 /**

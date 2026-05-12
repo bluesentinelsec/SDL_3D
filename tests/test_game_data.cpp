@@ -26,6 +26,7 @@ extern "C"
 #include "slayer3d/game_presentation.h"
 #include "slayer3d/image.h"
 #include "slayer3d/math.h"
+#include "slayer3d/model.h"
 #include "slayer3d/properties.h"
 #include "slayer3d/signal_bus.h"
 #include "slayer3d/timer_pool.h"
@@ -7577,6 +7578,28 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, BrushGeometryZombieGlbCarriesEmbeddedTextureMaterial)
+{
+    const std::filesystem::path model_path = std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "brush_geometry_dojo" /
+                                             "data" / "models" / "zombie" / "male-zombie-walking.glb";
+    ASSERT_TRUE(std::filesystem::exists(model_path)) << model_path;
+
+    slayer3d_model model{};
+    ASSERT_TRUE(slayer3d_load_model_from_file(model_path.string().c_str(), &model)) << SDL_GetError();
+    ASSERT_GE(model.material_count, 1);
+    ASSERT_NE(model.materials, nullptr);
+    ASSERT_NE(model.materials[0].albedo_map, nullptr);
+    EXPECT_STREQ(model.materials[0].albedo_map, "#0");
+    ASSERT_GT(model.embedded_texture_count, 0);
+    ASSERT_NE(model.embedded_textures, nullptr);
+    EXPECT_GT(model.embedded_textures[0].width, 0);
+    EXPECT_GT(model.embedded_textures[0].height, 0);
+    EXPECT_NE(model.embedded_textures[0].pixels, nullptr);
+    EXPECT_NE(model.materials[0].emissive_map, nullptr);
+
+    slayer3d_free_model(&model);
+}
+
 TEST(GameDataRuntime, UsesDefaultWorldUnitsAndPerspectiveFovy)
 {
     const std::filesystem::path dir = unique_test_dir("world_camera_defaults");
@@ -11814,13 +11837,15 @@ TEST(GameDataRuntime, PatrolCanUseBrushCollisionAndGrounding)
       "components": [
         {
           "type": "motion.patrol",
-          "waypoints": [[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]],
+          "waypoints": [[0.0, 0.0, 0.0], [0.0, 0.0, 5.0]],
           "speed": 6.0,
           "wait_time": 0.0,
           "arrival_radius": 0.05,
           "mode": "loop",
           "start_idle": false,
           "yaw_property": "yaw",
+          "yaw_forward": "+z",
+          "face_target": true,
           "animation_time_property": "walk_anim_time",
           "collision": {
             "type": "brush",
@@ -11858,12 +11883,12 @@ TEST(GameDataRuntime, PatrolCanUseBrushCollisionAndGrounding)
           "name": "brush.wall",
           "contents": ["solid", "player_clip"],
           "faces": [
-            { "plane": { "normal": [1, 0, 0], "distance": 1.85 }, "material": "mat" },
-            { "plane": { "normal": [-1, 0, 0], "distance": -1.5 }, "material": "mat" },
+            { "plane": { "normal": [1, 0, 0], "distance": 1.0 }, "material": "mat" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1.0 }, "material": "mat" },
             { "plane": { "normal": [0, 1, 0], "distance": 2.0 }, "material": "mat" },
             { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat" },
-            { "plane": { "normal": [0, 0, 1], "distance": 1.0 }, "material": "mat" },
-            { "plane": { "normal": [0, 0, -1], "distance": 1.0 }, "material": "mat" }
+            { "plane": { "normal": [0, 0, 1], "distance": 1.85 }, "material": "mat" },
+            { "plane": { "normal": [0, 0, -1], "distance": -1.5 }, "material": "mat" }
           ]
         }
       ]
@@ -11884,13 +11909,13 @@ TEST(GameDataRuntime, PatrolCanUseBrushCollisionAndGrounding)
     ASSERT_NE(actor, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.5f));
 
-    EXPECT_LT(actor->position.x, 1.35f);
-    EXPECT_GT(actor->position.x, 1.0f);
+    EXPECT_LT(actor->position.z, 1.35f);
+    EXPECT_GT(actor->position.z, 1.0f);
+    EXPECT_NEAR(actor->position.x, 0.0f, 0.03f);
     EXPECT_NEAR(actor->position.y, 0.0f, 0.03f);
-    EXPECT_NEAR(actor->position.z, 0.0f, 0.03f);
     EXPECT_TRUE(slayer3d_properties_get_bool(actor->props, "on_ground", false));
     EXPECT_GT(slayer3d_properties_get_float(actor->props, "walk_anim_time", 0.0f), 0.0f);
-    EXPECT_NEAR(slayer3d_properties_get_float(actor->props, "yaw", 0.0f), SDL_PI_F / 2.0f, 0.05f);
+    EXPECT_NEAR(slayer3d_properties_get_float(actor->props, "yaw", 1.0f), 0.0f, 0.05f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

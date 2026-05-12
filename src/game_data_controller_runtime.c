@@ -107,6 +107,35 @@ static void patrol_increment_animation_time(yyjson_val *component, slayer3d_regi
                                   slayer3d_properties_get_float(actor->props, property, 0.0f) + rate * dt);
 }
 
+static float patrol_yaw_from_delta(yyjson_val *component, slayer3d_vec3 delta)
+{
+    const char *forward_axis = json_string(component, "yaw_forward", "-z");
+    if (SDL_strcmp(forward_axis != NULL ? forward_axis : "", "+z") == 0 ||
+        SDL_strcmp(forward_axis != NULL ? forward_axis : "", "positive_z") == 0)
+    {
+        return SDL_atan2f(delta.x, delta.z);
+    }
+    return SDL_atan2f(delta.x, -delta.z);
+}
+
+static bool patrol_direction_to_target(const slayer3d_actor_patrol_controller *controller,
+                                       const slayer3d_registered_actor *actor, slayer3d_vec3 *out_direction)
+{
+    if (controller == NULL || actor == NULL || out_direction == NULL || controller->waypoint_count <= 0 ||
+        controller->target_waypoint < 0 || controller->target_waypoint >= controller->waypoint_count)
+    {
+        return false;
+    }
+
+    const slayer3d_vec3 target = controller->waypoints[controller->target_waypoint];
+    const slayer3d_vec3 direction =
+        slayer3d_vec3_make(target.x - actor->position.x, 0.0f, target.z - actor->position.z);
+    if ((direction.x * direction.x + direction.z * direction.z) <= 0.000001f)
+        return false;
+    *out_direction = direction;
+    return true;
+}
+
 static bool patrol_brush_move(void *userdata, const slayer3d_actor_patrol_controller *controller,
                               slayer3d_registered_actor *actor, slayer3d_vec3 desired_position,
                               slayer3d_vec3 *out_position)
@@ -203,8 +232,17 @@ void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *c
     actor_set_position(actor, result.position);
     if (result.moved)
     {
-        const float yaw = SDL_atan2f(result.movement_delta.x, -result.movement_delta.z);
+        const float yaw = patrol_yaw_from_delta(component, result.movement_delta);
         slayer3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), yaw);
+    }
+    if (json_bool(component, "face_target", false))
+    {
+        slayer3d_vec3 direction;
+        if (patrol_direction_to_target(&controller->controller, actor, &direction))
+        {
+            const float yaw = patrol_yaw_from_delta(component, direction);
+            slayer3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), yaw);
+        }
     }
     patrol_increment_animation_time(component, actor, result.state, dt);
 }

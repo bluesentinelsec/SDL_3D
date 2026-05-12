@@ -38,6 +38,8 @@
           "mode": "loop",
           "start_idle": false,
           "yaw_property": "yaw",
+          "yaw_forward": "+z",
+          "face_target": true,
           "animation_time_property": "walk_anim_time",
           "animation_rate": 1.0,
           "collision": {

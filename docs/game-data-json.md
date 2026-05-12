@@ -1675,7 +1675,10 @@ Reusable components include:
   Use `speed`, `wait_time`, `arrival_radius`, `mode` (`loop` or `ping_pong`),
   and optional `yaw_property` to expose movement direction to rendering or Lua
   logic. `animation_time_property` can advance model animation time while the
-  actor walks. For true-3D brush worlds, add a `collision` object with
+  actor walks. `yaw_forward` may be `"-z"`/`"negative_z"` (default) or
+  `"+z"`/`"positive_z"` to match the rendered actor asset's authored forward
+  axis, and `face_target` can orient the actor toward the next waypoint during
+  turns. For true-3D brush worlds, add a `collision` object with
   `"type": "brush"` to move through active brush-world instances using swept
   point, sphere, or AABB traces, sliding, floor probing, and an optional
   `on_ground_property`. This is intended for simple NPC patrols and background

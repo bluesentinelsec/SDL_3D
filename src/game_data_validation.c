@@ -5658,6 +5658,18 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *animate_when_idle = obj_get(component, "animate_when_idle");
                 if (animate_when_idle != NULL && !yyjson_is_bool(animate_when_idle))
                     return validation_error(ctx, path, "motion.patrol animate_when_idle must be a boolean");
+                yyjson_val *face_target = obj_get(component, "face_target");
+                if (face_target != NULL && !yyjson_is_bool(face_target))
+                    return validation_error(ctx, path, "motion.patrol face_target must be a boolean");
+                const char *yaw_forward = json_string(component, "yaw_forward");
+                if (yaw_forward != NULL && SDL_strcmp(yaw_forward, "-z") != 0 &&
+                    SDL_strcmp(yaw_forward, "negative_z") != 0 && SDL_strcmp(yaw_forward, "+z") != 0 &&
+                    SDL_strcmp(yaw_forward, "positive_z") != 0)
+                {
+                    return validation_error(ctx, path,
+                                            "motion.patrol yaw_forward must be '-z', 'negative_z', '+z', or "
+                                            "'positive_z'");
+                }
                 char collision_path[PATH_BUFFER_SIZE];
                 format_path(collision_path, sizeof(collision_path), "%s.collision", path);
                 if (!validate_motion_patrol_collision(ctx, obj_get(component, "collision"), collision_path))
