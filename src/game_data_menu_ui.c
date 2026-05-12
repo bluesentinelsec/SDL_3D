@@ -1333,6 +1333,198 @@ static bool for_each_authored_ui_text_root(yyjson_val *root, slayer3d_game_data_
     return true;
 }
 
+static bool ui_tool_value_to_string(const slayer3d_value *value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0)
+        return false;
+    buffer[0] = '\0';
+    if (value == NULL)
+        return false;
+
+    switch (value->type)
+    {
+    case SLAYER3D_VALUE_INT:
+        SDL_snprintf(buffer, buffer_size, "%d", value->as_int);
+        return true;
+    case SLAYER3D_VALUE_FLOAT:
+        SDL_snprintf(buffer, buffer_size, "%.3f", value->as_float);
+        return true;
+    case SLAYER3D_VALUE_BOOL:
+        SDL_snprintf(buffer, buffer_size, "%s", value->as_bool ? "true" : "false");
+        return true;
+    case SLAYER3D_VALUE_VEC3:
+        SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f", value->as_vec3.x, value->as_vec3.y, value->as_vec3.z);
+        return true;
+    case SLAYER3D_VALUE_STRING:
+        SDL_snprintf(buffer, buffer_size, "%s", value->as_string != NULL ? value->as_string : "");
+        return true;
+    case SLAYER3D_VALUE_COLOR:
+        SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", (unsigned)value->as_color.r, (unsigned)value->as_color.g,
+                     (unsigned)value->as_color.b, (unsigned)value->as_color.a);
+        return true;
+    }
+    return false;
+}
+
+static bool ui_tool_json_scalar_to_string(yyjson_val *value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0)
+        return false;
+    buffer[0] = '\0';
+    if (yyjson_is_str(value))
+        SDL_snprintf(buffer, buffer_size, "%s", yyjson_get_str(value));
+    else if (yyjson_is_int(value))
+        SDL_snprintf(buffer, buffer_size, "%lld", (long long)yyjson_get_sint(value));
+    else if (yyjson_is_real(value))
+        SDL_snprintf(buffer, buffer_size, "%.3f", yyjson_get_real(value));
+    else if (yyjson_is_bool(value))
+        SDL_snprintf(buffer, buffer_size, "%s", yyjson_get_bool(value) ? "true" : "false");
+    else
+        return false;
+    return true;
+}
+
+static bool ui_tool_metric_to_string(const slayer3d_game_data_ui_metrics *metrics, const char *metric, char *buffer,
+                                     size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0)
+        return false;
+    buffer[0] = '\0';
+    if (metrics == NULL || metric == NULL)
+        return false;
+    if (SDL_strcmp(metric, "fps") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->fps);
+    else if (SDL_strcmp(metric, "frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%llu", (unsigned long long)metrics->frame);
+    else if (SDL_strcmp(metric, "paused") == 0)
+        SDL_snprintf(buffer, buffer_size, "%s", metrics->paused ? "true" : "false");
+    else
+        return false;
+    return true;
+}
+
+static bool ui_tool_binding_to_string(const slayer3d_game_data_runtime *runtime,
+                                      const slayer3d_game_data_ui_metrics *metrics, yyjson_val *binding, char *buffer,
+                                      size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0)
+        return false;
+    buffer[0] = '\0';
+    const char *type = json_string(binding, "type", "");
+    bool formatted = false;
+    if (SDL_strcmp(type, "scene_state") == 0)
+    {
+        const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+        const slayer3d_value *value =
+            scene_state != NULL ? slayer3d_properties_get_value(scene_state, json_string(binding, "key", NULL)) : NULL;
+        formatted = ui_tool_value_to_string(value, buffer, buffer_size);
+    }
+    else if (SDL_strcmp(type, "property") == 0)
+    {
+        const slayer3d_registered_actor *actor =
+            slayer3d_game_data_find_actor(runtime, json_string(binding, "entity", NULL));
+        const slayer3d_value *value =
+            actor != NULL ? slayer3d_properties_get_value(actor->props, json_string(binding, "key", NULL)) : NULL;
+        formatted = ui_tool_value_to_string(value, buffer, buffer_size);
+    }
+    else if (SDL_strcmp(type, "metric") == 0)
+    {
+        formatted = ui_tool_metric_to_string(metrics, json_string(binding, "metric", NULL), buffer, buffer_size);
+    }
+    if (!formatted)
+        formatted = ui_tool_json_scalar_to_string(obj_get(binding, "default"), buffer, buffer_size);
+    return formatted;
+}
+
+static bool ui_tool_row_value_to_string(const slayer3d_game_data_runtime *runtime,
+                                        const slayer3d_game_data_ui_metrics *metrics, yyjson_val *row, char *buffer,
+                                        size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0)
+        return false;
+    buffer[0] = '\0';
+    yyjson_val *binding = obj_get(row, "binding");
+    if (yyjson_is_obj(binding))
+        return ui_tool_binding_to_string(runtime, metrics, binding, buffer, buffer_size);
+    return ui_tool_json_scalar_to_string(obj_get(row, "value"), buffer, buffer_size);
+}
+
+static bool emit_inspector_text(const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_ui_metrics *metrics,
+                                yyjson_val *inspector, const char *text_value, float x, float y, slayer3d_color color,
+                                slayer3d_game_data_ui_align align, slayer3d_game_data_ui_text_fn callback,
+                                void *userdata)
+{
+    if (text_value == NULL || text_value[0] == '\0')
+        return true;
+
+    yyjson_val *active_if = obj_get(inspector, "visible_if");
+    if (active_if != NULL && !eval_data_condition(runtime, active_if, metrics))
+        return true;
+
+    slayer3d_game_data_ui_text text;
+    SDL_zero(text);
+    text.name = json_string(inspector, "name", NULL);
+    text.font = json_string(inspector, "font", NULL);
+    text.text = text_value;
+    text.visible = "always";
+    text.x = x;
+    text.y = y;
+    text.normalized = json_bool(inspector, "normalized", false);
+    text.align = align;
+    text.centered = align == SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
+    text.scale = json_float(inspector, "scale", 1.0f);
+    text.color = color;
+    return callback(userdata, &text);
+}
+
+static bool for_each_ui_inspector_text_root(const slayer3d_game_data_runtime *runtime,
+                                            const slayer3d_game_data_ui_metrics *metrics, yyjson_val *root,
+                                            slayer3d_game_data_ui_text_fn callback, void *userdata)
+{
+    yyjson_val *inspectors = obj_get(obj_get(root, "ui"), "inspectors");
+    for (size_t i = 0; yyjson_is_arr(inspectors) && i < yyjson_arr_size(inspectors); ++i)
+    {
+        yyjson_val *inspector = yyjson_arr_get(inspectors, i);
+        const bool normalized = json_bool(inspector, "normalized", false);
+        const float x = json_float(inspector, "x", 0.0f);
+        float y = json_float(inspector, "y", 0.0f);
+        const float width = json_float(inspector, "w", json_float(inspector, "width", normalized ? 0.25f : 280.0f));
+        const float row_height = json_float(inspector, "row_height", normalized ? 0.032f : 24.0f);
+        const float label_width = json_float(inspector, "label_width", width * 0.42f);
+        const float padding = json_float(inspector, "padding", normalized ? 0.012f : 10.0f);
+        const float value_x = x + padding + label_width;
+        const float row_x = x + padding;
+        const slayer3d_color title_color = json_color(inspector, "title_color", (slayer3d_color){235, 240, 255, 255});
+        const slayer3d_color label_color = json_color(inspector, "label_color", (slayer3d_color){160, 176, 205, 255});
+        const slayer3d_color value_color = json_color(inspector, "value_color", (slayer3d_color){255, 255, 255, 255});
+        const char *title = json_string(inspector, "title", NULL);
+        if (title != NULL && title[0] != '\0')
+        {
+            if (!emit_inspector_text(runtime, metrics, inspector, title, row_x, y + padding, title_color,
+                                     SLAYER3D_GAME_DATA_UI_ALIGN_LEFT, callback, userdata))
+                return false;
+            y += row_height;
+        }
+
+        yyjson_val *rows = obj_get(inspector, "rows");
+        for (size_t row_index = 0; yyjson_is_arr(rows) && row_index < yyjson_arr_size(rows); ++row_index)
+        {
+            yyjson_val *row = yyjson_arr_get(rows, row_index);
+            const float row_y = y + padding + row_height * (float)row_index;
+            if (!emit_inspector_text(runtime, metrics, inspector, json_string(row, "label", ""), row_x, row_y,
+                                     label_color, SLAYER3D_GAME_DATA_UI_ALIGN_LEFT, callback, userdata))
+                return false;
+            char value[128];
+            if (!ui_tool_row_value_to_string(runtime, metrics, row, value, sizeof(value)))
+                SDL_strlcpy(value, json_string(row, "empty", "-"), sizeof(value));
+            if (!emit_inspector_text(runtime, metrics, inspector, value, value_x, row_y, value_color,
+                                     SLAYER3D_GAME_DATA_UI_ALIGN_LEFT, callback, userdata))
+                return false;
+        }
+    }
+    return true;
+}
+
 static bool emit_ui_menu_cursor(yyjson_val *presenter, float row_y, slayer3d_game_data_ui_text_fn callback,
                                 void *userdata)
 {
@@ -1595,6 +1787,7 @@ bool slayer3d_game_data_for_each_ui_text_for_metrics(const slayer3d_game_data_ru
 
     for (int root_index = 0; root_index < 2; ++root_index)
         if (!for_each_authored_ui_text_root(roots[root_index], callback, userdata) ||
+            !for_each_ui_inspector_text_root(runtime, metrics, roots[root_index], callback, userdata) ||
             !for_each_ui_menu_root(runtime, scene, metrics, roots[root_index], callback, userdata))
             return true;
     return true;
@@ -1686,6 +1879,110 @@ static bool for_each_authored_ui_rect_root(yyjson_val *root, slayer3d_game_data_
     return true;
 }
 
+static bool emit_ui_rect_from_values(yyjson_val *source, const char *name, float x, float y, float w, float h,
+                                     slayer3d_color color, slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    if (color.a == 0 || w <= 0.0f || h <= 0.0f)
+        return true;
+
+    slayer3d_game_data_ui_rect rect;
+    SDL_zero(rect);
+    rect.name = name;
+    rect.visible = "always";
+    rect.x = x;
+    rect.y = y;
+    rect.w = w;
+    rect.h = h;
+    rect.normalized = json_bool(source, "normalized", false);
+    rect.align = parse_ui_align(json_string(source, "align", NULL), SLAYER3D_GAME_DATA_UI_ALIGN_LEFT);
+    rect.valign = parse_ui_valign(json_string(source, "valign", NULL), SLAYER3D_GAME_DATA_UI_VALIGN_TOP);
+    rect.scale = json_float(source, "scale", 1.0f);
+    rect.color = color;
+    return callback(userdata, &rect);
+}
+
+static bool emit_ui_panel_rects(const slayer3d_game_data_runtime *runtime, yyjson_val *panel,
+                                slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    yyjson_val *active_if = obj_get(panel, "visible_if");
+    if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+        return true;
+
+    const char *name = json_string(panel, "name", NULL);
+    const float x = json_float(panel, "x", 0.0f);
+    const float y = json_float(panel, "y", 0.0f);
+    const float w = json_float(panel, "w", json_float(panel, "width", 0.0f));
+    const float h = json_float(panel, "h", json_float(panel, "height", 0.0f));
+    const slayer3d_color color = json_color(panel, "color", (slayer3d_color){16, 22, 32, 210});
+    if (!emit_ui_rect_from_values(panel, name, x, y, w, h, color, callback, userdata))
+        return false;
+
+    const float border = json_float(panel, "border_thickness", 0.0f);
+    const slayer3d_color border_color = json_color(panel, "border_color", (slayer3d_color){0, 0, 0, 0});
+    if (border <= 0.0f || border_color.a == 0)
+        return true;
+
+    return emit_ui_rect_from_values(panel, name, x, y, w, border, border_color, callback, userdata) &&
+           emit_ui_rect_from_values(panel, name, x, y + h - border, w, border, border_color, callback, userdata) &&
+           emit_ui_rect_from_values(panel, name, x, y, border, h, border_color, callback, userdata) &&
+           emit_ui_rect_from_values(panel, name, x + w - border, y, border, h, border_color, callback, userdata);
+}
+
+static bool for_each_ui_panel_rect_root(const slayer3d_game_data_runtime *runtime, yyjson_val *root,
+                                        slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    yyjson_val *panels = obj_get(obj_get(root, "ui"), "panels");
+    for (size_t i = 0; yyjson_is_arr(panels) && i < yyjson_arr_size(panels); ++i)
+    {
+        if (!emit_ui_panel_rects(runtime, yyjson_arr_get(panels, i), callback, userdata))
+            return false;
+    }
+    return true;
+}
+
+static bool for_each_ui_inspector_rect_root(const slayer3d_game_data_runtime *runtime, yyjson_val *root,
+                                            slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    yyjson_val *inspectors = obj_get(obj_get(root, "ui"), "inspectors");
+    for (size_t i = 0; yyjson_is_arr(inspectors) && i < yyjson_arr_size(inspectors); ++i)
+    {
+        yyjson_val *inspector = yyjson_arr_get(inspectors, i);
+        yyjson_val *active_if = obj_get(inspector, "visible_if");
+        if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+            continue;
+
+        const bool normalized = json_bool(inspector, "normalized", false);
+        const float x = json_float(inspector, "x", 0.0f);
+        const float y = json_float(inspector, "y", 0.0f);
+        const float w = json_float(inspector, "w", json_float(inspector, "width", normalized ? 0.25f : 280.0f));
+        const float row_height = json_float(inspector, "row_height", normalized ? 0.032f : 24.0f);
+        const float padding = json_float(inspector, "padding", normalized ? 0.012f : 10.0f);
+        const size_t row_count = yyjson_arr_size(obj_get(inspector, "rows"));
+        const bool has_title = json_string(inspector, "title", NULL) != NULL;
+        const float total_rows = (float)row_count + (has_title ? 1.0f : 0.0f);
+        const float h =
+            json_float(inspector, "h", json_float(inspector, "height", padding * 2.0f + row_height * total_rows));
+        const slayer3d_color color = json_color(inspector, "background_color", (slayer3d_color){10, 14, 20, 215});
+        if (json_bool(inspector, "panel", true) &&
+            !emit_ui_rect_from_values(inspector, json_string(inspector, "name", NULL), x, y, w, h, color, callback,
+                                      userdata))
+            return false;
+
+        const slayer3d_color row_color = json_color(inspector, "row_color", (slayer3d_color){255, 255, 255, 0});
+        if (row_color.a == 0)
+            continue;
+        const float row_y0 = y + padding + (has_title ? row_height : 0.0f);
+        for (size_t row_index = 0; row_index < row_count; ++row_index)
+        {
+            if (!emit_ui_rect_from_values(inspector, json_string(inspector, "name", NULL), x + padding,
+                                          row_y0 + row_height * (float)row_index, w - padding * 2.0f,
+                                          SDL_max(1.0f, row_height - 1.0f), row_color, callback, userdata))
+                return false;
+        }
+    }
+    return true;
+}
+
 bool slayer3d_game_data_for_each_ui_image(const slayer3d_game_data_runtime *runtime,
                                           slayer3d_game_data_ui_image_fn callback, void *userdata)
 {
@@ -1715,7 +2012,9 @@ bool slayer3d_game_data_for_each_ui_rect(const slayer3d_game_data_runtime *runti
     roots[1] = scene != NULL ? scene->root : NULL;
 
     for (int root_index = 0; root_index < 2; ++root_index)
-        if (!for_each_authored_ui_rect_root(roots[root_index], callback, userdata))
+        if (!for_each_authored_ui_rect_root(roots[root_index], callback, userdata) ||
+            !for_each_ui_panel_rect_root(runtime, roots[root_index], callback, userdata) ||
+            !for_each_ui_inspector_rect_root(runtime, roots[root_index], callback, userdata))
             return true;
     return true;
 }
