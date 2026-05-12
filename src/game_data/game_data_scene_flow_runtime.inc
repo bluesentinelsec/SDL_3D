@@ -99,9 +99,6 @@ bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, y
                                           const slayer3d_properties *payload);
 bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                             const slayer3d_properties *payload);
-static slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *runtime,
-                                                         const slayer3d_properties *payload, const char *key);
-
 void slayer3d_game_data_timeline_state_init(slayer3d_game_data_timeline_state *state)
 {
     if (state != NULL)

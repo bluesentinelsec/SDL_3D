@@ -1,7 +1,7 @@
 /* Actor, pool, and input-profile runtime helpers.
  * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
 
-static void set_actor_property_from_json(slayer3d_registered_actor *actor, const char *key, yyjson_val *value)
+void set_actor_property_from_json(slayer3d_registered_actor *actor, const char *key, yyjson_val *value)
 {
     if (actor == NULL || key == NULL || value == NULL)
         return;

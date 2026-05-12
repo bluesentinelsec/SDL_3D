@@ -1,5 +1,14 @@
-/* Combat, resource, pickup, and weapon action helpers. Included by game_data_actions.inc to preserve internal linkage.
- */
+/* Combat, resource, pickup, and weapon action helpers. */
+
+#include "game_data_internal.h"
+
+typedef enum weapon_fire_status
+{
+    WEAPON_FIRE_READY,
+    WEAPON_FIRE_COOLDOWN,
+    WEAPON_FIRE_RELOADING,
+    WEAPON_FIRE_EMPTY
+} weapon_fire_status;
 
 static bool weapon_value_as_float(const slayer3d_value *value, float *out_value)
 {
@@ -260,7 +269,7 @@ static bool action_float_value(slayer3d_game_data_runtime *runtime, yyjson_val *
     return false;
 }
 
-static void set_actor_numeric_property(slayer3d_registered_actor *actor, const char *key, float value)
+void set_actor_numeric_property(slayer3d_registered_actor *actor, const char *key, float value)
 {
     if (actor == NULL || actor->props == NULL || key == NULL)
         return;
@@ -327,8 +336,8 @@ static void emit_combat_signal(slayer3d_game_data_runtime *runtime, yyjson_val *
 bool apply_combat_damage_to_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                   const slayer3d_properties *payload, slayer3d_registered_actor *actor, float amount);
 
-static bool execute_combat_damage_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                         const slayer3d_properties *payload)
+bool execute_combat_damage_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                  const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor = action_target_actor(runtime, action, payload);
     float amount = 0.0f;
@@ -386,8 +395,8 @@ bool apply_combat_damage_to_actor(slayer3d_game_data_runtime *runtime, yyjson_va
     return true;
 }
 
-static bool execute_combat_heal_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                       const slayer3d_properties *payload)
+bool execute_combat_heal_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor = action_target_actor(runtime, action, payload);
     float amount = 0.0f;
@@ -421,8 +430,8 @@ static bool execute_combat_heal_action(slayer3d_game_data_runtime *runtime, yyjs
     return true;
 }
 
-static bool execute_combat_kill_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                       const slayer3d_properties *payload)
+bool execute_combat_kill_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor = action_target_actor(runtime, action, payload);
     if (actor == NULL)
@@ -456,8 +465,8 @@ static bool execute_combat_kill_action(slayer3d_game_data_runtime *runtime, yyjs
     return true;
 }
 
-static bool execute_combat_revive_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                         const slayer3d_properties *payload)
+bool execute_combat_revive_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                  const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor = action_target_actor(runtime, action, payload);
     if (actor == NULL)
@@ -614,8 +623,8 @@ static bool apply_resource_delta_to_actor(slayer3d_game_data_runtime *runtime, s
     return true;
 }
 
-static bool execute_resource_amount_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                           const slayer3d_properties *payload, bool consume)
+bool execute_resource_amount_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                    const slayer3d_properties *payload, bool consume)
 {
     slayer3d_registered_actor *target = action_target_actor(runtime, action, payload);
     float amount = 0.0f;
@@ -624,8 +633,8 @@ static bool execute_resource_amount_action(slayer3d_game_data_runtime *runtime, 
     return apply_resource_delta_to_actor(runtime, target, action, payload, amount, consume);
 }
 
-static bool execute_resource_set_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                        const slayer3d_properties *payload)
+bool execute_resource_set_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                 const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *target = action_target_actor(runtime, action, payload);
     const char *resource = resource_name(action);
@@ -687,8 +696,8 @@ static bool apply_resource_grants(slayer3d_game_data_runtime *runtime, slayer3d_
     return ok;
 }
 
-static bool execute_pickup_collect_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                          const slayer3d_properties *payload)
+bool execute_pickup_collect_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                   const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *collector = action_target_actor(runtime, action, payload);
     slayer3d_registered_actor *pickup = slayer3d_game_data_find_actor(runtime, json_string(action, "pickup", NULL));
@@ -725,8 +734,8 @@ static bool execute_pickup_collect_action(slayer3d_game_data_runtime *runtime, y
     return true;
 }
 
-static bool execute_resource_station_use_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                const slayer3d_properties *payload)
+bool execute_resource_station_use_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                         const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *target = action_target_actor(runtime, action, payload);
     slayer3d_registered_actor *station = slayer3d_game_data_find_actor(runtime, json_string(action, "station", NULL));
@@ -767,8 +776,8 @@ static bool execute_resource_station_use_action(slayer3d_game_data_runtime *runt
     return true;
 }
 
-static bool execute_status_effect_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                               const slayer3d_properties *payload)
+bool execute_status_effect_apply_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                        const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *target = action_target_actor(runtime, action, payload);
     const char *property = json_string(action, "property", NULL);
@@ -949,8 +958,8 @@ static slayer3d_properties *weapon_hitscan_payload(const slayer3d_registered_act
     return payload;
 }
 
-static bool execute_weapon_hitscan_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                          const slayer3d_properties *payload)
+bool execute_weapon_hitscan_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                   const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *source = action_target_actor(runtime, action, payload);
     if (source == NULL || !runtime_actor_is_active(runtime, source))
@@ -1052,8 +1061,8 @@ void weapon_complete_reload(slayer3d_registered_actor *actor, yyjson_val *json)
     slayer3d_properties_set_float(actor->props, timer_property, 0.0f);
 }
 
-static bool execute_weapon_reload_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                         const slayer3d_properties *payload)
+bool execute_weapon_reload_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                  const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor = action_target_actor(runtime, action, payload);
     if (actor == NULL)
@@ -1084,8 +1093,8 @@ static bool execute_weapon_reload_action(slayer3d_game_data_runtime *runtime, yy
     return true;
 }
 
-static bool execute_projectile_fire_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                           const slayer3d_properties *payload)
+bool execute_projectile_fire_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                    const slayer3d_properties *payload)
 {
     return execute_projectile_fire_action_for_actor(runtime, action, payload, NULL);
 }

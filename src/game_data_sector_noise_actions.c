@@ -1,4 +1,6 @@
-/* Sector door and noise action helpers. Included by game_data_actions.inc to preserve internal linkage. */
+/* Sector door and noise action helpers. */
+
+#include "game_data_internal.h"
 
 static const char *sector_door_action_target_name(yyjson_val *action, const slayer3d_properties *payload)
 {
@@ -12,8 +14,8 @@ static const char *sector_door_action_target_name(yyjson_val *action, const slay
     return json_string(action, "target", NULL);
 }
 
-static bool execute_sector_door_state_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                             const slayer3d_properties *payload, const char *kind)
+bool execute_sector_door_state_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                      const slayer3d_properties *payload, const char *kind)
 {
     sector_door_runtime *door = find_sector_door(runtime, sector_door_action_target_name(action, payload));
     if (door == NULL || !sector_door_in_active_scene(runtime, door))
@@ -63,7 +65,7 @@ static sector_door_runtime *find_interactable_sector_door(slayer3d_game_data_run
     return best;
 }
 
-static bool execute_sector_door_interact_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool execute_sector_door_interact_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, json_string(action, "actor", NULL));
     if (actor == NULL)
@@ -147,8 +149,8 @@ static bool runtime_add_noise_event(slayer3d_game_data_runtime *runtime, const c
     return true;
 }
 
-static bool execute_noise_emit_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                      const slayer3d_properties *payload)
+bool execute_noise_emit_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                               const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *source = noise_source_actor(runtime, action, payload);
     const slayer3d_vec3 fallback = source != NULL ? source->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);

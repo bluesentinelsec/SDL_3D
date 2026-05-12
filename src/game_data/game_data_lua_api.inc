@@ -26,8 +26,6 @@ static slayer3d_registered_actor *lua_actor_arg(lua_State *lua, slayer3d_game_da
     return slayer3d_game_data_find_actor(runtime, actor_name);
 }
 
-static bool ensure_runtime_storage(slayer3d_game_data_runtime *runtime, char *error_buffer, int error_buffer_size);
-
 static int lua_get_position(lua_State *lua)
 {
     slayer3d_game_data_runtime *runtime = lua_runtime(lua);

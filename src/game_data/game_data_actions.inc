@@ -3,15 +3,7 @@
 
 #include "game_data_conditions_presentation.inc"
 
-#include "game_data_persistence_audio_actions.inc"
-
 #include "game_data_actor_pool_actions.inc"
-
-#include "game_data_combat_weapon_actions.inc"
-
-#include "game_data_interaction_effect_actions.inc"
-
-#include "game_data_sector_noise_actions.inc"
 
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {
