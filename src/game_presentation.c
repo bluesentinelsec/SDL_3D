@@ -2373,6 +2373,41 @@ bool slayer3d_game_data_draw_render_primitives_evaluated(const slayer3d_game_dat
     return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL, NULL);
 }
 
+typedef struct editor_debug_draw_context
+{
+    slayer3d_render_context *renderer;
+    bool ok;
+} editor_debug_draw_context;
+
+static bool draw_editor_debug_primitive(void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive)
+{
+    editor_debug_draw_context *context = (editor_debug_draw_context *)userdata;
+    if (context == NULL || context->renderer == NULL || primitive == NULL)
+        return false;
+    if (!slayer3d_draw_line_3d(context->renderer, primitive->start, primitive->end, primitive->color))
+    {
+        context->ok = false;
+        return false;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_draw_editor_debug_primitives(const slayer3d_game_data_runtime *runtime,
+                                                     slayer3d_render_context *renderer,
+                                                     const slayer3d_game_data_editor_debug_desc *desc)
+{
+    if (runtime == NULL || renderer == NULL || desc == NULL)
+        return false;
+
+    editor_debug_draw_context context;
+    SDL_zero(context);
+    context.renderer = renderer;
+    context.ok = true;
+    if (!slayer3d_game_data_for_each_editor_debug_primitive(runtime, desc, draw_editor_debug_primitive, &context))
+        return false;
+    return context.ok;
+}
+
 bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                      slayer3d_game_data_font_cache *font_cache,
                                      const slayer3d_game_data_ui_metrics *metrics, float pulse_phase)

@@ -11674,14 +11674,26 @@ TEST(GameDataRuntime, WorldModelInterfaceEnumeratesQueriesAndTracesSectorAndBrus
   "brush_worlds": [
     {
       "name": "brush.world_model",
-      "materials": [{ "name": "mat.wall", "albedo": [0.8, 0.2, 0.2, 1.0] }],
+      "editor": { "stable_id": "editor.world.brush" },
+      "materials": [
+        {
+          "name": "mat.wall",
+          "albedo": [0.8, 0.2, 0.2, 1.0],
+          "editor": { "stable_id": "editor.material.wall", "display_name": "Wall Material" }
+        }
+      ],
       "brushes": [
         {
           "name": "brush.cube",
+          "editor": { "stable_id": "editor.brush.cube", "display_name": "Cube Brush" },
           "contents": ["solid", "player_clip"],
           "faces": [
             { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.wall" },
-            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            {
+              "plane": { "normal": [-1,  0,  0], "distance":  0 },
+              "material": "mat.wall",
+              "editor": { "stable_id": "editor.face.cube.left", "display_name": "Cube Left Face" }
+            },
             { "plane": { "normal": [ 0,  1,  0], "distance":  2 }, "material": "mat.wall" },
             { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
             { "plane": { "normal": [ 0,  0,  1], "distance":  2 }, "material": "mat.wall" },
@@ -11758,13 +11770,163 @@ TEST(GameDataRuntime, WorldModelInterfaceEnumeratesQueriesAndTracesSectorAndBrus
     EXPECT_NEAR(result.end_position.x, 10.0f, 0.001f);
     EXPECT_NEAR(result.normal.x, -1.0f, 0.001f);
 
+    slayer3d_game_data_editor_selection selection{};
+    ASSERT_TRUE(slayer3d_game_data_pick_editor_world_model(runtime, &trace, &selection));
+    EXPECT_TRUE(selection.hit);
+    EXPECT_EQ(selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
+    EXPECT_STREQ(selection.world_name, "brush.world_model");
+    EXPECT_NEAR(selection.world_position.x, 10.0f, 0.001f);
+    EXPECT_STREQ(selection.element_name, "brush.cube");
+    EXPECT_STREQ(selection.material_name, "mat.wall");
+    EXPECT_EQ(selection.element_index, 0);
+    EXPECT_EQ(selection.face_index, 1);
+    EXPECT_TRUE(selection.has_bounds);
+    EXPECT_NEAR(selection.bounds.min.x, 10.0f, 0.001f);
+    EXPECT_NEAR(selection.bounds.max.x, 12.0f, 0.001f);
+    ASSERT_NE(selection.world_editor, nullptr);
+    EXPECT_STREQ(selection.world_editor->stable_id, "editor.world.brush");
+    ASSERT_NE(selection.element_editor, nullptr);
+    EXPECT_STREQ(selection.element_editor->stable_id, "editor.brush.cube");
+    ASSERT_NE(selection.material_editor, nullptr);
+    EXPECT_STREQ(selection.material_editor->stable_id, "editor.material.wall");
+    ASSERT_NE(selection.face_editor, nullptr);
+    EXPECT_STREQ(selection.face_editor->stable_id, "editor.face.cube.left");
+
+    struct EditorDebugCapture
+    {
+        int world_edges = 0;
+        int selection_edges = 0;
+        int rays = 0;
+        int normals = 0;
+        int markers = 0;
+        bool saw_selection_world = false;
+        bool saw_normal = false;
+    } debug_capture;
+    auto capture_editor_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<EditorDebugCapture *>(userdata);
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORLD_BOUNDS_EDGE)
+            capture->world_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
+        {
+            capture->selection_edges++;
+            if (primitive->world_name != nullptr && std::string(primitive->world_name) == "brush.world_model" &&
+                primitive->element_name != nullptr && std::string(primitive->element_name) == "brush.cube")
+            {
+                capture->saw_selection_world = true;
+            }
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_TRACE_RAY)
+        {
+            capture->rays++;
+            EXPECT_NEAR(primitive->start.x, 8.0f, 0.001f);
+            EXPECT_NEAR(primitive->end.x, 11.0f, 0.001f);
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_FACE_NORMAL)
+        {
+            capture->normals++;
+            capture->saw_normal = primitive->end.x < primitive->start.x;
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_HIT_MARKER)
+        {
+            capture->markers++;
+        }
+        return true;
+    };
+    slayer3d_game_data_editor_debug_desc debug_desc{};
+    debug_desc.flags = SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    debug_desc.selection = &selection;
+    debug_desc.trace = &trace;
+    debug_desc.normal_length = 0.5f;
+    debug_desc.hit_marker_size = 0.125f;
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_editor_debug_primitive(runtime, &debug_desc, capture_editor_debug, &debug_capture));
+    EXPECT_EQ(debug_capture.world_edges, 24);
+    EXPECT_EQ(debug_capture.selection_edges, 12);
+    EXPECT_EQ(debug_capture.rays, 1);
+    EXPECT_EQ(debug_capture.normals, 1);
+    EXPECT_EQ(debug_capture.markers, 3);
+    EXPECT_TRUE(debug_capture.saw_selection_world);
+    EXPECT_TRUE(debug_capture.saw_normal);
+
     slayer3d_game_data_world_model_diagnostics diagnostics{};
     ASSERT_TRUE(slayer3d_game_data_get_world_model_diagnostics(runtime, &diagnostics));
     EXPECT_EQ(diagnostics.active_sector_level_instances, 1u);
     EXPECT_EQ(diagnostics.active_brush_world_instances, 1u);
-    EXPECT_EQ(diagnostics.world_trace_count, 2u);
+    EXPECT_EQ(diagnostics.world_trace_count, 3u);
     EXPECT_EQ(diagnostics.point_query_count, 2u);
     EXPECT_GE(diagnostics.brush.trace_count, 2u);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EditorPickingPreservesRepeatedBrushWorldInstancePlacement)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_repeated_brush_pick");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [
+      { "world": "brush.repeated", "position": [0.0, 0.0, 0.0] },
+      { "world": "brush.repeated", "position": [10.0, 0.0, 0.0] }
+    ]
+  }
+})json");
+    write_text(dir / "editor_repeated_pick.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Repeated Brush Pick Test" },
+  "world": { "name": "world.repeated_pick", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.repeated",
+      "materials": [{ "name": "mat.wall", "albedo": [0.8, 0.2, 0.2, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.cube",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "editor_repeated_pick.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_world_trace_desc trace{};
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    trace.model_filter = SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_BRUSH_WORLDS;
+    trace.start = slayer3d_vec3_make(8.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(11.0f, 1.0f, 1.0f);
+
+    slayer3d_game_data_editor_selection selection{};
+    ASSERT_TRUE(slayer3d_game_data_pick_editor_world_model(runtime, &trace, &selection));
+    EXPECT_TRUE(selection.hit);
+    EXPECT_STREQ(selection.world_name, "brush.repeated");
+    EXPECT_STREQ(selection.element_name, "brush.cube");
+    EXPECT_NEAR(selection.world_position.x, 10.0f, 0.001f);
+    ASSERT_TRUE(selection.has_bounds);
+    EXPECT_NEAR(selection.bounds.min.x, 10.0f, 0.001f);
+    EXPECT_NEAR(selection.bounds.max.x, 12.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
