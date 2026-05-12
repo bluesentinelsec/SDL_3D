@@ -135,8 +135,8 @@ static fps_controller_runtime *fps_controller_for_actor_action(slayer3d_game_dat
     return controller;
 }
 
-static bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                 const slayer3d_properties *payload)
+bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                          const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor = NULL;
     yyjson_val *component = NULL;
@@ -150,8 +150,8 @@ static bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *run
     return true;
 }
 
-static bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                   const slayer3d_properties *payload)
+bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *actor = NULL;
     yyjson_val *component = NULL;
@@ -199,7 +199,7 @@ static slayer3d_vec3 sector_door_closed_center(const slayer3d_door *door)
                               (bounds.min.z + bounds.max.z) * 0.5f);
 }
 
-static float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point)
+float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point)
 {
     if (door == NULL || door->panel_count <= 0)
         return 0.0f;
@@ -209,7 +209,7 @@ static float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3
     return dx * dx + dz * dz;
 }
 
-static bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot)
+bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot)
 {
     if (door == NULL)
         return false;

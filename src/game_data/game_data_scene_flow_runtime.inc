@@ -93,14 +93,12 @@ static yyjson_val *active_timeline_events(const slayer3d_game_data_runtime *runt
     return yyjson_is_arr(events) ? events : NULL;
 }
 
-static bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                               const slayer3d_properties *payload);
-static bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
-                                 const slayer3d_properties *payload);
-static bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                 const slayer3d_properties *payload);
-static bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                   const slayer3d_properties *payload);
+bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload);
+bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions, const slayer3d_properties *payload);
+bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                          const slayer3d_properties *payload);
+bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const slayer3d_properties *payload);
 static slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *runtime,
                                                          const slayer3d_properties *payload, const char *key);
 
@@ -225,8 +223,8 @@ static bool update_phase_default(const slayer3d_game_data_runtime *runtime, cons
     return !paused;
 }
 
-static bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
-                                const slayer3d_game_data_ui_metrics *metrics);
+bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                         const slayer3d_game_data_ui_metrics *metrics);
 
 static bool eval_update_phase_entry(const slayer3d_game_data_runtime *runtime, yyjson_val *entry, bool paused,
                                     bool fallback)
@@ -374,8 +372,8 @@ bool slayer3d_game_data_get_scene_transition(const slayer3d_game_data_runtime *r
     return transition_name != NULL && slayer3d_game_data_get_transition(runtime, transition_name, out_transition);
 }
 
-static bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
-                                const slayer3d_game_data_ui_metrics *metrics);
+bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                         const slayer3d_game_data_ui_metrics *metrics);
 
 static const scene_menu_state *active_scene_menu_for_metrics(const slayer3d_game_data_runtime *runtime,
                                                              const slayer3d_game_data_ui_metrics *metrics)

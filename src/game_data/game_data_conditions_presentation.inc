@@ -1,19 +1,18 @@
 /* Conditions, UI binding, presentation clock, and animation helpers. Included by game_data_actions.inc to preserve
  * internal linkage. */
 
-static int action_signal_id(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *key)
+int action_signal_id(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *key)
 {
     return slayer3d_game_data_find_signal(runtime, json_string(action, key, NULL));
 }
 
-static bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
-                                 const slayer3d_properties *payload);
-static bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
-                                          const slayer3d_properties *payload);
-static int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
-                                         const slayer3d_registered_actor *actor);
-static float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point);
-static bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot);
+bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions, const slayer3d_properties *payload);
+bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
+                                   const slayer3d_properties *payload);
+int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
+                                  const slayer3d_registered_actor *actor);
+float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point);
+bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot);
 
 static bool compare_value(const slayer3d_value *left, const char *op, yyjson_val *right)
 {
@@ -55,7 +54,7 @@ static bool compare_value(const slayer3d_value *left, const char *op, yyjson_val
     return false;
 }
 
-static bool json_scalar_to_value(yyjson_val *json, slayer3d_value *out_value)
+bool json_scalar_to_value(yyjson_val *json, slayer3d_value *out_value)
 {
     if (json == NULL || out_value == NULL)
         return false;
@@ -88,7 +87,7 @@ static bool json_scalar_to_value(yyjson_val *json, slayer3d_value *out_value)
     return false;
 }
 
-static bool set_property_from_value(slayer3d_properties *props, const char *key, const slayer3d_value *value)
+bool set_property_from_value(slayer3d_properties *props, const char *key, const slayer3d_value *value)
 {
     if (props == NULL || key == NULL || key[0] == '\0' || value == NULL)
         return false;
@@ -206,8 +205,8 @@ static bool value_equals_json_bool(const slayer3d_value *left, bool right)
     return left != NULL && left->type == SLAYER3D_VALUE_BOOL && left->as_bool == right;
 }
 
-static bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
-                                const slayer3d_game_data_ui_metrics *metrics)
+bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                         const slayer3d_game_data_ui_metrics *metrics)
 {
     if (condition == NULL)
         return true;

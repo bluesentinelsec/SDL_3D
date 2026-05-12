@@ -1,11 +1,14 @@
-/* Controller, motion, sensor, and schedule update helpers.
- * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
+/* Controller, motion, sensor, and schedule update helpers. */
 
-#include "game_data_controller_runtime.inc"
+#include "game_data_internal.h"
 
-#include "game_data_motion_runtime.inc"
+#include <SDL3/SDL_log.h>
 
-#include "game_data_sensor_runtime.inc"
+#include "game_data/game_data_controller_runtime.inc"
+
+#include "game_data/game_data_motion_runtime.inc"
+
+#include "game_data/game_data_sensor_runtime.inc"
 
 static void update_noise_events(slayer3d_game_data_runtime *runtime, float dt)
 {

@@ -144,7 +144,7 @@ static bool reset_actor_properties_to_authored_defaults(slayer3d_game_data_runti
     return true;
 }
 
-static actor_pool_runtime *find_actor_pool(slayer3d_game_data_runtime *runtime, const char *name)
+actor_pool_runtime *find_actor_pool(slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -220,8 +220,8 @@ const actor_pool_runtime *find_actor_pool_for_actor_const(const slayer3d_game_da
     return NULL;
 }
 
-static slayer3d_registered_actor *actor_pool_allocate(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
-                                                      int *out_index)
+slayer3d_registered_actor *actor_pool_allocate(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
+                                               int *out_index)
 {
     if (out_index != NULL)
         *out_index = -1;
@@ -287,8 +287,8 @@ static slayer3d_registered_actor *actor_pool_allocate(slayer3d_game_data_runtime
     return slayer3d_game_data_find_actor(runtime, pool->actor_names[index]);
 }
 
-static bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
-                                       slayer3d_registered_actor *actor, int index, const char *reason)
+bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
+                                slayer3d_registered_actor *actor, int index, const char *reason)
 {
     if (runtime == NULL || pool == NULL || actor == NULL || index < 0 || index >= pool->capacity)
         return false;
@@ -311,7 +311,7 @@ static bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, acto
     return true;
 }
 
-static void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *properties)
+void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *properties)
 {
     if (actor == NULL || !yyjson_is_obj(properties))
         return;
