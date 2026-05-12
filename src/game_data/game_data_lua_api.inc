@@ -1638,7 +1638,7 @@ static void install_lua_helpers(lua_State *lua)
     SDL_free(source);
 }
 
-static void register_lua_api(slayer3d_game_data_runtime *runtime, slayer3d_script_engine *engine)
+void register_lua_api(slayer3d_game_data_runtime *runtime, slayer3d_script_engine *engine)
 {
     if (runtime == NULL || engine == NULL)
         return;

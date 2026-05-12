@@ -1,8 +1,13 @@
-/* Lua script manifest and adapter loading helpers.
- * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
+/**
+ * @file game_data_scripts.c
+ * @brief Lua script manifest and adapter loading helpers for authored game data.
+ */
 
-static bool load_timers(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer,
-                        int error_buffer_size)
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
+
+bool load_timers(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *timers = obj_get(logic, "timers");
     if (!yyjson_is_arr(timers))
@@ -115,9 +120,9 @@ static bool load_script_entry(slayer3d_game_data_runtime *runtime, script_entry 
     return true;
 }
 
-static bool load_script_index_into_engine(slayer3d_game_data_runtime *runtime, slayer3d_asset_resolver *assets,
-                                          slayer3d_script_engine *engine, int index, slayer3d_script_ref *module_refs,
-                                          bool *loading, bool *loaded, char *error_buffer, int error_buffer_size)
+bool load_script_index_into_engine(slayer3d_game_data_runtime *runtime, slayer3d_asset_resolver *assets,
+                                   slayer3d_script_engine *engine, int index, slayer3d_script_ref *module_refs,
+                                   bool *loading, bool *loaded, char *error_buffer, int error_buffer_size)
 {
     if (runtime == NULL || assets == NULL || engine == NULL || index < 0 || index >= runtime->script_count ||
         module_refs == NULL || loading == NULL || loaded == NULL)
@@ -201,8 +206,7 @@ static bool load_script_index_into_engine(slayer3d_game_data_runtime *runtime, s
     return true;
 }
 
-static bool load_scripts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                         int error_buffer_size)
+bool load_scripts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *scripts = obj_get(root, "scripts");
     if (!yyjson_is_arr(scripts) || yyjson_arr_size(scripts) == 0)
@@ -307,8 +311,7 @@ static bool load_scripts(slayer3d_game_data_runtime *runtime, yyjson_val *root, 
     return true;
 }
 
-static bool load_lua_adapters(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                              int error_buffer_size)
+bool load_lua_adapters(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *adapters = obj_get(root, "adapters");
     if (!yyjson_is_arr(adapters))
