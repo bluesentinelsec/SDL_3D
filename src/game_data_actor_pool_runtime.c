@@ -343,9 +343,11 @@ slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *ru
 }
 
 slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                               const slayer3d_properties *payload, slayer3d_vec3 fallback)
+                                               const slayer3d_properties *payload, slayer3d_vec3 fallback,
+                                               const slayer3d_registered_actor *source_actor)
 {
     slayer3d_vec3 position = fallback;
+    const slayer3d_registered_actor *reference_actor = source_actor;
     yyjson_val *position_json = obj_get(action, "position");
     if (position_json != NULL)
         position = json_vec3_value(position_json, position);
@@ -353,12 +355,18 @@ slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runti
     const char *from_payload_key = json_string(action, "from_payload", NULL);
     slayer3d_registered_actor *from_payload_actor = actor_from_payload_key(runtime, payload, from_payload_key);
     if (from_payload_actor != NULL)
+    {
         position = from_payload_actor->position;
+        reference_actor = from_payload_actor;
+    }
 
     const char *from_actor_name = json_string(action, "from", NULL);
     slayer3d_registered_actor *from_actor = slayer3d_game_data_find_actor(runtime, from_actor_name);
     if (from_actor != NULL)
+    {
         position = from_actor->position;
+        reference_actor = from_actor;
+    }
 
     yyjson_val *offset_json = obj_get(action, "offset");
     if (offset_json != NULL)
@@ -367,6 +375,21 @@ slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runti
         position.x += offset.x;
         position.y += offset.y;
         position.z += offset.z;
+    }
+    yyjson_val *directional_offset = obj_get(action, "directional_offset");
+    if (yyjson_is_obj(directional_offset) && reference_actor != NULL && reference_actor->props != NULL)
+    {
+        const char *property = json_string(directional_offset, "property", NULL);
+        const float distance = json_float(directional_offset, "distance", 0.0f);
+        slayer3d_vec3 direction =
+            slayer3d_properties_get_vec3(reference_actor->props, property, slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        if (distance != 0.0f && slayer3d_vec3_length_squared(direction) > 0.000001f)
+        {
+            direction = slayer3d_vec3_normalize(direction);
+            position.x += direction.x * distance;
+            position.y += direction.y * distance;
+            position.z += direction.z * distance;
+        }
     }
     return position;
 }
@@ -396,7 +419,7 @@ bool execute_actor_spawn_action(slayer3d_game_data_runtime *runtime, yyjson_val 
         slayer3d_properties_set_int(actor->props, "pool_spawn_generation",
                                     (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
     }
-    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, actor->position));
+    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, actor->position, actor));
     apply_actor_spawn_properties(actor, obj_get(action, "properties"));
     actor_pool_note_spawn_success(runtime, pool);
 

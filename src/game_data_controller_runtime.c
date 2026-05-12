@@ -667,6 +667,50 @@ static bool fps_brush_slide_body(const slayer3d_game_data_runtime *runtime, cons
     return slayer3d_game_data_slide_active_brush_worlds(runtime, &trace, 4, out_result);
 }
 
+bool execute_fps_controller_push_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                        const slayer3d_properties *payload)
+{
+    slayer3d_registered_actor *actor = NULL;
+    yyjson_val *component = NULL;
+    fps_controller_runtime *controller = fps_controller_for_actor_action(runtime, action, payload, &actor, &component);
+    yyjson_val *velocity_json = obj_get(action, "velocity");
+    if (controller == NULL || actor == NULL || !yyjson_is_arr(velocity_json) || yyjson_arr_size(velocity_json) != 3)
+        return false;
+
+    slayer3d_vec3 delta = json_vec3_value(velocity_json, slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    if (json_bool(action, "scale_by_dt", true))
+        delta = slayer3d_vec3_scale(delta, runtime != NULL ? SDL_max(runtime->current_dt, 0.0f) : 0.0f);
+    if (slayer3d_vec3_length_squared(delta) <= 0.0000001f)
+        return true;
+
+    slayer3d_fps_mover *mover = &controller->mover;
+    if (component != NULL && find_brush_world_runtime(runtime, json_string(component, "brush_world", NULL)) != NULL)
+    {
+        const unsigned int contents_mask = fps_brush_contents_mask(component);
+        slayer3d_vec3 start = fps_brush_eye_to_body_center(mover, mover->position);
+        slayer3d_vec3 end = slayer3d_vec3_add(start, delta);
+        slayer3d_game_data_brush_trace_result slide;
+        if (fps_brush_slide_body(runtime, mover, contents_mask, start, end, &slide))
+        {
+            const slayer3d_vec3 accepted =
+                slide.hit ? slayer3d_vec3_add(slide.end_position, slayer3d_vec3_scale(slide.normal, 0.01f))
+                          : slide.end_position;
+            mover->position = fps_brush_body_center_to_eye(mover, accepted);
+        }
+        else
+        {
+            mover->position = slayer3d_vec3_add(mover->position, delta);
+        }
+    }
+    else
+    {
+        mover->position = slayer3d_vec3_add(mover->position, delta);
+    }
+
+    fps_controller_publish_actor_state(controller, component, actor);
+    return true;
+}
+
 static bool fps_brush_snap_to_ground(const slayer3d_game_data_runtime *runtime, slayer3d_fps_mover *mover,
                                      unsigned int contents_mask, float walkable_normal_y,
                                      fps_brush_diagnostics *diagnostics, slayer3d_vec3 *body_center)
@@ -853,6 +897,7 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     mover->position = fps_brush_body_center_to_eye(mover, body_center);
+    resolve_fps_controller_sector_doors(runtime, controller);
     if (smooth_ground_height_change && mover->on_ground)
     {
         const float height_delta = mover->position.y - smooth_start_eye_y;

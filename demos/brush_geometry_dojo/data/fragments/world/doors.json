@@ -1,0 +1,70 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "assets": {
+    "images": [
+      { "id": "image.brush_geometry.door_hatch", "path": "asset://textures/door-hatch.png" }
+    ]
+  },
+  "signals": ["signal.brush_geometry.door.interact"],
+  "sector_doors": [
+    {
+      "name": "door.brush_geometry.east_room",
+      "id": 1,
+      "scene": "scene.brush_geometry.showcase",
+      "open_seconds": 0.65,
+      "close_seconds": 0.65,
+      "stay_open_seconds": 4.0,
+      "panels": [
+        {
+          "bounds": { "min": [33.75, 0.0, -13.8], "max": [34.15, 3.35, -11.0] },
+          "open_offset": [0.0, 3.55, 0.0]
+        }
+      ],
+      "render": { "texture": "image.brush_geometry.door_hatch", "color": [180, 82, 70, 255], "lighting": true }
+    },
+    {
+      "name": "door.brush_geometry.tower_gate",
+      "id": 2,
+      "scene": "scene.brush_geometry.showcase",
+      "open_seconds": 0.75,
+      "close_seconds": 0.75,
+      "stay_open_seconds": 5.0,
+      "panels": [
+        {
+          "bounds": { "min": [-44.0, 0.0, 32.75], "max": [-40.5, 3.4, 33.15] },
+          "open_offset": [0.0, 3.7, 0.0]
+        }
+      ],
+      "render": { "texture": "image.brush_geometry.door_hatch", "color": [145, 52, 48, 255], "lighting": true }
+    }
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.use",
+        "on_pressed": "signal.brush_geometry.door.interact"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.brush_geometry.door.interact",
+        "actions": [
+          {
+            "type": "sector_door.interact",
+            "actor": "entity.brush_geometry.player",
+            "range": 2.6,
+            "min_dot": 0.05,
+            "actions": [
+              {
+                "type": "sector_door.toggle",
+                "target_from_payload": "door_name",
+                "stay_open_seconds": 4.5
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

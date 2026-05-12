@@ -154,7 +154,7 @@ bool execute_noise_emit_action(slayer3d_game_data_runtime *runtime, yyjson_val *
 {
     slayer3d_registered_actor *source = noise_source_actor(runtime, action, payload);
     const slayer3d_vec3 fallback = source != NULL ? source->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-    const slayer3d_vec3 position = actor_spawn_position_from_action(runtime, action, payload, fallback);
+    const slayer3d_vec3 position = actor_spawn_position_from_action(runtime, action, payload, fallback, source);
     const float radius = SDL_max(json_float(action, "radius", json_float(action, "range", 16.0f)), 0.0f);
     const float loudness = SDL_max(json_float(action, "loudness", 1.0f), 0.0f);
     const float duration = SDL_max(json_float(action, "duration", json_float(action, "duration_seconds", 0.1f)), 0.0f);

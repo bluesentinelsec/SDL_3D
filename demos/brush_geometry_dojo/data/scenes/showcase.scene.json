@@ -27,11 +27,22 @@
     "entity.brush_geometry.mock.robot",
     "entity.brush_geometry.sprite.robot",
     "entity.brush_geometry.sprite.health",
+    "entity.brush_geometry.jump_pad",
+    "entity.brush_geometry.teleport_pad",
+    "entity.brush_geometry.teleport_target",
+    "entity.brush_geometry.conveyor_marker",
+    "entity.brush_geometry.security_camera",
+    "entity.brush_geometry.security_eye",
+    "entity.brush_geometry.security_view_target",
+    "entity.brush_geometry.security_monitor",
     "entity.brush_geometry.sun",
     "entity.brush_geometry.blue_fill",
     "entity.brush_geometry.courtyard_blue",
     "entity.brush_geometry.courtyard_red",
-    "entity.brush_geometry.bridge_gold"
+    "entity.brush_geometry.bridge_gold",
+    "entity.brush_geometry.east_room_red",
+    "entity.brush_geometry.tower_red",
+    "entity.brush_geometry.tower_blue_shadow"
   ],
   "input": {
     "mouse_capture": "unpaused",
@@ -41,6 +52,8 @@
       "action.move.left",
       "action.move.right",
       "action.jump",
+      "action.use",
+      "action.camera.security.toggle",
       "action.fire",
       "action.exit"
     ]
@@ -79,7 +92,7 @@
       },
       {
         "name": "ui.brush_geometry.help",
-        "text": "WASD move  Mouse look  Space jump  F/Mouse fire  Esc quit",
+        "text": "WASD move  Mouse look  Space jump  E use  V camera  F/Mouse fire  Esc quit",
         "font": "font.brush_geometry.hud",
         "x": 0.02,
         "y": 0.075,

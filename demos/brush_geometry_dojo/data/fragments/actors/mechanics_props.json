@@ -1,0 +1,96 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "entities": [
+    {
+      "name": "entity.brush_geometry.jump_pad",
+      "active": true,
+      "transform": { "position": [-38.0, 0.08, -34.0] },
+      "components": [
+        { "type": "motion.spin", "property": "spin_angle", "rate": 2.4 },
+        { "type": "render.mesh_primitive", "primitive": "disc", "radius": 1.35, "segments": 32, "rotation_axis": [0.0, 1.0, 0.0], "rotation_property": "spin_angle", "color": [65, 210, 255, 230], "emissive": true, "lighting": true },
+        { "type": "light.point", "color": [0.2, 0.8, 1.0], "intensity": 3.2, "range": 7.5 }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.teleport_pad",
+      "active": true,
+      "transform": { "position": [38.0, 0.08, -34.0] },
+      "components": [
+        { "type": "motion.spin", "property": "spin_angle", "rate": -2.0 },
+        { "type": "render.mesh_primitive", "primitive": "torus", "major_radius": 1.05, "minor_radius": 0.18, "segments": 32, "tube_segments": 10, "rotation_axis": [0.0, 1.0, 0.0], "rotation_property": "spin_angle", "color": [255, 90, 230, 235], "emissive": true, "lighting": true },
+        { "type": "light.point", "color": [1.0, 0.18, 0.85], "intensity": 3.0, "range": 7.0 }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.teleport_target",
+      "active": true,
+      "transform": { "position": [0.0, 0.08, -30.0] },
+      "components": [
+        { "type": "motion.spin", "property": "spin_angle", "rate": 1.35 },
+        { "type": "render.mesh_primitive", "primitive": "arrow", "radius": 0.42, "height": 1.8, "segments": 20, "rotation_axis": [0.0, 1.0, 0.0], "rotation_property": "spin_angle", "color": [150, 255, 120, 235], "emissive": true, "lighting": true },
+        { "type": "light.point", "color": [0.45, 1.0, 0.28], "intensity": 2.2, "range": 6.0 }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.conveyor_marker",
+      "active": true,
+      "transform": { "position": [0.0, 0.08, -43.0] },
+      "components": [
+        { "type": "motion.spin", "property": "spin_angle", "rate": 3.0 },
+        { "type": "render.mesh_primitive", "primitive": "arrow", "radius": 0.35, "height": 2.4, "segments": 18, "rotation_axis": [0.0, 1.0, 0.0], "rotation_property": "spin_angle", "color": [255, 190, 65, 230], "emissive": true, "lighting": true },
+        { "type": "light.point", "color": [1.0, 0.58, 0.12], "intensity": 2.4, "range": 8.0 }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.security_camera",
+      "active": true,
+      "transform": { "position": [0.0, 6.1, 30.6] },
+      "components": [
+        { "type": "motion.spin", "property": "pan_angle", "rate": 0.7 },
+        {
+          "type": "render.composite",
+          "lighting": true,
+          "rotation_axis": [0.0, 1.0, 0.0],
+          "rotation_property": "pan_angle",
+          "parts": [
+            { "primitive": "rounded_box", "offset": [0.0, 0.0, 0.0], "size": [0.7, 0.45, 0.9], "bevel_radius": 0.08, "color": [45, 48, 56, 255] },
+            { "primitive": "cylinder", "offset": [0.0, 0.0, -0.72], "radius_top": 0.18, "radius_bottom": 0.24, "height": 0.65, "segments": 18, "color": [25, 26, 30, 255] },
+            { "primitive": "disc", "offset": [0.0, 0.0, -1.08], "radius": 0.16, "segments": 18, "color": [255, 52, 42, 255], "emissive": true }
+          ]
+        },
+        { "type": "light.point", "color": [1.0, 0.05, 0.02], "intensity": 2.0, "range": 8.0 }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.security_eye",
+      "active": true,
+      "transform": { "position": [0.0, 5.8, 28.0] },
+      "components": []
+    },
+    {
+      "name": "entity.brush_geometry.security_view_target",
+      "active": true,
+      "transform": { "position": [0.0, 1.45, -8.0] },
+      "components": [
+        { "type": "motion.oscillate", "origin": [0.0, 1.45, -8.0], "amplitude": [16.0, 0.0, 0.0], "rate": 0.45 }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.security_monitor",
+      "active": true,
+      "transform": { "position": [27.5, 1.25, 6.5] },
+      "components": [
+        {
+          "type": "render.composite",
+          "lighting": true,
+          "parts": [
+            { "primitive": "rounded_box", "offset": [0.0, 0.0, 0.0], "size": [2.2, 1.35, 0.25], "bevel_radius": 0.12, "color": [28, 30, 34, 255] },
+            { "primitive": "plane", "offset": [0.0, 0.04, -0.16], "size": [1.8, 0.95, 0.05], "color": [75, 150, 185, 255], "emissive": true },
+            { "primitive": "disc", "offset": [-0.72, -0.48, -0.18], "radius": 0.07, "segments": 16, "color": [255, 42, 35, 255], "emissive": true }
+          ]
+        },
+        { "type": "light.point", "color": [0.18, 0.55, 1.0], "intensity": 1.7, "range": 5.5 }
+      ]
+    }
+  ]
+}

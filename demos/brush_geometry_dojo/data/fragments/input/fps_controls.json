@@ -10,6 +10,8 @@
           { "name": "action.move.left", "bindings": [{ "device": "keyboard", "key": "A" }] },
           { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
           { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
+          { "name": "action.use", "bindings": [{ "device": "keyboard", "key": "E" }] },
+          { "name": "action.camera.security.toggle", "bindings": [{ "device": "keyboard", "key": "V" }] },
           {
             "name": "action.fire",
             "bindings": [

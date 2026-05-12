@@ -128,6 +128,7 @@ struct RenderPrimitiveCapture
     bool saw_brush_spinning_cube = false;
     bool saw_brush_robot_sprite = false;
     bool saw_brush_health_sprite = false;
+    int brush_player_capsules = 0;
 };
 
 struct SectorLevelInstanceCapture
@@ -1471,6 +1472,15 @@ bool capture_render_primitive(void *userdata, const slayer3d_game_data_render_pr
         primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
     {
         capture->brush_mesh_primitives++;
+    }
+    if (entity_name == "entity.brush_geometry.player" && primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+    {
+        capture->brush_player_capsules++;
+        EXPECT_EQ(primitive->mesh_primitive, SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE);
+        EXPECT_EQ(primitive->color.r, 60);
+        EXPECT_EQ(primitive->color.g, 255);
+        EXPECT_EQ(primitive->color.b, 70);
+        EXPECT_TRUE(primitive->emissive);
     }
     if (entity_name.rfind("pool.brush_geometry.projectiles.", 0) == 0 &&
         primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE)
@@ -7554,6 +7564,10 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_NE(find_brush("brush.bridge.rail_west"), nullptr);
     ASSERT_NE(find_brush("brush.stairs.south.0"), nullptr);
     ASSERT_NE(find_brush("brush.stairs.south.landing"), nullptr);
+    ASSERT_NE(find_brush("brush.conveyor.floor_escalator"), nullptr);
+    ASSERT_NE(find_brush("brush.tower.second_floor"), nullptr);
+    ASSERT_NE(find_brush("brush.tower.wall_south.header"), nullptr);
+    ASSERT_NE(find_brush("brush.tower.stair.5"), nullptr);
     const slayer3d_game_data_brush *pillar = find_brush("brush.pillar.center");
     const slayer3d_game_data_brush *overhang_west = find_brush("brush.bridge.overhang_west");
     const slayer3d_game_data_brush *overhang_east = find_brush("brush.bridge.overhang_east");
@@ -7601,13 +7615,40 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(capture.acceleration_enabled);
     EXPECT_TRUE(capture.lighting_enabled);
 
-    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 5);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 14);
     slayer3d_camera3d camera{};
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.player", &camera));
     EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
     EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
     EXPECT_NEAR(camera.position.y, 1.6f, 0.05f);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.brush_geometry.player");
+    RenderPrimitiveCapture player_camera_capture{};
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &player_camera_capture));
+    EXPECT_EQ(player_camera_capture.brush_player_capsules, 0);
+    const int security_camera_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.camera.toggle");
+    ASSERT_GE(security_camera_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), security_camera_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.brush_geometry.security");
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.security", &camera));
+    EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
+    EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
+    EXPECT_NEAR(camera.position.x, 0.0f, 0.05f);
+    EXPECT_NEAR(camera.position.y, 5.8f, 0.05f);
+    EXPECT_NEAR(camera.position.z, 28.0f, 0.05f);
+    RenderPrimitiveCapture security_camera_capture{};
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &security_camera_capture));
+    EXPECT_EQ(security_camera_capture.brush_player_capsules, 1);
+    const slayer3d_vec3 first_security_target = camera.target;
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f));
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.security", &camera));
+    EXPECT_NEAR(camera.target.y, 1.45f, 0.05f);
+    EXPECT_LT(SDL_fabsf(camera.target.x - first_security_target.x), 18.1f);
+    EXPECT_GT(SDL_fabsf(camera.target.x - first_security_target.x), 0.25f);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), security_camera_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.brush_geometry.player");
 
     RenderPrimitiveCapture primitive_capture{};
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &primitive_capture));
@@ -7681,6 +7722,16 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     slayer3d_registered_actor *projectile = slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.projectiles.0");
     ASSERT_NE(projectile, nullptr);
     EXPECT_TRUE(projectile->active);
+    slayer3d_vec3 camera_forward =
+        slayer3d_properties_get_vec3(player->props, "camera_forward", slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
+    camera_forward = slayer3d_vec3_normalize(camera_forward);
+    const slayer3d_vec3 projectile_velocity =
+        slayer3d_properties_get_vec3(projectile->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    expect_vec3_near(
+        projectile->position,
+        slayer3d_vec3_make(player->position.x + camera_forward.x * 0.75f + projectile_velocity.x * 0.016f,
+                           player->position.y + camera_forward.y * 0.75f + projectile_velocity.y * 0.016f,
+                           player->position.z + camera_forward.z * 0.75f + projectile_velocity.z * 0.016f));
     RenderPrimitiveCapture projectile_capture{};
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
     EXPECT_EQ(projectile_capture.brush_projectile_spheres, 1);
@@ -8986,7 +9037,7 @@ TEST(GameDataRuntime, WeaponProjectileComponentFiresFromOwningActor)
           "type": "weapon.projectile",
           "action": "action.fire",
           "pool": "pool.shots",
-          "offset": [0.0, 0.1, -0.5],
+          "directional_offset": { "property": "camera_forward", "distance": 0.75 },
           "velocity_from_property": "camera_forward",
           "speed": 12.0,
           "cooldown": 0.25,
@@ -9035,7 +9086,7 @@ TEST(GameDataRuntime, WeaponProjectileComponentFiresFromOwningActor)
     slayer3d_registered_actor *shot0 = slayer3d_game_data_find_actor(runtime, "pool.shots.0");
     ASSERT_NE(shot0, nullptr);
     EXPECT_TRUE(shot0->active);
-    expect_vec3_near(shot0->position, slayer3d_vec3_make(1.0f, 2.1f, 2.5f));
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(1.0f, 2.0f, 2.25f));
     expect_vec3_near(slayer3d_properties_get_vec3(shot0->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)),
                      slayer3d_vec3_make(0.0f, 0.0f, -12.0f));
     EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 5);
@@ -10039,6 +10090,27 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
+    write_text(dir / "bad_camera_visibility.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
+  "world": {
+    "name": "world.bad_mesh_primitive",
+    "kind": "fixed_screen",
+    "cameras": [
+      { "name": "camera.main", "type": "perspective", "position": [0.0, 2.0, 5.0], "target": [0.0, 1.0, 0.0] }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.bad",
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "capsule", "visible_to_cameras": ["camera.missing"] }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
   "schema": "slayer3d.scene.v0",
@@ -10061,6 +10133,10 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_draw_mode.game.json").string().c_str(), nullptr, error,
                                                   sizeof(error)));
     EXPECT_NE(std::string(error).find("render.mesh_primitive draw_mode is unknown"), std::string::npos) << error;
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_camera_visibility.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown camera reference 'camera.missing'"), std::string::npos) << error;
 
     remove_test_dir(dir);
 }
@@ -11787,6 +11863,22 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
       ]
     }
   ],
+  "signals": ["signal.push"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.push",
+        "actions": [
+          {
+            "type": "controller.fps.push",
+            "target": "entity.player",
+            "velocity": [0.5, 0.0, 0.0],
+            "scale_by_dt": false
+          }
+        ]
+      }
+    ]
+  },
   "brush_worlds": [
     {
       "name": "brush.test_room",
@@ -11837,6 +11929,10 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     ASSERT_NE(player, nullptr);
     const float initial_z = player->position.z;
     const float initial_y = player->position.y;
+    const int push_signal = slayer3d_game_data_find_signal(runtime, "signal.push");
+    ASSERT_GE(push_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), push_signal, nullptr);
+    EXPECT_NEAR(player->position.x, 0.5f, 0.0001f);
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);

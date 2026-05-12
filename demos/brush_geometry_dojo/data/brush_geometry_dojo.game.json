@@ -12,9 +12,12 @@
     { "path": "fragments/actors/showcase_primitives.json", "sections": ["entities"] },
     { "path": "fragments/actors/billboard_sprites.json", "sections": ["assets", "entities"] },
     { "path": "fragments/actors/zombie_actor.json", "sections": ["assets", "entities"] },
+    { "path": "fragments/actors/mechanics_props.json", "sections": ["entities"] },
     { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools"] },
     { "path": "fragments/world/showcase.brushes.json", "sections": ["brush_worlds"] },
+    { "path": "fragments/world/doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/actors/lights.json", "sections": ["entities"] },
+    { "path": "fragments/logic/movement_mechanics.json", "sections": ["signals", "logic"] },
     { "path": "fragments/logic/brush_gameplay_sensors.json", "sections": ["logic"] }
   ],
   "app": {
@@ -55,6 +58,15 @@
         "fov": 90.0,
         "fov_axis": "horizontal",
         "active": true
+      },
+      {
+        "name": "camera.brush_geometry.security",
+        "type": "perspective",
+        "position_entity": "entity.brush_geometry.security_eye",
+        "target_entity": "entity.brush_geometry.security_view_target",
+        "up": [0.0, 1.0, 0.0],
+        "fov": 66.0,
+        "fov_axis": "horizontal"
       }
     ]
   },

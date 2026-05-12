@@ -719,7 +719,8 @@ bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, actor_pool_
 slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *runtime,
                                                   const slayer3d_properties *payload, const char *key);
 slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                               const slayer3d_properties *payload, slayer3d_vec3 fallback);
+                                               const slayer3d_properties *payload, slayer3d_vec3 fallback,
+                                               const slayer3d_registered_actor *source_actor);
 void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *properties);
 void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
 bool execute_grid_spawn_from_glyphs_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
@@ -871,6 +872,8 @@ bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, y
                                           const slayer3d_properties *payload);
 bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                             const slayer3d_properties *payload);
+bool execute_fps_controller_push_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                        const slayer3d_properties *payload);
 bool execute_projectile_fire_action_for_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                               const slayer3d_properties *payload,
                                               slayer3d_registered_actor *source_actor);

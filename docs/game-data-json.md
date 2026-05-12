@@ -345,11 +345,14 @@ camera with their `camera` field, and logic actions can switch cameras with
 Camera types:
 
 - `orthographic`: fixed position/target/up with `size`.
-- `perspective`: fixed position/target/up with `fov` and optional `fov_axis`.
-  `fov_axis` may be `vertical` or `horizontal`; omitted cameras use vertical
-  FOV. The legacy `fovy` field is still accepted as a vertical-FOV alias when
-  `fov` is absent. If omitted, the vertical field of view defaults to 90
-  degrees.
+- `perspective`: position/target/up with `fov` and optional `fov_axis`.
+  `position` and `target` may be fixed Vec3 values, or driven by
+  `position_entity` / `target_entity` plus optional `position_offset` /
+  `target_offset`. Entity-driven targets are useful for panning security
+  cameras, rails, and authored cutscene cameras. `fov_axis` may be `vertical`
+  or `horizontal`; omitted cameras use vertical FOV. The legacy `fovy` field is
+  still accepted as a vertical-FOV alias when `fov` is absent. If omitted, the
+  vertical field of view defaults to 90 degrees.
 - `chase`: follows an actor named by `target_entity`. The forward vector comes
   from a Vec3 actor property such as `velocity` or an authored
   `camera_forward`, with `fallback_forward` used when that property is near
@@ -1154,6 +1157,20 @@ events:
 }
 ```
 
+```json
+{
+  "type": "controller.fps.push",
+  "target": "entity.player",
+  "velocity": [4.0, 0.0, 0.0]
+}
+```
+
+`controller.fps.push` applies a data-authored displacement to an FPS controller,
+scaled by frame `dt` by default. Use it with `sensor.volume` stay/overlap edges
+for conveyors, wind volumes, water currents, and other environmental pushes.
+Set `"scale_by_dt": false` when the authored vector is already a one-shot
+displacement.
+
 `controller.fps.teleport` moves the controller and actor to the given
 eye-position. `yaw` and `pitch` are optional; omitted angles preserve the
 current orientation. Both actions also support `target_from_payload` instead of
@@ -1379,7 +1396,7 @@ Example:
   "type": "projectile.fire",
   "target": "entity.player",
   "pool": "pool.player_shots",
-  "offset": [0.6, 0.0, 0.1],
+  "directional_offset": { "property": "camera_forward", "distance": 0.75 },
   "velocity_from_property": "camera_forward",
   "speed": 12.0,
   "cooldown_property": "fire_timer",
@@ -1389,7 +1406,10 @@ Example:
 
 The target actor may define `fire_cooldown`; otherwise the action's `cooldown`
 field is used. If the cooldown property is positive, no projectile is spawned.
-Use `velocity` for a literal projectile velocity, or
+Use `offset` for a literal world-space spawn offset. Use
+`directional_offset` to offset along a normalized actor vec3 property, which is
+the preferred FPS crosshair convention: the projectile starts on the same ray
+it will travel. Use `velocity` for a literal projectile velocity, or
 `velocity_from_property` plus `speed` to fire along an actor-authored direction
 such as an FPS controller's `camera_forward`. Use `target_from_payload` instead
 of `target` when the firing actor should come from a signal or collision
@@ -1403,7 +1423,7 @@ action is held:
   "type": "weapon.projectile",
   "action": "action.fire",
   "pool": "pool.player_shots",
-  "offset": [0.0, 0.1, -0.5],
+  "directional_offset": { "property": "camera_forward", "distance": 0.75 },
   "velocity_from_property": "camera_forward",
   "speed": 20.0,
   "cooldown_property": "fire_timer"
@@ -1735,6 +1755,11 @@ Reusable components include:
   `solid_wire`. `lighting_key` reads a scene-state boolean and is useful for
   isolating whether actor primitives, sector-local lighting, or dynamic lights
   are driving a scene.
+  Render primitive components also support camera-scoped visibility with
+  `visible_to_cameras` and `hidden_from_cameras`, each authored as a camera name
+  or array of camera names. This is useful for first-person bodies, security
+  camera overlays, mirrors, cutscene-only props, and similar camera-specific
+  presentation.
   Dimension fields include `size`, `radius`, `height`, `radius_top`,
   `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
   `segments`/`slices`, `rings`, and `tube_segments`. This is the stable
