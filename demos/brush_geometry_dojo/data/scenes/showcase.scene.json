@@ -9,8 +9,29 @@
     "entity.brush_geometry.visible_target",
     "entity.brush_geometry.occluded_target",
     "entity.brush_geometry.zombie",
+    "entity.brush_geometry.mesh.cube",
+    "entity.brush_geometry.mesh.sphere",
+    "entity.brush_geometry.mesh.capsule",
+    "entity.brush_geometry.mesh.cylinder",
+    "entity.brush_geometry.mesh.cone",
+    "entity.brush_geometry.mesh.torus",
+    "entity.brush_geometry.mesh.pyramid",
+    "entity.brush_geometry.mesh.wedge",
+    "entity.brush_geometry.mesh.plane",
+    "entity.brush_geometry.mesh.disc",
+    "entity.brush_geometry.mesh.hemisphere",
+    "entity.brush_geometry.mesh.rounded_box",
+    "entity.brush_geometry.mesh.pipe",
+    "entity.brush_geometry.mesh.arrow",
+    "entity.brush_geometry.mesh.billboard_plane",
+    "entity.brush_geometry.mock.robot",
+    "entity.brush_geometry.sprite.robot",
+    "entity.brush_geometry.sprite.health",
     "entity.brush_geometry.sun",
-    "entity.brush_geometry.blue_fill"
+    "entity.brush_geometry.blue_fill",
+    "entity.brush_geometry.courtyard_blue",
+    "entity.brush_geometry.courtyard_red",
+    "entity.brush_geometry.bridge_gold"
   ],
   "input": {
     "mouse_capture": "unpaused",
@@ -20,6 +41,7 @@
       "action.move.left",
       "action.move.right",
       "action.jump",
+      "action.fire",
       "action.exit"
     ]
   },
@@ -57,7 +79,7 @@
       },
       {
         "name": "ui.brush_geometry.help",
-        "text": "WASD move  Mouse look  Space jump  Esc quit",
+        "text": "WASD move  Mouse look  Space jump  F/Mouse fire  Esc quit",
         "font": "font.brush_geometry.hud",
         "x": 0.02,
         "y": 0.075,

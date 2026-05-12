@@ -122,6 +122,12 @@ struct RenderPrimitiveCapture
     int doom_model_primitives = 0;
     int doom_presentation_cubes = 0;
     int doom_projectile_spheres = 0;
+    int brush_mesh_primitives = 0;
+    int brush_sprites = 0;
+    int brush_projectile_spheres = 0;
+    bool saw_brush_spinning_cube = false;
+    bool saw_brush_robot_sprite = false;
+    bool saw_brush_health_sprite = false;
 };
 
 struct SectorLevelInstanceCapture
@@ -1461,6 +1467,47 @@ bool capture_render_primitive(void *userdata, const slayer3d_game_data_render_pr
         capture->doom_presentation_cubes++;
     if (entity_name.rfind("pool.doom.projectiles.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE)
         capture->doom_projectile_spheres++;
+    if (entity_name.rfind("entity.brush_geometry.mesh.", 0) == 0 &&
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+    {
+        capture->brush_mesh_primitives++;
+    }
+    if (entity_name.rfind("pool.brush_geometry.projectiles.", 0) == 0 &&
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE)
+    {
+        capture->brush_projectile_spheres++;
+    }
+    if (entity_name == "entity.brush_geometry.mesh.cube")
+    {
+        capture->saw_brush_spinning_cube = true;
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE);
+        EXPECT_EQ(primitive->mesh_primitive, SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE);
+        EXPECT_NEAR(primitive->rotation_axis.x, 0.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_axis.y, 1.0f, 0.0001f);
+        EXPECT_NEAR(primitive->rotation_axis.z, 0.0f, 0.0001f);
+        EXPECT_GT(primitive->rotation_angle, 0.0f);
+        EXPECT_TRUE(primitive->lighting_enabled);
+    }
+    if (entity_name == "entity.brush_geometry.sprite.robot")
+    {
+        capture->brush_sprites++;
+        capture->saw_brush_robot_sprite = true;
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_SPRITE);
+        EXPECT_STREQ(primitive->sprite_asset, "sprite.brush_geometry.robot.walk");
+        EXPECT_NEAR(primitive->sprite_size.x, 3.4f, 0.0001f);
+        EXPECT_NEAR(primitive->sprite_size.y, 5.2f, 0.0001f);
+        EXPECT_TRUE(primitive->lighting_enabled);
+    }
+    if (entity_name == "entity.brush_geometry.sprite.health")
+    {
+        capture->brush_sprites++;
+        capture->saw_brush_health_sprite = true;
+        EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_SPRITE);
+        EXPECT_STREQ(primitive->sprite_asset, "sprite.brush_geometry.health_pack");
+        EXPECT_NEAR(primitive->sprite_size.x, 1.2f, 0.0001f);
+        EXPECT_NEAR(primitive->sprite_size.y, 1.2f, 0.0001f);
+        EXPECT_TRUE(primitive->lighting_enabled);
+    }
     if (entity_name == "entity.doom.robot.entry")
     {
         capture->saw_doom_robot_sprite = true;
@@ -7415,7 +7462,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.brush_geometry.showcase", &world));
     ASSERT_NE(world.render_model, nullptr);
     EXPECT_EQ(world.material_count, 7);
-    EXPECT_GE(world.brush_count, 19);
+    EXPECT_GE(world.brush_count, 45);
     EXPECT_GE(world.render_model->mesh_count, 6);
     auto find_material = [&world](const char *name) -> const slayer3d_game_data_brush_material * {
         for (int i = 0; i < world.material_count; ++i)
@@ -7500,6 +7547,13 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_NE(find_brush("brush.room.ceiling.east"), nullptr);
     ASSERT_NE(find_brush("brush.room.wall_south.window_top"), nullptr);
     ASSERT_NE(find_brush("brush.room.wall_north.window_top"), nullptr);
+    ASSERT_NE(find_brush("brush.side_room.west.ceiling"), nullptr);
+    ASSERT_NE(find_brush("brush.side_room.east.ceiling"), nullptr);
+    ASSERT_NE(find_brush("brush.side_room.north.ceiling"), nullptr);
+    ASSERT_NE(find_brush("brush.bridge.deck"), nullptr);
+    ASSERT_NE(find_brush("brush.bridge.rail_west"), nullptr);
+    ASSERT_NE(find_brush("brush.stairs.south.0"), nullptr);
+    ASSERT_NE(find_brush("brush.stairs.south.landing"), nullptr);
     const slayer3d_game_data_brush *pillar = find_brush("brush.pillar.center");
     const slayer3d_game_data_brush *overhang_west = find_brush("brush.bridge.overhang_west");
     const slayer3d_game_data_brush *overhang_east = find_brush("brush.bridge.overhang_east");
@@ -7547,13 +7601,21 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(capture.acceleration_enabled);
     EXPECT_TRUE(capture.lighting_enabled);
 
-    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 2);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 5);
     slayer3d_camera3d camera{};
-    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.player", &camera));
     EXPECT_EQ(camera.fov_axis, SLAYER3D_CAMERA_FOV_HORIZONTAL);
     EXPECT_EQ(camera.projection, SLAYER3D_CAMERA_PERSPECTIVE);
     EXPECT_NEAR(camera.position.y, 1.6f, 0.05f);
+
+    RenderPrimitiveCapture primitive_capture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &primitive_capture));
+    EXPECT_GE(primitive_capture.brush_mesh_primitives, 15);
+    EXPECT_TRUE(primitive_capture.saw_brush_spinning_cube);
+    EXPECT_EQ(primitive_capture.brush_sprites, 2);
+    EXPECT_TRUE(primitive_capture.saw_brush_robot_sprite);
+    EXPECT_TRUE(primitive_capture.saw_brush_health_sprite);
 
     slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.player");
     slayer3d_registered_actor *zombie = slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.zombie");
@@ -7611,6 +7673,19 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
+    const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
+    ASSERT_GE(fire_action, 0);
+    slayer3d_input_set_action_override(input, fire_action, 1.0f);
+    ASSERT_NE(slayer3d_input_update(input, 2500), nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    slayer3d_registered_actor *projectile = slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.projectiles.0");
+    ASSERT_NE(projectile, nullptr);
+    EXPECT_TRUE(projectile->active);
+    RenderPrimitiveCapture projectile_capture{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
+    EXPECT_EQ(projectile_capture.brush_projectile_spheres, 1);
+    slayer3d_input_set_action_override(input, fire_action, 0.0f);
+
     const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
     ASSERT_GE(forward, 0);
     slayer3d_input_set_action_override(input, forward, 1.0f);

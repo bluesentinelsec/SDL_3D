@@ -9,7 +9,14 @@
           { "name": "action.move.back", "bindings": [{ "device": "keyboard", "key": "S" }] },
           { "name": "action.move.left", "bindings": [{ "device": "keyboard", "key": "A" }] },
           { "name": "action.move.right", "bindings": [{ "device": "keyboard", "key": "D" }] },
-          { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] }
+          { "name": "action.jump", "bindings": [{ "device": "keyboard", "key": "SPACE" }] },
+          {
+            "name": "action.fire",
+            "bindings": [
+              { "device": "mouse", "button": "LEFT" },
+              { "device": "keyboard", "key": "F" }
+            ]
+          }
         ]
       }
     ]
