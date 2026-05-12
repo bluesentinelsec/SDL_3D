@@ -1734,6 +1734,39 @@ static bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtim
     return true;
 }
 
+static bool editor_selection_mode_is_click(yyjson_val *selection)
+{
+    const char *mode = json_string(selection, "mode", "hover");
+    return SDL_strcmp(mode, "click") == 0;
+}
+
+static bool editor_selection_active_for_scene(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    return runtime->editor_selection_scene != NULL && active_scene != NULL &&
+           SDL_strcmp(runtime->editor_selection_scene, active_scene) == 0;
+}
+
+static void clear_editor_active_selection(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    init_editor_selection(&runtime->editor_active_selection);
+    runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+}
+
+static bool editor_selection_select_requested(const slayer3d_game_data_runtime *runtime, yyjson_val *selection)
+{
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return false;
+
+    const Uint8 button = mouse_button_from_json(json_string(selection, "select_button", "LEFT"));
+    return button != 0 && slayer3d_input_get_pressed_mouse_button(input) == button;
+}
+
 static const char *editor_selection_type_name(slayer3d_game_data_world_model_type type)
 {
     if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL)
@@ -1822,17 +1855,55 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     yyjson_val *selection_json = obj_get(editor, "selection");
     yyjson_val *outputs = obj_get(selection_json, "outputs");
     if (!yyjson_is_obj(selection_json))
+    {
+        clear_editor_active_selection(runtime);
         return true;
+    }
+    if (!editor_selection_active_for_scene(runtime))
+        clear_editor_active_selection(runtime);
 
     slayer3d_game_data_world_trace_desc trace;
-    slayer3d_game_data_editor_selection selection;
-    init_editor_selection(&selection);
+    slayer3d_game_data_editor_selection hover_selection;
+    init_editor_selection(&hover_selection);
     if (!editor_trace_desc_from_json(runtime, selection_json, &trace) ||
-        !slayer3d_game_data_pick_editor_world_model(runtime, &trace, &selection))
+        !slayer3d_game_data_pick_editor_world_model(runtime, &trace, &hover_selection))
     {
         return false;
     }
-    publish_editor_selection(runtime, outputs, &selection);
+
+    if (!editor_selection_mode_is_click(selection_json))
+    {
+        runtime->editor_active_selection = hover_selection;
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+        publish_editor_selection(runtime, outputs, &hover_selection);
+        return true;
+    }
+
+    publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
+    if (editor_selection_select_requested(runtime, selection_json))
+    {
+        if (hover_selection.hit)
+            runtime->editor_active_selection = hover_selection;
+        else if (json_bool(selection_json, "clear_on_miss", true))
+            init_editor_selection(&runtime->editor_active_selection);
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+    }
+
+    publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+    return true;
+}
+
+bool slayer3d_game_data_get_active_editor_selection(const slayer3d_game_data_runtime *runtime,
+                                                    slayer3d_game_data_editor_selection *out_selection)
+{
+    if (out_selection != NULL)
+        init_editor_selection(out_selection);
+    if (runtime == NULL || out_selection == NULL || !editor_selection_active_for_scene(runtime) ||
+        !runtime->editor_active_selection.hit)
+    {
+        return false;
+    }
+    *out_selection = runtime->editor_active_selection;
     return true;
 }
 
@@ -1862,8 +1933,16 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
     if (editor_trace_desc_from_json(runtime, selection_json, out_trace))
     {
         out_desc->trace = out_trace;
-        if (out_selection != NULL && slayer3d_game_data_pick_editor_world_model(runtime, out_trace, out_selection))
+        if (out_selection != NULL && editor_selection_mode_is_click(selection_json) &&
+            editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit)
+        {
+            *out_selection = runtime->editor_active_selection;
             out_desc->selection = out_selection;
+        }
+        else if (out_selection != NULL && slayer3d_game_data_pick_editor_world_model(runtime, out_trace, out_selection))
+        {
+            out_desc->selection = out_selection;
+        }
     }
     return true;
 }

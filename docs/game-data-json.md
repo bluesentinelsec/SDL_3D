@@ -633,6 +633,9 @@ face normal through the normal 3D presentation path:
 {
   "editor": {
     "selection": {
+      "mode": "click",
+      "select_button": "LEFT",
+      "clear_on_miss": true,
       "trace": {
         "source": "camera_screen",
         "camera": "camera.editor.viewport",
@@ -649,6 +652,10 @@ face normal through the normal 3D presentation path:
         "material_key": "editor.selection.material",
         "face_stable_id_key": "editor.selection.face_stable_id",
         "face_index_key": "editor.selection.face_index"
+      },
+      "hover_outputs": {
+        "hit_key": "editor.hover.hit",
+        "element_key": "editor.hover.element"
       }
     },
     "debug_overlay": {
@@ -667,6 +674,12 @@ Tooling can override that point with `screen`, `screen_x`/`screen_y`, or
 with `viewport`, `viewport_width`/`viewport_height`, or scene-state keys. This
 lets editor dojos and future editor hosts share the same data-authored picking
 primitive.
+
+Selection mode defaults to `hover`, where `outputs` receives the current pick
+every frame. In `mode: "click"`, `outputs` receives the pinned selection and
+`hover_outputs` can publish the live hover independently. `select_button`
+defaults to `LEFT`; clicking empty space clears the pinned selection unless
+`clear_on_miss` is false.
 
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,

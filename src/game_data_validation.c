@@ -10466,6 +10466,32 @@ static bool validate_scene_editor_trace(validation_context *ctx, yyjson_val *tra
     return true;
 }
 
+static bool validate_scene_editor_selection_options(validation_context *ctx, yyjson_val *selection,
+                                                    const char *selection_path)
+{
+    yyjson_val *mode = obj_get(selection, "mode");
+    if (mode != NULL)
+    {
+        if (!yyjson_is_str(mode) || yyjson_get_str(mode)[0] == '\0')
+            return validation_error(ctx, selection_path, "scene editor selection mode must be a non-empty string");
+        const char *mode_name = yyjson_get_str(mode);
+        if (SDL_strcmp(mode_name, "hover") != 0 && SDL_strcmp(mode_name, "click") != 0)
+            return validation_error(ctx, selection_path, "scene editor selection mode must be 'hover' or 'click'");
+    }
+
+    yyjson_val *select_button = obj_get(selection, "select_button");
+    if (select_button != NULL)
+    {
+        if (!yyjson_is_str(select_button) || !validation_mouse_button_name_valid(yyjson_get_str(select_button)))
+            return validation_error(ctx, selection_path, "scene editor selection select_button must be a mouse button");
+    }
+
+    yyjson_val *clear_on_miss = obj_get(selection, "clear_on_miss");
+    if (clear_on_miss != NULL && !yyjson_is_bool(clear_on_miss))
+        return validation_error(ctx, selection_path, "scene editor selection clear_on_miss must be a boolean");
+    return true;
+}
+
 static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
                                           validation_names *names)
 {
@@ -10482,6 +10508,8 @@ static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *s
         format_path(selection_path, sizeof(selection_path), "%s.editor.selection", json_path);
         if (!yyjson_is_obj(selection))
             return validation_error(ctx, selection_path, "scene editor selection must be an object");
+        if (!validate_scene_editor_selection_options(ctx, selection, selection_path))
+            return false;
         yyjson_val *trace = obj_get(selection, "trace");
         if (!yyjson_is_obj(trace))
             return validation_error(ctx, selection_path, "scene editor selection requires a trace object");
@@ -10492,6 +10520,10 @@ static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *s
         char outputs_path[PATH_BUFFER_SIZE];
         format_path(outputs_path, sizeof(outputs_path), "%s.outputs", selection_path);
         if (!validate_scene_editor_outputs(ctx, obj_get(selection, "outputs"), outputs_path))
+            return false;
+        char hover_outputs_path[PATH_BUFFER_SIZE];
+        format_path(hover_outputs_path, sizeof(hover_outputs_path), "%s.hover_outputs", selection_path);
+        if (!validate_scene_editor_outputs(ctx, obj_get(selection, "hover_outputs"), hover_outputs_path))
             return false;
     }
 

@@ -1877,6 +1877,16 @@ extern "C"
     bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime *runtime);
 
     /**
+     * @brief Copy the active data-authored editor selection.
+     *
+     * Returns false and writes an empty selection when no object has been
+     * selected in the active scene. Selection pointers are runtime-owned and
+     * remain valid until the runtime is destroyed or reloaded.
+     */
+    bool slayer3d_game_data_get_active_editor_selection(const slayer3d_game_data_runtime *runtime,
+                                                        slayer3d_game_data_editor_selection *out_selection);
+
+    /**
      * @brief Iterate data-authored editor debug primitives for the active scene.
      *
      * This reads the active scene's `editor.debug_overlay` and
