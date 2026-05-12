@@ -424,6 +424,11 @@ std::filesystem::path brush_geometry_dojo_data_path()
     return demo_data_path("brush_geometry_dojo", "brush_geometry_dojo.game.json");
 }
 
+std::filesystem::path editor_shell_dojo_data_path()
+{
+    return demo_data_path("editor_shell_dojo", "editor_shell_dojo.game.json");
+}
+
 std::filesystem::path fps_template_data_path()
 {
     return demo_data_path("templates/fps", "fps_template.game.json");
@@ -12102,12 +12107,14 @@ TEST(GameDataRuntime, EditorPickingPreservesRepeatedBrushWorldInstancePlacement)
 
 TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
 {
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
     slayer3d_game_session *session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
     char error[512]{};
     slayer3d_game_data_runtime *runtime = nullptr;
-    ASSERT_TRUE(slayer3d_game_data_load_file("demos/editor_shell_dojo/data/editor_shell_dojo.game.json", session,
-                                             &runtime, error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
