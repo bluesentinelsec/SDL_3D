@@ -753,6 +753,16 @@ int actor_sector_index_for_sensor(const sector_level_runtime *level, const senso
 bool collect_effect_targets(slayer3d_game_data_runtime *runtime, const char *tag, sensor_actor_list *out_list);
 float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point);
 bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot);
+void update_sector_doors(slayer3d_game_data_runtime *runtime, float dt);
+void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                              slayer3d_registered_actor *actor, float dt);
+void update_fps_sector_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                  slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
+void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                 slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
+bool update_brush_velocity_motion(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                  slayer3d_registered_actor *actor, int actor_id, int pool_index, int actor_index,
+                                  float dt);
 bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                           const slayer3d_properties *payload);
 bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,

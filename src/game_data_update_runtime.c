@@ -4,8 +4,6 @@
 
 #include <SDL3/SDL_log.h>
 
-#include "game_data/game_data_controller_runtime.inc"
-
 #include "game_data/game_data_motion_runtime.inc"
 
 #include "game_data/game_data_sensor_runtime.inc"
