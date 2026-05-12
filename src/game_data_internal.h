@@ -625,6 +625,8 @@ typedef struct slayer3d_game_data_runtime
     bool has_network_schema;
     Uint8 network_schema_hash[SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE];
     const char *active_camera;
+    slayer3d_game_data_editor_selection editor_active_selection;
+    const char *editor_selection_scene;
     scene_activity_state activity;
     float current_dt;
     unsigned int rng_state;

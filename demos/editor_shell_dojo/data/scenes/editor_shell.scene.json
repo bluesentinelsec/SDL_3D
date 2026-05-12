@@ -14,6 +14,9 @@
   },
   "editor": {
     "selection": {
+      "mode": "click",
+      "select_button": "LEFT",
+      "clear_on_miss": true,
       "trace": {
         "source": "camera_screen",
         "camera": "camera.editor_shell.viewport",
@@ -38,6 +41,11 @@
         "fraction_key": "editor.selection.fraction",
         "point_key": "editor.selection.point",
         "normal_key": "editor.selection.normal"
+      },
+      "hover_outputs": {
+        "hit_key": "editor.hover.hit",
+        "element_key": "editor.hover.element",
+        "face_stable_id_key": "editor.hover.face_stable_id"
       }
     },
     "debug_overlay": {

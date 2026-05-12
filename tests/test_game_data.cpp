@@ -8170,18 +8170,28 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
     const Case cases[] = {
         {
             "bad_source",
-            R"json({ "source": "pointer", "model_filter": "brush_worlds" })json",
+            R"json({ "trace": { "source": "pointer", "model_filter": "brush_worlds" }, "outputs": { "hit_key": "editor.hit" } })json",
             "scene editor selection trace source must be 'world' or 'camera_screen'",
         },
         {
             "bad_camera",
-            R"json({ "source": "camera_screen", "camera": "camera.missing", "viewport": [1280, 720] })json",
+            R"json({ "trace": { "source": "camera_screen", "camera": "camera.missing", "viewport": [1280, 720] }, "outputs": { "hit_key": "editor.hit" } })json",
             "unknown camera",
         },
         {
             "bad_far",
-            R"json({ "source": "camera_screen", "camera": "camera.valid", "near": 10.0, "far": 1.0 })json",
+            R"json({ "trace": { "source": "camera_screen", "camera": "camera.valid", "near": 10.0, "far": 1.0 }, "outputs": { "hit_key": "editor.hit" } })json",
             "far must be greater than near",
+        },
+        {
+            "bad_mode",
+            R"json({ "mode": "drag", "trace": { "source": "camera_screen", "camera": "camera.valid" }, "outputs": { "hit_key": "editor.hit" } })json",
+            "scene editor selection mode must be 'hover' or 'click'",
+        },
+        {
+            "bad_select_button",
+            R"json({ "select_button": "PRIMARY", "trace": { "source": "camera_screen", "camera": "camera.valid" }, "outputs": { "hit_key": "editor.hit" } })json",
+            "scene editor selection select_button must be a mouse button",
         },
     };
 
@@ -8206,11 +8216,8 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
   "name": "scene.play",
   "camera": "camera.valid",
   "editor": {
-    "selection": {
-      "trace": )json") + test_case.trace_json +
-                                       R"json(,
-      "outputs": { "hit_key": "editor.hit" }
-    }
+    "selection": )json") + test_case.trace_json +
+                                       R"json(
   }
 })json";
         write_text(dir / "scenes" / "play.scene.json", scene_json.c_str());
@@ -12190,9 +12197,15 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     motion.motion.y = 392.9f;
     motion.motion.xrel = 0.0f;
     motion.motion.yrel = 0.0f;
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     slayer3d_input_process_event(input, &motion);
+    slayer3d_input_process_event(input, &click);
     slayer3d_input_update(input, 1);
 
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -12207,6 +12220,12 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.face_stable_id", ""),
                  "editor.face.target_cube.left");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.face_index", -1), 1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.hover.hit", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.hover.element", ""), "brush.target.cube");
+
+    slayer3d_game_data_editor_selection active_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_STREQ(active_selection.element_name, "brush.target.cube");
 
     struct DebugCapture
     {
@@ -12255,6 +12274,31 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(inspector.values[2], "true");
     EXPECT_EQ(inspector.values[3], "World");
     EXPECT_EQ(inspector.values[4], "brush.editor_shell.target");
+
+    SDL_Event release{};
+    release.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    release.button.button = SDL_BUTTON_LEFT;
+    release.button.x = click.button.x;
+    release.button.y = click.button.y;
+    slayer3d_input_process_event(input, &release);
+    slayer3d_input_update(input, 2);
+
+    SDL_Event miss_motion{};
+    miss_motion.type = SDL_EVENT_MOUSE_MOTION;
+    miss_motion.motion.x = 20.0f;
+    miss_motion.motion.y = 20.0f;
+    SDL_Event miss_click{};
+    miss_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    miss_click.button.button = SDL_BUTTON_LEFT;
+    miss_click.button.x = miss_motion.motion.x;
+    miss_click.button.y = miss_motion.motion.y;
+    slayer3d_input_process_event(input, &miss_motion);
+    slayer3d_input_process_event(input, &miss_click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.hover.hit", true));
+    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
