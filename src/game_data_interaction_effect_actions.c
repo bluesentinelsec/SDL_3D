@@ -1,5 +1,6 @@
-/* Target filtering, interaction, and effect action helpers. Included by game_data_actions.inc to preserve internal
- * linkage. */
+/* Target filtering, interaction, and effect action helpers. */
+
+#include "game_data_internal.h"
 
 static yyjson_val *actor_component_json(const slayer3d_game_data_runtime *runtime,
                                         const slayer3d_registered_actor *actor, const char *type)
@@ -159,8 +160,8 @@ static const char *faction_relationship(const slayer3d_game_data_runtime *runtim
     return SDL_strcmp(source_faction, target_faction) == 0 ? "friendly" : "hostile";
 }
 
-static slayer3d_registered_actor *action_source_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                      const slayer3d_properties *payload)
+slayer3d_registered_actor *action_source_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                               const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *source =
         actor_from_payload_key(runtime, payload, target_filter_string(action, "source_from_payload", NULL));
@@ -361,7 +362,7 @@ static bool interaction_requirement_met(slayer3d_registered_actor *source, yyjso
     if (source == NULL || property == NULL || property[0] == '\0')
         return false;
     const float amount = SDL_max(json_float(requirement, "amount", 1.0f), 0.0f);
-    return weapon_actor_numeric_property(source, property, 0.0f) + 0.0001f >= amount;
+    return actor_numeric_property(source, property, 0.0f) + 0.0001f >= amount;
 }
 
 static void interaction_consume_requirement(slayer3d_registered_actor *source, yyjson_val *component)
@@ -373,8 +374,8 @@ static void interaction_consume_requirement(slayer3d_registered_actor *source, y
     if (property == NULL || property[0] == '\0')
         return;
     const float amount = SDL_max(json_float(requirement, "amount", 1.0f), 0.0f);
-    const float current = weapon_actor_numeric_property(source, property, 0.0f);
-    weapon_set_actor_numeric_property(source, property, SDL_max(current - amount, 0.0f));
+    const float current = actor_numeric_property(source, property, 0.0f);
+    set_actor_numeric_property(source, property, SDL_max(current - amount, 0.0f));
 }
 
 static slayer3d_properties *interaction_payload(const slayer3d_registered_actor *source,
@@ -414,8 +415,8 @@ static bool interaction_emit_or_run(slayer3d_game_data_runtime *runtime, yyjson_
     return true;
 }
 
-static bool execute_interaction_use_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                           const slayer3d_properties *payload)
+bool execute_interaction_use_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                    const slayer3d_properties *payload)
 {
     slayer3d_registered_actor *source =
         actor_from_payload_key(runtime, payload, json_string(action, "actor_from_payload", NULL));
@@ -562,8 +563,8 @@ static void effect_apply_impulse(slayer3d_registered_actor *actor, slayer3d_vec3
                                                     velocity.z + delta.z * strength));
 }
 
-static bool execute_effect_explosion_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                            const slayer3d_properties *payload)
+bool execute_effect_explosion_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                     const slayer3d_properties *payload)
 {
     if (runtime == NULL || action == NULL)
         return false;

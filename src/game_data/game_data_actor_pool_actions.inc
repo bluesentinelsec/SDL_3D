@@ -329,15 +329,15 @@ void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *
     }
 }
 
-static slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *runtime,
-                                                         const slayer3d_properties *payload, const char *key)
+slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *runtime,
+                                                  const slayer3d_properties *payload, const char *key)
 {
     const char *actor_name = payload != NULL && key != NULL ? slayer3d_properties_get_string(payload, key, NULL) : NULL;
     return slayer3d_game_data_find_actor(runtime, actor_name);
 }
 
-static slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                      const slayer3d_properties *payload, slayer3d_vec3 fallback)
+slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                               const slayer3d_properties *payload, slayer3d_vec3 fallback)
 {
     slayer3d_vec3 position = fallback;
     yyjson_val *position_json = obj_get(action, "position");

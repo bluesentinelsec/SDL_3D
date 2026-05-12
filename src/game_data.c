@@ -159,7 +159,7 @@ static char *path_dirname(const char *path)
     return dir;
 }
 
-static char *path_basename(const char *path)
+char *path_basename(const char *path)
 {
     if (path == NULL)
         return NULL;
@@ -173,7 +173,7 @@ static char *path_basename(const char *path)
     return SDL_strdup(base);
 }
 
-static const char *asset_path_without_scheme(const char *path)
+const char *asset_path_without_scheme(const char *path)
 {
     return path != NULL && SDL_strncmp(path, "asset://", 8) == 0 ? path + 8 : path;
 }
@@ -250,8 +250,6 @@ bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, actor_pool_
                                 slayer3d_registered_actor *actor, int index, const char *reason);
 static bool apply_actor_pool_scene_exit_policies(slayer3d_game_data_runtime *runtime, const char *from_scene,
                                                  const char *to_scene);
-static slayer3d_registered_actor *action_source_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                      const slayer3d_properties *payload);
 bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *target,
                                  const slayer3d_registered_actor *source, yyjson_val *json,
                                  const slayer3d_properties *payload, const char *fallback_tag,

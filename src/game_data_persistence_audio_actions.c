@@ -1,4 +1,8 @@
-/* Persistence and audio action helpers. Included by game_data_actions.inc to preserve internal linkage. */
+/* Persistence and audio action helpers. */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
 
 static bool ensure_audio_file_capacity(slayer3d_game_data_runtime *runtime, int required)
 {
@@ -65,7 +69,7 @@ static char *make_safe_audio_filename(const char *path)
     return filename;
 }
 
-static bool ensure_runtime_storage(slayer3d_game_data_runtime *runtime, char *error_buffer, int error_buffer_size)
+bool ensure_runtime_storage(slayer3d_game_data_runtime *runtime, char *error_buffer, int error_buffer_size)
 {
     if (runtime == NULL)
     {
@@ -110,8 +114,8 @@ static const char *persistence_property_key(yyjson_val *property)
     return json_string(property, "key", NULL);
 }
 
-static slayer3d_registered_actor *action_target_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                                      const slayer3d_properties *payload)
+slayer3d_registered_actor *action_target_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                               const slayer3d_properties *payload)
 {
     const char *target_from_payload = json_string(action, "target_from_payload", NULL);
     if (target_from_payload != NULL)
@@ -267,7 +271,7 @@ static bool execute_persistence_load(slayer3d_game_data_runtime *runtime, yyjson
     return true;
 }
 
-static bool execute_persistence_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *type)
+bool execute_persistence_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *type)
 {
     if (SDL_strcmp(type, "persistence.save") == 0)
         return execute_persistence_save(runtime, action);
@@ -622,8 +626,8 @@ static float action_float_or_property(slayer3d_game_data_runtime *runtime, yyjso
     return json_float(action, key, fallback);
 }
 
-static bool execute_audio_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                 const slayer3d_properties *payload, const char *type)
+bool execute_audio_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload,
+                          const char *type)
 {
     slayer3d_audio_engine *audio = slayer3d_game_session_get_audio(runtime != NULL ? runtime->session : NULL);
     if (SDL_strcmp(type, "audio.play_sfx") == 0)
