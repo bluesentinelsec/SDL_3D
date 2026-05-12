@@ -15,8 +15,7 @@
 
 #include "game_data_sector_noise_actions.inc"
 
-static bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                               const slayer3d_properties *payload)
+bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
     slayer3d_signal_bus *bus = runtime_bus(runtime);
@@ -485,8 +484,7 @@ static bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *
     return false;
 }
 
-static bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
-                                 const slayer3d_properties *payload)
+bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions, const slayer3d_properties *payload)
 {
     if (!yyjson_is_arr(actions))
         return false;
@@ -503,8 +501,8 @@ static bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val
     return ok;
 }
 
-static bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
-                                          const slayer3d_properties *payload)
+bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
+                                   const slayer3d_properties *payload)
 {
     if (actions == NULL)
         return true;

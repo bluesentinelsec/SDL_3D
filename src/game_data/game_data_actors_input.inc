@@ -276,8 +276,8 @@ bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name)
     return false;
 }
 
-static void actor_pool_set_lifecycle_state(actor_pool_runtime *pool, slayer3d_registered_actor *actor, int index,
-                                           actor_lifecycle_state state)
+void actor_pool_set_lifecycle_state(actor_pool_runtime *pool, slayer3d_registered_actor *actor, int index,
+                                    actor_lifecycle_state state)
 {
     if (pool == NULL || actor == NULL || index < 0 || index >= pool->capacity)
         return;
@@ -286,8 +286,7 @@ static void actor_pool_set_lifecycle_state(actor_pool_runtime *pool, slayer3d_re
     slayer3d_properties_set_string(actor->props, "pool_lifecycle", actor_lifecycle_state_name(state));
 }
 
-static bool actor_pool_actor_is_active(const actor_pool_runtime *pool, const slayer3d_registered_actor *actor,
-                                       int index)
+bool actor_pool_actor_is_active(const actor_pool_runtime *pool, const slayer3d_registered_actor *actor, int index)
 {
     return actor != NULL && actor->active &&
            (pool == NULL || pool->lifecycle_states == NULL ||
@@ -342,13 +341,13 @@ static void actor_pool_update_peak_active_count(slayer3d_game_data_runtime *runt
         pool->peak_active_count = active_count;
 }
 
-static void actor_pool_note_spawn_attempt(actor_pool_runtime *pool)
+void actor_pool_note_spawn_attempt(actor_pool_runtime *pool)
 {
     if (pool != NULL)
         pool->spawn_attempt_count++;
 }
 
-static void actor_pool_note_spawn_success(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool)
+void actor_pool_note_spawn_success(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool)
 {
     if (pool == NULL)
         return;
@@ -357,7 +356,7 @@ static void actor_pool_note_spawn_success(slayer3d_game_data_runtime *runtime, a
     actor_pool_update_peak_active_count(runtime, pool);
 }
 
-static void actor_pool_note_spawn_failure(actor_pool_runtime *pool, const char *reason)
+void actor_pool_note_spawn_failure(actor_pool_runtime *pool, const char *reason)
 {
     if (pool == NULL)
         return;
@@ -365,7 +364,7 @@ static void actor_pool_note_spawn_failure(actor_pool_runtime *pool, const char *
     actor_pool_copy_reason(pool->last_spawn_failure_reason, sizeof(pool->last_spawn_failure_reason), reason);
 }
 
-static void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime)
+void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime)
 {
     if (runtime != NULL)
         runtime->actor_lifecycle_defer_depth++;
@@ -394,7 +393,7 @@ static void actor_lifecycle_flush(slayer3d_game_data_runtime *runtime)
     }
 }
 
-static void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime)
+void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->actor_lifecycle_defer_depth <= 0)
         return;
@@ -421,7 +420,7 @@ static bool actor_pool_initialize_slot(slayer3d_game_data_runtime *runtime, acto
     return true;
 }
 
-static bool initialize_pooled_actor(actor_pool_runtime *pool, slayer3d_registered_actor *actor, int index, bool active)
+bool initialize_pooled_actor(actor_pool_runtime *pool, slayer3d_registered_actor *actor, int index, bool active)
 {
     if (pool == NULL || actor == NULL || index < 0 || index >= pool->capacity)
         return false;

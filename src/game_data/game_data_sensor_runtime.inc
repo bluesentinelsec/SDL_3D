@@ -67,7 +67,7 @@ bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const sl
     return actor->active;
 }
 
-static bool sensor_actor_list_add(sensor_actor_list *list, slayer3d_registered_actor *actor)
+bool sensor_actor_list_add(sensor_actor_list *list, slayer3d_registered_actor *actor)
 {
     if (list == NULL || actor == NULL)
         return false;
@@ -85,7 +85,7 @@ static bool sensor_actor_list_add(sensor_actor_list *list, slayer3d_registered_a
     return true;
 }
 
-static void sensor_actor_list_free(sensor_actor_list *list)
+void sensor_actor_list_free(sensor_actor_list *list)
 {
     if (list == NULL)
         return;
@@ -95,8 +95,8 @@ static void sensor_actor_list_free(sensor_actor_list *list)
     list->capacity = 0;
 }
 
-static bool collect_sensor_endpoint_actors(slayer3d_game_data_runtime *runtime, const char *actor_name, const char *tag,
-                                           sensor_actor_list *out_list)
+bool collect_sensor_endpoint_actors(slayer3d_game_data_runtime *runtime, const char *actor_name, const char *tag,
+                                    sensor_actor_list *out_list)
 {
     if (runtime == NULL || out_list == NULL)
         return false;
@@ -153,7 +153,7 @@ static bool sensor_contact_name_is_transient(const char *name)
     return name != NULL && SDL_strncmp(name, "noise.", 6) == 0;
 }
 
-static void sensor_contact_pair_destroy(sensor_contact_pair_state *state)
+void sensor_contact_pair_destroy(sensor_contact_pair_state *state)
 {
     if (state == NULL)
         return;
@@ -481,8 +481,8 @@ static int sensor_target_sector_index(const sector_level_runtime *level, const s
     return sector_level_find_sector_name(level, sensor->sector);
 }
 
-static int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
-                                         const slayer3d_registered_actor *actor)
+int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
+                                  const slayer3d_registered_actor *actor)
 {
     if (level == NULL || actor == NULL)
         return -1;

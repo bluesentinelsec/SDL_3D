@@ -169,11 +169,10 @@ static slayer3d_registered_actor *action_source_actor(slayer3d_game_data_runtime
     return source;
 }
 
-static bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtime,
-                                        const slayer3d_registered_actor *target,
-                                        const slayer3d_registered_actor *source, yyjson_val *json,
-                                        const slayer3d_properties *payload, const char *fallback_tag,
-                                        bool fallback_exclude_source)
+bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *target,
+                                 const slayer3d_registered_actor *source, yyjson_val *json,
+                                 const slayer3d_properties *payload, const char *fallback_tag,
+                                 bool fallback_exclude_source)
 {
     if (target == NULL || !target->active)
         return false;
@@ -474,7 +473,7 @@ static slayer3d_registered_actor *effect_source_actor(slayer3d_game_data_runtime
     return source;
 }
 
-static bool collect_effect_targets(slayer3d_game_data_runtime *runtime, const char *tag, sensor_actor_list *out_list)
+bool collect_effect_targets(slayer3d_game_data_runtime *runtime, const char *tag, sensor_actor_list *out_list)
 {
     if (runtime == NULL || out_list == NULL)
         return false;

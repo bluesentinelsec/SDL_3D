@@ -645,6 +645,8 @@ float scene_state_float(const slayer3d_game_data_runtime *runtime, const char *k
 
 slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runtime);
 slayer3d_signal_bus *runtime_bus(const slayer3d_game_data_runtime *runtime);
+slayer3d_timer_pool *runtime_timers(const slayer3d_game_data_runtime *runtime);
+slayer3d_input_manager *runtime_input(const slayer3d_game_data_runtime *runtime);
 yyjson_val *runtime_root(const slayer3d_game_data_runtime *runtime);
 scene_entry *active_scene_entry(slayer3d_game_data_runtime *runtime);
 const scene_entry *active_scene_entry_const(const slayer3d_game_data_runtime *runtime);
@@ -679,9 +681,23 @@ bool entity_json_has_tags(yyjson_val *entity, const char *const *tags, int tag_c
 bool entity_json_has_all_tags_from_json(yyjson_val *entity, yyjson_val *tags);
 const actor_pool_runtime *find_actor_pool_for_actor_const(const slayer3d_game_data_runtime *runtime,
                                                           const char *actor_name, int *out_index);
+actor_pool_runtime *find_actor_pool(slayer3d_game_data_runtime *runtime, const char *name);
 bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name);
+slayer3d_registered_actor *actor_pool_allocate(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
+                                               int *out_index);
+void actor_pool_set_lifecycle_state(actor_pool_runtime *pool, slayer3d_registered_actor *actor, int index,
+                                    actor_lifecycle_state state);
+bool actor_pool_actor_is_active(const actor_pool_runtime *pool, const slayer3d_registered_actor *actor, int index);
+void actor_pool_note_spawn_attempt(actor_pool_runtime *pool);
+void actor_pool_note_spawn_success(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool);
+void actor_pool_note_spawn_failure(actor_pool_runtime *pool, const char *reason);
+bool initialize_pooled_actor(actor_pool_runtime *pool, slayer3d_registered_actor *actor, int index, bool active);
+bool actor_pool_request_despawn(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
+                                slayer3d_registered_actor *actor, int index, const char *reason);
+void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *properties);
 void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
 slayer3d_vec3 actor_vec_property(const slayer3d_registered_actor *actor, const char *key);
+float actor_numeric_property(const slayer3d_registered_actor *actor, const char *key, float fallback);
 void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value);
 slayer3d_audio_bus parse_audio_bus(const char *bus, slayer3d_audio_bus fallback);
 slayer3d_backend parse_backend(const char *value, slayer3d_backend fallback);
@@ -707,6 +723,44 @@ fps_controller_runtime *find_or_add_fps_controller(slayer3d_game_data_runtime *r
 patrol_controller_runtime *find_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name);
 patrol_controller_runtime *find_or_add_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
                                                          yyjson_val *component);
+float game_data_random01(slayer3d_game_data_runtime *runtime);
+int action_signal_id(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *key);
+bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload);
+bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions, const slayer3d_properties *payload);
+bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
+                                   const slayer3d_properties *payload);
+bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                         const slayer3d_game_data_ui_metrics *metrics);
+void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,
+                          const slayer3d_properties *payload);
+void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
+void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
+bool json_scalar_to_value(yyjson_val *json, slayer3d_value *out_value);
+bool set_property_from_value(slayer3d_properties *props, const char *key, const slayer3d_value *value);
+bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *target,
+                                 const slayer3d_registered_actor *source, yyjson_val *json,
+                                 const slayer3d_properties *payload, const char *fallback_tag,
+                                 bool fallback_exclude_source);
+bool apply_combat_damage_to_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                  const slayer3d_properties *payload, slayer3d_registered_actor *actor, float amount);
+bool sensor_actor_list_add(sensor_actor_list *list, slayer3d_registered_actor *actor);
+void sensor_actor_list_free(sensor_actor_list *list);
+bool collect_sensor_endpoint_actors(slayer3d_game_data_runtime *runtime, const char *actor_name, const char *tag,
+                                    sensor_actor_list *out_list);
+void sensor_contact_pair_destroy(sensor_contact_pair_state *state);
+int actor_sector_index_for_sensor(const sector_level_runtime *level, const sensor_entry *sensor,
+                                  const slayer3d_registered_actor *actor);
+bool collect_effect_targets(slayer3d_game_data_runtime *runtime, const char *tag, sensor_actor_list *out_list);
+float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point);
+bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot);
+bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                          const slayer3d_properties *payload);
+bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const slayer3d_properties *payload);
+bool execute_projectile_fire_action_for_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                              const slayer3d_properties *payload,
+                                              slayer3d_registered_actor *source_actor);
+void weapon_complete_reload(slayer3d_registered_actor *actor, yyjson_val *json);
 const grid_map_runtime *find_grid_map(const slayer3d_game_data_runtime *runtime, const char *name);
 bool grid_map_normalize_cell(const grid_map_runtime *map, int *col, int *row);
 char grid_map_cell(const grid_map_runtime *map, int col, int row);
