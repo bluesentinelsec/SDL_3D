@@ -1,6 +1,16 @@
-/* Timer, adapter, script, and Lua invocation helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_adapter_helpers.c
+ * @brief Timer, adapter, script, and Lua invocation helpers for authored game data.
+ */
 
-static int find_timer_index(const slayer3d_game_data_runtime *runtime, const char *name)
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_stdinc.h>
+
+#include "lauxlib.h"
+
+int find_timer_index(const slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return -1;
@@ -12,7 +22,7 @@ static int find_timer_index(const slayer3d_game_data_runtime *runtime, const cha
     return -1;
 }
 
-static adapter_entry *find_adapter(slayer3d_game_data_runtime *runtime, const char *name)
+adapter_entry *find_adapter(slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
@@ -24,7 +34,7 @@ static adapter_entry *find_adapter(slayer3d_game_data_runtime *runtime, const ch
     return NULL;
 }
 
-static script_entry *find_script(slayer3d_game_data_runtime *runtime, const char *id)
+script_entry *find_script(slayer3d_game_data_runtime *runtime, const char *id)
 {
     if (runtime == NULL || id == NULL)
         return NULL;
@@ -36,8 +46,8 @@ static script_entry *find_script(slayer3d_game_data_runtime *runtime, const char
     return NULL;
 }
 
-static bool append_adapter(slayer3d_game_data_runtime *runtime, const char *name,
-                           slayer3d_game_data_adapter_fn callback, void *userdata)
+bool append_adapter(slayer3d_game_data_runtime *runtime, const char *name, slayer3d_game_data_adapter_fn callback,
+                    void *userdata)
 {
     adapter_entry *entries =
         (adapter_entry *)SDL_realloc(runtime->adapters, (size_t)(runtime->adapter_count + 1) * sizeof(*entries));
@@ -56,8 +66,8 @@ static bool append_adapter(slayer3d_game_data_runtime *runtime, const char *name
     return true;
 }
 
-static bool set_adapter_lua_function(slayer3d_game_data_runtime *runtime, const char *name, const char *script_id,
-                                     const char *function_name, slayer3d_script_ref function_ref)
+bool set_adapter_lua_function(slayer3d_game_data_runtime *runtime, const char *name, const char *script_id,
+                              const char *function_name, slayer3d_script_ref function_ref)
 {
     if (runtime == NULL || name == NULL || name[0] == '\0' || script_id == NULL || script_id[0] == '\0' ||
         function_name == NULL || function_name[0] == '\0' || function_ref == SLAYER3D_SCRIPT_REF_INVALID)
@@ -154,7 +164,7 @@ static void lua_push_payload(lua_State *lua, const slayer3d_properties *payload)
     }
 }
 
-static void lua_push_actor_wrapper(lua_State *lua, const slayer3d_registered_actor *actor)
+void lua_push_actor_wrapper(lua_State *lua, const slayer3d_registered_actor *actor)
 {
     if (actor == NULL)
     {
@@ -243,8 +253,8 @@ static bool call_lua_adapter(slayer3d_game_data_runtime *runtime, const adapter_
     return ok;
 }
 
-static bool invoke_adapter(slayer3d_game_data_runtime *runtime, adapter_entry *adapter,
-                           slayer3d_registered_actor *target, const slayer3d_properties *payload)
+bool invoke_adapter(slayer3d_game_data_runtime *runtime, adapter_entry *adapter, slayer3d_registered_actor *target,
+                    const slayer3d_properties *payload)
 {
     if (adapter == NULL)
         return false;

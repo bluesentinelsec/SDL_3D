@@ -177,7 +177,7 @@ static const char *asset_path_without_scheme(const char *path)
     return path != NULL && SDL_strncmp(path, "asset://", 8) == 0 ? path + 8 : path;
 }
 
-static char *path_join(const char *base_dir, const char *path)
+char *path_join(const char *base_dir, const char *path)
 {
     if (path == NULL)
         return NULL;
@@ -221,7 +221,6 @@ static slayer3d_input_manager *runtime_input(const slayer3d_game_data_runtime *r
 }
 
 static void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
-static void lua_push_actor_wrapper(lua_State *lua, const slayer3d_registered_actor *actor);
 static void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value);
 static actor_pool_runtime *find_actor_pool(slayer3d_game_data_runtime *runtime, const char *name);
 static const actor_pool_runtime *find_actor_pool_const(const slayer3d_game_data_runtime *runtime, const char *name);
@@ -266,8 +265,6 @@ static void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
 
 #include "game_data/game_data_replication_helpers.inc"
 
-#include "game_data/game_data_adapter_helpers.inc"
-
 #include "game_data/game_data_render_runtime.inc"
 
 #include "game_data/game_data_ui_animation_runtime.inc"
@@ -279,8 +276,6 @@ static void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
 #include "game_data/game_data_menu_ui.inc"
 
 #include "game_data/game_data_actors_input.inc"
-
-#include "game_data/game_data_scripts.inc"
 
 #include "game_data/game_data_actions.inc"
 

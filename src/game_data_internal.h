@@ -601,6 +601,7 @@ typedef struct slayer3d_game_data_runtime
 
 void set_error(char *buffer, int buffer_size, const char *message);
 void set_errorf(char *buffer, int buffer_size, const char *format, ...);
+char *path_join(const char *base_dir, const char *path);
 
 yyjson_val *obj_get(yyjson_val *object, const char *key);
 const char *json_string(yyjson_val *object, const char *key, const char *fallback);
@@ -693,5 +694,25 @@ bool fps_controller_action_pressed(const slayer3d_game_data_runtime *runtime, co
                                    int action_id);
 slayer3d_actor_patrol_mode parse_patrol_mode(const char *value);
 int patrol_signal_id(const slayer3d_game_data_runtime *runtime, yyjson_val *component, const char *name);
+
+int find_timer_index(const slayer3d_game_data_runtime *runtime, const char *name);
+adapter_entry *find_adapter(slayer3d_game_data_runtime *runtime, const char *name);
+script_entry *find_script(slayer3d_game_data_runtime *runtime, const char *id);
+bool append_adapter(slayer3d_game_data_runtime *runtime, const char *name, slayer3d_game_data_adapter_fn callback,
+                    void *userdata);
+bool set_adapter_lua_function(slayer3d_game_data_runtime *runtime, const char *name, const char *script_id,
+                              const char *function_name, slayer3d_script_ref function_ref);
+bool invoke_adapter(slayer3d_game_data_runtime *runtime, adapter_entry *adapter, slayer3d_registered_actor *target,
+                    const slayer3d_properties *payload);
+void lua_push_actor_wrapper(lua_State *lua, const slayer3d_registered_actor *actor);
+
+void register_lua_api(slayer3d_game_data_runtime *runtime, slayer3d_script_engine *engine);
+bool load_timers(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size);
+bool load_script_index_into_engine(slayer3d_game_data_runtime *runtime, slayer3d_asset_resolver *assets,
+                                   slayer3d_script_engine *engine, int index, slayer3d_script_ref *module_refs,
+                                   bool *loading, bool *loaded, char *error_buffer, int error_buffer_size);
+bool load_scripts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
+bool load_lua_adapters(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                       int error_buffer_size);
 
 #endif
