@@ -1,5 +1,13 @@
-/* Menu and authored UI runtime helpers.
- * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
+/**
+ * @file game_data_menu_ui.c
+ * @brief Menu and authored UI runtime helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
+
+#include "slayer3d/input.h"
 
 static slayer3d_game_data_menu_control_type parse_menu_control_type(const char *type)
 {

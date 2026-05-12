@@ -1,5 +1,12 @@
-/* Actor, pool, and input-profile runtime helpers.
- * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
+/**
+ * @file game_data_actors_input.c
+ * @brief Actor, pool, and input-profile runtime helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include "game_data_validation.h"
+#include "slayer3d/input.h"
 
 void set_actor_property_from_json(slayer3d_registered_actor *actor, const char *key, yyjson_val *value)
 {
@@ -305,7 +312,7 @@ void actor_pool_copy_reason(char *target, size_t target_size, const char *reason
     SDL_strlcpy(target, reason != NULL && reason[0] != '\0' ? reason : "none", target_size);
 }
 
-static int actor_pool_active_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool)
+int actor_pool_active_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool)
 {
     int count = 0;
     for (int i = 0; runtime != NULL && pool != NULL && i < pool->capacity; ++i)
@@ -317,7 +324,7 @@ static int actor_pool_active_count(const slayer3d_game_data_runtime *runtime, co
     return count;
 }
 
-static int actor_pool_available_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool)
+int actor_pool_available_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool)
 {
     int count = 0;
     for (int i = 0; runtime != NULL && pool != NULL && i < pool->capacity; ++i)
@@ -676,7 +683,7 @@ static void rebind_action_from_specs(slayer3d_game_data_runtime *runtime, int ac
     }
 }
 
-static bool set_action_keyboard_binding(slayer3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode)
+bool set_action_keyboard_binding(slayer3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode)
 {
     const int action_id = slayer3d_game_data_find_action(runtime, action);
     if (runtime == NULL || action == NULL || action_id < 0 || scancode == SDL_SCANCODE_UNKNOWN)
@@ -710,7 +717,7 @@ static bool set_action_keyboard_binding(slayer3d_game_data_runtime *runtime, con
     return true;
 }
 
-static bool set_action_mouse_button_binding(slayer3d_game_data_runtime *runtime, const char *action, Uint8 button)
+bool set_action_mouse_button_binding(slayer3d_game_data_runtime *runtime, const char *action, Uint8 button)
 {
     const int action_id = slayer3d_game_data_find_action(runtime, action);
     if (runtime == NULL || action == NULL || action_id < 0 || button == 0)
@@ -744,8 +751,8 @@ static bool set_action_mouse_button_binding(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
-static bool set_action_gamepad_button_binding(slayer3d_game_data_runtime *runtime, const char *action,
-                                              SDL_GamepadButton button)
+bool set_action_gamepad_button_binding(slayer3d_game_data_runtime *runtime, const char *action,
+                                       SDL_GamepadButton button)
 {
     const int action_id = slayer3d_game_data_find_action(runtime, action);
     if (runtime == NULL || action == NULL || action_id < 0 || button == SDL_GAMEPAD_BUTTON_INVALID)

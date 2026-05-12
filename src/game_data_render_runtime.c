@@ -1,5 +1,11 @@
-/* App control, asset, camera, light, render, particle, and transition helpers. Included by src/game_data.c to preserve
- * internal linkage. */
+/**
+ * @file game_data_render_runtime.c
+ * @brief App control, asset, camera, light, render, particle, and transition helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include "game_data_standard_options.h"
 
 bool slayer3d_game_data_get_app_control(const slayer3d_game_data_runtime *runtime,
                                         slayer3d_game_data_app_control *out_control)

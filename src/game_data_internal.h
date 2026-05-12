@@ -26,6 +26,15 @@
 
 typedef struct slayer3d_replication_field_descriptor slayer3d_replication_field_descriptor;
 
+#define SLAYER3D_GAME_DATA_SIGNAL_BASE 20000
+#define SLAYER3D_GAME_DATA_MENU_TEXT_MAX_BYTES 255
+#define SLAYER3D_GAME_DATA_NETWORK_SNAPSHOT_MAGIC 0x53335253u /* "S3RS" */
+#define SLAYER3D_GAME_DATA_NETWORK_SNAPSHOT_VERSION 1u
+#define SLAYER3D_GAME_DATA_NETWORK_INPUT_MAGIC 0x49335253u /* "S3RI" */
+#define SLAYER3D_GAME_DATA_NETWORK_INPUT_VERSION 1u
+#define SLAYER3D_GAME_DATA_NETWORK_CONTROL_MAGIC 0x43335253u /* "S3RC" */
+#define SLAYER3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
+
 typedef enum game_data_sensor_type
 {
     GAME_DATA_SENSOR_BOUNDS_EXIT,
@@ -623,6 +632,7 @@ typedef struct slayer3d_game_data_runtime
 
 void set_error(char *buffer, int buffer_size, const char *message);
 void set_errorf(char *buffer, int buffer_size, const char *format, ...);
+bool append_format(char *buffer, size_t buffer_size, size_t *offset, const char *format, ...);
 char *path_join(const char *base_dir, const char *path);
 char *path_dirname(const char *path);
 
@@ -696,6 +706,8 @@ void actor_pool_set_lifecycle_state(actor_pool_runtime *pool, slayer3d_registere
                                     actor_lifecycle_state state);
 bool actor_pool_actor_is_active(const actor_pool_runtime *pool, const slayer3d_registered_actor *actor, int index);
 bool actor_pool_actor_is_available(const actor_pool_runtime *pool, const slayer3d_registered_actor *actor, int index);
+int actor_pool_active_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool);
+int actor_pool_available_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool);
 void actor_pool_copy_reason(char *target, size_t target_size, const char *reason);
 void actor_pool_note_spawn_attempt(actor_pool_runtime *pool);
 void actor_pool_note_spawn_success(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool);
@@ -778,6 +790,10 @@ bool apply_actor_pool_scene_exit_policies(slayer3d_game_data_runtime *runtime, c
 void clear_menu_text_entry_capture(slayer3d_game_data_runtime *runtime);
 int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
 void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
+bool set_action_keyboard_binding(slayer3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode);
+bool set_action_mouse_button_binding(slayer3d_game_data_runtime *runtime, const char *action, Uint8 button);
+bool set_action_gamepad_button_binding(slayer3d_game_data_runtime *runtime, const char *action,
+                                       SDL_GamepadButton button);
 bool json_scalar_to_value(yyjson_val *json, slayer3d_value *out_value);
 bool set_property_from_value(slayer3d_properties *props, const char *key, const slayer3d_value *value);
 bool start_property_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action);
