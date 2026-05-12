@@ -9,8 +9,6 @@
 
 #include "game_data_combat_weapon_actions.inc"
 
-#include "game_data_grid_actions.inc"
-
 #include "game_data_interaction_effect_actions.inc"
 
 #include "game_data_sector_noise_actions.inc"

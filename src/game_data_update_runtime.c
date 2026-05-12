@@ -4,12 +4,6 @@
 
 #include <SDL3/SDL_log.h>
 
-#include "game_data/game_data_controller_runtime.inc"
-
-#include "game_data/game_data_motion_runtime.inc"
-
-#include "game_data/game_data_sensor_runtime.inc"
-
 static void update_noise_events(slayer3d_game_data_runtime *runtime, float dt)
 {
     if (runtime == NULL || runtime->noise_event_count <= 0)

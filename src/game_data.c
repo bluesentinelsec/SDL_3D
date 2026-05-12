@@ -268,8 +268,6 @@ void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
 
 #include "game_data/game_data_scene_flow_runtime.inc"
 
-#include "game_data/game_data_network_sessions.inc"
-
 #include "game_data/game_data_menu_ui.inc"
 
 #include "game_data/game_data_actors_input.inc"

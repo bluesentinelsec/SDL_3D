@@ -1,4 +1,6 @@
-/* Grid spawn and pickup action helpers. Included by game_data_actions.inc to preserve internal linkage. */
+/* Grid spawn and pickup action helpers. */
+
+#include "game_data_internal.h"
 
 static bool grid_spawn_rule_matches(yyjson_val *rule, char glyph)
 {
@@ -6,7 +8,7 @@ static bool grid_spawn_rule_matches(yyjson_val *rule, char glyph)
     return rule_glyph != NULL && rule_glyph[0] == glyph && rule_glyph[1] == '\0';
 }
 
-static bool execute_grid_spawn_from_glyphs_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool execute_grid_spawn_from_glyphs_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const grid_map_runtime *map = find_grid_map(runtime, json_string(action, "map", NULL));
     yyjson_val *spawns = obj_get(action, "spawns");
@@ -175,7 +177,7 @@ static bool spawn_grid_run_actor(slayer3d_game_data_runtime *runtime, const grid
     return true;
 }
 
-static bool execute_grid_spawn_runs_from_glyphs_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool execute_grid_spawn_runs_from_glyphs_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     const grid_map_runtime *map = find_grid_map(runtime, json_string(action, "map", NULL));
     yyjson_val *spawns = obj_get(action, "spawns");
@@ -248,7 +250,7 @@ static bool execute_grid_spawn_runs_from_glyphs_action(slayer3d_game_data_runtim
     return ok;
 }
 
-static bool execute_grid_pickup_layer_reset_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool execute_grid_pickup_layer_reset_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     grid_pickup_layer_runtime *layer = find_grid_pickup_layer(runtime, json_string(action, "layer", NULL));
     if (layer == NULL || !grid_pickup_layer_reset(runtime, layer))

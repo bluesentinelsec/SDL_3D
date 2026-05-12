@@ -1,5 +1,6 @@
-/* Controller, FPS movement, brush movement, and sector door update helpers. Included by game_data_update_runtime.inc to
- * preserve internal linkage. */
+/* Controller, FPS movement, brush movement, and sector door update helpers. */
+
+#include "game_data_internal.h"
 
 static bool initialize_patrol_controller(slayer3d_game_data_runtime *runtime, patrol_controller_runtime *controller,
                                          yyjson_val *component, slayer3d_registered_actor *actor)
@@ -34,8 +35,8 @@ static bool initialize_patrol_controller(slayer3d_game_data_runtime *runtime, pa
     return true;
 }
 
-static void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                     slayer3d_registered_actor *actor, float dt)
+void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                              slayer3d_registered_actor *actor, float dt)
 {
     patrol_controller_runtime *controller =
         actor != NULL ? find_or_add_patrol_controller(runtime, actor->name, component) : NULL;
@@ -249,9 +250,8 @@ static void resolve_fps_controller_sector_doors(slayer3d_game_data_runtime *runt
     }
 }
 
-static void update_fps_sector_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                         slayer3d_registered_actor *actor, const slayer3d_input_manager *input,
-                                         float dt)
+void update_fps_sector_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                  slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt)
 {
     if (runtime == NULL || component == NULL || actor == NULL)
         return;
@@ -522,8 +522,8 @@ static bool fps_brush_try_step_move(const slayer3d_game_data_runtime *runtime, s
     return true;
 }
 
-static void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                        slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt)
+void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                 slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt)
 {
     if (runtime == NULL || component == NULL || actor == NULL)
         return;
@@ -746,9 +746,9 @@ static slayer3d_properties *brush_velocity_impact_payload(const slayer3d_registe
     return payload;
 }
 
-static bool update_brush_velocity_motion(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                         slayer3d_registered_actor *actor, int actor_id, int pool_index,
-                                         int actor_index, float dt)
+bool update_brush_velocity_motion(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                  slayer3d_registered_actor *actor, int actor_id, int pool_index, int actor_index,
+                                  float dt)
 {
     const char *property = json_string(component, "property", "velocity");
     const slayer3d_vec3 velocity = actor_vec_property(actor, property);
@@ -794,7 +794,7 @@ static bool update_brush_velocity_motion(slayer3d_game_data_runtime *runtime, yy
     return true;
 }
 
-static void update_sector_doors(slayer3d_game_data_runtime *runtime, float dt)
+void update_sector_doors(slayer3d_game_data_runtime *runtime, float dt)
 {
     for (int i = 0; runtime != NULL && i < runtime->sector_door_count; ++i)
     {
