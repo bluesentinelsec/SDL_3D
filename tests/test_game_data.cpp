@@ -4778,6 +4778,173 @@ TEST(GameDataRuntime, DynamicListMenuReadsRuntimeCollections)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, UiToolPanelsAndInspectorsEmitReusableOverlayPrimitives)
+{
+    const std::filesystem::path dir = unique_test_dir("ui_tooling");
+    write_text(dir / "ui_tooling.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "UI Tooling", "id": "test.ui_tooling", "version": "0.1.0" },
+  "world": { "name": "world.ui_tooling", "kind": "fixed_screen" },
+  "assets": { "fonts": [{ "id": "font.tool", "builtin": "Inter", "size": 16 }] },
+  "entities": [
+    {
+      "name": "entity.selection",
+      "properties": {
+        "health": { "type": "int", "value": 100 }
+      }
+    }
+  ],
+  "scenes": { "initial": "scene.editor", "files": ["scenes/editor.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "editor.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.editor",
+  "entities": ["entity.selection"],
+  "ui": {
+    "panels": [
+      {
+        "name": "ui.editor.sidebar",
+        "x": 12,
+        "y": 12,
+        "w": 260,
+        "h": 160,
+        "color": [20, 28, 40, 220],
+        "border_color": [90, 130, 210, 255],
+        "border_thickness": 2
+      }
+    ],
+    "inspectors": [
+      {
+        "name": "ui.editor.inspector",
+        "font": "font.tool",
+        "x": 24,
+        "y": 24,
+        "w": 232,
+        "row_height": 22,
+        "padding": 8,
+        "title": "Selection",
+        "background_color": [8, 10, 16, 180],
+        "row_color": [255, 255, 255, 18],
+        "rows": [
+          {
+            "label": "World",
+            "binding": { "type": "scene_state", "key": "editor.world", "default": "none" }
+          },
+          {
+            "label": "Health",
+            "binding": { "type": "property", "entity": "entity.selection", "key": "health" }
+          },
+          {
+            "label": "FPS",
+            "binding": { "type": "metric", "metric": "fps", "default": 0 }
+          }
+        ]
+      }
+    ]
+  }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "ui_tooling.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.world", "brush.dojo");
+
+    struct Rects
+    {
+        int sidebar_rects = 0;
+        int inspector_rects = 0;
+    } rects;
+    auto capture_tool_rects = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+        auto *capture = static_cast<Rects *>(userdata);
+        if (std::string(rect->name) == "ui.editor.sidebar")
+            capture->sidebar_rects++;
+        if (std::string(rect->name) == "ui.editor.inspector")
+            capture->inspector_rects++;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_tool_rects, &rects));
+    EXPECT_EQ(rects.sidebar_rects, 5);
+    EXPECT_EQ(rects.inspector_rects, 4);
+
+    slayer3d_game_data_ui_metrics metrics{};
+    metrics.fps = 59.75f;
+    struct Texts
+    {
+        std::vector<std::string> values;
+    } texts;
+    auto capture_tool_texts = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<Texts *>(userdata);
+        if (std::string(text->name) == "ui.editor.inspector")
+            capture->values.emplace_back(text->text != nullptr ? text->text : "");
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_tool_texts, &texts));
+    ASSERT_EQ(texts.values.size(), 7U);
+    EXPECT_EQ(texts.values[0], "Selection");
+    EXPECT_EQ(texts.values[1], "World");
+    EXPECT_EQ(texts.values[2], "brush.dojo");
+    EXPECT_EQ(texts.values[3], "Health");
+    EXPECT_EQ(texts.values[4], "100");
+    EXPECT_EQ(texts.values[5], "FPS");
+    EXPECT_EQ(texts.values[6], "59.8");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataValidation, RejectsInvalidUiTooling)
+{
+    const std::filesystem::path dir = unique_test_dir("ui_tooling_validation");
+    write_text(dir / "bad_ui_tooling.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad UI Tooling", "id": "test.bad_ui_tooling", "version": "0.1.0" },
+  "world": { "name": "world.bad_ui_tooling", "kind": "fixed_screen" },
+  "assets": { "fonts": [{ "id": "font.tool", "builtin": "Inter", "size": 16 }] },
+  "entities": [],
+  "scenes": { "initial": "scene.editor", "files": ["scenes/editor.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "editor.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.editor",
+  "ui": {
+    "inspectors": [
+      {
+        "name": "ui.editor.inspector",
+        "font": "font.tool",
+        "rows": [
+          {
+            "label": "Broken",
+            "binding": { "type": "property", "entity": "entity.missing", "key": "health" }
+          }
+        ]
+      }
+    ]
+  }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "bad_ui_tooling.game.json").string().c_str(), session, &runtime,
+                                              error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("$.scenes.resolved[0].ui.inspectors[0].rows[0].binding"), std::string::npos)
+        << error;
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidDynamicListMenuSchema)
 {
     const std::filesystem::path dir = unique_test_dir("menu_dynamic_list_validation");

@@ -1926,6 +1926,61 @@ Supported brush metrics are `brush.trace_count`,
 `brush.render_mesh_culled`, `brush.render_mesh_draws`, and
 `brush.render_triangles_submitted`.
 
+For editor-like tools and diagnostics, `ui.panels` and `ui.inspectors` provide
+reusable higher-level overlay widgets while still rendering through the normal
+UI rectangle and text path. A panel emits one filled rectangle plus optional
+border rectangles. An inspector emits a background panel, optional row
+backgrounds, a title, and label/value rows. Inspector row values can be scalar
+literals or bindings to scene state, actor properties, or UI metrics:
+
+```json
+{
+  "ui": {
+    "panels": [
+      {
+        "name": "ui.editor.sidebar",
+        "x": 12,
+        "y": 12,
+        "w": 280,
+        "h": 180,
+        "color": [20, 28, 40, 220],
+        "border_color": [90, 130, 210, 255],
+        "border_thickness": 2
+      }
+    ],
+    "inspectors": [
+      {
+        "name": "ui.editor.selection",
+        "font": "font.hud",
+        "x": 24,
+        "y": 24,
+        "w": 248,
+        "row_height": 22,
+        "padding": 8,
+        "title": "Selection",
+        "rows": [
+          {
+            "label": "World",
+            "binding": { "type": "scene_state", "key": "editor.world", "default": "none" }
+          },
+          {
+            "label": "Health",
+            "binding": { "type": "property", "entity": "entity.player", "key": "health" }
+          },
+          {
+            "label": "FPS",
+            "binding": { "type": "metric", "metric": "fps", "default": 0 }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+These widgets are project-agnostic. Use them for debug HUDs, editor shells,
+inspectors, and simple tool panels before reaching for custom native UI code.
+
 `property.set` and `property.add` normally target a fixed actor:
 
 ```json
