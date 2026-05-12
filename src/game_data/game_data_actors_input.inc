@@ -264,7 +264,7 @@ static actor_pool_scene_exit_policy actor_pool_scene_exit_policy_from_string(con
     return fallback;
 }
 
-static bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name)
+bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name)
 {
     if (pool == NULL || scene_name == NULL)
         return false;

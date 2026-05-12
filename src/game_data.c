@@ -109,6 +109,7 @@ bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const sl
 static int menu_runtime_item_count(const slayer3d_game_data_runtime *runtime, const scene_menu_state *menu);
 static void update_dynamic_list_selection_state(slayer3d_game_data_runtime *runtime, scene_menu_state *menu);
 static void load_storage_config(slayer3d_game_data_runtime *runtime, yyjson_val *root);
+static void storage_config_from_root(yyjson_val *root, slayer3d_storage_config *out_config);
 static bool sensor_actor_list_add(sensor_actor_list *list, slayer3d_registered_actor *actor);
 static void sensor_actor_list_free(sensor_actor_list *list);
 static bool collect_sensor_endpoint_actors(slayer3d_game_data_runtime *runtime, const char *actor_name, const char *tag,
@@ -205,7 +206,7 @@ slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runt
     return runtime != NULL ? slayer3d_game_session_get_registry(runtime->session) : NULL;
 }
 
-static slayer3d_signal_bus *runtime_bus(const slayer3d_game_data_runtime *runtime)
+slayer3d_signal_bus *runtime_bus(const slayer3d_game_data_runtime *runtime)
 {
     return runtime != NULL ? slayer3d_game_session_get_signal_bus(runtime->session) : NULL;
 }
@@ -220,15 +221,15 @@ static slayer3d_input_manager *runtime_input(const slayer3d_game_data_runtime *r
     return runtime != NULL ? slayer3d_game_session_get_input(runtime->session) : NULL;
 }
 
-static void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
-static void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value);
+void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
+void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value);
 static actor_pool_runtime *find_actor_pool(slayer3d_game_data_runtime *runtime, const char *name);
 static const actor_pool_runtime *find_actor_pool_const(const slayer3d_game_data_runtime *runtime, const char *name);
 static actor_pool_runtime *find_actor_pool_for_actor(slayer3d_game_data_runtime *runtime, const char *actor_name,
                                                      int *out_index);
-static const actor_pool_runtime *find_actor_pool_for_actor_const(const slayer3d_game_data_runtime *runtime,
-                                                                 const char *actor_name, int *out_index);
-static bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name);
+const actor_pool_runtime *find_actor_pool_for_actor_const(const slayer3d_game_data_runtime *runtime,
+                                                          const char *actor_name, int *out_index);
+bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name);
 static slayer3d_registered_actor *actor_pool_allocate(slayer3d_game_data_runtime *runtime, actor_pool_runtime *pool,
                                                       int *out_index);
 static actor_lifecycle_state actor_pool_lifecycle_state(const actor_pool_runtime *pool, int index);
@@ -260,8 +261,6 @@ static bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtim
 static void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
 static void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
 #include "game_data/game_data_lua_api.inc"
-
-#include "game_data/game_data_scene_lookup.inc"
 
 #include "game_data/game_data_replication_helpers.inc"
 
