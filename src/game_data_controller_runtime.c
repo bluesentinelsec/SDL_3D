@@ -2,6 +2,9 @@
 
 #include "game_data_internal.h"
 
+#define FPS_BRUSH_VIEW_SMOOTH_SPEED 12.0f
+#define FPS_BRUSH_VIEW_SMOOTH_EPSILON 0.01f
+
 typedef struct patrol_brush_collision_context
 {
     slayer3d_game_data_runtime *runtime;
@@ -499,6 +502,21 @@ static float fps_brush_clampf(float value, float min_value, float max_value)
     return value;
 }
 
+static void fps_brush_decay_view_smooth(slayer3d_fps_mover *mover, float dt)
+{
+    if (mover == NULL)
+        return;
+
+    if (SDL_fabsf(mover->view_smooth) <= FPS_BRUSH_VIEW_SMOOTH_EPSILON)
+    {
+        mover->view_smooth = 0.0f;
+        return;
+    }
+
+    const float decay = fps_brush_clampf(FPS_BRUSH_VIEW_SMOOTH_SPEED * SDL_max(dt, 0.0f), 0.0f, 1.0f);
+    mover->view_smooth -= mover->view_smooth * decay;
+}
+
 static unsigned int fps_brush_contents_mask(yyjson_val *component)
 {
     return brush_flags_from_json(obj_get(component, "contents_mask"), brush_content_flag_from_string,
@@ -705,6 +723,12 @@ static bool fps_brush_try_step_move(const slayer3d_game_data_runtime *runtime, s
     }
 
     *out_position = slayer3d_vec3_add(down_trace.end_position, slayer3d_vec3_scale(down_trace.normal, 0.01f));
+    const float step_delta = out_position->y - start.y;
+    if (step_delta > FPS_BRUSH_VIEW_SMOOTH_EPSILON)
+    {
+        mover->view_smooth =
+            fps_brush_clampf(mover->view_smooth - step_delta, -mover->config.step_height, mover->config.step_height);
+    }
     mover->on_ground = true;
     mover->vertical_velocity = 0.0f;
     if (diagnostics != NULL)
@@ -738,6 +762,7 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
     const float mouse_sensitivity = json_float(component, "mouse_sensitivity", 0.002f);
     mover->yaw += mouse_dx * mouse_sensitivity;
     mover->pitch = fps_brush_clampf(mover->pitch - mouse_dy * mouse_sensitivity, -1.4f, 1.4f);
+    fps_brush_decay_view_smooth(mover, dt);
 
     const unsigned int contents_mask = fps_brush_contents_mask(component);
     const float walkable_normal_y = fps_brush_walkable_normal_y(component);

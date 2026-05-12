@@ -11927,6 +11927,179 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, FpsBrushControllerSmoothsStairStepCamera)
+{
+    const std::filesystem::path dir = unique_test_dir("fps_brush_stair_smoothing");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.player",
+  "updates_game": true,
+  "entities": ["entity.player"],
+  "input": {
+    "actions": [
+      "action.move.forward",
+      "action.move.back",
+      "action.move.left",
+      "action.move.right"
+    ]
+  },
+  "world": { "brush_worlds": [{ "world": "brush.stair_room", "position": [0.0, 0.0, 0.0] }] }
+})json");
+    write_text(dir / "fps_brush_stair.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "FPS Brush Stair Smoothing Test" },
+  "world": {
+    "name": "world.test",
+    "kind": "brush",
+    "cameras": [
+      { "name": "camera.player", "type": "fps", "target_entity": "entity.player", "fov": 90.0, "active": true }
+    ]
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.play",
+        "actions": [
+          { "name": "action.move.forward" },
+          { "name": "action.move.back" },
+          { "name": "action.move.left" },
+          { "name": "action.move.right" }
+        ]
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.6, 1.5] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "view_smooth": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_brush",
+          "brush_world": "brush.stair_room",
+          "contents_mask": ["solid"],
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right"
+          },
+          "move_speed": 4.0,
+          "jump_velocity": 4.0,
+          "gravity": 9.0,
+          "player_height": 1.6,
+          "player_radius": 0.25,
+          "step_height": 0.45,
+          "ceiling_clearance": 0.1,
+          "walkable_normal_y": 0.65,
+          "mouse_sensitivity": 0.0
+        }
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.stair_room",
+      "materials": [{ "name": "mat.default", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.floor",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 3.0 }, "material": "mat.default" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 3.0 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat.default" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.5 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, 1], "distance": 3.0 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, -1], "distance": 3.0 }, "material": "mat.default" }
+          ]
+        },
+        {
+          "name": "brush.step",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1.5 }, "material": "mat.default" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1.5 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.30 }, "material": "mat.default" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.5 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, 1], "distance": 0.55 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1.5 }, "material": "mat.default" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "fps_brush_stair.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+
+    slayer3d_camera3d initial_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &initial_camera));
+    const float initial_eye_y = player->position.y;
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
+    ASSERT_GE(forward, 0);
+    slayer3d_input_set_action_override(input, forward, 1.0f);
+
+    bool stepped = false;
+    slayer3d_camera3d stepped_camera{};
+    for (int i = 0; i < 80; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(4000 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        if (slayer3d_properties_get_bool(player->props, "brush_step_up", false))
+        {
+            stepped = true;
+            ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &stepped_camera));
+            break;
+        }
+    }
+
+    ASSERT_TRUE(stepped);
+    EXPECT_GT(player->position.y, initial_eye_y + 0.20f);
+    EXPECT_LT(stepped_camera.position.y, player->position.y - 0.15f);
+    EXPECT_NEAR(stepped_camera.position.y, initial_camera.position.y, 0.10f);
+    EXPECT_LT(slayer3d_properties_get_float(player->props, "view_smooth", 0.0f), -0.15f);
+
+    slayer3d_input_set_action_override(input, forward, 0.0f);
+    float previous_camera_y = stepped_camera.position.y;
+    for (int i = 0; i < 30; ++i)
+    {
+        ASSERT_NE(slayer3d_input_update(input, (Uint64)(5000 + i)), nullptr);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        slayer3d_camera3d camera{};
+        ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.player", &camera));
+        EXPECT_GE(camera.position.y + 0.001f, previous_camera_y);
+        EXPECT_LE(camera.position.y, player->position.y + 0.001f);
+        previous_camera_y = camera.position.y;
+    }
+    EXPECT_NEAR(previous_camera_y, player->position.y, 0.03f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, PatrolCanUseBrushCollisionAndGrounding)
 {
     const std::filesystem::path dir = unique_test_dir("patrol_brush_collision");
