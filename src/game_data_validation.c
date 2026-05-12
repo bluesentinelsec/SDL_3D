@@ -3168,6 +3168,53 @@ static bool validate_brush_velocity_component(validation_context *ctx, yyjson_va
            (impact_actions == NULL || validate_action_array(ctx, impact_actions, path, names));
 }
 
+static bool validate_motion_patrol_collision(validation_context *ctx, yyjson_val *collision, const char *path)
+{
+    if (collision == NULL)
+        return true;
+    if (!yyjson_is_obj(collision))
+        return validation_error(ctx, path, "motion.patrol collision must be an object");
+
+    const char *type = json_string(collision, "type");
+    if (type != NULL && SDL_strcmp(type, "brush") != 0)
+        return validation_error(ctx, path, "motion.patrol collision type must be brush");
+    if (!brush_velocity_shape_valid(json_string(collision, "shape")))
+        return validation_error(ctx, path, "motion.patrol collision shape must be point, sphere, or aabb");
+
+    yyjson_val *extents = obj_get(collision, "extents");
+    if (extents != NULL && (!is_exact_vec_array(extents, 3) || !numeric_array_values_in_range(extents, 0.0, DBL_MAX)))
+        return validation_error(ctx, path, "motion.patrol collision extents must be a non-negative vec3");
+    yyjson_val *center_offset = obj_get(collision, "center_offset");
+    if (center_offset != NULL && !is_exact_vec_array(center_offset, 3))
+        return validation_error(ctx, path, "motion.patrol collision center_offset must be a vec3");
+    yyjson_val *radius = obj_get(collision, "radius");
+    if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) < 0.0))
+        return validation_error(ctx, path, "motion.patrol collision radius must be non-negative");
+    yyjson_val *slide_iterations = obj_get(collision, "slide_iterations");
+    if (slide_iterations != NULL && (!yyjson_is_int(slide_iterations) || yyjson_get_int(slide_iterations) < 1 ||
+                                     yyjson_get_int(slide_iterations) > 8))
+        return validation_error(ctx, path, "motion.patrol collision slide_iterations must be an integer in [1, 8]");
+    yyjson_val *contact_skin = obj_get(collision, "contact_skin");
+    if (contact_skin != NULL && (!yyjson_is_num(contact_skin) || yyjson_get_num(contact_skin) < 0.0))
+        return validation_error(ctx, path, "motion.patrol collision contact_skin must be non-negative");
+    yyjson_val *ground_probe_distance = obj_get(collision, "ground_probe_distance");
+    if (ground_probe_distance != NULL &&
+        (!yyjson_is_num(ground_probe_distance) || yyjson_get_num(ground_probe_distance) < 0.0))
+        return validation_error(ctx, path, "motion.patrol collision ground_probe_distance must be non-negative");
+    yyjson_val *walkable_normal_y = obj_get(collision, "walkable_normal_y");
+    if (walkable_normal_y != NULL && (!yyjson_is_num(walkable_normal_y) || yyjson_get_num(walkable_normal_y) < 0.0 ||
+                                      yyjson_get_num(walkable_normal_y) > 1.0))
+        return validation_error(ctx, path, "motion.patrol collision walkable_normal_y must be in [0, 1]");
+    yyjson_val *on_ground_property = obj_get(collision, "on_ground_property");
+    if (on_ground_property != NULL && !is_non_empty_string(collision, "on_ground_property"))
+        return validation_error(ctx, path, "motion.patrol collision on_ground_property must be non-empty");
+
+    char contents_path[PATH_BUFFER_SIZE];
+    format_path(contents_path, sizeof(contents_path), "%s.contents_mask", path);
+    return validate_brush_string_or_string_array(ctx, obj_get(collision, "contents_mask"), contents_path,
+                                                 "brush content", brush_content_name_valid, false);
+}
+
 static bool validate_combat_health_component(validation_context *ctx, yyjson_val *component, const char *path)
 {
     const char *property_keys[] = {"health_property", "max_health_property", "armor_property", "armor_absorb_property",
@@ -5602,6 +5649,19 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *yaw_property = obj_get(component, "yaw_property");
                 if (yaw_property != NULL && !is_non_empty_string(component, "yaw_property"))
                     return validation_error(ctx, path, "motion.patrol yaw_property must be non-empty");
+                yyjson_val *animation_time_property = obj_get(component, "animation_time_property");
+                if (animation_time_property != NULL && !is_non_empty_string(component, "animation_time_property"))
+                    return validation_error(ctx, path, "motion.patrol animation_time_property must be non-empty");
+                yyjson_val *animation_rate = obj_get(component, "animation_rate");
+                if (animation_rate != NULL && !yyjson_is_num(animation_rate))
+                    return validation_error(ctx, path, "motion.patrol animation_rate must be a number");
+                yyjson_val *animate_when_idle = obj_get(component, "animate_when_idle");
+                if (animate_when_idle != NULL && !yyjson_is_bool(animate_when_idle))
+                    return validation_error(ctx, path, "motion.patrol animate_when_idle must be a boolean");
+                char collision_path[PATH_BUFFER_SIZE];
+                format_path(collision_path, sizeof(collision_path), "%s.collision", path);
+                if (!validate_motion_patrol_collision(ctx, obj_get(component, "collision"), collision_path))
+                    return false;
                 yyjson_val *signals = obj_get(component, "signals");
                 if (signals != NULL)
                 {

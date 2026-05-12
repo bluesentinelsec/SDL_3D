@@ -8,6 +8,7 @@
     "entity.brush_geometry.player",
     "entity.brush_geometry.visible_target",
     "entity.brush_geometry.occluded_target",
+    "entity.brush_geometry.zombie",
     "entity.brush_geometry.sun",
     "entity.brush_geometry.blue_fill"
   ],

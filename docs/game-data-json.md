@@ -1674,7 +1674,12 @@ Reusable components include:
 - `motion.patrol`: moves an actor through an authored list of 3D waypoints.
   Use `speed`, `wait_time`, `arrival_radius`, `mode` (`loop` or `ping_pong`),
   and optional `yaw_property` to expose movement direction to rendering or Lua
-  logic.
+  logic. `animation_time_property` can advance model animation time while the
+  actor walks. For true-3D brush worlds, add a `collision` object with
+  `"type": "brush"` to move through active brush-world instances using swept
+  point, sphere, or AABB traces, sliding, floor probing, and an optional
+  `on_ground_property`. This is intended for simple NPC patrols and background
+  actors that need to respect authored walls and floors without custom Lua.
 - `lifecycle.ttl`: increments an age property every update and despawns pooled
   actors once the configured TTL is reached. Use this for short-lived bursts and
   effects instead of scanning active actors in Lua.

@@ -7507,12 +7507,32 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NEAR(camera.position.y, 1.6f, 0.05f);
 
     slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.player");
+    slayer3d_registered_actor *zombie = slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.zombie");
     slayer3d_registered_actor *visible = slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.visible_target");
     slayer3d_registered_actor *occluded =
         slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.occluded_target");
     ASSERT_NE(player, nullptr);
+    ASSERT_NE(zombie, nullptr);
     ASSERT_NE(visible, nullptr);
     ASSERT_NE(occluded, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(zombie->props, "on_ground", false));
+    EXPECT_GT(slayer3d_properties_get_float(zombie->props, "walk_anim_time", 0.0f), 0.0f);
+    bool saw_zombie_model = false;
+    auto find_zombie_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        bool *saw = static_cast<bool *>(userdata);
+        if (primitive != nullptr && primitive->entity_name != nullptr &&
+            std::string(primitive->entity_name) == "entity.brush_geometry.zombie")
+        {
+            *saw = true;
+            EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MODEL);
+            EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.zombie.walking");
+            EXPECT_TRUE(primitive->animation_loop);
+            EXPECT_EQ(primitive->animation_clip, 0);
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, find_zombie_model, &saw_zombie_model));
+    EXPECT_TRUE(saw_zombie_model);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
 
@@ -11755,6 +11775,122 @@ TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
     EXPECT_NEAR(camera.position.y, player->position.y, 0.001f);
     EXPECT_NEAR(camera.position.z, player->position.z, 0.001f);
     EXPECT_LT(camera.target.z, camera.position.z);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PatrolCanUseBrushCollisionAndGrounding)
+{
+    const std::filesystem::path dir = unique_test_dir("patrol_brush_collision");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "updates_game": true,
+  "entities": ["entity.patrol"],
+  "world": {
+    "brush_worlds": [
+      { "world": "brush.patrol_room", "position": [0.0, 0.0, 0.0] }
+    ]
+  }
+})json");
+    write_text(dir / "patrol_brush.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Patrol Brush Collision Test" },
+  "world": { "name": "world.patrol_brush", "kind": "brush" },
+  "entities": [
+    {
+      "name": "entity.patrol",
+      "active": true,
+      "transform": { "position": [0.0, 0.0, 0.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "walk_anim_time": { "type": "float", "value": 0.0 },
+        "on_ground": { "type": "bool", "value": false }
+      },
+      "components": [
+        {
+          "type": "motion.patrol",
+          "waypoints": [[0.0, 0.0, 0.0], [5.0, 0.0, 0.0]],
+          "speed": 6.0,
+          "wait_time": 0.0,
+          "arrival_radius": 0.05,
+          "mode": "loop",
+          "start_idle": false,
+          "yaw_property": "yaw",
+          "animation_time_property": "walk_anim_time",
+          "collision": {
+            "type": "brush",
+            "shape": "aabb",
+            "extents": [0.25, 0.5, 0.25],
+            "center_offset": [0.0, 0.5, 0.0],
+            "contents_mask": ["solid", "player_clip"],
+            "slide_iterations": 4,
+            "ground_probe_distance": 0.2,
+            "walkable_normal_y": 0.65,
+            "on_ground_property": "on_ground"
+          }
+        }
+      ]
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.patrol_room",
+      "materials": [{ "name": "mat", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.floor",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 4.0 }, "material": "mat" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 4.0 }, "material": "mat" },
+            { "plane": { "normal": [0, 1, 0], "distance": 0.0 }, "material": "mat" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.5 }, "material": "mat" },
+            { "plane": { "normal": [0, 0, 1], "distance": 4.0 }, "material": "mat" },
+            { "plane": { "normal": [0, 0, -1], "distance": 4.0 }, "material": "mat" }
+          ]
+        },
+        {
+          "name": "brush.wall",
+          "contents": ["solid", "player_clip"],
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1.85 }, "material": "mat" },
+            { "plane": { "normal": [-1, 0, 0], "distance": -1.5 }, "material": "mat" },
+            { "plane": { "normal": [0, 1, 0], "distance": 2.0 }, "material": "mat" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0.0 }, "material": "mat" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1.0 }, "material": "mat" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1.0 }, "material": "mat" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "patrol_brush.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, "entity.patrol");
+    ASSERT_NE(actor, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.5f));
+
+    EXPECT_LT(actor->position.x, 1.35f);
+    EXPECT_GT(actor->position.x, 1.0f);
+    EXPECT_NEAR(actor->position.y, 0.0f, 0.03f);
+    EXPECT_NEAR(actor->position.z, 0.0f, 0.03f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(actor->props, "on_ground", false));
+    EXPECT_GT(slayer3d_properties_get_float(actor->props, "walk_anim_time", 0.0f), 0.0f);
+    EXPECT_NEAR(slayer3d_properties_get_float(actor->props, "yaw", 0.0f), SDL_PI_F / 2.0f, 0.05f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
