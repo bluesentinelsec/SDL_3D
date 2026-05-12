@@ -2,6 +2,9 @@
 
 #include "game_data_internal.h"
 
+#define FPS_BRUSH_VIEW_SMOOTH_SPEED 12.0f
+#define FPS_BRUSH_VIEW_SMOOTH_EPSILON 0.01f
+
 typedef struct patrol_brush_collision_context
 {
     slayer3d_game_data_runtime *runtime;
@@ -499,6 +502,21 @@ static float fps_brush_clampf(float value, float min_value, float max_value)
     return value;
 }
 
+static void fps_brush_decay_view_smooth(slayer3d_fps_mover *mover, float dt)
+{
+    if (mover == NULL)
+        return;
+
+    if (SDL_fabsf(mover->view_smooth) <= FPS_BRUSH_VIEW_SMOOTH_EPSILON)
+    {
+        mover->view_smooth = 0.0f;
+        return;
+    }
+
+    const float decay = fps_brush_clampf(FPS_BRUSH_VIEW_SMOOTH_SPEED * SDL_max(dt, 0.0f), 0.0f, 1.0f);
+    mover->view_smooth -= mover->view_smooth * decay;
+}
+
 static unsigned int fps_brush_contents_mask(yyjson_val *component)
 {
     return brush_flags_from_json(obj_get(component, "contents_mask"), brush_content_flag_from_string,
@@ -738,6 +756,7 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
     const float mouse_sensitivity = json_float(component, "mouse_sensitivity", 0.002f);
     mover->yaw += mouse_dx * mouse_sensitivity;
     mover->pitch = fps_brush_clampf(mover->pitch - mouse_dy * mouse_sensitivity, -1.4f, 1.4f);
+    fps_brush_decay_view_smooth(mover, dt);
 
     const unsigned int contents_mask = fps_brush_contents_mask(component);
     const float walkable_normal_y = fps_brush_walkable_normal_y(component);
@@ -746,6 +765,8 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
     slayer3d_vec3 body_center = fps_brush_eye_to_body_center(mover, mover->position);
     if (mover->on_ground)
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
+    const bool smooth_ground_height_change = mover->on_ground;
+    const float smooth_start_eye_y = fps_brush_body_center_to_eye(mover, body_center).y;
 
     if (fps_controller_action_pressed(runtime, input, jump_action))
         slayer3d_fps_mover_jump(mover);
@@ -832,6 +853,16 @@ void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val
         (void)fps_brush_snap_to_ground(runtime, mover, contents_mask, walkable_normal_y, &diagnostics, &body_center);
 
     mover->position = fps_brush_body_center_to_eye(mover, body_center);
+    if (smooth_ground_height_change && mover->on_ground)
+    {
+        const float height_delta = mover->position.y - smooth_start_eye_y;
+        if (SDL_fabsf(height_delta) > FPS_BRUSH_VIEW_SMOOTH_EPSILON &&
+            SDL_fabsf(height_delta) <= mover->config.step_height + 0.05f)
+        {
+            mover->view_smooth = fps_brush_clampf(mover->view_smooth - height_delta, -mover->config.step_height,
+                                                  mover->config.step_height);
+        }
+    }
     mover->current_sector = -1;
     if (mover->on_ground)
     {

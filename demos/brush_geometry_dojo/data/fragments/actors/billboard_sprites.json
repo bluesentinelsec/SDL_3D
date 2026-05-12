@@ -1,0 +1,124 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "assets": {
+    "sprites": [
+      {
+        "id": "sprite.brush_geometry.robot.walk",
+        "kind": "files",
+        "base_paths": [
+          "asset://sprites/skeletal_robot/south.png",
+          "asset://sprites/skeletal_robot/south-east.png",
+          "asset://sprites/skeletal_robot/east.png",
+          "asset://sprites/skeletal_robot/north-east.png",
+          "asset://sprites/skeletal_robot/north.png",
+          "asset://sprites/skeletal_robot/north-west.png",
+          "asset://sprites/skeletal_robot/west.png",
+          "asset://sprites/skeletal_robot/south-west.png"
+        ],
+        "frame_paths": [
+          "asset://sprites/skeletal_robot/walking_frames/south_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_00.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_01.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_02.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_03.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_04.png",
+          "asset://sprites/skeletal_robot/walking_frames/south_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-east_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/east_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-east_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/north_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/north-west_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/west_05.png",
+          "asset://sprites/skeletal_robot/walking_frames/south-west_05.png"
+        ],
+        "frame_count": 6,
+        "direction_count": 8,
+        "fps": 8.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false,
+        "visual_ground_offset": 0.56
+      },
+      {
+        "id": "sprite.brush_geometry.health_pack",
+        "path": "asset://sprites/health-pack.png",
+        "frame_width": 64,
+        "frame_height": 64,
+        "columns": 1,
+        "rows": 1,
+        "frame_count": 1,
+        "direction_count": 1,
+        "fps": 1.0,
+        "loop": true,
+        "lighting": true,
+        "emissive": false
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.brush_geometry.sprite.robot",
+      "active": true,
+      "transform": { "position": [-33.0, 0.0, -12.0] },
+      "properties": {
+        "sprite_yaw": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.brush_geometry.robot.walk", "size": [3.4, 5.2], "facing_yaw_property": "sprite_yaw", "lighting": true },
+        {
+          "type": "motion.patrol",
+          "waypoints": [[-33.0, 0.0, -12.0], [-33.0, 0.0, -2.0]],
+          "speed": 1.0,
+          "wait_time": 0.8,
+          "arrival_radius": 0.1,
+          "mode": "ping_pong",
+          "start_idle": false,
+          "yaw_property": "sprite_yaw"
+        }
+      ]
+    },
+    {
+      "name": "entity.brush_geometry.sprite.health",
+      "active": true,
+      "transform": { "position": [35.0, 0.35, -10.0] },
+      "components": [
+        { "type": "render.sprite", "sprite": "sprite.brush_geometry.health_pack", "size": [1.2, 1.2], "lighting": true },
+        { "type": "motion.oscillate", "origin": [35.0, 0.35, -10.0], "amplitude": [0.0, 0.18, 0.0], "rate": 1.7 }
+      ]
+    }
+  ]
+}

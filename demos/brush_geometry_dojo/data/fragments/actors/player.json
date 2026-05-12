@@ -9,6 +9,8 @@
         "yaw": { "type": "float", "value": 0.0 },
         "pitch": { "type": "float", "value": 0.0 },
         "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
+        "fire_timer": { "type": "float", "value": 0.0 },
+        "fire_cooldown": { "type": "float", "value": 0.18 },
         "on_ground": { "type": "bool", "value": false },
         "vertical_velocity": { "type": "float", "value": 0.0 },
         "brush_trigger_active": { "type": "bool", "value": false },
@@ -34,6 +36,22 @@
           "step_height": 0.65,
           "ceiling_clearance": 0.1,
           "mouse_sensitivity": 0.002
+        },
+        {
+          "type": "property.decay",
+          "property": "fire_timer",
+          "rate": 1.0,
+          "target": 0.0,
+          "min": 0.0
+        },
+        {
+          "type": "weapon.projectile",
+          "action": "action.fire",
+          "pool": "pool.brush_geometry.projectiles",
+          "offset": [0.0, -0.15, -0.55],
+          "velocity_from_property": "camera_forward",
+          "speed": 28.0,
+          "cooldown_property": "fire_timer"
         }
       ]
     }
