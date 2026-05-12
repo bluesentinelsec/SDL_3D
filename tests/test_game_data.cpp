@@ -7415,7 +7415,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.brush_geometry.showcase", &world));
     ASSERT_NE(world.render_model, nullptr);
     EXPECT_EQ(world.material_count, 7);
-    EXPECT_GE(world.brush_count, 10);
+    EXPECT_GE(world.brush_count, 19);
     EXPECT_GE(world.render_model->mesh_count, 6);
     auto find_material = [&world](const char *name) -> const slayer3d_game_data_brush_material * {
         for (int i = 0; i < world.material_count; ++i)
@@ -7494,6 +7494,12 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(saw_model_floor_texture);
     EXPECT_TRUE(saw_model_wall_texture);
     EXPECT_TRUE(saw_model_ceiling_texture);
+    ASSERT_NE(find_brush("brush.room.ceiling.north"), nullptr);
+    ASSERT_NE(find_brush("brush.room.ceiling.south"), nullptr);
+    ASSERT_NE(find_brush("brush.room.ceiling.west"), nullptr);
+    ASSERT_NE(find_brush("brush.room.ceiling.east"), nullptr);
+    ASSERT_NE(find_brush("brush.room.wall_south.window_top"), nullptr);
+    ASSERT_NE(find_brush("brush.room.wall_north.window_top"), nullptr);
     const slayer3d_game_data_brush *pillar = find_brush("brush.pillar.center");
     const slayer3d_game_data_brush *overhang_west = find_brush("brush.bridge.overhang_west");
     const slayer3d_game_data_brush *overhang_east = find_brush("brush.bridge.overhang_east");
