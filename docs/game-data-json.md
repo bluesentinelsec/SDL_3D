@@ -621,6 +621,45 @@ bounds, trace rays, hit markers, and face normals. These helpers are
 renderer-agnostic/data-driven editor substrate; authored gameplay JSON does
 not need to contain one-off debug actors for selection visualization.
 
+Scenes can opt into a data-authored editor overlay with `editor.selection` and
+`editor.debug_overlay`. This is useful for editor dojos and future in-engine
+tools that should run through the generic runner instead of a custom native
+host. `editor.selection.trace` describes a pick ray; `outputs` publishes the
+latest selection to scene state so UI inspectors can display it. The debug
+overlay renders world bounds, selected bounds, the trace ray, hit marker, and
+face normal through the normal 3D presentation path:
+
+```json
+{
+  "editor": {
+    "selection": {
+      "trace": {
+        "start": [-2.0, 1.0, 1.0],
+        "end": [1.25, 1.0, 1.0],
+        "model_filter": "brush_worlds",
+        "contents_mask": "solid"
+      },
+      "outputs": {
+        "hit_key": "editor.selection.hit",
+        "world_key": "editor.selection.world",
+        "element_key": "editor.selection.element",
+        "material_key": "editor.selection.material",
+        "face_stable_id_key": "editor.selection.face_stable_id",
+        "face_index_key": "editor.selection.face_index"
+      }
+    },
+    "debug_overlay": {
+      "enabled": true,
+      "flags": ["world_bounds", "selection_bounds", "trace_ray", "face_normal", "hit_marker"]
+    }
+  }
+}
+```
+
+Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
+`brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,
+`selection_bounds`, `trace_ray`, `face_normal`, and `hit_marker`.
+
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
 

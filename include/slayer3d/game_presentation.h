@@ -385,6 +385,17 @@ extern "C"
                                                          const slayer3d_game_data_editor_debug_desc *desc);
 
     /**
+     * @brief Draw active-scene data-authored editor/debug primitives.
+     *
+     * Scenes opt into this through their `editor.debug_overlay` block. The
+     * helper remains game-agnostic and delegates primitive generation to
+     * @ref slayer3d_game_data_for_each_active_editor_debug_primitive. Call
+     * inside an active 3D pass after the scene camera is configured.
+     */
+    bool slayer3d_game_data_draw_active_editor_debug_primitives(const slayer3d_game_data_runtime *runtime,
+                                                                slayer3d_render_context *renderer);
+
+    /**
      * @brief Initialize a world sprite asset cache.
      *
      * @param cache Cache to initialize.

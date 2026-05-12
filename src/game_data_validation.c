@@ -10274,6 +10274,136 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
     return true;
 }
 
+static bool editor_model_filter_name_valid(const char *value)
+{
+    return value != NULL && (SDL_strcmp(value, "all") == 0 || SDL_strcmp(value, "sector_levels") == 0 ||
+                             SDL_strcmp(value, "sector") == 0 || SDL_strcmp(value, "brush_worlds") == 0 ||
+                             SDL_strcmp(value, "brush") == 0);
+}
+
+static bool editor_debug_flag_name_valid(const char *value)
+{
+    return value != NULL && (SDL_strcmp(value, "all") == 0 || SDL_strcmp(value, "world_bounds") == 0 ||
+                             SDL_strcmp(value, "selection_bounds") == 0 || SDL_strcmp(value, "trace_ray") == 0 ||
+                             SDL_strcmp(value, "face_normal") == 0 || SDL_strcmp(value, "hit_marker") == 0);
+}
+
+static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,
+                                                  const char *label, bool (*name_valid)(const char *name))
+{
+    if (value == NULL)
+        return true;
+    if (yyjson_is_str(value))
+        return name_valid(yyjson_get_str(value))
+                   ? true
+                   : validation_error(ctx, path, "unsupported %s '%s'", label, yyjson_get_str(value));
+    if (!yyjson_is_arr(value))
+        return validation_error(ctx, path, "%s must be a string or string array", label);
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        char entry_path[PATH_BUFFER_SIZE];
+        format_path(entry_path, sizeof(entry_path), "%s[%zu]", path, i);
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_str(entry) || !name_valid(yyjson_get_str(entry)))
+            return validation_error(ctx, entry_path, "unsupported %s '%s'", label,
+                                    yyjson_is_str(entry) ? yyjson_get_str(entry) : "<non-string>");
+    }
+    return true;
+}
+
+static bool validate_scene_editor_outputs(validation_context *ctx, yyjson_val *outputs, const char *json_path)
+{
+    if (outputs == NULL)
+        return true;
+    if (!yyjson_is_obj(outputs))
+        return validation_error(ctx, json_path, "scene editor selection outputs must be an object");
+
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(outputs, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        yyjson_val *value = yyjson_obj_iter_get_val(key);
+        if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
+            return validation_error(ctx, json_path, "scene editor selection output values must be non-empty strings");
+    }
+    return true;
+}
+
+static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path)
+{
+    yyjson_val *editor = obj_get(scene_root, "editor");
+    if (editor == NULL)
+        return true;
+    if (!yyjson_is_obj(editor))
+        return validation_error(ctx, json_path, "scene editor must be an object");
+
+    yyjson_val *selection = obj_get(editor, "selection");
+    if (selection != NULL)
+    {
+        char selection_path[PATH_BUFFER_SIZE];
+        format_path(selection_path, sizeof(selection_path), "%s.editor.selection", json_path);
+        if (!yyjson_is_obj(selection))
+            return validation_error(ctx, selection_path, "scene editor selection must be an object");
+        yyjson_val *trace = obj_get(selection, "trace");
+        if (!yyjson_is_obj(trace))
+            return validation_error(ctx, selection_path, "scene editor selection requires a trace object");
+        char trace_path[PATH_BUFFER_SIZE];
+        format_path(trace_path, sizeof(trace_path), "%s.trace", selection_path);
+        if (!is_exact_vec_array(obj_get(trace, "start"), 3))
+            return validation_error(ctx, trace_path, "scene editor selection trace requires a start vec3");
+        if (!is_exact_vec_array(obj_get(trace, "end"), 3))
+            return validation_error(ctx, trace_path, "scene editor selection trace requires an end vec3");
+        char contents_path[PATH_BUFFER_SIZE];
+        format_path(contents_path, sizeof(contents_path), "%s.contents_mask", trace_path);
+        if (!validate_brush_string_or_string_array(ctx, obj_get(trace, "contents_mask"), contents_path, "brush content",
+                                                   brush_content_name_valid, false))
+            return false;
+        char filter_path[PATH_BUFFER_SIZE];
+        format_path(filter_path, sizeof(filter_path), "%s.model_filter", trace_path);
+        if (!validate_string_or_string_array_names(ctx, obj_get(trace, "model_filter"), filter_path,
+                                                   "world model filter", editor_model_filter_name_valid))
+            return false;
+        char outputs_path[PATH_BUFFER_SIZE];
+        format_path(outputs_path, sizeof(outputs_path), "%s.outputs", selection_path);
+        if (!validate_scene_editor_outputs(ctx, obj_get(selection, "outputs"), outputs_path))
+            return false;
+    }
+
+    yyjson_val *overlay = obj_get(editor, "debug_overlay");
+    if (overlay != NULL)
+    {
+        char overlay_path[PATH_BUFFER_SIZE];
+        format_path(overlay_path, sizeof(overlay_path), "%s.editor.debug_overlay", json_path);
+        if (!yyjson_is_obj(overlay))
+            return validation_error(ctx, overlay_path, "scene editor debug_overlay must be an object");
+        yyjson_val *enabled = obj_get(overlay, "enabled");
+        if (enabled != NULL && !yyjson_is_bool(enabled))
+            return validation_error(ctx, overlay_path, "scene editor debug_overlay enabled must be a boolean");
+        char flags_path[PATH_BUFFER_SIZE];
+        format_path(flags_path, sizeof(flags_path), "%s.flags", overlay_path);
+        if (!validate_string_or_string_array_names(ctx, obj_get(overlay, "flags"), flags_path, "editor debug flag",
+                                                   editor_debug_flag_name_valid))
+            return false;
+        static const char *const color_keys[] = {"world_bounds_color", "selection_bounds_color", "trace_color",
+                                                 "face_normal_color", "hit_marker_color"};
+        for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
+        {
+            yyjson_val *color = obj_get(overlay, color_keys[i]);
+            if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+                return validation_error(ctx, overlay_path, "scene editor debug_overlay %s must be a vec3 or vec4 color",
+                                        color_keys[i]);
+        }
+        yyjson_val *normal_length = obj_get(overlay, "normal_length");
+        if (normal_length != NULL && (!yyjson_is_num(normal_length) || yyjson_get_num(normal_length) <= 0.0))
+            return validation_error(ctx, overlay_path, "scene editor debug_overlay normal_length must be positive");
+        yyjson_val *hit_marker_size = obj_get(overlay, "hit_marker_size");
+        if (hit_marker_size != NULL && (!yyjson_is_num(hit_marker_size) || yyjson_get_num(hit_marker_size) <= 0.0))
+            return validation_error(ctx, overlay_path, "scene editor debug_overlay hit_marker_size must be positive");
+    }
+    return true;
+}
+
 static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yyjson_val *game_root,
                                    validation_names *names, const char *json_path)
 {
@@ -10304,6 +10434,8 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     if (!validate_scene_brush_worlds(ctx, root, json_path, names))
         return false;
     if (!validate_scene_skybox(ctx, root, json_path, names))
+        return false;
+    if (!validate_scene_editor_tooling(ctx, root, json_path))
         return false;
 
     char phases_path[PATH_BUFFER_SIZE];

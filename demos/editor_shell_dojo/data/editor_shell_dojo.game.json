@@ -1,0 +1,119 @@
+{
+  "schema": "slayer3d.game.v0",
+  "metadata": {
+    "name": "Slayer 3D Editor Shell Dojo",
+    "id": "demo.editor_shell_dojo",
+    "version": "0.1.0"
+  },
+  "app": {
+    "title": "Slayer 3D Editor Shell Dojo",
+    "logical_width": 1280,
+    "logical_height": 720,
+    "backend": "opengl",
+    "window": { "renderer": "opengl", "vsync": true },
+    "quit": { "action": "action.exit" },
+    "input_policy": { "global_actions": ["action.exit"] }
+  },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.editor_shell",
+        "actions": [
+          {
+            "name": "action.exit",
+            "bindings": [{ "device": "keyboard", "key": "ESCAPE" }]
+          }
+        ]
+      }
+    ]
+  },
+  "world": {
+    "name": "world.editor_shell_dojo",
+    "kind": "brush",
+    "units": "meters",
+    "meters_per_unit": 1.0,
+    "ambient_light": [0.22, 0.23, 0.25],
+    "cameras": [
+      {
+        "name": "camera.editor_shell.viewport",
+        "type": "perspective",
+        "position": [-5.0, 3.2, 5.0],
+        "target": [1.0, 1.0, 1.0],
+        "up": [0.0, 1.0, 0.0],
+        "fov": 70.0,
+        "fov_axis": "horizontal",
+        "active": true
+      }
+    ]
+  },
+  "assets": {
+    "fonts": [
+      { "id": "font.editor_shell.ui", "builtin": "Inter", "size": 18 }
+    ]
+  },
+  "render": {
+    "lighting": true,
+    "bloom": false,
+    "clear_color": [0.04, 0.045, 0.055]
+  },
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "editor": {
+        "stable_id": "editor.world.target",
+        "display_name": "Target Brush World",
+        "category": "editor/dojo"
+      },
+      "materials": [
+        {
+          "name": "mat.editor.wall",
+          "albedo": [0.58, 0.18, 0.16, 1.0],
+          "roughness": 0.8,
+          "editor": {
+            "stable_id": "editor.material.wall",
+            "display_name": "Red Wall Material"
+          }
+        },
+        {
+          "name": "mat.editor.floor",
+          "albedo": [0.22, 0.24, 0.28, 1.0],
+          "roughness": 0.9,
+          "editor": {
+            "stable_id": "editor.material.floor",
+            "display_name": "Dark Floor Material"
+          }
+        }
+      ],
+      "brushes": [
+        {
+          "name": "brush.target.cube",
+          "contents": ["solid", "player_clip"],
+          "editor": {
+            "stable_id": "editor.brush.target_cube",
+            "display_name": "Selectable Cube",
+            "prefab": "prefab.editor_shell.cube"
+          },
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            {
+              "plane": { "normal": [-1, 0, 0], "distance": 0 },
+              "material": "mat.editor.wall",
+              "editor": {
+                "stable_id": "editor.face.target_cube.left",
+                "display_name": "Left Face"
+              }
+            },
+            { "plane": { "normal": [0, 1, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": {
+    "initial": "scene.editor_shell.dojo",
+    "files": ["scenes/editor_shell.scene.json"]
+  }
+}

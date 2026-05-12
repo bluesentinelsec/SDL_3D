@@ -1,0 +1,133 @@
+{
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.editor_shell.dojo",
+  "camera": "camera.editor_shell.viewport",
+  "updates_game": true,
+  "renders_world": true,
+  "input": {
+    "actions": ["action.exit"]
+  },
+  "world": {
+    "brush_worlds": [
+      { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0] }
+    ]
+  },
+  "editor": {
+    "selection": {
+      "trace": {
+        "start": [-2.0, 1.0, 1.0],
+        "end": [1.25, 1.0, 1.0],
+        "model_filter": "brush_worlds",
+        "contents_mask": "solid"
+      },
+      "outputs": {
+        "hit_key": "editor.selection.hit",
+        "type_key": "editor.selection.type",
+        "world_key": "editor.selection.world",
+        "element_key": "editor.selection.element",
+        "material_key": "editor.selection.material",
+        "world_stable_id_key": "editor.selection.world_stable_id",
+        "element_stable_id_key": "editor.selection.element_stable_id",
+        "material_stable_id_key": "editor.selection.material_stable_id",
+        "face_stable_id_key": "editor.selection.face_stable_id",
+        "element_index_key": "editor.selection.element_index",
+        "face_index_key": "editor.selection.face_index",
+        "fraction_key": "editor.selection.fraction",
+        "point_key": "editor.selection.point",
+        "normal_key": "editor.selection.normal"
+      }
+    },
+    "debug_overlay": {
+      "enabled": true,
+      "flags": ["world_bounds", "selection_bounds", "trace_ray", "face_normal", "hit_marker"],
+      "world_bounds_color": [80, 170, 255, 190],
+      "selection_bounds_color": [255, 220, 40, 255],
+      "trace_color": [255, 255, 255, 210],
+      "face_normal_color": [40, 255, 120, 255],
+      "hit_marker_color": [255, 70, 70, 255],
+      "normal_length": 0.65,
+      "hit_marker_size": 0.12
+    }
+  },
+  "ui": {
+    "panels": [
+      {
+        "name": "ui.editor_shell.sidebar",
+        "x": 18,
+        "y": 18,
+        "w": 340,
+        "h": 270,
+        "color": [10, 14, 22, 215],
+        "border_color": [80, 140, 230, 230],
+        "border_thickness": 2
+      }
+    ],
+    "inspectors": [
+      {
+        "name": "ui.editor_shell.inspector",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 32,
+        "w": 308,
+        "row_height": 22,
+        "padding": 8,
+        "title": "Editor Selection",
+        "background_color": [0, 0, 0, 0],
+        "row_color": [255, 255, 255, 12],
+        "title_color": [235, 245, 255, 255],
+        "label_color": [145, 175, 220, 255],
+        "value_color": [245, 248, 255, 255],
+        "rows": [
+          {
+            "label": "Hit",
+            "binding": { "type": "scene_state", "key": "editor.selection.hit", "default": false }
+          },
+          {
+            "label": "World",
+            "binding": { "type": "scene_state", "key": "editor.selection.world", "default": "none" }
+          },
+          {
+            "label": "Brush",
+            "binding": { "type": "scene_state", "key": "editor.selection.element", "default": "none" }
+          },
+          {
+            "label": "Material",
+            "binding": { "type": "scene_state", "key": "editor.selection.material", "default": "none" }
+          },
+          {
+            "label": "Face",
+            "binding": { "type": "scene_state", "key": "editor.selection.face_index", "default": -1 }
+          },
+          {
+            "label": "Stable",
+            "binding": { "type": "scene_state", "key": "editor.selection.face_stable_id", "default": "none" }
+          }
+        ]
+      }
+    ],
+    "text": [
+      {
+        "name": "ui.editor_shell.title",
+        "text": "Editor Shell Dojo",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.035,
+        "normalized": true,
+        "align": "right",
+        "color": [235, 242, 255, 230],
+        "scale": 0.8
+      },
+      {
+        "name": "ui.editor_shell.help",
+        "text": "Data-authored viewport, selection overlay, and inspector",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.075,
+        "normalized": true,
+        "align": "right",
+        "color": [190, 205, 230, 215],
+        "scale": 0.6
+      }
+    ]
+  }
+}

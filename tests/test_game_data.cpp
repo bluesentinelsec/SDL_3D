@@ -12100,6 +12100,81 @@ TEST(GameDataRuntime, EditorPickingPreservesRepeatedBrushWorldInstancePlacement)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
+{
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file("demos/editor_shell_dojo/data/editor_shell_dojo.game.json", session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.type", ""), "brush_world");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.world", ""),
+                 "brush.editor_shell.target");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.element", ""), "brush.target.cube");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.material", ""), "mat.editor.wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.face_stable_id", ""),
+                 "editor.face.target_cube.left");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.face_index", -1), 1);
+
+    struct DebugCapture
+    {
+        int world_edges = 0;
+        int selection_edges = 0;
+        int rays = 0;
+        int normals = 0;
+        int markers = 0;
+    } debug;
+    auto capture_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<DebugCapture *>(userdata);
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORLD_BOUNDS_EDGE)
+            capture->world_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
+            capture->selection_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_TRACE_RAY)
+            capture->rays++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_FACE_NORMAL)
+            capture->normals++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_HIT_MARKER)
+            capture->markers++;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_debug, &debug));
+    EXPECT_EQ(debug.world_edges, 12);
+    EXPECT_EQ(debug.selection_edges, 12);
+    EXPECT_EQ(debug.rays, 1);
+    EXPECT_EQ(debug.normals, 1);
+    EXPECT_EQ(debug.markers, 3);
+
+    struct InspectorText
+    {
+        std::vector<std::string> values;
+    } inspector;
+    auto capture_inspector = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<InspectorText *>(userdata);
+        if (std::string(text->name) == "ui.editor_shell.inspector")
+            capture->values.emplace_back(text->text != nullptr ? text->text : "");
+        return true;
+    };
+    slayer3d_game_data_ui_metrics metrics{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_inspector, &inspector));
+    ASSERT_GE(inspector.values.size(), 13U);
+    EXPECT_EQ(inspector.values[0], "Editor Selection");
+    EXPECT_EQ(inspector.values[1], "Hit");
+    EXPECT_EQ(inspector.values[2], "true");
+    EXPECT_EQ(inspector.values[3], "World");
+    EXPECT_EQ(inspector.values[4], "brush.editor_shell.target");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
 {
     const std::filesystem::path dir = unique_test_dir("fps_brush_controller");
