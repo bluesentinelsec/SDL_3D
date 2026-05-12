@@ -7441,7 +7441,19 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const slayer3d_game_data_brush_material *blue_material = find_material("mat.accent_blue");
     ASSERT_NE(blue_material, nullptr);
     EXPECT_GT(blue_material->emissive.z, 0.0f);
+    const slayer3d_game_data_brush_material *floor_material = find_material("mat.floor");
+    const slayer3d_game_data_brush_material *wall_material = find_material("mat.wall");
+    const slayer3d_game_data_brush_material *ceiling_material = find_material("mat.ceiling");
+    ASSERT_NE(floor_material, nullptr);
+    ASSERT_NE(wall_material, nullptr);
+    ASSERT_NE(ceiling_material, nullptr);
+    EXPECT_STREQ(floor_material->texture, "asset://textures/rock_floor.jpg");
+    EXPECT_STREQ(wall_material->texture, "asset://textures/wall_metal.jpg");
+    EXPECT_STREQ(ceiling_material->texture, "asset://textures/ceiling_metal.jpg");
     bool saw_model_emissive = false;
+    bool saw_model_floor_texture = false;
+    bool saw_model_wall_texture = false;
+    bool saw_model_ceiling_texture = false;
     for (int i = 0; i < world.render_model->material_count; ++i)
     {
         const slayer3d_material &material = world.render_model->materials[i];
@@ -7450,8 +7462,29 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
             saw_model_emissive = true;
             EXPECT_GT(material.emissive[2], 0.0f);
         }
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.floor") == 0)
+        {
+            saw_model_floor_texture = true;
+            ASSERT_NE(material.albedo_map, nullptr);
+            EXPECT_STREQ(material.albedo_map, "asset://textures/rock_floor.jpg");
+        }
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.wall") == 0)
+        {
+            saw_model_wall_texture = true;
+            ASSERT_NE(material.albedo_map, nullptr);
+            EXPECT_STREQ(material.albedo_map, "asset://textures/wall_metal.jpg");
+        }
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.ceiling") == 0)
+        {
+            saw_model_ceiling_texture = true;
+            ASSERT_NE(material.albedo_map, nullptr);
+            EXPECT_STREQ(material.albedo_map, "asset://textures/ceiling_metal.jpg");
+        }
     }
     EXPECT_TRUE(saw_model_emissive);
+    EXPECT_TRUE(saw_model_floor_texture);
+    EXPECT_TRUE(saw_model_wall_texture);
+    EXPECT_TRUE(saw_model_ceiling_texture);
     const slayer3d_game_data_brush *pillar = find_brush("brush.pillar.center");
     const slayer3d_game_data_brush *overhang_west = find_brush("brush.bridge.overhang_west");
     const slayer3d_game_data_brush *overhang_east = find_brush("brush.bridge.overhang_east");
