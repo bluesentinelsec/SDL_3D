@@ -754,6 +754,9 @@ bool collect_effect_targets(slayer3d_game_data_runtime *runtime, const char *tag
 float sector_door_distance_sq_xz(const slayer3d_door *door, slayer3d_vec3 point);
 bool sector_door_is_in_front(const slayer3d_door *door, slayer3d_vec3 point, float yaw, float min_dot);
 void update_sector_doors(slayer3d_game_data_runtime *runtime, float dt);
+bool update_sector_platforms(slayer3d_game_data_runtime *runtime, float dt);
+void update_control_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt);
+void update_motion_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt);
 void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
                               slayer3d_registered_actor *actor, float dt);
 void update_fps_sector_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,

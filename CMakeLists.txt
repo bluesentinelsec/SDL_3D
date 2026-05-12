@@ -154,6 +154,7 @@ target_sources(
         src/game_data_grid_runtime.c
         src/game_data_input_device_helpers.c
         src/game_data_json_helpers.c
+        src/game_data_motion_runtime.c
         src/game_data_property_effect_runtime.c
         src/game_data_runtime_collections.c
         src/game_data_scene_lookup.c

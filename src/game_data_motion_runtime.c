@@ -1,5 +1,8 @@
-/* Sector platform, component state, and motion update helpers. Included by game_data_update_runtime.inc to preserve
- * internal linkage. */
+/* Sector platform, component state, and motion update helpers. */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
 
 static slayer3d_properties *sector_platform_crush_payload(const sector_platform_runtime *platform,
                                                           const slayer3d_registered_actor *actor, float floor_y,
@@ -75,7 +78,7 @@ static bool sector_platform_apply_crush_policy(slayer3d_game_data_runtime *runti
     return ok;
 }
 
-static bool update_sector_platforms(slayer3d_game_data_runtime *runtime, float dt)
+bool update_sector_platforms(slayer3d_game_data_runtime *runtime, float dt)
 {
     if (runtime == NULL)
         return false;
@@ -236,7 +239,7 @@ static void update_interactable_component(yyjson_val *component, slayer3d_regist
         slayer3d_properties_set_float(actor->props, cooldown_property, SDL_max(cooldown - dt, 0.0f));
 }
 
-static void update_control_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt)
+void update_control_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
     slayer3d_input_manager *input = runtime_input(runtime);
     yyjson_val *entities = obj_get(root, "entities");
@@ -321,7 +324,7 @@ static void update_control_components(slayer3d_game_data_runtime *runtime, yyjso
     }
 }
 
-static void update_motion_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt)
+void update_motion_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
     (void)root;
     for (int actor_id = 0; actor_id < runtime->actor_pool_count + 1; ++actor_id)
