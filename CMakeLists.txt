@@ -147,9 +147,12 @@ target_sources(
         src/game.c
         src/game_data_brush.c
         src/game_data.c
+        src/game_data_actions.c
         src/game_data_action_lookup.c
+        src/game_data_actor_pool_runtime.c
         src/game_data_adapter_helpers.c
         src/game_data_combat_weapon_actions.c
+        src/game_data_conditions_presentation.c
         src/game_data_controller_runtime.c
         src/game_data_controller_binding_helpers.c
         src/game_data_grid_actions.c
@@ -167,6 +170,7 @@ target_sources(
         src/game_data_sector_noise_actions.c
         src/game_data_scripts.c
         src/game_data_update_runtime.c
+        src/game_data_ui_animation_runtime.c
         src/game_data_world_loaders.c
         src/game_data_world_queries.c
         src/game_data_standard_options.c

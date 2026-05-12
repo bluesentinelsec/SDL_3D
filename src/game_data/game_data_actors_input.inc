@@ -18,8 +18,7 @@ void set_actor_property_from_json(slayer3d_registered_actor *actor, const char *
         slayer3d_properties_set_vec3(actor->props, key, json_vec3_value(value, slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
 }
 
-static bool format_payload_string(const slayer3d_properties *payload, const char *format, char *buffer,
-                                  size_t buffer_size)
+bool format_payload_string(const slayer3d_properties *payload, const char *format, char *buffer, size_t buffer_size)
 {
     if (buffer == NULL || buffer_size == 0U)
         return false;
@@ -83,8 +82,8 @@ static bool format_payload_string(const slayer3d_properties *payload, const char
     return cursor[0] == '\0';
 }
 
-static bool set_property_from_json_with_payload(slayer3d_properties *props, const char *key, yyjson_val *value,
-                                                const slayer3d_properties *payload)
+bool set_property_from_json_with_payload(slayer3d_properties *props, const char *key, yyjson_val *value,
+                                         const slayer3d_properties *payload)
 {
     if (props == NULL || key == NULL || value == NULL)
         return false;
@@ -99,7 +98,7 @@ static bool set_property_from_json_with_payload(slayer3d_properties *props, cons
     return set_property_from_json(props, key, value);
 }
 
-static slayer3d_properties *properties_from_json_payload(yyjson_val *json, const slayer3d_properties *source_payload)
+slayer3d_properties *properties_from_json_payload(yyjson_val *json, const slayer3d_properties *source_payload)
 {
     slayer3d_properties *payload = slayer3d_properties_create();
     if (payload == NULL)
@@ -243,7 +242,7 @@ static const char *actor_lifecycle_state_name(actor_lifecycle_state state)
     }
 }
 
-static actor_lifecycle_state actor_pool_lifecycle_state(const actor_pool_runtime *pool, int index)
+actor_lifecycle_state actor_pool_lifecycle_state(const actor_pool_runtime *pool, int index)
 {
     if (pool == NULL || index < 0 || index >= pool->capacity || pool->lifecycle_states == NULL)
         return ACTOR_LIFECYCLE_INACTIVE;
@@ -293,15 +292,14 @@ bool actor_pool_actor_is_active(const actor_pool_runtime *pool, const slayer3d_r
             actor_pool_lifecycle_state(pool, index) == ACTOR_LIFECYCLE_ACTIVE);
 }
 
-static bool actor_pool_actor_is_available(const actor_pool_runtime *pool, const slayer3d_registered_actor *actor,
-                                          int index)
+bool actor_pool_actor_is_available(const actor_pool_runtime *pool, const slayer3d_registered_actor *actor, int index)
 {
     return actor != NULL && !actor->active &&
            (pool == NULL || pool->lifecycle_states == NULL ||
             actor_pool_lifecycle_state(pool, index) == ACTOR_LIFECYCLE_INACTIVE);
 }
 
-static void actor_pool_copy_reason(char *target, size_t target_size, const char *reason)
+void actor_pool_copy_reason(char *target, size_t target_size, const char *reason)
 {
     if (target == NULL || target_size == 0U)
         return;
