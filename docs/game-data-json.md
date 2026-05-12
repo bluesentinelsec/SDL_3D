@@ -681,6 +681,31 @@ every frame. In `mode: "click"`, `outputs` receives the pinned selection and
 defaults to `LEFT`; clicking empty space clears the pinned selection unless
 `clear_on_miss` is false.
 
+Editor selections can also drive generic logic actions:
+
+```json
+{
+  "type": "editor.selection.run",
+  "actions": [
+    {
+      "type": "scene_state.set",
+      "key": "editor.last_action",
+      "value": "inspect {selection_element} face {selection_face_stable_id}"
+    }
+  ],
+  "else": [
+    { "type": "scene_state.set", "key": "editor.last_action", "value": "nothing selected" }
+  ]
+}
+```
+
+`editor.selection.run` executes `actions` only when the active scene has a
+pinned or current selection. It supplies payload fields such as
+`selection_type`, `selection_world`, `selection_element`,
+`selection_material`, `selection_face_index`, `selection_face_stable_id`,
+`selection_point`, and `selection_normal`. `editor.selection.clear` clears the
+active selection and republishes the scene's `outputs` as an empty selection.
+
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,
 `selection_bounds`, `trace_ray`, `face_normal`, and `hit_marker`.

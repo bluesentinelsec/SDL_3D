@@ -22,6 +22,80 @@
           {
             "name": "action.exit",
             "bindings": [{ "device": "keyboard", "key": "ESCAPE" }]
+          },
+          {
+            "name": "action.editor.tool.cycle",
+            "bindings": [{ "device": "keyboard", "key": "TAB" }]
+          },
+          {
+            "name": "action.editor.selection.clear",
+            "bindings": [{ "device": "keyboard", "key": "BACKSPACE" }]
+          },
+          {
+            "name": "action.editor.selection.inspect",
+            "bindings": [{ "device": "keyboard", "key": "I" }]
+          }
+        ]
+      }
+    ]
+  },
+  "signals": [
+    "signal.editor.tool.cycle",
+    "signal.editor.selection.clear",
+    "signal.editor.selection.inspect"
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.tool.cycle",
+        "on_pressed": "signal.editor.tool.cycle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.selection.clear",
+        "on_pressed": "signal.editor.selection.clear"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.selection.inspect",
+        "on_pressed": "signal.editor.selection.inspect"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.editor.tool.cycle",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.tool.mode",
+            "default": "select",
+            "values": ["select", "move", "paint"]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.selection.clear",
+        "actions": [
+          { "type": "editor.selection.clear" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selection cleared" }
+        ]
+      },
+      {
+        "signal": "signal.editor.selection.inspect",
+        "actions": [
+          {
+            "type": "editor.selection.run",
+            "actions": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "inspect {selection_element} face {selection_face_stable_id}"
+              }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing selected" }
+            ]
           }
         ]
       }

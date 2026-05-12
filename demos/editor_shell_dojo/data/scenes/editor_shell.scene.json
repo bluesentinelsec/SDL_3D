@@ -5,7 +5,12 @@
   "updates_game": true,
   "renders_world": true,
   "input": {
-    "actions": ["action.exit"]
+    "actions": [
+      "action.exit",
+      "action.editor.tool.cycle",
+      "action.editor.selection.clear",
+      "action.editor.selection.inspect"
+    ]
   },
   "world": {
     "brush_worlds": [
@@ -112,6 +117,14 @@
           {
             "label": "Stable",
             "binding": { "type": "scene_state", "key": "editor.selection.face_stable_id", "default": "none" }
+          },
+          {
+            "label": "Tool",
+            "binding": { "type": "scene_state", "key": "editor.tool.mode", "default": "select" }
+          },
+          {
+            "label": "Action",
+            "binding": { "type": "scene_state", "key": "editor.tool.last_action", "default": "none" }
           }
         ]
       }

@@ -8231,6 +8231,38 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_selection_actions");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+
+    write_text(dir / "bad_selection_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Selection Action" },
+  "world": { "name": "world.bad_editor_selection_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.inspect"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.inspect",
+        "actions": [
+          { "type": "editor.selection.run", "else": [] }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_selection_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("logic action list must be an array"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, CombatActionsApplyHealthArmorDeathAndRevive)
 {
     const std::filesystem::path dir = unique_test_dir("combat_actions");
@@ -12227,6 +12259,23 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(active_selection.element_name, "brush.target.cube");
 
+    auto press_key = [&](SDL_Scancode scancode, Uint64 frame) {
+        SDL_Event key{};
+        key.type = SDL_EVENT_KEY_DOWN;
+        key.key.scancode = scancode;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame);
+    };
+
+    press_key(SDL_SCANCODE_I, 4);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "inspect brush.target.cube face editor.face.target_cube.left");
+
+    press_key(SDL_SCANCODE_TAB, 5);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "move");
+
     struct DebugCapture
     {
         int world_edges = 0;
@@ -12274,6 +12323,12 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(inspector.values[2], "true");
     EXPECT_EQ(inspector.values[3], "World");
     EXPECT_EQ(inspector.values[4], "brush.editor_shell.target");
+
+    press_key(SDL_SCANCODE_BACKSPACE, 6);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "selection cleared");
+    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
 
     SDL_Event release{};
     release.type = SDL_EVENT_MOUSE_BUTTON_UP;

@@ -1907,6 +1907,53 @@ bool slayer3d_game_data_get_active_editor_selection(const slayer3d_game_data_run
     return true;
 }
 
+bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    clear_editor_active_selection(runtime);
+    yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
+    publish_editor_selection(runtime, obj_get(selection_json, "outputs"), &runtime->editor_active_selection);
+    return true;
+}
+
+slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
+    const slayer3d_game_data_editor_selection *selection)
+{
+    slayer3d_properties *payload = slayer3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+
+    const bool hit = selection != NULL && selection->hit;
+    slayer3d_properties_set_bool(payload, "selection_hit", hit);
+    slayer3d_properties_set_string(payload, "selection_type",
+                                   hit ? editor_selection_type_name(selection->type) : "none");
+    slayer3d_properties_set_string(payload, "selection_world",
+                                   hit && selection->world_name != NULL ? selection->world_name : "");
+    slayer3d_properties_set_string(payload, "selection_element",
+                                   hit && selection->element_name != NULL ? selection->element_name : "");
+    slayer3d_properties_set_string(payload, "selection_material",
+                                   hit && selection->material_name != NULL ? selection->material_name : "");
+    slayer3d_properties_set_string(payload, "selection_world_stable_id",
+                                   hit ? editor_metadata_stable_id(selection->world_editor) : "");
+    slayer3d_properties_set_string(payload, "selection_element_stable_id",
+                                   hit ? editor_metadata_stable_id(selection->element_editor) : "");
+    slayer3d_properties_set_string(payload, "selection_material_stable_id",
+                                   hit ? editor_metadata_stable_id(selection->material_editor) : "");
+    slayer3d_properties_set_string(payload, "selection_face_stable_id",
+                                   hit ? editor_metadata_stable_id(selection->face_editor) : "");
+    slayer3d_properties_set_int(payload, "selection_element_index", hit ? selection->element_index : -1);
+    slayer3d_properties_set_int(payload, "selection_face_index", hit ? selection->face_index : -1);
+    slayer3d_properties_set_float(payload, "selection_fraction", hit ? selection->fraction : 1.0f);
+    slayer3d_properties_set_vec3(payload, "selection_world_position",
+                                 hit ? selection->world_position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(payload, "selection_point",
+                                 hit ? selection->point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(payload, "selection_normal",
+                                 hit ? selection->normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    return payload;
+}
+
 static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime *runtime,
                                                slayer3d_game_data_editor_debug_desc *out_desc,
                                                slayer3d_game_data_world_trace_desc *out_trace,

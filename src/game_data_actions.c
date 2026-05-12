@@ -188,6 +188,24 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return set_property_from_json(runtime->scene_state, key, yyjson_arr_get(values, next));
     }
 
+    if (SDL_strcmp(type, "editor.selection.clear") == 0)
+        return slayer3d_game_data_clear_active_editor_selection(runtime);
+
+    if (SDL_strcmp(type, "editor.selection.run") == 0)
+    {
+        slayer3d_game_data_editor_selection selection;
+        if (slayer3d_game_data_get_active_editor_selection(runtime, &selection))
+        {
+            slayer3d_properties *selection_payload = slayer3d_game_data_create_editor_selection_payload(&selection);
+            if (selection_payload == NULL)
+                return false;
+            const bool ok = execute_action_array(runtime, obj_get(action, "actions"), selection_payload);
+            slayer3d_properties_destroy(selection_payload);
+            return ok;
+        }
+        return execute_optional_action_array(runtime, obj_get(action, "else"), payload);
+    }
+
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         const char *name = json_string(action, "name", NULL);
