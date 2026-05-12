@@ -48,10 +48,23 @@
           "type": "weapon.projectile",
           "action": "action.fire",
           "pool": "pool.brush_geometry.projectiles",
-          "offset": [0.0, -0.15, -0.55],
+          "directional_offset": { "property": "camera_forward", "distance": 0.75 },
           "velocity_from_property": "camera_forward",
           "speed": 28.0,
           "cooldown_property": "fire_timer"
+        },
+        {
+          "type": "render.mesh_primitive",
+          "primitive": "capsule",
+          "offset": [0.0, -0.8, 0.0],
+          "radius": 0.35,
+          "height": 1.6,
+          "segments": 24,
+          "rings": 8,
+          "color": [60, 255, 70, 255],
+          "emissive": true,
+          "lighting": true,
+          "visible_to_cameras": ["camera.brush_geometry.security"]
         }
       ]
     }

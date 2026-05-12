@@ -204,7 +204,7 @@ bool execute_projectile_fire_action_for_actor(slayer3d_game_data_runtime *runtim
                                     (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
     }
 
-    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, target->position));
+    actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, target->position, target));
     apply_actor_spawn_properties(actor, obj_get(action, "properties"));
     yyjson_val *velocity = obj_get(action, "velocity");
     const slayer3d_vec3 fallback_velocity = json_vec3_value(velocity, slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
@@ -968,7 +968,7 @@ bool execute_weapon_hitscan_action(slayer3d_game_data_runtime *runtime, yyjson_v
         return true;
 
     const float range = SDL_max(json_float(action, "range", 64.0f), 0.0f);
-    slayer3d_vec3 origin = actor_spawn_position_from_action(runtime, action, payload, source->position);
+    slayer3d_vec3 origin = actor_spawn_position_from_action(runtime, action, payload, source->position, source);
     slayer3d_vec3 direction = weapon_direction_from_action(source, action);
     float wall_distance = range;
     bool wall_hit = false;

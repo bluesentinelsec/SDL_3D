@@ -3011,6 +3011,27 @@ static bool validate_render_composite_component(validation_context *ctx, yyjson_
     return true;
 }
 
+static bool validate_render_camera_visibility_field(validation_context *ctx, yyjson_val *component, const char *path,
+                                                    const validation_names *names, const char *field)
+{
+    yyjson_val *value = obj_get(component, field);
+    if (value == NULL)
+        return true;
+    if (yyjson_is_str(value))
+        return require_ref(ctx, &names->cameras, "camera", yyjson_get_str(value), path);
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) == 0)
+        return validation_error(ctx, path, "render primitive camera visibility must be a string or non-empty array");
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_str(entry) || yyjson_get_str(entry)[0] == '\0')
+            return validation_error(ctx, path, "render primitive camera visibility must contain camera names");
+        if (!require_ref(ctx, &names->cameras, "camera", yyjson_get_str(entry), path))
+            return false;
+    }
+    return true;
+}
+
 static bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path,
                                             const char *type, const char *field);
 static bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
@@ -3391,6 +3412,18 @@ static bool validate_projectile_fire_shape(validation_context *ctx, yyjson_val *
     yyjson_val *offset = obj_get(value, "offset");
     if (offset != NULL && !is_vec_array(offset, 3))
         return validation_error(ctx, path, "projectile offset must be a vec3");
+    yyjson_val *directional_offset = obj_get(value, "directional_offset");
+    if (directional_offset != NULL)
+    {
+        if (!yyjson_is_obj(directional_offset))
+            return validation_error(ctx, path, "projectile directional_offset must be an object");
+        yyjson_val *property = obj_get(directional_offset, "property");
+        yyjson_val *distance = obj_get(directional_offset, "distance");
+        if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+            return validation_error(ctx, path, "projectile directional_offset property must be a non-empty string");
+        if (!yyjson_is_num(distance))
+            return validation_error(ctx, path, "projectile directional_offset distance must be numeric");
+    }
     yyjson_val *velocity = obj_get(value, "velocity");
     if (velocity != NULL && !is_vec_array(velocity, 3))
         return validation_error(ctx, path, "projectile velocity must be a vec3");
@@ -5778,6 +5811,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lighting_key = obj_get(component, "lighting_key");
                 if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
                     return validation_error(ctx, path, "render primitive lighting_key must be non-empty");
+                if (!validate_render_camera_visibility_field(ctx, component, path, names, "visible_to_cameras") ||
+                    !validate_render_camera_visibility_field(ctx, component, path, names, "hidden_from_cameras"))
+                {
+                    return false;
+                }
                 if (SDL_strcmp(type, "render.cube") == 0 || SDL_strcmp(type, "render.sphere") == 0 ||
                     SDL_strcmp(type, "render.mesh_primitive") == 0 || SDL_strcmp(type, "render.composite") == 0)
                 {
@@ -6252,6 +6290,13 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *lighting_key = obj_get(component, "lighting_key");
                 if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
                     return validation_error(ctx, component_path, "render primitive lighting_key must be non-empty");
+                if (!validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "visible_to_cameras") ||
+                    !validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "hidden_from_cameras"))
+                {
+                    return false;
+                }
                 yyjson_val *size = obj_get(component, "size");
                 if (size != NULL && !is_vec_array(size, 3))
                     return validation_error(ctx, component_path, "render.cube size must be a vec3");
@@ -6268,16 +6313,37 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             }
             else if (SDL_strcmp(type, "render.mesh_primitive") == 0)
             {
+                if (!validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "visible_to_cameras") ||
+                    !validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "hidden_from_cameras"))
+                {
+                    return false;
+                }
                 if (!validate_render_mesh_primitive_component(ctx, component, component_path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "render.composite") == 0)
             {
+                if (!validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "visible_to_cameras") ||
+                    !validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "hidden_from_cameras"))
+                {
+                    return false;
+                }
                 if (!validate_render_composite_component(ctx, component, component_path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "render.sprite") == 0)
             {
+                if (!validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "visible_to_cameras") ||
+                    !validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "hidden_from_cameras"))
+                {
+                    return false;
+                }
                 if (!require_ref(ctx, &names->sprites, "sprite asset", json_string(component, "sprite"),
                                  component_path))
                     return false;
@@ -6293,6 +6359,13 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             }
             else if (SDL_strcmp(type, "render.model") == 0)
             {
+                if (!validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "visible_to_cameras") ||
+                    !validate_render_camera_visibility_field(ctx, component, component_path, names,
+                                                             "hidden_from_cameras"))
+                {
+                    return false;
+                }
                 if (!require_ref(ctx, &names->models, "model asset", json_string(component, "model"), component_path))
                     return false;
                 yyjson_val *scale = obj_get(component, "scale");
@@ -7571,6 +7644,22 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *from_payload = obj_get(action, "from_payload");
         if (from_payload != NULL && (!yyjson_is_str(from_payload) || yyjson_get_str(from_payload)[0] == '\0'))
             return validation_error(ctx, json_path, "actor.spawn from_payload must be a non-empty string");
+        yyjson_val *offset = obj_get(action, "offset");
+        if (offset != NULL && !is_vec_array(offset, 3))
+            return validation_error(ctx, json_path, "actor.spawn offset must be a vec3");
+        yyjson_val *directional_offset = obj_get(action, "directional_offset");
+        if (directional_offset != NULL)
+        {
+            if (!yyjson_is_obj(directional_offset))
+                return validation_error(ctx, json_path, "actor.spawn directional_offset must be an object");
+            yyjson_val *property = obj_get(directional_offset, "property");
+            yyjson_val *distance = obj_get(directional_offset, "distance");
+            if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+                return validation_error(ctx, json_path,
+                                        "actor.spawn directional_offset property must be a non-empty string");
+            if (!yyjson_is_num(distance))
+                return validation_error(ctx, json_path, "actor.spawn directional_offset distance must be numeric");
+        }
         yyjson_val *properties = obj_get(action, "properties");
         if (properties != NULL && !yyjson_is_obj(properties))
             return validation_error(ctx, json_path, "actor.spawn properties must be an object");
@@ -7781,7 +7870,7 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return validate_projectile_fire_shape(ctx, action, json_path, names, true);
     }
     if (SDL_strcmp(type, "controller.fps.launch") == 0 || SDL_strcmp(type, "controller.fps.teleport") == 0 ||
-        SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
+        SDL_strcmp(type, "controller.fps.push") == 0 || SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
         SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
     {
         yyjson_val *target_value = obj_get(action, "target");
@@ -7802,6 +7891,15 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             yyjson_val *vertical_velocity = obj_get(action, "vertical_velocity");
             if (!yyjson_is_num(vertical_velocity) || yyjson_get_num(vertical_velocity) <= 0.0)
                 return validation_error(ctx, json_path, "%s requires positive vertical_velocity", type);
+            return true;
+        }
+        if (SDL_strcmp(type, "controller.fps.push") == 0)
+        {
+            if (!is_vec_array(obj_get(action, "velocity"), 3))
+                return validation_error(ctx, json_path, "%s requires a vec3 velocity", type);
+            yyjson_val *scale_by_dt = obj_get(action, "scale_by_dt");
+            if (scale_by_dt != NULL && !yyjson_is_bool(scale_by_dt))
+                return validation_error(ctx, json_path, "%s scale_by_dt must be a boolean", type);
             return true;
         }
 
@@ -9088,6 +9186,27 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
         yyjson_val *size = obj_get(camera, "size");
         if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 0.0))
             return validation_error(ctx, path, "camera size must be positive");
+        yyjson_val *position = obj_get(camera, "position");
+        if (position != NULL && !is_vec_array(position, 3))
+            return validation_error(ctx, path, "camera position must be a vec3");
+        yyjson_val *target = obj_get(camera, "target");
+        if (target != NULL && !is_vec_array(target, 3))
+            return validation_error(ctx, path, "camera target must be a vec3");
+        yyjson_val *up = obj_get(camera, "up");
+        if (up != NULL && !is_vec_array(up, 3))
+            return validation_error(ctx, path, "camera up must be a vec3");
+        yyjson_val *position_offset = obj_get(camera, "position_offset");
+        if (position_offset != NULL && !is_vec_array(position_offset, 3))
+            return validation_error(ctx, path, "camera position_offset must be a vec3");
+        yyjson_val *target_offset = obj_get(camera, "target_offset");
+        if (target_offset != NULL && !is_vec_array(target_offset, 3))
+            return validation_error(ctx, path, "camera target_offset must be a vec3");
+        const char *position_entity = json_string(camera, "position_entity");
+        if (position_entity != NULL && !require_ref(ctx, &names->entities, "entity", position_entity, path))
+            return false;
+        const char *target_entity = json_string(camera, "target_entity");
+        if (target_entity != NULL && !require_ref(ctx, &names->entities, "entity", target_entity, path))
+            return false;
         if (SDL_strcmp(type != NULL ? type : "", "adapter") == 0)
         {
             const char *adapter = json_string(camera, "adapter");
@@ -9095,9 +9214,6 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
                 return false;
             if (!note_name(&names->used_adapters, adapter, path))
                 return validation_error(ctx, path, "failed to record adapter use");
-            if (json_string(camera, "target_entity") != NULL &&
-                !require_ref(ctx, &names->entities, "entity", json_string(camera, "target_entity"), path))
-                return false;
         }
         else if (SDL_strcmp(type != NULL ? type : "", "chase") == 0)
         {

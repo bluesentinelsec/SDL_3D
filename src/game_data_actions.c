@@ -362,6 +362,8 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return execute_fps_controller_launch_action(runtime, action, payload);
     if (SDL_strcmp(type, "controller.fps.teleport") == 0 || SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
         return execute_fps_controller_teleport_action(runtime, action, payload);
+    if (SDL_strcmp(type, "controller.fps.push") == 0)
+        return execute_fps_controller_push_action(runtime, action, payload);
     if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0)
         return execute_grid_spawn_from_glyphs_action(runtime, action);
     if (SDL_strcmp(type, "grid.spawn_runs_from_glyphs") == 0)

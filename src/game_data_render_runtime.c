@@ -368,6 +368,20 @@ const char *slayer3d_game_data_active_camera(const slayer3d_game_data_runtime *r
     return runtime != NULL ? runtime->active_camera : NULL;
 }
 
+static slayer3d_vec3 camera_vec3_from_entity_or_json(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json,
+                                                     const char *entity_key, const char *offset_key,
+                                                     const char *json_key, slayer3d_vec3 fallback)
+{
+    slayer3d_registered_actor *actor =
+        slayer3d_game_data_find_actor(runtime, json_string(camera_json, entity_key, NULL));
+    if (actor != NULL)
+    {
+        return slayer3d_vec3_add(actor->position,
+                                 json_vec3(camera_json, offset_key, slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
+    }
+    return json_vec3(camera_json, json_key, fallback);
+}
+
 bool slayer3d_game_data_get_camera(const slayer3d_game_data_runtime *runtime, const char *name,
                                    slayer3d_camera3d *out_camera)
 {
@@ -464,8 +478,10 @@ bool slayer3d_game_data_get_camera(const slayer3d_game_data_runtime *runtime, co
         return true;
     }
 
-    out_camera->position = json_vec3(camera_json, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    out_camera->target = json_vec3(camera_json, "target", slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
+    out_camera->position = camera_vec3_from_entity_or_json(runtime, camera_json, "position_entity", "position_offset",
+                                                           "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    out_camera->target = camera_vec3_from_entity_or_json(runtime, camera_json, "target_entity", "target_offset",
+                                                         "target", slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
     out_camera->up = json_vec3(camera_json, "up", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
     if (SDL_strcmp(type, "orthographic") == 0)
     {
@@ -1030,6 +1046,31 @@ static slayer3d_game_data_render_draw_mode render_draw_mode_from_string(const ch
     return SLAYER3D_GAME_DATA_RENDER_DRAW_SOLID;
 }
 
+static bool json_string_or_array_contains(yyjson_val *value, const char *needle)
+{
+    if (needle == NULL || value == NULL)
+        return false;
+    if (yyjson_is_str(value))
+        return SDL_strcmp(yyjson_get_str(value), needle) == 0;
+    for (size_t i = 0; yyjson_is_arr(value) && i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (yyjson_is_str(entry) && SDL_strcmp(yyjson_get_str(entry), needle) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool render_component_visible_for_active_camera(const slayer3d_game_data_runtime *runtime, yyjson_val *component)
+{
+    const char *active_camera = slayer3d_game_data_active_camera(runtime);
+    yyjson_val *visible_to = obj_get(component, "visible_to_cameras");
+    if (visible_to != NULL && !json_string_or_array_contains(visible_to, active_camera))
+        return false;
+    yyjson_val *hidden_from = obj_get(component, "hidden_from_cameras");
+    return !json_string_or_array_contains(hidden_from, active_camera);
+}
+
 static void populate_mesh_primitive_descriptor(const slayer3d_registered_actor *actor, yyjson_val *component,
                                                slayer3d_game_data_render_primitive *primitive)
 {
@@ -1109,6 +1150,8 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
     for (size_t c = 0; c < yyjson_arr_size(components); ++c)
     {
         yyjson_val *component = yyjson_arr_get(components, c);
+        if (!render_component_visible_for_active_camera(runtime, component))
+            continue;
         const char *type = json_string(component, "type", "");
         slayer3d_game_data_render_primitive primitive;
         SDL_zero(primitive);

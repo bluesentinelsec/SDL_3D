@@ -574,7 +574,7 @@ bool execute_effect_explosion_action(slayer3d_game_data_runtime *runtime, yyjson
         return true;
     slayer3d_registered_actor *source = effect_source_actor(runtime, action, payload);
     const slayer3d_vec3 fallback = source != NULL ? source->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-    const slayer3d_vec3 origin = actor_spawn_position_from_action(runtime, action, payload, fallback);
+    const slayer3d_vec3 origin = actor_spawn_position_from_action(runtime, action, payload, fallback, source);
     const char *tag = json_string(action, "target_tag", json_string(action, "affected_tag", NULL));
     const bool exclude_source = json_bool(action, "exclude_source", true);
     const int max_targets = SDL_max(json_int(action, "max_targets", SDL_MAX_SINT32), 0);

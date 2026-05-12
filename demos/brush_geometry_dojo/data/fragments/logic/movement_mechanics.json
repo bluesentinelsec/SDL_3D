@@ -1,0 +1,73 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "signals": ["signal.brush_geometry.camera.toggle"],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.brush_geometry.camera_toggle",
+        "type": "sensor.input_pressed",
+        "action": "action.camera.security.toggle",
+        "on_pressed": "signal.brush_geometry.camera.toggle"
+      },
+      {
+        "name": "sensor.brush_geometry.conveyor.stay",
+        "type": "sensor.volume",
+        "actor": "entity.brush_geometry.player",
+        "min": [-28.0, 0.0, -45.0],
+        "max": [28.0, 2.4, -41.0],
+        "edge": "stay",
+        "actions": [
+          {
+            "type": "controller.fps.push",
+            "target": "entity.brush_geometry.player",
+            "velocity": [4.2, 0.0, 0.0]
+          }
+        ]
+      },
+      {
+        "name": "sensor.brush_geometry.jump_pad.enter",
+        "type": "sensor.volume",
+        "actor": "entity.brush_geometry.player",
+        "min": [-39.6, 0.0, -35.6],
+        "max": [-36.4, 2.4, -32.4],
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "controller.fps.launch",
+            "target": "entity.brush_geometry.player",
+            "vertical_velocity": 13.0
+          }
+        ]
+      },
+      {
+        "name": "sensor.brush_geometry.teleporter.enter",
+        "type": "sensor.volume",
+        "actor": "entity.brush_geometry.player",
+        "min": [36.4, 0.0, -35.6],
+        "max": [39.6, 2.4, -32.4],
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "controller.fps.teleport",
+            "target": "entity.brush_geometry.player",
+            "position": [0.0, 1.6, -30.0],
+            "yaw": 0.0,
+            "pitch": 0.0
+          }
+        ]
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.brush_geometry.camera.toggle",
+        "actions": [
+          {
+            "type": "camera.toggle",
+            "camera": "camera.brush_geometry.security",
+            "fallback": "camera.brush_geometry.player"
+          }
+        ]
+      }
+    ]
+  }
+}
