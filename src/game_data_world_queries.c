@@ -1543,6 +1543,247 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
     return true;
 }
 
+static yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime)
+{
+    const scene_entry *scene = active_scene_entry_const(runtime);
+    return obj_get(scene != NULL ? scene->root : NULL, "editor");
+}
+
+static unsigned int editor_model_filter_flag_from_string(const char *value)
+{
+    if (SDL_strcmp(value != NULL ? value : "", "all") == 0)
+        return SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_ALL;
+    if (SDL_strcmp(value != NULL ? value : "", "sector_levels") == 0 ||
+        SDL_strcmp(value != NULL ? value : "", "sector") == 0)
+    {
+        return SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_SECTOR_LEVELS;
+    }
+    if (SDL_strcmp(value != NULL ? value : "", "brush_worlds") == 0 ||
+        SDL_strcmp(value != NULL ? value : "", "brush") == 0)
+    {
+        return SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_BRUSH_WORLDS;
+    }
+    return 0u;
+}
+
+static unsigned int editor_model_filter_from_json(yyjson_val *value)
+{
+    if (yyjson_is_str(value))
+        return editor_model_filter_flag_from_string(yyjson_get_str(value));
+    if (!yyjson_is_arr(value))
+        return SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_ALL;
+
+    unsigned int flags = 0u;
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (yyjson_is_str(entry))
+            flags |= editor_model_filter_flag_from_string(yyjson_get_str(entry));
+    }
+    return flags != 0u ? flags : SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_ALL;
+}
+
+static unsigned int editor_debug_flag_from_string(const char *value)
+{
+    if (SDL_strcmp(value != NULL ? value : "", "all") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if (SDL_strcmp(value != NULL ? value : "", "world_bounds") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS;
+    if (SDL_strcmp(value != NULL ? value : "", "selection_bounds") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS;
+    if (SDL_strcmp(value != NULL ? value : "", "trace_ray") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY;
+    if (SDL_strcmp(value != NULL ? value : "", "face_normal") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL;
+    if (SDL_strcmp(value != NULL ? value : "", "hit_marker") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER;
+    return 0u;
+}
+
+static unsigned int editor_debug_flags_from_json(yyjson_val *value)
+{
+    if (yyjson_is_str(value))
+        return editor_debug_flag_from_string(yyjson_get_str(value));
+    if (!yyjson_is_arr(value))
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+
+    unsigned int flags = 0u;
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (yyjson_is_str(entry))
+            flags |= editor_debug_flag_from_string(yyjson_get_str(entry));
+    }
+    return flags != 0u ? flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+}
+
+static bool editor_trace_desc_from_json(yyjson_val *selection, slayer3d_game_data_world_trace_desc *out_trace)
+{
+    if (out_trace != NULL)
+        SDL_zero(*out_trace);
+    yyjson_val *trace = obj_get(selection, "trace");
+    if (!yyjson_is_obj(trace) || out_trace == NULL)
+        return false;
+
+    out_trace->shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    out_trace->start = json_vec3(trace, "start", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    out_trace->end = json_vec3(trace, "end", out_trace->start);
+    out_trace->contents_mask =
+        brush_flags_from_json(obj_get(trace, "contents_mask"), brush_content_flag_from_string,
+                              SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+    out_trace->model_filter = editor_model_filter_from_json(obj_get(trace, "model_filter"));
+    return true;
+}
+
+static const char *editor_selection_type_name(slayer3d_game_data_world_model_type type)
+{
+    if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL)
+        return "sector_level";
+    if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
+        return "brush_world";
+    return "none";
+}
+
+static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)
+{
+    return metadata != NULL && metadata->stable_id != NULL ? metadata->stable_id : "";
+}
+
+static void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name,
+                                     const char *value)
+{
+    const char *key = json_string(outputs, key_name, NULL);
+    if (props != NULL && key != NULL)
+        slayer3d_properties_set_string(props, key, value != NULL ? value : "");
+}
+
+static void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value)
+{
+    const char *key = json_string(outputs, key_name, NULL);
+    if (props != NULL && key != NULL)
+        slayer3d_properties_set_bool(props, key, value);
+}
+
+static void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value)
+{
+    const char *key = json_string(outputs, key_name, NULL);
+    if (props != NULL && key != NULL)
+        slayer3d_properties_set_int(props, key, value);
+}
+
+static void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, float value)
+{
+    const char *key = json_string(outputs, key_name, NULL);
+    if (props != NULL && key != NULL)
+        slayer3d_properties_set_float(props, key, value);
+}
+
+static void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name,
+                                   slayer3d_vec3 value)
+{
+    const char *key = json_string(outputs, key_name, NULL);
+    if (props != NULL && key != NULL)
+        slayer3d_properties_set_vec3(props, key, value);
+}
+
+static void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
+                                     const slayer3d_game_data_editor_selection *selection)
+{
+    if (runtime == NULL || outputs == NULL || selection == NULL)
+        return;
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "hit_key", selection->hit);
+    editor_set_string_output(scene_state, outputs, "type_key", editor_selection_type_name(selection->type));
+    editor_set_string_output(scene_state, outputs, "world_key", selection->hit ? selection->world_name : "");
+    editor_set_string_output(scene_state, outputs, "element_key", selection->hit ? selection->element_name : "");
+    editor_set_string_output(scene_state, outputs, "material_key", selection->hit ? selection->material_name : "");
+    editor_set_string_output(scene_state, outputs, "world_stable_id_key",
+                             selection->hit ? editor_metadata_stable_id(selection->world_editor) : "");
+    editor_set_string_output(scene_state, outputs, "element_stable_id_key",
+                             selection->hit ? editor_metadata_stable_id(selection->element_editor) : "");
+    editor_set_string_output(scene_state, outputs, "material_stable_id_key",
+                             selection->hit ? editor_metadata_stable_id(selection->material_editor) : "");
+    editor_set_string_output(scene_state, outputs, "face_stable_id_key",
+                             selection->hit ? editor_metadata_stable_id(selection->face_editor) : "");
+    editor_set_int_output(scene_state, outputs, "element_index_key", selection->hit ? selection->element_index : -1);
+    editor_set_int_output(scene_state, outputs, "face_index_key", selection->hit ? selection->face_index : -1);
+    editor_set_float_output(scene_state, outputs, "fraction_key", selection->hit ? selection->fraction : 1.0f);
+    editor_set_vec3_output(scene_state, outputs, "point_key",
+                           selection->hit ? selection->point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    editor_set_vec3_output(scene_state, outputs, "normal_key",
+                           selection->hit ? selection->normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+}
+
+bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    yyjson_val *selection_json = obj_get(editor, "selection");
+    yyjson_val *outputs = obj_get(selection_json, "outputs");
+    if (!yyjson_is_obj(selection_json))
+        return true;
+
+    slayer3d_game_data_world_trace_desc trace;
+    slayer3d_game_data_editor_selection selection;
+    init_editor_selection(&selection);
+    if (!editor_trace_desc_from_json(selection_json, &trace) ||
+        !slayer3d_game_data_pick_editor_world_model(runtime, &trace, &selection))
+    {
+        return false;
+    }
+    publish_editor_selection(runtime, outputs, &selection);
+    return true;
+}
+
+static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime *runtime,
+                                               slayer3d_game_data_editor_debug_desc *out_desc,
+                                               slayer3d_game_data_world_trace_desc *out_trace,
+                                               slayer3d_game_data_editor_selection *out_selection)
+{
+    if (runtime == NULL)
+        return false;
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    yyjson_val *overlay = obj_get(editor, "debug_overlay");
+    if (!yyjson_is_obj(overlay) || !json_bool(overlay, "enabled", true) || out_desc == NULL)
+        return false;
+
+    SDL_zero(*out_desc);
+    out_desc->flags = editor_debug_flags_from_json(obj_get(overlay, "flags"));
+    out_desc->world_bounds_color = json_color(overlay, "world_bounds_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->selection_bounds_color = json_color(overlay, "selection_bounds_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->trace_color = json_color(overlay, "trace_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->face_normal_color = json_color(overlay, "face_normal_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->hit_marker_color = json_color(overlay, "hit_marker_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->normal_length = json_float(overlay, "normal_length", 0.75f);
+    out_desc->hit_marker_size = json_float(overlay, "hit_marker_size", 0.1f);
+
+    yyjson_val *selection_json = obj_get(editor, "selection");
+    if (editor_trace_desc_from_json(selection_json, out_trace))
+    {
+        out_desc->trace = out_trace;
+        if (out_selection != NULL && slayer3d_game_data_pick_editor_world_model(runtime, out_trace, out_selection))
+            out_desc->selection = out_selection;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_game_data_runtime *runtime,
+                                                               slayer3d_game_data_editor_debug_primitive_fn callback,
+                                                               void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    slayer3d_game_data_editor_debug_desc desc;
+    slayer3d_game_data_world_trace_desc trace;
+    slayer3d_game_data_editor_selection selection;
+    if (!active_editor_debug_desc_from_json(runtime, &desc, &trace, &selection))
+        return true;
+    return slayer3d_game_data_for_each_editor_debug_primitive(runtime, &desc, callback, userdata);
+}
+
 bool slayer3d_game_data_query_world_model_point(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 point,
                                                 unsigned int model_filter, unsigned int brush_contents_mask,
                                                 slayer3d_game_data_world_point_result *out_result)

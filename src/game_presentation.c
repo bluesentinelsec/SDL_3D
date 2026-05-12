@@ -2408,6 +2408,21 @@ bool slayer3d_game_data_draw_editor_debug_primitives(const slayer3d_game_data_ru
     return context.ok;
 }
 
+bool slayer3d_game_data_draw_active_editor_debug_primitives(const slayer3d_game_data_runtime *runtime,
+                                                            slayer3d_render_context *renderer)
+{
+    if (runtime == NULL || renderer == NULL)
+        return false;
+
+    editor_debug_draw_context context;
+    SDL_zero(context);
+    context.renderer = renderer;
+    context.ok = true;
+    if (!slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, draw_editor_debug_primitive, &context))
+        return false;
+    return context.ok;
+}
+
 bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                      slayer3d_game_data_font_cache *font_cache,
                                      const slayer3d_game_data_ui_metrics *metrics, float pulse_phase)
@@ -2846,6 +2861,8 @@ bool slayer3d_game_data_update_frame(slayer3d_game_data_frame_state *state,
     if (slayer3d_game_data_active_scene_update_phase(runtime, "presentation", ctx->paused))
     {
         state->time += desc->dt;
+        if (!slayer3d_game_data_update_active_editor_tooling(runtime))
+            return false;
         if (!slayer3d_game_data_update_presentation_clocks(runtime, desc->dt, ctx->paused, pause_entered))
             return false;
         if (!slayer3d_game_data_update_animations(runtime, desc->dt))
@@ -3466,6 +3483,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
                      frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
                      frame->model_cache, frame->mesh_primitive_cache, &camera) &&
                  ok;
+            ok = slayer3d_game_data_draw_active_editor_debug_primitives(frame->runtime, frame->renderer) && ok;
             ok = run_frame_hook(frame, frame->after_world_3d) && ok;
             slayer3d_end_mode_3d(frame->renderer);
         }

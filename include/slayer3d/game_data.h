@@ -1866,6 +1866,29 @@ extern "C"
                                                             slayer3d_game_data_editor_debug_primitive_fn callback,
                                                             void *userdata);
 
+    /**
+     * @brief Update authored active-scene editor tooling state.
+     *
+     * Scenes may author an `editor.selection` block with a trace descriptor and
+     * scene-state output keys. This helper runs that generic pick query and
+     * publishes stable selection metadata for UI inspectors. It is intended for
+     * editor dojos and tools that run through the same managed loop as games.
+     */
+    bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime *runtime);
+
+    /**
+     * @brief Iterate data-authored editor debug primitives for the active scene.
+     *
+     * This reads the active scene's `editor.debug_overlay` and
+     * `editor.selection` blocks, performs the authored trace when present, and
+     * emits world bounds, selected bounds, trace rays, face normals, and hit
+     * markers using the same primitive callback contract as
+     * @ref slayer3d_game_data_for_each_editor_debug_primitive.
+     */
+    bool slayer3d_game_data_for_each_active_editor_debug_primitive(
+        const slayer3d_game_data_runtime *runtime, slayer3d_game_data_editor_debug_primitive_fn callback,
+        void *userdata);
+
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity
     {
