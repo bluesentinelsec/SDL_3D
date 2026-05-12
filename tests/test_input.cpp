@@ -121,6 +121,19 @@ void push_mouse_motion(slayer3d_input_manager *input, float dx, float dy)
 {
     SDL_Event event{};
     event.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.x = dx;
+    event.motion.y = dy;
+    event.motion.xrel = dx;
+    event.motion.yrel = dy;
+    slayer3d_input_process_event(input, &event);
+}
+
+void push_mouse_motion_at(slayer3d_input_manager *input, float x, float y, float dx, float dy)
+{
+    SDL_Event event{};
+    event.type = SDL_EVENT_MOUSE_MOTION;
+    event.motion.x = x;
+    event.motion.y = y;
     event.motion.xrel = dx;
     event.motion.yrel = dy;
     slayer3d_input_process_event(input, &event);
@@ -246,6 +259,28 @@ TEST(Input, MouseDeltaAccumulation)
     slayer3d_input_update(input.input, 11);
     EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_mouse_dx(input.input));
     EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_mouse_dy(input.input));
+}
+
+TEST(Input, TracksAbsoluteMousePosition)
+{
+    InputPtr input;
+    float x = -1.0f;
+    float y = -1.0f;
+    EXPECT_FALSE(slayer3d_input_get_mouse_position(input.input, &x, &y));
+    EXPECT_FLOAT_EQ(0.0f, x);
+    EXPECT_FLOAT_EQ(0.0f, y);
+
+    push_mouse_motion_at(input.input, 123.0f, 456.0f, 4.0f, -2.0f);
+    slayer3d_input_update(input.input, 10);
+
+    ASSERT_TRUE(slayer3d_input_get_mouse_position(input.input, &x, &y));
+    EXPECT_FLOAT_EQ(123.0f, x);
+    EXPECT_FLOAT_EQ(456.0f, y);
+
+    slayer3d_input_update(input.input, 11);
+    ASSERT_TRUE(slayer3d_input_get_mouse_position(input.input, &x, &y));
+    EXPECT_FLOAT_EQ(123.0f, x);
+    EXPECT_FLOAT_EQ(456.0f, y);
 }
 
 TEST(Input, DiscardsMouseMotionUntilNextSnapshot)
@@ -712,6 +747,11 @@ TEST(Input, NullSafety)
     EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_value(nullptr, 0));
     EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_mouse_dx(nullptr));
     EXPECT_FLOAT_EQ(0.0f, slayer3d_input_get_mouse_dy(nullptr));
+    float mouse_x = 1.0f;
+    float mouse_y = 1.0f;
+    EXPECT_FALSE(slayer3d_input_get_mouse_position(nullptr, &mouse_x, &mouse_y));
+    EXPECT_FLOAT_EQ(0.0f, mouse_x);
+    EXPECT_FLOAT_EQ(0.0f, mouse_y);
     EXPECT_EQ(nullptr, slayer3d_input_get_snapshot(nullptr));
     slayer3d_input_bind_fps_defaults(nullptr);
     slayer3d_input_bind_ui_defaults(nullptr);

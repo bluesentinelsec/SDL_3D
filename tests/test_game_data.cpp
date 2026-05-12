@@ -16,6 +16,7 @@
 
 extern "C"
 {
+#include <SDL3/SDL_events.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
@@ -8157,6 +8158,72 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
+{
+    struct Case
+    {
+        const char *name;
+        const char *trace_json;
+        const char *expected_error;
+    };
+
+    const Case cases[] = {
+        {
+            "bad_source",
+            R"json({ "source": "pointer", "model_filter": "brush_worlds" })json",
+            "scene editor selection trace source must be 'world' or 'camera_screen'",
+        },
+        {
+            "bad_camera",
+            R"json({ "source": "camera_screen", "camera": "camera.missing", "viewport": [1280, 720] })json",
+            "unknown camera",
+        },
+        {
+            "bad_far",
+            R"json({ "source": "camera_screen", "camera": "camera.valid", "near": 10.0, "far": 1.0 })json",
+            "far must be greater than near",
+        },
+    };
+
+    const std::filesystem::path dir = unique_test_dir("scene_editor_tooling");
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path root_path = dir / (std::string(test_case.name) + ".game.json");
+        write_text(root_path, R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Scene Editor" },
+  "world": {
+    "name": "world.bad_scene_editor",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+        const std::string scene_json = std::string(R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "selection": {
+      "trace": )json") + test_case.trace_json +
+                                       R"json(,
+      "outputs": { "hit_key": "editor.hit" }
+    }
+  }
+})json";
+        write_text(dir / "scenes" / "play.scene.json", scene_json.c_str());
+
+        char error[512]{};
+        EXPECT_FALSE(slayer3d_game_data_validate_file(root_path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, CombatActionsApplyHealthArmorDeathAndRevive)
 {
     const std::filesystem::path dir = unique_test_dir("combat_actions");
@@ -12116,6 +12183,17 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 564.8f;
+    motion.motion.y = 392.9f;
+    motion.motion.xrel = 0.0f;
+    motion.motion.yrel = 0.0f;
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
 
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);

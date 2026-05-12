@@ -63,6 +63,9 @@ struct slayer3d_input_manager
     float mouse_dy_accum;
     float mouse_wheel_x_accum;
     float mouse_wheel_y_accum;
+    float mouse_x;
+    float mouse_y;
+    bool has_mouse_position;
     bool discard_mouse_motion_until_update;
     bool discard_next_mouse_motion;
     bool discarded_mouse_motion_since_request;
@@ -99,6 +102,15 @@ struct slayer3d_input_manager
 static bool slayer3d_input_action_id_valid(int action_id)
 {
     return action_id >= 0 && action_id < SLAYER3D_INPUT_MAX_ACTIONS;
+}
+
+static void slayer3d_input_set_mouse_position(slayer3d_input_manager *input, float x, float y)
+{
+    if (input == NULL)
+        return;
+    input->mouse_x = x;
+    input->mouse_y = y;
+    input->has_mouse_position = true;
 }
 
 static int slayer3d_input_modifier_mask_from_sdl(SDL_Keymod mod)
@@ -1247,6 +1259,7 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
         }
         break;
     case SDL_EVENT_MOUSE_MOTION: {
+        slayer3d_input_set_mouse_position(input, event->motion.x, event->motion.y);
         const bool discard_motion = input->discard_mouse_motion_until_update || input->discard_next_mouse_motion;
         if (discard_motion)
         {
@@ -1264,10 +1277,12 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
         break;
     }
     case SDL_EVENT_MOUSE_WHEEL:
+        slayer3d_input_set_mouse_position(input, event->wheel.mouse_x, event->wheel.mouse_y);
         input->mouse_wheel_x_accum += event->wheel.x;
         input->mouse_wheel_y_accum += event->wheel.y;
         break;
     case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        slayer3d_input_set_mouse_position(input, event->button.x, event->button.y);
         if (slayer3d_input_mouse_button_valid(event->button.button))
         {
             input->mouse_down[event->button.button] = true;
@@ -1275,6 +1290,7 @@ void slayer3d_input_process_event(slayer3d_input_manager *input, const SDL_Event
         }
         break;
     case SDL_EVENT_MOUSE_BUTTON_UP:
+        slayer3d_input_set_mouse_position(input, event->button.x, event->button.y);
         if (slayer3d_input_mouse_button_valid(event->button.button))
         {
             input->mouse_down[event->button.button] = false;
@@ -1395,6 +1411,7 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
         if (player->cursor < player->count)
         {
             input->snapshot = player->snapshots[player->cursor++];
+            input->has_mouse_position = false;
             input->pressed_scancode = SDL_SCANCODE_UNKNOWN;
             input->pressed_mouse_button = 0;
             input->pressed_gamepad_button = SDL_GAMEPAD_BUTTON_INVALID;
@@ -1523,6 +1540,19 @@ float slayer3d_input_get_mouse_dx(const slayer3d_input_manager *input)
 float slayer3d_input_get_mouse_dy(const slayer3d_input_manager *input)
 {
     return input != NULL ? input->snapshot.mouse_dy : 0.0f;
+}
+
+bool slayer3d_input_get_mouse_position(const slayer3d_input_manager *input, float *out_x, float *out_y)
+{
+    if (out_x != NULL)
+        *out_x = 0.0f;
+    if (out_y != NULL)
+        *out_y = 0.0f;
+    if (input == NULL || out_x == NULL || out_y == NULL || !input->has_mouse_position)
+        return false;
+    *out_x = input->mouse_x;
+    *out_y = input->mouse_y;
+    return true;
 }
 
 slayer3d_vec2 slayer3d_input_get_axis_pair(const slayer3d_input_manager *input, int negative_x_action,
