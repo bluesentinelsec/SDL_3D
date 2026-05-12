@@ -9,6 +9,7 @@
     { "path": "fragments/input/fps_controls.json", "sections": ["input"] },
     { "path": "fragments/actors/player.json", "sections": ["entities"] },
     { "path": "fragments/actors/gameplay_targets.json", "sections": ["entities"] },
+    { "path": "fragments/actors/zombie_actor.json", "sections": ["assets", "entities"] },
     { "path": "fragments/world/showcase.brushes.json", "sections": ["brush_worlds"] },
     { "path": "fragments/actors/lights.json", "sections": ["entities"] },
     { "path": "fragments/logic/brush_gameplay_sensors.json", "sections": ["logic"] }

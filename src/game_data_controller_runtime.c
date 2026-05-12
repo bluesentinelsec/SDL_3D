@@ -2,6 +2,184 @@
 
 #include "game_data_internal.h"
 
+typedef struct patrol_brush_collision_context
+{
+    slayer3d_game_data_runtime *runtime;
+    yyjson_val *collision;
+    slayer3d_game_data_brush_trace_shape shape;
+    slayer3d_vec3 extents;
+    slayer3d_vec3 center_offset;
+    unsigned int contents_mask;
+    int slide_iterations;
+    float contact_skin;
+    float ground_probe_distance;
+    float walkable_normal_y;
+    const char *on_ground_property;
+} patrol_brush_collision_context;
+
+static yyjson_val *patrol_brush_collision_json(yyjson_val *component)
+{
+    yyjson_val *collision = obj_get(component, "collision");
+    if (!yyjson_is_obj(collision))
+        return NULL;
+    const char *type = json_string(collision, "type", "brush");
+    return SDL_strcmp(type, "brush") == 0 ? collision : NULL;
+}
+
+static slayer3d_game_data_brush_trace_shape patrol_brush_trace_shape_from_string(const char *shape)
+{
+    if (SDL_strcmp(shape != NULL ? shape : "", "sphere") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_TRACE_SPHERE;
+    if (SDL_strcmp(shape != NULL ? shape : "", "aabb") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_TRACE_AABB;
+    return SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+}
+
+static bool patrol_brush_collision_context_init(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                                patrol_brush_collision_context *context)
+{
+    yyjson_val *collision = patrol_brush_collision_json(component);
+    if (runtime == NULL || collision == NULL || context == NULL)
+        return false;
+
+    SDL_zero(*context);
+    context->runtime = runtime;
+    context->collision = collision;
+    context->shape = patrol_brush_trace_shape_from_string(json_string(collision, "shape", "aabb"));
+    context->extents = json_vec3(collision, "extents", slayer3d_vec3_make(0.35f, 0.9f, 0.35f));
+    if (context->shape == SLAYER3D_GAME_DATA_BRUSH_TRACE_SPHERE)
+        context->extents = slayer3d_vec3_make(json_float(collision, "radius", context->extents.x), 0.0f, 0.0f);
+    else if (context->shape == SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT)
+        context->extents = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    context->center_offset = json_vec3(collision, "center_offset", slayer3d_vec3_make(0.0f, context->extents.y, 0.0f));
+    context->contents_mask =
+        brush_flags_from_json(obj_get(collision, "contents_mask"), brush_content_flag_from_string,
+                              SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+    context->slide_iterations = SDL_clamp(json_int(collision, "slide_iterations", 4), 1, 8);
+    context->contact_skin = SDL_max(json_float(collision, "contact_skin", 0.02f), 0.0f);
+    context->ground_probe_distance = SDL_max(json_float(collision, "ground_probe_distance", 0.35f), 0.0f);
+    context->walkable_normal_y = SDL_clamp(json_float(collision, "walkable_normal_y", 0.7f), 0.0f, 1.0f);
+    context->on_ground_property = json_string(collision, "on_ground_property", "on_ground");
+    return true;
+}
+
+static bool patrol_brush_trace(const patrol_brush_collision_context *context, slayer3d_vec3 start, slayer3d_vec3 end,
+                               bool slide, slayer3d_game_data_brush_trace_result *out_result)
+{
+    if (context == NULL || out_result == NULL)
+        return false;
+
+    slayer3d_game_data_brush_trace_desc trace;
+    SDL_zero(trace);
+    trace.start = start;
+    trace.end = end;
+    trace.shape = context->shape;
+    trace.extents = context->extents;
+    trace.contents_mask = context->contents_mask;
+    return slide ? slayer3d_game_data_slide_active_brush_worlds(context->runtime, &trace, context->slide_iterations,
+                                                                out_result)
+                 : slayer3d_game_data_trace_active_brush_worlds(context->runtime, &trace, out_result);
+}
+
+static void patrol_brush_publish_grounded(const patrol_brush_collision_context *context,
+                                          slayer3d_registered_actor *actor, bool grounded)
+{
+    if (context != NULL && actor != NULL && context->on_ground_property != NULL &&
+        context->on_ground_property[0] != '\0')
+        slayer3d_properties_set_bool(actor->props, context->on_ground_property, grounded);
+}
+
+static void patrol_increment_animation_time(yyjson_val *component, slayer3d_registered_actor *actor,
+                                            slayer3d_actor_patrol_state state, float dt)
+{
+    const char *property = json_string(component, "animation_time_property", NULL);
+    if (component == NULL || actor == NULL || property == NULL || property[0] == '\0' || dt <= 0.0f)
+        return;
+
+    const bool animate_when_idle = json_bool(component, "animate_when_idle", false);
+    if (state == SLAYER3D_ACTOR_PATROL_IDLE && !animate_when_idle)
+        return;
+
+    const float rate = json_float(component, "animation_rate", 1.0f);
+    if (rate == 0.0f)
+        return;
+    slayer3d_properties_set_float(actor->props, property,
+                                  slayer3d_properties_get_float(actor->props, property, 0.0f) + rate * dt);
+}
+
+static float patrol_yaw_from_delta(yyjson_val *component, slayer3d_vec3 delta)
+{
+    const char *forward_axis = json_string(component, "yaw_forward", "-z");
+    if (SDL_strcmp(forward_axis != NULL ? forward_axis : "", "+z") == 0 ||
+        SDL_strcmp(forward_axis != NULL ? forward_axis : "", "positive_z") == 0)
+    {
+        return SDL_atan2f(delta.x, delta.z);
+    }
+    return SDL_atan2f(delta.x, -delta.z);
+}
+
+static bool patrol_direction_to_target(const slayer3d_actor_patrol_controller *controller,
+                                       const slayer3d_registered_actor *actor, slayer3d_vec3 *out_direction)
+{
+    if (controller == NULL || actor == NULL || out_direction == NULL || controller->waypoint_count <= 0 ||
+        controller->target_waypoint < 0 || controller->target_waypoint >= controller->waypoint_count)
+    {
+        return false;
+    }
+
+    const slayer3d_vec3 target = controller->waypoints[controller->target_waypoint];
+    const slayer3d_vec3 direction =
+        slayer3d_vec3_make(target.x - actor->position.x, 0.0f, target.z - actor->position.z);
+    if ((direction.x * direction.x + direction.z * direction.z) <= 0.000001f)
+        return false;
+    *out_direction = direction;
+    return true;
+}
+
+static bool patrol_brush_move(void *userdata, const slayer3d_actor_patrol_controller *controller,
+                              slayer3d_registered_actor *actor, slayer3d_vec3 desired_position,
+                              slayer3d_vec3 *out_position)
+{
+    (void)controller;
+    patrol_brush_collision_context *context = (patrol_brush_collision_context *)userdata;
+    if (context == NULL || actor == NULL || out_position == NULL)
+        return false;
+
+    const slayer3d_vec3 skin_offset = slayer3d_vec3_make(0.0f, context->contact_skin, 0.0f);
+    const slayer3d_vec3 start_center = slayer3d_vec3_add(actor->position, context->center_offset);
+    const slayer3d_vec3 desired_center = slayer3d_vec3_add(desired_position, context->center_offset);
+    slayer3d_game_data_brush_trace_result move;
+    if (!patrol_brush_trace(context, slayer3d_vec3_add(start_center, skin_offset),
+                            slayer3d_vec3_add(desired_center, skin_offset), true, &move) ||
+        move.start_solid)
+    {
+        return false;
+    }
+
+    slayer3d_vec3 accepted_center =
+        move.hit ? slayer3d_vec3_add(move.end_position, slayer3d_vec3_scale(move.normal, 0.01f)) : move.end_position;
+    accepted_center = slayer3d_vec3_sub(accepted_center, skin_offset);
+    bool grounded = false;
+    if (context->ground_probe_distance > 0.0f)
+    {
+        const slayer3d_vec3 ground_start = slayer3d_vec3_add(accepted_center, skin_offset);
+        const slayer3d_vec3 ground_end =
+            slayer3d_vec3_make(ground_start.x, ground_start.y - context->ground_probe_distance, ground_start.z);
+        slayer3d_game_data_brush_trace_result ground;
+        if (patrol_brush_trace(context, ground_start, ground_end, false, &ground) && ground.hit &&
+            !ground.start_solid && ground.normal.y >= context->walkable_normal_y)
+        {
+            accepted_center = slayer3d_vec3_add(slayer3d_vec3_sub(ground.end_position, skin_offset),
+                                                slayer3d_vec3_scale(ground.normal, 0.01f));
+            grounded = true;
+        }
+    }
+
+    *out_position = slayer3d_vec3_sub(accepted_center, context->center_offset);
+    patrol_brush_publish_grounded(context, actor, grounded);
+    return true;
+}
+
 static bool initialize_patrol_controller(slayer3d_game_data_runtime *runtime, patrol_controller_runtime *controller,
                                          yyjson_val *component, slayer3d_registered_actor *actor)
 {
@@ -46,14 +224,27 @@ void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *c
     if (!controller->initialized && !initialize_patrol_controller(runtime, controller, component, actor))
         return;
 
+    patrol_brush_collision_context collision;
+    const bool use_brush_collision = patrol_brush_collision_context_init(runtime, component, &collision);
     slayer3d_actor_patrol_result result = slayer3d_actor_patrol_controller_update(
-        &controller->controller, runtime_registry(runtime), runtime_bus(runtime), dt, NULL, NULL);
+        &controller->controller, runtime_registry(runtime), runtime_bus(runtime), dt,
+        use_brush_collision ? patrol_brush_move : NULL, use_brush_collision ? &collision : NULL);
     actor_set_position(actor, result.position);
     if (result.moved)
     {
-        const float yaw = SDL_atan2f(result.movement_delta.x, -result.movement_delta.z);
+        const float yaw = patrol_yaw_from_delta(component, result.movement_delta);
         slayer3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), yaw);
     }
+    if (json_bool(component, "face_target", false))
+    {
+        slayer3d_vec3 direction;
+        if (patrol_direction_to_target(&controller->controller, actor, &direction))
+        {
+            const float yaw = patrol_yaw_from_delta(component, direction);
+            slayer3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), yaw);
+        }
+    }
+    patrol_increment_animation_time(component, actor, result.state, dt);
 }
 
 static void fps_controller_publish_actor_state(const fps_controller_runtime *controller, yyjson_val *component,

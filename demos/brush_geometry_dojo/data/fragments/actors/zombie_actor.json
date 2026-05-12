@@ -1,0 +1,72 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "assets": {
+    "models": [
+      {
+        "id": "model.brush_geometry.zombie.idle",
+        "path": "asset://models/zombie/male-zombie-idle.glb"
+      },
+      {
+        "id": "model.brush_geometry.zombie.walking",
+        "path": "asset://models/zombie/male-zombie-walking.glb"
+      }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.brush_geometry.zombie",
+      "active": true,
+      "tags": ["npc", "zombie", "patrol", "model"],
+      "transform": { "position": [-12.0, 0.0, -12.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "walk_anim_time": { "type": "float", "value": 0.0 },
+        "on_ground": { "type": "bool", "value": false }
+      },
+      "components": [
+        {
+          "type": "motion.patrol",
+          "waypoints": [
+            [-12.0, 0.0, -12.0],
+            [-8.0, 0.0, -12.0],
+            [-8.0, 0.0, -8.0],
+            [-12.0, 0.0, -8.0]
+          ],
+          "speed": 1.4,
+          "wait_time": 0.0,
+          "arrival_radius": 0.15,
+          "mode": "loop",
+          "start_idle": false,
+          "yaw_property": "yaw",
+          "yaw_forward": "+z",
+          "face_target": true,
+          "animation_time_property": "walk_anim_time",
+          "animation_rate": 1.0,
+          "collision": {
+            "type": "brush",
+            "shape": "aabb",
+            "extents": [0.35, 0.9, 0.35],
+            "center_offset": [0.0, 0.9, 0.0],
+            "contents_mask": ["solid", "player_clip"],
+            "slide_iterations": 4,
+            "ground_probe_distance": 0.4,
+            "walkable_normal_y": 0.7,
+            "on_ground_property": "on_ground"
+          }
+        },
+        {
+          "type": "render.model",
+          "model": "model.brush_geometry.zombie.walking",
+          "scale": [1.0, 1.0, 1.0],
+          "rotation_axis": [0.0, 1.0, 0.0],
+          "rotation_property": "yaw",
+          "animation_clip": 0,
+          "animation_time_property": "walk_anim_time",
+          "animation_loop": true,
+          "color": [255, 255, 255, 255],
+          "lighting": true
+        }
+      ]
+    }
+  ]
+}
