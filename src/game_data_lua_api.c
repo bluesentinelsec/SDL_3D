@@ -1,4 +1,14 @@
-/* Lua scripting bridge helpers. Included by src/game_data.c to preserve internal linkage. */
+/**
+ * @file game_data_lua_api.c
+ * @brief Lua scripting bridge helpers.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
+
+#include "lauxlib.h"
+#include "lua.h"
 
 static slayer3d_game_data_runtime *lua_runtime(lua_State *lua)
 {

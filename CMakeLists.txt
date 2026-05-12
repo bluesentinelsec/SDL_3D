@@ -150,6 +150,7 @@ target_sources(
         src/game_data_actions.c
         src/game_data_action_lookup.c
         src/game_data_actor_pool_runtime.c
+        src/game_data_actors_input.c
         src/game_data_adapter_helpers.c
         src/game_data_combat_weapon_actions.c
         src/game_data_conditions_presentation.c
@@ -161,12 +162,16 @@ target_sources(
         src/game_data_interaction_effect_actions.c
         src/game_data_json_helpers.c
         src/game_data_motion_runtime.c
+        src/game_data_network_runtime.c
         src/game_data_network_sessions.c
         src/game_data_persistence_audio_actions.c
         src/game_data_property_effect_runtime.c
+        src/game_data_render_runtime.c
         src/game_data_replication_helpers.c
         src/game_data_runtime_collections.c
         src/game_data_load_runtime.c
+        src/game_data_lua_api.c
+        src/game_data_menu_ui.c
         src/game_data_scene_flow_runtime.c
         src/game_data_scene_load_runtime.c
         src/game_data_scene_lookup.c

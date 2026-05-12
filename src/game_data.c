@@ -9,7 +9,6 @@
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
-#include <SDL3/SDL_scancode.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 
@@ -37,15 +36,6 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdlib.h>
-
-#define SLAYER3D_GAME_DATA_SIGNAL_BASE 20000
-#define SLAYER3D_GAME_DATA_NETWORK_SNAPSHOT_MAGIC 0x53335253u /* "S3RS" */
-#define SLAYER3D_GAME_DATA_NETWORK_SNAPSHOT_VERSION 1u
-#define SLAYER3D_GAME_DATA_NETWORK_INPUT_MAGIC 0x49335253u /* "S3RI" */
-#define SLAYER3D_GAME_DATA_NETWORK_INPUT_VERSION 1u
-#define SLAYER3D_GAME_DATA_NETWORK_CONTROL_MAGIC 0x43335253u /* "S3RC" */
-#define SLAYER3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
-#define SLAYER3D_GAME_DATA_MENU_TEXT_MAX_BYTES 255
 
 #include "game_data_internal.h"
 
@@ -80,7 +70,7 @@ void clear_menu_text_entry_capture(slayer3d_game_data_runtime *runtime)
     runtime->text_capture.original = NULL;
 }
 
-static bool append_format(char *buffer, size_t buffer_size, size_t *offset, const char *format, ...)
+bool append_format(char *buffer, size_t buffer_size, size_t *offset, const char *format, ...)
 {
     if (buffer == NULL || buffer_size == 0U || offset == NULL || *offset >= buffer_size || format == NULL)
         return false;
@@ -99,10 +89,6 @@ static bool append_format(char *buffer, size_t buffer_size, size_t *offset, cons
     return true;
 }
 
-static bool set_action_keyboard_binding(slayer3d_game_data_runtime *runtime, const char *action, SDL_Scancode scancode);
-static bool set_action_mouse_button_binding(slayer3d_game_data_runtime *runtime, const char *action, Uint8 button);
-static bool set_action_gamepad_button_binding(slayer3d_game_data_runtime *runtime, const char *action,
-                                              SDL_GamepadButton button);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
@@ -220,24 +206,12 @@ slayer3d_input_manager *runtime_input(const slayer3d_game_data_runtime *runtime)
 void actor_set_position(slayer3d_registered_actor *actor, slayer3d_vec3 position);
 void copy_property_value(slayer3d_properties *target, const char *key, const slayer3d_value *value);
 bool actor_pool_in_scene(const actor_pool_runtime *pool, const char *scene_name);
-static int actor_pool_active_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool);
-static int actor_pool_available_count(const slayer3d_game_data_runtime *runtime, const actor_pool_runtime *pool);
 bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *target,
                                  const slayer3d_registered_actor *source, yyjson_val *json,
                                  const slayer3d_properties *payload, const char *fallback_tag,
                                  bool fallback_exclude_source);
 void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
 void actor_lifecycle_defer_end(slayer3d_game_data_runtime *runtime);
-#include "game_data/game_data_lua_api.inc"
-
-#include "game_data/game_data_render_runtime.inc"
-
-#include "game_data/game_data_menu_ui.inc"
-
-#include "game_data/game_data_actors_input.inc"
-
-#include "game_data/game_data_network_runtime.inc"
-
 void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)

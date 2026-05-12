@@ -1,6 +1,14 @@
-/* Network runtime bindings, packets, and diagnostics.
- * Included by src/game_data.c to keep private runtime helpers in one translation unit. */
+/**
+ * @file game_data_network_runtime.c
+ * @brief Network runtime bindings, packets, and diagnostics.
+ */
 
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_timer.h>
+
+#include "network_replication_schema.h"
 bool slayer3d_game_data_has_network_schema(const slayer3d_game_data_runtime *runtime)
 {
     return runtime != NULL && runtime->has_network_schema;
