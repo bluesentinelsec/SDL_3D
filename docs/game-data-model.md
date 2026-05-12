@@ -102,7 +102,13 @@ the underlying sector level or brush world. Sector and brush implementations
 remain distinct internally, but tools can start from the shared
 `slayer3d_game_data_for_each_world_model_instance`,
 `slayer3d_game_data_trace_world_models`, and
-`slayer3d_game_data_query_world_model_point` APIs.
+`slayer3d_game_data_query_world_model_point` APIs. Editor viewport picking can
+use `slayer3d_game_data_pick_editor_world_model` to turn a trace into stable
+selection metadata, including brush/material/face editor metadata when the hit
+comes from a brush world. Debug overlays should use
+`slayer3d_game_data_for_each_editor_debug_primitive` or the presentation-layer
+draw helper rather than duplicating bounds, normal, and hit-marker rendering in
+tool code.
 
 ## Data Boundary
 

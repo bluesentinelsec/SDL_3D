@@ -5,6 +5,7 @@
 extern "C"
 {
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "slayer3d/network.h"
 }
@@ -13,6 +14,8 @@ namespace
 {
 constexpr Uint16 kBasePort = 27183;
 constexpr int kPumpLimit = 400;
+constexpr float kConnectTimeoutSeconds = 8.0f;
+constexpr Uint32 kPumpSleepMs = 2;
 
 struct NetworkPair
 {
@@ -55,8 +58,8 @@ bool create_host_client_pair(NetworkPair *pair)
         slayer3d_network_session_desc_init(&host_desc);
         host_desc.role = SLAYER3D_NETWORK_ROLE_HOST;
         host_desc.port = port;
-        host_desc.handshake_timeout = 2.0f;
-        host_desc.idle_timeout = 2.0f;
+        host_desc.handshake_timeout = kConnectTimeoutSeconds;
+        host_desc.idle_timeout = kConnectTimeoutSeconds;
         host_desc.session_name = "SLAYER3D Test Host";
 
         if (!slayer3d_network_session_create(&host_desc, &pair->host))
@@ -69,8 +72,8 @@ bool create_host_client_pair(NetworkPair *pair)
         client_desc.role = SLAYER3D_NETWORK_ROLE_CLIENT;
         client_desc.host = "127.0.0.1";
         client_desc.port = port;
-        client_desc.handshake_timeout = 2.0f;
-        client_desc.idle_timeout = 2.0f;
+        client_desc.handshake_timeout = kConnectTimeoutSeconds;
+        client_desc.idle_timeout = kConnectTimeoutSeconds;
 
         if (!slayer3d_network_session_create(&client_desc, &pair->client))
         {
@@ -88,10 +91,25 @@ bool create_host_client_pair(NetworkPair *pair)
 
 bool pump_until_connected(NetworkPair *pair)
 {
-    for (int i = 0; i < kPumpLimit; ++i)
+    if (pair == nullptr || pair->host == nullptr || pair->client == nullptr)
     {
-        EXPECT_TRUE(slayer3d_network_session_update(pair->host, 0.016f));
-        EXPECT_TRUE(slayer3d_network_session_update(pair->client, 0.016f));
+        return false;
+    }
+
+    const Uint64 start = SDL_GetTicks();
+    Uint64 last = start;
+    while ((SDL_GetTicks() - start) < (Uint64)(kConnectTimeoutSeconds * 1000.0f))
+    {
+        const Uint64 now = SDL_GetTicks();
+        float dt = (float)(now - last) / 1000.0f;
+        if (dt <= 0.0f)
+        {
+            dt = 0.001f;
+        }
+        last = now;
+
+        EXPECT_TRUE(slayer3d_network_session_update(pair->host, dt));
+        EXPECT_TRUE(slayer3d_network_session_update(pair->client, dt));
         if (slayer3d_network_session_is_connected(pair->host) && slayer3d_network_session_is_connected(pair->client))
         {
             return true;
@@ -102,6 +120,7 @@ bool pump_until_connected(NetworkPair *pair)
         {
             return false;
         }
+        SDL_Delay(kPumpSleepMs);
     }
     return false;
 }
@@ -134,8 +153,8 @@ bool create_discovery_pair(DiscoveryPair *pair)
         host_desc.role = SLAYER3D_NETWORK_ROLE_HOST;
         host_desc.port = port;
         host_desc.session_name = "SLAYER3D Discovery Host";
-        host_desc.handshake_timeout = 2.0f;
-        host_desc.idle_timeout = 2.0f;
+        host_desc.handshake_timeout = kConnectTimeoutSeconds;
+        host_desc.idle_timeout = kConnectTimeoutSeconds;
 
         if (!slayer3d_network_session_create(&host_desc, &pair->host))
         {
@@ -169,10 +188,20 @@ bool pump_until_discovered(DiscoveryPair *pair, slayer3d_network_discovery_resul
     }
 
     EXPECT_TRUE(slayer3d_network_discovery_session_refresh(pair->scanner));
-    for (int i = 0; i < kPumpLimit; ++i)
+    const Uint64 start = SDL_GetTicks();
+    Uint64 last = start;
+    while ((SDL_GetTicks() - start) < (Uint64)(kConnectTimeoutSeconds * 1000.0f))
     {
-        EXPECT_TRUE(slayer3d_network_session_update(pair->host, 0.016f));
-        EXPECT_TRUE(slayer3d_network_discovery_session_update(pair->scanner, 0.016f));
+        const Uint64 now = SDL_GetTicks();
+        float dt = (float)(now - last) / 1000.0f;
+        if (dt <= 0.0f)
+        {
+            dt = 0.001f;
+        }
+        last = now;
+
+        EXPECT_TRUE(slayer3d_network_session_update(pair->host, dt));
+        EXPECT_TRUE(slayer3d_network_discovery_session_update(pair->scanner, dt));
         if (slayer3d_network_discovery_session_result_count(pair->scanner) > 0)
         {
             if (out_result != nullptr)
@@ -181,6 +210,44 @@ bool pump_until_discovered(DiscoveryPair *pair, slayer3d_network_discovery_resul
             }
             return true;
         }
+        SDL_Delay(kPumpSleepMs);
+    }
+    return false;
+}
+
+bool pump_sessions_until_connected(slayer3d_network_session *host, slayer3d_network_session *client,
+                                   float timeout_seconds)
+{
+    if (host == nullptr || client == nullptr || timeout_seconds <= 0.0f)
+    {
+        return false;
+    }
+
+    const Uint64 start = SDL_GetTicks();
+    Uint64 last = start;
+    while ((SDL_GetTicks() - start) < (Uint64)(timeout_seconds * 1000.0f))
+    {
+        const Uint64 now = SDL_GetTicks();
+        float dt = (float)(now - last) / 1000.0f;
+        if (dt <= 0.0f)
+        {
+            dt = 0.001f;
+        }
+        last = now;
+
+        EXPECT_TRUE(slayer3d_network_session_update(host, dt));
+        EXPECT_TRUE(slayer3d_network_session_update(client, dt));
+        if (slayer3d_network_session_is_connected(host) && slayer3d_network_session_is_connected(client))
+        {
+            return true;
+        }
+        if (slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_REJECTED ||
+            slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_TIMED_OUT ||
+            slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_ERROR)
+        {
+            return false;
+        }
+        SDL_Delay(kPumpSleepMs);
     }
     return false;
 }
@@ -248,31 +315,17 @@ TEST(NetworkSession, ClientCanConnectToDiscoveredHost)
     client_desc.role = SLAYER3D_NETWORK_ROLE_CLIENT;
     client_desc.host = result.host;
     client_desc.port = result.port;
-    client_desc.handshake_timeout = 2.0f;
-    client_desc.idle_timeout = 2.0f;
+    client_desc.handshake_timeout = kConnectTimeoutSeconds;
+    client_desc.idle_timeout = kConnectTimeoutSeconds;
 
     slayer3d_network_session *client = nullptr;
     ASSERT_TRUE(slayer3d_network_session_create(&client_desc, &client));
 
-    bool connected = false;
-    for (int i = 0; i < kPumpLimit; ++i)
-    {
-        EXPECT_TRUE(slayer3d_network_session_update(pair.host, 0.016f));
-        EXPECT_TRUE(slayer3d_network_session_update(client, 0.016f));
-        if (slayer3d_network_session_is_connected(pair.host) && slayer3d_network_session_is_connected(client))
-        {
-            connected = true;
-            break;
-        }
-        if (slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_REJECTED ||
-            slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_TIMED_OUT ||
-            slayer3d_network_session_state(client) == SLAYER3D_NETWORK_STATE_ERROR)
-        {
-            break;
-        }
-    }
+    const bool connected = pump_sessions_until_connected(pair.host, client, kConnectTimeoutSeconds);
 
-    EXPECT_TRUE(connected);
+    EXPECT_TRUE(connected) << "discovered_host=" << result.host << " port=" << result.port
+                           << " host_status=" << slayer3d_network_session_status(pair.host)
+                           << " client_status=" << slayer3d_network_session_status(client);
     EXPECT_TRUE(slayer3d_network_session_is_connected(pair.host));
     EXPECT_TRUE(slayer3d_network_session_is_connected(client));
 

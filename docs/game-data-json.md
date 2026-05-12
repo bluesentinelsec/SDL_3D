@@ -610,6 +610,17 @@ stable selection ids, hierarchy grouping, palette filtering, snap hints,
 prefab/archetype references, and face inspectors while still previewing the
 same runtime brush mesh that the game renders.
 
+Editor viewports should pick brush and sector geometry through
+`slayer3d_game_data_pick_editor_world_model()`. This wraps the generic
+world-model trace API and returns a stable selection record with world,
+sector/brush, material, face indexes, hit point, hit normal, bounds, and
+runtime-owned editor metadata pointers. Debug overlays should consume
+`slayer3d_game_data_for_each_editor_debug_primitive()` or
+`slayer3d_game_data_draw_editor_debug_primitives()` for world bounds, selected
+bounds, trace rays, hit markers, and face normals. These helpers are
+renderer-agnostic/data-driven editor substrate; authored gameplay JSON does
+not need to contain one-off debug actors for selection visualization.
+
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
 

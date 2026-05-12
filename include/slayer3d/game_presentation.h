@@ -374,6 +374,17 @@ extern "C"
                                                              const slayer3d_game_data_render_eval *eval);
 
     /**
+     * @brief Draw editor/debug world-model overlay primitives.
+     *
+     * Draws the renderer-agnostic line primitives emitted by
+     * @ref slayer3d_game_data_for_each_editor_debug_primitive. Call inside an
+     * active 3D pass after the scene camera is configured.
+     */
+    bool slayer3d_game_data_draw_editor_debug_primitives(const slayer3d_game_data_runtime *runtime,
+                                                         slayer3d_render_context *renderer,
+                                                         const slayer3d_game_data_editor_debug_desc *desc);
+
+    /**
      * @brief Initialize a world sprite asset cache.
      *
      * @param cache Cache to initialize.

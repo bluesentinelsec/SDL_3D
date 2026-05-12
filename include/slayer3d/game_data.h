@@ -568,6 +568,8 @@ extern "C"
         slayer3d_vec3 normal;
         /** @brief Authored brush world name. */
         const char *world_name;
+        /** @brief World-space translation of the hit brush-world instance. */
+        slayer3d_vec3 world_position;
         /** @brief Authored brush name. */
         const char *brush_name;
         /** @brief Authored face material name for plane hits, or NULL. */
@@ -688,6 +690,8 @@ extern "C"
         slayer3d_game_data_world_model_type type;
         /** @brief Authored world model name. */
         const char *world_name;
+        /** @brief World-space translation of the hit world-model instance. */
+        slayer3d_vec3 world_position;
         /** @brief Authored sector/brush name when available. */
         const char *element_name;
         /** @brief Authored material name for brush face hits, or NULL. */
@@ -719,6 +723,8 @@ extern "C"
         slayer3d_game_data_world_model_type type;
         /** @brief Authored world model name. */
         const char *world_name;
+        /** @brief World-space translation of the selected world-model instance. */
+        slayer3d_vec3 world_position;
         /** @brief Authored sector/brush name when available. */
         const char *element_name;
         /** @brief Sector or brush index, or -1 when unavailable. */
@@ -741,6 +747,127 @@ extern "C"
         /** @brief Existing brush-world trace/render diagnostics. */
         slayer3d_game_data_brush_diagnostics brush;
     } slayer3d_game_data_world_model_diagnostics;
+
+    /** @brief Editor/tooling selection produced by world-model picking. */
+    typedef struct slayer3d_game_data_editor_selection
+    {
+        /** @brief True when the selection hit a world model. */
+        bool hit;
+        /** @brief Implementation kind that produced the selection. */
+        slayer3d_game_data_world_model_type type;
+        /** @brief Authored world model name. */
+        const char *world_name;
+        /** @brief World-space translation of the selected world-model instance. */
+        slayer3d_vec3 world_position;
+        /** @brief Authored sector/brush name when available. */
+        const char *element_name;
+        /** @brief Authored brush material name for face selections, or NULL. */
+        const char *material_name;
+        /** @brief Sector or brush index, or -1 when unavailable. */
+        int element_index;
+        /** @brief Brush face index, or -1 when unavailable. */
+        int face_index;
+        /** @brief Trace fraction in [0, 1]. */
+        float fraction;
+        /** @brief World-space hit point. */
+        slayer3d_vec3 point;
+        /** @brief World-space hit normal when available. */
+        slayer3d_vec3 normal;
+        /** @brief World-space selection bounds when known. */
+        slayer3d_bounding_box bounds;
+        /** @brief True when @p bounds contains usable world-space bounds. */
+        bool has_bounds;
+        /** @brief Optional world-level editor metadata. */
+        const slayer3d_game_data_editor_metadata *world_editor;
+        /** @brief Optional sector/brush editor metadata. */
+        const slayer3d_game_data_editor_metadata *element_editor;
+        /** @brief Optional material editor metadata for brush face hits. */
+        const slayer3d_game_data_editor_metadata *material_editor;
+        /** @brief Optional face editor metadata for brush face hits. */
+        const slayer3d_game_data_editor_metadata *face_editor;
+    } slayer3d_game_data_editor_selection;
+
+    /** @brief Editor debug primitive kind emitted by tooling helpers. */
+    typedef enum slayer3d_game_data_editor_debug_primitive_type
+    {
+        /** @brief Active world-model bounds edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORLD_BOUNDS_EDGE = 1,
+        /** @brief Selected object bounds edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE = 2,
+        /** @brief Selection trace ray. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_TRACE_RAY = 3,
+        /** @brief Selected face normal line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_FACE_NORMAL = 4,
+        /** @brief Hit-point marker line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_HIT_MARKER = 5,
+    } slayer3d_game_data_editor_debug_primitive_type;
+
+    enum
+    {
+        /** @brief Emit active world-model bounds. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS = 1u << 0,
+        /** @brief Emit selected element bounds when known. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS = 1u << 1,
+        /** @brief Emit the trace ray stored in the debug descriptor. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY = 1u << 2,
+        /** @brief Emit selected face normal when known. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL = 1u << 3,
+        /** @brief Emit a small marker at the selected hit point. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER = 1u << 4,
+        /** @brief Emit every supported editor debug primitive. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER,
+    };
+
+    /** @brief One renderer-agnostic editor debug line segment. */
+    typedef struct slayer3d_game_data_editor_debug_primitive
+    {
+        /** @brief Semantic line type. */
+        slayer3d_game_data_editor_debug_primitive_type type;
+        /** @brief World-space line start. */
+        slayer3d_vec3 start;
+        /** @brief World-space line end. */
+        slayer3d_vec3 end;
+        /** @brief Display color. */
+        slayer3d_color color;
+        /** @brief Associated world name when available. */
+        const char *world_name;
+        /** @brief Associated sector/brush name when available. */
+        const char *element_name;
+        /** @brief Associated brush face index, or -1. */
+        int face_index;
+    } slayer3d_game_data_editor_debug_primitive;
+
+    /** @brief Editor debug overlay generation options. */
+    typedef struct slayer3d_game_data_editor_debug_desc
+    {
+        /** @brief Bitmask of SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_* flags. */
+        unsigned int flags;
+        /** @brief Optional current selection. */
+        const slayer3d_game_data_editor_selection *selection;
+        /** @brief Optional trace descriptor used for trace-ray visualization. */
+        const slayer3d_game_data_world_trace_desc *trace;
+        /** @brief Color for active world-model bounds, or alpha 0 for default. */
+        slayer3d_color world_bounds_color;
+        /** @brief Color for selected element bounds, or alpha 0 for default. */
+        slayer3d_color selection_bounds_color;
+        /** @brief Color for trace rays, or alpha 0 for default. */
+        slayer3d_color trace_color;
+        /** @brief Color for face normals, or alpha 0 for default. */
+        slayer3d_color face_normal_color;
+        /** @brief Color for hit markers, or alpha 0 for default. */
+        slayer3d_color hit_marker_color;
+        /** @brief Face-normal line length in world units. Defaults to 0.75. */
+        float normal_length;
+        /** @brief Hit-marker half-size in world units. Defaults to 0.1. */
+        float hit_marker_size;
+    } slayer3d_game_data_editor_debug_desc;
+
+    /** @brief Callback for renderer-agnostic editor debug primitive iteration. */
+    typedef bool (*slayer3d_game_data_editor_debug_primitive_fn)(
+        void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive);
 
     /**
      * @brief Callback for active authored sector level instances.
@@ -1691,6 +1818,19 @@ extern "C"
                                                slayer3d_game_data_world_trace_result *out_result);
 
     /**
+     * @brief Pick an active world model and return editor-facing selection metadata.
+     *
+     * This is a convenience layer over @ref slayer3d_game_data_trace_world_models
+     * for editor viewports. The returned selection includes the raw trace hit,
+     * stable authored names and indexes, world-space bounds where available, and
+     * pointers to runtime-owned editor metadata for the selected world, element,
+     * material, and face. Pointers remain valid until the runtime is destroyed.
+     */
+    bool slayer3d_game_data_pick_editor_world_model(const slayer3d_game_data_runtime *runtime,
+                                                    const slayer3d_game_data_world_trace_desc *desc,
+                                                    slayer3d_game_data_editor_selection *out_selection);
+
+    /**
      * @brief Query which active world model volume contains a point.
      *
      * The first matching sector or brush volume in active-scene order is
@@ -1712,6 +1852,19 @@ extern "C"
      */
     bool slayer3d_game_data_get_world_model_diagnostics(const slayer3d_game_data_runtime *runtime,
                                                         slayer3d_game_data_world_model_diagnostics *out_diagnostics);
+
+    /**
+     * @brief Iterate renderer-agnostic editor/debug line primitives.
+     *
+     * The helper emits deterministic line segments for active world bounds,
+     * current selection bounds, trace rays, selected face normals, and hit
+     * markers. Editors can draw these through any backend, while runtime hosts
+     * can use the companion presentation helper.
+     */
+    bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data_runtime *runtime,
+                                                            const slayer3d_game_data_editor_debug_desc *desc,
+                                                            slayer3d_game_data_editor_debug_primitive_fn callback,
+                                                            void *userdata);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity
