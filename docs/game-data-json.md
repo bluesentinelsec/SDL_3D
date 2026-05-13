@@ -1854,12 +1854,16 @@ Use `position_from_payload` for payload Vec3 positions such as hitscan
 `origin` or `hit_position`, and `payload_directional_offset` to push the spawn
 point along a payload Vec3 such as `hit_normal`. `velocity_from_payload` reads a
 payload Vec3 direction, normalizes it, multiplies by `speed`, and writes it to
-`velocity` or `velocity_property` on the spawned actor:
+`velocity` or `velocity_property` on the spawned actor. `properties_from_actor`
+copies same-named properties from a source actor before applying the spawn
+action's explicit `properties` object; use it for opt-in debug/tuning config
+actors that should feed pooled effects without hard-coding the effect in C:
 
 ```json
 { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" }
 { "type": "actor.spawn", "pool": "pool.tracers", "position_from_payload": "origin", "velocity_from_payload": "direction", "speed": 80.0 }
 { "type": "actor.spawn", "pool": "pool.decals", "position_from_payload": "hit_position", "payload_directional_offset": { "property": "hit_normal", "distance": 0.03 } }
+{ "type": "actor.spawn", "pool": "pool.smoke", "position_from_payload": "origin", "properties_from_actor": { "source": "entity.weapon_smoke_config", "keys": ["smoke_size_scale", "smoke_alpha_scale"] } }
 { "type": "actor.despawn", "target_from_payload": "actor_name" }
 ```
 
@@ -2055,7 +2059,13 @@ Reusable components include:
   emitter is active only while the actor is active. `render_style` defaults to
   `default`; `soft_smoke` renders procedural, soft-edged GPU smoke billboards
   when a shader backend is available and falls back to the normal particle quad
-  path in software.
+  path in software. Effects can be tuned per actor with property indirection:
+  `position_offset_property` reads a vec3 offset, `position_offset_x_property`,
+  `position_offset_y_property`, and `position_offset_z_property` add scalar
+  offsets, `size_start_property`/`size_end_property` override authored sizes,
+  `size_scale_property` scales both sizes, `alpha_scale_property` scales color
+  alpha, `emit_rate_property` overrides emission rate, and
+  `emissive_intensity_property` overrides draw emissive intensity.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
   named by `size_property`. `texture` may reference an image asset id; each cube
   face is UV-mapped to the full image and tinted by `color`. The property path

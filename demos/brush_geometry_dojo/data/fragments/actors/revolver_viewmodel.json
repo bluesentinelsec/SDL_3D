@@ -45,6 +45,25 @@
       }
     },
     {
+      "name": "entity.brush_geometry.revolver_smoke_config",
+      "id": 812,
+      "active": false,
+      "properties": {
+        "smoke_offset_x": { "type": "float", "value": 0.0 },
+        "smoke_offset_y": { "type": "float", "value": 0.0 },
+        "smoke_offset_z": { "type": "float", "value": 0.0 },
+        "smoke_size_scale": { "type": "float", "value": 1.0 },
+        "smoke_alpha_scale": { "type": "float", "value": 1.0 },
+        "smoke_emit_rate": { "type": "float", "value": 48.0 }
+      },
+      "editor": {
+        "display_name": "Revolver Smoke Config",
+        "category": "weapons",
+        "preview": { "primitive": "sphere", "color": [150, 170, 160, 180] },
+        "tags": ["weapon", "debug_tuning"]
+      }
+    },
+    {
       "name": "entity.brush_geometry.revolver_pickup",
       "id": 811,
       "active": true,

@@ -7860,11 +7860,15 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(saw_zombie_model);
     slayer3d_registered_actor *revolver =
         slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.revolver_viewmodel");
+    slayer3d_registered_actor *smoke_config_actor =
+        slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.revolver_smoke_config");
     slayer3d_registered_actor *revolver_pickup =
         slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.revolver_pickup");
     ASSERT_NE(revolver, nullptr);
+    ASSERT_NE(smoke_config_actor, nullptr);
     ASSERT_NE(revolver_pickup, nullptr);
     EXPECT_FALSE(revolver->active);
+    EXPECT_FALSE(smoke_config_actor->active);
     EXPECT_TRUE(revolver_pickup->active);
     EXPECT_NEAR(revolver_pickup->position.x, 0.0f, 0.0001f);
     EXPECT_LT(revolver_pickup->position.z, player->position.z);
@@ -7889,9 +7893,13 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
     const std::filesystem::path pickup_placement_path = "/tmp/gun-placement-pickup.txt";
     const std::filesystem::path placement_trace_path = "/tmp/gun-placement-trace.txt";
+    const std::filesystem::path smoke_placement_path = "/tmp/smoke-placement.txt";
+    const std::filesystem::path smoke_trace_path = "/tmp/smoke-placement-trace.txt";
     std::filesystem::remove(placement_path);
     std::filesystem::remove(pickup_placement_path);
     std::filesystem::remove(placement_trace_path);
+    std::filesystem::remove(smoke_placement_path);
+    std::filesystem::remove(smoke_trace_path);
     slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
     slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
     const int revolver_pickup_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.pickup");
@@ -7936,6 +7944,12 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_model, &saw_revolver_viewmodel));
     EXPECT_TRUE(saw_revolver_viewmodel);
+    slayer3d_properties_set_float(smoke_config_actor->props, "smoke_offset_x", 0.11f);
+    slayer3d_properties_set_float(smoke_config_actor->props, "smoke_offset_y", 0.04f);
+    slayer3d_properties_set_float(smoke_config_actor->props, "smoke_offset_z", -0.07f);
+    slayer3d_properties_set_float(smoke_config_actor->props, "smoke_size_scale", 1.5f);
+    slayer3d_properties_set_float(smoke_config_actor->props, "smoke_alpha_scale", 0.5f);
+    slayer3d_properties_set_float(smoke_config_actor->props, "smoke_emit_rate", 24.0f);
     const int revolver_fire_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.fire");
     ASSERT_GE(revolver_fire_signal, 0);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), revolver_fire_signal, nullptr);
@@ -7955,25 +7969,39 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(smoke->active);
     EXPECT_TRUE(tracer->active);
     EXPECT_TRUE(impact_decal->active);
+    EXPECT_NEAR(slayer3d_properties_get_float(smoke->props, "smoke_offset_x", 0.0f), 0.11f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(smoke->props, "smoke_size_scale", 0.0f), 1.5f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(smoke->props, "smoke_alpha_scale", 0.0f), 0.5f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(smoke->props, "smoke_emit_rate", 0.0f), 24.0f, 0.0001f);
     slayer3d_particle_config smoke_config{};
     ASSERT_TRUE(slayer3d_game_data_get_particle_emitter(runtime, smoke->name, &smoke_config));
     EXPECT_EQ(smoke_config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
-    EXPECT_LT(smoke_config.color_start.a, 128);
+    EXPECT_NEAR(smoke_config.position.x, smoke->position.x + 0.11f, 0.0001f);
+    EXPECT_NEAR(smoke_config.position.y, smoke->position.y + 0.04f, 0.0001f);
+    EXPECT_NEAR(smoke_config.position.z, smoke->position.z - 0.07f, 0.0001f);
+    EXPECT_EQ(smoke_config.color_start.a, 48);
+    EXPECT_NEAR(smoke_config.emit_rate, 24.0f, 0.0001f);
+    EXPECT_NEAR(smoke_config.size_start, 0.13f * 1.5f, 0.0001f);
+    EXPECT_NEAR(smoke_config.size_end, 0.46f * 1.5f, 0.0001f);
     EXPECT_GT(smoke_config.size_end, smoke_config.size_start);
     const slayer3d_vec3 tracer_velocity =
         slayer3d_properties_get_vec3(tracer->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_GT(slayer3d_vec3_length_squared(tracer_velocity), 1.0f);
     const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.x_pos");
     const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.write");
+    const int smoke_tune_toggle_signal = slayer3d_game_data_find_signal(runtime, "signal.smoke_tune.toggle");
     ASSERT_GE(tune_x_signal, 0);
     ASSERT_GE(tune_write_signal, 0);
+    ASSERT_GE(smoke_tune_toggle_signal, 0);
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     const int tune_toggle_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.toggle");
+    const int smoke_tune_toggle_action = slayer3d_game_data_find_action(runtime, "action.smoke_tune.toggle");
     const int tune_x_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.x_pos");
     const int tune_scale_down_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.scale_down");
     const int tune_scale_up_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.scale_up");
     ASSERT_GE(tune_toggle_action, 0);
+    ASSERT_GE(smoke_tune_toggle_action, 0);
     ASSERT_GE(tune_x_action, 0);
     ASSERT_GE(tune_scale_down_action, 0);
     ASSERT_GE(tune_scale_up_action, 0);
@@ -7986,6 +8014,19 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(
         slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "debug.revolver_tuning.enabled", false));
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), smoke_tune_toggle_signal, nullptr);
+    EXPECT_FALSE(
+        slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "debug.revolver_tuning.enabled", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime),
+                                             "debug.revolver_smoke_tuning.enabled", false));
+    const float old_smoke_x = slayer3d_properties_get_float(smoke_config_actor->props, "smoke_offset_x", 0.0f);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(smoke_config_actor->props, "smoke_offset_x", 0.0f), old_smoke_x + 0.02f,
+                0.0001f);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_smoke_tuning.enabled",
+                                 false);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
+                                 true);
     const float old_gun_x = slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f);
     key.key.scancode = SDL_SCANCODE_RIGHT;
     slayer3d_input_process_event(input, &key);
@@ -8025,9 +8066,20 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NE(full_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
     EXPECT_NE(full_trace_text.find("label=manual_write.viewmodel.current"), std::string::npos);
     EXPECT_NE(full_trace_text.find("label=manual_write.player.camera_state"), std::string::npos);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
+                                 false);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_smoke_tuning.enabled",
+                                 true);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_write_signal, nullptr);
+    ASSERT_TRUE(std::filesystem::exists(smoke_placement_path));
+    const std::string smoke_placement_text = read_text(smoke_placement_path);
+    EXPECT_NE(smoke_placement_text.find("actor=entity.brush_geometry.revolver_smoke_config"), std::string::npos);
+    EXPECT_NE(smoke_placement_text.find("smoke_size_scale="), std::string::npos);
     std::filesystem::remove(placement_path);
     std::filesystem::remove(pickup_placement_path);
     std::filesystem::remove(placement_trace_path);
+    std::filesystem::remove(smoke_placement_path);
+    std::filesystem::remove(smoke_trace_path);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
 

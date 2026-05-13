@@ -3296,6 +3296,34 @@ static bool validate_status_effect_timer_component(validation_context *ctx, yyjs
     return validate_optional_signal_field(ctx, component, path, names, "on_expire");
 }
 
+static bool validate_particle_emitter_component(validation_context *ctx, yyjson_val *component, const char *path)
+{
+    const char *render_style = json_string(component, "render_style");
+    if (render_style != NULL && SDL_strcmp(render_style, "default") != 0 && SDL_strcmp(render_style, "soft_smoke") != 0)
+    {
+        return validation_error(ctx, path, "particles.emitter render_style must be 'default' or 'soft_smoke'");
+    }
+
+    yyjson_val *position_offset = obj_get(component, "position_offset");
+    if (position_offset != NULL && !is_vec_array(position_offset, 3))
+        return validation_error(ctx, path, "particles.emitter position_offset must be a vec3");
+
+    const char *property_fields[] = {
+        "position_offset_property",    "position_offset_x_property", "position_offset_y_property",
+        "position_offset_z_property",  "size_start_property",        "size_end_property",
+        "size_scale_property",         "alpha_scale_property",       "emit_rate_property",
+        "emissive_intensity_property",
+    };
+    for (size_t i = 0; i < SDL_arraysize(property_fields); ++i)
+    {
+        yyjson_val *value = obj_get(component, property_fields[i]);
+        if (value != NULL && !is_non_empty_string(component, property_fields[i]))
+            return validation_error(ctx, path, "particles.emitter %s must be non-empty", property_fields[i]);
+    }
+
+    return true;
+}
+
 static bool validate_weapon_state_component(validation_context *ctx, yyjson_val *component, const char *path)
 {
     const char *string_fields[] = {"clip_property",         "clip_size_property",      "reserve_property",
@@ -5775,13 +5803,8 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
             }
             else if (SDL_strcmp(type, "particles.emitter") == 0)
             {
-                const char *render_style = json_string(component, "render_style");
-                if (render_style != NULL && SDL_strcmp(render_style, "default") != 0 &&
-                    SDL_strcmp(render_style, "soft_smoke") != 0)
-                {
-                    return validation_error(ctx, path,
-                                            "particles.emitter render_style must be 'default' or 'soft_smoke'");
-                }
+                if (!validate_particle_emitter_component(ctx, component, path))
+                    return false;
             }
             else if (SDL_strcmp(type, "motion.spin") == 0)
             {
@@ -6256,6 +6279,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 {
                     return false;
                 }
+            }
+            else if (SDL_strcmp(type, "particles.emitter") == 0)
+            {
+                if (!validate_particle_emitter_component(ctx, component, component_path))
+                    return false;
             }
             else if (SDL_strcmp(type, "motion.grid_agent") == 0)
             {
@@ -7816,6 +7844,25 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *properties = obj_get(action, "properties");
         if (properties != NULL && !yyjson_is_obj(properties))
             return validation_error(ctx, json_path, "actor.spawn properties must be an object");
+        yyjson_val *properties_from_actor = obj_get(action, "properties_from_actor");
+        if (properties_from_actor != NULL)
+        {
+            if (!yyjson_is_obj(properties_from_actor))
+                return validation_error(ctx, json_path, "actor.spawn properties_from_actor must be an object");
+            if (!require_actor_ref(ctx, names, json_string(properties_from_actor, "source"), json_path))
+                return false;
+            yyjson_val *keys = obj_get(properties_from_actor, "keys");
+            if (!yyjson_is_arr(keys) || yyjson_arr_size(keys) == 0)
+                return validation_error(ctx, json_path,
+                                        "actor.spawn properties_from_actor keys must be a non-empty array");
+            for (size_t i = 0; i < yyjson_arr_size(keys); ++i)
+            {
+                yyjson_val *key = yyjson_arr_get(keys, i);
+                if (!yyjson_is_str(key) || yyjson_get_str(key)[0] == '\0')
+                    return validation_error(ctx, json_path,
+                                            "actor.spawn properties_from_actor keys must be non-empty strings");
+            }
+        }
         return true;
     }
     if (SDL_strcmp(type, "actor.despawn") == 0)

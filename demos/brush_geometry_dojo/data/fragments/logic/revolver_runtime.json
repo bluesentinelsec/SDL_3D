@@ -102,7 +102,18 @@
                   {
                     "type": "actor.spawn",
                     "pool": "pool.brush_geometry.revolver_smoke",
-                    "position_from_payload": "origin"
+                    "position_from_payload": "origin",
+                    "properties_from_actor": {
+                      "source": "entity.brush_geometry.revolver_smoke_config",
+                      "keys": [
+                        "smoke_offset_x",
+                        "smoke_offset_y",
+                        "smoke_offset_z",
+                        "smoke_size_scale",
+                        "smoke_alpha_scale",
+                        "smoke_emit_rate"
+                      ]
+                    }
                   },
                   {
                     "type": "actor.spawn",

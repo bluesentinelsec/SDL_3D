@@ -1509,7 +1509,19 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     if (component == NULL || actor == NULL)
         return false;
 
-    out_config->position = actor->position;
+    slayer3d_vec3 position_offset = json_vec3(component, "position_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const char *position_offset_property = json_string(component, "position_offset_property", NULL);
+    const slayer3d_value *position_offset_value =
+        position_offset_property != NULL ? slayer3d_properties_get_value(actor->props, position_offset_property) : NULL;
+    if (position_offset_value != NULL && position_offset_value->type == SLAYER3D_VALUE_VEC3)
+        position_offset = position_offset_value->as_vec3;
+    position_offset.x +=
+        slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_x_property", NULL), 0.0f);
+    position_offset.y +=
+        slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_y_property", NULL), 0.0f);
+    position_offset.z +=
+        slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_z_property", NULL), 0.0f);
+    out_config->position = slayer3d_vec3_add(actor->position, position_offset);
     out_config->direction = json_vec3(component, "direction", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
     out_config->spread = json_float(component, "spread", 0.0f);
     out_config->speed_min = json_float(component, "speed_min", 0.0f);
@@ -1518,11 +1530,29 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     out_config->lifetime_max = json_float(component, "lifetime_max", 1.0f);
     out_config->size_start = json_float(component, "size_start", 0.05f);
     out_config->size_end = json_float(component, "size_end", 0.01f);
+    out_config->size_start = slayer3d_properties_get_float(
+        actor->props, json_string(component, "size_start_property", NULL), out_config->size_start);
+    out_config->size_end = slayer3d_properties_get_float(
+        actor->props, json_string(component, "size_end_property", NULL), out_config->size_end);
+    float size_scale =
+        slayer3d_properties_get_float(actor->props, json_string(component, "size_scale_property", NULL), 1.0f);
+    if (size_scale < 0.0f)
+        size_scale = 0.0f;
+    out_config->size_start *= size_scale;
+    out_config->size_end *= size_scale;
     out_config->color_start = json_color(component, "color_start", (slayer3d_color){255, 255, 255, 255});
     out_config->color_end = json_color(component, "color_end", (slayer3d_color){255, 255, 255, 0});
+    const float alpha_scale =
+        slayer3d_properties_get_float(actor->props, json_string(component, "alpha_scale_property", NULL), 1.0f);
+    out_config->color_start.a = (Uint8)SDL_clamp((int)((float)out_config->color_start.a * alpha_scale + 0.5f), 0, 255);
+    out_config->color_end.a = (Uint8)SDL_clamp((int)((float)out_config->color_end.a * alpha_scale + 0.5f), 0, 255);
     out_config->gravity = json_float(component, "gravity", 0.0f);
     out_config->max_particles = json_int(component, "max_particles", 128);
     out_config->emit_rate = json_float(component, "emit_rate", 0.0f);
+    out_config->emit_rate = slayer3d_properties_get_float(
+        actor->props, json_string(component, "emit_rate_property", NULL), out_config->emit_rate);
+    if (out_config->emit_rate < 0.0f)
+        out_config->emit_rate = 0.0f;
     const char *shape = json_string(component, "shape", "point");
     if (SDL_strcmp(shape, "box") == 0)
         out_config->shape = SLAYER3D_PARTICLE_EMITTER_BOX;
@@ -1533,6 +1563,8 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     out_config->extents = json_vec3(component, "extents", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     out_config->radius = json_float(component, "radius", 0.0f);
     out_config->emissive_intensity = json_float(component, "emissive_intensity", 1.0f);
+    out_config->emissive_intensity = slayer3d_properties_get_float(
+        actor->props, json_string(component, "emissive_intensity_property", NULL), out_config->emissive_intensity);
     const char *render_style = json_string(component, "render_style", "default");
     if (SDL_strcmp(render_style, "soft_smoke") == 0)
         out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE;

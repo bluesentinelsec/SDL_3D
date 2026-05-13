@@ -2,6 +2,7 @@
   "schema": "slayer3d.fragment.v0",
   "signals": [
     "signal.gun_tune.toggle",
+    "signal.smoke_tune.toggle",
     "signal.gun_tune.x_neg",
     "signal.gun_tune.x_pos",
     "signal.gun_tune.y_neg",
@@ -21,6 +22,7 @@
   "logic": {
     "sensors": [
       { "name": "sensor.gun_tune.toggle", "type": "sensor.input_pressed", "action": "action.gun_tune.toggle", "on_pressed": "signal.gun_tune.toggle" },
+      { "name": "sensor.smoke_tune.toggle", "type": "sensor.input_pressed", "action": "action.smoke_tune.toggle", "on_pressed": "signal.smoke_tune.toggle" },
       { "name": "sensor.gun_tune.x_neg", "type": "sensor.input_pressed", "action": "action.gun_tune.x_neg", "on_pressed": "signal.gun_tune.x_neg" },
       { "name": "sensor.gun_tune.x_pos", "type": "sensor.input_pressed", "action": "action.gun_tune.x_pos", "on_pressed": "signal.gun_tune.x_pos" },
       { "name": "sensor.gun_tune.y_neg", "type": "sensor.input_pressed", "action": "action.gun_tune.y_neg", "on_pressed": "signal.gun_tune.y_neg" },
@@ -41,79 +43,99 @@
       {
         "signal": "signal.gun_tune.toggle",
         "actions": [
+          { "type": "scene_state.set", "key": "debug.revolver_smoke_tuning.enabled", "value": false },
           { "type": "scene_state.toggle", "key": "debug.revolver_tuning.enabled", "default": false }
+        ]
+      },
+      {
+        "signal": "signal.smoke_tune.toggle",
+        "actions": [
+          { "type": "scene_state.set", "key": "debug.revolver_tuning.enabled", "value": false },
+          { "type": "scene_state.toggle", "key": "debug.revolver_smoke_tuning.enabled", "default": false }
         ]
       },
       {
         "signal": "signal.gun_tune.x_neg",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_x", "value": -0.02 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_x", "value": -0.02 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_offset_x", "value": -0.02 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.x_pos",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_x", "value": 0.02 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_x", "value": 0.02 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_offset_x", "value": 0.02 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.y_neg",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_y", "value": -0.02 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_y", "value": -0.02 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_offset_y", "value": -0.02 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.y_pos",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_y", "value": 0.02 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_y", "value": 0.02 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_offset_y", "value": 0.02 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.z_neg",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_z", "value": -0.02 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_z", "value": -0.02 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_offset_z", "value": -0.02 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.z_pos",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_z", "value": 0.02 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_z", "value": 0.02 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_offset_z", "value": 0.02 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.scale_down",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_scale", "value": -0.01 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_scale", "value": -0.01 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_size_scale", "value": -0.05 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.scale_up",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_scale", "value": 0.01 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_scale", "value": 0.01 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_size_scale", "value": 0.05 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.pitch_down",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_pitch", "value": -0.025 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_pitch", "value": -0.025 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_alpha_scale", "value": -0.05 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.pitch_up",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_pitch", "value": 0.025 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_pitch", "value": 0.025 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_alpha_scale", "value": 0.05 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.yaw_neg",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_yaw", "value": -0.025 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_yaw", "value": -0.025 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_emit_rate", "value": -4.0 }] }
         ]
       },
       {
         "signal": "signal.gun_tune.yaw_pos",
         "actions": [
-          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_yaw", "value": 0.025 }] }
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_yaw", "value": 0.025 }] },
+          { "type": "branch", "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true }, "then": [{ "type": "property.add", "target": "entity.brush_geometry.revolver_smoke_config", "key": "smoke_emit_rate", "value": 4.0 }] }
         ]
       },
       {
@@ -157,6 +179,27 @@
                 "append": true,
                 "label": "manual_write.player.camera_state",
                 "properties": ["yaw", "pitch", "camera_forward"]
+              }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true },
+            "then": [
+              {
+                "type": "debug.write_actor_properties",
+                "target": "entity.brush_geometry.revolver_smoke_config",
+                "path": "/tmp/smoke-placement.txt",
+                "label": "brush_geometry_revolver_smoke",
+                "properties": ["smoke_offset_x", "smoke_offset_y", "smoke_offset_z", "smoke_size_scale", "smoke_alpha_scale", "smoke_emit_rate"]
+              },
+              {
+                "type": "debug.write_actor_properties",
+                "target": "entity.brush_geometry.revolver_smoke_config",
+                "path": "/tmp/smoke-placement-trace.txt",
+                "append": true,
+                "label": "manual_write.smoke.current",
+                "properties": ["smoke_offset_x", "smoke_offset_y", "smoke_offset_z", "smoke_size_scale", "smoke_alpha_scale", "smoke_emit_rate"]
               }
             ]
           }

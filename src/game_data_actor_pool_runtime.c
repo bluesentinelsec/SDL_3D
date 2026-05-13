@@ -335,6 +335,27 @@ void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *
     }
 }
 
+static void apply_actor_spawn_properties_from_actor(slayer3d_game_data_runtime *runtime,
+                                                    slayer3d_registered_actor *actor, yyjson_val *properties_from_actor)
+{
+    if (runtime == NULL || actor == NULL || !yyjson_is_obj(properties_from_actor))
+        return;
+
+    slayer3d_registered_actor *source =
+        slayer3d_game_data_find_actor(runtime, json_string(properties_from_actor, "source", NULL));
+    yyjson_val *keys = obj_get(properties_from_actor, "keys");
+    if (source == NULL || source->props == NULL || actor->props == NULL || !yyjson_is_arr(keys))
+        return;
+
+    for (size_t i = 0; i < yyjson_arr_size(keys); ++i)
+    {
+        const char *key = yyjson_get_str(yyjson_arr_get(keys, i));
+        const slayer3d_value *value = key != NULL ? slayer3d_properties_get_value(source->props, key) : NULL;
+        if (key != NULL && value != NULL)
+            (void)set_property_from_value(actor->props, key, value);
+    }
+}
+
 static bool payload_vec3_value(const slayer3d_properties *payload, const char *key, slayer3d_vec3 *out_value)
 {
     const slayer3d_value *value = payload != NULL && key != NULL ? slayer3d_properties_get_value(payload, key) : NULL;
@@ -466,6 +487,7 @@ bool execute_actor_spawn_action(slayer3d_game_data_runtime *runtime, yyjson_val 
                                     (int)SDL_min(pool->spawn_generations[actor_index], (Uint64)SDL_MAX_SINT32));
     }
     actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, actor->position, actor));
+    apply_actor_spawn_properties_from_actor(runtime, actor, obj_get(action, "properties_from_actor"));
     apply_actor_spawn_properties(actor, obj_get(action, "properties"));
     apply_actor_spawn_velocity_from_payload(actor, action, payload);
     actor_pool_note_spawn_success(runtime, pool);
