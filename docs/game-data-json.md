@@ -711,7 +711,8 @@ the active selection. This is the safe scaffolding layer for editor tools:
 commands can publish UI state and draw preview bounds without modifying the
 authored world. Supported `command` values are `translate`, `paint`, `extrude`,
 and `delete`; supported `target` values are `selection`, `world`, `element`,
-`face`, and `material`.
+`face`, and `material`. Paint previews require a `material` string naming a
+material in the selected brush world's material palette.
 
 ```json
 {
@@ -737,10 +738,11 @@ Use `editor.command.commit`, `editor.command.undo`, and `editor.command.redo` to
 record validated editor command transactions. A commit requires an active command
 preview in the current scene. `translate` commands targeting a brush `element`
 mutate the selected runtime brush by shifting its planes by the preview offset,
-then rebuild brush bounds and the compiled render mesh. Undo and redo apply the
-inverse/forward mutation and move the command-history cursor. Other command
-names are accepted as transaction records so editor UI can be authored ahead of
-future mutation implementations.
+then rebuild brush bounds and the compiled render mesh. `paint` commands
+targeting a brush `face` replace that face's material and rebuild the compiled
+render mesh. Undo and redo apply the inverse/forward mutation and move the
+command-history cursor. Other command names are accepted as transaction records
+so editor UI can be authored ahead of future mutation implementations.
 
 ```json
 {
@@ -772,10 +774,10 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_event`, `editor_transaction_id`,
 `editor_transaction_id_text`, `editor_command`, `editor_command_target`, `editor_transaction_scene`,
 `editor_transaction_world`, `editor_transaction_element`,
-`editor_transaction_material`, `editor_transaction_face_index`,
-`editor_transaction_offset`, `editor_transaction_undo_count`,
-`editor_transaction_redo_count`, and `editor_transaction_bounds_min`/
-`editor_transaction_bounds_max`.
+`editor_transaction_material`, `editor_transaction_previous_material`,
+`editor_transaction_face_index`, `editor_transaction_offset`,
+`editor_transaction_undo_count`, `editor_transaction_redo_count`, and
+`editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
 
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,
