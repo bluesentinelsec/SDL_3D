@@ -8380,6 +8380,35 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_status_action.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown brush world reference"), std::string::npos) << error;
+
+    write_text(dir / "bad_create_box_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Create Box Action" },
+  "world": { "name": "world.bad_editor_create_box_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.create_box"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.create_box",
+        "actions": [
+          {
+            "type": "editor.brush_world.create_box",
+            "world": "missing.world",
+            "material": "mat.wall",
+            "min": [0, 0, 0],
+            "max": [1, 1, 1]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_create_box_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown brush world reference"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -12326,6 +12355,159 @@ TEST(GameDataRuntime, EditorPickingPreservesRepeatedBrushWorldInstancePlacement)
     EXPECT_NEAR(selection.bounds.min.x, 10.0f, 0.001f);
     EXPECT_NEAR(selection.bounds.max.x, 12.0f, 0.001f);
 
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_create_box_brush");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "create_box.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Editor Create Box Brush Test" },
+  "world": { "name": "world.editor_create_box", "kind": "brush" },
+  "signals": ["signal.editor.create_box"],
+  "brush_worlds": [
+    {
+      "name": "brush.editor.level",
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.7, 0.7, 0.7, 1.0] },
+        { "name": "mat.floor", "albedo": [0.2, 0.2, 0.2, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.create_box",
+        "actions": [
+          {
+            "type": "editor.brush_world.create_box",
+            "world": "brush.editor.level",
+            "name": "brush.created.wall",
+            "material": "mat.wall",
+            "min": [2.0, 0.0, 0.0],
+            "max": [4.0, 2.0, 0.5],
+            "outputs": {
+              "valid_key": "editor.create.valid",
+              "message_key": "editor.create.message",
+              "brush_key": "editor.create.brush",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "create_box.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_EQ(world.brush_count, 1);
+    slayer3d_game_data_brush_world_editor_state editor_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_FALSE(editor_state.dirty);
+    EXPECT_EQ(editor_state.revision, 0U);
+
+    const int create_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.create_box");
+    ASSERT_GE(create_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), create_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""), "brush.created.wall");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 1);
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    const slayer3d_game_data_brush &created = world.brushes[1];
+    EXPECT_STREQ(created.name, "brush.created.wall");
+    EXPECT_TRUE(created.has_bounds);
+    EXPECT_NEAR(created.bounds.min.x, 2.0f, 0.001f);
+    EXPECT_NEAR(created.bounds.max.y, 2.0f, 0.001f);
+    ASSERT_EQ(created.face_count, 6);
+    for (int i = 0; i < created.face_count; ++i)
+        EXPECT_STREQ(created.faces[i].material_name, "mat.wall");
+
+    slayer3d_game_data_create_box_brush_desc desc{};
+    desc.world_name = "brush.editor.level";
+    desc.material_name = "mat.floor";
+    desc.min = slayer3d_vec3_make(0.0f, -0.25f, 2.0f);
+    desc.max = slayer3d_vec3_make(3.0f, 0.0f, 4.0f);
+    char generated_name[256]{};
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &desc, generated_name, sizeof(generated_name), error,
+                                                    sizeof(error)))
+        << error;
+    EXPECT_STREQ(generated_name, "brush.editor.level.box.1");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_TRUE(editor_state.dirty);
+    EXPECT_EQ(editor_state.revision, 2U);
+    EXPECT_EQ(editor_state.saved_revision, 0U);
+
+    char *export_json = nullptr;
+    size_t export_size = 0U;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_fragment_json(runtime, "brush.editor.level", &export_json,
+                                                                    &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+    EXPECT_GT(export_size, 0U);
+    write_text(dir / "fragments" / "exported.fragment.json", export_json);
+    SDL_free(export_json);
+    write_text(dir / "roundtrip.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "imports": [{ "path": "fragments/exported.fragment.json", "sections": ["brush_worlds"] }],
+  "metadata": { "name": "Roundtrip Created Brushes" },
+  "world": { "name": "world.roundtrip", "kind": "brush" },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "roundtrip.game.json").string().c_str(), roundtrip_session,
+                                             &roundtrip_runtime, error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world roundtrip_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor.level", &roundtrip_world));
+    ASSERT_EQ(roundtrip_world.brush_count, 3);
+    EXPECT_STREQ(roundtrip_world.brushes[1].name, "brush.created.wall");
+    EXPECT_STREQ(roundtrip_world.brushes[2].name, "brush.editor.level.box.1");
+    EXPECT_STREQ(roundtrip_world.brushes[2].faces[0].material_name, "mat.floor");
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);

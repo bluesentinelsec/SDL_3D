@@ -1926,6 +1926,36 @@ extern "C"
     bool slayer3d_game_data_mark_brush_world_saved(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                    const char *source_path, char *error_buffer, int error_buffer_size);
 
+    /** @brief Descriptor for creating one axis-aligned convex box brush. */
+    typedef struct slayer3d_game_data_create_box_brush_desc
+    {
+        /** @brief Target brush world name. Required. */
+        const char *world_name;
+        /** @brief Optional brush name. If NULL/empty, a unique editor name is generated. */
+        const char *brush_name;
+        /** @brief Brush material assigned to all six faces. Required. */
+        const char *material_name;
+        /** @brief Minimum XYZ corner. Each component must be less than @p max. */
+        slayer3d_vec3 min;
+        /** @brief Maximum XYZ corner. Each component must be greater than @p min. */
+        slayer3d_vec3 max;
+        /** @brief Brush contents bitmask. Zero defaults to solid. */
+        unsigned int contents;
+    } slayer3d_game_data_create_box_brush_desc;
+
+    /**
+     * @brief Append one axis-aligned box brush to a runtime brush world.
+     *
+     * The operation is atomic from the runtime caller's perspective: the brush
+     * is visible only after allocations, acceleration rebuild, and render-model
+     * compilation all succeed. Success marks the brush world dirty and
+     * increments its editor revision. @p out_brush_name receives the final
+     * runtime brush name when non-NULL.
+     */
+    bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
+                                             const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,
+                                             size_t out_brush_name_size, char *error_buffer, int error_buffer_size);
+
     /**
      * @brief Iterate data-authored editor debug primitives for the active scene.
      *

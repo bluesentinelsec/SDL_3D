@@ -8198,6 +8198,43 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.brush_world.create_box") == 0)
+    {
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+            return false;
+        if (!is_non_empty_string(action, "material"))
+            return validation_error(ctx, json_path, "editor.brush_world.create_box requires a non-empty material");
+        yyjson_val *name = obj_get(action, "name");
+        if (name != NULL && (!yyjson_is_str(name) || yyjson_get_str(name)[0] == '\0'))
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.create_box name must be non-empty when present");
+        yyjson_val *min = obj_get(action, "min");
+        yyjson_val *max = obj_get(action, "max");
+        if (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3))
+            return validation_error(ctx, json_path, "editor.brush_world.create_box requires min and max vec3 values");
+        const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));
+        const double min_y = yyjson_get_num(yyjson_arr_get(min, 1));
+        const double min_z = yyjson_get_num(yyjson_arr_get(min, 2));
+        const double max_x = yyjson_get_num(yyjson_arr_get(max, 0));
+        const double max_y = yyjson_get_num(yyjson_arr_get(max, 1));
+        const double max_z = yyjson_get_num(yyjson_arr_get(max, 2));
+        if (!(min_x < max_x && min_y < max_y && min_z < max_z))
+            return validation_error(ctx, json_path, "editor.brush_world.create_box bounds require min < max");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.brush_world.create_box outputs must be an object");
+        static const char *const output_keys[] = {"valid_key",    "message_key",       "brush_key",
+                                                  "world_key",    "source_path_key",   "dirty_key",
+                                                  "revision_key", "saved_revision_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.brush_world.create_box output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))
