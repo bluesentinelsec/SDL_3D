@@ -85,7 +85,7 @@ static const char k_soft_fire_particle_frag[] =
     "}\n"
     "void main() {\n"
     "    vec2 centered = vTexCoord * 2.0 - 1.0;\n"
-    "    float y = clamp(vTexCoord.y, 0.0, 1.0);\n"
+    "    float y = 1.0 - clamp(vTexCoord.y, 0.0, 1.0);\n"
     "    float width = mix(0.70, 0.08, smoothstep(0.0, 1.0, y));\n"
     "    float flame_body = 1.0 - smoothstep(width * 0.35, width, abs(centered.x));\n"
     "    float vertical = smoothstep(0.02, 0.28, y) * (1.0 - smoothstep(0.82, 1.0, y));\n"
