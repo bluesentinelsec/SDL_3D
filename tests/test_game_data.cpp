@@ -13868,6 +13868,108 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int floor_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.floor");
+    const int wall_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.wall");
+    const int ceiling_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.ceiling");
+    const int player_start_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.player_start");
+    const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
+    ASSERT_GE(floor_signal, 0);
+    ASSERT_GE(wall_signal, 0);
+    ASSERT_GE(ceiling_signal, 0);
+    ASSERT_GE(player_start_signal, 0);
+    ASSERT_GE(commit_signal, 0);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    auto world = [&]() {
+        slayer3d_game_data_brush_world brush_world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+        return brush_world;
+    };
+    auto latest_brush = [&]() -> const slayer3d_game_data_brush * {
+        slayer3d_game_data_brush_world brush_world = world();
+        if (brush_world.brush_count <= 0)
+            return nullptr;
+        return &brush_world.brushes[brush_world.brush_count - 1];
+    };
+
+    EXPECT_EQ(world().brush_count, 1);
+
+    slayer3d_signal_emit(bus, floor_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "floor prefab created");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""),
+                 "brush.editor_shell.target.box.1");
+    ASSERT_NE(latest_brush(), nullptr);
+    EXPECT_STREQ(latest_brush()->faces[0].material_name, "mat.editor.floor");
+    EXPECT_NEAR(latest_brush()->bounds.min.y, -0.2f, 0.001f);
+    EXPECT_NEAR(latest_brush()->bounds.max.y, 0.0f, 0.001f);
+
+    slayer3d_signal_emit(bus, wall_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "wall prefab created");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""),
+                 "brush.editor_shell.target.box.2");
+    ASSERT_NE(latest_brush(), nullptr);
+    EXPECT_STREQ(latest_brush()->faces[0].material_name, "mat.editor.wall");
+    EXPECT_NEAR(latest_brush()->bounds.min.x, 3.0f, 0.001f);
+    EXPECT_NEAR(latest_brush()->bounds.max.y, 2.5f, 0.001f);
+
+    slayer3d_signal_emit(bus, ceiling_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "ceiling");
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "ceiling prefab created");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""),
+                 "brush.editor_shell.target.box.3");
+    ASSERT_NE(latest_brush(), nullptr);
+    EXPECT_STREQ(latest_brush()->faces[0].material_name, "mat.editor.ceiling");
+    EXPECT_NEAR(latest_brush()->bounds.min.y, 2.5f, 0.001f);
+    EXPECT_NEAR(latest_brush()->bounds.max.y, 2.7f, 0.001f);
+    EXPECT_EQ(world().brush_count, 4);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 3);
+
+    slayer3d_signal_emit(bus, player_start_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "player_start");
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.name", ""),
+                 "player_start.editor_shell");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.scene", ""),
+                 "scene.editor_shell.dojo");
+    slayer3d_game_data_editor_player_start start{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.editor_shell", &start));
+    EXPECT_NEAR(start.position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(start.position.y, 1.6f, 0.001f);
+    EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, RunsAuthoredFpsBrushController)
 {
     const std::filesystem::path dir = unique_test_dir("fps_brush_controller");
