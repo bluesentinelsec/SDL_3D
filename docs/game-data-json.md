@@ -2058,7 +2058,8 @@ Reusable components include:
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active. `render_style` defaults to
   `default`; `soft_smoke` renders procedural, soft-edged GPU smoke billboards
-  when a shader backend is available and falls back to the normal particle quad
+  and `soft_fire` renders procedural fire/muzzle-flash billboards when a shader
+  backend is available. Both shader styles fall back to the normal particle quad
   path in software. Effects can be tuned per actor with property indirection:
   `position_offset_property` reads a vec3 offset, `position_offset_x_property`,
   `position_offset_y_property`, and `position_offset_z_property` add scalar

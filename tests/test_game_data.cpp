@@ -226,6 +226,7 @@ struct ParticleCapture
     bool saw_options_flow = false;
     bool saw_pooled_emitter = false;
     bool saw_nukage_vapor = false;
+    bool saw_revolver_muzzle_flash = false;
     bool saw_revolver_smoke = false;
 };
 
@@ -1766,6 +1767,14 @@ bool capture_particle(void *userdata, const slayer3d_game_data_particle_emitter 
         capture->saw_revolver_smoke = true;
         EXPECT_TRUE(emitter->view_space);
         EXPECT_EQ(emitter->config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
+    }
+    if (std::string(emitter->entity_name) == "pool.brush_geometry.revolver_muzzle_flashes.0")
+    {
+        capture->saw_revolver_muzzle_flash = true;
+        EXPECT_TRUE(emitter->view_space);
+        EXPECT_EQ(emitter->config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_FIRE);
+        EXPECT_TRUE(emitter->config.additive_blend);
+        EXPECT_FALSE(emitter->config.depth_test);
     }
     return true;
 }
@@ -8001,6 +8010,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ParticleCapture revolver_particles{};
     ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &revolver_particles));
     EXPECT_TRUE(revolver_particles.saw_revolver_smoke);
+    EXPECT_TRUE(revolver_particles.saw_revolver_muzzle_flash);
     const slayer3d_vec3 tracer_velocity =
         slayer3d_properties_get_vec3(tracer->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_GT(slayer3d_vec3_length_squared(tracer_velocity), 1.0f);

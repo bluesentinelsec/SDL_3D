@@ -50,9 +50,9 @@
       "active": false,
       "properties": {
         "smoke_offset_x": { "type": "float", "value": 0.04 },
-        "smoke_offset_y": { "type": "float", "value": -0.24 },
-        "smoke_offset_z": { "type": "float", "value": -0.2 },
-        "smoke_size_scale": { "type": "float", "value": 0.5 },
+        "smoke_offset_y": { "type": "float", "value": -0.2 },
+        "smoke_offset_z": { "type": "float", "value": 0.3 },
+        "smoke_size_scale": { "type": "float", "value": 0.25 },
         "smoke_alpha_scale": { "type": "float", "value": 0.35 },
         "smoke_emit_rate": { "type": "float", "value": 120.0 }
       },

@@ -68,6 +68,41 @@ static const char k_soft_smoke_particle_frag[] =
     "    fragColor = vec4(color, alpha);\n"
     "}\n";
 
+static const char k_soft_fire_particle_frag[] =
+    "in vec2 vTexCoord;\n"
+    "in vec4 vColor;\n"
+    "uniform vec4 uTint;\n"
+    "out vec4 fragColor;\n"
+    "float hash(vec2 p) {\n"
+    "    return fract(sin(dot(p, vec2(41.3, 289.7))) * 24634.6345);\n"
+    "}\n"
+    "float noise(vec2 p) {\n"
+    "    vec2 i = floor(p);\n"
+    "    vec2 f = fract(p);\n"
+    "    vec2 u = f * f * (3.0 - 2.0 * f);\n"
+    "    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),\n"
+    "               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 centered = vTexCoord * 2.0 - 1.0;\n"
+    "    centered.x *= 0.82;\n"
+    "    float radius = length(centered);\n"
+    "    if (radius >= 1.0) discard;\n"
+    "    float core = 1.0 - smoothstep(0.0, 0.42, radius);\n"
+    "    float plume = 1.0 - smoothstep(0.22, 1.0, radius);\n"
+    "    float n = noise(vTexCoord * 7.0 + vec2(vColor.r * 2.0, vColor.g * 3.0));\n"
+    "    float lick = smoothstep(-0.2, 0.9, centered.y + n * 0.38);\n"
+    "    float alpha = vColor.a * uTint.a * plume * mix(0.55, 1.15, n) * lick;\n"
+    "    alpha = max(alpha, core * vColor.a * uTint.a);\n"
+    "    if (alpha <= 0.01) discard;\n"
+    "    vec3 hot = vec3(1.0, 0.96, 0.52);\n"
+    "    vec3 orange = vec3(1.0, 0.42, 0.08);\n"
+    "    vec3 ember = vec3(0.62, 0.08, 0.015);\n"
+    "    vec3 fire = mix(mix(ember, orange, plume), hot, core);\n"
+    "    fire *= vColor.rgb * uTint.rgb * 1.35;\n"
+    "    fragColor = vec4(fire, clamp(alpha, 0.0, 1.0));\n"
+    "}\n";
+
 static float slayer3d_effects_absf(float value)
 {
     return value < 0.0f ? -value : value;
@@ -158,7 +193,7 @@ static slayer3d_particle_config slayer3d_particle_config_normalized(const slayer
         normalized.shape = SLAYER3D_PARTICLE_EMITTER_POINT;
     }
     if (normalized.render_style < SLAYER3D_PARTICLE_RENDER_DEFAULT ||
-        normalized.render_style > SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE)
+        normalized.render_style > SLAYER3D_PARTICLE_RENDER_SOFT_FIRE)
     {
         normalized.render_style = SLAYER3D_PARTICLE_RENDER_DEFAULT;
     }
@@ -509,14 +544,18 @@ static bool slayer3d_draw_particle_quad(slayer3d_render_context *context, const 
         return true;
     }
 
-    if (config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE)
+    if (config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE ||
+        config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_FIRE)
     {
         const slayer3d_vec2 billboard_size = {size, size};
         const slayer3d_vec2 anchor = {0.5f, 0.5f};
+        const char *fragment_shader = config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_FIRE
+                                          ? k_soft_fire_particle_frag
+                                          : k_soft_smoke_particle_frag;
         return slayer3d_draw_billboard_shader_ex(context, config->texture, particle->position, billboard_size, anchor,
                                                  config->camera_facing ? SLAYER3D_BILLBOARD_SPHERICAL
                                                                        : SLAYER3D_BILLBOARD_UPRIGHT,
-                                                 color, false, NULL, k_soft_smoke_particle_frag);
+                                                 color, false, NULL, fragment_shader);
     }
 
     if (config->camera_facing)

@@ -46,29 +46,36 @@
       "tags": ["weapon_effect", "muzzle_flash"],
       "properties": {
         "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.06 }
+        "ttl": { "type": "float", "value": 0.08 }
       },
       "components": [
         {
-          "type": "render.mesh_primitive",
-          "primitive": "disc",
-          "radius": 0.22,
-          "segments": 24,
-          "color": [255, 230, 92, 235],
-          "emissive": true,
-          "lighting": false
+          "type": "particles.emitter",
+          "render_style": "soft_fire",
+          "space": "camera",
+          "position_offset": [0.04, -0.2, 0.3],
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 0.55,
+          "speed_min": 0.03,
+          "speed_max": 0.12,
+          "lifetime_min": 0.025,
+          "lifetime_max": 0.055,
+          "size_start": 0.34,
+          "size_end": 0.08,
+          "color_start": [255, 235, 145, 245],
+          "color_end": [255, 76, 12, 0],
+          "emit_rate": 520.0,
+          "max_particles": 16,
+          "camera_facing": true,
+          "additive_blend": true,
+          "depth_test": false,
+          "random_seed": 37
         },
         {
           "type": "lifecycle.ttl",
           "age_property": "age",
           "ttl_property": "ttl",
           "reason": "muzzle flash expired"
-        },
-        {
-          "type": "light.point",
-          "color": [1.0, 0.82, 0.18],
-          "intensity": 7.0,
-          "range": 6.0
         }
       ]
     },
@@ -79,9 +86,9 @@
         "age": { "type": "float", "value": 0.0 },
         "ttl": { "type": "float", "value": 0.22 },
         "smoke_offset_x": { "type": "float", "value": 0.04 },
-        "smoke_offset_y": { "type": "float", "value": -0.24 },
-        "smoke_offset_z": { "type": "float", "value": -0.2 },
-        "smoke_size_scale": { "type": "float", "value": 0.5 },
+        "smoke_offset_y": { "type": "float", "value": -0.2 },
+        "smoke_offset_z": { "type": "float", "value": 0.3 },
+        "smoke_size_scale": { "type": "float", "value": 0.25 },
         "smoke_alpha_scale": { "type": "float", "value": 0.35 },
         "smoke_emit_rate": { "type": "float", "value": 120.0 }
       },

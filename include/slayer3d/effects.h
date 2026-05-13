@@ -42,6 +42,7 @@ extern "C"
     {
         SLAYER3D_PARTICLE_RENDER_DEFAULT = 0,
         SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE = 1,
+        SLAYER3D_PARTICLE_RENDER_SOFT_FIRE = 2,
     } slayer3d_particle_render_style;
 
     /**

@@ -1576,6 +1576,8 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     const char *render_style = json_string(component, "render_style", "default");
     if (SDL_strcmp(render_style, "soft_smoke") == 0)
         out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE;
+    else if (SDL_strcmp(render_style, "soft_fire") == 0)
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_FIRE;
     else
         out_config->render_style = SLAYER3D_PARTICLE_RENDER_DEFAULT;
     out_config->camera_facing = json_bool(component, "camera_facing", true);

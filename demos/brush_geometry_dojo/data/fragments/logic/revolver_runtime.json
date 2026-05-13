@@ -97,7 +97,7 @@
                   {
                     "type": "actor.spawn",
                     "pool": "pool.brush_geometry.revolver_muzzle_flashes",
-                    "position_from_payload": "origin"
+                    "position": [0.0, 0.0, 0.55]
                   },
                   {
                     "type": "actor.spawn",
