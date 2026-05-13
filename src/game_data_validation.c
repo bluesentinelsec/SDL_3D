@@ -7955,6 +7955,26 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             if (property_offset != NULL && !is_vec_array(property_offset, 3))
                 return validation_error(ctx, json_path,
                                         "actor.spawn position_from_actor_properties offset must be a vec3");
+            const char *additive_fields[] = {"x_add", "y_add", "z_add"};
+            for (size_t additive_index = 0; additive_index < SDL_arraysize(additive_fields); ++additive_index)
+            {
+                yyjson_val *additive = obj_get(position_from_actor_properties, additive_fields[additive_index]);
+                if (additive == NULL)
+                    continue;
+                if (!yyjson_is_arr(additive))
+                    return validation_error(
+                        ctx, json_path, "actor.spawn position_from_actor_properties additive fields must be arrays");
+                for (size_t property_index = 0; property_index < yyjson_arr_size(additive); ++property_index)
+                {
+                    yyjson_val *property = yyjson_arr_get(additive, property_index);
+                    if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+                    {
+                        return validation_error(ctx, json_path,
+                                                "actor.spawn position_from_actor_properties additive fields must "
+                                                "contain non-empty strings");
+                    }
+                }
+            }
         }
         yyjson_val *offset = obj_get(action, "offset");
         if (offset != NULL && !is_vec_array(offset, 3))

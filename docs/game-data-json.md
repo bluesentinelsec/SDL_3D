@@ -1856,19 +1856,21 @@ Use `position_from_payload` for payload Vec3 positions such as hitscan
 `origin` or `hit_position`, and `payload_directional_offset` to push the spawn
 point along a payload Vec3 such as `hit_normal`. `position_from_actor_properties`
 builds a spawn position from three numeric properties on a source actor, with an
-optional local `offset`; use it for authored weapon/effect anchors where the
-effect should follow a tunable viewmodel or actor placement. `velocity_from_payload`
-reads a payload Vec3 direction, normalizes it, multiplies by `speed`, and writes
-it to `velocity` or `velocity_property` on the spawned actor. `properties_from_actor`
-copies same-named properties from a source actor before applying the spawn
-action's explicit `properties` object; use it for opt-in debug/tuning config
-actors that should feed pooled effects without hard-coding the effect in C:
+optional local `offset`. It can also add arrays of source properties through
+`x_add`, `y_add`, and `z_add`. Use those additive fields for authored
+weapon/effect anchors that need to follow a tunable viewmodel plus intro,
+recoil, and bob offsets. `velocity_from_payload` reads a payload Vec3 direction,
+normalizes it, multiplies by `speed`, and writes it to `velocity` or
+`velocity_property` on the spawned actor. `properties_from_actor` copies
+same-named properties from a source actor before applying the spawn action's
+explicit `properties` object; use it for opt-in debug/tuning config actors that
+should feed pooled effects without hard-coding the effect in C:
 
 ```json
 { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" }
 { "type": "actor.spawn", "pool": "pool.tracers", "position_from_payload": "origin", "velocity_from_payload": "direction", "speed": 80.0 }
 { "type": "actor.spawn", "pool": "pool.decals", "position_from_payload": "hit_position", "payload_directional_offset": { "property": "hit_normal", "distance": 0.03 } }
-{ "type": "actor.spawn", "pool": "pool.weapon_flash", "position_from_actor_properties": { "source": "entity.weapon_viewmodel", "x": "gun_x", "y": "gun_y", "z": "gun_z" } }
+{ "type": "actor.spawn", "pool": "pool.weapon_flash", "position_from_actor_properties": { "source": "entity.weapon_viewmodel", "x": "gun_x", "y": "gun_y", "z": "gun_z", "x_add": ["gun_intro_x", "gun_recoil_x", "gun_bob_x"], "y_add": ["gun_intro_y", "gun_recoil_y", "gun_bob_y"], "z_add": ["gun_intro_z", "gun_recoil_z", "gun_bob_z"] } }
 { "type": "actor.spawn", "pool": "pool.smoke", "position_from_payload": "origin", "properties_from_actor": { "source": "entity.weapon_smoke_config", "keys": ["smoke_size_scale", "smoke_alpha_scale"] } }
 { "type": "actor.despawn", "target_from_payload": "actor_name" }
 ```
@@ -2393,10 +2395,11 @@ can also use `payload.compare` with the same comparison operators:
 }
 ```
 
-`debug.write_actor_properties` is a development-only action for placement and
-tuning workflows. It writes selected actor properties to a host filesystem path.
-Set `append` to true to add another diagnostic block instead of replacing the
-file:
+`debug.write_actor_properties` is a development-only action for explicit
+placement and tuning workflows. It writes selected actor properties to a host
+filesystem path when the action runs. Keep it behind opt-in tuning controls or
+debug-only bindings; do not run it continuously during normal gameplay. Set
+`append` to true to add another diagnostic block instead of replacing the file:
 
 ```json
 {

@@ -383,6 +383,19 @@ static bool actor_property_float_value(const slayer3d_properties *props, const c
     return false;
 }
 
+static float actor_property_float_sum(const slayer3d_properties *props, yyjson_val *keys)
+{
+    float sum = 0.0f;
+    for (size_t i = 0; props != NULL && yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
+    {
+        yyjson_val *key = yyjson_arr_get(keys, i);
+        float value = 0.0f;
+        if (yyjson_is_str(key) && actor_property_float_value(props, yyjson_get_str(key), &value))
+            sum += value;
+    }
+    return sum;
+}
+
 static const slayer3d_registered_actor *actor_property_position_from_json(slayer3d_game_data_runtime *runtime,
                                                                           yyjson_val *position_from_actor_properties,
                                                                           slayer3d_vec3 *out_position)
@@ -413,6 +426,9 @@ static const slayer3d_registered_actor *actor_property_position_from_json(slayer
         position.y += offset.y;
         position.z += offset.z;
     }
+    position.x += actor_property_float_sum(source->props, obj_get(position_from_actor_properties, "x_add"));
+    position.y += actor_property_float_sum(source->props, obj_get(position_from_actor_properties, "y_add"));
+    position.z += actor_property_float_sum(source->props, obj_get(position_from_actor_properties, "z_add"));
     *out_position = position;
     return source;
 }
