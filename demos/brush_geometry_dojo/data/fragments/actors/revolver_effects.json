@@ -7,10 +7,10 @@
       "properties": {
         "age": { "type": "float", "value": 0.0 },
         "ttl": { "type": "float", "value": 0.035 },
-        "flash_offset_x": { "type": "float", "value": -0.06 },
+        "flash_offset_x": { "type": "float", "value": -0.02 },
         "flash_offset_y": { "type": "float", "value": 0.1 },
         "flash_offset_z": { "type": "float", "value": 0.33 },
-        "flash_size_scale": { "type": "float", "value": 0.15 },
+        "flash_size_scale": { "type": "float", "value": 0.1 },
         "flash_alpha_scale": { "type": "float", "value": 1.0 },
         "flash_intensity": { "type": "float", "value": 2.6 }
       },
@@ -56,8 +56,8 @@
       "properties": {
         "age": { "type": "float", "value": 0.0 },
         "ttl": { "type": "float", "value": 0.22 },
-        "smoke_offset_x": { "type": "float", "value": -0.06 },
-        "smoke_offset_y": { "type": "float", "value": 0.1 },
+        "smoke_offset_x": { "type": "float", "value": 0.0 },
+        "smoke_offset_y": { "type": "float", "value": 0.12 },
         "smoke_offset_z": { "type": "float", "value": 0.27 },
         "smoke_size_scale": { "type": "float", "value": 0.25 },
         "smoke_alpha_scale": { "type": "float", "value": 0.35 },

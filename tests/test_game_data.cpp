@@ -7968,19 +7968,22 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "revolver", 0), 1);
     EXPECT_FALSE(revolver_pickup->active);
     EXPECT_TRUE(revolver->active);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.1f, 0.0001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f), -0.3f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f), -0.26f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f), 0.58f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), 0.27f, 0.0001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f), -0.05f, 0.0001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -1.424999f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f), -0.025f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -1.549999f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_roll", 0.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_y", 1.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_z", 1.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_pitch", 1.0f), 0.0f, 0.0001f);
     ASSERT_FALSE(std::filesystem::exists(placement_path));
     ASSERT_TRUE(std::filesystem::exists(pickup_placement_path));
     ASSERT_TRUE(std::filesystem::exists(placement_trace_path));
     const std::string pickup_placement_text = read_text(pickup_placement_path);
     EXPECT_NE(pickup_placement_text.find("label=pickup.viewmodel.current"), std::string::npos);
-    EXPECT_NE(pickup_placement_text.find("gun_yaw=-1.424999"), std::string::npos);
+    EXPECT_NE(pickup_placement_text.find("gun_yaw=-1.549999"), std::string::npos);
     const std::string pickup_trace_text = read_text(placement_trace_path);
     EXPECT_NE(pickup_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
     EXPECT_NE(pickup_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
@@ -7998,7 +8001,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
             EXPECT_FALSE(primitive->lighting_enabled);
             EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.revolver");
             EXPECT_GT(primitive->model_scale.x, 0.0f);
-            EXPECT_NEAR(primitive->position.x, 0.1f, 0.0001f);
+            EXPECT_NEAR(primitive->position.x, 0.0f, 0.0001f);
         }
         return true;
     };
@@ -8031,10 +8034,10 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(muzzle_flash->active);
     EXPECT_TRUE(smoke->active);
     EXPECT_NEAR(muzzle_flash->position.x, 0.2f, 0.0001f);
-    EXPECT_NEAR(muzzle_flash->position.y, -0.3f, 0.0001f);
+    EXPECT_NEAR(muzzle_flash->position.y, -0.26f, 0.0001f);
     EXPECT_NEAR(muzzle_flash->position.z, 0.58f, 0.0001f);
     EXPECT_NEAR(smoke->position.x, 0.2f, 0.0001f);
-    EXPECT_NEAR(smoke->position.y, -0.3f, 0.0001f);
+    EXPECT_NEAR(smoke->position.y, -0.26f, 0.0001f);
     EXPECT_NEAR(smoke->position.z, 0.58f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_offset_x", 0.0f), 0.09f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_size_scale", 0.0f), 1.4f, 0.0001f);
@@ -8068,6 +8071,44 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NEAR(muzzle_flash_config.lifetime_max, 0.024f, 0.0001f);
     EXPECT_NEAR(muzzle_flash_config.size_start, 1.7f * 1.4f, 0.0001f);
     EXPECT_NEAR(muzzle_flash_config.size_end, 1.1f * 1.4f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.02f));
+    const float recoil_y = slayer3d_properties_get_float(revolver->props, "gun_recoil_y", 0.0f);
+    const float recoil_z = slayer3d_properties_get_float(revolver->props, "gun_recoil_z", 0.0f);
+    const float recoil_pitch = slayer3d_properties_get_float(revolver->props, "gun_recoil_pitch", 0.0f);
+    EXPECT_GT(recoil_y, 0.0f);
+    EXPECT_LT(recoil_z, 0.0f);
+    EXPECT_GT(recoil_pitch, 0.0f);
+    struct ViewmodelRecoilCapture
+    {
+        bool saw;
+        slayer3d_vec3 position;
+        slayer3d_vec3 rotation;
+    } recoil_capture{};
+    auto capture_revolver_recoil = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        ViewmodelRecoilCapture *capture = static_cast<ViewmodelRecoilCapture *>(userdata);
+        if (primitive != nullptr && primitive->entity_name != nullptr &&
+            std::string(primitive->entity_name) == "entity.brush_geometry.revolver_viewmodel")
+        {
+            capture->saw = true;
+            capture->position = primitive->position;
+            capture->rotation = primitive->euler_rotation;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_revolver_recoil, &recoil_capture));
+    EXPECT_TRUE(recoil_capture.saw);
+    EXPECT_NEAR(recoil_capture.position.x, slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.0001f);
+    EXPECT_NEAR(recoil_capture.position.y, slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f) + recoil_y,
+                0.0001f);
+    EXPECT_NEAR(recoil_capture.position.z, slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f) + recoil_z,
+                0.0001f);
+    EXPECT_NEAR(recoil_capture.rotation.x,
+                slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f) + recoil_pitch, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.03f));
+    ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.1f));
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_y", 1.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_z", 1.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_pitch", 1.0f), 0.0f, 0.0001f);
     ParticleCapture revolver_particles{};
     ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &revolver_particles));
     EXPECT_TRUE(revolver_particles.saw_revolver_smoke);

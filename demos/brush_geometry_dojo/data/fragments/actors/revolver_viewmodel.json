@@ -12,13 +12,19 @@
       "active": false,
       "position": [0.0, 0.0, 0.0],
       "properties": {
-        "gun_x": { "type": "float", "value": 0.1 },
-        "gun_y": { "type": "float", "value": -0.3 },
+        "gun_x": { "type": "float", "value": 0.0 },
+        "gun_y": { "type": "float", "value": -0.26 },
         "gun_z": { "type": "float", "value": 0.58 },
         "gun_scale": { "type": "float", "value": 0.27 },
-        "gun_pitch": { "type": "float", "value": -0.05 },
-        "gun_yaw": { "type": "float", "value": -1.424999 },
-        "gun_roll": { "type": "float", "value": 0.0 }
+        "gun_pitch": { "type": "float", "value": -0.025 },
+        "gun_yaw": { "type": "float", "value": -1.549999 },
+        "gun_roll": { "type": "float", "value": 0.0 },
+        "gun_recoil_x": { "type": "float", "value": 0.0 },
+        "gun_recoil_y": { "type": "float", "value": 0.0 },
+        "gun_recoil_z": { "type": "float", "value": 0.0 },
+        "gun_recoil_pitch": { "type": "float", "value": 0.0 },
+        "gun_recoil_yaw": { "type": "float", "value": 0.0 },
+        "gun_recoil_roll": { "type": "float", "value": 0.0 }
       },
       "components": [
         {
@@ -28,11 +34,17 @@
           "offset_x_property": "gun_x",
           "offset_y_property": "gun_y",
           "offset_z_property": "gun_z",
+          "offset_x_add_property": "gun_recoil_x",
+          "offset_y_add_property": "gun_recoil_y",
+          "offset_z_add_property": "gun_recoil_z",
           "scale": [1.0, 1.0, 1.0],
           "scale_property": "gun_scale",
           "pitch_property": "gun_pitch",
           "yaw_property": "gun_yaw",
           "roll_property": "gun_roll",
+          "pitch_add_property": "gun_recoil_pitch",
+          "yaw_add_property": "gun_recoil_yaw",
+          "roll_add_property": "gun_recoil_roll",
           "visible_to_cameras": ["camera.brush_geometry.player"],
           "lighting": false
         }
@@ -49,8 +61,8 @@
       "id": 812,
       "active": false,
       "properties": {
-        "smoke_offset_x": { "type": "float", "value": -0.06 },
-        "smoke_offset_y": { "type": "float", "value": 0.1 },
+        "smoke_offset_x": { "type": "float", "value": 0.0 },
+        "smoke_offset_y": { "type": "float", "value": 0.12 },
         "smoke_offset_z": { "type": "float", "value": 0.27 },
         "smoke_size_scale": { "type": "float", "value": 0.25 },
         "smoke_alpha_scale": { "type": "float", "value": 0.35 },
@@ -68,10 +80,10 @@
       "id": 813,
       "active": false,
       "properties": {
-        "flash_offset_x": { "type": "float", "value": -0.06 },
+        "flash_offset_x": { "type": "float", "value": -0.02 },
         "flash_offset_y": { "type": "float", "value": 0.1 },
         "flash_offset_z": { "type": "float", "value": 0.33 },
-        "flash_size_scale": { "type": "float", "value": 0.15 },
+        "flash_size_scale": { "type": "float", "value": 0.1 },
         "flash_alpha_scale": { "type": "float", "value": 1.0 },
         "flash_intensity": { "type": "float", "value": 2.6 }
       },

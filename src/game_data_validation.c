@@ -5875,7 +5875,9 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lighting_key = obj_get(component, "lighting_key");
                 if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
                     return validation_error(ctx, path, "render primitive lighting_key must be non-empty");
-                const char *offset_properties[] = {"offset_x_property", "offset_y_property", "offset_z_property"};
+                const char *offset_properties[] = {"offset_x_property",     "offset_y_property",
+                                                   "offset_z_property",     "offset_x_add_property",
+                                                   "offset_y_add_property", "offset_z_add_property"};
                 for (size_t i = 0; i < SDL_arraysize(offset_properties); ++i)
                 {
                     yyjson_val *offset_property = obj_get(component, offset_properties[i]);
@@ -5957,8 +5959,9 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     yyjson_val *rotation = obj_get(component, "rotation");
                     if (rotation != NULL && !is_vec_array(rotation, 3))
                         return validation_error(ctx, path, "render.model rotation must be a vec3");
-                    const char *property_fields[] = {"scale_property", "pitch_property", "yaw_property",
-                                                     "roll_property"};
+                    const char *property_fields[] = {"scale_property",   "pitch_property",     "yaw_property",
+                                                     "roll_property",    "pitch_add_property", "yaw_add_property",
+                                                     "roll_add_property"};
                     for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
                     {
                         yyjson_val *property = obj_get(component, property_fields[property_index]);
@@ -6469,9 +6472,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *rotation = obj_get(component, "rotation");
                 if (rotation != NULL && !is_vec_array(rotation, 3))
                     return validation_error(ctx, component_path, "render.model rotation must be a vec3");
-                const char *property_fields[] = {"scale_property",   "pitch_property",    "yaw_property",
-                                                 "roll_property",    "offset_x_property", "offset_y_property",
-                                                 "offset_z_property"};
+                const char *property_fields[] = {
+                    "scale_property",       "pitch_property",    "yaw_property",          "roll_property",
+                    "pitch_add_property",   "yaw_add_property",  "roll_add_property",     "offset_x_property",
+                    "offset_y_property",    "offset_z_property", "offset_x_add_property", "offset_y_add_property",
+                    "offset_z_add_property"};
                 for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
                 {
                     yyjson_val *property = obj_get(component, property_fields[property_index]);

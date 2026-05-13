@@ -646,10 +646,11 @@ bool slayer3d_game_data_update_animations(slayer3d_game_data_runtime *runtime, f
 
         if (complete)
         {
-            if (animation->done_signal_id >= 0 && bus != NULL)
-                slayer3d_signal_emit(bus, animation->done_signal_id, NULL);
+            const int done_signal_id = animation->done_signal_id;
             runtime->animations[i] = runtime->animations[runtime->animation_count - 1];
             --runtime->animation_count;
+            if (done_signal_id >= 0 && bus != NULL)
+                slayer3d_signal_emit(bus, done_signal_id, NULL);
             continue;
         }
         ++i;

@@ -2142,6 +2142,11 @@ Reusable components include:
   `offset_z_property` are interpreted as camera-local right/up/forward
   placement, and `rotation`, `pitch_property`, `yaw_property`,
   `roll_property`, and `scale_property` provide data-authored tuning controls.
+  Additive placement and rotation fields (`offset_x_add_property`,
+  `offset_y_add_property`, `offset_z_add_property`, `pitch_add_property`,
+  `yaw_add_property`, `roll_add_property`) are evaluated on top of those base
+  values. Use them for transient effects such as weapon recoil so placement
+  tuning can remain stable while animation properties move the viewmodel.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets
@@ -2377,6 +2382,12 @@ file:
   "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
 }
 ```
+
+`property.animate` tweens a numeric, vec3, or color actor property over time.
+It supports `from`, `to`/`value`, `duration`, `easing`, `repeat`, and optional
+`done_signal`. Omit `from` to start from the property's current runtime value;
+this is useful for repeated weapon recoil or other effects that may be
+re-triggered before the previous animation has fully settled.
 
 Generic combat actions provide reusable health, armor, death, and revival
 behavior without writing game-specific C:

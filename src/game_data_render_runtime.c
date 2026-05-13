@@ -1180,12 +1180,21 @@ static slayer3d_vec3 render_component_offset(const slayer3d_registered_actor *ac
     const char *x_property = json_string(component, "offset_x_property", NULL);
     const char *y_property = json_string(component, "offset_y_property", NULL);
     const char *z_property = json_string(component, "offset_z_property", NULL);
+    const char *x_add_property = json_string(component, "offset_x_add_property", NULL);
+    const char *y_add_property = json_string(component, "offset_y_add_property", NULL);
+    const char *z_add_property = json_string(component, "offset_z_add_property", NULL);
     if (x_property != NULL)
         offset.x += slayer3d_properties_get_float(actor->props, x_property, 0.0f);
     if (y_property != NULL)
         offset.y += slayer3d_properties_get_float(actor->props, y_property, 0.0f);
     if (z_property != NULL)
         offset.z += slayer3d_properties_get_float(actor->props, z_property, 0.0f);
+    if (x_add_property != NULL)
+        offset.x += slayer3d_properties_get_float(actor->props, x_add_property, 0.0f);
+    if (y_add_property != NULL)
+        offset.y += slayer3d_properties_get_float(actor->props, y_add_property, 0.0f);
+    if (z_add_property != NULL)
+        offset.z += slayer3d_properties_get_float(actor->props, z_add_property, 0.0f);
     return offset;
 }
 
@@ -1340,12 +1349,21 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
             const char *pitch_property = json_string(component, "pitch_property", NULL);
             const char *yaw_property = json_string(component, "yaw_property", NULL);
             const char *roll_property = json_string(component, "roll_property", NULL);
+            const char *pitch_add_property = json_string(component, "pitch_add_property", NULL);
+            const char *yaw_add_property = json_string(component, "yaw_add_property", NULL);
+            const char *roll_add_property = json_string(component, "roll_add_property", NULL);
             if (pitch_property != NULL)
                 primitive.euler_rotation.x += slayer3d_properties_get_float(actor->props, pitch_property, 0.0f);
             if (yaw_property != NULL)
                 primitive.euler_rotation.y += slayer3d_properties_get_float(actor->props, yaw_property, 0.0f);
             if (roll_property != NULL)
                 primitive.euler_rotation.z += slayer3d_properties_get_float(actor->props, roll_property, 0.0f);
+            if (pitch_add_property != NULL)
+                primitive.euler_rotation.x += slayer3d_properties_get_float(actor->props, pitch_add_property, 0.0f);
+            if (yaw_add_property != NULL)
+                primitive.euler_rotation.y += slayer3d_properties_get_float(actor->props, yaw_add_property, 0.0f);
+            if (roll_add_property != NULL)
+                primitive.euler_rotation.z += slayer3d_properties_get_float(actor->props, roll_add_property, 0.0f);
             primitive.animation_clip = json_int(component, "animation_clip", -1);
             primitive.animation_time = json_float(component, "animation_time", 0.0f);
             primitive.animation_loop = json_bool(component, "animation_loop", true);
