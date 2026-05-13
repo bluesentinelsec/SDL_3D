@@ -12316,6 +12316,35 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         slayer3d_input_process_event(input, &key);
         slayer3d_input_update(input, frame);
     };
+    auto target_cube_min_y = [&]() -> float {
+        struct BoundsCapture
+        {
+            float min_y = 0.0f;
+            bool found = false;
+        } capture;
+        auto capture_bounds = [](void *userdata, const slayer3d_game_data_brush_world_instance *instance) -> bool {
+            auto *capture = static_cast<BoundsCapture *>(userdata);
+            if (instance == nullptr || instance->world == nullptr ||
+                std::string(instance->world_name != nullptr ? instance->world_name : "") != "brush.editor_shell.target")
+            {
+                return true;
+            }
+            for (int i = 0; i < instance->world->brush_count; ++i)
+            {
+                const slayer3d_game_data_brush &brush = instance->world->brushes[i];
+                if (brush.name != nullptr && std::string(brush.name) == "brush.target.cube")
+                {
+                    capture->min_y = brush.bounds.min.y + instance->position.y;
+                    capture->found = true;
+                    return false;
+                }
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_brush_world_instance(runtime, capture_bounds, &capture));
+        EXPECT_TRUE(capture.found);
+        return capture.min_y;
+    };
 
     press_key(SDL_SCANCODE_I, 4);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
@@ -12403,6 +12432,10 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.element", ""), "brush.target.cube");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "commit translate #1");
+    EXPECT_NEAR(target_cube_min_y(), 0.35f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_TRUE(active_selection.has_bounds);
+    EXPECT_NEAR(active_selection.bounds.min.y, 0.35f, 0.001f);
 
     press_key(SDL_SCANCODE_Z, 8);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
@@ -12412,6 +12445,10 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "undo translate #1");
+    EXPECT_NEAR(target_cube_min_y(), 0.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_TRUE(active_selection.has_bounds);
+    EXPECT_NEAR(active_selection.bounds.min.y, 0.0f, 0.001f);
 
     press_key(SDL_SCANCODE_Y, 9);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
@@ -12420,6 +12457,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "redo translate #1");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
+    EXPECT_NEAR(target_cube_min_y(), 0.35f, 0.001f);
 
     press_key(SDL_SCANCODE_BACKSPACE, 10);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
