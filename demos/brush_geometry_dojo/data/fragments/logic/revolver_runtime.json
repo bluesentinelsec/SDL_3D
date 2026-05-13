@@ -106,7 +106,7 @@
                         "flash_offset_z",
                         "flash_size_scale",
                         "flash_alpha_scale",
-                        "flash_emit_rate"
+                        "flash_intensity"
                       ]
                     }
                   },

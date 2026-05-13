@@ -2948,12 +2948,28 @@ static bool validate_render_mesh_primitive_component(validation_context *ctx, yy
     yyjson_val *lighting_key = obj_get(component, "lighting_key");
     if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
         return validation_error(ctx, path, "render.mesh_primitive lighting_key must be non-empty");
+    yyjson_val *space = obj_get(component, "space");
+    if (space != NULL && (!yyjson_is_str(space) || (SDL_strcmp(yyjson_get_str(space), "world") != 0 &&
+                                                    SDL_strcmp(yyjson_get_str(space), "camera") != 0)))
+        return validation_error(ctx, path, "render.mesh_primitive space must be 'world' or 'camera'");
     yyjson_val *size = obj_get(component, "size");
     if (size != NULL && !is_vec_array(size, 3))
         return validation_error(ctx, path, "render.mesh_primitive size must be a vec3");
-    yyjson_val *size_property = obj_get(component, "size_property");
-    if (size_property != NULL && !is_non_empty_string(component, "size_property"))
-        return validation_error(ctx, path, "render.mesh_primitive size_property must be non-empty");
+    const char *property_fields[] = {
+        "size_property",          "radius_property",     "height_property",      "radius_top_property",
+        "radius_bottom_property", "size_scale_property", "alpha_scale_property", "emissive_intensity_property"};
+    for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
+    {
+        yyjson_val *property = obj_get(component, property_fields[property_index]);
+        if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
+            return validation_error(ctx, path, "render.mesh_primitive property fields must be non-empty");
+    }
+    yyjson_val *emissive_color = obj_get(component, "emissive_color");
+    if (emissive_color != NULL && !is_vec_array(emissive_color, 3))
+        return validation_error(ctx, path, "render.mesh_primitive emissive_color must be a vec3 or vec4");
+    yyjson_val *emissive_intensity = obj_get(component, "emissive_intensity");
+    if (emissive_intensity != NULL && (!yyjson_is_num(emissive_intensity) || yyjson_get_num(emissive_intensity) < 0.0))
+        return validation_error(ctx, path, "render.mesh_primitive emissive_intensity must be non-negative");
     const char *positive_numbers[] = {"radius", "height", "major_radius", "minor_radius"};
     for (size_t i = 0; i < SDL_arraysize(positive_numbers); ++i)
     {

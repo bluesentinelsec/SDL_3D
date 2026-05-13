@@ -1090,10 +1090,22 @@ static void populate_mesh_primitive_descriptor(const slayer3d_registered_actor *
     if (actor != NULL && size_property != NULL)
         primitive->size = slayer3d_properties_get_vec3(actor->props, size_property, primitive->size);
     primitive->radius = json_float(component, "radius", primitive->radius);
+    primitive->radius = slayer3d_properties_get_float(
+        actor != NULL ? actor->props : NULL, json_string(component, "radius_property", NULL), primitive->radius);
     primitive->height =
         json_float(component, "height", primitive->height > 0.0f ? primitive->height : primitive->size.y);
-    primitive->radius_top = json_float(component, "radius_top", primitive->radius);
+    primitive->height = slayer3d_properties_get_float(
+        actor != NULL ? actor->props : NULL, json_string(component, "height_property", NULL), primitive->height);
+    primitive->radius_top = primitive->mesh_primitive == SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE
+                                ? json_float(component, "radius_top", 0.0f)
+                                : json_float(component, "radius_top", primitive->radius);
+    primitive->radius_top =
+        slayer3d_properties_get_float(actor != NULL ? actor->props : NULL,
+                                      json_string(component, "radius_top_property", NULL), primitive->radius_top);
     primitive->radius_bottom = json_float(component, "radius_bottom", primitive->radius);
+    primitive->radius_bottom =
+        slayer3d_properties_get_float(actor != NULL ? actor->props : NULL,
+                                      json_string(component, "radius_bottom_property", NULL), primitive->radius_bottom);
     primitive->major_radius = json_float(component, "major_radius", primitive->major_radius);
     primitive->minor_radius = json_float(component, "minor_radius", primitive->minor_radius);
     primitive->bevel_radius =
@@ -1102,8 +1114,19 @@ static void populate_mesh_primitive_descriptor(const slayer3d_registered_actor *
     primitive->slices = SDL_max(json_int(component, "slices", json_int(component, "segments", primitive->slices)), 3);
     primitive->rings = SDL_max(json_int(component, "rings", primitive->rings), 3);
     primitive->tube_segments = SDL_max(json_int(component, "tube_segments", primitive->tube_segments), 3);
-    if (primitive->mesh_primitive == SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE)
-        primitive->radius_top = json_float(component, "radius_top", 0.0f);
+    const float size_scale = slayer3d_properties_get_float(actor != NULL ? actor->props : NULL,
+                                                           json_string(component, "size_scale_property", NULL), 1.0f);
+    if (size_scale > 0.0f)
+    {
+        primitive->size = slayer3d_vec3_scale(primitive->size, size_scale);
+        primitive->radius *= size_scale;
+        primitive->height *= size_scale;
+        primitive->radius_top *= size_scale;
+        primitive->radius_bottom *= size_scale;
+        primitive->major_radius *= size_scale;
+        primitive->minor_radius *= size_scale;
+        primitive->bevel_radius *= size_scale;
+    }
 }
 
 static const slayer3d_sector *active_scene_sector_for_position(const slayer3d_game_data_runtime *runtime,
@@ -1188,6 +1211,10 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         primitive.position.x += offset.x;
         primitive.position.y += offset.y;
         primitive.position.z += offset.z;
+        const char *space = json_string(component, "space", "world");
+        primitive.view_space = space != NULL && SDL_strcmp(space, "camera") == 0;
+        if (primitive.view_space)
+            primitive.position.z = -primitive.position.z;
         primitive.rotation_axis = json_vec3(component, "rotation_axis", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
         primitive.rotation_angle = json_float(component, "rotation_angle", 0.0f);
         const char *rotation_property = json_string(component, "rotation_property", NULL);
@@ -1197,8 +1224,19 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         primitive.texture_image = json_string(component, "texture", NULL);
         primitive.lighting_enabled = render_component_lighting_enabled(runtime, component, true);
         primitive.emissive = json_bool(component, "emissive", false);
-        primitive.emissive_color =
-            primitive.emissive ? slayer3d_vec3_make(0.2f, 0.2f, 0.2f) : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        primitive.emissive_color = primitive.emissive
+                                       ? json_vec3(component, "emissive_color", slayer3d_vec3_make(0.2f, 0.2f, 0.2f))
+                                       : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        if (primitive.emissive)
+        {
+            float emissive_intensity = json_float(component, "emissive_intensity", 1.0f);
+            emissive_intensity = slayer3d_properties_get_float(
+                actor->props, json_string(component, "emissive_intensity_property", NULL), emissive_intensity);
+            primitive.emissive_color = slayer3d_vec3_scale(primitive.emissive_color, SDL_max(emissive_intensity, 0.0f));
+        }
+        const float alpha_scale =
+            slayer3d_properties_get_float(actor->props, json_string(component, "alpha_scale_property", NULL), 1.0f);
+        primitive.color.a = (Uint8)SDL_clamp((int)((float)primitive.color.a * alpha_scale + 0.5f), 0, 255);
         primitive.wire_color = json_color(component, "wire_color", (slayer3d_color){0, 0, 0, 255});
         primitive.size = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
         primitive.radius = 0.5f;
@@ -1286,7 +1324,6 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         {
             primitive.type = SLAYER3D_GAME_DATA_RENDER_MODEL;
             primitive.model_asset = json_string(component, "model", NULL);
-            const char *space = json_string(component, "space", "world");
             primitive.view_space = SDL_strcmp(space, "camera") == 0;
             if (primitive.view_space)
                 primitive.position = offset;

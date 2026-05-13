@@ -2091,7 +2091,13 @@ Reusable components include:
   where applicable, and add `draw_mode`: `solid` (default), `wire`, or
   `solid_wire`. `lighting_key` reads a scene-state boolean and is useful for
   isolating whether actor primitives, sector-local lighting, or dynamic lights
-  are driving a scene.
+  are driving a scene. Set `"space": "camera"` for first-person procedural
+  geometry such as weapon flashes, cockpit markers, and viewmodel-only debug
+  shapes. Camera-space mesh primitive offsets use the same convention as
+  camera-space models and particles: positive Z is forward from the camera, and
+  the renderer converts it to view space at draw time. This is usually a better
+  fit for directional muzzle flashes than a billboard particle because the
+  flash can be authored as actual geometry pointing down the weapon barrel.
   Render primitive components also support camera-scoped visibility with
   `visible_to_cameras` and `hidden_from_cameras`, each authored as a camera name
   or array of camera names. This is useful for first-person bodies, security
@@ -2099,9 +2105,15 @@ Reusable components include:
   presentation.
   Dimension fields include `size`, `radius`, `height`, `radius_top`,
   `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
-  `segments`/`slices`, `rings`, and `tube_segments`. This is the stable
-  data/runtime representation for procedural mesh primitives. The generic
-  presentation path renders every primitive as shaded solid geometry by
+  `segments`/`slices`, `rings`, and `tube_segments`. Authored property fields
+  can override or scale common dimensions per actor:
+  `size_property`, `radius_property`, `height_property`,
+  `radius_top_property`, `radius_bottom_property`, and
+  `size_scale_property`. `alpha_scale_property` scales the primitive color
+  alpha, while `emissive_color`, `emissive_intensity`, and
+  `emissive_intensity_property` provide data-tunable glow for effects. This is
+  the stable data/runtime representation for procedural mesh primitives. The
+  generic presentation path renders every primitive as shaded solid geometry by
   default, with optional wire-only or solid-plus-wire modes. Solid procedural
   primitives are generated through a presentation cache when hosts provide one,
   so repeated static placeholder geometry can reuse stable CPU mesh data and
