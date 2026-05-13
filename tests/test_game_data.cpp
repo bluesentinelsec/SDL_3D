@@ -7990,7 +7990,9 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(smoke_config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
     EXPECT_NEAR(smoke_config.position.x, smoke->position.x + 0.11f, 0.0001f);
     EXPECT_NEAR(smoke_config.position.y, smoke->position.y + 0.04f, 0.0001f);
-    EXPECT_NEAR(smoke_config.position.z, smoke->position.z - 0.07f, 0.0001f);
+    EXPECT_NEAR(smoke->position.z, 0.55f, 0.0001f);
+    EXPECT_NEAR(smoke_config.position.z, -(smoke->position.z - 0.07f), 0.0001f);
+    EXPECT_LT(smoke_config.position.z, -0.1f);
     EXPECT_EQ(smoke_config.color_start.a, 48);
     EXPECT_NEAR(smoke_config.emit_rate, 24.0f, 0.0001f);
     EXPECT_NEAR(smoke_config.size_start, 0.13f * 1.5f, 0.0001f);

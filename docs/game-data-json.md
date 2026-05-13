@@ -2067,9 +2067,12 @@ Reusable components include:
   alpha, `emit_rate_property` overrides emission rate, and
   `emissive_intensity_property` overrides draw emissive intensity. `space`
   defaults to `world`; `space: "camera"` evaluates and draws particle positions
-  directly in viewmodel camera space for weapon smoke, muzzle puffs, cockpit
-  effects, and other first-person presentation effects that should stay
-  attached to the viewport instead of lingering in world space.
+  in viewmodel camera space for weapon smoke, muzzle puffs, cockpit effects,
+  and other first-person presentation effects that should stay attached to the
+  viewport instead of lingering in world space. Camera-space particle positions
+  use the same authoring convention as camera-space models: positive Z is
+  forward from the camera and is converted to the renderer's view-space axis at
+  draw time.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
   named by `size_property`. `texture` may reference an image asset id; each cube
   face is UV-mapped to the full image and tinted by `color`. The property path

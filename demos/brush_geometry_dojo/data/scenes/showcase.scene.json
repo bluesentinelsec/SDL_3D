@@ -98,7 +98,7 @@
               {
                 "type": "actor.spawn",
                 "pool": "pool.brush_geometry.revolver_smoke",
-                "position": [0.0, 0.0, 0.0],
+                "position": [0.0, 0.0, 0.55],
                 "properties_from_actor": {
                   "source": "entity.brush_geometry.revolver_smoke_config",
                   "keys": [
