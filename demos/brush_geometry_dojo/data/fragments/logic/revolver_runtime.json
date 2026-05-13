@@ -66,30 +66,7 @@
           { "type": "entity.set_active", "target": "entity.brush_geometry.revolver_viewmodel", "active": true },
           { "type": "property.animate", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_y", "to": 0.0, "duration": 0.24, "easing": "out_quad" },
           { "type": "property.animate", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_z", "to": 0.0, "duration": 0.24, "easing": "out_quad" },
-          { "type": "property.animate", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_pitch", "to": 0.0, "duration": 0.24, "easing": "out_quad" },
-          {
-            "type": "debug.write_actor_properties",
-            "target": "entity.brush_geometry.revolver_viewmodel",
-            "path": "/tmp/gun-placement-pickup.txt",
-            "label": "pickup.viewmodel.current",
-            "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
-          },
-          {
-            "type": "debug.write_actor_properties",
-            "target": "entity.brush_geometry.revolver_viewmodel",
-            "path": "/tmp/gun-placement-trace.txt",
-            "append": true,
-            "label": "pickup.viewmodel.current",
-            "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
-          },
-          {
-            "type": "debug.write_actor_properties",
-            "target": "entity.brush_geometry.player",
-            "path": "/tmp/gun-placement-trace.txt",
-            "append": true,
-            "label": "pickup.player.camera_state",
-            "properties": ["yaw", "pitch", "camera_forward"]
-          }
+          { "type": "property.animate", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_pitch", "to": 0.0, "duration": 0.24, "easing": "out_quad" }
         ]
       },
       {
@@ -150,7 +127,10 @@
                       "source": "entity.brush_geometry.revolver_viewmodel",
                       "x": "gun_x",
                       "y": "gun_y",
-                      "z": "gun_z"
+                      "z": "gun_z",
+                      "x_add": ["gun_intro_x", "gun_recoil_x", "gun_bob_x"],
+                      "y_add": ["gun_intro_y", "gun_recoil_y", "gun_bob_y"],
+                      "z_add": ["gun_intro_z", "gun_recoil_z", "gun_bob_z"]
                     },
                     "properties_from_actor": {
                       "source": "entity.brush_geometry.revolver_muzzle_flash_config",
@@ -171,7 +151,10 @@
                       "source": "entity.brush_geometry.revolver_viewmodel",
                       "x": "gun_x",
                       "y": "gun_y",
-                      "z": "gun_z"
+                      "z": "gun_z",
+                      "x_add": ["gun_intro_x", "gun_recoil_x", "gun_bob_x"],
+                      "y_add": ["gun_intro_y", "gun_recoil_y", "gun_bob_y"],
+                      "z_add": ["gun_intro_z", "gun_recoil_z", "gun_bob_z"]
                     },
                     "properties_from_actor": {
                       "source": "entity.brush_geometry.revolver_smoke_config",

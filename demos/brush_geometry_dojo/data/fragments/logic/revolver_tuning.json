@@ -217,22 +217,6 @@
                 "path": "/tmp/gun-placement.txt",
                 "label": "brush_geometry_revolver_viewmodel",
                 "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
-              },
-              {
-                "type": "debug.write_actor_properties",
-                "target": "entity.brush_geometry.revolver_viewmodel",
-                "path": "/tmp/gun-placement-trace.txt",
-                "append": true,
-                "label": "manual_write.viewmodel.current",
-                "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
-              },
-              {
-                "type": "debug.write_actor_properties",
-                "target": "entity.brush_geometry.player",
-                "path": "/tmp/gun-placement-trace.txt",
-                "append": true,
-                "label": "manual_write.player.camera_state",
-                "properties": ["yaw", "pitch", "camera_forward"]
               }
             ]
           },
@@ -246,14 +230,6 @@
                 "path": "/tmp/smoke-placement.txt",
                 "label": "brush_geometry_revolver_smoke",
                 "properties": ["smoke_offset_x", "smoke_offset_y", "smoke_offset_z", "smoke_size_scale", "smoke_alpha_scale", "smoke_emit_rate"]
-              },
-              {
-                "type": "debug.write_actor_properties",
-                "target": "entity.brush_geometry.revolver_smoke_config",
-                "path": "/tmp/smoke-placement-trace.txt",
-                "append": true,
-                "label": "manual_write.smoke.current",
-                "properties": ["smoke_offset_x", "smoke_offset_y", "smoke_offset_z", "smoke_size_scale", "smoke_alpha_scale", "smoke_emit_rate"]
               }
             ]
           },
@@ -266,14 +242,6 @@
                 "target": "entity.brush_geometry.revolver_muzzle_flash_config",
                 "path": "/tmp/muzzle-flash-placement.txt",
                 "label": "brush_geometry_revolver_muzzle_flash",
-                "properties": ["flash_offset_x", "flash_offset_y", "flash_offset_z", "flash_size_scale", "flash_alpha_scale", "flash_intensity"]
-              },
-              {
-                "type": "debug.write_actor_properties",
-                "target": "entity.brush_geometry.revolver_muzzle_flash_config",
-                "path": "/tmp/muzzle-flash-placement-trace.txt",
-                "append": true,
-                "label": "manual_write.muzzle_flash.current",
                 "properties": ["flash_offset_x", "flash_offset_y", "flash_offset_z", "flash_size_scale", "flash_alpha_scale", "flash_intensity"]
               }
             ]

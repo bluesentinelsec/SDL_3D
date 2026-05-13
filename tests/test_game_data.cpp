@@ -6998,7 +6998,10 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
       "properties": {
         "anchor_x": { "type": "float", "value": 2.0 },
         "anchor_y": { "type": "float", "value": 3.0 },
-        "anchor_z": { "type": "float", "value": 4.0 }
+        "anchor_z": { "type": "float", "value": 4.0 },
+        "anchor_x_add": { "type": "float", "value": 0.75 },
+        "anchor_y_add": { "type": "float", "value": -0.25 },
+        "anchor_z_add": { "type": "float", "value": 0.125 }
       }
     }
   ],
@@ -7122,7 +7125,10 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
               "x": "anchor_x",
               "y": "anchor_y",
               "z": "anchor_z",
-              "offset": [0.25, 0.5, -0.25]
+              "offset": [0.25, 0.5, -0.25],
+              "x_add": ["anchor_x_add"],
+              "y_add": ["anchor_y_add"],
+              "z_add": ["anchor_z_add"]
             },
             "offset": [1.0, 0.0, 0.0]
           }
@@ -7221,7 +7227,7 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
 
     slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.property_position"), nullptr);
     EXPECT_TRUE(shot0->active);
-    expect_vec3_near(shot0->position, slayer3d_vec3_make(3.25f, 3.5f, 3.75f));
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(4.0f, 3.25f, 3.875f));
 
     slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
     EXPECT_FALSE(shot0->active);
@@ -7944,19 +7950,11 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
         slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_pickup_model, &saw_revolver_pickup));
     EXPECT_TRUE(saw_revolver_pickup);
     const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
-    const std::filesystem::path pickup_placement_path = "/tmp/gun-placement-pickup.txt";
-    const std::filesystem::path placement_trace_path = "/tmp/gun-placement-trace.txt";
     const std::filesystem::path smoke_placement_path = "/tmp/smoke-placement.txt";
-    const std::filesystem::path smoke_trace_path = "/tmp/smoke-placement-trace.txt";
     const std::filesystem::path muzzle_flash_placement_path = "/tmp/muzzle-flash-placement.txt";
-    const std::filesystem::path muzzle_flash_trace_path = "/tmp/muzzle-flash-placement-trace.txt";
     std::filesystem::remove(placement_path);
-    std::filesystem::remove(pickup_placement_path);
-    std::filesystem::remove(placement_trace_path);
     std::filesystem::remove(smoke_placement_path);
-    std::filesystem::remove(smoke_trace_path);
     std::filesystem::remove(muzzle_flash_placement_path);
-    std::filesystem::remove(muzzle_flash_trace_path);
     slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
     slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
     const int revolver_pickup_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.pickup");
@@ -7986,16 +7984,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_z", 1.0f), 0.0f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_pitch", 1.0f), 0.0f, 0.0001f);
     ASSERT_FALSE(std::filesystem::exists(placement_path));
-    ASSERT_TRUE(std::filesystem::exists(pickup_placement_path));
-    ASSERT_TRUE(std::filesystem::exists(placement_trace_path));
-    const std::string pickup_placement_text = read_text(pickup_placement_path);
-    EXPECT_NE(pickup_placement_text.find("label=pickup.viewmodel.current"), std::string::npos);
-    EXPECT_NE(pickup_placement_text.find("gun_yaw=-1.549999"), std::string::npos);
-    const std::string pickup_trace_text = read_text(placement_trace_path);
-    EXPECT_NE(pickup_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
-    EXPECT_NE(pickup_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
-    EXPECT_LT(pickup_trace_text.find("label=pickup.viewmodel.current"),
-              pickup_trace_text.find("label=pickup.player.camera_state"));
     bool saw_revolver_viewmodel = false;
     auto find_revolver_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
         bool *saw = static_cast<bool *>(userdata);
@@ -8040,12 +8028,24 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_impact_decals.0"), nullptr);
     EXPECT_TRUE(muzzle_flash->active);
     EXPECT_TRUE(smoke->active);
-    EXPECT_NEAR(muzzle_flash->position.x, 0.2f, 0.0001f);
-    EXPECT_NEAR(muzzle_flash->position.y, -0.26f, 0.0001f);
-    EXPECT_NEAR(muzzle_flash->position.z, 0.58f, 0.0001f);
-    EXPECT_NEAR(smoke->position.x, 0.2f, 0.0001f);
-    EXPECT_NEAR(smoke->position.y, -0.26f, 0.0001f);
-    EXPECT_NEAR(smoke->position.z, 0.58f, 0.0001f);
+    const float effect_anchor_x = slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_intro_x", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_recoil_x", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_bob_x", 0.0f);
+    const float effect_anchor_y = slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_intro_y", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_recoil_y", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_bob_y", 0.0f);
+    const float effect_anchor_z = slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_intro_z", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_recoil_z", 0.0f) +
+                                  slayer3d_properties_get_float(revolver->props, "gun_bob_z", 0.0f);
+    EXPECT_NEAR(muzzle_flash->position.x, effect_anchor_x, 0.0001f);
+    EXPECT_NEAR(muzzle_flash->position.y, effect_anchor_y, 0.0001f);
+    EXPECT_NEAR(muzzle_flash->position.z, effect_anchor_z, 0.0001f);
+    EXPECT_NEAR(smoke->position.x, effect_anchor_x, 0.0001f);
+    EXPECT_NEAR(smoke->position.y, effect_anchor_y, 0.0001f);
+    EXPECT_NEAR(smoke->position.z, effect_anchor_z, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_offset_x", 0.0f), 0.09f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_size_scale", 0.0f), 1.4f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_alpha_scale", 0.0f), 0.8f, 0.0001f);
@@ -8230,11 +8230,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const std::string placement_text = read_text(placement_path);
     EXPECT_NE(placement_text.find("actor=entity.brush_geometry.revolver_viewmodel"), std::string::npos);
     EXPECT_NE(placement_text.find("gun_x="), std::string::npos);
-    const std::string full_trace_text = read_text(placement_trace_path);
-    EXPECT_NE(full_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
-    EXPECT_NE(full_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
-    EXPECT_NE(full_trace_text.find("label=manual_write.viewmodel.current"), std::string::npos);
-    EXPECT_NE(full_trace_text.find("label=manual_write.player.camera_state"), std::string::npos);
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
                                  false);
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_smoke_tuning.enabled",
@@ -8255,12 +8250,8 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
               std::string::npos);
     EXPECT_NE(muzzle_flash_placement_text.find("flash_size_scale="), std::string::npos);
     std::filesystem::remove(placement_path);
-    std::filesystem::remove(pickup_placement_path);
-    std::filesystem::remove(placement_trace_path);
     std::filesystem::remove(smoke_placement_path);
-    std::filesystem::remove(smoke_trace_path);
     std::filesystem::remove(muzzle_flash_placement_path);
-    std::filesystem::remove(muzzle_flash_trace_path);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
 
@@ -18065,6 +18056,45 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "position_from_actor_properties",
+        },
+        {
+            "bad_spawn_property_position_additive",
+            R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "entities": [
+    { "name": "entity.weapon" }
+  ],
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          {
+            "type": "actor.spawn",
+            "pool": "pool.shots",
+            "position_from_actor_properties": {
+              "source": "entity.weapon",
+              "x": "gun_x",
+              "y": "gun_y",
+              "z": "gun_z",
+              "x_add": "gun_recoil_x"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "additive fields must be arrays",
         },
         {
             "bad_despawn_target",

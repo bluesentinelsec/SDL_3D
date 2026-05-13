@@ -202,6 +202,7 @@ static void slayer3d_network_destroy_remote_address(slayer3d_network_session *se
 
     if (session->remote_address != NULL)
     {
+        (void)NET_WaitUntilResolved(session->remote_address, -1);
         NET_UnrefAddress(session->remote_address);
         session->remote_address = NULL;
     }
@@ -218,6 +219,7 @@ static void slayer3d_network_discovery_destroy_target_address(slayer3d_network_d
     {
         if (session->target_addresses[i] != NULL)
         {
+            (void)NET_WaitUntilResolved(session->target_addresses[i], -1);
             NET_UnrefAddress(session->target_addresses[i]);
             session->target_addresses[i] = NULL;
         }

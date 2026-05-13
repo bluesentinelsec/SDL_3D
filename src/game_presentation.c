@@ -1727,74 +1727,6 @@ static bool model_has_euler_rotation(slayer3d_vec3 rotation)
     return SDL_fabsf(rotation.x) > 0.000001f || SDL_fabsf(rotation.y) > 0.000001f || SDL_fabsf(rotation.z) > 0.000001f;
 }
 
-static bool viewmodel_trace_enabled_for_entity(const char *entity_name)
-{
-    const char *enabled = SDL_getenv("SLAYER3D_TRACE_VIEWMODEL_TRANSFORMS");
-    if (enabled == NULL || enabled[0] == '\0' || SDL_strcmp(enabled, "0") == 0)
-        return false;
-    const char *filter = SDL_getenv("SLAYER3D_TRACE_VIEWMODEL_ENTITY");
-    return filter == NULL || filter[0] == '\0' || (entity_name != NULL && SDL_strcmp(entity_name, filter) == 0);
-}
-
-static bool viewmodel_trace_write_all(SDL_IOStream *stream, const char *text)
-{
-    const size_t length = SDL_strlen(text);
-    return SDL_WriteIO(stream, text, length) == length;
-}
-
-static void trace_viewmodel_transform(const slayer3d_game_data_render_primitive *primitive,
-                                      const slayer3d_camera3d *camera, slayer3d_vec3 model_position,
-                                      slayer3d_vec3 model_rotation)
-{
-    static int trace_count = 0;
-    if (trace_count >= 128 || primitive == NULL || !primitive->view_space ||
-        !viewmodel_trace_enabled_for_entity(primitive->entity_name))
-    {
-        return;
-    }
-
-    SDL_IOStream *stream = SDL_IOFromFile("/tmp/gun-placement-render-trace.txt", trace_count == 0 ? "wb" : "r+b");
-    if (stream == NULL)
-        return;
-    if (trace_count > 0 && SDL_SeekIO(stream, 0, SDL_IO_SEEK_END) < 0)
-    {
-        SDL_CloseIO(stream);
-        return;
-    }
-
-    const slayer3d_vec3 camera_position = camera != NULL ? camera->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-    const slayer3d_vec3 camera_target = camera != NULL ? camera->target : slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
-    const slayer3d_vec3 camera_up = camera != NULL ? camera->up : slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
-    const slayer3d_vec3 forward_raw = slayer3d_vec3_sub(camera_target, camera_position);
-    const slayer3d_vec3 camera_forward = slayer3d_vec3_length_squared(forward_raw) > 0.000001f
-                                             ? slayer3d_vec3_normalize(forward_raw)
-                                             : slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
-    char buffer[1536];
-    SDL_snprintf(buffer, sizeof(buffer),
-                 "# Slayer 3D viewmodel render transform\n"
-                 "index=%d\n"
-                 "actor=%s\n"
-                 "local_offset=[%.6f, %.6f, %.6f]\n"
-                 "local_euler=[%.6f, %.6f, %.6f]\n"
-                 "model_scale=[%.6f, %.6f, %.6f]\n"
-                 "camera_position=[%.6f, %.6f, %.6f]\n"
-                 "camera_target=[%.6f, %.6f, %.6f]\n"
-                 "camera_up=[%.6f, %.6f, %.6f]\n"
-                 "camera_forward=[%.6f, %.6f, %.6f]\n"
-                 "render_position=[%.6f, %.6f, %.6f]\n"
-                 "render_euler=[%.6f, %.6f, %.6f]\n\n",
-                 trace_count, primitive->entity_name != NULL ? primitive->entity_name : "<none>", primitive->position.x,
-                 primitive->position.y, primitive->position.z, primitive->euler_rotation.x, primitive->euler_rotation.y,
-                 primitive->euler_rotation.z, primitive->model_scale.x, primitive->model_scale.y,
-                 primitive->model_scale.z, camera_position.x, camera_position.y, camera_position.z, camera_target.x,
-                 camera_target.y, camera_target.z, camera_up.x, camera_up.y, camera_up.z, camera_forward.x,
-                 camera_forward.y, camera_forward.z, model_position.x, model_position.y, model_position.z,
-                 model_rotation.x, model_rotation.y, model_rotation.z);
-    if (viewmodel_trace_write_all(stream, buffer))
-        ++trace_count;
-    SDL_CloseIO(stream);
-}
-
 static bool draw_model_with_matrix(slayer3d_render_context *renderer, const slayer3d_asset_resolver *assets,
                                    const slayer3d_model *model, slayer3d_mat4 matrix, slayer3d_color tint)
 {
@@ -1921,7 +1853,6 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
             model_rotation = primitive->euler_rotation;
             use_model_matrix = true;
         }
-        trace_viewmodel_transform(primitive, context->camera, model_position, model_rotation);
         if (primitive->animation_clip >= 0 && entry->model.skeleton != NULL && entry->model.animation_count > 0)
         {
             int clip_index = primitive->animation_clip;
