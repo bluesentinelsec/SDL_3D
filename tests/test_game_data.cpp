@@ -12586,13 +12586,19 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.export.size", 0), 0);
 
     const std::filesystem::path export_dir = unique_test_dir("editor_brush_export");
-    write_text(export_dir / "fragments" / "exported.json", export_json);
+    size_t saved_size = 0U;
+    const std::filesystem::path saved_path = export_dir / "saved" / "world.fragment.json";
+    ASSERT_TRUE(slayer3d_game_data_save_brush_world_fragment_file(
+        runtime, "brush.editor_shell.target", saved_path.string().c_str(), &saved_size, error, sizeof(error)))
+        << error;
+    EXPECT_GT(saved_size, 0U);
+    EXPECT_TRUE(std::filesystem::exists(saved_path));
     write_text(export_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
     write_text(export_dir / "exported.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
-  "imports": [{ "path": "fragments/exported.json", "sections": ["brush_worlds"] }],
+  "imports": [{ "path": "saved/world.fragment.json", "sections": ["brush_worlds"] }],
   "metadata": { "name": "Exported Brush World" },
   "world": { "name": "world.exported", "kind": "brush" },
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }

@@ -784,7 +784,10 @@ brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
 includes runtime editor mutations such as translated brush planes and painted
 face materials. Future editor hosts can write this JSON to their own project
 document or source-control workflow; data-authored dojos can publish it to scene
-state for validation and inspection.
+state for validation and inspection. Native editor hosts can also call
+`slayer3d_game_data_save_brush_world_fragment_file()` to atomically write the
+same fragment JSON to a chosen filesystem path. Authored game data does not get
+a direct arbitrary-file save action; file writes stay under editor host control.
 
 ```json
 {

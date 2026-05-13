@@ -1918,6 +1918,19 @@ extern "C"
                                                              const char *world_name, char **out_json, size_t *out_size,
                                                              char *error_buffer, int error_buffer_size);
 
+    /**
+     * @brief Atomically save one runtime brush world as a JSON fragment file.
+     *
+     * This is the filesystem-facing companion to
+     * @ref slayer3d_game_data_export_brush_world_fragment_json for editor
+     * hosts. Parent directories are created automatically. The write uses a
+     * temporary file in the target directory and renames it into place, so
+     * callers never observe a partially written fragment.
+     */
+    bool slayer3d_game_data_save_brush_world_fragment_file(const slayer3d_game_data_runtime *runtime,
+                                                           const char *world_name, const char *path, size_t *out_size,
+                                                           char *error_buffer, int error_buffer_size);
+
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity
     {
