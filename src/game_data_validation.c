@@ -8070,11 +8070,16 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (target == NULL)
             target = "selection";
         if (!editor_command_name_valid(command))
-            return validation_error(ctx, json_path,
-                                    "editor.command.preview command must be translate, paint, extrude, or delete");
+            return validation_error(
+                ctx, json_path, "editor.command.preview command must be translate, paint, resize, extrude, or delete");
         if (!editor_command_target_name_valid(target))
             return validation_error(
                 ctx, json_path, "editor.command.preview target must be selection, world, element, face, or material");
+        if ((SDL_strcmp(command, "resize") == 0 || SDL_strcmp(command, "extrude") == 0) &&
+            SDL_strcmp(target, "face") != 0)
+        {
+            return validation_error(ctx, json_path, "editor.command.preview resize/extrude target must be face");
+        }
         yyjson_val *material = obj_get(action, "material");
         if (SDL_strcmp(command, "paint") == 0 && (!yyjson_is_str(material) || yyjson_get_str(material)[0] == '\0'))
         {
@@ -10478,8 +10483,9 @@ static bool editor_debug_flag_name_valid(const char *value)
 
 static bool editor_command_name_valid(const char *value)
 {
-    return value != NULL && (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "paint") == 0 ||
-                             SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
+    return value != NULL &&
+           (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "paint") == 0 ||
+            SDL_strcmp(value, "resize") == 0 || SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
 }
 
 static bool editor_command_target_name_valid(const char *value)

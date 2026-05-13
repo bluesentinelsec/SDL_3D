@@ -735,10 +735,13 @@ generates a unique brush name under the target world.
 Use `editor.command.preview` to declare a non-mutating command intent against
 the active selection. This is the safe scaffolding layer for editor tools:
 commands can publish UI state and draw preview bounds without modifying the
-authored world. Supported `command` values are `translate`, `paint`, `extrude`,
-and `delete`; supported `target` values are `selection`, `world`, `element`,
-`face`, and `material`. Paint previews require a `material` string naming a
-material in the selected brush world's material palette.
+authored world. Supported `command` values are `translate`, `paint`, `resize`,
+`extrude`, and `delete`; supported `target` values are `selection`, `world`,
+`element`, `face`, and `material`. Paint previews require a `material` string
+naming a material in the selected brush world's material palette. Resize and
+extrude previews currently target brush faces and use `distance` along the
+selected face normal; positive values grow the brush outward and negative values
+shrink it.
 
 ```json
 {
@@ -764,6 +767,8 @@ Use `editor.command.commit`, `editor.command.undo`, and `editor.command.redo` to
 record validated editor command transactions. A commit requires an active command
 preview in the current scene. `translate` commands targeting a brush `element`
 mutate the selected runtime brush by shifting its planes by the preview offset,
+then rebuild brush bounds and the compiled render mesh. `resize` and `extrude`
+commands targeting a brush `face` move that face plane by the preview distance,
 then rebuild brush bounds and the compiled render mesh. `paint` commands
 targeting a brush `face` replace that face's material and rebuild the compiled
 render mesh. Undo and redo apply the inverse/forward mutation and move the

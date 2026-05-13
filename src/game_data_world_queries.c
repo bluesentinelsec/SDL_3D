@@ -2520,7 +2520,8 @@ static bool editor_command_preview_active_for_scene(const slayer3d_game_data_run
 static bool editor_command_name_valid(const char *command)
 {
     return command != NULL && (SDL_strcmp(command, "translate") == 0 || SDL_strcmp(command, "paint") == 0 ||
-                               SDL_strcmp(command, "extrude") == 0 || SDL_strcmp(command, "delete") == 0);
+                               SDL_strcmp(command, "resize") == 0 || SDL_strcmp(command, "extrude") == 0 ||
+                               SDL_strcmp(command, "delete") == 0);
 }
 
 static bool editor_command_target_name_valid(const char *target)
@@ -2845,16 +2846,22 @@ static bool editor_command_target_compatible(const slayer3d_game_data_editor_sel
             *out_reason = "selection has no material target";
         return false;
     }
+    if ((SDL_strcmp(command, "resize") == 0 || SDL_strcmp(command, "extrude") == 0) && SDL_strcmp(target, "face") != 0)
+    {
+        if (out_reason != NULL)
+            *out_reason = "resize/extrude target must be face";
+        return false;
+    }
     if ((SDL_strcmp(command, "translate") == 0 || SDL_strcmp(command, "delete") == 0) && !selection->has_bounds)
     {
         if (out_reason != NULL)
             *out_reason = "selection has no previewable bounds";
         return false;
     }
-    if (SDL_strcmp(command, "extrude") == 0 && selection->face_index < 0)
+    if ((SDL_strcmp(command, "resize") == 0 || SDL_strcmp(command, "extrude") == 0) && selection->face_index < 0)
     {
         if (out_reason != NULL)
-            *out_reason = "extrude preview requires a face selection";
+            *out_reason = "resize/extrude preview requires a face selection";
         return false;
     }
     if (SDL_strcmp(command, "paint") == 0 && selection->face_index < 0 &&
@@ -2877,6 +2884,49 @@ static slayer3d_vec3 editor_command_preview_offset(yyjson_val *action,
     if (distance != 0.0f && selection != NULL && slayer3d_vec3_length_squared(selection->normal) > 0.000001f)
         return slayer3d_vec3_scale(slayer3d_vec3_normalize(selection->normal), distance);
     return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+}
+
+static float editor_command_face_distance_delta(const char *command, slayer3d_vec3 offset,
+                                                const slayer3d_game_data_editor_selection *selection)
+{
+    if (command == NULL || selection == NULL ||
+        (SDL_strcmp(command, "resize") != 0 && SDL_strcmp(command, "extrude") != 0) ||
+        slayer3d_vec3_length_squared(selection->normal) <= 0.000001f)
+    {
+        return 0.0f;
+    }
+    return slayer3d_vec3_dot(slayer3d_vec3_normalize(selection->normal), offset);
+}
+
+static slayer3d_bounding_box editor_resized_preview_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 normal,
+                                                           float distance)
+{
+    normal = slayer3d_vec3_normalize(normal);
+    const float ax = SDL_fabsf(normal.x);
+    const float ay = SDL_fabsf(normal.y);
+    const float az = SDL_fabsf(normal.z);
+    if (ax >= ay && ax >= az)
+    {
+        if (normal.x >= 0.0f)
+            bounds.max.x += distance;
+        else
+            bounds.min.x -= distance;
+    }
+    else if (ay >= ax && ay >= az)
+    {
+        if (normal.y >= 0.0f)
+            bounds.max.y += distance;
+        else
+            bounds.min.y -= distance;
+    }
+    else
+    {
+        if (normal.z >= 0.0f)
+            bounds.max.z += distance;
+        else
+            bounds.min.z -= distance;
+    }
+    return bounds;
 }
 
 static void publish_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool valid,
@@ -2942,8 +2992,13 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
         }
     }
 
-    slayer3d_bounding_box bounds = selection.has_bounds ? translated_bounds(selection.bounds, offset)
-                                                        : (slayer3d_bounding_box){selection.point, selection.point};
+    const bool face_resize = SDL_strcmp(command, "resize") == 0 || SDL_strcmp(command, "extrude") == 0;
+    const float face_distance = editor_command_face_distance_delta(command, offset, &selection);
+    slayer3d_bounding_box bounds =
+        selection.has_bounds
+            ? (face_resize ? editor_resized_preview_bounds(selection.bounds, selection.normal, face_distance)
+                           : translated_bounds(selection.bounds, offset))
+            : (slayer3d_bounding_box){selection.point, selection.point};
 
     editor_command_preview_state *preview = &runtime->editor_command_preview;
     SDL_zero(*preview);
@@ -3200,6 +3255,68 @@ static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
     return true;
 }
 
+static bool editor_brush_bounds_valid(const slayer3d_game_data_brush *brush)
+{
+    if (brush == NULL || !brush->has_bounds)
+        return false;
+    const float epsilon = 0.0001f;
+    return brush->bounds.max.x - brush->bounds.min.x > epsilon && brush->bounds.max.y - brush->bounds.min.y > epsilon &&
+           brush->bounds.max.z - brush->bounds.min.z > epsilon;
+}
+
+static bool resize_editor_brush_face_plane(slayer3d_game_data_brush *brush, int face_index, float distance)
+{
+    if (brush == NULL || face_index < 0 || face_index >= brush->face_count)
+        return false;
+    slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[face_index];
+    face->distance += distance;
+    return true;
+}
+
+bool slayer3d_game_data_resize_brush_face(slayer3d_game_data_runtime *runtime,
+                                          const slayer3d_game_data_resize_brush_face_desc *desc, char *error_buffer,
+                                          int error_buffer_size)
+{
+    if (runtime == NULL || desc == NULL || desc->world_name == NULL || desc->world_name[0] == '\0' ||
+        desc->brush_name == NULL || desc->brush_name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "invalid brush face resize request");
+        return false;
+    }
+    if (SDL_fabsf(desc->distance) <= 0.0000001f)
+        return true;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, desc->world_name);
+    slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, desc->brush_name);
+    if (brush == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush not found");
+        return false;
+    }
+    if (desc->face_index < 0 || desc->face_index >= brush->face_count)
+    {
+        set_error(error_buffer, error_buffer_size, "brush face index out of range");
+        return false;
+    }
+
+    if (!resize_editor_brush_face_plane(brush, desc->face_index, desc->distance))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to resize brush face");
+        return false;
+    }
+
+    if (rebuild_editor_brush_world(world_runtime) && editor_brush_bounds_valid(brush))
+    {
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
+    }
+
+    (void)resize_editor_brush_face_plane(brush, desc->face_index, -desc->distance);
+    (void)rebuild_editor_brush_world(world_runtime);
+    set_error(error_buffer, error_buffer_size, "brush face resize would create invalid geometry");
+    return false;
+}
+
 static bool resolve_editor_paint_material(slayer3d_game_data_runtime *runtime,
                                           const slayer3d_game_data_editor_selection *selection,
                                           const char *material_name, const char **out_material_name,
@@ -3302,6 +3419,32 @@ static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const 
     return false;
 }
 
+static bool apply_editor_brush_face_resize(slayer3d_game_data_runtime *runtime,
+                                           const editor_command_transaction_entry *entry, bool forward)
+{
+    if (runtime == NULL || entry == NULL || entry->world_name == NULL || entry->element_name == NULL ||
+        entry->face_index < 0)
+    {
+        return false;
+    }
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+    slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, entry->element_name);
+    if (brush == NULL || entry->face_index >= brush->face_count)
+        return false;
+
+    const slayer3d_game_data_brush_face *face = &brush->faces[entry->face_index];
+    const float distance = slayer3d_vec3_dot(slayer3d_vec3_normalize(face->normal),
+                                             forward ? entry->offset : slayer3d_vec3_scale(entry->offset, -1.0f));
+    slayer3d_game_data_resize_brush_face_desc desc;
+    SDL_zero(desc);
+    desc.world_name = entry->world_name;
+    desc.brush_name = entry->element_name;
+    desc.face_index = entry->face_index;
+    desc.distance = distance;
+    return slayer3d_game_data_resize_brush_face(runtime, &desc, NULL, 0);
+}
+
 static void translate_active_editor_selection_for_transaction(slayer3d_game_data_runtime *runtime,
                                                               const editor_command_transaction_entry *entry,
                                                               slayer3d_vec3 offset)
@@ -3322,6 +3465,51 @@ static void translate_active_editor_selection_for_transaction(slayer3d_game_data
     selection->world_position = slayer3d_vec3_add(selection->world_position, offset);
     if (selection->has_bounds)
         selection->bounds = translated_bounds(selection->bounds, offset);
+
+    yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
+    publish_editor_selection(runtime, obj_get(selection_json, "outputs"), selection);
+}
+
+static void resize_active_editor_selection_for_transaction(slayer3d_game_data_runtime *runtime,
+                                                           const editor_command_transaction_entry *entry, bool forward)
+{
+    if (runtime == NULL || entry == NULL || !runtime->editor_active_selection.hit)
+        return;
+    slayer3d_game_data_editor_selection *selection = &runtime->editor_active_selection;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (active_scene == NULL || entry->scene == NULL || SDL_strcmp(active_scene, entry->scene) != 0 ||
+        selection->world_name == NULL || entry->world_name == NULL ||
+        SDL_strcmp(selection->world_name, entry->world_name) != 0 || selection->element_name == NULL ||
+        entry->element_name == NULL || SDL_strcmp(selection->element_name, entry->element_name) != 0 ||
+        selection->face_index != entry->face_index)
+    {
+        return;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, entry->world_name);
+    const slayer3d_game_data_brush *brush = NULL;
+    if (world_runtime != NULL)
+    {
+        const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+        for (int i = 0; i < world->brush_count; ++i)
+        {
+            if (world->brushes[i].name != NULL && SDL_strcmp(world->brushes[i].name, entry->element_name) == 0)
+            {
+                brush = &world->brushes[i];
+                break;
+            }
+        }
+    }
+
+    const slayer3d_vec3 offset = forward ? entry->offset : slayer3d_vec3_scale(entry->offset, -1.0f);
+    selection->point = slayer3d_vec3_add(selection->point, offset);
+    selection->world_position = slayer3d_vec3_add(selection->world_position, offset);
+    if (brush != NULL && brush->has_bounds)
+        selection->bounds = brush->bounds;
+    else if (selection->has_bounds)
+        selection->bounds = editor_resized_preview_bounds(selection->bounds, selection->normal,
+                                                          slayer3d_vec3_dot(selection->normal, offset));
+    selection->has_bounds = brush != NULL ? brush->has_bounds : selection->has_bounds;
 
     yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
     publish_editor_selection(runtime, obj_get(selection_json, "outputs"), selection);
@@ -3364,7 +3552,9 @@ static bool editor_transaction_has_brush_mutation(const editor_command_transacti
         return false;
     }
     return (SDL_strcmp(entry->command, "translate") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
-           (SDL_strcmp(entry->command, "paint") == 0 && SDL_strcmp(entry->target, "face") == 0);
+           (SDL_strcmp(entry->command, "paint") == 0 && SDL_strcmp(entry->target, "face") == 0) ||
+           ((SDL_strcmp(entry->command, "resize") == 0 || SDL_strcmp(entry->command, "extrude") == 0) &&
+            SDL_strcmp(entry->target, "face") == 0);
 }
 
 static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtime,
@@ -3377,6 +3567,13 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
         if (!apply_editor_brush_paint(runtime, entry, forward))
             return false;
         update_active_editor_selection_material_for_transaction(runtime, entry, forward);
+        return true;
+    }
+    if (SDL_strcmp(entry->command, "resize") == 0 || SDL_strcmp(entry->command, "extrude") == 0)
+    {
+        if (!apply_editor_brush_face_resize(runtime, entry, forward))
+            return false;
+        resize_active_editor_selection_for_transaction(runtime, entry, forward);
         return true;
     }
 
