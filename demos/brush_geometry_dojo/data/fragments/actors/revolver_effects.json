@@ -1,0 +1,162 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "actor_archetypes": [
+    {
+      "name": "archetype.brush_geometry.revolver_tracer",
+      "tags": ["weapon_effect", "tracer"],
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] },
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.08 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.07,
+          "slices": 12,
+          "rings": 8,
+          "color": [90, 255, 120, 255],
+          "emissive": true,
+          "lighting": false
+        },
+        {
+          "type": "motion.brush_velocity_3d",
+          "property": "velocity",
+          "shape": "sphere",
+          "radius": 0.07,
+          "contents_mask": ["solid", "projectile_clip"],
+          "reason": "tracer impact"
+        },
+        {
+          "type": "lifecycle.ttl",
+          "age_property": "age",
+          "ttl_property": "ttl",
+          "reason": "tracer expired"
+        },
+        {
+          "type": "light.point",
+          "color": [0.15, 1.0, 0.25],
+          "intensity": 4.5,
+          "range": 5.0
+        }
+      ]
+    },
+    {
+      "name": "archetype.brush_geometry.revolver_muzzle_flash",
+      "tags": ["weapon_effect", "muzzle_flash"],
+      "properties": {
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.06 }
+      },
+      "components": [
+        {
+          "type": "render.mesh_primitive",
+          "primitive": "disc",
+          "radius": 0.22,
+          "segments": 24,
+          "color": [255, 230, 92, 235],
+          "emissive": true,
+          "lighting": false
+        },
+        {
+          "type": "lifecycle.ttl",
+          "age_property": "age",
+          "ttl_property": "ttl",
+          "reason": "muzzle flash expired"
+        },
+        {
+          "type": "light.point",
+          "color": [1.0, 0.82, 0.18],
+          "intensity": 7.0,
+          "range": 6.0
+        }
+      ]
+    },
+    {
+      "name": "archetype.brush_geometry.revolver_smoke",
+      "tags": ["weapon_effect", "smoke"],
+      "properties": {
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.35 }
+      },
+      "components": [
+        {
+          "type": "particles.emitter",
+          "direction": [0.0, 0.4, 0.0],
+          "spread": 1.2,
+          "speed_min": 0.25,
+          "speed_max": 0.9,
+          "lifetime_min": 0.2,
+          "lifetime_max": 0.45,
+          "size_start": 0.08,
+          "size_end": 0.22,
+          "color_start": [155, 168, 168, 150],
+          "color_end": [80, 92, 92, 0],
+          "emit_rate": 90.0,
+          "max_particles": 24,
+          "camera_facing": true,
+          "additive_blend": false,
+          "random_seed": 91
+        },
+        {
+          "type": "lifecycle.ttl",
+          "age_property": "age",
+          "ttl_property": "ttl",
+          "reason": "smoke expired"
+        }
+      ]
+    },
+    {
+      "name": "archetype.brush_geometry.revolver_impact_decal",
+      "tags": ["weapon_effect", "impact_decal"],
+      "properties": {
+        "radius": { "type": "float", "value": 0.085 }
+      },
+      "components": [
+        {
+          "type": "render.sphere",
+          "radius": 0.085,
+          "slices": 12,
+          "rings": 8,
+          "color": [18, 28, 18, 255],
+          "emissive": false,
+          "lighting": true
+        }
+      ]
+    }
+  ],
+  "actor_pools": [
+    {
+      "name": "pool.brush_geometry.revolver_tracers",
+      "archetype": "archetype.brush_geometry.revolver_tracer",
+      "capacity": 16,
+      "scene": "scene.brush_geometry.showcase",
+      "exhaustion_policy": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.brush_geometry.revolver_muzzle_flashes",
+      "archetype": "archetype.brush_geometry.revolver_muzzle_flash",
+      "capacity": 8,
+      "scene": "scene.brush_geometry.showcase",
+      "exhaustion_policy": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.brush_geometry.revolver_smoke",
+      "archetype": "archetype.brush_geometry.revolver_smoke",
+      "capacity": 8,
+      "scene": "scene.brush_geometry.showcase",
+      "exhaustion_policy": "reuse_oldest",
+      "on_scene_exit": "reset"
+    },
+    {
+      "name": "pool.brush_geometry.revolver_impact_decals",
+      "archetype": "archetype.brush_geometry.revolver_impact_decal",
+      "capacity": 48,
+      "scene": "scene.brush_geometry.showcase",
+      "exhaustion_policy": "reuse_oldest",
+      "on_scene_exit": "reset"
+    }
+  ]
+}

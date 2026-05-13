@@ -1849,10 +1849,17 @@ geometry, and light shape. Use this for files such as
 `world/e1m1.lights.json`. Keep each fragment logically cohesive; do not scatter
 one room across unrelated files unless an editor owns that layout.
 
-`actor.spawn` and `actor.despawn` can also resolve actors from payload fields:
+`actor.spawn` and `actor.despawn` can also resolve actors from payload fields.
+Use `position_from_payload` for payload Vec3 positions such as hitscan
+`origin` or `hit_position`, and `payload_directional_offset` to push the spawn
+point along a payload Vec3 such as `hit_normal`. `velocity_from_payload` reads a
+payload Vec3 direction, normalizes it, multiplies by `speed`, and writes it to
+`velocity` or `velocity_property` on the spawned actor:
 
 ```json
 { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" }
+{ "type": "actor.spawn", "pool": "pool.tracers", "position_from_payload": "origin", "velocity_from_payload": "direction", "speed": 80.0 }
+{ "type": "actor.spawn", "pool": "pool.decals", "position_from_payload": "hit_position", "payload_directional_offset": { "property": "hit_normal", "distance": 0.03 } }
 { "type": "actor.despawn", "target_from_payload": "actor_name" }
 ```
 
@@ -2091,7 +2098,11 @@ Reusable components include:
   optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
   animation playback via `animation_clip` and `animation_time_property`.
   `animation_loop` defaults to `true` and wraps authored animation time by the
-  selected clip duration.
+  selected clip duration. Set `"space": "camera"` for first-person viewmodels;
+  in that mode `offset` and `offset_x_property`/`offset_y_property`/
+  `offset_z_property` are interpreted as camera-local right/up/forward
+  placement, and `rotation`, `pitch_property`, `yaw_property`,
+  `roll_property`, and `scale_property` provide data-authored tuning controls.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets
@@ -2299,6 +2310,35 @@ as a float so fractional damage, timers, and meters can accumulate correctly:
 }
 ```
 
+`branch` executes `then` actions when its `if` condition passes and `else`
+actions when it does not. Either side may be omitted, which makes that branch a
+successful no-op:
+
+```json
+{
+  "type": "branch",
+  "if": { "type": "scene_state.compare", "key": "debug.enabled", "op": "==", "value": true },
+  "then": [
+    { "type": "property.add", "target": "entity.debug_marker", "key": "x", "value": 1.0 }
+  ]
+}
+```
+
+`debug.write_actor_properties` is a development-only action for placement and
+tuning workflows. It writes selected actor properties to a host filesystem path.
+Set `append` to true to add another diagnostic block instead of replacing the
+file:
+
+```json
+{
+  "type": "debug.write_actor_properties",
+  "target": "entity.weapon.viewmodel",
+  "path": "/tmp/gun-placement.txt",
+  "append": false,
+  "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
+}
+```
+
 Generic combat actions provide reusable health, armor, death, and revival
 behavior without writing game-specific C:
 
@@ -2480,6 +2520,11 @@ Author a `pickup.respawn` component on the pickup actor when it should become
 active again after `pickup_respawn_remaining` reaches zero. This component runs
 for inactive actors in the active scene, so respawned pickups do not require Lua
 polling.
+
+Weapon pickups are ordinary resource pickups. A firearm pickup can grant a
+resource such as `revolver`, enable a camera-space `render.model` viewmodel with
+`entity.set_active`, and use a `weapon.hitscan` action to spawn pooled muzzle,
+smoke, tracer, and impact actors from the hitscan payload.
 
 Resource stations are reusable actors such as health fountains, ammo terminals,
 and recharge pads. `resource.station.use` grants resources if the station has

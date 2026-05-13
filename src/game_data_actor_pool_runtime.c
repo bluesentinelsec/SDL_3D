@@ -335,6 +335,15 @@ void apply_actor_spawn_properties(slayer3d_registered_actor *actor, yyjson_val *
     }
 }
 
+static bool payload_vec3_value(const slayer3d_properties *payload, const char *key, slayer3d_vec3 *out_value)
+{
+    const slayer3d_value *value = payload != NULL && key != NULL ? slayer3d_properties_get_value(payload, key) : NULL;
+    if (value == NULL || value->type != SLAYER3D_VALUE_VEC3 || out_value == NULL)
+        return false;
+    *out_value = value->as_vec3;
+    return true;
+}
+
 slayer3d_registered_actor *actor_from_payload_key(slayer3d_game_data_runtime *runtime,
                                                   const slayer3d_properties *payload, const char *key)
 {
@@ -351,6 +360,11 @@ slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runti
     yyjson_val *position_json = obj_get(action, "position");
     if (position_json != NULL)
         position = json_vec3_value(position_json, position);
+
+    const char *position_payload_key = json_string(action, "position_from_payload", NULL);
+    slayer3d_vec3 payload_position;
+    if (payload_vec3_value(payload, position_payload_key, &payload_position))
+        position = payload_position;
 
     const char *from_payload_key = json_string(action, "from_payload", NULL);
     slayer3d_registered_actor *from_payload_actor = actor_from_payload_key(runtime, payload, from_payload_key);
@@ -391,7 +405,39 @@ slayer3d_vec3 actor_spawn_position_from_action(slayer3d_game_data_runtime *runti
             position.z += direction.z * distance;
         }
     }
+    yyjson_val *payload_directional_offset = obj_get(action, "payload_directional_offset");
+    if (yyjson_is_obj(payload_directional_offset))
+    {
+        const char *property = json_string(payload_directional_offset, "property", NULL);
+        const float distance = json_float(payload_directional_offset, "distance", 0.0f);
+        slayer3d_vec3 direction;
+        if (distance != 0.0f && payload_vec3_value(payload, property, &direction) &&
+            slayer3d_vec3_length_squared(direction) > 0.000001f)
+        {
+            direction = slayer3d_vec3_normalize(direction);
+            position.x += direction.x * distance;
+            position.y += direction.y * distance;
+            position.z += direction.z * distance;
+        }
+    }
     return position;
+}
+
+static void apply_actor_spawn_velocity_from_payload(slayer3d_registered_actor *actor, yyjson_val *action,
+                                                    const slayer3d_properties *payload)
+{
+    slayer3d_vec3 direction;
+    const char *payload_key = json_string(action, "velocity_from_payload", NULL);
+    if (actor == NULL || !payload_vec3_value(payload, payload_key, &direction) ||
+        slayer3d_vec3_length_squared(direction) <= 0.000001f)
+    {
+        return;
+    }
+
+    direction = slayer3d_vec3_normalize(direction);
+    const float speed = json_float(action, "speed", 1.0f);
+    const slayer3d_vec3 velocity = slayer3d_vec3_make(direction.x * speed, direction.y * speed, direction.z * speed);
+    slayer3d_properties_set_vec3(actor->props, json_string(action, "velocity_property", "velocity"), velocity);
 }
 
 bool execute_actor_spawn_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -421,6 +467,7 @@ bool execute_actor_spawn_action(slayer3d_game_data_runtime *runtime, yyjson_val 
     }
     actor_set_position(actor, actor_spawn_position_from_action(runtime, action, payload, actor->position, actor));
     apply_actor_spawn_properties(actor, obj_get(action, "properties"));
+    apply_actor_spawn_velocity_from_payload(actor, action, payload);
     actor_pool_note_spawn_success(runtime, pool);
 
     const char *actor_key = json_string(action, "output_actor_key", NULL);

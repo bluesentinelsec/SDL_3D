@@ -42,6 +42,13 @@ extern "C"
      */
     bool slayer3d_push_matrix(slayer3d_render_context *context);
     bool slayer3d_pop_matrix(slayer3d_render_context *context);
+    /**
+     * @brief Post-multiply the current model matrix by an authored transform.
+     *
+     * This is useful for engine subsystems that need to submit a complete
+     * transform matrix, such as camera-relative viewmodels or editor tools.
+     */
+    bool slayer3d_multiply_matrix(slayer3d_render_context *context, slayer3d_mat4 matrix);
     bool slayer3d_translate(slayer3d_render_context *context, float x, float y, float z);
     bool slayer3d_rotate(slayer3d_render_context *context, slayer3d_vec3 axis, float angle_radians);
     bool slayer3d_scale(slayer3d_render_context *context, float x, float y, float z);
@@ -175,6 +182,18 @@ extern "C"
                                             const struct slayer3d_asset_resolver *assets, const slayer3d_model *model,
                                             slayer3d_vec3 position, slayer3d_vec3 rotation_axis,
                                             float rotation_angle_radians, slayer3d_vec3 scale, slayer3d_color tint);
+
+    /*
+     * Same as slayer3d_draw_model_ex_with_assets, but applies Euler rotation
+     * in pitch/yaw/roll order after translation and before scale. This is
+     * useful for camera-space viewmodels and authored placement tools where
+     * independent angle controls are easier to tune than a single axis-angle.
+     */
+    bool slayer3d_draw_model_euler_with_assets(slayer3d_render_context *context,
+                                               const struct slayer3d_asset_resolver *assets,
+                                               const slayer3d_model *model, slayer3d_vec3 position,
+                                               slayer3d_vec3 rotation_radians, slayer3d_vec3 scale,
+                                               slayer3d_color tint);
 
     /*
      * Draw a model with skeletal animation applied. `joint_matrices` is

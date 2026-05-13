@@ -115,6 +115,9 @@ typedef struct slayer3d_draw_entry
     const unsigned int *indices;
     int vertex_count;
     int index_count;
+    float view_matrix[16];
+    float view_projection[16];
+    float camera_pos[3];
     float model_matrix[16];
     float normal_matrix[9];
     float tint[4];
@@ -2332,6 +2335,68 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
     gl->BindVertexArray(0);
 }
 
+static void camera_position_from_view_matrix(const slayer3d_mat4 *view, float out_position[3])
+{
+    if (view == NULL || out_position == NULL)
+        return;
+    out_position[0] = -(view->m[0] * view->m[12] + view->m[1] * view->m[13] + view->m[2] * view->m[14]);
+    out_position[1] = -(view->m[4] * view->m[12] + view->m[5] * view->m[13] + view->m[6] * view->m[14]);
+    out_position[2] = -(view->m[8] * view->m[12] + view->m[9] * view->m[13] + view->m[10] * view->m[14]);
+}
+
+static void flush_scene_ubo_for_draw_entry(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entry)
+{
+    slayer3d_render_context *rc = ctx->current_ctx;
+    if (rc == NULL || entry == NULL)
+        return;
+
+    slayer3d_scene_ubo_data ubo;
+    SDL_memset(&ubo, 0, sizeof(ubo));
+    SDL_memcpy(ubo.view_projection, entry->view_projection, 16 * sizeof(float));
+    SDL_memcpy(ubo.camera_pos, entry->camera_pos, 3 * sizeof(float));
+
+    ubo.ambient[0] = rc->ambient[0];
+    ubo.ambient[1] = rc->ambient[1];
+    ubo.ambient[2] = rc->ambient[2];
+
+    int lc = rc->light_count;
+    if (lc > 8)
+        lc = 8;
+    ubo.light_count = lc;
+    for (int i = 0; i < lc; i++)
+    {
+        const slayer3d_light *l = &rc->lights[i];
+        ubo.lights[i].type = (int)l->type;
+        ubo.lights[i].position[0] = l->position.x;
+        ubo.lights[i].position[1] = l->position.y;
+        ubo.lights[i].position[2] = l->position.z;
+        ubo.lights[i].direction[0] = l->direction.x;
+        ubo.lights[i].direction[1] = l->direction.y;
+        ubo.lights[i].direction[2] = l->direction.z;
+        ubo.lights[i].color[0] = l->color[0];
+        ubo.lights[i].color[1] = l->color[1];
+        ubo.lights[i].color[2] = l->color[2];
+        ubo.lights[i].intensity = l->intensity;
+        ubo.lights[i].range = l->range;
+        ubo.lights[i].inner_cutoff = l->inner_cutoff;
+        ubo.lights[i].outer_cutoff = l->outer_cutoff;
+    }
+
+    ubo.fog_mode = (int)rc->fog.mode;
+    ubo.fog_start = rc->fog.start;
+    ubo.fog_end = rc->fog.end;
+    ubo.fog_density = rc->fog.density;
+    ubo.fog_color[0] = rc->fog.color[0];
+    ubo.fog_color[1] = rc->fog.color[1];
+    ubo.fog_color[2] = rc->fog.color[2];
+    ubo.tonemap_mode = (int)rc->tonemap_mode;
+
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    gl->BindBuffer(GL_UNIFORM_BUFFER, ctx->scene_ubo);
+    gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)sizeof(ubo), &ubo, GL_DYNAMIC_DRAW);
+    gl->BindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->scene_ubo);
+}
+
 static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
 {
     slayer3d_gl_funcs *gl = &ctx->gl;
@@ -2343,6 +2408,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
 
         if (e->lit)
         {
+            flush_scene_ubo_for_draw_entry(ctx, e);
             slayer3d_custom_shader_cache_entry *custom =
                 (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
                     ? custom_shader_lookup_or_create(ctx, true, e->shader_vertex_source, e->shader_fragment_source)
@@ -2405,7 +2471,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                         if (custom->pbr_csm_splits_loc >= 0)
                             gl->Uniform1fv(custom->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
                         if (custom->pbr_view_matrix_loc >= 0)
-                            gl->UniformMatrix4fv(custom->pbr_view_matrix_loc, 1, GL_FALSE, ctx->current_ctx->view.m);
+                            gl->UniformMatrix4fv(custom->pbr_view_matrix_loc, 1, GL_FALSE, e->view_matrix);
                         if (custom->pbr_csm_enabled_loc >= 0)
                             gl->Uniform1i(custom->pbr_csm_enabled_loc, 1);
                     }
@@ -2513,7 +2579,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                         for (int c = 1; c < 4; c++)
                             gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[c], 1, GL_FALSE, ctx->csm_light_vp[c]);
                         gl->Uniform1fv(ctx->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
-                        gl->UniformMatrix4fv(ctx->pbr_view_matrix_loc, 1, GL_FALSE, ctx->current_ctx->view.m);
+                        gl->UniformMatrix4fv(ctx->pbr_view_matrix_loc, 1, GL_FALSE, e->view_matrix);
                         gl->Uniform1i(ctx->pbr_csm_enabled_loc, 1);
                     }
                     else
@@ -3667,6 +3733,9 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     e->primitive_mode = GL_TRIANGLES;
     e->shader_vertex_source = params->shader_vertex_source;
     e->shader_fragment_source = params->shader_fragment_source;
+    SDL_memcpy(e->view_matrix, context->view.m, 16 * sizeof(float));
+    SDL_memcpy(e->view_projection, context->view_projection.m, 16 * sizeof(float));
+    camera_position_from_view_matrix(&context->view, e->camera_pos);
     SDL_memcpy(e->model_matrix, params->model_matrix, 16 * sizeof(float));
     SDL_memcpy(e->normal_matrix, params->normal_matrix, 9 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));

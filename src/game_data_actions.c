@@ -5,7 +5,180 @@
 
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
+
+static bool debug_write_all(SDL_IOStream *stream, const char *text)
+{
+    if (stream == NULL || text == NULL)
+        return false;
+    const size_t size = SDL_strlen(text);
+    return SDL_WriteIO(stream, text, size) == size;
+}
+
+static bool debug_make_directory_recursive(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (SDL_GetPathInfo(path, &info))
+        return info.type == SDL_PATHTYPE_DIRECTORY;
+
+    char *copy = SDL_strdup(path);
+    if (copy == NULL)
+        return false;
+
+    bool ok = true;
+    for (char *p = copy + 1; *p != '\0'; ++p)
+    {
+        if (*p != '/' && *p != '\\')
+            continue;
+        const char saved = *p;
+        *p = '\0';
+        if (copy[0] != '\0')
+        {
+            SDL_zero(info);
+            if (!SDL_GetPathInfo(copy, &info))
+                ok = SDL_CreateDirectory(copy);
+            else
+                ok = info.type == SDL_PATHTYPE_DIRECTORY;
+        }
+        *p = saved;
+        if (!ok)
+            break;
+    }
+
+    if (ok)
+    {
+        SDL_zero(info);
+        if (!SDL_GetPathInfo(copy, &info))
+            ok = SDL_CreateDirectory(copy);
+        else
+            ok = info.type == SDL_PATHTYPE_DIRECTORY;
+    }
+
+    SDL_free(copy);
+    return ok;
+}
+
+static char *debug_parent_directory(const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    const char *slash = SDL_strrchr(path, '/');
+    const char *backslash = SDL_strrchr(path, '\\');
+    if (backslash != NULL && (slash == NULL || backslash > slash))
+        slash = backslash;
+    if (slash == NULL)
+        return SDL_strdup(".");
+    const size_t len = (size_t)(slash - path);
+    if (len == 0u)
+        return SDL_strdup("/");
+    char *parent = (char *)SDL_malloc(len + 1u);
+    if (parent == NULL)
+        return NULL;
+    SDL_memcpy(parent, path, len);
+    parent[len] = '\0';
+    return parent;
+}
+
+static bool debug_ensure_parent_directory(const char *path)
+{
+    char *parent = debug_parent_directory(path);
+    if (parent == NULL)
+        return false;
+    const bool ok = debug_make_directory_recursive(parent);
+    SDL_free(parent);
+    return ok;
+}
+
+static SDL_IOStream *debug_open_property_dump(const char *path, bool append)
+{
+    if (path == NULL || path[0] == '\0')
+        return NULL;
+    if (!debug_ensure_parent_directory(path))
+        return NULL;
+    if (!append)
+        return SDL_IOFromFile(path, "wb");
+
+    SDL_IOStream *stream = SDL_IOFromFile(path, "r+b");
+    if (stream == NULL)
+        return SDL_IOFromFile(path, "wb");
+    if (SDL_SeekIO(stream, 0, SDL_IO_SEEK_END) < 0)
+    {
+        (void)SDL_CloseIO(stream);
+        return NULL;
+    }
+    return stream;
+}
+
+static bool debug_write_property_value(SDL_IOStream *stream, const char *key, const slayer3d_value *value)
+{
+    char line[256];
+    if (stream == NULL || key == NULL)
+        return false;
+    if (value == NULL)
+        SDL_snprintf(line, sizeof(line), "%s=<missing>\n", key);
+    else if (value->type == SLAYER3D_VALUE_INT)
+        SDL_snprintf(line, sizeof(line), "%s=%d\n", key, value->as_int);
+    else if (value->type == SLAYER3D_VALUE_FLOAT)
+        SDL_snprintf(line, sizeof(line), "%s=%.6f\n", key, value->as_float);
+    else if (value->type == SLAYER3D_VALUE_BOOL)
+        SDL_snprintf(line, sizeof(line), "%s=%s\n", key, value->as_bool ? "true" : "false");
+    else if (value->type == SLAYER3D_VALUE_STRING)
+        SDL_snprintf(line, sizeof(line), "%s=%s\n", key, value->as_string != NULL ? value->as_string : "");
+    else if (value->type == SLAYER3D_VALUE_VEC3)
+        SDL_snprintf(line, sizeof(line), "%s=[%.6f, %.6f, %.6f]\n", key, value->as_vec3.x, value->as_vec3.y,
+                     value->as_vec3.z);
+    else if (value->type == SLAYER3D_VALUE_COLOR)
+        SDL_snprintf(line, sizeof(line), "%s=[%u, %u, %u, %u]\n", key, value->as_color.r, value->as_color.g,
+                     value->as_color.b, value->as_color.a);
+    else
+        SDL_snprintf(line, sizeof(line), "%s=<unsupported>\n", key);
+    return debug_write_all(stream, line);
+}
+
+static bool debug_write_actor_properties(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                         const slayer3d_properties *payload)
+{
+    slayer3d_registered_actor *actor = action_target_actor(runtime, action, payload);
+    const char *path = json_string(action, "path", NULL);
+    yyjson_val *properties = obj_get(action, "properties");
+    if (actor == NULL || path == NULL || path[0] == '\0' || !yyjson_is_arr(properties))
+        return false;
+
+    const bool append = json_bool(action, "append", false);
+    SDL_IOStream *stream = debug_open_property_dump(path, append);
+    if (stream == NULL)
+        return false;
+
+    bool ok = debug_write_all(stream, "# Slayer 3D actor property dump\n");
+    char line[256];
+    SDL_snprintf(line, sizeof(line), "actor=%s\n", actor->name != NULL ? actor->name : "");
+    ok = debug_write_all(stream, line) && ok;
+    const char *label = json_string(action, "label", NULL);
+    if (label != NULL)
+    {
+        SDL_snprintf(line, sizeof(line), "label=%s\n", label);
+        ok = debug_write_all(stream, line) && ok;
+    }
+    ok = debug_write_all(stream, "\n") && ok;
+
+    for (size_t i = 0; i < yyjson_arr_size(properties); ++i)
+    {
+        const char *key = yyjson_get_str(yyjson_arr_get(properties, i));
+        if (key != NULL)
+            ok = debug_write_property_value(stream, key, slayer3d_properties_get_value(actor->props, key)) && ok;
+    }
+
+    ok = SDL_CloseIO(stream) && ok;
+    if (ok)
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "wrote actor property dump: %s", path);
+    return ok;
+}
 
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {
@@ -95,6 +268,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "property.reset_defaults") == 0)
         return reset_actor_properties_to_authored_defaults(runtime, action);
+
+    if (SDL_strcmp(type, "debug.write_actor_properties") == 0)
+        return debug_write_actor_properties(runtime, action, payload);
 
     if (SDL_strcmp(type, "input.reset_bindings") == 0)
         return slayer3d_game_data_reset_menu_input_bindings(runtime, json_string(action, "menu", NULL));
@@ -517,7 +693,7 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     {
         yyjson_val *condition = obj_get(action, "if");
         const bool passed = eval_data_condition(runtime, condition, NULL);
-        return execute_action_array(runtime, obj_get(action, passed ? "then" : "else"), payload);
+        return execute_optional_action_array(runtime, obj_get(action, passed ? "then" : "else"), payload);
     }
 
     return false;

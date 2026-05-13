@@ -7788,7 +7788,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(capture.acceleration_enabled);
     EXPECT_TRUE(capture.lighting_enabled);
 
-    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 14);
+    ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 15);
     slayer3d_camera3d camera{};
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.brush_geometry.player", &camera));
@@ -7858,6 +7858,171 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, find_zombie_model, &saw_zombie_model));
     EXPECT_TRUE(saw_zombie_model);
+    slayer3d_registered_actor *revolver =
+        slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.revolver_viewmodel");
+    slayer3d_registered_actor *revolver_pickup =
+        slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.revolver_pickup");
+    ASSERT_NE(revolver, nullptr);
+    ASSERT_NE(revolver_pickup, nullptr);
+    EXPECT_FALSE(revolver->active);
+    EXPECT_TRUE(revolver_pickup->active);
+    EXPECT_NEAR(revolver_pickup->position.x, 0.0f, 0.0001f);
+    EXPECT_LT(revolver_pickup->position.z, player->position.z);
+    EXPECT_GT(slayer3d_properties_get_float(revolver_pickup->props, "pickup_spin_yaw", 0.0f), 0.0f);
+    bool saw_revolver_pickup = false;
+    auto find_revolver_pickup_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        bool *saw = static_cast<bool *>(userdata);
+        if (primitive != nullptr && primitive->entity_name != nullptr &&
+            std::string(primitive->entity_name) == "entity.brush_geometry.revolver_pickup")
+        {
+            *saw = true;
+            EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MODEL);
+            EXPECT_FALSE(primitive->view_space);
+            EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.revolver");
+            EXPECT_GT(primitive->euler_rotation.y, 1.5707964f);
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_pickup_model, &saw_revolver_pickup));
+    EXPECT_TRUE(saw_revolver_pickup);
+    const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
+    const std::filesystem::path pickup_placement_path = "/tmp/gun-placement-pickup.txt";
+    const std::filesystem::path placement_trace_path = "/tmp/gun-placement-trace.txt";
+    std::filesystem::remove(placement_path);
+    std::filesystem::remove(pickup_placement_path);
+    std::filesystem::remove(placement_trace_path);
+    slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
+    slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
+    const int revolver_pickup_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.pickup");
+    ASSERT_GE(revolver_pickup_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), revolver_pickup_signal, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "revolver", 0), 1);
+    EXPECT_FALSE(revolver_pickup->active);
+    EXPECT_TRUE(revolver->active);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.1f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f), -0.3f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f), 0.58f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), 0.27f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f), -0.05f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -1.424999f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_roll", 0.0f), 0.0f, 0.0001f);
+    ASSERT_FALSE(std::filesystem::exists(placement_path));
+    ASSERT_TRUE(std::filesystem::exists(pickup_placement_path));
+    ASSERT_TRUE(std::filesystem::exists(placement_trace_path));
+    const std::string pickup_placement_text = read_text(pickup_placement_path);
+    EXPECT_NE(pickup_placement_text.find("label=pickup.viewmodel.current"), std::string::npos);
+    EXPECT_NE(pickup_placement_text.find("gun_yaw=-1.424999"), std::string::npos);
+    const std::string pickup_trace_text = read_text(placement_trace_path);
+    EXPECT_NE(pickup_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
+    EXPECT_NE(pickup_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
+    EXPECT_LT(pickup_trace_text.find("label=pickup.viewmodel.current"),
+              pickup_trace_text.find("label=pickup.player.camera_state"));
+    bool saw_revolver_viewmodel = false;
+    auto find_revolver_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        bool *saw = static_cast<bool *>(userdata);
+        if (primitive != nullptr && primitive->entity_name != nullptr &&
+            std::string(primitive->entity_name) == "entity.brush_geometry.revolver_viewmodel")
+        {
+            *saw = true;
+            EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MODEL);
+            EXPECT_TRUE(primitive->view_space);
+            EXPECT_FALSE(primitive->lighting_enabled);
+            EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.revolver");
+            EXPECT_GT(primitive->model_scale.x, 0.0f);
+            EXPECT_NEAR(primitive->position.x, 0.1f, 0.0001f);
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_model, &saw_revolver_viewmodel));
+    EXPECT_TRUE(saw_revolver_viewmodel);
+    const int revolver_fire_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.fire");
+    ASSERT_GE(revolver_fire_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), revolver_fire_signal, nullptr);
+    EXPECT_GT(slayer3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.0f);
+    slayer3d_registered_actor *muzzle_flash =
+        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_muzzle_flashes.0");
+    slayer3d_registered_actor *smoke = slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_smoke.0");
+    slayer3d_registered_actor *tracer =
+        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_tracers.0");
+    slayer3d_registered_actor *impact_decal =
+        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_impact_decals.0");
+    ASSERT_NE(muzzle_flash, nullptr);
+    ASSERT_NE(smoke, nullptr);
+    ASSERT_NE(tracer, nullptr);
+    ASSERT_NE(impact_decal, nullptr);
+    EXPECT_TRUE(muzzle_flash->active);
+    EXPECT_TRUE(smoke->active);
+    EXPECT_TRUE(tracer->active);
+    EXPECT_TRUE(impact_decal->active);
+    const slayer3d_vec3 tracer_velocity =
+        slayer3d_properties_get_vec3(tracer->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_GT(slayer3d_vec3_length_squared(tracer_velocity), 1.0f);
+    const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.x_pos");
+    const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.write");
+    ASSERT_GE(tune_x_signal, 0);
+    ASSERT_GE(tune_write_signal, 0);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int tune_toggle_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.toggle");
+    const int tune_x_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.x_pos");
+    const int tune_scale_down_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.scale_down");
+    const int tune_scale_up_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.scale_up");
+    ASSERT_GE(tune_toggle_action, 0);
+    ASSERT_GE(tune_x_action, 0);
+    ASSERT_GE(tune_scale_down_action, 0);
+    ASSERT_GE(tune_scale_up_action, 0);
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_G;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_toggle_action));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(
+        slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "debug.revolver_tuning.enabled", false));
+    const float old_gun_x = slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f);
+    key.key.scancode = SDL_SCANCODE_RIGHT;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_x_action));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.02f, 0.0001f);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
+                                 false);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.02f, 0.0001f);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
+                                 true);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.04f, 0.0001f);
+    const float old_gun_scale = slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f);
+    key.key.scancode = SDL_SCANCODE_COMMA;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_scale_down_action));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), old_gun_scale - 0.01f, 0.0001f);
+    key.key.scancode = SDL_SCANCODE_PERIOD;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_scale_up_action));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), old_gun_scale, 0.0001f);
+    std::filesystem::remove(placement_path);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_write_signal, nullptr);
+    ASSERT_TRUE(std::filesystem::exists(placement_path));
+    const std::string placement_text = read_text(placement_path);
+    EXPECT_NE(placement_text.find("actor=entity.brush_geometry.revolver_viewmodel"), std::string::npos);
+    EXPECT_NE(placement_text.find("gun_x="), std::string::npos);
+    const std::string full_trace_text = read_text(placement_trace_path);
+    EXPECT_NE(full_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
+    EXPECT_NE(full_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
+    EXPECT_NE(full_trace_text.find("label=manual_write.viewmodel.current"), std::string::npos);
+    EXPECT_NE(full_trace_text.find("label=manual_write.player.camera_state"), std::string::npos);
+    std::filesystem::remove(placement_path);
+    std::filesystem::remove(pickup_placement_path);
+    std::filesystem::remove(placement_trace_path);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
 
@@ -7884,31 +8049,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_render_diagnostics, &render_diagnostics_args));
     EXPECT_TRUE(saw_render_diagnostics);
     EXPECT_STREQ(render_diagnostics, "RENDER 5/7 CULL 2 TRI 128");
-
-    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
-    ASSERT_NE(input, nullptr);
-    const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
-    ASSERT_GE(fire_action, 0);
-    slayer3d_input_set_action_override(input, fire_action, 1.0f);
-    ASSERT_NE(slayer3d_input_update(input, 2500), nullptr);
-    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
-    slayer3d_registered_actor *projectile = slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.projectiles.0");
-    ASSERT_NE(projectile, nullptr);
-    EXPECT_TRUE(projectile->active);
-    slayer3d_vec3 camera_forward =
-        slayer3d_properties_get_vec3(player->props, "camera_forward", slayer3d_vec3_make(0.0f, 0.0f, -1.0f));
-    camera_forward = slayer3d_vec3_normalize(camera_forward);
-    const slayer3d_vec3 projectile_velocity =
-        slayer3d_properties_get_vec3(projectile->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    expect_vec3_near(
-        projectile->position,
-        slayer3d_vec3_make(player->position.x + camera_forward.x * 0.75f + projectile_velocity.x * 0.016f,
-                           player->position.y + camera_forward.y * 0.75f + projectile_velocity.y * 0.016f,
-                           player->position.z + camera_forward.z * 0.75f + projectile_velocity.z * 0.016f));
-    RenderPrimitiveCapture projectile_capture{};
-    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &projectile_capture));
-    EXPECT_EQ(projectile_capture.brush_projectile_spheres, 1);
-    slayer3d_input_set_action_override(input, fire_action, 0.0f);
 
     const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
     ASSERT_GE(forward, 0);
@@ -9867,6 +10007,21 @@ TEST(GameDataRuntime, WeaponHitscanTracesActiveBrushWorlds)
       }
     }
   ],
+  "actor_archetypes": [
+    {
+      "name": "archetype.tracer",
+      "properties": {
+        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] }
+      }
+    },
+    {
+      "name": "archetype.decal"
+    }
+  ],
+  "actor_pools": [
+    { "name": "pool.tracers", "archetype": "archetype.tracer", "capacity": 1, "scene": "scene.play" },
+    { "name": "pool.decals", "archetype": "archetype.decal", "capacity": 1, "scene": "scene.play" }
+  ],
   "signals": ["signal.fire"],
   "logic": {
     "bindings": [
@@ -9906,6 +10061,19 @@ TEST(GameDataRuntime, WeaponHitscanTracesActiveBrushWorlds)
                 "target": "entity.player",
                 "key": "last_hit_brush_flag",
                 "value_from_payload": "hit_brush"
+              },
+              {
+                "type": "actor.spawn",
+                "pool": "pool.tracers",
+                "position_from_payload": "origin",
+                "velocity_from_payload": "direction",
+                "speed": 40.0
+              },
+              {
+                "type": "actor.spawn",
+                "pool": "pool.decals",
+                "position_from_payload": "hit_position",
+                "payload_directional_offset": { "property": "hit_normal", "distance": 0.05 }
               }
             ]
           }
@@ -9957,7 +10125,11 @@ TEST(GameDataRuntime, WeaponHitscanTracesActiveBrushWorlds)
     const int fire = slayer3d_game_data_find_signal(runtime, "signal.fire");
     ASSERT_GE(fire, 0);
     slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *tracer = slayer3d_game_data_find_actor(runtime, "pool.tracers.0");
+    slayer3d_registered_actor *decal = slayer3d_game_data_find_actor(runtime, "pool.decals.0");
     ASSERT_NE(player, nullptr);
+    ASSERT_NE(tracer, nullptr);
+    ASSERT_NE(decal, nullptr);
 
     slayer3d_signal_emit(bus, fire, nullptr);
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "energy", -1), 0);
@@ -9965,6 +10137,17 @@ TEST(GameDataRuntime, WeaponHitscanTracesActiveBrushWorlds)
     EXPECT_STREQ(slayer3d_properties_get_string(player->props, "last_hit_material", ""), "mat.wall");
     EXPECT_TRUE(slayer3d_properties_get_bool(player->props, "last_hit_brush_flag", false));
     EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_hit_distance", 0.0f), 1.8f, 0.01f);
+    EXPECT_TRUE(tracer->active);
+    EXPECT_NEAR(tracer->position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(tracer->position.y, 1.5f, 0.001f);
+    EXPECT_NEAR(tracer->position.z, 2.0f, 0.001f);
+    const slayer3d_vec3 tracer_velocity =
+        slayer3d_properties_get_vec3(tracer->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(tracer_velocity.x, 0.0f, 0.001f);
+    EXPECT_NEAR(tracer_velocity.y, 0.0f, 0.001f);
+    EXPECT_NEAR(tracer_velocity.z, -40.0f, 0.001f);
+    EXPECT_TRUE(decal->active);
+    EXPECT_NEAR(decal->position.z, 0.25f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -17417,6 +17600,32 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
             "unknown actor.spawn from actor",
         },
         {
+            "bad_spawn_payload_vector",
+            R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          { "type": "actor.spawn", "pool": "pool.shots", "position_from_payload": 7 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "position_from_payload",
+        },
+        {
             "bad_despawn_target",
             R"json({
   "schema": "slayer3d.game.v0",
@@ -18707,6 +18916,29 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "nongamepad_assignment_slot.game.json").string().c_str(),
                                                   nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.profiles[0].assignments[0]"), std::string::npos);
+
+    write_text(dir / "long_action_name.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Long Action Name", "id": "test.long_action_name", "version": "0.1.0" },
+  "world": { "name": "world.long_action_name", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          { "name": "action.this_name_is_far_too_long_for_runtime_registration_and_validation" }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "long_action_name.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("input action name must be shorter"), std::string::npos);
     remove_test_dir(dir);
 }
 

@@ -1,0 +1,87 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "assets": {
+    "models": [
+      { "id": "model.brush_geometry.revolver", "path": "asset://models/weapons/revolver.glb" }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.brush_geometry.revolver_viewmodel",
+      "id": 810,
+      "active": false,
+      "position": [0.0, 0.0, 0.0],
+      "properties": {
+        "gun_x": { "type": "float", "value": 0.1 },
+        "gun_y": { "type": "float", "value": -0.3 },
+        "gun_z": { "type": "float", "value": 0.58 },
+        "gun_scale": { "type": "float", "value": 0.27 },
+        "gun_pitch": { "type": "float", "value": -0.05 },
+        "gun_yaw": { "type": "float", "value": -1.424999 },
+        "gun_roll": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "render.model",
+          "model": "model.brush_geometry.revolver",
+          "space": "camera",
+          "offset_x_property": "gun_x",
+          "offset_y_property": "gun_y",
+          "offset_z_property": "gun_z",
+          "scale": [1.0, 1.0, 1.0],
+          "scale_property": "gun_scale",
+          "pitch_property": "gun_pitch",
+          "yaw_property": "gun_yaw",
+          "roll_property": "gun_roll",
+          "visible_to_cameras": ["camera.brush_geometry.player"],
+          "lighting": false
+        }
+      ],
+      "editor": {
+        "display_name": "Revolver Viewmodel",
+        "category": "weapons",
+        "preview": { "primitive": "cube", "color": [60, 210, 120, 255] },
+        "tags": ["weapon", "debug_tuning"]
+      }
+    },
+    {
+      "name": "entity.brush_geometry.revolver_pickup",
+      "id": 811,
+      "active": true,
+      "tags": ["pickup", "weapon_pickup"],
+      "transform": { "position": [0.0, 0.65, 9.25] },
+      "properties": {
+        "pickup_available": { "type": "bool", "value": true },
+        "pickup_respawn_remaining": { "type": "float", "value": 0.0 },
+        "pickup_spin_yaw": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "motion.spin",
+          "property": "pickup_spin_yaw",
+          "rate": 1.6
+        },
+        {
+          "type": "render.model",
+          "model": "model.brush_geometry.revolver",
+          "scale": [0.45, 0.45, 0.45],
+          "rotation": [0.0, 1.5707964, 0.0],
+          "yaw_property": "pickup_spin_yaw",
+          "lighting": true
+        },
+        {
+          "type": "light.point",
+          "color": [0.25, 0.95, 0.42],
+          "intensity": 1.3,
+          "range": 4.0
+        }
+      ],
+      "editor": {
+        "display_name": "Revolver Pickup",
+        "category": "weapons",
+        "preview": { "primitive": "cube", "color": [70, 250, 110, 255] },
+        "tags": ["weapon", "pickup"]
+      }
+    }
+  ]
+}

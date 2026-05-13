@@ -12,12 +12,16 @@
     { "path": "fragments/actors/showcase_primitives.json", "sections": ["entities"] },
     { "path": "fragments/actors/billboard_sprites.json", "sections": ["assets", "entities"] },
     { "path": "fragments/actors/zombie_actor.json", "sections": ["assets", "entities"] },
+    { "path": "fragments/actors/revolver_viewmodel.json", "sections": ["assets", "entities"] },
     { "path": "fragments/actors/mechanics_props.json", "sections": ["entities"] },
     { "path": "fragments/actors/projectiles.json", "sections": ["actor_archetypes", "actor_pools"] },
+    { "path": "fragments/actors/revolver_effects.json", "sections": ["actor_archetypes", "actor_pools"] },
     { "path": "fragments/world/showcase.brushes.json", "sections": ["brush_worlds"] },
     { "path": "fragments/world/doors.json", "sections": ["assets", "sector_doors", "signals", "logic"] },
     { "path": "fragments/actors/lights.json", "sections": ["entities"] },
     { "path": "fragments/logic/movement_mechanics.json", "sections": ["signals", "logic"] },
+    { "path": "fragments/logic/revolver_runtime.json", "sections": ["signals", "logic"] },
+    { "path": "fragments/logic/revolver_tuning.json", "sections": ["signals", "logic"] },
     { "path": "fragments/logic/brush_gameplay_sensors.json", "sections": ["logic"] }
   ],
   "app": {

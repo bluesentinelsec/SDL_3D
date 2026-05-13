@@ -27,6 +27,10 @@ SDL_Scancode scancode_from_json(const char *name)
         return SDL_SCANCODE_ESCAPE;
     if (SDL_strcmp(name, "BACKSPACE") == 0 || SDL_strcmp(name, "DELETE") == 0)
         return SDL_SCANCODE_BACKSPACE;
+    if (SDL_strcmp(name, "COMMA") == 0)
+        return SDL_SCANCODE_COMMA;
+    if (SDL_strcmp(name, "PERIOD") == 0)
+        return SDL_SCANCODE_PERIOD;
     if (SDL_strlen(name) == 1)
         return SDL_GetScancodeFromKey(SDL_GetKeyFromName(name), NULL);
     return SDL_GetScancodeFromName(name);

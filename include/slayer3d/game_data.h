@@ -1031,6 +1031,8 @@ extern "C"
         slayer3d_game_data_render_draw_mode draw_mode;
         /** @brief Current world-space position from the owning actor plus optional component offset. */
         slayer3d_vec3 position;
+        /** @brief True when @ref position is a camera-local offset instead of a world-space position. */
+        bool view_space;
         /** @brief Optional world-space instance positions for batched primitives. */
         const slayer3d_vec3 *instances;
         /** @brief Number of entries in @ref instances for batched primitives. */
@@ -1039,6 +1041,8 @@ extern "C"
         slayer3d_vec3 rotation_axis;
         /** @brief Primitive-local rotation angle in radians by primitives that support rotation. */
         float rotation_angle;
+        /** @brief Euler rotation in radians for model primitives. */
+        slayer3d_vec3 euler_rotation;
         /** @brief Cube size for SLAYER3D_GAME_DATA_RENDER_CUBE. */
         slayer3d_vec3 size;
         /** @brief Sphere radius for SLAYER3D_GAME_DATA_RENDER_SPHERE. */

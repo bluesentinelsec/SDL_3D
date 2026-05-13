@@ -10,6 +10,7 @@
         "pitch": { "type": "float", "value": 0.0 },
         "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
         "fire_timer": { "type": "float", "value": 0.0 },
+        "revolver": { "type": "int", "value": 0 },
         "fire_cooldown": { "type": "float", "value": 0.18 },
         "on_ground": { "type": "bool", "value": false },
         "vertical_velocity": { "type": "float", "value": 0.0 },
@@ -43,15 +44,6 @@
           "rate": 1.0,
           "target": 0.0,
           "min": 0.0
-        },
-        {
-          "type": "weapon.projectile",
-          "action": "action.fire",
-          "pool": "pool.brush_geometry.projectiles",
-          "directional_offset": { "property": "camera_forward", "distance": 0.75 },
-          "velocity_from_property": "camera_forward",
-          "speed": 28.0,
-          "cooldown_property": "fire_timer"
         },
         {
           "type": "render.mesh_primitive",
