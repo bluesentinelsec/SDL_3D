@@ -221,6 +221,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.command.redo") == 0)
         return slayer3d_game_data_redo_editor_command(runtime, action, payload);
 
+    if (SDL_strcmp(type, "editor.brush_world.export") == 0)
+        return slayer3d_game_data_export_editor_brush_world_action(runtime, action);
+
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         const char *name = json_string(action, "name", NULL);

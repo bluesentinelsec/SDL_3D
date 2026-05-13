@@ -779,6 +779,26 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_undo_count`, `editor_transaction_redo_count`, and
 `editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
 
+Use `editor.brush_world.export` to serialize the current runtime state of one
+brush world as a canonical `slayer3d.fragment.v0` JSON document. The export
+includes runtime editor mutations such as translated brush planes and painted
+face materials. Future editor hosts can write this JSON to their own project
+document or source-control workflow; data-authored dojos can publish it to scene
+state for validation and inspection.
+
+```json
+{
+  "type": "editor.brush_world.export",
+  "world": "brush.level.blockout",
+  "outputs": {
+    "valid_key": "editor.export.valid",
+    "message_key": "editor.export.message",
+    "json_key": "editor.export.json",
+    "size_key": "editor.export.size"
+  }
+}
+```
+
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,
 `selection_bounds`, `trace_ray`, `face_normal`, `hit_marker`, and
