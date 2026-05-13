@@ -34,7 +34,7 @@
           "yaw_property": "gun_yaw",
           "roll_property": "gun_roll",
           "visible_to_cameras": ["camera.brush_geometry.player"],
-          "lighting": true
+          "lighting": false
         }
       ],
       "editor": {
@@ -49,17 +49,24 @@
       "id": 811,
       "active": true,
       "tags": ["pickup", "weapon_pickup"],
-      "transform": { "position": [2.0, 0.6, 10.0] },
+      "transform": { "position": [0.0, 0.65, 9.25] },
       "properties": {
         "pickup_available": { "type": "bool", "value": true },
-        "pickup_respawn_remaining": { "type": "float", "value": 0.0 }
+        "pickup_respawn_remaining": { "type": "float", "value": 0.0 },
+        "pickup_spin_yaw": { "type": "float", "value": 0.0 }
       },
       "components": [
+        {
+          "type": "motion.spin",
+          "property": "pickup_spin_yaw",
+          "rate": 1.6
+        },
         {
           "type": "render.model",
           "model": "model.brush_geometry.revolver",
           "scale": [0.45, 0.45, 0.45],
           "rotation": [0.0, 1.5707964, 0.0],
+          "yaw_property": "pickup_spin_yaw",
           "lighting": true
         },
         {

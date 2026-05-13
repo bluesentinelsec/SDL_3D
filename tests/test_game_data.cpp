@@ -7866,8 +7866,24 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_NE(revolver_pickup, nullptr);
     EXPECT_FALSE(revolver->active);
     EXPECT_TRUE(revolver_pickup->active);
-    slayer3d_properties_set_int(player->props, "revolver", 1);
-    revolver->active = true;
+    EXPECT_NEAR(revolver_pickup->position.x, 0.0f, 0.0001f);
+    EXPECT_LT(revolver_pickup->position.z, player->position.z);
+    EXPECT_GT(slayer3d_properties_get_float(revolver_pickup->props, "pickup_spin_yaw", 0.0f), 0.0f);
+    slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
+    slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
+    const int revolver_pickup_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.pickup");
+    ASSERT_GE(revolver_pickup_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), revolver_pickup_signal, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(player->props, "revolver", 0), 1);
+    EXPECT_FALSE(revolver_pickup->active);
+    EXPECT_TRUE(revolver->active);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.06f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f), -0.3f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f), 0.58f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), 0.25f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f), -0.05f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -0.125f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_roll", 0.0f), 0.0f, 0.0001f);
     bool saw_revolver_viewmodel = false;
     auto find_revolver_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
         bool *saw = static_cast<bool *>(userdata);
@@ -7877,6 +7893,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
             *saw = true;
             EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MODEL);
             EXPECT_TRUE(primitive->view_space);
+            EXPECT_FALSE(primitive->lighting_enabled);
             EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.revolver");
             EXPECT_GT(primitive->model_scale.x, 0.0f);
             EXPECT_NEAR(primitive->position.x, 0.06f, 0.0001f);
