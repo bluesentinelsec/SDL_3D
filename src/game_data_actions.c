@@ -212,6 +212,15 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.command.clear_preview") == 0)
         return slayer3d_game_data_clear_editor_command_preview(runtime, action);
 
+    if (SDL_strcmp(type, "editor.command.commit") == 0)
+        return slayer3d_game_data_commit_editor_command(runtime, action, payload);
+
+    if (SDL_strcmp(type, "editor.command.undo") == 0)
+        return slayer3d_game_data_undo_editor_command(runtime, action, payload);
+
+    if (SDL_strcmp(type, "editor.command.redo") == 0)
+        return slayer3d_game_data_redo_editor_command(runtime, action, payload);
+
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         const char *name = json_string(action, "name", NULL);

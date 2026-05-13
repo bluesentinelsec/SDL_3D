@@ -8118,6 +8118,38 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.command.commit") == 0 || SDL_strcmp(type, "editor.command.undo") == 0 ||
+        SDL_strcmp(type, "editor.command.redo") == 0)
+    {
+        yyjson_val *message = obj_get(action, "message");
+        yyjson_val *invalid_message = obj_get(action, "invalid_message");
+        if (message != NULL && !yyjson_is_str(message))
+            return validation_error(ctx, json_path, "%s message must be a string", type);
+        if (invalid_message != NULL && !yyjson_is_str(invalid_message))
+            return validation_error(ctx, json_path, "%s invalid_message must be a string", type);
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "%s outputs must be an object", type);
+        static const char *const output_keys[] = {
+            "valid_key",      "event_key",      "message_key",   "transaction_id_key", "undo_count_key",
+            "redo_count_key", "command_key",    "target_key",    "world_key",          "element_key",
+            "face_index_key", "bounds_min_key", "bounds_max_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path, "%s output keys must be non-empty strings", type);
+        }
+        char actions_path[PATH_BUFFER_SIZE];
+        char else_path[PATH_BUFFER_SIZE];
+        format_path(actions_path, sizeof(actions_path), "%s.actions", json_path);
+        format_path(else_path, sizeof(else_path), "%s.else", json_path);
+        yyjson_val *actions = obj_get(action, "actions");
+        yyjson_val *else_actions = obj_get(action, "else");
+        if (actions != NULL && !validate_action_array(ctx, actions, actions_path, names))
+            return false;
+        return else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names);
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))

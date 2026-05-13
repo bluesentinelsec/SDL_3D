@@ -9,7 +9,11 @@
       "action.exit",
       "action.editor.tool.cycle",
       "action.editor.selection.clear",
-      "action.editor.selection.inspect"
+      "action.editor.selection.inspect",
+      "action.editor.command.preview",
+      "action.editor.command.commit",
+      "action.editor.command.undo",
+      "action.editor.command.redo"
     ]
   },
   "world": {
@@ -130,6 +134,10 @@
           {
             "label": "Preview",
             "binding": { "type": "scene_state", "key": "editor.command_preview.message", "default": "none" }
+          },
+          {
+            "label": "Txn",
+            "binding": { "type": "scene_state", "key": "editor.transaction.message", "default": "none" }
           }
         ]
       }
@@ -148,7 +156,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. I inspect. P previews. Tab changes tool. Backspace clears.",
+        "text": "Click select. P preview. Enter commit. Z/Y undo-redo. Tab tool. Backspace clear.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

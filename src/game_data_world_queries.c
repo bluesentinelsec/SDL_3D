@@ -2137,6 +2137,7 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
     preview->element_name = selection.element_name;
     preview->material_name = selection.material_name;
     preview->face_index = selection.face_index;
+    preview->outputs = outputs;
     preview->has_bounds = true;
     preview->bounds = bounds;
 
@@ -2164,6 +2165,244 @@ bool slayer3d_game_data_clear_editor_command_preview(slayer3d_game_data_runtime 
     publish_editor_command_preview(runtime, obj_get(action, "outputs"), false, "", "",
                                    json_string(action, "message", "preview cleared"), NULL, NULL);
     return true;
+}
+
+static int editor_command_history_undo_count(const editor_command_history_state *history)
+{
+    return history != NULL ? history->cursor : 0;
+}
+
+static int editor_command_history_redo_count(const editor_command_history_state *history)
+{
+    return history != NULL ? history->count - history->cursor : 0;
+}
+
+static slayer3d_properties *create_editor_transaction_payload(const slayer3d_game_data_runtime *runtime,
+                                                              const char *event, bool valid,
+                                                              const editor_command_transaction_entry *entry,
+                                                              const char *message)
+{
+    slayer3d_properties *payload = slayer3d_properties_create();
+    if (payload == NULL)
+        return NULL;
+
+    const editor_command_history_state *history = runtime != NULL ? &runtime->editor_command_history : NULL;
+    slayer3d_properties_set_bool(payload, "editor_transaction_valid", valid);
+    slayer3d_properties_set_string(payload, "editor_transaction_event", event != NULL ? event : "");
+    slayer3d_properties_set_string(payload, "editor_transaction_message", message != NULL ? message : "");
+    slayer3d_properties_set_int(payload, "editor_transaction_undo_count", editor_command_history_undo_count(history));
+    slayer3d_properties_set_int(payload, "editor_transaction_redo_count", editor_command_history_redo_count(history));
+
+    if (entry != NULL)
+    {
+        char id_text[32];
+        SDL_snprintf(id_text, sizeof(id_text), "%d", entry->id);
+        slayer3d_properties_set_int(payload, "editor_transaction_id", entry->id);
+        slayer3d_properties_set_string(payload, "editor_transaction_id_text", id_text);
+        slayer3d_properties_set_string(payload, "editor_command", entry->command != NULL ? entry->command : "");
+        slayer3d_properties_set_string(payload, "editor_command_target", entry->target != NULL ? entry->target : "");
+        slayer3d_properties_set_string(payload, "editor_transaction_scene", entry->scene != NULL ? entry->scene : "");
+        slayer3d_properties_set_string(payload, "editor_transaction_world",
+                                       entry->world_name != NULL ? entry->world_name : "");
+        slayer3d_properties_set_string(payload, "editor_transaction_element",
+                                       entry->element_name != NULL ? entry->element_name : "");
+        slayer3d_properties_set_string(payload, "editor_transaction_material",
+                                       entry->material_name != NULL ? entry->material_name : "");
+        slayer3d_properties_set_int(payload, "editor_transaction_face_index", entry->face_index);
+        slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_min",
+                                     entry->has_bounds ? entry->bounds.min : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_max",
+                                     entry->has_bounds ? entry->bounds.max : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    }
+    else
+    {
+        slayer3d_properties_set_int(payload, "editor_transaction_id", -1);
+        slayer3d_properties_set_string(payload, "editor_transaction_id_text", "");
+        slayer3d_properties_set_string(payload, "editor_command", "");
+        slayer3d_properties_set_string(payload, "editor_command_target", "");
+        slayer3d_properties_set_string(payload, "editor_transaction_scene", "");
+        slayer3d_properties_set_string(payload, "editor_transaction_world", "");
+        slayer3d_properties_set_string(payload, "editor_transaction_element", "");
+        slayer3d_properties_set_string(payload, "editor_transaction_material", "");
+        slayer3d_properties_set_int(payload, "editor_transaction_face_index", -1);
+        slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    }
+    return payload;
+}
+
+static void publish_editor_transaction(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, const char *event,
+                                       bool valid, const editor_command_transaction_entry *entry, const char *message)
+{
+    if (runtime == NULL || outputs == NULL)
+        return;
+
+    const editor_command_history_state *history = &runtime->editor_command_history;
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", valid);
+    editor_set_string_output(scene_state, outputs, "event_key", event != NULL ? event : "");
+    editor_set_string_output(scene_state, outputs, "message_key", message != NULL ? message : "");
+    editor_set_int_output(scene_state, outputs, "transaction_id_key", valid && entry != NULL ? entry->id : -1);
+    editor_set_int_output(scene_state, outputs, "undo_count_key", editor_command_history_undo_count(history));
+    editor_set_int_output(scene_state, outputs, "redo_count_key", editor_command_history_redo_count(history));
+    editor_set_string_output(scene_state, outputs, "command_key",
+                             valid && entry != NULL && entry->command != NULL ? entry->command : "");
+    editor_set_string_output(scene_state, outputs, "target_key",
+                             valid && entry != NULL && entry->target != NULL ? entry->target : "");
+    editor_set_string_output(scene_state, outputs, "world_key",
+                             valid && entry != NULL && entry->world_name != NULL ? entry->world_name : "");
+    editor_set_string_output(scene_state, outputs, "element_key",
+                             valid && entry != NULL && entry->element_name != NULL ? entry->element_name : "");
+    editor_set_int_output(scene_state, outputs, "face_index_key", valid && entry != NULL ? entry->face_index : -1);
+    editor_set_vec3_output(scene_state, outputs, "bounds_min_key",
+                           valid && entry != NULL && entry->has_bounds ? entry->bounds.min
+                                                                       : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    editor_set_vec3_output(scene_state, outputs, "bounds_max_key",
+                           valid && entry != NULL && entry->has_bounds ? entry->bounds.max
+                                                                       : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+}
+
+static bool run_editor_transaction_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
+                                                const char *event, bool valid,
+                                                const editor_command_transaction_entry *entry, const char *message)
+{
+    if (actions == NULL)
+        return true;
+    slayer3d_properties *payload = create_editor_transaction_payload(runtime, event, valid, entry, message);
+    if (payload == NULL)
+        return false;
+    const bool ok = execute_optional_action_array(runtime, actions, payload);
+    slayer3d_properties_destroy(payload);
+    return ok;
+}
+
+static void format_editor_transaction_message(const slayer3d_game_data_runtime *runtime, const char *event, bool valid,
+                                              const editor_command_transaction_entry *entry, const char *format,
+                                              char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    SDL_strlcpy(buffer, format != NULL ? format : "", buffer_size);
+    slayer3d_properties *payload = create_editor_transaction_payload(runtime, event, valid, entry, buffer);
+    if (payload != NULL)
+    {
+        (void)format_payload_string(payload, format != NULL ? format : "", buffer, buffer_size);
+        slayer3d_properties_destroy(payload);
+    }
+}
+
+static editor_command_transaction_entry *editor_command_history_append(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return NULL;
+    editor_command_history_state *history = &runtime->editor_command_history;
+    if (history->cursor < history->count)
+        history->count = history->cursor;
+    if (history->count >= SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY)
+    {
+        SDL_memmove(&history->entries[0], &history->entries[1],
+                    sizeof(history->entries[0]) * (SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY - 1));
+        history->count = SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY - 1;
+        history->cursor = history->count;
+    }
+
+    editor_command_transaction_entry *entry = &history->entries[history->count];
+    SDL_zero(*entry);
+    entry->id = ++history->next_id;
+    entry->face_index = -1;
+    history->count++;
+    history->cursor = history->count;
+    return entry;
+}
+
+bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                              const slayer3d_properties *payload)
+{
+    (void)payload;
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+
+    if (!editor_command_preview_active_for_scene(runtime))
+    {
+        const char *message = json_string(action, "invalid_message", "no active editor command preview");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, message);
+    }
+
+    const editor_command_preview_state *preview = &runtime->editor_command_preview;
+    editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+    if (entry == NULL)
+        return false;
+
+    entry->scene = preview->scene;
+    entry->command = preview->command;
+    entry->target = preview->target;
+    entry->world_name = preview->world_name;
+    entry->element_name = preview->element_name;
+    entry->material_name = preview->material_name;
+    entry->face_index = preview->face_index;
+    entry->has_bounds = preview->has_bounds;
+    entry->bounds = preview->bounds;
+    format_editor_transaction_message(runtime, "commit", true, entry,
+                                      json_string(action, "message", "committed {editor_command}"), entry->message,
+                                      sizeof(entry->message));
+
+    publish_editor_command_preview(runtime, preview->outputs, false, "", "", "preview committed", NULL, NULL);
+    clear_editor_command_preview(runtime);
+    publish_editor_transaction(runtime, outputs, "commit", true, entry, entry->message);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", true, entry,
+                                               entry->message);
+}
+
+bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const slayer3d_properties *payload)
+{
+    (void)payload;
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+    editor_command_history_state *history = &runtime->editor_command_history;
+    if (history->cursor <= 0)
+    {
+        const char *message = json_string(action, "invalid_message", "nothing to undo");
+        publish_editor_transaction(runtime, outputs, "undo", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "undo", false, NULL, message);
+    }
+
+    history->cursor--;
+    editor_command_transaction_entry *entry = &history->entries[history->cursor];
+    char message[128];
+    format_editor_transaction_message(runtime, "undo", true, entry,
+                                      json_string(action, "message", "undo {editor_command}"), message,
+                                      sizeof(message));
+    publish_editor_transaction(runtime, outputs, "undo", true, entry, message);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "undo", true, entry, message);
+}
+
+bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const slayer3d_properties *payload)
+{
+    (void)payload;
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+    editor_command_history_state *history = &runtime->editor_command_history;
+    if (history->cursor >= history->count)
+    {
+        const char *message = json_string(action, "invalid_message", "nothing to redo");
+        publish_editor_transaction(runtime, outputs, "redo", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "redo", false, NULL, message);
+    }
+
+    editor_command_transaction_entry *entry = &history->entries[history->cursor];
+    history->cursor++;
+    char message[128];
+    format_editor_transaction_message(runtime, "redo", true, entry,
+                                      json_string(action, "message", "redo {editor_command}"), message,
+                                      sizeof(message));
+    publish_editor_transaction(runtime, outputs, "redo", true, entry, message);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "redo", true, entry, message);
 }
 
 static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime *runtime,

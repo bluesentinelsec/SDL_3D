@@ -733,6 +733,47 @@ and `delete`; supported `target` values are `selection`, `world`, `element`,
 `editor.command.clear_preview` clears that preview state and can publish the
 same `outputs` keys with `active_key`/`valid_key` set to false.
 
+Use `editor.command.commit`, `editor.command.undo`, and `editor.command.redo` to
+record validated editor command transactions without mutating authored world data
+yet. This gives editor tools a stable command history and payload contract before
+brush editing commands are introduced. A commit requires an active command
+preview in the current scene. Undo and redo move the command-history cursor and
+publish the selected transaction; they do not change geometry in this slice.
+
+```json
+{
+  "type": "editor.command.commit",
+  "message": "committed {editor_command} #{editor_transaction_id_text}",
+  "invalid_message": "nothing to commit",
+  "outputs": {
+    "valid_key": "editor.transaction.valid",
+    "event_key": "editor.transaction.event",
+    "message_key": "editor.transaction.message",
+    "transaction_id_key": "editor.transaction.id",
+    "undo_count_key": "editor.transaction.undo_count",
+    "redo_count_key": "editor.transaction.redo_count"
+  },
+  "actions": [
+    {
+      "type": "scene_state.set",
+      "key": "editor.tool.last_action",
+      "value": "commit {editor_command} #{editor_transaction_id_text}"
+    }
+  ],
+  "else": [
+    { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to commit" }
+  ]
+}
+```
+
+Transaction payloads include `editor_transaction_valid`,
+`editor_transaction_event`, `editor_transaction_id`,
+`editor_transaction_id_text`, `editor_command`, `editor_command_target`, `editor_transaction_scene`,
+`editor_transaction_world`, `editor_transaction_element`,
+`editor_transaction_material`, `editor_transaction_face_index`,
+`editor_transaction_undo_count`, `editor_transaction_redo_count`, and
+`editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
+
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,
 `selection_bounds`, `trace_ray`, `face_normal`, `hit_marker`, and
