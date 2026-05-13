@@ -129,13 +129,46 @@
       },
       {
         "name": "ui.brush_geometry.gun_tuning_active",
-        "text": "GUN TUNE: arrows X/Y  Z/X depth  ,/. scale  I/K pitch  J/L yaw  U/O roll  P write /tmp/gun-placement.txt",
+        "text": "GUN TUNE ENABLED",
         "font": "font.brush_geometry.hud",
         "x": 0.02,
         "y": 0.135,
         "normalized": true,
         "color": [145, 255, 155, 230],
-        "scale": 0.43,
+        "scale": 0.62,
+        "visible_if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }
+      },
+      {
+        "name": "ui.brush_geometry.gun_tuning_move",
+        "text": "Move: Left/Right = X    Up/Down = Y    Z/X = depth",
+        "font": "font.brush_geometry.hud",
+        "x": 0.02,
+        "y": 0.17,
+        "normalized": true,
+        "color": [145, 255, 155, 230],
+        "scale": 0.54,
+        "visible_if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }
+      },
+      {
+        "name": "ui.brush_geometry.gun_tuning_rotate",
+        "text": "Rotate: I/K = pitch    J/L = yaw    U/O = roll",
+        "font": "font.brush_geometry.hud",
+        "x": 0.02,
+        "y": 0.202,
+        "normalized": true,
+        "color": [145, 255, 155, 230],
+        "scale": 0.54,
+        "visible_if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }
+      },
+      {
+        "name": "ui.brush_geometry.gun_tuning_scale",
+        "text": "Scale: comma = smaller    period = bigger    P = write /tmp/gun-placement.txt",
+        "font": "font.brush_geometry.hud",
+        "x": 0.02,
+        "y": 0.234,
+        "normalized": true,
+        "color": [145, 255, 155, 230],
+        "scale": 0.54,
         "visible_if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }
       },
       {
