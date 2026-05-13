@@ -743,6 +743,10 @@ targeting a brush `face` replace that face's material and rebuild the compiled
 render mesh. Undo and redo apply the inverse/forward mutation and move the
 command-history cursor. Other command names are accepted as transaction records
 so editor UI can be authored ahead of future mutation implementations.
+Successful brush-world mutations mark the affected runtime brush world dirty and
+increment its editor revision. Transaction outputs can publish `dirty_key`,
+`revision_key`, `saved_revision_key`, and `source_path_key` alongside the
+transaction payload so editor UI can show unsaved state without host-specific C.
 
 ```json
 {
@@ -786,8 +790,11 @@ face materials. Future editor hosts can write this JSON to their own project
 document or source-control workflow; data-authored dojos can publish it to scene
 state for validation and inspection. Native editor hosts can also call
 `slayer3d_game_data_save_brush_world_fragment_file()` to atomically write the
-same fragment JSON to a chosen filesystem path. Authored game data does not get
-a direct arbitrary-file save action; file writes stay under editor host control.
+same fragment JSON to a chosen filesystem path; a successful save marks the
+world clean and records the saved source path. Hosts that save through their own
+project pipeline can call `slayer3d_game_data_mark_brush_world_saved()` after
+their write commits. Authored game data does not get a direct arbitrary-file
+save action; file writes stay under editor host control.
 
 ```json
 {
@@ -798,6 +805,24 @@ a direct arbitrary-file save action; file writes stay under editor host control.
     "message_key": "editor.export.message",
     "json_key": "editor.export.json",
     "size_key": "editor.export.size"
+  }
+}
+```
+
+Use `editor.brush_world.status` to publish the current dirty/source state of a
+brush world without exporting its JSON. Outputs support `valid_key`,
+`message_key`, `world_key`, `dirty_key`, `revision_key`, `saved_revision_key`,
+and `source_path_key`.
+
+```json
+{
+  "type": "editor.brush_world.status",
+  "world": "brush.level.blockout",
+  "outputs": {
+    "dirty_key": "editor.brush_world.dirty",
+    "revision_key": "editor.brush_world.revision",
+    "saved_revision_key": "editor.brush_world.saved_revision",
+    "source_path_key": "editor.brush_world.source_path"
   }
 }
 ```

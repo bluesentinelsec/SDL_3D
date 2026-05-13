@@ -420,6 +420,10 @@ typedef struct brush_world_runtime
 {
     slayer3d_game_data_brush_world desc;
     slayer3d_model render_model;
+    char *editor_source_path;
+    Uint64 editor_revision;
+    Uint64 editor_saved_revision;
+    bool editor_dirty;
 } brush_world_runtime;
 
 typedef struct sector_door_runtime
@@ -844,6 +848,8 @@ bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime,
 bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                             const slayer3d_properties *payload);
 bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_data_runtime *runtime,
+                                                                 yyjson_val *action);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,

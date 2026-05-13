@@ -1892,6 +1892,40 @@ extern "C"
     bool slayer3d_game_data_get_active_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                         slayer3d_game_data_editor_selection *out_selection);
 
+    /** @brief Runtime editor state for one mutable brush world. */
+    typedef struct slayer3d_game_data_brush_world_editor_state
+    {
+        /** @brief Brush world name. Pointer is runtime-owned. */
+        const char *world_name;
+        /** @brief Last known host save/source path, or NULL when unknown. Pointer is runtime-owned. */
+        const char *source_path;
+        /** @brief True when runtime mutations have not been marked saved. */
+        bool dirty;
+        /** @brief Monotonic runtime mutation revision. */
+        Uint64 revision;
+        /** @brief Revision that was last marked saved. */
+        Uint64 saved_revision;
+    } slayer3d_game_data_brush_world_editor_state;
+
+    /**
+     * @brief Query editor save state for one runtime brush world.
+     *
+     * The returned pointers are runtime-owned and remain valid until the brush
+     * world is saved/marked saved again or the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_brush_world_editor_state(const slayer3d_game_data_runtime *runtime,
+                                                         const char *world_name,
+                                                         slayer3d_game_data_brush_world_editor_state *out_state);
+
+    /**
+     * @brief Mark one runtime brush world as saved by an editor host.
+     *
+     * @p source_path may be NULL to keep the existing source path, or a
+     * filesystem path to associate with the saved revision.
+     */
+    bool slayer3d_game_data_mark_brush_world_saved(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                   const char *source_path, char *error_buffer, int error_buffer_size);
+
     /**
      * @brief Iterate data-authored editor debug primitives for the active scene.
      *
@@ -1925,11 +1959,12 @@ extern "C"
      * @ref slayer3d_game_data_export_brush_world_fragment_json for editor
      * hosts. Parent directories are created automatically. The write uses a
      * temporary file in the target directory and renames it into place, so
-     * callers never observe a partially written fragment.
+     * callers never observe a partially written fragment. On success the brush
+     * world is marked saved and @p path becomes its editor source path.
      */
-    bool slayer3d_game_data_save_brush_world_fragment_file(const slayer3d_game_data_runtime *runtime,
-                                                           const char *world_name, const char *path, size_t *out_size,
-                                                           char *error_buffer, int error_buffer_size);
+    bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                           const char *path, size_t *out_size, char *error_buffer,
+                                                           int error_buffer_size);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity
