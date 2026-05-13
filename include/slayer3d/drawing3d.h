@@ -113,12 +113,14 @@ extern "C"
      * @brief Draw a billboard with an authored custom sprite shader.
      *
      * The shader sources use the same textured-quad vertex contract as the
-     * built-in unlit path. The fragment source is required; the vertex source
-     * is optional and falls back to the engine's default billboard vertex
-     * shader when NULL. When @p lighting is true, the custom shader is routed
-     * through the lit billboard path and receives the standard lighting
-     * uniforms used by the built-in lit renderer. Software rendering ignores
-     * the custom shader and falls back to the built-in billboard draw path.
+     * built-in unlit path. @p texture is optional; custom fragment shaders can
+     * use `uHasTexture` to distinguish textured from procedural billboards.
+     * The fragment source is required; the vertex source is optional and falls
+     * back to the engine's default billboard vertex shader when NULL. When
+     * @p lighting is true, the custom shader is routed through the lit
+     * billboard path and receives the standard lighting uniforms used by the
+     * built-in lit renderer. Software rendering ignores the custom shader and
+     * falls back to the built-in billboard draw path.
      */
     bool slayer3d_draw_billboard_shader_ex(slayer3d_render_context *context, const slayer3d_texture2d *texture,
                                            slayer3d_vec3 position, slayer3d_vec2 size, slayer3d_vec2 anchor,

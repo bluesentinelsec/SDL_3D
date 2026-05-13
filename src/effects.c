@@ -38,6 +38,119 @@ static slayer3d_vec3 slayer3d_effects_camera_right(const slayer3d_render_context
 static slayer3d_vec3 slayer3d_effects_camera_up(const slayer3d_render_context *context);
 static slayer3d_vec3 slayer3d_effects_camera_forward(const slayer3d_render_context *context);
 
+static const char k_soft_smoke_particle_frag[] =
+    "in vec2 vTexCoord;\n"
+    "in vec4 vColor;\n"
+    "uniform vec4 uTint;\n"
+    "out vec4 fragColor;\n"
+    "float hash(vec2 p) {\n"
+    "    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);\n"
+    "}\n"
+    "float noise(vec2 p) {\n"
+    "    vec2 i = floor(p);\n"
+    "    vec2 f = fract(p);\n"
+    "    vec2 u = f * f * (3.0 - 2.0 * f);\n"
+    "    return mix(mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),\n"
+    "               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 centered = vTexCoord * 2.0 - 1.0;\n"
+    "    float radius = length(centered);\n"
+    "    if (radius >= 1.0) discard;\n"
+    "    float radial = 1.0 - smoothstep(0.20, 1.0, radius);\n"
+    "    float edge = 1.0 - smoothstep(0.62, 1.0, radius);\n"
+    "    float n1 = noise(vTexCoord * 4.0 + vec2(vColor.r * 3.1, vColor.g * 2.7));\n"
+    "    float n2 = noise(vTexCoord * 9.0 + vec2(vColor.b * 5.3, vColor.a * 1.7));\n"
+    "    float wisps = smoothstep(0.20, 0.95, n1 * 0.65 + n2 * 0.35);\n"
+    "    float alpha = vColor.a * uTint.a * radial * edge * mix(0.55, 1.0, wisps);\n"
+    "    if (alpha <= 0.01) discard;\n"
+    "    vec3 color = vColor.rgb * uTint.rgb * mix(0.72, 1.08, n1);\n"
+    "    fragColor = vec4(color, alpha);\n"
+    "}\n";
+
+static const char k_soft_fire_particle_frag[] =
+    "in vec2 vTexCoord;\n"
+    "in vec4 vColor;\n"
+    "uniform vec4 uTint;\n"
+    "out vec4 fragColor;\n"
+    "float hash(vec2 p) {\n"
+    "    return fract(sin(dot(p, vec2(41.3, 289.7))) * 24634.6345);\n"
+    "}\n"
+    "float noise(vec2 p) {\n"
+    "    vec2 i = floor(p);\n"
+    "    vec2 f = fract(p);\n"
+    "    vec2 u = f * f * (3.0 - 2.0 * f);\n"
+    "    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),\n"
+    "               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 centered = vTexCoord * 2.0 - 1.0;\n"
+    "    float y = 1.0 - clamp(vTexCoord.y, 0.0, 1.0);\n"
+    "    float width = mix(0.70, 0.08, smoothstep(0.0, 1.0, y));\n"
+    "    float flame_body = 1.0 - smoothstep(width * 0.35, width, abs(centered.x));\n"
+    "    float vertical = smoothstep(0.02, 0.28, y) * (1.0 - smoothstep(0.82, 1.0, y));\n"
+    "    float point = 1.0 - smoothstep(0.08, 0.36, length(vec2(centered.x * 2.1, centered.y - 0.70)));\n"
+    "    float n = noise(vTexCoord * 7.0 + vec2(vColor.r * 2.0, vColor.g * 3.0));\n"
+    "    float lick = smoothstep(0.06, 0.82, y + n * 0.18);\n"
+    "    float core = flame_body * vertical * (1.0 - smoothstep(0.05, 0.46, abs(centered.x))) *\n"
+    "                 (1.0 - smoothstep(0.20, 0.82, y));\n"
+    "    float alpha = vColor.a * uTint.a * max(point, flame_body * vertical * lick) * mix(0.65, 1.18, n);\n"
+    "    alpha = max(alpha, core * vColor.a * uTint.a);\n"
+    "    if (alpha <= 0.01) discard;\n"
+    "    vec3 hot = vec3(1.0, 0.96, 0.52);\n"
+    "    vec3 orange = vec3(1.0, 0.42, 0.08);\n"
+    "    vec3 ember = vec3(0.62, 0.08, 0.015);\n"
+    "    vec3 fire = mix(mix(ember, orange, flame_body), hot, max(core, point * 0.85));\n"
+    "    fire *= vColor.rgb * uTint.rgb * 1.35;\n"
+    "    fragColor = vec4(fire, clamp(alpha, 0.0, 1.0));\n"
+    "}\n";
+
+static const char k_muzzle_flash_particle_frag[] =
+    "in vec2 vTexCoord;\n"
+    "in vec4 vColor;\n"
+    "uniform vec4 uTint;\n"
+    "out vec4 fragColor;\n"
+    "float hash(float n) {\n"
+    "    return fract(sin(n) * 43758.5453123);\n"
+    "}\n"
+    "float noise(vec2 p) {\n"
+    "    vec2 i = floor(p);\n"
+    "    vec2 f = fract(p);\n"
+    "    vec2 u = f * f * (3.0 - 2.0 * f);\n"
+    "    float a = hash(dot(i, vec2(127.1, 311.7)));\n"
+    "    float b = hash(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7)));\n"
+    "    float c = hash(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7)));\n"
+    "    float d = hash(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7)));\n"
+    "    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 p = vTexCoord * 2.0 - 1.0;\n"
+    "    p.x *= 1.18;\n"
+    "    float r = length(p);\n"
+    "    if (r >= 1.05) discard;\n"
+    "    float a = atan(p.y, p.x);\n"
+    "    float n1 = noise(vTexCoord * 5.5 + vec2(vColor.r * 1.7, vColor.g * 2.3));\n"
+    "    float n2 = noise(vec2(a * 1.9, r * 8.0) + vec2(vColor.b * 2.1, vColor.a));\n"
+    "    float rays = 0.5 + 0.5 * sin(a * 7.0 + n1 * 3.2) + 0.25 * sin(a * 13.0 + n2 * 4.0);\n"
+    "    rays = clamp(rays, 0.0, 1.0);\n"
+    "    float lopsided = 0.12 * cos(a) - 0.06 * sin(a * 2.0);\n"
+    "    float edge = 0.46 + rays * 0.33 + n2 * 0.10 + lopsided;\n"
+    "    float body = 1.0 - smoothstep(edge * 0.72, edge, r);\n"
+    "    float tongues = smoothstep(0.34, 0.98, rays) * (1.0 - smoothstep(edge, edge + 0.12, r));\n"
+    "    float core = 1.0 - smoothstep(0.05, 0.27, r);\n"
+    "    float ring = smoothstep(0.12, 0.34, r) * (1.0 - smoothstep(0.42, 0.78, r));\n"
+    "    float alpha = vColor.a * uTint.a * max(core, max(body * 0.95, tongues * ring));\n"
+    "    alpha *= mix(0.82, 1.22, n1);\n"
+    "    if (alpha <= 0.015) discard;\n"
+    "    vec3 white_hot = vec3(1.0, 0.96, 0.62);\n"
+    "    vec3 orange = vec3(1.0, 0.42, 0.05);\n"
+    "    vec3 ember = vec3(0.62, 0.06, 0.01);\n"
+    "    vec3 fire = mix(ember, orange, body);\n"
+    "    fire = mix(fire, white_hot, max(core, tongues * 0.45));\n"
+    "    fire *= vColor.rgb * uTint.rgb * 1.45;\n"
+    "    fragColor = vec4(fire, clamp(alpha, 0.0, 1.0));\n"
+    "}\n";
+
 static float slayer3d_effects_absf(float value)
 {
     return value < 0.0f ? -value : value;
@@ -126,6 +239,11 @@ static slayer3d_particle_config slayer3d_particle_config_normalized(const slayer
     if (normalized.shape < SLAYER3D_PARTICLE_EMITTER_POINT || normalized.shape > SLAYER3D_PARTICLE_EMITTER_CIRCLE)
     {
         normalized.shape = SLAYER3D_PARTICLE_EMITTER_POINT;
+    }
+    if (normalized.render_style < SLAYER3D_PARTICLE_RENDER_DEFAULT ||
+        normalized.render_style > SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH)
+    {
+        normalized.render_style = SLAYER3D_PARTICLE_RENDER_DEFAULT;
     }
     return normalized;
 }
@@ -472,6 +590,23 @@ static bool slayer3d_draw_particle_quad(slayer3d_render_context *context, const 
     if (size <= 0.0f || color.a == 0)
     {
         return true;
+    }
+
+    if (config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE ||
+        config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_FIRE ||
+        config->render_style == SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH)
+    {
+        const slayer3d_vec2 billboard_size = {size, size};
+        const slayer3d_vec2 anchor = {0.5f, 0.5f};
+        const char *fragment_shader = k_soft_smoke_particle_frag;
+        if (config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_FIRE)
+            fragment_shader = k_soft_fire_particle_frag;
+        else if (config->render_style == SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH)
+            fragment_shader = k_muzzle_flash_particle_frag;
+        return slayer3d_draw_billboard_shader_ex(context, config->texture, particle->position, billboard_size, anchor,
+                                                 config->camera_facing ? SLAYER3D_BILLBOARD_SPHERICAL
+                                                                       : SLAYER3D_BILLBOARD_UPRIGHT,
+                                                 color, false, NULL, fragment_shader);
     }
 
     if (config->camera_facing)

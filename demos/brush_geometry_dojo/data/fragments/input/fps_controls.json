@@ -13,6 +13,8 @@
           { "name": "action.use", "bindings": [{ "device": "keyboard", "key": "E" }] },
           { "name": "action.camera.security.toggle", "bindings": [{ "device": "keyboard", "key": "V" }] },
           { "name": "action.gun_tune.toggle", "bindings": [{ "device": "keyboard", "key": "G" }] },
+          { "name": "action.smoke_tune.toggle", "bindings": [{ "device": "keyboard", "key": "H" }] },
+          { "name": "action.muzzle_tune.toggle", "bindings": [{ "device": "keyboard", "key": "M" }] },
           { "name": "action.gun_tune.x_neg", "bindings": [{ "device": "keyboard", "key": "LEFT" }] },
           { "name": "action.gun_tune.x_pos", "bindings": [{ "device": "keyboard", "key": "RIGHT" }] },
           { "name": "action.gun_tune.y_pos", "bindings": [{ "device": "keyboard", "key": "UP" }] },

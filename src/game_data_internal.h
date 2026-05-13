@@ -871,6 +871,8 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
 bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
+bool eval_data_condition_with_payload(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                                      const slayer3d_game_data_ui_metrics *metrics, const slayer3d_properties *payload);
 void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,
                           const slayer3d_properties *payload);
 void actor_lifecycle_defer_begin(slayer3d_game_data_runtime *runtime);
@@ -886,7 +888,8 @@ bool set_action_gamepad_button_binding(slayer3d_game_data_runtime *runtime, cons
                                        SDL_GamepadButton button);
 bool json_scalar_to_value(yyjson_val *json, slayer3d_value *out_value);
 bool set_property_from_value(slayer3d_properties *props, const char *key, const slayer3d_value *value);
-bool start_property_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool start_property_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                        const slayer3d_properties *payload);
 bool start_ui_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool actor_matches_target_filter(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *target,
                                  const slayer3d_registered_actor *source, yyjson_val *json,

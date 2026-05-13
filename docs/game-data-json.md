@@ -1820,8 +1820,10 @@ Hitscan payloads include `source_actor_name`, `actor_name` / `hit_actor_name`,
 `hit_normal`, `hit_contents`, and `hit_surface_flags`. Use these fields for
 damage, particles, lights, sounds, decals, or debug UI. Actor hit tests use a
 target actor's `hit_radius` or `radius` property, falling back to the action's
-`hit_radius` value. Brush hits block actor hits behind the wall because the
-actor query is limited to the nearest wall distance.
+`hit_radius` value. The sphere is centered on the actor position plus optional
+`hit_center_offset`; use this for actors whose origin is at the feet rather than
+the torso. Brush hits block actor hits behind the wall because the actor query
+is limited to the nearest wall distance.
 
 ## Sector Level Fragments
 
@@ -1852,14 +1854,22 @@ one room across unrelated files unless an editor owns that layout.
 `actor.spawn` and `actor.despawn` can also resolve actors from payload fields.
 Use `position_from_payload` for payload Vec3 positions such as hitscan
 `origin` or `hit_position`, and `payload_directional_offset` to push the spawn
-point along a payload Vec3 such as `hit_normal`. `velocity_from_payload` reads a
-payload Vec3 direction, normalizes it, multiplies by `speed`, and writes it to
-`velocity` or `velocity_property` on the spawned actor:
+point along a payload Vec3 such as `hit_normal`. `position_from_actor_properties`
+builds a spawn position from three numeric properties on a source actor, with an
+optional local `offset`; use it for authored weapon/effect anchors where the
+effect should follow a tunable viewmodel or actor placement. `velocity_from_payload`
+reads a payload Vec3 direction, normalizes it, multiplies by `speed`, and writes
+it to `velocity` or `velocity_property` on the spawned actor. `properties_from_actor`
+copies same-named properties from a source actor before applying the spawn
+action's explicit `properties` object; use it for opt-in debug/tuning config
+actors that should feed pooled effects without hard-coding the effect in C:
 
 ```json
 { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" }
 { "type": "actor.spawn", "pool": "pool.tracers", "position_from_payload": "origin", "velocity_from_payload": "direction", "speed": 80.0 }
 { "type": "actor.spawn", "pool": "pool.decals", "position_from_payload": "hit_position", "payload_directional_offset": { "property": "hit_normal", "distance": 0.03 } }
+{ "type": "actor.spawn", "pool": "pool.weapon_flash", "position_from_actor_properties": { "source": "entity.weapon_viewmodel", "x": "gun_x", "y": "gun_y", "z": "gun_z" } }
+{ "type": "actor.spawn", "pool": "pool.smoke", "position_from_payload": "origin", "properties_from_actor": { "source": "entity.weapon_smoke_config", "keys": ["smoke_size_scale", "smoke_alpha_scale"] } }
 { "type": "actor.despawn", "target_from_payload": "actor_name" }
 ```
 
@@ -2045,6 +2055,14 @@ Reusable components include:
   opposite bound. This is intended for parallax panels, repeating stars, clouds,
   conveyor belts, and similar backgrounds.
 - `motion.oscillate` and `motion.spin`: simple authored movement effects.
+- `viewmodel.bob`: writes additive first-person viewmodel offset/rotation
+  properties by measuring movement of a source actor. Use it for weapon sway or
+  walk bob without coupling the effect to a specific FPS controller. The
+  component stores the source actor's previous position in
+  `previous_position_property`, advances `phase_property` while the actor moves,
+  and writes configured output properties such as `offset_y_property` and
+  `roll_property`. `offset_amplitude`, `frequency`, `speed_scale`,
+  `min_speed`, and `settle_rate` tune the feel.
 - `light.point`, `light.spot`, and `light.directional`: actor-attached light
   components. They work on static actors and active pooled actors. Component
   lights inherit the actor transform and may use an `offset`. `enabled` defaults
@@ -2052,7 +2070,25 @@ Reusable components include:
   menus and data-authored profile controls can disable a light group without
   removing actors.
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
-  emitter is active only while the actor is active.
+  emitter is active only while the actor is active. `render_style` defaults to
+  `default`; `soft_smoke` renders procedural, soft-edged GPU smoke billboards
+  and `soft_fire` renders general flame billboards when a shader backend is
+  available. `muzzle_flash` renders a short, irregular hot-core burst intended
+  for firearm discharge effects. Shader styles fall back to the normal particle
+  quad path in software. Effects can be tuned per actor with property indirection:
+  `position_offset_property` reads a vec3 offset, `position_offset_x_property`,
+  `position_offset_y_property`, and `position_offset_z_property` add scalar
+  offsets, `size_start_property`/`size_end_property` override authored sizes,
+  `size_scale_property` scales both sizes, `alpha_scale_property` scales color
+  alpha, `emit_rate_property` overrides emission rate, and
+  `emissive_intensity_property` overrides draw emissive intensity. `space`
+  defaults to `world`; `space: "camera"` evaluates and draws particle positions
+  in viewmodel camera space for weapon smoke, muzzle puffs, cockpit effects,
+  and other first-person presentation effects that should stay attached to the
+  viewport instead of lingering in world space. Camera-space particle positions
+  use the same authoring convention as camera-space models: positive Z is
+  forward from the camera and is converted to the renderer's view-space axis at
+  draw time.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
   named by `size_property`. `texture` may reference an image asset id; each cube
   face is UV-mapped to the full image and tinted by `color`. The property path
@@ -2070,7 +2106,14 @@ Reusable components include:
   where applicable, and add `draw_mode`: `solid` (default), `wire`, or
   `solid_wire`. `lighting_key` reads a scene-state boolean and is useful for
   isolating whether actor primitives, sector-local lighting, or dynamic lights
-  are driving a scene.
+  are driving a scene. Set `"space": "camera"` for first-person procedural
+  geometry such as weapon flashes, cockpit markers, and viewmodel-only debug
+  shapes. Camera-space mesh primitive offsets use the same convention as
+  camera-space models and particles: positive Z is forward from the camera, and
+  the renderer converts it to view space at draw time. This is useful for
+  authored first-person meshes and debug shapes; use `particles.emitter`
+  `render_style: "muzzle_flash"` when a shader-shaped firearm burst is a better
+  fit than solid geometry.
   Render primitive components also support camera-scoped visibility with
   `visible_to_cameras` and `hidden_from_cameras`, each authored as a camera name
   or array of camera names. This is useful for first-person bodies, security
@@ -2078,9 +2121,15 @@ Reusable components include:
   presentation.
   Dimension fields include `size`, `radius`, `height`, `radius_top`,
   `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
-  `segments`/`slices`, `rings`, and `tube_segments`. This is the stable
-  data/runtime representation for procedural mesh primitives. The generic
-  presentation path renders every primitive as shaded solid geometry by
+  `segments`/`slices`, `rings`, and `tube_segments`. Authored property fields
+  can override or scale common dimensions per actor:
+  `size_property`, `radius_property`, `height_property`,
+  `radius_top_property`, `radius_bottom_property`, and
+  `size_scale_property`. `alpha_scale_property` scales the primitive color
+  alpha, while `emissive_color`, `emissive_intensity`, and
+  `emissive_intensity_property` provide data-tunable glow for effects. This is
+  the stable data/runtime representation for procedural mesh primitives. The
+  generic presentation path renders every primitive as shaded solid geometry by
   default, with optional wire-only or solid-plus-wire modes. Solid procedural
   primitives are generated through a presentation cache when hosts provide one,
   so repeated static placeholder geometry can reuse stable CPU mesh data and
@@ -2103,6 +2152,14 @@ Reusable components include:
   `offset_z_property` are interpreted as camera-local right/up/forward
   placement, and `rotation`, `pitch_property`, `yaw_property`,
   `roll_property`, and `scale_property` provide data-authored tuning controls.
+  Additive placement and rotation fields (`offset_x_add_property`,
+  `offset_y_add_property`, `offset_z_add_property`, `pitch_add_property`,
+  `yaw_add_property`, `roll_add_property`) are evaluated on top of those base
+  values. The plural forms (`offset_x_add_properties`,
+  `offset_y_add_properties`, `offset_z_add_properties`,
+  `pitch_add_properties`, `yaw_add_properties`, `roll_add_properties`) sum
+  multiple additive properties, which lets authored effects such as recoil,
+  pickup easing, and walk bob compose without mutating the base placement.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets
@@ -2312,7 +2369,9 @@ as a float so fractional damage, timers, and meters can accumulate correctly:
 
 `branch` executes `then` actions when its `if` condition passes and `else`
 actions when it does not. Either side may be omitted, which makes that branch a
-successful no-op:
+successful no-op. Conditions normally read scene state or actor properties.
+Actions that receive a runtime payload, such as `weapon.hitscan` or sensors,
+can also use `payload.compare` with the same comparison operators:
 
 ```json
 {
@@ -2320,6 +2379,16 @@ successful no-op:
   "if": { "type": "scene_state.compare", "key": "debug.enabled", "op": "==", "value": true },
   "then": [
     { "type": "property.add", "target": "entity.debug_marker", "key": "x", "value": 1.0 }
+  ]
+}
+```
+
+```json
+{
+  "type": "branch",
+  "if": { "type": "payload.compare", "key": "hit_wall", "op": "==", "value": true },
+  "then": [
+    { "type": "actor.spawn", "pool": "pool.impact_sparks", "position_from_payload": "hit_position" }
   ]
 }
 ```
@@ -2338,6 +2407,14 @@ file:
   "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
 }
 ```
+
+`property.animate` tweens a numeric, vec3, or color actor property over time.
+It supports `target` or `target_from_payload`, `from`, `to`/`value`,
+`duration`, `easing`, `repeat`, and optional `done_signal`. Omit `from` to
+start from the property's current runtime value; this is useful for repeated
+weapon recoil or other effects that may be re-triggered before the previous
+animation has fully settled. Use `target_from_payload` for generic hit
+reactions such as flashing whichever actor a hitscan weapon struck.
 
 Generic combat actions provide reusable health, armor, death, and revival
 behavior without writing game-specific C:

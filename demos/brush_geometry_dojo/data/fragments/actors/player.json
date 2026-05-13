@@ -11,7 +11,7 @@
         "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
         "fire_timer": { "type": "float", "value": 0.0 },
         "revolver": { "type": "int", "value": 0 },
-        "fire_cooldown": { "type": "float", "value": 0.18 },
+        "fire_cooldown": { "type": "float", "value": 0.0 },
         "on_ground": { "type": "bool", "value": false },
         "vertical_velocity": { "type": "float", "value": 0.0 },
         "brush_trigger_active": { "type": "bool", "value": false },

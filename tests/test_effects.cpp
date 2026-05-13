@@ -160,6 +160,54 @@ TEST(SLAYER3DParticles, CreateAndDestroy)
     slayer3d_destroy_particle_emitter(em);
 }
 
+TEST(SLAYER3DParticles, SoftSmokeRenderStyleIsStored)
+{
+    slayer3d_particle_config c = default_config();
+    c.render_style = SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE;
+    slayer3d_particle_emitter *em = slayer3d_create_particle_emitter(&c);
+    ASSERT_NE(em, nullptr);
+    const slayer3d_particle_config *stored = slayer3d_particle_emitter_get_config(em);
+    ASSERT_NE(stored, nullptr);
+    EXPECT_EQ(stored->render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
+    slayer3d_destroy_particle_emitter(em);
+}
+
+TEST(SLAYER3DParticles, SoftFireRenderStyleIsStored)
+{
+    slayer3d_particle_config c = default_config();
+    c.render_style = SLAYER3D_PARTICLE_RENDER_SOFT_FIRE;
+    slayer3d_particle_emitter *em = slayer3d_create_particle_emitter(&c);
+    ASSERT_NE(em, nullptr);
+    const slayer3d_particle_config *stored = slayer3d_particle_emitter_get_config(em);
+    ASSERT_NE(stored, nullptr);
+    EXPECT_EQ(stored->render_style, SLAYER3D_PARTICLE_RENDER_SOFT_FIRE);
+    slayer3d_destroy_particle_emitter(em);
+}
+
+TEST(SLAYER3DParticles, MuzzleFlashRenderStyleIsStored)
+{
+    slayer3d_particle_config c = default_config();
+    c.render_style = SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH;
+    slayer3d_particle_emitter *em = slayer3d_create_particle_emitter(&c);
+    ASSERT_NE(em, nullptr);
+    const slayer3d_particle_config *stored = slayer3d_particle_emitter_get_config(em);
+    ASSERT_NE(stored, nullptr);
+    EXPECT_EQ(stored->render_style, SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH);
+    slayer3d_destroy_particle_emitter(em);
+}
+
+TEST(SLAYER3DParticles, InvalidRenderStyleNormalizesToDefault)
+{
+    slayer3d_particle_config c = default_config();
+    c.render_style = static_cast<slayer3d_particle_render_style>(999);
+    slayer3d_particle_emitter *em = slayer3d_create_particle_emitter(&c);
+    ASSERT_NE(em, nullptr);
+    const slayer3d_particle_config *stored = slayer3d_particle_emitter_get_config(em);
+    ASSERT_NE(stored, nullptr);
+    EXPECT_EQ(stored->render_style, SLAYER3D_PARTICLE_RENDER_DEFAULT);
+    slayer3d_destroy_particle_emitter(em);
+}
+
 TEST(SLAYER3DParticles, DestroyNullSafe)
 {
     slayer3d_destroy_particle_emitter(nullptr);

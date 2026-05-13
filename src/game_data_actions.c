@@ -264,7 +264,7 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return restore_actor_property_snapshot(runtime, action);
 
     if (SDL_strcmp(type, "property.animate") == 0)
-        return start_property_animation_from_json(runtime, action);
+        return start_property_animation_from_json(runtime, action, payload);
 
     if (SDL_strcmp(type, "property.reset_defaults") == 0)
         return reset_actor_properties_to_authored_defaults(runtime, action);
@@ -692,7 +692,7 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "branch") == 0)
     {
         yyjson_val *condition = obj_get(action, "if");
-        const bool passed = eval_data_condition(runtime, condition, NULL);
+        const bool passed = eval_data_condition_with_payload(runtime, condition, NULL, payload);
         return execute_optional_action_array(runtime, obj_get(action, passed ? "then" : "else"), payload);
     }
 

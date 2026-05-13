@@ -2,73 +2,51 @@
   "schema": "slayer3d.fragment.v0",
   "actor_archetypes": [
     {
-      "name": "archetype.brush_geometry.revolver_tracer",
-      "tags": ["weapon_effect", "tracer"],
-      "properties": {
-        "velocity": { "type": "vec3", "value": [0.0, 0.0, 0.0] },
-        "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.08 }
-      },
-      "components": [
-        {
-          "type": "render.sphere",
-          "radius": 0.07,
-          "slices": 12,
-          "rings": 8,
-          "color": [90, 255, 120, 255],
-          "emissive": true,
-          "lighting": false
-        },
-        {
-          "type": "motion.brush_velocity_3d",
-          "property": "velocity",
-          "shape": "sphere",
-          "radius": 0.07,
-          "contents_mask": ["solid", "projectile_clip"],
-          "reason": "tracer impact"
-        },
-        {
-          "type": "lifecycle.ttl",
-          "age_property": "age",
-          "ttl_property": "ttl",
-          "reason": "tracer expired"
-        },
-        {
-          "type": "light.point",
-          "color": [0.15, 1.0, 0.25],
-          "intensity": 4.5,
-          "range": 5.0
-        }
-      ]
-    },
-    {
       "name": "archetype.brush_geometry.revolver_muzzle_flash",
       "tags": ["weapon_effect", "muzzle_flash"],
       "properties": {
         "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.06 }
+        "ttl": { "type": "float", "value": 0.035 },
+        "flash_offset_x": { "type": "float", "value": -0.02 },
+        "flash_offset_y": { "type": "float", "value": 0.1 },
+        "flash_offset_z": { "type": "float", "value": 0.33 },
+        "flash_size_scale": { "type": "float", "value": 0.1 },
+        "flash_alpha_scale": { "type": "float", "value": 1.0 },
+        "flash_intensity": { "type": "float", "value": 2.6 }
       },
       "components": [
         {
-          "type": "render.mesh_primitive",
-          "primitive": "disc",
-          "radius": 0.22,
-          "segments": 24,
-          "color": [255, 230, 92, 235],
-          "emissive": true,
-          "lighting": false
+          "type": "particles.emitter",
+          "render_style": "muzzle_flash",
+          "space": "camera",
+          "position_offset_x_property": "flash_offset_x",
+          "position_offset_y_property": "flash_offset_y",
+          "position_offset_z_property": "flash_offset_z",
+          "direction": [0.0, 0.0, 1.0],
+          "spread": 0.18,
+          "speed_min": 0.0,
+          "speed_max": 0.04,
+          "lifetime_min": 0.012,
+          "lifetime_max": 0.024,
+          "size_start": 1.7,
+          "size_end": 1.1,
+          "size_scale_property": "flash_size_scale",
+          "color_start": [255, 236, 158, 255],
+          "color_end": [255, 70, 12, 0],
+          "alpha_scale_property": "flash_alpha_scale",
+          "emissive_intensity_property": "flash_intensity",
+          "emit_rate": 180.0,
+          "max_particles": 8,
+          "camera_facing": true,
+          "additive_blend": true,
+          "depth_test": false,
+          "random_seed": 37
         },
         {
           "type": "lifecycle.ttl",
           "age_property": "age",
           "ttl_property": "ttl",
           "reason": "muzzle flash expired"
-        },
-        {
-          "type": "light.point",
-          "color": [1.0, 0.82, 0.18],
-          "intensity": 7.0,
-          "range": 6.0
         }
       ]
     },
@@ -77,23 +55,37 @@
       "tags": ["weapon_effect", "smoke"],
       "properties": {
         "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.35 }
+        "ttl": { "type": "float", "value": 0.22 },
+        "smoke_offset_x": { "type": "float", "value": 0.0 },
+        "smoke_offset_y": { "type": "float", "value": 0.12 },
+        "smoke_offset_z": { "type": "float", "value": 0.27 },
+        "smoke_size_scale": { "type": "float", "value": 0.25 },
+        "smoke_alpha_scale": { "type": "float", "value": 0.35 },
+        "smoke_emit_rate": { "type": "float", "value": 120.0 }
       },
       "components": [
         {
           "type": "particles.emitter",
+          "render_style": "soft_smoke",
+          "space": "camera",
+          "position_offset_x_property": "smoke_offset_x",
+          "position_offset_y_property": "smoke_offset_y",
+          "position_offset_z_property": "smoke_offset_z",
           "direction": [0.0, 0.4, 0.0],
-          "spread": 1.2,
-          "speed_min": 0.25,
-          "speed_max": 0.9,
-          "lifetime_min": 0.2,
-          "lifetime_max": 0.45,
-          "size_start": 0.08,
-          "size_end": 0.22,
-          "color_start": [155, 168, 168, 150],
-          "color_end": [80, 92, 92, 0],
-          "emit_rate": 90.0,
-          "max_particles": 24,
+          "spread": 0.85,
+          "speed_min": 0.04,
+          "speed_max": 0.18,
+          "lifetime_min": 0.14,
+          "lifetime_max": 0.28,
+          "size_start": 0.13,
+          "size_end": 0.46,
+          "size_scale_property": "smoke_size_scale",
+          "color_start": [172, 178, 170, 96],
+          "color_end": [72, 78, 74, 0],
+          "alpha_scale_property": "smoke_alpha_scale",
+          "emit_rate": 120.0,
+          "emit_rate_property": "smoke_emit_rate",
+          "max_particles": 12,
           "camera_facing": true,
           "additive_blend": false,
           "random_seed": 91
@@ -107,33 +99,53 @@
       ]
     },
     {
-      "name": "archetype.brush_geometry.revolver_impact_decal",
-      "tags": ["weapon_effect", "impact_decal"],
+      "name": "archetype.brush_geometry.revolver_impact_sparks",
+      "tags": ["weapon_effect", "impact", "sparks"],
       "properties": {
-        "radius": { "type": "float", "value": 0.085 }
+        "age": { "type": "float", "value": 0.0 },
+        "ttl": { "type": "float", "value": 0.14 }
       },
       "components": [
         {
-          "type": "render.sphere",
-          "radius": 0.085,
-          "slices": 12,
-          "rings": 8,
-          "color": [18, 28, 18, 255],
-          "emissive": false,
-          "lighting": true
+          "type": "particles.emitter",
+          "render_style": "soft_fire",
+          "shape": "point",
+          "direction": [0.0, 1.0, 0.0],
+          "spread": 2.4,
+          "speed_min": 0.9,
+          "speed_max": 2.8,
+          "lifetime_min": 0.045,
+          "lifetime_max": 0.12,
+          "size_start": 0.056,
+          "size_end": 0.006,
+          "gravity": 8.0,
+          "max_particles": 30,
+          "emit_rate": 190.0,
+          "color_start": [190, 126, 58, 190],
+          "color_end": [80, 28, 8, 0],
+          "emissive_intensity": 1.4,
+          "camera_facing": true,
+          "depth_test": true,
+          "additive_blend": true,
+          "draw_emissive": [0.55, 0.28, 0.06],
+          "random_seed": 147
+        },
+        {
+          "type": "light.point",
+          "color": [1.0, 0.55, 0.08],
+          "intensity": 0.8,
+          "range": 0.85
+        },
+        {
+          "type": "lifecycle.ttl",
+          "age_property": "age",
+          "ttl_property": "ttl",
+          "reason": "impact sparks expired"
         }
       ]
     }
   ],
   "actor_pools": [
-    {
-      "name": "pool.brush_geometry.revolver_tracers",
-      "archetype": "archetype.brush_geometry.revolver_tracer",
-      "capacity": 16,
-      "scene": "scene.brush_geometry.showcase",
-      "exhaustion_policy": "reuse_oldest",
-      "on_scene_exit": "reset"
-    },
     {
       "name": "pool.brush_geometry.revolver_muzzle_flashes",
       "archetype": "archetype.brush_geometry.revolver_muzzle_flash",
@@ -151,9 +163,9 @@
       "on_scene_exit": "reset"
     },
     {
-      "name": "pool.brush_geometry.revolver_impact_decals",
-      "archetype": "archetype.brush_geometry.revolver_impact_decal",
-      "capacity": 48,
+      "name": "pool.brush_geometry.revolver_impact_sparks",
+      "archetype": "archetype.brush_geometry.revolver_impact_sparks",
+      "capacity": 16,
       "scene": "scene.brush_geometry.showcase",
       "exhaustion_policy": "reuse_oldest",
       "on_scene_exit": "reset"

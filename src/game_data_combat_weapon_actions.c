@@ -844,6 +844,15 @@ static bool ray_sphere_intersection(slayer3d_vec3 origin, slayer3d_vec3 directio
     return true;
 }
 
+static slayer3d_vec3 hitscan_actor_center(const slayer3d_registered_actor *actor)
+{
+    if (actor == NULL)
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 offset =
+        slayer3d_properties_get_vec3(actor->props, "hit_center_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    return slayer3d_vec3_add(actor->position, offset);
+}
+
 static slayer3d_registered_actor *find_hitscan_actor_target(slayer3d_game_data_runtime *runtime,
                                                             const slayer3d_registered_actor *source, yyjson_val *action,
                                                             slayer3d_vec3 origin, slayer3d_vec3 direction,
@@ -870,7 +879,7 @@ static slayer3d_registered_actor *find_hitscan_actor_target(slayer3d_game_data_r
                         weapon_actor_numeric_property(actor, "radius", json_float(action, "hit_radius", 0.5f))),
                     0.001f);
         float distance = 0.0f;
-        if (ray_sphere_intersection(origin, direction, actor->position, radius, best_distance, &distance))
+        if (ray_sphere_intersection(origin, direction, hitscan_actor_center(actor), radius, best_distance, &distance))
         {
             best = actor;
             best_distance = distance;
@@ -896,7 +905,8 @@ static slayer3d_registered_actor *find_hitscan_actor_target(slayer3d_game_data_r
                             weapon_actor_numeric_property(actor, "radius", json_float(action, "hit_radius", 0.5f))),
                         0.001f);
             float distance = 0.0f;
-            if (ray_sphere_intersection(origin, direction, actor->position, radius, best_distance, &distance))
+            if (ray_sphere_intersection(origin, direction, hitscan_actor_center(actor), radius, best_distance,
+                                        &distance))
             {
                 best = actor;
                 best_distance = distance;

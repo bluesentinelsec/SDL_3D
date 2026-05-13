@@ -12,6 +12,7 @@ extern "C"
 {
 #include "gl_renderer.h"
 #include "render_context_internal.h"
+#include "slayer3d/effects.h"
 #include "slayer3d/level.h"
 #include "slayer3d/slayer3d.h"
 }
@@ -619,6 +620,45 @@ TEST_F(GLRendererTest, BillboardTransparentPixelsDiscard)
 
     EXPECT_LT(left_px[0] + left_px[1] + left_px[2], 40);
     EXPECT_GT(right_px[0], 100);
+}
+
+TEST_F(GLRendererTest, MuzzleFlashParticleShaderProducesNonClearPixels)
+{
+    slayer3d_camera3d cam;
+    cam.position = slayer3d_vec3_make(0.0f, 0.0f, 2.0f);
+    cam.target = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    slayer3d_particle_config config{};
+    config.position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    config.lifetime_min = 1.0f;
+    config.lifetime_max = 1.0f;
+    config.size_start = 1.4f;
+    config.size_end = 1.4f;
+    config.color_start = (slayer3d_color){255, 225, 120, 255};
+    config.color_end = (slayer3d_color){255, 80, 16, 255};
+    config.max_particles = 1;
+    config.render_style = SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH;
+    config.camera_facing = true;
+    config.emissive_intensity = 1.0f;
+
+    slayer3d_particle_emitter *emitter = slayer3d_create_particle_emitter(&config);
+    ASSERT_NE(emitter, nullptr) << SDL_GetError();
+    slayer3d_particle_emitter_emit(emitter, 1);
+
+    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(slayer3d_draw_particles(ctx, emitter)) << SDL_GetError();
+    slayer3d_end_mode_3d(ctx);
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    slayer3d_destroy_particle_emitter(emitter);
+
+    EXPECT_GT(px[0], 100);
+    EXPECT_GT(px[1], 30);
 }
 
 TEST_F(GLRendererTest, TexturedSkyboxShowsTopFaceWithBackfaceCulling)

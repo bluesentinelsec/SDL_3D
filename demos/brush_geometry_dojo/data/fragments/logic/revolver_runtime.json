@@ -2,7 +2,8 @@
   "schema": "slayer3d.fragment.v0",
   "signals": [
     "signal.brush_geometry.revolver.pickup",
-    "signal.brush_geometry.revolver.fire"
+    "signal.brush_geometry.revolver.fire",
+    "signal.brush_geometry.revolver.recoil.return"
   ],
   "logic": {
     "sensors": [
@@ -36,14 +37,36 @@
               { "resource": "revolver", "amount": 1.0, "max": 1.0 }
             ]
           },
-          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_x", "value": 0.1 },
-          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_y", "value": -0.3 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_x", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_y", "value": -0.26 },
           { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_z", "value": 0.58 },
           { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_scale", "value": 0.27 },
-          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_pitch", "value": -0.05 },
-          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_yaw", "value": -1.424999 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_pitch", "value": -0.025 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_yaw", "value": -1.549999 },
           { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_roll", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_recoil_x", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_recoil_y", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_recoil_z", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_recoil_pitch", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_recoil_yaw", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_recoil_roll", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_x", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_y", "value": -0.52 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_z", "value": -0.14 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_pitch", "value": 0.185 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_yaw", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_roll", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_bob_x", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_bob_y", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_bob_z", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_bob_pitch", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_bob_yaw", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_bob_roll", "value": 0.0 },
+          { "type": "property.set", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_bob_phase", "value": 0.0 },
           { "type": "entity.set_active", "target": "entity.brush_geometry.revolver_viewmodel", "active": true },
+          { "type": "property.animate", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_y", "to": 0.0, "duration": 0.24, "easing": "out_quad" },
+          { "type": "property.animate", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_z", "to": 0.0, "duration": 0.24, "easing": "out_quad" },
+          { "type": "property.animate", "target": "entity.brush_geometry.revolver_viewmodel", "key": "gun_intro_pitch", "to": 0.0, "duration": 0.24, "easing": "out_quad" },
           {
             "type": "debug.write_actor_properties",
             "target": "entity.brush_geometry.revolver_viewmodel",
@@ -88,44 +111,150 @@
                 "trace_brush_worlds": true,
                 "brush_contents_mask": ["solid", "projectile_clip"],
                 "direction_from_property": "camera_forward",
+                "target_tag": "zombie",
                 "directional_offset": { "property": "camera_forward", "distance": 0.75 },
                 "range": 80.0,
                 "cooldown_property": "fire_timer",
-                "cooldown": 0.18,
+                "cooldown": 0.0,
                 "run_actions_on_miss": true,
                 "actions": [
                   {
+                    "type": "property.animate",
+                    "target": "entity.brush_geometry.revolver_viewmodel",
+                    "key": "gun_recoil_z",
+                    "to": -0.055,
+                    "duration": 0.035,
+                    "easing": "out_quad"
+                  },
+                  {
+                    "type": "property.animate",
+                    "target": "entity.brush_geometry.revolver_viewmodel",
+                    "key": "gun_recoil_y",
+                    "to": 0.025,
+                    "duration": 0.035,
+                    "easing": "out_quad"
+                  },
+                  {
+                    "type": "property.animate",
+                    "target": "entity.brush_geometry.revolver_viewmodel",
+                    "key": "gun_recoil_pitch",
+                    "to": 0.075,
+                    "duration": 0.035,
+                    "easing": "out_quad",
+                    "done_signal": "signal.brush_geometry.revolver.recoil.return"
+                  },
+                  {
                     "type": "actor.spawn",
                     "pool": "pool.brush_geometry.revolver_muzzle_flashes",
-                    "position_from_payload": "origin"
+                    "position_from_actor_properties": {
+                      "source": "entity.brush_geometry.revolver_viewmodel",
+                      "x": "gun_x",
+                      "y": "gun_y",
+                      "z": "gun_z"
+                    },
+                    "properties_from_actor": {
+                      "source": "entity.brush_geometry.revolver_muzzle_flash_config",
+                      "keys": [
+                        "flash_offset_x",
+                        "flash_offset_y",
+                        "flash_offset_z",
+                        "flash_size_scale",
+                        "flash_alpha_scale",
+                        "flash_intensity"
+                      ]
+                    }
                   },
                   {
                     "type": "actor.spawn",
                     "pool": "pool.brush_geometry.revolver_smoke",
-                    "position_from_payload": "origin"
-                  },
-                  {
-                    "type": "actor.spawn",
-                    "pool": "pool.brush_geometry.revolver_tracers",
-                    "position_from_payload": "origin",
-                    "velocity_from_payload": "direction",
-                    "speed": 78.0
-                  },
-                  {
-                    "type": "actor.spawn",
-                    "pool": "pool.brush_geometry.revolver_impact_decals",
-                    "position_from_payload": "hit_position",
-                    "payload_directional_offset": { "property": "hit_normal", "distance": 0.035 }
+                    "position_from_actor_properties": {
+                      "source": "entity.brush_geometry.revolver_viewmodel",
+                      "x": "gun_x",
+                      "y": "gun_y",
+                      "z": "gun_z"
+                    },
+                    "properties_from_actor": {
+                      "source": "entity.brush_geometry.revolver_smoke_config",
+                      "keys": [
+                        "smoke_offset_x",
+                        "smoke_offset_y",
+                        "smoke_offset_z",
+                        "smoke_size_scale",
+                        "smoke_alpha_scale",
+                        "smoke_emit_rate"
+                      ]
+                    }
                   },
                   {
                     "type": "property.set",
                     "target": "entity.brush_geometry.player",
                     "key": "last_revolver_hit_distance",
                     "value_from_payload": "hit_distance"
+                  },
+                  {
+                    "type": "branch",
+                    "if": { "type": "payload.compare", "key": "hit_actor", "op": "==", "value": true },
+                    "then": [
+                      {
+                        "type": "property.set",
+                        "target_from_payload": "hit_actor_name",
+                        "key": "hit_flash",
+                        "value": 1.0
+                      },
+                      {
+                        "type": "property.animate",
+                        "target_from_payload": "hit_actor_name",
+                        "key": "hit_flash",
+                        "to": 0.0,
+                        "duration": 0.22,
+                        "easing": "out_quad"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "branch",
+                    "if": { "type": "payload.compare", "key": "hit_wall", "op": "==", "value": true },
+                    "then": [
+                      {
+                        "type": "actor.spawn",
+                        "pool": "pool.brush_geometry.revolver_impact_sparks",
+                        "position_from_payload": "hit_position",
+                        "payload_directional_offset": { "property": "hit_normal", "distance": 0.04 }
+                      }
+                    ]
                   }
                 ]
               }
             ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.brush_geometry.revolver.recoil.return",
+        "actions": [
+          {
+            "type": "property.animate",
+            "target": "entity.brush_geometry.revolver_viewmodel",
+            "key": "gun_recoil_z",
+            "to": 0.0,
+            "duration": 0.08,
+            "easing": "out_quad"
+          },
+          {
+            "type": "property.animate",
+            "target": "entity.brush_geometry.revolver_viewmodel",
+            "key": "gun_recoil_y",
+            "to": 0.0,
+            "duration": 0.08,
+            "easing": "out_quad"
+          },
+          {
+            "type": "property.animate",
+            "target": "entity.brush_geometry.revolver_viewmodel",
+            "key": "gun_recoil_pitch",
+            "to": 0.0,
+            "duration": 0.08,
+            "easing": "out_quad"
           }
         ]
       }

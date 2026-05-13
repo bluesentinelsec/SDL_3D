@@ -7,6 +7,12 @@
 
 #include "game_data_standard_options.h"
 
+static bool particle_emitter_component_is_view_space(yyjson_val *component)
+{
+    const char *space = json_string(component, "space", "world");
+    return space != NULL && SDL_strcmp(space, "camera") == 0;
+}
+
 bool slayer3d_game_data_get_app_control(const slayer3d_game_data_runtime *runtime,
                                         slayer3d_game_data_app_control *out_control)
 {
@@ -1084,10 +1090,22 @@ static void populate_mesh_primitive_descriptor(const slayer3d_registered_actor *
     if (actor != NULL && size_property != NULL)
         primitive->size = slayer3d_properties_get_vec3(actor->props, size_property, primitive->size);
     primitive->radius = json_float(component, "radius", primitive->radius);
+    primitive->radius = slayer3d_properties_get_float(
+        actor != NULL ? actor->props : NULL, json_string(component, "radius_property", NULL), primitive->radius);
     primitive->height =
         json_float(component, "height", primitive->height > 0.0f ? primitive->height : primitive->size.y);
-    primitive->radius_top = json_float(component, "radius_top", primitive->radius);
+    primitive->height = slayer3d_properties_get_float(
+        actor != NULL ? actor->props : NULL, json_string(component, "height_property", NULL), primitive->height);
+    primitive->radius_top = primitive->mesh_primitive == SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE
+                                ? json_float(component, "radius_top", 0.0f)
+                                : json_float(component, "radius_top", primitive->radius);
+    primitive->radius_top =
+        slayer3d_properties_get_float(actor != NULL ? actor->props : NULL,
+                                      json_string(component, "radius_top_property", NULL), primitive->radius_top);
     primitive->radius_bottom = json_float(component, "radius_bottom", primitive->radius);
+    primitive->radius_bottom =
+        slayer3d_properties_get_float(actor != NULL ? actor->props : NULL,
+                                      json_string(component, "radius_bottom_property", NULL), primitive->radius_bottom);
     primitive->major_radius = json_float(component, "major_radius", primitive->major_radius);
     primitive->minor_radius = json_float(component, "minor_radius", primitive->minor_radius);
     primitive->bevel_radius =
@@ -1096,8 +1114,19 @@ static void populate_mesh_primitive_descriptor(const slayer3d_registered_actor *
     primitive->slices = SDL_max(json_int(component, "slices", json_int(component, "segments", primitive->slices)), 3);
     primitive->rings = SDL_max(json_int(component, "rings", primitive->rings), 3);
     primitive->tube_segments = SDL_max(json_int(component, "tube_segments", primitive->tube_segments), 3);
-    if (primitive->mesh_primitive == SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE)
-        primitive->radius_top = json_float(component, "radius_top", 0.0f);
+    const float size_scale = slayer3d_properties_get_float(actor != NULL ? actor->props : NULL,
+                                                           json_string(component, "size_scale_property", NULL), 1.0f);
+    if (size_scale > 0.0f)
+    {
+        primitive->size = slayer3d_vec3_scale(primitive->size, size_scale);
+        primitive->radius *= size_scale;
+        primitive->height *= size_scale;
+        primitive->radius_top *= size_scale;
+        primitive->radius_bottom *= size_scale;
+        primitive->major_radius *= size_scale;
+        primitive->minor_radius *= size_scale;
+        primitive->bevel_radius *= size_scale;
+    }
 }
 
 static const slayer3d_sector *active_scene_sector_for_position(const slayer3d_game_data_runtime *runtime,
@@ -1151,13 +1180,59 @@ static slayer3d_vec3 render_component_offset(const slayer3d_registered_actor *ac
     const char *x_property = json_string(component, "offset_x_property", NULL);
     const char *y_property = json_string(component, "offset_y_property", NULL);
     const char *z_property = json_string(component, "offset_z_property", NULL);
+    const char *x_add_property = json_string(component, "offset_x_add_property", NULL);
+    const char *y_add_property = json_string(component, "offset_y_add_property", NULL);
+    const char *z_add_property = json_string(component, "offset_z_add_property", NULL);
     if (x_property != NULL)
         offset.x += slayer3d_properties_get_float(actor->props, x_property, 0.0f);
     if (y_property != NULL)
         offset.y += slayer3d_properties_get_float(actor->props, y_property, 0.0f);
     if (z_property != NULL)
         offset.z += slayer3d_properties_get_float(actor->props, z_property, 0.0f);
+    if (x_add_property != NULL)
+        offset.x += slayer3d_properties_get_float(actor->props, x_add_property, 0.0f);
+    if (y_add_property != NULL)
+        offset.y += slayer3d_properties_get_float(actor->props, y_add_property, 0.0f);
+    if (z_add_property != NULL)
+        offset.z += slayer3d_properties_get_float(actor->props, z_add_property, 0.0f);
+    yyjson_val *x_add_properties = obj_get(component, "offset_x_add_properties");
+    for (size_t i = 0; yyjson_is_arr(x_add_properties) && i < yyjson_arr_size(x_add_properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(x_add_properties, i);
+        if (yyjson_is_str(property))
+            offset.x += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
+    yyjson_val *y_add_properties = obj_get(component, "offset_y_add_properties");
+    for (size_t i = 0; yyjson_is_arr(y_add_properties) && i < yyjson_arr_size(y_add_properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(y_add_properties, i);
+        if (yyjson_is_str(property))
+            offset.y += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
+    yyjson_val *z_add_properties = obj_get(component, "offset_z_add_properties");
+    for (size_t i = 0; yyjson_is_arr(z_add_properties) && i < yyjson_arr_size(z_add_properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(z_add_properties, i);
+        if (yyjson_is_str(property))
+            offset.z += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
     return offset;
+}
+
+static float render_component_property_list_sum(const slayer3d_registered_actor *actor, yyjson_val *component,
+                                                const char *field)
+{
+    if (actor == NULL || actor->props == NULL || component == NULL || field == NULL)
+        return 0.0f;
+    float sum = 0.0f;
+    yyjson_val *properties = obj_get(component, field);
+    for (size_t i = 0; yyjson_is_arr(properties) && i < yyjson_arr_size(properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(properties, i);
+        if (yyjson_is_str(property))
+            sum += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
+    return sum;
 }
 
 static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runtime,
@@ -1182,6 +1257,10 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         primitive.position.x += offset.x;
         primitive.position.y += offset.y;
         primitive.position.z += offset.z;
+        const char *space = json_string(component, "space", "world");
+        primitive.view_space = space != NULL && SDL_strcmp(space, "camera") == 0;
+        if (primitive.view_space)
+            primitive.position.z = -primitive.position.z;
         primitive.rotation_axis = json_vec3(component, "rotation_axis", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
         primitive.rotation_angle = json_float(component, "rotation_angle", 0.0f);
         const char *rotation_property = json_string(component, "rotation_property", NULL);
@@ -1191,8 +1270,19 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         primitive.texture_image = json_string(component, "texture", NULL);
         primitive.lighting_enabled = render_component_lighting_enabled(runtime, component, true);
         primitive.emissive = json_bool(component, "emissive", false);
-        primitive.emissive_color =
-            primitive.emissive ? slayer3d_vec3_make(0.2f, 0.2f, 0.2f) : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        primitive.emissive_color = primitive.emissive
+                                       ? json_vec3(component, "emissive_color", slayer3d_vec3_make(0.2f, 0.2f, 0.2f))
+                                       : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        if (primitive.emissive)
+        {
+            float emissive_intensity = json_float(component, "emissive_intensity", 1.0f);
+            emissive_intensity = slayer3d_properties_get_float(
+                actor->props, json_string(component, "emissive_intensity_property", NULL), emissive_intensity);
+            primitive.emissive_color = slayer3d_vec3_scale(primitive.emissive_color, SDL_max(emissive_intensity, 0.0f));
+        }
+        const float alpha_scale =
+            slayer3d_properties_get_float(actor->props, json_string(component, "alpha_scale_property", NULL), 1.0f);
+        primitive.color.a = (Uint8)SDL_clamp((int)((float)primitive.color.a * alpha_scale + 0.5f), 0, 255);
         primitive.wire_color = json_color(component, "wire_color", (slayer3d_color){0, 0, 0, 255});
         primitive.size = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
         primitive.radius = 0.5f;
@@ -1280,7 +1370,6 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         {
             primitive.type = SLAYER3D_GAME_DATA_RENDER_MODEL;
             primitive.model_asset = json_string(component, "model", NULL);
-            const char *space = json_string(component, "space", "world");
             primitive.view_space = SDL_strcmp(space, "camera") == 0;
             if (primitive.view_space)
                 primitive.position = offset;
@@ -1297,12 +1386,24 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
             const char *pitch_property = json_string(component, "pitch_property", NULL);
             const char *yaw_property = json_string(component, "yaw_property", NULL);
             const char *roll_property = json_string(component, "roll_property", NULL);
+            const char *pitch_add_property = json_string(component, "pitch_add_property", NULL);
+            const char *yaw_add_property = json_string(component, "yaw_add_property", NULL);
+            const char *roll_add_property = json_string(component, "roll_add_property", NULL);
             if (pitch_property != NULL)
                 primitive.euler_rotation.x += slayer3d_properties_get_float(actor->props, pitch_property, 0.0f);
             if (yaw_property != NULL)
                 primitive.euler_rotation.y += slayer3d_properties_get_float(actor->props, yaw_property, 0.0f);
             if (roll_property != NULL)
                 primitive.euler_rotation.z += slayer3d_properties_get_float(actor->props, roll_property, 0.0f);
+            if (pitch_add_property != NULL)
+                primitive.euler_rotation.x += slayer3d_properties_get_float(actor->props, pitch_add_property, 0.0f);
+            if (yaw_add_property != NULL)
+                primitive.euler_rotation.y += slayer3d_properties_get_float(actor->props, yaw_add_property, 0.0f);
+            if (roll_add_property != NULL)
+                primitive.euler_rotation.z += slayer3d_properties_get_float(actor->props, roll_add_property, 0.0f);
+            primitive.euler_rotation.x += render_component_property_list_sum(actor, component, "pitch_add_properties");
+            primitive.euler_rotation.y += render_component_property_list_sum(actor, component, "yaw_add_properties");
+            primitive.euler_rotation.z += render_component_property_list_sum(actor, component, "roll_add_properties");
             primitive.animation_clip = json_int(component, "animation_clip", -1);
             primitive.animation_time = json_float(component, "animation_time", 0.0f);
             primitive.animation_loop = json_bool(component, "animation_loop", true);
@@ -1509,7 +1610,21 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     if (component == NULL || actor == NULL)
         return false;
 
-    out_config->position = actor->position;
+    slayer3d_vec3 position_offset = json_vec3(component, "position_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const char *position_offset_property = json_string(component, "position_offset_property", NULL);
+    const slayer3d_value *position_offset_value =
+        position_offset_property != NULL ? slayer3d_properties_get_value(actor->props, position_offset_property) : NULL;
+    if (position_offset_value != NULL && position_offset_value->type == SLAYER3D_VALUE_VEC3)
+        position_offset = position_offset_value->as_vec3;
+    position_offset.x +=
+        slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_x_property", NULL), 0.0f);
+    position_offset.y +=
+        slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_y_property", NULL), 0.0f);
+    position_offset.z +=
+        slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_z_property", NULL), 0.0f);
+    out_config->position = slayer3d_vec3_add(actor->position, position_offset);
+    if (particle_emitter_component_is_view_space(component))
+        out_config->position.z = -out_config->position.z;
     out_config->direction = json_vec3(component, "direction", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
     out_config->spread = json_float(component, "spread", 0.0f);
     out_config->speed_min = json_float(component, "speed_min", 0.0f);
@@ -1518,11 +1633,29 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     out_config->lifetime_max = json_float(component, "lifetime_max", 1.0f);
     out_config->size_start = json_float(component, "size_start", 0.05f);
     out_config->size_end = json_float(component, "size_end", 0.01f);
+    out_config->size_start = slayer3d_properties_get_float(
+        actor->props, json_string(component, "size_start_property", NULL), out_config->size_start);
+    out_config->size_end = slayer3d_properties_get_float(
+        actor->props, json_string(component, "size_end_property", NULL), out_config->size_end);
+    float size_scale =
+        slayer3d_properties_get_float(actor->props, json_string(component, "size_scale_property", NULL), 1.0f);
+    if (size_scale < 0.0f)
+        size_scale = 0.0f;
+    out_config->size_start *= size_scale;
+    out_config->size_end *= size_scale;
     out_config->color_start = json_color(component, "color_start", (slayer3d_color){255, 255, 255, 255});
     out_config->color_end = json_color(component, "color_end", (slayer3d_color){255, 255, 255, 0});
+    const float alpha_scale =
+        slayer3d_properties_get_float(actor->props, json_string(component, "alpha_scale_property", NULL), 1.0f);
+    out_config->color_start.a = (Uint8)SDL_clamp((int)((float)out_config->color_start.a * alpha_scale + 0.5f), 0, 255);
+    out_config->color_end.a = (Uint8)SDL_clamp((int)((float)out_config->color_end.a * alpha_scale + 0.5f), 0, 255);
     out_config->gravity = json_float(component, "gravity", 0.0f);
     out_config->max_particles = json_int(component, "max_particles", 128);
     out_config->emit_rate = json_float(component, "emit_rate", 0.0f);
+    out_config->emit_rate = slayer3d_properties_get_float(
+        actor->props, json_string(component, "emit_rate_property", NULL), out_config->emit_rate);
+    if (out_config->emit_rate < 0.0f)
+        out_config->emit_rate = 0.0f;
     const char *shape = json_string(component, "shape", "point");
     if (SDL_strcmp(shape, "box") == 0)
         out_config->shape = SLAYER3D_PARTICLE_EMITTER_BOX;
@@ -1533,6 +1666,17 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     out_config->extents = json_vec3(component, "extents", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     out_config->radius = json_float(component, "radius", 0.0f);
     out_config->emissive_intensity = json_float(component, "emissive_intensity", 1.0f);
+    out_config->emissive_intensity = slayer3d_properties_get_float(
+        actor->props, json_string(component, "emissive_intensity_property", NULL), out_config->emissive_intensity);
+    const char *render_style = json_string(component, "render_style", "default");
+    if (SDL_strcmp(render_style, "soft_smoke") == 0)
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE;
+    else if (SDL_strcmp(render_style, "soft_fire") == 0)
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_FIRE;
+    else if (SDL_strcmp(render_style, "muzzle_flash") == 0)
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH;
+    else
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_DEFAULT;
     out_config->camera_facing = json_bool(component, "camera_facing", true);
     out_config->depth_test = json_bool(component, "depth_test", true);
     out_config->additive_blend = json_bool(component, "additive_blend", false);
@@ -1585,6 +1729,7 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
         emitter.entity_name = entity_name;
         if (!slayer3d_game_data_get_particle_emitter(runtime, entity_name, &emitter.config))
             continue;
+        emitter.view_space = particle_emitter_component_is_view_space(component);
         (void)slayer3d_game_data_get_particle_emitter_draw_emissive(runtime, entity_name, &emitter.draw_emissive);
 
         if (!callback(userdata, &emitter))
@@ -1593,8 +1738,8 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
     for (int pool_index = 0; keep_iterating && pool_index < runtime->actor_pool_count; ++pool_index)
     {
         actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
-        if (!actor_pool_in_scene(pool, slayer3d_game_data_active_scene(runtime)) ||
-            find_component_json(pool->archetype_json, "particles.emitter") == NULL)
+        yyjson_val *pool_component = find_component_json(pool->archetype_json, "particles.emitter");
+        if (!actor_pool_in_scene(pool, slayer3d_game_data_active_scene(runtime)) || pool_component == NULL)
         {
             continue;
         }
@@ -1610,6 +1755,7 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
             emitter.entity_name = actor->name;
             if (!slayer3d_game_data_get_particle_emitter(runtime, actor->name, &emitter.config))
                 continue;
+            emitter.view_space = particle_emitter_component_is_view_space(pool_component);
             (void)slayer3d_game_data_get_particle_emitter_draw_emissive(runtime, actor->name, &emitter.draw_emissive);
 
             if (!callback(userdata, &emitter))
