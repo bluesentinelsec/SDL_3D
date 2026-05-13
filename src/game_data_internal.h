@@ -156,6 +156,7 @@ typedef struct editor_command_preview_state
     const char *material_name;
     int face_index;
     yyjson_val *outputs;
+    slayer3d_vec3 offset;
     bool has_bounds;
     slayer3d_bounding_box bounds;
 } editor_command_preview_state;
@@ -172,6 +173,7 @@ typedef struct editor_command_transaction_entry
     const char *element_name;
     const char *material_name;
     int face_index;
+    slayer3d_vec3 offset;
     bool has_bounds;
     slayer3d_bounding_box bounds;
     char message[128];

@@ -593,17 +593,22 @@ bool slayer3d_game_data_get_sector_level(const slayer3d_game_data_runtime *runti
     return true;
 }
 
-const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name)
+static brush_world_runtime *find_brush_world_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name)
 {
     if (runtime == NULL || name == NULL)
         return NULL;
     for (int i = 0; i < runtime->brush_world_count; ++i)
     {
-        const brush_world_runtime *world = &runtime->brush_worlds[i];
+        brush_world_runtime *world = &runtime->brush_worlds[i];
         if (world->desc.name != NULL && SDL_strcmp(world->desc.name, name) == 0)
             return world;
     }
     return NULL;
+}
+
+const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name)
+{
+    return find_brush_world_runtime_mutable((slayer3d_game_data_runtime *)runtime, name);
 }
 
 bool slayer3d_game_data_get_brush_world(const slayer3d_game_data_runtime *runtime, const char *name,
@@ -2138,6 +2143,7 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
     preview->material_name = selection.material_name;
     preview->face_index = selection.face_index;
     preview->outputs = outputs;
+    preview->offset = offset;
     preview->has_bounds = true;
     preview->bounds = bounds;
 
@@ -2209,6 +2215,7 @@ static slayer3d_properties *create_editor_transaction_payload(const slayer3d_gam
         slayer3d_properties_set_string(payload, "editor_transaction_material",
                                        entry->material_name != NULL ? entry->material_name : "");
         slayer3d_properties_set_int(payload, "editor_transaction_face_index", entry->face_index);
+        slayer3d_properties_set_vec3(payload, "editor_transaction_offset", entry->offset);
         slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_min",
                                      entry->has_bounds ? entry->bounds.min : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
         slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_max",
@@ -2225,6 +2232,7 @@ static slayer3d_properties *create_editor_transaction_payload(const slayer3d_gam
         slayer3d_properties_set_string(payload, "editor_transaction_element", "");
         slayer3d_properties_set_string(payload, "editor_transaction_material", "");
         slayer3d_properties_set_int(payload, "editor_transaction_face_index", -1);
+        slayer3d_properties_set_vec3(payload, "editor_transaction_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
         slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
         slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     }
@@ -2315,6 +2323,120 @@ static editor_command_transaction_entry *editor_command_history_append(slayer3d_
     return entry;
 }
 
+static slayer3d_game_data_brush *find_editor_mutable_brush(brush_world_runtime *world_runtime, const char *brush_name)
+{
+    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
+        return NULL;
+    slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        slayer3d_game_data_brush *brush = (slayer3d_game_data_brush *)&world->brushes[i];
+        if (brush->name != NULL && SDL_strcmp(brush->name, brush_name) == 0)
+            return brush;
+    }
+    return NULL;
+}
+
+static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return false;
+    slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    if (!slayer3d_game_data_brush_world_build_acceleration(world))
+        return false;
+
+    slayer3d_model render_model;
+    SDL_zero(render_model);
+    if (!slayer3d_game_data_brush_world_compile_render_model(world, &render_model))
+    {
+        slayer3d_free_model(&render_model);
+        return false;
+    }
+
+    slayer3d_free_model(&world_runtime->render_model);
+    world_runtime->render_model = render_model;
+    world->render_model = &world_runtime->render_model;
+    return true;
+}
+
+static void translate_editor_brush_planes(slayer3d_game_data_brush *brush, slayer3d_vec3 offset)
+{
+    if (brush == NULL)
+        return;
+    for (int i = 0; i < brush->face_count; ++i)
+    {
+        slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[i];
+        face->distance += slayer3d_vec3_dot(face->normal, offset);
+    }
+}
+
+static bool apply_editor_brush_translate(slayer3d_game_data_runtime *runtime,
+                                         const editor_command_transaction_entry *entry, slayer3d_vec3 offset)
+{
+    if (runtime == NULL || entry == NULL || entry->world_name == NULL || entry->element_name == NULL)
+        return false;
+    if (slayer3d_vec3_length_squared(offset) <= 0.0000001f)
+        return true;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+    slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, entry->element_name);
+    if (brush == NULL)
+        return false;
+
+    translate_editor_brush_planes(brush, offset);
+    if (rebuild_editor_brush_world(world_runtime))
+        return true;
+
+    translate_editor_brush_planes(brush, slayer3d_vec3_scale(offset, -1.0f));
+    (void)rebuild_editor_brush_world(world_runtime);
+    return false;
+}
+
+static void translate_active_editor_selection_for_transaction(slayer3d_game_data_runtime *runtime,
+                                                              const editor_command_transaction_entry *entry,
+                                                              slayer3d_vec3 offset)
+{
+    if (runtime == NULL || entry == NULL || !runtime->editor_active_selection.hit)
+        return;
+    slayer3d_game_data_editor_selection *selection = &runtime->editor_active_selection;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (active_scene == NULL || entry->scene == NULL || SDL_strcmp(active_scene, entry->scene) != 0 ||
+        selection->world_name == NULL || entry->world_name == NULL ||
+        SDL_strcmp(selection->world_name, entry->world_name) != 0 || selection->element_name == NULL ||
+        entry->element_name == NULL || SDL_strcmp(selection->element_name, entry->element_name) != 0)
+    {
+        return;
+    }
+
+    selection->point = slayer3d_vec3_add(selection->point, offset);
+    selection->world_position = slayer3d_vec3_add(selection->world_position, offset);
+    if (selection->has_bounds)
+        selection->bounds = translated_bounds(selection->bounds, offset);
+
+    yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
+    publish_editor_selection(runtime, obj_get(selection_json, "outputs"), selection);
+}
+
+static bool editor_transaction_has_brush_mutation(const editor_command_transaction_entry *entry)
+{
+    return entry != NULL && entry->command != NULL && entry->target != NULL &&
+           SDL_strcmp(entry->command, "translate") == 0 && SDL_strcmp(entry->target, "element") == 0 &&
+           entry->world_name != NULL && entry->world_name[0] != '\0' && entry->element_name != NULL &&
+           entry->element_name[0] != '\0';
+}
+
+static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtime,
+                                              const editor_command_transaction_entry *entry, bool forward)
+{
+    if (!editor_transaction_has_brush_mutation(entry))
+        return true;
+    const slayer3d_vec3 offset = forward ? entry->offset : slayer3d_vec3_scale(entry->offset, -1.0f);
+    if (!apply_editor_brush_translate(runtime, entry, offset))
+        return false;
+    translate_active_editor_selection_for_transaction(runtime, entry, offset);
+    return true;
+}
+
 bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                               const slayer3d_properties *payload)
 {
@@ -2342,11 +2464,22 @@ bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtim
     entry->element_name = preview->element_name;
     entry->material_name = preview->material_name;
     entry->face_index = preview->face_index;
+    entry->offset = preview->offset;
     entry->has_bounds = preview->has_bounds;
     entry->bounds = preview->bounds;
     format_editor_transaction_message(runtime, "commit", true, entry,
                                       json_string(action, "message", "committed {editor_command}"), entry->message,
                                       sizeof(entry->message));
+
+    if (!apply_editor_transaction_mutation(runtime, entry, true))
+    {
+        editor_command_history_state *history = &runtime->editor_command_history;
+        history->count--;
+        history->cursor = history->count;
+        const char *message = json_string(action, "invalid_message", "editor command mutation failed");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, message);
+    }
 
     publish_editor_command_preview(runtime, preview->outputs, false, "", "", "preview committed", NULL, NULL);
     clear_editor_command_preview(runtime);
@@ -2370,8 +2503,14 @@ bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime,
         return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "undo", false, NULL, message);
     }
 
+    editor_command_transaction_entry *entry = &history->entries[history->cursor - 1];
+    if (!apply_editor_transaction_mutation(runtime, entry, false))
+    {
+        const char *message = json_string(action, "invalid_message", "editor command undo failed");
+        publish_editor_transaction(runtime, outputs, "undo", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "undo", false, NULL, message);
+    }
     history->cursor--;
-    editor_command_transaction_entry *entry = &history->entries[history->cursor];
     char message[128];
     format_editor_transaction_message(runtime, "undo", true, entry,
                                       json_string(action, "message", "undo {editor_command}"), message,
@@ -2396,6 +2535,12 @@ bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime,
     }
 
     editor_command_transaction_entry *entry = &history->entries[history->cursor];
+    if (!apply_editor_transaction_mutation(runtime, entry, true))
+    {
+        const char *message = json_string(action, "invalid_message", "editor command redo failed");
+        publish_editor_transaction(runtime, outputs, "redo", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "redo", false, NULL, message);
+    }
     history->cursor++;
     char message[128];
     format_editor_transaction_message(runtime, "redo", true, entry,
