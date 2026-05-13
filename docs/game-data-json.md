@@ -734,7 +734,12 @@ blockout tools: floors, walls, ceilings, platforms, and simple room pieces. It
 validates the target world and bounds at load time, resolves the material at
 runtime, rebuilds brush collision/render data atomically, then marks the world
 dirty only after the rebuild succeeds. If `name` is omitted, the runtime
-generates a unique brush name under the target world.
+generates a unique brush name under the target world. The editor shell dojo
+demonstrates the current blockout palette pattern: number-key tool selection is
+represented by scene-state strings, and the shared commit signal branches to
+prefab-specific `editor.brush_world.create_box` or
+`editor.player_start.place` actions. That keeps the first editor workflow
+data-authored while a dedicated editor frontend is still evolving.
 
 ```json
 {

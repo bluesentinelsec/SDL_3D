@@ -50,6 +50,22 @@
           {
             "name": "action.editor.command.redo",
             "bindings": [{ "device": "keyboard", "key": "Y" }]
+          },
+          {
+            "name": "action.editor.tool.floor",
+            "bindings": [{ "device": "keyboard", "key": "1" }]
+          },
+          {
+            "name": "action.editor.tool.wall",
+            "bindings": [{ "device": "keyboard", "key": "2" }]
+          },
+          {
+            "name": "action.editor.tool.ceiling",
+            "bindings": [{ "device": "keyboard", "key": "3" }]
+          },
+          {
+            "name": "action.editor.tool.player_start",
+            "bindings": [{ "device": "keyboard", "key": "4" }]
           }
         ]
       }
@@ -63,6 +79,10 @@
     "signal.editor.command.commit",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
+    "signal.editor.tool.floor",
+    "signal.editor.tool.wall",
+    "signal.editor.tool.ceiling",
+    "signal.editor.tool.player_start",
     "signal.editor.export"
   ],
   "logic": {
@@ -101,6 +121,26 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.tool.floor",
+        "on_pressed": "signal.editor.tool.floor"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.tool.wall",
+        "on_pressed": "signal.editor.tool.wall"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.tool.ceiling",
+        "on_pressed": "signal.editor.tool.ceiling"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.tool.player_start",
+        "on_pressed": "signal.editor.tool.player_start"
       }
     ],
     "bindings": [
@@ -111,8 +151,36 @@
             "type": "scene_state.cycle",
             "key": "editor.tool.mode",
             "default": "select",
-            "values": ["select", "move", "paint"]
+            "values": ["select", "move", "paint", "floor", "wall", "ceiling", "player_start"]
           }
+        ]
+      },
+      {
+        "signal": "signal.editor.tool.floor",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "floor" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor prefab selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.tool.wall",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "wall" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall prefab selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.tool.ceiling",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "ceiling" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling prefab selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.tool.player_start",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start tool selected" }
         ]
       },
       {
@@ -204,37 +272,164 @@
         "signal": "signal.editor.command.commit",
         "actions": [
           {
-            "type": "editor.command.commit",
-            "message": "committed {editor_command} #{editor_transaction_id_text}",
-            "invalid_message": "nothing to commit",
-            "outputs": {
-              "valid_key": "editor.transaction.valid",
-              "event_key": "editor.transaction.event",
-              "message_key": "editor.transaction.message",
-              "transaction_id_key": "editor.transaction.id",
-              "undo_count_key": "editor.transaction.undo_count",
-              "redo_count_key": "editor.transaction.redo_count",
-              "command_key": "editor.transaction.command",
-              "target_key": "editor.transaction.target",
-              "world_key": "editor.transaction.world",
-              "element_key": "editor.transaction.element",
-              "face_index_key": "editor.transaction.face_index",
-              "bounds_min_key": "editor.transaction.bounds_min",
-              "bounds_max_key": "editor.transaction.bounds_max",
-              "dirty_key": "editor.brush_world.dirty",
-              "revision_key": "editor.brush_world.revision",
-              "saved_revision_key": "editor.brush_world.saved_revision",
-              "source_path_key": "editor.brush_world.source_path"
-            },
-            "actions": [
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" },
+            "then": [
               {
-                "type": "scene_state.set",
-                "key": "editor.tool.last_action",
-                "value": "commit {editor_command} #{editor_transaction_id_text}"
-              }
+                "type": "editor.brush_world.create_box",
+                "world": "brush.editor_shell.target",
+                "material": "mat.editor.floor",
+                "min": [-3.0, -0.2, -3.0],
+                "max": [3.0, 0.0, 3.0],
+                "message": "floor prefab created",
+                "outputs": {
+                  "valid_key": "editor.create.valid",
+                  "message_key": "editor.create.message",
+                  "brush_key": "editor.create.brush",
+                  "world_key": "editor.brush_world.name",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision",
+                  "source_path_key": "editor.brush_world.source_path"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor prefab created" }
             ],
             "else": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to commit" }
+              {
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "wall" },
+                "then": [
+                  {
+                    "type": "editor.brush_world.create_box",
+                    "world": "brush.editor_shell.target",
+                    "material": "mat.editor.wall",
+                    "min": [3.0, 0.0, -3.0],
+                    "max": [3.25, 2.5, 3.0],
+                    "message": "wall prefab created",
+                    "outputs": {
+                      "valid_key": "editor.create.valid",
+                      "message_key": "editor.create.message",
+                      "brush_key": "editor.create.brush",
+                      "world_key": "editor.brush_world.name",
+                      "dirty_key": "editor.brush_world.dirty",
+                      "revision_key": "editor.brush_world.revision",
+                      "saved_revision_key": "editor.brush_world.saved_revision",
+                      "source_path_key": "editor.brush_world.source_path"
+                    }
+                  },
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall prefab created" }
+                ],
+                "else": [
+                  {
+                    "type": "branch",
+                    "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" },
+                    "then": [
+                      {
+                        "type": "editor.brush_world.create_box",
+                        "world": "brush.editor_shell.target",
+                        "material": "mat.editor.ceiling",
+                        "min": [-3.0, 2.5, -3.0],
+                        "max": [3.0, 2.7, 3.0],
+                        "message": "ceiling prefab created",
+                        "outputs": {
+                          "valid_key": "editor.create.valid",
+                          "message_key": "editor.create.message",
+                          "brush_key": "editor.create.brush",
+                          "world_key": "editor.brush_world.name",
+                          "dirty_key": "editor.brush_world.dirty",
+                          "revision_key": "editor.brush_world.revision",
+                          "saved_revision_key": "editor.brush_world.saved_revision",
+                          "source_path_key": "editor.brush_world.source_path"
+                        }
+                      },
+                      {
+                        "type": "scene_state.set",
+                        "key": "editor.tool.last_action",
+                        "value": "ceiling prefab created"
+                      }
+                    ],
+                    "else": [
+                      {
+                        "type": "branch",
+                        "if": {
+                          "type": "scene_state.compare",
+                          "key": "editor.tool.mode",
+                          "op": "==",
+                          "value": "player_start"
+                        },
+                        "then": [
+                          {
+                            "type": "editor.player_start.place",
+                            "name": "player_start.editor_shell",
+                            "scene": "scene.editor_shell.dojo",
+                            "position": [0.0, 1.6, 4.0],
+                            "yaw": 3.14159,
+                            "pitch": 0.0,
+                            "outputs": {
+                              "valid_key": "editor.player_start.valid",
+                              "message_key": "editor.player_start.message",
+                              "player_start_key": "editor.player_start.name",
+                              "scene_key": "editor.player_start.scene",
+                              "position_key": "editor.player_start.position",
+                              "yaw_key": "editor.player_start.yaw",
+                              "pitch_key": "editor.player_start.pitch",
+                              "dirty_key": "editor.player_start.dirty",
+                              "revision_key": "editor.player_start.revision",
+                              "saved_revision_key": "editor.player_start.saved_revision"
+                            }
+                          },
+                          {
+                            "type": "scene_state.set",
+                            "key": "editor.tool.last_action",
+                            "value": "player start placed"
+                          }
+                        ],
+                        "else": [
+                          {
+                            "type": "editor.command.commit",
+                            "message": "committed {editor_command} #{editor_transaction_id_text}",
+                            "invalid_message": "nothing to commit",
+                            "outputs": {
+                              "valid_key": "editor.transaction.valid",
+                              "event_key": "editor.transaction.event",
+                              "message_key": "editor.transaction.message",
+                              "transaction_id_key": "editor.transaction.id",
+                              "undo_count_key": "editor.transaction.undo_count",
+                              "redo_count_key": "editor.transaction.redo_count",
+                              "command_key": "editor.transaction.command",
+                              "target_key": "editor.transaction.target",
+                              "world_key": "editor.transaction.world",
+                              "element_key": "editor.transaction.element",
+                              "face_index_key": "editor.transaction.face_index",
+                              "bounds_min_key": "editor.transaction.bounds_min",
+                              "bounds_max_key": "editor.transaction.bounds_max",
+                              "dirty_key": "editor.brush_world.dirty",
+                              "revision_key": "editor.brush_world.revision",
+                              "saved_revision_key": "editor.brush_world.saved_revision",
+                              "source_path_key": "editor.brush_world.source_path"
+                            },
+                            "actions": [
+                              {
+                                "type": "scene_state.set",
+                                "key": "editor.tool.last_action",
+                                "value": "commit {editor_command} #{editor_transaction_id_text}"
+                              }
+                            ],
+                            "else": [
+                              {
+                                "type": "scene_state.set",
+                                "key": "editor.tool.last_action",
+                                "value": "nothing to commit"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
             ]
           }
         ]
@@ -385,6 +580,15 @@
           "editor": {
             "stable_id": "editor.material.floor",
             "display_name": "Dark Floor Material"
+          }
+        },
+        {
+          "name": "mat.editor.ceiling",
+          "albedo": [0.42, 0.44, 0.48, 1.0],
+          "roughness": 0.85,
+          "editor": {
+            "stable_id": "editor.material.ceiling",
+            "display_name": "Soft Ceiling Material"
           }
         }
       ],
