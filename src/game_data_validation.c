@@ -8138,9 +8138,10 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "%s outputs must be an object", type);
         static const char *const output_keys[] = {
-            "valid_key",      "event_key",      "message_key",   "transaction_id_key", "undo_count_key",
-            "redo_count_key", "command_key",    "target_key",    "world_key",          "element_key",
-            "face_index_key", "bounds_min_key", "bounds_max_key"};
+            "valid_key",      "event_key",         "message_key",    "transaction_id_key", "undo_count_key",
+            "redo_count_key", "command_key",       "target_key",     "world_key",          "element_key",
+            "face_index_key", "bounds_min_key",    "bounds_max_key", "source_path_key",    "dirty_key",
+            "revision_key",   "saved_revision_key"};
         for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
         {
             yyjson_val *output = obj_get(outputs, output_keys[i]);
@@ -8164,13 +8165,36 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.brush_world.export outputs must be an object");
-        static const char *const output_keys[] = {"valid_key", "message_key", "json_key", "size_key"};
+        static const char *const output_keys[] = {"valid_key", "message_key",  "json_key",
+                                                  "size_key",  "world_key",    "source_path_key",
+                                                  "dirty_key", "revision_key", "saved_revision_key"};
         for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
         {
             yyjson_val *output = obj_get(outputs, output_keys[i]);
             if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
                 return validation_error(ctx, json_path,
                                         "editor.brush_world.export output keys must be non-empty strings");
+        }
+        return true;
+    }
+    if (SDL_strcmp(type, "editor.brush_world.status") == 0)
+    {
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+            return false;
+        yyjson_val *message = obj_get(action, "message");
+        if (message != NULL && !yyjson_is_str(message))
+            return validation_error(ctx, json_path, "editor.brush_world.status message must be a string");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.brush_world.status outputs must be an object");
+        static const char *const output_keys[] = {"valid_key", "message_key",  "world_key",         "source_path_key",
+                                                  "dirty_key", "revision_key", "saved_revision_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.brush_world.status output keys must be non-empty strings");
         }
         return true;
     }

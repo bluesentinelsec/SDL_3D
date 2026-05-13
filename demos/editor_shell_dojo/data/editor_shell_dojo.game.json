@@ -220,7 +220,11 @@
               "element_key": "editor.transaction.element",
               "face_index_key": "editor.transaction.face_index",
               "bounds_min_key": "editor.transaction.bounds_min",
-              "bounds_max_key": "editor.transaction.bounds_max"
+              "bounds_max_key": "editor.transaction.bounds_max",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision",
+              "source_path_key": "editor.brush_world.source_path"
             },
             "actions": [
               {
@@ -253,7 +257,11 @@
               "target_key": "editor.transaction.target",
               "world_key": "editor.transaction.world",
               "element_key": "editor.transaction.element",
-              "face_index_key": "editor.transaction.face_index"
+              "face_index_key": "editor.transaction.face_index",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision",
+              "source_path_key": "editor.brush_world.source_path"
             },
             "actions": [
               {
@@ -284,7 +292,11 @@
               "target_key": "editor.transaction.target",
               "world_key": "editor.transaction.world",
               "element_key": "editor.transaction.element",
-              "face_index_key": "editor.transaction.face_index"
+              "face_index_key": "editor.transaction.face_index",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision",
+              "source_path_key": "editor.brush_world.source_path"
             },
             "actions": [
               {
@@ -307,7 +319,12 @@
               "valid_key": "editor.export.valid",
               "message_key": "editor.export.message",
               "json_key": "editor.export.json",
-              "size_key": "editor.export.size"
+              "size_key": "editor.export.size",
+              "world_key": "editor.brush_world.name",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision",
+              "source_path_key": "editor.brush_world.source_path"
             }
           }
         ]

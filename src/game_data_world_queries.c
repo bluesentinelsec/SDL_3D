@@ -616,6 +616,72 @@ const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_run
     return find_brush_world_runtime_mutable((slayer3d_game_data_runtime *)runtime, name);
 }
 
+static bool editor_brush_world_set_source_path(brush_world_runtime *world_runtime, const char *source_path)
+{
+    if (world_runtime == NULL || source_path == NULL)
+        return world_runtime != NULL;
+
+    char *copy = SDL_strdup(source_path);
+    if (copy == NULL)
+        return false;
+    SDL_free(world_runtime->editor_source_path);
+    world_runtime->editor_source_path = copy;
+    return true;
+}
+
+static void editor_brush_world_mark_dirty(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return;
+    if (world_runtime->editor_revision < SDL_MAX_UINT64)
+        world_runtime->editor_revision++;
+    world_runtime->editor_dirty = true;
+}
+
+static bool editor_brush_world_mark_saved(brush_world_runtime *world_runtime, const char *source_path)
+{
+    if (world_runtime == NULL)
+        return false;
+    if (!editor_brush_world_set_source_path(world_runtime, source_path))
+        return false;
+    world_runtime->editor_saved_revision = world_runtime->editor_revision;
+    world_runtime->editor_dirty = false;
+    return true;
+}
+
+bool slayer3d_game_data_get_brush_world_editor_state(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                     slayer3d_game_data_brush_world_editor_state *out_state)
+{
+    if (out_state != NULL)
+        SDL_zero(*out_state);
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL || out_state == NULL)
+        return false;
+    out_state->world_name = world_runtime->desc.name;
+    out_state->source_path = world_runtime->editor_source_path;
+    out_state->dirty = world_runtime->editor_dirty;
+    out_state->revision = world_runtime->editor_revision;
+    out_state->saved_revision = world_runtime->editor_saved_revision;
+    return true;
+}
+
+bool slayer3d_game_data_mark_brush_world_saved(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                               const char *source_path, char *error_buffer, int error_buffer_size)
+{
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush world not found");
+        return false;
+    }
+    if (!editor_brush_world_mark_saved(world_runtime, source_path))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to update brush world save state");
+        return false;
+    }
+    return true;
+}
+
 static bool export_add_vec3(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_vec3 value)
 {
     yyjson_mut_val *arr = yyjson_mut_arr(doc);
@@ -985,9 +1051,9 @@ static char *editor_save_parent_directory(const char *path)
     return parent;
 }
 
-bool slayer3d_game_data_save_brush_world_fragment_file(const slayer3d_game_data_runtime *runtime,
-                                                       const char *world_name, const char *path, size_t *out_size,
-                                                       char *error_buffer, int error_buffer_size)
+bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                       const char *path, size_t *out_size, char *error_buffer,
+                                                       int error_buffer_size)
 {
     if (out_size != NULL)
         *out_size = 0u;
@@ -1046,6 +1112,8 @@ bool slayer3d_game_data_save_brush_world_fragment_file(const slayer3d_game_data_
         set_error(error_buffer, error_buffer_size, "failed to save brush world fragment");
         return false;
     }
+    if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size))
+        return false;
     if (out_size != NULL)
         *out_size = size;
     return true;
@@ -2321,6 +2389,37 @@ static void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outpu
         slayer3d_properties_set_vec3(props, key, value);
 }
 
+static int editor_revision_to_int(Uint64 revision)
+{
+    return revision > (Uint64)SDL_MAX_SINT32 ? SDL_MAX_SINT32 : (int)revision;
+}
+
+static bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
+                                              const char *world_name, const char *message, bool publish_result)
+{
+    if (runtime == NULL || outputs == NULL)
+        return true;
+
+    slayer3d_game_data_brush_world_editor_state state;
+    const bool ok = slayer3d_game_data_get_brush_world_editor_state(runtime, world_name, &state);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    if (publish_result)
+    {
+        editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+        editor_set_string_output(scene_state, outputs, "message_key",
+                                 ok ? (message != NULL ? message : "brush world status published")
+                                    : "brush world status unavailable");
+    }
+    editor_set_string_output(scene_state, outputs, "world_key", ok && state.world_name != NULL ? state.world_name : "");
+    editor_set_string_output(scene_state, outputs, "source_path_key",
+                             ok && state.source_path != NULL ? state.source_path : "");
+    editor_set_bool_output(scene_state, outputs, "dirty_key", ok && state.dirty);
+    editor_set_int_output(scene_state, outputs, "revision_key", ok ? editor_revision_to_int(state.revision) : 0);
+    editor_set_int_output(scene_state, outputs, "saved_revision_key",
+                          ok ? editor_revision_to_int(state.saved_revision) : 0);
+    return ok;
+}
+
 bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");
@@ -2338,8 +2437,16 @@ bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runt
                                 : (error[0] != '\0' ? error : "brush world export failed"));
     editor_set_int_output(scene_state, outputs, "size_key", ok ? (int)size : 0);
     editor_set_string_output(scene_state, outputs, "json_key", ok && json != NULL ? json : "");
+    (void)publish_editor_brush_world_status(runtime, outputs, world_name, NULL, false);
     SDL_free(json);
     return true;
+}
+
+bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_data_runtime *runtime,
+                                                                 yyjson_val *action)
+{
+    return publish_editor_brush_world_status(runtime, obj_get(action, "outputs"), json_string(action, "world", NULL),
+                                             json_string(action, "message", "brush world status published"), true);
 }
 
 static void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
@@ -2761,6 +2868,8 @@ static void publish_editor_transaction(slayer3d_game_data_runtime *runtime, yyjs
     editor_set_vec3_output(scene_state, outputs, "bounds_max_key",
                            valid && entry != NULL && entry->has_bounds ? entry->bounds.max
                                                                        : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    (void)publish_editor_brush_world_status(runtime, outputs, valid && entry != NULL ? entry->world_name : NULL, NULL,
+                                            false);
 }
 
 static bool run_editor_transaction_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
@@ -2919,7 +3028,10 @@ static bool apply_editor_brush_translate(slayer3d_game_data_runtime *runtime,
 
     translate_editor_brush_planes(brush, offset);
     if (rebuild_editor_brush_world(world_runtime))
+    {
+        editor_brush_world_mark_dirty(world_runtime);
         return true;
+    }
 
     translate_editor_brush_planes(brush, slayer3d_vec3_scale(offset, -1.0f));
     (void)rebuild_editor_brush_world(world_runtime);
@@ -2956,7 +3068,10 @@ static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const 
     if (!set_editor_brush_face_material(world_runtime, brush, entry->face_index, material_index))
         return false;
     if (rebuild_editor_brush_world(world_runtime))
+    {
+        editor_brush_world_mark_dirty(world_runtime);
         return true;
+    }
 
     (void)set_editor_brush_face_material(world_runtime, brush, entry->face_index, rollback_index);
     (void)rebuild_editor_brush_world(world_runtime);

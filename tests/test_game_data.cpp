@@ -8357,6 +8357,29 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_export_action.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown brush world reference"), std::string::npos) << error;
+
+    write_text(dir / "bad_status_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Status Action" },
+  "world": { "name": "world.bad_editor_status_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.status"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.status",
+        "actions": [
+          { "type": "editor.brush_world.status", "world": "missing.world" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_status_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown brush world reference"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -12355,6 +12378,13 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_data_editor_selection active_selection{};
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(active_selection.element_name, "brush.target.cube");
+    slayer3d_game_data_brush_world_editor_state editor_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &editor_state));
+    EXPECT_STREQ(editor_state.world_name, "brush.editor_shell.target");
+    EXPECT_EQ(editor_state.source_path, nullptr);
+    EXPECT_FALSE(editor_state.dirty);
+    EXPECT_EQ(editor_state.revision, 0U);
+    EXPECT_EQ(editor_state.saved_revision, 0U);
 
     auto press_key = [&](SDL_Scancode scancode, Uint64 frame) {
         SDL_Event key{};
@@ -12508,6 +12538,13 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.element", ""), "brush.target.cube");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "commit translate #1");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.saved_revision", -1), 0);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &editor_state));
+    EXPECT_TRUE(editor_state.dirty);
+    EXPECT_EQ(editor_state.revision, 1U);
+    EXPECT_EQ(editor_state.saved_revision, 0U);
     EXPECT_NEAR(target_cube_min_y(), 0.35f, 0.001f);
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     ASSERT_TRUE(active_selection.has_bounds);
@@ -12584,15 +12621,25 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_NE(std::string(export_json).find("\"schema\": \"slayer3d.fragment.v0\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"material\": \"mat.editor.floor\""), std::string::npos);
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.export.size", 0), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 6);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.saved_revision", -1), 0);
 
     const std::filesystem::path export_dir = unique_test_dir("editor_brush_export");
     size_t saved_size = 0U;
     const std::filesystem::path saved_path = export_dir / "saved" / "world.fragment.json";
+    const std::string saved_path_string = saved_path.string();
     ASSERT_TRUE(slayer3d_game_data_save_brush_world_fragment_file(
-        runtime, "brush.editor_shell.target", saved_path.string().c_str(), &saved_size, error, sizeof(error)))
+        runtime, "brush.editor_shell.target", saved_path_string.c_str(), &saved_size, error, sizeof(error)))
         << error;
     EXPECT_GT(saved_size, 0U);
     EXPECT_TRUE(std::filesystem::exists(saved_path));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &editor_state));
+    EXPECT_FALSE(editor_state.dirty);
+    EXPECT_EQ(editor_state.revision, 6U);
+    EXPECT_EQ(editor_state.saved_revision, 6U);
+    ASSERT_NE(editor_state.source_path, nullptr);
+    EXPECT_EQ(std::string(editor_state.source_path), saved_path_string);
     write_text(export_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
     write_text(export_dir / "exported.game.json",
