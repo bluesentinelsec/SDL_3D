@@ -1528,8 +1528,6 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     position_offset.z +=
         slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_z_property", NULL), 0.0f);
     out_config->position = slayer3d_vec3_add(actor->position, position_offset);
-    if (particle_emitter_component_is_view_space(component))
-        out_config->position.z = -out_config->position.z;
     out_config->direction = json_vec3(component, "direction", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
     out_config->spread = json_float(component, "spread", 0.0f);
     out_config->speed_min = json_float(component, "speed_min", 0.0f);
