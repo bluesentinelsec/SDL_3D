@@ -8,6 +8,8 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
 - reusable `ui.panels` and `ui.inspectors` populated from scene state
 - a first blockout tool palette: `1` floor, `2` wall, `3` ceiling,
   `4` player start, then `Enter` to place the selected prefab
+- unified editable-level export: `S` publishes one fragment containing the
+  brush world and player starts
 
 Run it with:
 

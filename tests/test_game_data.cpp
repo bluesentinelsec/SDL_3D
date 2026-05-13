@@ -13887,11 +13887,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int ceiling_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.ceiling");
     const int player_start_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.player_start");
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
+    const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
     ASSERT_GE(floor_signal, 0);
     ASSERT_GE(wall_signal, 0);
     ASSERT_GE(ceiling_signal, 0);
     ASSERT_GE(player_start_signal, 0);
     ASSERT_GE(commit_signal, 0);
+    ASSERT_GE(export_signal, 0);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -13900,13 +13902,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
         return brush_world;
     };
-    auto latest_brush = [&]() -> const slayer3d_game_data_brush * {
-        slayer3d_game_data_brush_world brush_world = world();
-        if (brush_world.brush_count <= 0)
-            return nullptr;
-        return &brush_world.brushes[brush_world.brush_count - 1];
-    };
-
     EXPECT_EQ(world().brush_count, 1);
 
     slayer3d_signal_emit(bus, floor_signal, nullptr);
@@ -13917,10 +13912,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "floor prefab created");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""),
                  "brush.editor_shell.target.box.1");
-    ASSERT_NE(latest_brush(), nullptr);
-    EXPECT_STREQ(latest_brush()->faces[0].material_name, "mat.editor.floor");
-    EXPECT_NEAR(latest_brush()->bounds.min.y, -0.2f, 0.001f);
-    EXPECT_NEAR(latest_brush()->bounds.max.y, 0.0f, 0.001f);
+    slayer3d_game_data_brush_world brush_world = world();
+    ASSERT_GT(brush_world.brush_count, 0);
+    const slayer3d_game_data_brush *brush = &brush_world.brushes[brush_world.brush_count - 1];
+    EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.floor");
+    EXPECT_NEAR(brush->bounds.min.y, -0.2f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.y, 0.0f, 0.001f);
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
@@ -13929,10 +13926,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "wall prefab created");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""),
                  "brush.editor_shell.target.box.2");
-    ASSERT_NE(latest_brush(), nullptr);
-    EXPECT_STREQ(latest_brush()->faces[0].material_name, "mat.editor.wall");
-    EXPECT_NEAR(latest_brush()->bounds.min.x, 3.0f, 0.001f);
-    EXPECT_NEAR(latest_brush()->bounds.max.y, 2.5f, 0.001f);
+    brush_world = world();
+    ASSERT_GT(brush_world.brush_count, 0);
+    brush = &brush_world.brushes[brush_world.brush_count - 1];
+    EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.wall");
+    EXPECT_NEAR(brush->bounds.min.x, 3.0f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.y, 2.5f, 0.001f);
 
     slayer3d_signal_emit(bus, ceiling_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "ceiling");
@@ -13941,10 +13940,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "ceiling prefab created");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""),
                  "brush.editor_shell.target.box.3");
-    ASSERT_NE(latest_brush(), nullptr);
-    EXPECT_STREQ(latest_brush()->faces[0].material_name, "mat.editor.ceiling");
-    EXPECT_NEAR(latest_brush()->bounds.min.y, 2.5f, 0.001f);
-    EXPECT_NEAR(latest_brush()->bounds.max.y, 2.7f, 0.001f);
+    brush_world = world();
+    ASSERT_GT(brush_world.brush_count, 0);
+    brush = &brush_world.brushes[brush_world.brush_count - 1];
+    EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.ceiling");
+    EXPECT_NEAR(brush->bounds.min.y, 2.5f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.y, 2.7f, 0.001f);
     EXPECT_EQ(world().brush_count, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 3);
@@ -13965,6 +13966,72 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
+
+    slayer3d_signal_emit(bus, export_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.export.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.count", 0), 1);
+    const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
+    ASSERT_NE(export_json, nullptr);
+    EXPECT_NE(std::string(export_json).find("\"brush_worlds\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
+
+    const std::filesystem::path save_dir = unique_test_dir("editor_unified_level_save");
+    const std::filesystem::path saved_path = save_dir / "saved" / "editable_level.fragment.json";
+    size_t saved_size = 0U;
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
+        runtime, "brush.editor_shell.target", saved_path.string().c_str(), &saved_size, error, sizeof(error)))
+        << error;
+    EXPECT_GT(saved_size, 0U);
+    EXPECT_TRUE(std::filesystem::exists(saved_path));
+    slayer3d_game_data_brush_world_editor_state brush_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &brush_state));
+    EXPECT_FALSE(brush_state.dirty);
+    EXPECT_EQ(brush_state.revision, 3U);
+    EXPECT_EQ(brush_state.saved_revision, 3U);
+    ASSERT_NE(brush_state.source_path, nullptr);
+    EXPECT_EQ(std::string(brush_state.source_path), saved_path.string());
+    slayer3d_game_data_player_start_editor_state player_start_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_player_start_editor_state(runtime, &player_start_state));
+    EXPECT_FALSE(player_start_state.dirty);
+    EXPECT_EQ(player_start_state.revision, 1U);
+    EXPECT_EQ(player_start_state.saved_revision, 1U);
+    ASSERT_NE(player_start_state.source_path, nullptr);
+    EXPECT_EQ(std::string(player_start_state.source_path), saved_path.string());
+
+    write_text(save_dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.editor_shell.dojo" })json");
+    write_text(save_dir / "roundtrip.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "imports": [
+    {
+      "path": "saved/editable_level.fragment.json",
+      "sections": ["brush_worlds", "editor_player_starts"]
+    }
+  ],
+  "metadata": { "name": "Editor Unified Level Roundtrip" },
+  "world": { "name": "world.editor_unified_level_roundtrip", "kind": "brush" },
+  "scenes": { "initial": "scene.editor_shell.dojo", "files": ["scenes/play.scene.json"] }
+})json");
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((save_dir / "roundtrip.game.json").string().c_str(), roundtrip_session,
+                                             &roundtrip_runtime, error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world roundtrip_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor_shell.target", &roundtrip_world));
+    ASSERT_EQ(roundtrip_world.brush_count, 4);
+    EXPECT_STREQ(roundtrip_world.brushes[3].faces[0].material_name, "mat.editor.ceiling");
+    ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(roundtrip_runtime, "player_start.editor_shell", &start));
+    EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
+    remove_test_dir(save_dir);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

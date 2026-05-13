@@ -888,15 +888,28 @@ project pipeline can call `slayer3d_game_data_mark_brush_world_saved()` after
 their write commits. Authored game data does not get a direct arbitrary-file
 save action; file writes stay under editor host control.
 
+Use `editor.level.export` when the editable artifact needs both blockout brush
+geometry and test-run player starts. It serializes a single fragment containing
+the selected `brush_worlds` entry and the runtime `editor_player_starts`
+collection. Native editor hosts can call
+`slayer3d_game_data_export_editable_level_fragment_json()` or
+`slayer3d_game_data_save_editable_level_fragment_file()` for the same canonical
+JSON. A successful native save marks both the selected brush world and
+player-start collection clean at their current revisions. This is the preferred
+first milestone save path for blockout editors because reloading one fragment
+restores floors, walls, ceilings, face materials, and player starts together.
+
 ```json
 {
-  "type": "editor.brush_world.export",
+  "type": "editor.level.export",
   "world": "brush.level.blockout",
   "outputs": {
     "valid_key": "editor.export.valid",
     "message_key": "editor.export.message",
     "json_key": "editor.export.json",
-    "size_key": "editor.export.size"
+    "size_key": "editor.export.size",
+    "brush_revision_key": "editor.brush_world.revision",
+    "player_start_revision_key": "editor.player_start.revision"
   }
 }
 ```
