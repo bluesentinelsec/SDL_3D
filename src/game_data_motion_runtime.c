@@ -239,6 +239,115 @@ static void update_interactable_component(yyjson_val *component, slayer3d_regist
         slayer3d_properties_set_float(actor->props, cooldown_property, SDL_max(cooldown - dt, 0.0f));
 }
 
+static float approach_zero(float value, float amount)
+{
+    if (value > amount)
+        return value - amount;
+    if (value < -amount)
+        return value + amount;
+    return 0.0f;
+}
+
+static void update_viewmodel_bob_component(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                           slayer3d_registered_actor *actor, float dt)
+{
+    if (runtime == NULL || component == NULL || actor == NULL || actor->props == NULL || dt <= 0.0f)
+        return;
+
+    slayer3d_registered_actor *source = slayer3d_game_data_find_actor(runtime, json_string(component, "source", NULL));
+    if (source == NULL)
+        return;
+
+    const char *previous_property = json_string(component, "previous_position_property", "viewmodel_bob_source");
+    const char *phase_property = json_string(component, "phase_property", "viewmodel_bob_phase");
+    const char *x_property = json_string(component, "offset_x_property", "viewmodel_bob_x");
+    const char *y_property = json_string(component, "offset_y_property", "viewmodel_bob_y");
+    const char *z_property = json_string(component, "offset_z_property", "viewmodel_bob_z");
+    const char *pitch_property = json_string(component, "pitch_property", "viewmodel_bob_pitch");
+    const char *yaw_property = json_string(component, "yaw_property", "viewmodel_bob_yaw");
+    const char *roll_property = json_string(component, "roll_property", "viewmodel_bob_roll");
+    if (previous_property == NULL || previous_property[0] == '\0' || phase_property == NULL ||
+        phase_property[0] == '\0')
+    {
+        return;
+    }
+
+    const slayer3d_value *previous_value = slayer3d_properties_get_value(actor->props, previous_property);
+    if (previous_value == NULL || previous_value->type != SLAYER3D_VALUE_VEC3)
+    {
+        slayer3d_properties_set_vec3(actor->props, previous_property, source->position);
+        return;
+    }
+
+    const slayer3d_vec3 previous = previous_value->as_vec3;
+    const float dx = source->position.x - previous.x;
+    const float dz = source->position.z - previous.z;
+    const float horizontal_speed = SDL_sqrtf(dx * dx + dz * dz) / dt;
+    slayer3d_properties_set_vec3(actor->props, previous_property, source->position);
+
+    const float min_speed = SDL_max(json_float(component, "min_speed", 0.1f), 0.0f);
+    const float settle_rate = SDL_max(json_float(component, "settle_rate", 8.0f), 0.0f);
+    if (horizontal_speed < min_speed)
+    {
+        const float settle = settle_rate * dt;
+        if (x_property != NULL)
+            slayer3d_properties_set_float(
+                actor->props, x_property,
+                approach_zero(slayer3d_properties_get_float(actor->props, x_property, 0.0f), settle));
+        if (y_property != NULL)
+            slayer3d_properties_set_float(
+                actor->props, y_property,
+                approach_zero(slayer3d_properties_get_float(actor->props, y_property, 0.0f), settle));
+        if (z_property != NULL)
+            slayer3d_properties_set_float(
+                actor->props, z_property,
+                approach_zero(slayer3d_properties_get_float(actor->props, z_property, 0.0f), settle));
+        if (pitch_property != NULL)
+            slayer3d_properties_set_float(
+                actor->props, pitch_property,
+                approach_zero(slayer3d_properties_get_float(actor->props, pitch_property, 0.0f), settle));
+        if (yaw_property != NULL)
+            slayer3d_properties_set_float(
+                actor->props, yaw_property,
+                approach_zero(slayer3d_properties_get_float(actor->props, yaw_property, 0.0f), settle));
+        if (roll_property != NULL)
+            slayer3d_properties_set_float(
+                actor->props, roll_property,
+                approach_zero(slayer3d_properties_get_float(actor->props, roll_property, 0.0f), settle));
+        return;
+    }
+
+    const float frequency = SDL_max(json_float(component, "frequency", 9.0f), 0.0f);
+    const float speed_scale = SDL_max(json_float(component, "speed_scale", 0.2f), 0.0f);
+    float phase = slayer3d_properties_get_float(actor->props, phase_property, 0.0f) +
+                  frequency * SDL_min(horizontal_speed * speed_scale, 2.5f) * dt;
+    const float two_pi = 6.28318530717958647692f;
+    if (phase > two_pi || phase < -two_pi)
+        phase = SDL_fmodf(phase, two_pi);
+    slayer3d_properties_set_float(actor->props, phase_property, phase);
+
+    const slayer3d_vec3 offset_amplitude =
+        json_vec3(component, "offset_amplitude", slayer3d_vec3_make(0.015f, 0.025f, 0.006f));
+    const float pitch_amplitude = json_float(component, "pitch_amplitude", 0.008f);
+    const float yaw_amplitude = json_float(component, "yaw_amplitude", 0.0f);
+    const float roll_amplitude = json_float(component, "roll_amplitude", 0.012f);
+    const float horizontal = SDL_sinf(phase);
+    const float vertical = SDL_fabsf(SDL_sinf(phase + SDL_PI_F * 0.5f));
+
+    if (x_property != NULL)
+        slayer3d_properties_set_float(actor->props, x_property, offset_amplitude.x * horizontal);
+    if (y_property != NULL)
+        slayer3d_properties_set_float(actor->props, y_property, offset_amplitude.y * vertical);
+    if (z_property != NULL)
+        slayer3d_properties_set_float(actor->props, z_property, offset_amplitude.z * SDL_cosf(phase));
+    if (pitch_property != NULL)
+        slayer3d_properties_set_float(actor->props, pitch_property, pitch_amplitude * SDL_cosf(phase));
+    if (yaw_property != NULL)
+        slayer3d_properties_set_float(actor->props, yaw_property, yaw_amplitude * horizontal);
+    if (roll_property != NULL)
+        slayer3d_properties_set_float(actor->props, roll_property, roll_amplitude * horizontal);
+}
+
 void update_control_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt)
 {
     slayer3d_input_manager *input = runtime_input(runtime);
@@ -589,6 +698,10 @@ void update_motion_components(slayer3d_game_data_runtime *runtime, yyjson_val *r
                     if (angle > two_pi || angle < -two_pi)
                         angle = SDL_fmodf(angle, two_pi);
                     slayer3d_properties_set_float(actor->props, property, angle);
+                }
+                else if (SDL_strcmp(type, "viewmodel.bob") == 0)
+                {
+                    update_viewmodel_bob_component(runtime, component, actor, dt);
                 }
                 else if (SDL_strcmp(type, "status_effect.timer") == 0)
                 {

@@ -130,6 +130,8 @@ struct RenderPrimitiveCapture
     bool saw_brush_robot_sprite = false;
     bool saw_brush_health_sprite = false;
     int brush_player_capsules = 0;
+    bool saw_viewmodel_bob_cube = false;
+    slayer3d_vec3 viewmodel_bob_position{};
 };
 
 struct SectorLevelInstanceCapture
@@ -1463,6 +1465,11 @@ bool capture_render_primitive(void *userdata, const slayer3d_game_data_render_pr
         capture->doom_robot_sprites++;
     if (entity_name.rfind("entity.doom.health.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_SPRITE)
         capture->doom_health_sprites++;
+    if (entity_name == "entity.viewmodel" && primitive->type == SLAYER3D_GAME_DATA_RENDER_CUBE)
+    {
+        capture->saw_viewmodel_bob_cube = true;
+        capture->viewmodel_bob_position = primitive->position;
+    }
     if (entity_name.rfind("entity.doom.crate.", 0) == 0 && primitive->type == SLAYER3D_GAME_DATA_RENDER_CUBE)
     {
         capture->doom_crates++;
@@ -8075,6 +8082,9 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const float recoil_y = slayer3d_properties_get_float(revolver->props, "gun_recoil_y", 0.0f);
     const float recoil_z = slayer3d_properties_get_float(revolver->props, "gun_recoil_z", 0.0f);
     const float recoil_pitch = slayer3d_properties_get_float(revolver->props, "gun_recoil_pitch", 0.0f);
+    const float intro_y = slayer3d_properties_get_float(revolver->props, "gun_intro_y", 0.0f);
+    const float intro_z = slayer3d_properties_get_float(revolver->props, "gun_intro_z", 0.0f);
+    const float intro_pitch = slayer3d_properties_get_float(revolver->props, "gun_intro_pitch", 0.0f);
     EXPECT_GT(recoil_y, 0.0f);
     EXPECT_LT(recoil_z, 0.0f);
     EXPECT_GT(recoil_pitch, 0.0f);
@@ -8098,12 +8108,13 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_revolver_recoil, &recoil_capture));
     EXPECT_TRUE(recoil_capture.saw);
     EXPECT_NEAR(recoil_capture.position.x, slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.0001f);
-    EXPECT_NEAR(recoil_capture.position.y, slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f) + recoil_y,
-                0.0001f);
-    EXPECT_NEAR(recoil_capture.position.z, slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f) + recoil_z,
-                0.0001f);
+    EXPECT_NEAR(recoil_capture.position.y,
+                slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f) + intro_y + recoil_y, 0.0001f);
+    EXPECT_NEAR(recoil_capture.position.z,
+                slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f) + intro_z + recoil_z, 0.0001f);
     EXPECT_NEAR(recoil_capture.rotation.x,
-                slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f) + recoil_pitch, 0.0001f);
+                slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f) + intro_pitch + recoil_pitch,
+                0.0001f);
     ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.03f));
     ASSERT_TRUE(slayer3d_game_data_update_animations(runtime, 0.1f));
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_recoil_y", 1.0f), 0.0f, 0.0001f);
@@ -11778,6 +11789,108 @@ return rules
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_col", -1), 3);
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "grid_row", -1), 1);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ViewmodelBobComposesWithAdditiveRenderProperties)
+{
+    const std::filesystem::path dir = unique_test_dir("viewmodel_bob");
+    write_text(dir / "viewmodel_bob.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Viewmodel Bob", "id": "test.viewmodel_bob", "version": "0.1.0" },
+  "world": { "name": "world.viewmodel_bob", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.player",
+      "active": true,
+      "transform": { "position": [0.0, 0.0, 0.0] }
+    },
+    {
+      "name": "entity.viewmodel",
+      "active": true,
+      "properties": {
+        "bob_source": { "type": "vec3", "value": [0.0, 0.0, 0.0] },
+        "bob_phase": { "type": "float", "value": 0.0 },
+        "bob_x": { "type": "float", "value": 0.0 },
+        "bob_y": { "type": "float", "value": 0.0 },
+        "bob_z": { "type": "float", "value": 0.0 },
+        "bob_pitch": { "type": "float", "value": 0.0 },
+        "bob_yaw": { "type": "float", "value": 0.0 },
+        "bob_roll": { "type": "float", "value": 0.0 },
+        "recoil_x": { "type": "float", "value": 0.25 },
+        "recoil_y": { "type": "float", "value": -0.1 },
+        "recoil_z": { "type": "float", "value": 0.05 }
+      },
+      "components": [
+        {
+          "type": "viewmodel.bob",
+          "source": "entity.player",
+          "previous_position_property": "bob_source",
+          "phase_property": "bob_phase",
+          "offset_x_property": "bob_x",
+          "offset_y_property": "bob_y",
+          "offset_z_property": "bob_z",
+          "pitch_property": "bob_pitch",
+          "yaw_property": "bob_yaw",
+          "roll_property": "bob_roll",
+          "offset_amplitude": [0.05, 0.1, 0.025],
+          "frequency": 8.0,
+          "speed_scale": 0.25,
+          "min_speed": 0.01
+        },
+        {
+          "type": "render.cube",
+          "offset": [1.0, 2.0, 3.0],
+          "offset_x_add_properties": ["recoil_x", "bob_x"],
+          "offset_y_add_properties": ["recoil_y", "bob_y"],
+          "offset_z_add_properties": ["recoil_z", "bob_z"],
+          "size": [0.1, 0.1, 0.1]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(
+        dir / "scenes" / "play.scene.json",
+        R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.player", "entity.viewmodel"] })json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "viewmodel_bob.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    slayer3d_registered_actor *viewmodel = slayer3d_game_data_find_actor(runtime, "entity.viewmodel");
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(viewmodel, nullptr);
+
+    player->position = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.1f));
+    EXPECT_GT(slayer3d_properties_get_float(viewmodel->props, "bob_phase", 0.0f), 0.0f);
+    EXPECT_NE(slayer3d_properties_get_float(viewmodel->props, "bob_y", 0.0f), 0.0f);
+
+    RenderPrimitiveCapture render{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, capture_render_primitive, &render));
+    EXPECT_TRUE(render.saw_viewmodel_bob_cube);
+    EXPECT_NEAR(render.viewmodel_bob_position.x,
+                1.0f + 0.25f + slayer3d_properties_get_float(viewmodel->props, "bob_x", 0.0f), 0.0001f);
+    EXPECT_NEAR(render.viewmodel_bob_position.y,
+                2.0f - 0.1f + slayer3d_properties_get_float(viewmodel->props, "bob_y", 0.0f), 0.0001f);
+    EXPECT_NEAR(render.viewmodel_bob_position.z,
+                3.0f + 0.05f + slayer3d_properties_get_float(viewmodel->props, "bob_z", 0.0f), 0.0001f);
+
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 1.0f));
+    EXPECT_NEAR(slayer3d_properties_get_float(viewmodel->props, "bob_x", 99.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(viewmodel->props, "bob_y", 99.0f), 0.0f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(viewmodel->props, "bob_z", 99.0f), 0.0f, 0.0001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

@@ -2055,6 +2055,14 @@ Reusable components include:
   opposite bound. This is intended for parallax panels, repeating stars, clouds,
   conveyor belts, and similar backgrounds.
 - `motion.oscillate` and `motion.spin`: simple authored movement effects.
+- `viewmodel.bob`: writes additive first-person viewmodel offset/rotation
+  properties by measuring movement of a source actor. Use it for weapon sway or
+  walk bob without coupling the effect to a specific FPS controller. The
+  component stores the source actor's previous position in
+  `previous_position_property`, advances `phase_property` while the actor moves,
+  and writes configured output properties such as `offset_y_property` and
+  `roll_property`. `offset_amplitude`, `frequency`, `speed_scale`,
+  `min_speed`, and `settle_rate` tune the feel.
 - `light.point`, `light.spot`, and `light.directional`: actor-attached light
   components. They work on static actors and active pooled actors. Component
   lights inherit the actor transform and may use an `offset`. `enabled` defaults
@@ -2147,8 +2155,11 @@ Reusable components include:
   Additive placement and rotation fields (`offset_x_add_property`,
   `offset_y_add_property`, `offset_z_add_property`, `pitch_add_property`,
   `yaw_add_property`, `roll_add_property`) are evaluated on top of those base
-  values. Use them for transient effects such as weapon recoil so placement
-  tuning can remain stable while animation properties move the viewmodel.
+  values. The plural forms (`offset_x_add_properties`,
+  `offset_y_add_properties`, `offset_z_add_properties`,
+  `pitch_add_properties`, `yaw_add_properties`, `roll_add_properties`) sum
+  multiple additive properties, which lets authored effects such as recoil,
+  pickup easing, and walk bob compose without mutating the base placement.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets

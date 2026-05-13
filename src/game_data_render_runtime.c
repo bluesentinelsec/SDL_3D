@@ -1195,7 +1195,44 @@ static slayer3d_vec3 render_component_offset(const slayer3d_registered_actor *ac
         offset.y += slayer3d_properties_get_float(actor->props, y_add_property, 0.0f);
     if (z_add_property != NULL)
         offset.z += slayer3d_properties_get_float(actor->props, z_add_property, 0.0f);
+    yyjson_val *x_add_properties = obj_get(component, "offset_x_add_properties");
+    for (size_t i = 0; yyjson_is_arr(x_add_properties) && i < yyjson_arr_size(x_add_properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(x_add_properties, i);
+        if (yyjson_is_str(property))
+            offset.x += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
+    yyjson_val *y_add_properties = obj_get(component, "offset_y_add_properties");
+    for (size_t i = 0; yyjson_is_arr(y_add_properties) && i < yyjson_arr_size(y_add_properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(y_add_properties, i);
+        if (yyjson_is_str(property))
+            offset.y += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
+    yyjson_val *z_add_properties = obj_get(component, "offset_z_add_properties");
+    for (size_t i = 0; yyjson_is_arr(z_add_properties) && i < yyjson_arr_size(z_add_properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(z_add_properties, i);
+        if (yyjson_is_str(property))
+            offset.z += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
     return offset;
+}
+
+static float render_component_property_list_sum(const slayer3d_registered_actor *actor, yyjson_val *component,
+                                                const char *field)
+{
+    if (actor == NULL || actor->props == NULL || component == NULL || field == NULL)
+        return 0.0f;
+    float sum = 0.0f;
+    yyjson_val *properties = obj_get(component, field);
+    for (size_t i = 0; yyjson_is_arr(properties) && i < yyjson_arr_size(properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(properties, i);
+        if (yyjson_is_str(property))
+            sum += slayer3d_properties_get_float(actor->props, yyjson_get_str(property), 0.0f);
+    }
+    return sum;
 }
 
 static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runtime,
@@ -1364,6 +1401,9 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
                 primitive.euler_rotation.y += slayer3d_properties_get_float(actor->props, yaw_add_property, 0.0f);
             if (roll_add_property != NULL)
                 primitive.euler_rotation.z += slayer3d_properties_get_float(actor->props, roll_add_property, 0.0f);
+            primitive.euler_rotation.x += render_component_property_list_sum(actor, component, "pitch_add_properties");
+            primitive.euler_rotation.y += render_component_property_list_sum(actor, component, "yaw_add_properties");
+            primitive.euler_rotation.z += render_component_property_list_sum(actor, component, "roll_add_properties");
             primitive.animation_clip = json_int(component, "animation_clip", -1);
             primitive.animation_time = json_float(component, "animation_time", 0.0f);
             primitive.animation_loop = json_bool(component, "animation_loop", true);

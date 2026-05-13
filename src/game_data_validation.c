@@ -2891,6 +2891,7 @@ static bool is_supported_component_type(const char *type)
         "render.sphere",
         "render.sprite",
         "status_effect.timer",
+        "viewmodel.bob",
         "weapon.projectile",
         "weapon.state",
     };
@@ -3048,6 +3049,23 @@ static bool validate_render_camera_visibility_field(validation_context *ctx, yyj
             return validation_error(ctx, path, "render primitive camera visibility must contain camera names");
         if (!require_ref(ctx, &names->cameras, "camera", yyjson_get_str(entry), path))
             return false;
+    }
+    return true;
+}
+
+static bool validate_property_name_array_field(validation_context *ctx, yyjson_val *component, const char *path,
+                                               const char *field, const char *label)
+{
+    yyjson_val *value = obj_get(component, field);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) == 0)
+        return validation_error(ctx, path, "%s must be a non-empty string array", label);
+    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, i);
+        if (!yyjson_is_str(entry) || yyjson_get_str(entry)[0] == '\0')
+            return validation_error(ctx, path, "%s arrays must contain non-empty strings", label);
     }
     return true;
 }
@@ -5884,6 +5902,14 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     if (offset_property != NULL && !is_non_empty_string(component, offset_properties[i]))
                         return validation_error(ctx, path, "render primitive offset property must be non-empty");
                 }
+                const char *offset_property_arrays[] = {"offset_x_add_properties", "offset_y_add_properties",
+                                                        "offset_z_add_properties"};
+                for (size_t i = 0; i < SDL_arraysize(offset_property_arrays); ++i)
+                {
+                    if (!validate_property_name_array_field(ctx, component, path, offset_property_arrays[i],
+                                                            "render primitive offset property arrays"))
+                        return false;
+                }
                 if (!validate_render_camera_visibility_field(ctx, component, path, names, "visible_to_cameras") ||
                     !validate_render_camera_visibility_field(ctx, component, path, names, "hidden_from_cameras"))
                 {
@@ -5968,6 +5994,14 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                         if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
                             return validation_error(ctx, path, "render.model property fields must be non-empty");
                     }
+                    const char *property_arrays[] = {"pitch_add_properties", "yaw_add_properties",
+                                                     "roll_add_properties"};
+                    for (size_t property_index = 0; property_index < SDL_arraysize(property_arrays); ++property_index)
+                    {
+                        if (!validate_property_name_array_field(ctx, component, path, property_arrays[property_index],
+                                                                "render.model property arrays"))
+                            return false;
+                    }
                     yyjson_val *animation_clip = obj_get(component, "animation_clip");
                     if (animation_clip != NULL &&
                         (!yyjson_is_int(animation_clip) || yyjson_get_int(animation_clip) < 0))
@@ -5982,6 +6016,37 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     yyjson_val *animation_loop = obj_get(component, "animation_loop");
                     if (animation_loop != NULL && !yyjson_is_bool(animation_loop))
                         return validation_error(ctx, path, "render.model animation_loop must be a boolean");
+                }
+            }
+            else if (SDL_strcmp(type, "viewmodel.bob") == 0)
+            {
+                if (!require_actor_ref(ctx, names, json_string(component, "source"), path))
+                    return false;
+                const char *property_fields[] = {
+                    "previous_position_property", "phase_property", "offset_x_property", "offset_y_property",
+                    "offset_z_property",          "pitch_property", "yaw_property",      "roll_property"};
+                for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
+                {
+                    yyjson_val *property = obj_get(component, property_fields[property_index]);
+                    if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
+                        return validation_error(ctx, path, "viewmodel.bob property fields must be non-empty");
+                }
+                yyjson_val *offset_amplitude = obj_get(component, "offset_amplitude");
+                if (offset_amplitude != NULL && !is_vec_array(offset_amplitude, 3))
+                    return validation_error(ctx, path, "viewmodel.bob offset_amplitude must be a vec3");
+                const char *non_negative[] = {"frequency", "speed_scale", "min_speed", "settle_rate"};
+                for (size_t tuning_index = 0; tuning_index < SDL_arraysize(non_negative); ++tuning_index)
+                {
+                    yyjson_val *value = obj_get(component, non_negative[tuning_index]);
+                    if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+                        return validation_error(ctx, path, "viewmodel.bob numeric tuning values must be non-negative");
+                }
+                const char *numeric[] = {"pitch_amplitude", "yaw_amplitude", "roll_amplitude"};
+                for (size_t tuning_index = 0; tuning_index < SDL_arraysize(numeric); ++tuning_index)
+                {
+                    yyjson_val *value = obj_get(component, numeric[tuning_index]);
+                    if (value != NULL && !yyjson_is_num(value))
+                        return validation_error(ctx, path, "viewmodel.bob angular amplitudes must be numbers");
                 }
             }
         }
@@ -6483,6 +6548,16 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                     if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
                         return validation_error(ctx, component_path, "render.model property fields must be non-empty");
                 }
+                const char *property_arrays[] = {"offset_x_add_properties", "offset_y_add_properties",
+                                                 "offset_z_add_properties", "pitch_add_properties",
+                                                 "yaw_add_properties",      "roll_add_properties"};
+                for (size_t property_index = 0; property_index < SDL_arraysize(property_arrays); ++property_index)
+                {
+                    if (!validate_property_name_array_field(ctx, component, component_path,
+                                                            property_arrays[property_index],
+                                                            "render.model property arrays"))
+                        return false;
+                }
                 yyjson_val *animation_clip = obj_get(component, "animation_clip");
                 if (animation_clip != NULL && (!yyjson_is_int(animation_clip) || yyjson_get_int(animation_clip) < 0))
                     return validation_error(ctx, component_path,
@@ -6497,6 +6572,39 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *animation_loop = obj_get(component, "animation_loop");
                 if (animation_loop != NULL && !yyjson_is_bool(animation_loop))
                     return validation_error(ctx, component_path, "render.model animation_loop must be a boolean");
+            }
+            else if (SDL_strcmp(type, "viewmodel.bob") == 0)
+            {
+                if (!require_actor_ref(ctx, names, json_string(component, "source"), component_path))
+                    return false;
+                const char *property_fields[] = {
+                    "previous_position_property", "phase_property", "offset_x_property", "offset_y_property",
+                    "offset_z_property",          "pitch_property", "yaw_property",      "roll_property"};
+                for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
+                {
+                    yyjson_val *property = obj_get(component, property_fields[property_index]);
+                    if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
+                        return validation_error(ctx, component_path, "viewmodel.bob property fields must be non-empty");
+                }
+                yyjson_val *offset_amplitude = obj_get(component, "offset_amplitude");
+                if (offset_amplitude != NULL && !is_vec_array(offset_amplitude, 3))
+                    return validation_error(ctx, component_path, "viewmodel.bob offset_amplitude must be a vec3");
+                const char *non_negative[] = {"frequency", "speed_scale", "min_speed", "settle_rate"};
+                for (size_t bob_tuning_index = 0; bob_tuning_index < SDL_arraysize(non_negative); ++bob_tuning_index)
+                {
+                    yyjson_val *value = obj_get(component, non_negative[bob_tuning_index]);
+                    if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
+                        return validation_error(ctx, component_path,
+                                                "viewmodel.bob numeric tuning values must be non-negative");
+                }
+                const char *numeric[] = {"pitch_amplitude", "yaw_amplitude", "roll_amplitude"};
+                for (size_t bob_tuning_index = 0; bob_tuning_index < SDL_arraysize(numeric); ++bob_tuning_index)
+                {
+                    yyjson_val *value = obj_get(component, numeric[bob_tuning_index]);
+                    if (value != NULL && !yyjson_is_num(value))
+                        return validation_error(ctx, component_path,
+                                                "viewmodel.bob angular amplitudes must be numbers");
+                }
             }
         }
     }
