@@ -9,14 +9,15 @@
     {
       "name": "entity.brush_geometry.revolver_viewmodel",
       "id": 810,
+      "active": false,
       "position": [0.0, 0.0, 0.0],
       "properties": {
-        "gun_x": { "type": "float", "value": 0.28 },
-        "gun_y": { "type": "float", "value": -0.24 },
+        "gun_x": { "type": "float", "value": 0.06 },
+        "gun_y": { "type": "float", "value": -0.3 },
         "gun_z": { "type": "float", "value": 0.58 },
-        "gun_scale": { "type": "float", "value": 0.16 },
-        "gun_pitch": { "type": "float", "value": 0.0 },
-        "gun_yaw": { "type": "float", "value": 0.0 },
+        "gun_scale": { "type": "float", "value": 0.25 },
+        "gun_pitch": { "type": "float", "value": -0.05 },
+        "gun_yaw": { "type": "float", "value": -0.125 },
         "gun_roll": { "type": "float", "value": 0.0 }
       },
       "components": [
@@ -41,6 +42,38 @@
         "category": "weapons",
         "preview": { "primitive": "cube", "color": [60, 210, 120, 255] },
         "tags": ["weapon", "debug_tuning"]
+      }
+    },
+    {
+      "name": "entity.brush_geometry.revolver_pickup",
+      "id": 811,
+      "active": true,
+      "tags": ["pickup", "weapon_pickup"],
+      "transform": { "position": [2.0, 0.6, 10.0] },
+      "properties": {
+        "pickup_available": { "type": "bool", "value": true },
+        "pickup_respawn_remaining": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "render.model",
+          "model": "model.brush_geometry.revolver",
+          "scale": [0.45, 0.45, 0.45],
+          "rotation": [0.0, 1.5707964, 0.0],
+          "lighting": true
+        },
+        {
+          "type": "light.point",
+          "color": [0.25, 0.95, 0.42],
+          "intensity": 1.3,
+          "range": 4.0
+        }
+      ],
+      "editor": {
+        "display_name": "Revolver Pickup",
+        "category": "weapons",
+        "preview": { "primitive": "cube", "color": [70, 250, 110, 255] },
+        "tags": ["weapon", "pickup"]
       }
     }
   ]

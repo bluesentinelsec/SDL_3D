@@ -1,0 +1,97 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "signals": [
+    "signal.brush_geometry.revolver.fire"
+  ],
+  "logic": {
+    "sensors": [
+      {
+        "name": "sensor.brush_geometry.revolver.pickup",
+        "type": "sensor.volume",
+        "actor": "entity.brush_geometry.player",
+        "min": [1.3, 0.0, 9.3],
+        "max": [2.7, 2.0, 10.7],
+        "edge": "enter",
+        "actions": [
+          {
+            "type": "pickup.collect",
+            "target_from_payload": "actor_name",
+            "pickup": "entity.brush_geometry.revolver_pickup",
+            "resources": [
+              { "resource": "revolver", "amount": 1.0, "max": 1.0 }
+            ]
+          },
+          { "type": "entity.set_active", "target": "entity.brush_geometry.revolver_viewmodel", "active": true }
+        ]
+      },
+      {
+        "name": "sensor.brush_geometry.revolver.fire",
+        "type": "sensor.input_pressed",
+        "action": "action.fire",
+        "on_pressed": "signal.brush_geometry.revolver.fire"
+      }
+    ],
+    "bindings": [
+      {
+        "signal": "signal.brush_geometry.revolver.fire",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.brush_geometry.player",
+              "key": "revolver",
+              "op": ">",
+              "value": 0
+            },
+            "then": [
+              {
+                "type": "weapon.hitscan",
+                "target": "entity.brush_geometry.player",
+                "trace_brush_worlds": true,
+                "brush_contents_mask": ["solid", "projectile_clip"],
+                "direction_from_property": "camera_forward",
+                "directional_offset": { "property": "camera_forward", "distance": 0.75 },
+                "range": 80.0,
+                "cooldown_property": "fire_timer",
+                "cooldown": 0.18,
+                "run_actions_on_miss": true,
+                "actions": [
+                  {
+                    "type": "actor.spawn",
+                    "pool": "pool.brush_geometry.revolver_muzzle_flashes",
+                    "position_from_payload": "origin"
+                  },
+                  {
+                    "type": "actor.spawn",
+                    "pool": "pool.brush_geometry.revolver_smoke",
+                    "position_from_payload": "origin"
+                  },
+                  {
+                    "type": "actor.spawn",
+                    "pool": "pool.brush_geometry.revolver_tracers",
+                    "position_from_payload": "origin",
+                    "velocity_from_payload": "direction",
+                    "speed": 78.0
+                  },
+                  {
+                    "type": "actor.spawn",
+                    "pool": "pool.brush_geometry.revolver_impact_decals",
+                    "position_from_payload": "hit_position",
+                    "payload_directional_offset": { "property": "hit_normal", "distance": 0.035 }
+                  },
+                  {
+                    "type": "property.set",
+                    "target": "entity.brush_geometry.player",
+                    "key": "last_revolver_hit_distance",
+                    "value_from_payload": "hit_distance"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

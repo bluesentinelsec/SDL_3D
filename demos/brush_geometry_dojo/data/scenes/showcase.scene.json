@@ -7,6 +7,7 @@
   "entities": [
     "entity.brush_geometry.player",
     "entity.brush_geometry.revolver_viewmodel",
+    "entity.brush_geometry.revolver_pickup",
     "entity.brush_geometry.visible_target",
     "entity.brush_geometry.occluded_target",
     "entity.brush_geometry.zombie",

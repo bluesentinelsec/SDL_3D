@@ -7748,6 +7748,15 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *from_payload = obj_get(action, "from_payload");
         if (from_payload != NULL && (!yyjson_is_str(from_payload) || yyjson_get_str(from_payload)[0] == '\0'))
             return validation_error(ctx, json_path, "actor.spawn from_payload must be a non-empty string");
+        yyjson_val *position = obj_get(action, "position");
+        if (position != NULL && !is_vec_array(position, 3))
+            return validation_error(ctx, json_path, "actor.spawn position must be a vec3");
+        yyjson_val *position_from_payload = obj_get(action, "position_from_payload");
+        if (position_from_payload != NULL &&
+            (!yyjson_is_str(position_from_payload) || yyjson_get_str(position_from_payload)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path, "actor.spawn position_from_payload must be a non-empty string");
+        }
         yyjson_val *offset = obj_get(action, "offset");
         if (offset != NULL && !is_vec_array(offset, 3))
             return validation_error(ctx, json_path, "actor.spawn offset must be a vec3");
@@ -7764,6 +7773,33 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             if (!yyjson_is_num(distance))
                 return validation_error(ctx, json_path, "actor.spawn directional_offset distance must be numeric");
         }
+        yyjson_val *payload_directional_offset = obj_get(action, "payload_directional_offset");
+        if (payload_directional_offset != NULL)
+        {
+            if (!yyjson_is_obj(payload_directional_offset))
+                return validation_error(ctx, json_path, "actor.spawn payload_directional_offset must be an object");
+            yyjson_val *property = obj_get(payload_directional_offset, "property");
+            yyjson_val *distance = obj_get(payload_directional_offset, "distance");
+            if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+                return validation_error(ctx, json_path,
+                                        "actor.spawn payload_directional_offset property must be a non-empty string");
+            if (!yyjson_is_num(distance))
+                return validation_error(ctx, json_path,
+                                        "actor.spawn payload_directional_offset distance must be numeric");
+        }
+        yyjson_val *velocity_from_payload = obj_get(action, "velocity_from_payload");
+        if (velocity_from_payload != NULL &&
+            (!yyjson_is_str(velocity_from_payload) || yyjson_get_str(velocity_from_payload)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path, "actor.spawn velocity_from_payload must be a non-empty string");
+        }
+        yyjson_val *velocity_property = obj_get(action, "velocity_property");
+        if (velocity_property != NULL &&
+            (!yyjson_is_str(velocity_property) || yyjson_get_str(velocity_property)[0] == '\0'))
+            return validation_error(ctx, json_path, "actor.spawn velocity_property must be a non-empty string");
+        yyjson_val *speed = obj_get(action, "speed");
+        if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
+            return validation_error(ctx, json_path, "actor.spawn speed must be non-negative");
         yyjson_val *properties = obj_get(action, "properties");
         if (properties != NULL && !yyjson_is_obj(properties))
             return validation_error(ctx, json_path, "actor.spawn properties must be an object");

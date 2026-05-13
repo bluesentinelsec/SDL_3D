@@ -1849,10 +1849,17 @@ geometry, and light shape. Use this for files such as
 `world/e1m1.lights.json`. Keep each fragment logically cohesive; do not scatter
 one room across unrelated files unless an editor owns that layout.
 
-`actor.spawn` and `actor.despawn` can also resolve actors from payload fields:
+`actor.spawn` and `actor.despawn` can also resolve actors from payload fields.
+Use `position_from_payload` for payload Vec3 positions such as hitscan
+`origin` or `hit_position`, and `payload_directional_offset` to push the spawn
+point along a payload Vec3 such as `hit_normal`. `velocity_from_payload` reads a
+payload Vec3 direction, normalizes it, multiplies by `speed`, and writes it to
+`velocity` or `velocity_property` on the spawned actor:
 
 ```json
 { "type": "actor.spawn", "pool": "pool.explosions", "from_payload": "other_actor_name" }
+{ "type": "actor.spawn", "pool": "pool.tracers", "position_from_payload": "origin", "velocity_from_payload": "direction", "speed": 80.0 }
+{ "type": "actor.spawn", "pool": "pool.decals", "position_from_payload": "hit_position", "payload_directional_offset": { "property": "hit_normal", "distance": 0.03 } }
 { "type": "actor.despawn", "target_from_payload": "actor_name" }
 ```
 
@@ -2510,6 +2517,11 @@ Author a `pickup.respawn` component on the pickup actor when it should become
 active again after `pickup_respawn_remaining` reaches zero. This component runs
 for inactive actors in the active scene, so respawned pickups do not require Lua
 polling.
+
+Weapon pickups are ordinary resource pickups. A firearm pickup can grant a
+resource such as `revolver`, enable a camera-space `render.model` viewmodel with
+`entity.set_active`, and use a `weapon.hitscan` action to spawn pooled muzzle,
+smoke, tracer, and impact actors from the hitscan payload.
 
 Resource stations are reusable actors such as health fountains, ammo terminals,
 and recharge pads. `resource.station.use` grants resources if the station has
