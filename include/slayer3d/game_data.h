@@ -1956,6 +1956,31 @@ extern "C"
                                              const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,
                                              size_t out_brush_name_size, char *error_buffer, int error_buffer_size);
 
+    /** @brief Descriptor for resizing one brush face plane. */
+    typedef struct slayer3d_game_data_resize_brush_face_desc
+    {
+        /** @brief Target brush world name. Required. */
+        const char *world_name;
+        /** @brief Target brush name. Required. */
+        const char *brush_name;
+        /** @brief Zero-based face index on the target brush. */
+        int face_index;
+        /** @brief Signed face-plane distance. Positive expands the brush outward. */
+        float distance;
+    } slayer3d_game_data_resize_brush_face_desc;
+
+    /**
+     * @brief Move one brush face plane along its normal.
+     *
+     * Positive distances grow the brush outward along the selected face normal;
+     * negative distances shrink it. The operation rebuilds brush collision and
+     * render data before committing and rolls back if the result is invalid.
+     * Success marks the brush world dirty and increments its editor revision.
+     */
+    bool slayer3d_game_data_resize_brush_face(slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_resize_brush_face_desc *desc, char *error_buffer,
+                                              int error_buffer_size);
+
     /**
      * @brief Iterate data-authored editor debug primitives for the active scene.
      *

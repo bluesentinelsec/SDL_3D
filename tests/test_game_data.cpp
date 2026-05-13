@@ -8282,7 +8282,8 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     SDL_zeroa(error);
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_preview_action.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
-    EXPECT_NE(std::string(error).find("editor.command.preview command must be"), std::string::npos) << error;
+    EXPECT_NE(std::string(error).find("editor.command.preview resize/extrude target must be face"), std::string::npos)
+        << error;
 
     write_text(dir / "bad_paint_preview_action.game.json",
                R"json({
@@ -12475,6 +12476,27 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     EXPECT_EQ(editor_state.revision, 2U);
     EXPECT_EQ(editor_state.saved_revision, 0U);
 
+    slayer3d_game_data_resize_brush_face_desc resize_desc{};
+    resize_desc.world_name = "brush.editor.level";
+    resize_desc.brush_name = "brush.created.wall";
+    resize_desc.face_index = 0;
+    resize_desc.distance = 0.75f;
+    ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize_desc, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_EQ(world.brush_count, 3);
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 4.75f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_EQ(editor_state.revision, 3U);
+
+    resize_desc.face_index = 1;
+    resize_desc.distance = -3.0f;
+    EXPECT_FALSE(slayer3d_game_data_resize_brush_face(runtime, &resize_desc, error, sizeof(error)));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 4.75f, 0.001f);
+    EXPECT_NEAR(world.brushes[1].bounds.min.x, 2.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_EQ(editor_state.revision, 3U);
+
     char *export_json = nullptr;
     size_t export_size = 0U;
     ASSERT_TRUE(slayer3d_game_data_export_brush_world_fragment_json(runtime, "brush.editor.level", &export_json,
@@ -12503,11 +12525,200 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor.level", &roundtrip_world));
     ASSERT_EQ(roundtrip_world.brush_count, 3);
     EXPECT_STREQ(roundtrip_world.brushes[1].name, "brush.created.wall");
+    EXPECT_NEAR(roundtrip_world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     EXPECT_STREQ(roundtrip_world.brushes[2].name, "brush.editor.level.box.1");
     EXPECT_STREQ(roundtrip_world.brushes[2].faces[0].material_name, "mat.floor");
 
     slayer3d_game_data_destroy(roundtrip_runtime);
     slayer3d_game_session_destroy(roundtrip_session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EditorExtrudeCommandResizesSelectedBrushFace)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_extrude_face_command");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": { "brush_worlds": [{ "world": "brush.editor.level" }] },
+  "editor": {
+    "selection": {
+      "mode": "hover",
+      "trace": {
+        "source": "world",
+        "start": [2.0, 0.5, 0.5],
+        "end": [0.0, 0.5, 0.5],
+        "model_filter": "brush_worlds"
+      },
+      "outputs": {
+        "hit_key": "editor.selection.hit",
+        "world_key": "editor.selection.world",
+        "element_key": "editor.selection.element",
+        "face_index_key": "editor.selection.face_index"
+      }
+    }
+  }
+})json");
+    write_text(dir / "extrude_command.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Editor Extrude Face Command Test" },
+  "world": { "name": "world.editor_extrude", "kind": "brush" },
+  "signals": ["signal.editor.preview_extrude", "signal.editor.commit", "signal.editor.undo", "signal.editor.redo"],
+  "brush_worlds": [
+    {
+      "name": "brush.editor.level",
+      "materials": [{ "name": "mat.wall", "albedo": [0.7, 0.7, 0.7, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.preview_extrude",
+        "actions": [
+          {
+            "type": "editor.command.preview",
+            "command": "extrude",
+            "target": "face",
+            "distance": 0.5,
+            "message": "preview extrude {selection_element}",
+            "outputs": {
+              "active_key": "editor.command_preview.active",
+              "valid_key": "editor.command_preview.valid",
+              "command_key": "editor.command_preview.command",
+              "target_key": "editor.command_preview.target",
+              "message_key": "editor.command_preview.message",
+              "bounds_min_key": "editor.command_preview.bounds_min",
+              "bounds_max_key": "editor.command_preview.bounds_max"
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.commit",
+        "actions": [
+          {
+            "type": "editor.command.commit",
+            "message": "committed {editor_command} #{editor_transaction_id_text}",
+            "outputs": {
+              "valid_key": "editor.transaction.valid",
+              "event_key": "editor.transaction.event",
+              "message_key": "editor.transaction.message",
+              "undo_count_key": "editor.transaction.undo_count",
+              "redo_count_key": "editor.transaction.redo_count",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision"
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.undo",
+        "actions": [
+          {
+            "type": "editor.command.undo",
+            "message": "undo {editor_command} #{editor_transaction_id_text}",
+            "outputs": {
+              "valid_key": "editor.transaction.valid",
+              "event_key": "editor.transaction.event",
+              "message_key": "editor.transaction.message",
+              "undo_count_key": "editor.transaction.undo_count",
+              "redo_count_key": "editor.transaction.redo_count"
+            }
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.redo",
+        "actions": [
+          {
+            "type": "editor.command.redo",
+            "message": "redo {editor_command} #{editor_transaction_id_text}",
+            "outputs": {
+              "valid_key": "editor.transaction.valid",
+              "event_key": "editor.transaction.event",
+              "message_key": "editor.transaction.message",
+              "undo_count_key": "editor.transaction.undo_count",
+              "redo_count_key": "editor.transaction.redo_count"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "extrude_command.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.element", ""), "brush.seed");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.face_index", -1), 0);
+
+    const int preview_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.preview_extrude");
+    const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.commit");
+    const int undo_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.undo");
+    const int redo_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.redo");
+    ASSERT_GE(preview_signal, 0);
+    ASSERT_GE(commit_signal, 0);
+    ASSERT_GE(undo_signal, 0);
+    ASSERT_GE(redo_signal, 0);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    slayer3d_signal_emit(bus, preview_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.command", ""), "extrude");
+    const slayer3d_value *preview_max = slayer3d_properties_get_value(scene_state, "editor.command_preview.bounds_max");
+    ASSERT_NE(preview_max, nullptr);
+    ASSERT_EQ(preview_max->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(preview_max->as_vec3.x, 1.5f, 0.001f);
+
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "committed extrude #1");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 1);
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 1.5f, 0.001f);
+
+    slayer3d_signal_emit(bus, undo_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "undo extrude #1");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 1.0f, 0.001f);
+
+    slayer3d_signal_emit(bus, redo_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "redo extrude #1");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 1.5f, 0.001f);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
