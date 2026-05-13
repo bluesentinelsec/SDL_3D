@@ -193,6 +193,16 @@ typedef struct editor_command_history_state
     int next_id;
 } editor_command_history_state;
 
+typedef struct editor_player_start_runtime
+{
+    char *name;
+    char *scene;
+    char *target;
+    slayer3d_vec3 position;
+    float yaw;
+    float pitch;
+} editor_player_start_runtime;
+
 typedef struct wave_schedule_entry
 {
     yyjson_val *schedule;
@@ -644,6 +654,13 @@ typedef struct slayer3d_game_data_runtime
     int sector_level_count;
     brush_world_runtime *brush_worlds;
     int brush_world_count;
+    editor_player_start_runtime *editor_player_starts;
+    int editor_player_start_count;
+    int editor_player_start_capacity;
+    char *editor_player_start_source_path;
+    Uint64 editor_player_start_revision;
+    Uint64 editor_player_start_saved_revision;
+    bool editor_player_start_dirty;
     slayer3d_game_data_brush_diagnostics brush_diagnostics;
     Uint64 world_model_trace_count;
     Uint64 world_model_point_query_count;
@@ -851,6 +868,7 @@ bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runt
 bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_data_runtime *runtime,
                                                                  yyjson_val *action);
 bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,
@@ -1030,6 +1048,8 @@ void register_lua_api(slayer3d_game_data_runtime *runtime, slayer3d_script_engin
 bool load_timers(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size);
 bool load_signals(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_entities(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
+bool load_editor_player_starts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                               int error_buffer_size);
 bool load_actor_pools(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_bindings(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size);

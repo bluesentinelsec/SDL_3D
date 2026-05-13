@@ -1911,6 +1911,7 @@ static bool import_section_name_allowed(const char *name)
                                           "sector_levels",
                                           "sector_level_fragments",
                                           "brush_worlds",
+                                          "editor_player_starts",
                                           "sector_navigation",
                                           "sector_doors",
                                           "sector_platforms",
@@ -6734,6 +6735,45 @@ static bool validate_editor_metadata_tree(validation_context *ctx, yyjson_val *r
     return true;
 }
 
+static bool validate_editor_player_starts(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *starts = obj_get(root, "editor_player_starts");
+    if (starts == NULL)
+        return true;
+    if (!yyjson_is_arr(starts))
+        return validation_error(ctx, "$.editor_player_starts", "editor_player_starts must be an array");
+
+    name_table start_names;
+    SDL_zero(start_names);
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(starts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.editor_player_starts[%zu]", i);
+        yyjson_val *start = yyjson_arr_get(starts, i);
+        if (!yyjson_is_obj(start))
+        {
+            ok = validation_error(ctx, path, "editor player start entries must be objects");
+            break;
+        }
+        const char *scene = json_string(start, "scene");
+        const char *target = json_string(start, "target");
+        yyjson_val *yaw = obj_get(start, "yaw");
+        yyjson_val *pitch = obj_get(start, "pitch");
+        ok = require_unique_name(ctx, &start_names, "editor player start", json_string(start, "name"), path) &&
+             (scene == NULL || require_ref(ctx, &names->scenes, "scene", scene, path)) &&
+             (target == NULL || require_actor_ref(ctx, names, target, path)) &&
+             is_exact_vec_array(obj_get(start, "position"), 3) && (yaw == NULL || yyjson_is_num(yaw)) &&
+             (pitch == NULL || yyjson_is_num(pitch));
+        if (ok)
+            continue;
+        if (!ctx->failed)
+            ok = validation_error(ctx, path, "editor player start requires position vec3 and numeric yaw/pitch");
+    }
+    name_table_destroy(&start_names);
+    return ok;
+}
+
 static bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
                                             const char *json_path)
 {
@@ -8237,6 +8277,46 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
                 return validation_error(ctx, json_path,
                                         "editor.brush_world.create_box output keys must be non-empty strings");
+        }
+        return true;
+    }
+    if (SDL_strcmp(type, "editor.player_start.place") == 0)
+    {
+        if (!is_non_empty_string(action, "name"))
+            return validation_error(ctx, json_path, "editor.player_start.place requires a non-empty name");
+        const char *scene = json_string(action, "scene");
+        const char *target = json_string(action, "target");
+        if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+            return false;
+        if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
+            return false;
+        yyjson_val *position = obj_get(action, "position");
+        if (position != NULL && !is_exact_vec_array(position, 3))
+            return validation_error(ctx, json_path, "editor.player_start.place position must be a vec3");
+        const char *position_from = json_string(action, "position_from");
+        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0)
+            return validation_error(ctx, json_path, "editor.player_start.place position_from must be selection_point");
+        yyjson_val *yaw = obj_get(action, "yaw");
+        yyjson_val *pitch = obj_get(action, "pitch");
+        yyjson_val *apply_to_target = obj_get(action, "apply_to_target");
+        if ((yaw != NULL && !yyjson_is_num(yaw)) || (pitch != NULL && !yyjson_is_num(pitch)) ||
+            (apply_to_target != NULL && !yyjson_is_bool(apply_to_target)))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.player_start.place yaw/pitch must be numeric and apply_to_target bool");
+        }
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.player_start.place outputs must be an object");
+        static const char *const output_keys[] = {"valid_key",  "message_key",  "player_start_key",  "scene_key",
+                                                  "target_key", "position_key", "yaw_key",           "pitch_key",
+                                                  "dirty_key",  "revision_key", "saved_revision_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.player_start.place output keys must be non-empty strings");
         }
         return true;
     }
@@ -11298,9 +11378,10 @@ static bool validate_details(validation_context *ctx, yyjson_val *root, validati
            validate_sector_navigation(ctx, root, names) && validate_components(ctx, root, names) &&
            validate_update_phases(ctx, obj_get(root, "update_phases"), "$.update_phases", names) &&
            validate_transitions(ctx, root, names) && validate_scenes(ctx, root, names) &&
-           validate_sector_doors(ctx, root, names) && validate_sector_platforms(ctx, root, names) &&
-           validate_actor_archetypes_and_pools(ctx, root, names) && validate_network(ctx, root, names) &&
-           validate_app_refs(ctx, root, names) && validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
+           validate_editor_player_starts(ctx, root, names) && validate_sector_doors(ctx, root, names) &&
+           validate_sector_platforms(ctx, root, names) && validate_actor_archetypes_and_pools(ctx, root, names) &&
+           validate_network(ctx, root, names) && validate_app_refs(ctx, root, names) &&
+           validate_cameras(ctx, root, names) && validate_ui(ctx, root, names) &&
            validate_presentation(ctx, root, names) && validate_render_settings(ctx, root) &&
            validate_render_effects(ctx, root, names) && validate_lights(ctx, root, names) &&
            validate_haptics(ctx, root, names) && validate_editor_metadata_tree(ctx, root, names) &&

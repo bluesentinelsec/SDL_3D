@@ -230,6 +230,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.brush_world.create_box") == 0)
         return slayer3d_game_data_create_box_brush_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.player_start.place") == 0)
+        return slayer3d_game_data_place_editor_player_start_action(runtime, action);
+
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         const char *name = json_string(action, "name", NULL);

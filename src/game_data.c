@@ -330,6 +330,12 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         SDL_free((void *)world->materials);
         SDL_free((void *)world->brushes);
     }
+    for (int i = 0; i < runtime->editor_player_start_count; ++i)
+    {
+        SDL_free(runtime->editor_player_starts[i].name);
+        SDL_free(runtime->editor_player_starts[i].scene);
+        SDL_free(runtime->editor_player_starts[i].target);
+    }
     for (int i = 0; i < runtime->actor_pool_count; ++i)
     {
         SDL_free(runtime->actor_pools[i].name);
@@ -392,6 +398,8 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     SDL_free(runtime->grid_pickup_layers);
     SDL_free(runtime->sector_levels);
     SDL_free(runtime->brush_worlds);
+    SDL_free(runtime->editor_player_starts);
+    SDL_free(runtime->editor_player_start_source_path);
     SDL_free(runtime->sector_doors);
     SDL_free(runtime->sector_platforms);
     SDL_free(runtime->fps_controllers);

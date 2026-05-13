@@ -1956,6 +1956,97 @@ extern "C"
                                              const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,
                                              size_t out_brush_name_size, char *error_buffer, int error_buffer_size);
 
+    /** @brief Runtime-authored player start marker for editor and test-run workflows. */
+    typedef struct slayer3d_game_data_editor_player_start
+    {
+        /** @brief Stable player start name. Pointer is runtime-owned. */
+        const char *name;
+        /** @brief Scene where this start is valid, or NULL for scene-agnostic starts. */
+        const char *scene;
+        /** @brief Optional actor/entity to place when test-running from this start. */
+        const char *target;
+        /** @brief Spawn position in world meters. */
+        slayer3d_vec3 position;
+        /** @brief Spawn yaw in radians. */
+        float yaw;
+        /** @brief Spawn pitch in radians. */
+        float pitch;
+    } slayer3d_game_data_editor_player_start;
+
+    /** @brief Editor save state for the player-start collection. */
+    typedef struct slayer3d_game_data_player_start_editor_state
+    {
+        /** @brief Last known host save/source path, or NULL when unknown. Pointer is runtime-owned. */
+        const char *source_path;
+        /** @brief True when runtime mutations have not been marked saved. */
+        bool dirty;
+        /** @brief Monotonic runtime mutation revision. */
+        Uint64 revision;
+        /** @brief Revision that was last marked saved. */
+        Uint64 saved_revision;
+        /** @brief Number of player starts currently loaded in the runtime. */
+        int count;
+    } slayer3d_game_data_player_start_editor_state;
+
+    /** @brief Descriptor for creating or updating one editor player start. */
+    typedef struct slayer3d_game_data_place_player_start_desc
+    {
+        /** @brief Player start name. Required. */
+        const char *name;
+        /** @brief Optional scene reference. Defaults to the active scene when omitted. */
+        const char *scene;
+        /** @brief Optional actor/entity to place when applying the start. */
+        const char *target;
+        /** @brief Spawn position. Used only when @p has_position is true. */
+        slayer3d_vec3 position;
+        /** @brief Whether @p position is explicit. Defaults to selection point, then target actor position. */
+        bool has_position;
+        /** @brief Spawn yaw in radians. Used only when @p has_yaw is true. */
+        float yaw;
+        /** @brief Whether @p yaw is explicit. */
+        bool has_yaw;
+        /** @brief Spawn pitch in radians. Used only when @p has_pitch is true. */
+        float pitch;
+        /** @brief Whether @p pitch is explicit. */
+        bool has_pitch;
+        /** @brief Apply the start to @p target immediately when a target actor exists. */
+        bool apply_to_target;
+    } slayer3d_game_data_place_player_start_desc;
+
+    /**
+     * @brief Query one editor player start by name.
+     *
+     * Returned pointers are runtime-owned and remain valid until player starts
+     * are mutated or the runtime is destroyed.
+     */
+    bool slayer3d_game_data_get_editor_player_start(const slayer3d_game_data_runtime *runtime, const char *name,
+                                                    slayer3d_game_data_editor_player_start *out_start);
+
+    /** @brief Query editor save state for runtime player-start markers. */
+    bool slayer3d_game_data_get_player_start_editor_state(const slayer3d_game_data_runtime *runtime,
+                                                          slayer3d_game_data_player_start_editor_state *out_state);
+
+    /**
+     * @brief Create or update one runtime editor player start.
+     *
+     * The operation marks the player-start collection dirty and increments its
+     * revision. When @p apply_to_target is true and the target actor exists,
+     * the actor position/yaw/pitch are updated atomically after the marker is
+     * stored.
+     */
+    bool slayer3d_game_data_place_editor_player_start(slayer3d_game_data_runtime *runtime,
+                                                      const slayer3d_game_data_place_player_start_desc *desc,
+                                                      char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Export all runtime editor player starts as a fragment JSON string.
+     *
+     * The caller owns @p out_json and must release it with SDL_free().
+     */
+    bool slayer3d_game_data_export_player_starts_fragment_json(const slayer3d_game_data_runtime *runtime,
+                                                               char **out_json, size_t *out_size, char *error_buffer,
+                                                               int error_buffer_size);
+
     /** @brief Descriptor for resizing one brush face plane. */
     typedef struct slayer3d_game_data_resize_brush_face_desc
     {
