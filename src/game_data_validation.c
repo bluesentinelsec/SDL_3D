@@ -858,6 +858,8 @@ static bool validate_managed_network_scene_state(validation_context *ctx, yyjson
 
 static bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path,
                                   validation_names *names);
+static bool editor_command_name_valid(const char *value);
+static bool editor_command_target_name_valid(const char *value);
 
 static bool validate_network_session_string_map(validation_context *ctx, yyjson_val *map, const char *json_path,
                                                 const char *label, const name_table *scene_names)
@@ -8061,6 +8063,61 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *else_actions = obj_get(action, "else");
         return else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names);
     }
+    if (SDL_strcmp(type, "editor.command.preview") == 0)
+    {
+        const char *command = json_string(action, "command");
+        const char *target = json_string(action, "target");
+        if (target == NULL)
+            target = "selection";
+        if (!editor_command_name_valid(command))
+            return validation_error(ctx, json_path,
+                                    "editor.command.preview command must be translate, paint, extrude, or delete");
+        if (!editor_command_target_name_valid(target))
+            return validation_error(
+                ctx, json_path, "editor.command.preview target must be selection, world, element, face, or material");
+        yyjson_val *offset = obj_get(action, "offset");
+        if (offset != NULL && !is_vec_array(offset, 3))
+            return validation_error(ctx, json_path, "editor.command.preview offset must be a vec3");
+        yyjson_val *distance = obj_get(action, "distance");
+        if (distance != NULL && !yyjson_is_num(distance))
+            return validation_error(ctx, json_path, "editor.command.preview distance must be numeric");
+        yyjson_val *message = obj_get(action, "message");
+        if (message != NULL && !yyjson_is_str(message))
+            return validation_error(ctx, json_path, "editor.command.preview message must be a string");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.command.preview outputs must be an object");
+        static const char *const output_keys[] = {"active_key",     "valid_key",     "command_key", "target_key",
+                                                  "message_key",    "world_key",     "element_key", "face_index_key",
+                                                  "bounds_min_key", "bounds_max_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path, "editor.command.preview output keys must be non-empty strings");
+        }
+        return true;
+    }
+    if (SDL_strcmp(type, "editor.command.clear_preview") == 0)
+    {
+        yyjson_val *message = obj_get(action, "message");
+        if (message != NULL && !yyjson_is_str(message))
+            return validation_error(ctx, json_path, "editor.command.clear_preview message must be a string");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.command.clear_preview outputs must be an object");
+        static const char *const output_keys[] = {"active_key",     "valid_key",     "command_key", "target_key",
+                                                  "message_key",    "world_key",     "element_key", "face_index_key",
+                                                  "bounds_min_key", "bounds_max_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.command.clear_preview output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))
@@ -10298,7 +10355,21 @@ static bool editor_debug_flag_name_valid(const char *value)
 {
     return value != NULL && (SDL_strcmp(value, "all") == 0 || SDL_strcmp(value, "world_bounds") == 0 ||
                              SDL_strcmp(value, "selection_bounds") == 0 || SDL_strcmp(value, "trace_ray") == 0 ||
-                             SDL_strcmp(value, "face_normal") == 0 || SDL_strcmp(value, "hit_marker") == 0);
+                             SDL_strcmp(value, "face_normal") == 0 || SDL_strcmp(value, "hit_marker") == 0 ||
+                             SDL_strcmp(value, "command_preview") == 0);
+}
+
+static bool editor_command_name_valid(const char *value)
+{
+    return value != NULL && (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "paint") == 0 ||
+                             SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
+}
+
+static bool editor_command_target_name_valid(const char *value)
+{
+    return value != NULL &&
+           (SDL_strcmp(value, "selection") == 0 || SDL_strcmp(value, "world") == 0 ||
+            SDL_strcmp(value, "element") == 0 || SDL_strcmp(value, "face") == 0 || SDL_strcmp(value, "material") == 0);
 }
 
 static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,
@@ -10555,8 +10626,9 @@ static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *s
         if (!validate_string_or_string_array_names(ctx, obj_get(overlay, "flags"), flags_path, "editor debug flag",
                                                    editor_debug_flag_name_valid))
             return false;
-        static const char *const color_keys[] = {"world_bounds_color", "selection_bounds_color", "trace_color",
-                                                 "face_normal_color", "hit_marker_color"};
+        static const char *const color_keys[] = {"world_bounds_color", "selection_bounds_color",
+                                                 "trace_color",        "face_normal_color",
+                                                 "hit_marker_color",   "command_preview_color"};
         for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
         {
             yyjson_val *color = obj_get(overlay, color_keys[i]);

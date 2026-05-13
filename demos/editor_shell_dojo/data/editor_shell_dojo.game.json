@@ -34,6 +34,10 @@
           {
             "name": "action.editor.selection.inspect",
             "bindings": [{ "device": "keyboard", "key": "I" }]
+          },
+          {
+            "name": "action.editor.command.preview",
+            "bindings": [{ "device": "keyboard", "key": "P" }]
           }
         ]
       }
@@ -42,7 +46,8 @@
   "signals": [
     "signal.editor.tool.cycle",
     "signal.editor.selection.clear",
-    "signal.editor.selection.inspect"
+    "signal.editor.selection.inspect",
+    "signal.editor.command.preview"
   ],
   "logic": {
     "sensors": [
@@ -60,6 +65,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.selection.inspect",
         "on_pressed": "signal.editor.selection.inspect"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.command.preview",
+        "on_pressed": "signal.editor.command.preview"
       }
     ],
     "bindings": [
@@ -78,6 +88,15 @@
         "signal": "signal.editor.selection.clear",
         "actions": [
           { "type": "editor.selection.clear" },
+          {
+            "type": "editor.command.clear_preview",
+            "message": "preview cleared",
+            "outputs": {
+              "active_key": "editor.command_preview.active",
+              "valid_key": "editor.command_preview.valid",
+              "message_key": "editor.command_preview.message"
+            }
+          },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selection cleared" }
         ]
       },
@@ -96,6 +115,30 @@
             "else": [
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing selected" }
             ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.command.preview",
+        "actions": [
+          {
+            "type": "editor.command.preview",
+            "command": "translate",
+            "target": "element",
+            "offset": [0.0, 0.35, 0.0],
+            "message": "preview translate {selection_element}",
+            "outputs": {
+              "active_key": "editor.command_preview.active",
+              "valid_key": "editor.command_preview.valid",
+              "command_key": "editor.command_preview.command",
+              "target_key": "editor.command_preview.target",
+              "message_key": "editor.command_preview.message",
+              "world_key": "editor.command_preview.world",
+              "element_key": "editor.command_preview.element",
+              "face_index_key": "editor.command_preview.face_index",
+              "bounds_min_key": "editor.command_preview.bounds_min",
+              "bounds_max_key": "editor.command_preview.bounds_max"
+            }
           }
         ]
       }
