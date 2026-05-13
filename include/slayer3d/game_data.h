@@ -1041,7 +1041,7 @@ extern "C"
         slayer3d_vec3 rotation_axis;
         /** @brief Primitive-local rotation angle in radians by primitives that support rotation. */
         float rotation_angle;
-        /** @brief Euler rotation in radians, used by camera-space model primitives. */
+        /** @brief Euler rotation in radians for model primitives. */
         slayer3d_vec3 euler_rotation;
         /** @brief Cube size for SLAYER3D_GAME_DATA_RENDER_CUBE. */
         slayer3d_vec3 size;

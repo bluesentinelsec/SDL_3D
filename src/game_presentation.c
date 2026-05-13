@@ -1682,9 +1682,14 @@ static bool camera_space_transform(const slayer3d_camera3d *camera, slayer3d_vec
                                             slayer3d_vec3_add(slayer3d_vec3_scale(up, local_offset.y),
                                                               slayer3d_vec3_scale(forward, local_offset.z))));
     *out_rotation = local_rotation;
-    out_rotation->y += SDL_atan2f(forward.x, -forward.z);
-    out_rotation->x += SDL_asinf(SDL_clamp(forward.y, -1.0f, 1.0f));
+    out_rotation->y -= SDL_atan2f(forward.x, -forward.z);
+    out_rotation->x -= SDL_asinf(SDL_clamp(forward.y, -1.0f, 1.0f));
     return true;
+}
+
+static bool model_has_euler_rotation(slayer3d_vec3 rotation)
+{
+    return SDL_fabsf(rotation.x) > 0.000001f || SDL_fabsf(rotation.y) > 0.000001f || SDL_fabsf(rotation.z) > 0.000001f;
 }
 
 static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primitive *primitive)
@@ -1802,7 +1807,7 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
             if (!drawn)
                 return false;
         }
-        else if (primitive->view_space)
+        else if (primitive->view_space || model_has_euler_rotation(model_rotation))
         {
             if (!slayer3d_draw_model_euler_with_assets(context->renderer, context->model_cache->assets, &entry->model,
                                                        model_position, model_rotation, primitive->model_scale,

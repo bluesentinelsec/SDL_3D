@@ -7869,6 +7869,23 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NEAR(revolver_pickup->position.x, 0.0f, 0.0001f);
     EXPECT_LT(revolver_pickup->position.z, player->position.z);
     EXPECT_GT(slayer3d_properties_get_float(revolver_pickup->props, "pickup_spin_yaw", 0.0f), 0.0f);
+    bool saw_revolver_pickup = false;
+    auto find_revolver_pickup_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        bool *saw = static_cast<bool *>(userdata);
+        if (primitive != nullptr && primitive->entity_name != nullptr &&
+            std::string(primitive->entity_name) == "entity.brush_geometry.revolver_pickup")
+        {
+            *saw = true;
+            EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MODEL);
+            EXPECT_FALSE(primitive->view_space);
+            EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.revolver");
+            EXPECT_GT(primitive->euler_rotation.y, 1.5707964f);
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_pickup_model, &saw_revolver_pickup));
+    EXPECT_TRUE(saw_revolver_pickup);
     slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
     slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
     const int revolver_pickup_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.pickup");
