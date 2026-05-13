@@ -62,7 +62,8 @@
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.command.undo",
-    "signal.editor.command.redo"
+    "signal.editor.command.redo",
+    "signal.editor.export"
   ],
   "logic": {
     "sensors": [
@@ -293,6 +294,21 @@
               }
             ],
             "else": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to redo" }]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.export",
+        "actions": [
+          {
+            "type": "editor.brush_world.export",
+            "world": "brush.editor_shell.target",
+            "outputs": {
+              "valid_key": "editor.export.valid",
+              "message_key": "editor.export.message",
+              "json_key": "editor.export.json",
+              "size_key": "editor.export.size"
+            }
           }
         ]
       }

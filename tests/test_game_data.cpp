@@ -8334,6 +8334,29 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("editor.command.commit output keys must be non-empty strings"), std::string::npos)
         << error;
+
+    write_text(dir / "bad_export_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Export Action" },
+  "world": { "name": "world.bad_editor_export_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.export"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.export",
+        "actions": [
+          { "type": "editor.brush_world.export", "world": "missing.world" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_export_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown brush world reference"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -12551,6 +12574,43 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 2);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_EQ(target_cube_face_material(), "mat.editor.floor");
+
+    const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
+    ASSERT_GE(export_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), export_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.export.valid", false));
+    const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
+    ASSERT_NE(export_json, nullptr);
+    EXPECT_NE(std::string(export_json).find("\"schema\": \"slayer3d.fragment.v0\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"material\": \"mat.editor.floor\""), std::string::npos);
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.export.size", 0), 0);
+
+    const std::filesystem::path export_dir = unique_test_dir("editor_brush_export");
+    write_text(export_dir / "fragments" / "exported.json", export_json);
+    write_text(export_dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    write_text(export_dir / "exported.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "imports": [{ "path": "fragments/exported.json", "sections": ["brush_worlds"] }],
+  "metadata": { "name": "Exported Brush World" },
+  "world": { "name": "world.exported", "kind": "brush" },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    slayer3d_game_session *export_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &export_session));
+    slayer3d_game_data_runtime *export_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((export_dir / "exported.game.json").string().c_str(), export_session,
+                                             &export_runtime, error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world exported_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(export_runtime, "brush.editor_shell.target", &exported_world));
+    ASSERT_GT(exported_world.brush_count, 0);
+    ASSERT_GT(exported_world.brushes[0].face_count, 1);
+    EXPECT_STREQ(exported_world.brushes[0].faces[1].material_name, "mat.editor.floor");
+    slayer3d_game_data_destroy(export_runtime);
+    slayer3d_game_session_destroy(export_session);
+    remove_test_dir(export_dir);
 
     press_key(SDL_SCANCODE_BACKSPACE, 15);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
