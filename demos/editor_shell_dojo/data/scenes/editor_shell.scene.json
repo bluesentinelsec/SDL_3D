@@ -55,12 +55,13 @@
     },
     "debug_overlay": {
       "enabled": true,
-      "flags": ["world_bounds", "selection_bounds", "trace_ray", "face_normal", "hit_marker"],
+      "flags": ["world_bounds", "selection_bounds", "trace_ray", "face_normal", "hit_marker", "command_preview"],
       "world_bounds_color": [80, 170, 255, 190],
       "selection_bounds_color": [255, 220, 40, 255],
       "trace_color": [255, 255, 255, 210],
       "face_normal_color": [40, 255, 120, 255],
       "hit_marker_color": [255, 70, 70, 255],
+      "command_preview_color": [80, 255, 255, 235],
       "normal_length": 0.65,
       "hit_marker_size": 0.12
     }
@@ -125,6 +126,10 @@
           {
             "label": "Action",
             "binding": { "type": "scene_state", "key": "editor.tool.last_action", "default": "none" }
+          },
+          {
+            "label": "Preview",
+            "binding": { "type": "scene_state", "key": "editor.command_preview.message", "default": "none" }
           }
         ]
       }
@@ -143,7 +148,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Data-authored viewport, selection overlay, and inspector",
+        "text": "Click select. I inspect. P previews. Tab changes tool. Backspace clears.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

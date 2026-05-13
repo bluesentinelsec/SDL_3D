@@ -145,6 +145,20 @@ typedef struct sensor_entry
     int contact_pair_capacity;
 } sensor_entry;
 
+typedef struct editor_command_preview_state
+{
+    bool active;
+    const char *scene;
+    const char *command;
+    const char *target;
+    const char *world_name;
+    const char *element_name;
+    const char *material_name;
+    int face_index;
+    bool has_bounds;
+    slayer3d_bounding_box bounds;
+} editor_command_preview_state;
+
 typedef struct wave_schedule_entry
 {
     yyjson_val *schedule;
@@ -627,6 +641,7 @@ typedef struct slayer3d_game_data_runtime
     const char *active_camera;
     slayer3d_game_data_editor_selection editor_active_selection;
     const char *editor_selection_scene;
+    editor_command_preview_state editor_command_preview;
     scene_activity_state activity;
     float current_dt;
     unsigned int rng_state;
@@ -785,6 +800,8 @@ bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_v
 bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
     const slayer3d_game_data_editor_selection *selection);
+bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_clear_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,

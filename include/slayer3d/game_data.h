@@ -800,6 +800,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_FACE_NORMAL = 4,
         /** @brief Hit-point marker line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_HIT_MARKER = 5,
+        /** @brief Non-mutating editor command preview bounds edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE = 6,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -814,11 +816,13 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL = 1u << 3,
         /** @brief Emit a small marker at the selected hit point. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER = 1u << 4,
+        /** @brief Emit active non-mutating editor command preview bounds. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW = 1u << 5,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
@@ -859,6 +863,8 @@ extern "C"
         slayer3d_color face_normal_color;
         /** @brief Color for hit markers, or alpha 0 for default. */
         slayer3d_color hit_marker_color;
+        /** @brief Color for command preview bounds, or alpha 0 for default. */
+        slayer3d_color command_preview_color;
         /** @brief Face-normal line length in world units. Defaults to 0.75. */
         float normal_length;
         /** @brief Hit-marker half-size in world units. Defaults to 0.1. */

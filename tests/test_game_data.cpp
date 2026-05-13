@@ -8260,6 +8260,29 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_selection_action.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("logic action list must be an array"), std::string::npos) << error;
+
+    write_text(dir / "bad_preview_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Preview Action" },
+  "world": { "name": "world.bad_editor_preview_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.preview"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.preview",
+        "actions": [
+          { "type": "editor.command.preview", "command": "resize", "target": "element" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_preview_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.command.preview command must be"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -12276,10 +12299,24 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "move");
 
+    press_key(SDL_SCANCODE_P, 6);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.command", ""), "translate");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "element");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.message", ""),
+                 "preview translate brush.target.cube");
+    const slayer3d_value *preview_min = slayer3d_properties_get_value(scene_state, "editor.command_preview.bounds_min");
+    ASSERT_NE(preview_min, nullptr);
+    ASSERT_EQ(preview_min->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(preview_min->as_vec3.y, 0.35f, 0.001f);
+
     struct DebugCapture
     {
         int world_edges = 0;
         int selection_edges = 0;
+        int command_preview_edges = 0;
         int rays = 0;
         int normals = 0;
         int markers = 0;
@@ -12290,6 +12327,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
             capture->world_edges++;
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
             capture->selection_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE)
+            capture->command_preview_edges++;
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_TRACE_RAY)
             capture->rays++;
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_FACE_NORMAL)
@@ -12301,6 +12340,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_debug, &debug));
     EXPECT_EQ(debug.world_edges, 12);
     EXPECT_EQ(debug.selection_edges, 12);
+    EXPECT_EQ(debug.command_preview_edges, 12);
     EXPECT_EQ(debug.rays, 1);
     EXPECT_EQ(debug.normals, 1);
     EXPECT_EQ(debug.markers, 3);
@@ -12324,9 +12364,11 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(inspector.values[3], "World");
     EXPECT_EQ(inspector.values[4], "brush.editor_shell.target");
 
-    press_key(SDL_SCANCODE_BACKSPACE, 6);
+    press_key(SDL_SCANCODE_BACKSPACE, 7);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.message", ""), "preview cleared");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "selection cleared");
     EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
 

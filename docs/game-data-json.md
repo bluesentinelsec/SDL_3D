@@ -706,9 +706,37 @@ pinned or current selection. It supplies payload fields such as
 `selection_point`, and `selection_normal`. `editor.selection.clear` clears the
 active selection and republishes the scene's `outputs` as an empty selection.
 
+Use `editor.command.preview` to declare a non-mutating command intent against
+the active selection. This is the safe scaffolding layer for editor tools:
+commands can publish UI state and draw preview bounds without modifying the
+authored world. Supported `command` values are `translate`, `paint`, `extrude`,
+and `delete`; supported `target` values are `selection`, `world`, `element`,
+`face`, and `material`.
+
+```json
+{
+  "type": "editor.command.preview",
+  "command": "translate",
+  "target": "element",
+  "offset": [0.0, 0.35, 0.0],
+  "message": "preview translate {selection_element}",
+  "outputs": {
+    "active_key": "editor.command_preview.active",
+    "valid_key": "editor.command_preview.valid",
+    "message_key": "editor.command_preview.message",
+    "bounds_min_key": "editor.command_preview.bounds_min",
+    "bounds_max_key": "editor.command_preview.bounds_max"
+  }
+}
+```
+
+`editor.command.clear_preview` clears that preview state and can publish the
+same `outputs` keys with `active_key`/`valid_key` set to false.
+
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,
-`selection_bounds`, `trace_ray`, `face_normal`, and `hit_marker`.
+`selection_bounds`, `trace_ray`, `face_normal`, `hit_marker`, and
+`command_preview`.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
