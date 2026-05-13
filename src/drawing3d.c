@@ -1963,6 +1963,50 @@ bool slayer3d_draw_model_ex_with_assets(slayer3d_render_context *context, const 
     return ok;
 }
 
+bool slayer3d_draw_model_euler_with_assets(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
+                                           const slayer3d_model *model, slayer3d_vec3 position,
+                                           slayer3d_vec3 rotation_radians, slayer3d_vec3 scale, slayer3d_color tint)
+{
+    const slayer3d_vec4 tint_modulate = slayer3d_color_to_modulate(tint);
+    bool ok = false;
+
+    if (!slayer3d_require_mode_3d(context, "slayer3d_draw_model_euler_with_assets"))
+        return false;
+    if (model == NULL)
+        return SDL_InvalidParamError("model");
+    if (model->meshes == NULL || model->mesh_count <= 0)
+        return SDL_SetError("Model draw requires at least one mesh.");
+
+    if (!slayer3d_push_matrix(context))
+        return false;
+
+    ok = slayer3d_translate(context, position.x, position.y, position.z);
+    if (ok && rotation_radians.y != 0.0f)
+        ok = slayer3d_rotate(context, slayer3d_vec3_make(0.0f, 1.0f, 0.0f), rotation_radians.y);
+    if (ok && rotation_radians.x != 0.0f)
+        ok = slayer3d_rotate(context, slayer3d_vec3_make(1.0f, 0.0f, 0.0f), rotation_radians.x);
+    if (ok && rotation_radians.z != 0.0f)
+        ok = slayer3d_rotate(context, slayer3d_vec3_make(0.0f, 0.0f, 1.0f), rotation_radians.z);
+    if (ok)
+        ok = slayer3d_scale(context, scale.x, scale.y, scale.z);
+
+    if (ok && model->nodes != NULL && model->root_count > 0)
+    {
+        for (int r = 0; ok && r < model->root_count; ++r)
+            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL);
+    }
+    else
+    {
+        for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
+            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL);
+    }
+
+    if (!slayer3d_pop_matrix(context))
+        return false;
+
+    return ok;
+}
+
 bool slayer3d_draw_model_skinned(slayer3d_render_context *context, const slayer3d_model *model, slayer3d_vec3 position,
                                  slayer3d_vec3 rotation_axis, float rotation_angle_radians, slayer3d_vec3 scale,
                                  slayer3d_color tint, const slayer3d_mat4 *joint_matrices)

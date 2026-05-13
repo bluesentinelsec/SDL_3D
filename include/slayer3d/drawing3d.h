@@ -177,6 +177,18 @@ extern "C"
                                             float rotation_angle_radians, slayer3d_vec3 scale, slayer3d_color tint);
 
     /*
+     * Same as slayer3d_draw_model_ex_with_assets, but applies Euler rotation
+     * in pitch/yaw/roll order after translation and before scale. This is
+     * useful for camera-space viewmodels and authored placement tools where
+     * independent angle controls are easier to tune than a single axis-angle.
+     */
+    bool slayer3d_draw_model_euler_with_assets(slayer3d_render_context *context,
+                                               const struct slayer3d_asset_resolver *assets,
+                                               const slayer3d_model *model, slayer3d_vec3 position,
+                                               slayer3d_vec3 rotation_radians, slayer3d_vec3 scale,
+                                               slayer3d_color tint);
+
+    /*
      * Draw a model with skeletal animation applied. `joint_matrices` is
      * an array of skeleton->joint_count mat4 entries from
      * slayer3d_evaluate_animation. Pass NULL for bind pose (same as draw_model_ex).

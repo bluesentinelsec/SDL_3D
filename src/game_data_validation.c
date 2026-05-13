@@ -5814,6 +5814,13 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lighting_key = obj_get(component, "lighting_key");
                 if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
                     return validation_error(ctx, path, "render primitive lighting_key must be non-empty");
+                const char *offset_properties[] = {"offset_x_property", "offset_y_property", "offset_z_property"};
+                for (size_t i = 0; i < SDL_arraysize(offset_properties); ++i)
+                {
+                    yyjson_val *offset_property = obj_get(component, offset_properties[i]);
+                    if (offset_property != NULL && !is_non_empty_string(component, offset_properties[i]))
+                        return validation_error(ctx, path, "render primitive offset property must be non-empty");
+                }
                 if (!validate_render_camera_visibility_field(ctx, component, path, names, "visible_to_cameras") ||
                     !validate_render_camera_visibility_field(ctx, component, path, names, "hidden_from_cameras"))
                 {
@@ -5882,6 +5889,21 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                     yyjson_val *scale = obj_get(component, "scale");
                     if (scale != NULL && !is_vec_array(scale, 3))
                         return validation_error(ctx, path, "render.model scale must be a vec3");
+                    yyjson_val *space = obj_get(component, "space");
+                    if (space != NULL && (!yyjson_is_str(space) || (SDL_strcmp(yyjson_get_str(space), "world") != 0 &&
+                                                                    SDL_strcmp(yyjson_get_str(space), "camera") != 0)))
+                        return validation_error(ctx, path, "render.model space must be 'world' or 'camera'");
+                    yyjson_val *rotation = obj_get(component, "rotation");
+                    if (rotation != NULL && !is_vec_array(rotation, 3))
+                        return validation_error(ctx, path, "render.model rotation must be a vec3");
+                    const char *property_fields[] = {"scale_property", "pitch_property", "yaw_property",
+                                                     "roll_property"};
+                    for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
+                    {
+                        yyjson_val *property = obj_get(component, property_fields[property_index]);
+                        if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
+                            return validation_error(ctx, path, "render.model property fields must be non-empty");
+                    }
                     yyjson_val *animation_clip = obj_get(component, "animation_clip");
                     if (animation_clip != NULL &&
                         (!yyjson_is_int(animation_clip) || yyjson_get_int(animation_clip) < 0))
@@ -6374,6 +6396,22 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *scale = obj_get(component, "scale");
                 if (scale != NULL && !is_vec_array(scale, 3))
                     return validation_error(ctx, component_path, "render.model scale must be a vec3");
+                yyjson_val *space = obj_get(component, "space");
+                if (space != NULL && (!yyjson_is_str(space) || (SDL_strcmp(yyjson_get_str(space), "world") != 0 &&
+                                                                SDL_strcmp(yyjson_get_str(space), "camera") != 0)))
+                    return validation_error(ctx, component_path, "render.model space must be 'world' or 'camera'");
+                yyjson_val *rotation = obj_get(component, "rotation");
+                if (rotation != NULL && !is_vec_array(rotation, 3))
+                    return validation_error(ctx, component_path, "render.model rotation must be a vec3");
+                const char *property_fields[] = {"scale_property",   "pitch_property",    "yaw_property",
+                                                 "roll_property",    "offset_x_property", "offset_y_property",
+                                                 "offset_z_property"};
+                for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
+                {
+                    yyjson_val *property = obj_get(component, property_fields[property_index]);
+                    if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
+                        return validation_error(ctx, component_path, "render.model property fields must be non-empty");
+                }
                 yyjson_val *animation_clip = obj_get(component, "animation_clip");
                 if (animation_clip != NULL && (!yyjson_is_int(animation_clip) || yyjson_get_int(animation_clip) < 0))
                     return validation_error(ctx, component_path,
@@ -7671,6 +7709,25 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "debug.write_actor_properties") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+            return false;
+        if (!is_non_empty_string(action, "path"))
+            return validation_error(ctx, json_path, "debug.write_actor_properties requires a non-empty path");
+        yyjson_val *properties = obj_get(action, "properties");
+        if (!yyjson_is_arr(properties) || yyjson_arr_size(properties) == 0)
+            return validation_error(ctx, json_path,
+                                    "debug.write_actor_properties requires a non-empty properties array");
+        for (size_t i = 0; i < yyjson_arr_size(properties); ++i)
+        {
+            yyjson_val *property = yyjson_arr_get(properties, i);
+            if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+                return validation_error(ctx, json_path,
+                                        "debug.write_actor_properties properties must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "actor.spawn") == 0)
     {
         if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
@@ -8503,8 +8560,10 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         char else_path[PATH_BUFFER_SIZE];
         format_path(then_path, sizeof(then_path), "%s.then", json_path);
         format_path(else_path, sizeof(else_path), "%s.else", json_path);
-        return validate_action_array(ctx, obj_get(action, "then"), then_path, names) &&
-               validate_action_array(ctx, obj_get(action, "else"), else_path, names);
+        yyjson_val *then_actions = obj_get(action, "then");
+        yyjson_val *else_actions = obj_get(action, "else");
+        return (then_actions == NULL || validate_action_array(ctx, then_actions, then_path, names)) &&
+               (else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names));
     }
 
     return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);

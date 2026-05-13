@@ -1,0 +1,47 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "assets": {
+    "models": [
+      { "id": "model.brush_geometry.revolver", "path": "asset://models/weapons/revolver.glb" }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.brush_geometry.revolver_viewmodel",
+      "id": 810,
+      "position": [0.0, 0.0, 0.0],
+      "properties": {
+        "gun_x": { "type": "float", "value": 0.28 },
+        "gun_y": { "type": "float", "value": -0.24 },
+        "gun_z": { "type": "float", "value": 0.58 },
+        "gun_scale": { "type": "float", "value": 0.16 },
+        "gun_pitch": { "type": "float", "value": 0.0 },
+        "gun_yaw": { "type": "float", "value": 0.0 },
+        "gun_roll": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "render.model",
+          "model": "model.brush_geometry.revolver",
+          "space": "camera",
+          "offset_x_property": "gun_x",
+          "offset_y_property": "gun_y",
+          "offset_z_property": "gun_z",
+          "scale": [1.0, 1.0, 1.0],
+          "scale_property": "gun_scale",
+          "pitch_property": "gun_pitch",
+          "yaw_property": "gun_yaw",
+          "roll_property": "gun_roll",
+          "visible_to_cameras": ["camera.brush_geometry.player"],
+          "lighting": true
+        }
+      ],
+      "editor": {
+        "display_name": "Revolver Viewmodel",
+        "category": "weapons",
+        "preview": { "primitive": "cube", "color": [60, 210, 120, 255] },
+        "tags": ["weapon", "debug_tuning"]
+      }
+    }
+  ]
+}

@@ -7858,6 +7858,45 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, find_zombie_model, &saw_zombie_model));
     EXPECT_TRUE(saw_zombie_model);
+    slayer3d_registered_actor *revolver =
+        slayer3d_game_data_find_actor(runtime, "entity.brush_geometry.revolver_viewmodel");
+    ASSERT_NE(revolver, nullptr);
+    bool saw_revolver_viewmodel = false;
+    auto find_revolver_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
+        bool *saw = static_cast<bool *>(userdata);
+        if (primitive != nullptr && primitive->entity_name != nullptr &&
+            std::string(primitive->entity_name) == "entity.brush_geometry.revolver_viewmodel")
+        {
+            *saw = true;
+            EXPECT_EQ(primitive->type, SLAYER3D_GAME_DATA_RENDER_MODEL);
+            EXPECT_TRUE(primitive->view_space);
+            EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.revolver");
+            EXPECT_GT(primitive->model_scale.x, 0.0f);
+            EXPECT_NEAR(primitive->position.x, 0.28f, 0.0001f);
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_model, &saw_revolver_viewmodel));
+    EXPECT_TRUE(saw_revolver_viewmodel);
+    const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.debug.revolver_tuning.x_pos");
+    const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.debug.revolver_tuning.write");
+    ASSERT_GE(tune_x_signal, 0);
+    ASSERT_GE(tune_write_signal, 0);
+    const float old_gun_x = slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
+                                 true);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.02f, 0.0001f);
+    const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
+    std::filesystem::remove(placement_path);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_write_signal, nullptr);
+    ASSERT_TRUE(std::filesystem::exists(placement_path));
+    const std::string placement_text = read_text(placement_path);
+    EXPECT_NE(placement_text.find("actor=entity.brush_geometry.revolver_viewmodel"), std::string::npos);
+    EXPECT_NE(placement_text.find("gun_x="), std::string::npos);
+    std::filesystem::remove(placement_path);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
 

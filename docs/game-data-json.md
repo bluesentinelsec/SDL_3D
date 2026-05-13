@@ -2091,7 +2091,11 @@ Reusable components include:
   optional `scale`, axis-angle rotation, `color` tint, and optional skeletal
   animation playback via `animation_clip` and `animation_time_property`.
   `animation_loop` defaults to `true` and wraps authored animation time by the
-  selected clip duration.
+  selected clip duration. Set `"space": "camera"` for first-person viewmodels;
+  in that mode `offset` and `offset_x_property`/`offset_y_property`/
+  `offset_z_property` are interpreted as camera-local right/up/forward
+  placement, and `rotation`, `pitch_property`, `yaw_property`,
+  `roll_property`, and `scale_property` provide data-authored tuning controls.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets
@@ -2296,6 +2300,32 @@ as a float so fractional damage, timers, and meters can accumulate correctly:
   "target_from_payload": "actor_name",
   "key": "damage_taken",
   "value_from_payload": "sector_damage_delta"
+}
+```
+
+`branch` executes `then` actions when its `if` condition passes and `else`
+actions when it does not. Either side may be omitted, which makes that branch a
+successful no-op:
+
+```json
+{
+  "type": "branch",
+  "if": { "type": "scene_state.compare", "key": "debug.enabled", "op": "==", "value": true },
+  "then": [
+    { "type": "property.add", "target": "entity.debug_marker", "key": "x", "value": 1.0 }
+  ]
+}
+```
+
+`debug.write_actor_properties` is a development-only action for placement and
+tuning workflows. It writes selected actor properties to a host filesystem path:
+
+```json
+{
+  "type": "debug.write_actor_properties",
+  "target": "entity.weapon.viewmodel",
+  "path": "/tmp/gun-placement.txt",
+  "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
 }
 ```
 

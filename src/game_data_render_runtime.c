@@ -1133,10 +1133,31 @@ static const slayer3d_sector *active_scene_sector_for_position(const slayer3d_ga
 static void apply_sector_lighting_to_render_primitive(const slayer3d_game_data_runtime *runtime,
                                                       slayer3d_game_data_render_primitive *primitive)
 {
-    if (runtime == NULL || primitive == NULL || !primitive->lighting_enabled || primitive->instances != NULL)
+    if (runtime == NULL || primitive == NULL || !primitive->lighting_enabled || primitive->view_space ||
+        primitive->instances != NULL)
+    {
         return;
+    }
     modulate_color_by_sector_lighting(&primitive->color,
                                       active_scene_sector_for_position(runtime, primitive->position));
+}
+
+static slayer3d_vec3 render_component_offset(const slayer3d_registered_actor *actor, yyjson_val *component)
+{
+    slayer3d_vec3 offset = json_vec3(component, "offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    if (actor == NULL || actor->props == NULL)
+        return offset;
+
+    const char *x_property = json_string(component, "offset_x_property", NULL);
+    const char *y_property = json_string(component, "offset_y_property", NULL);
+    const char *z_property = json_string(component, "offset_z_property", NULL);
+    if (x_property != NULL)
+        offset.x += slayer3d_properties_get_float(actor->props, x_property, 0.0f);
+    if (y_property != NULL)
+        offset.y += slayer3d_properties_get_float(actor->props, y_property, 0.0f);
+    if (z_property != NULL)
+        offset.z += slayer3d_properties_get_float(actor->props, z_property, 0.0f);
+    return offset;
 }
 
 static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runtime,
@@ -1157,7 +1178,7 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         SDL_zero(primitive);
         primitive.entity_name = actor->name;
         primitive.position = actor->position;
-        const slayer3d_vec3 offset = json_vec3(component, "offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        const slayer3d_vec3 offset = render_component_offset(actor, component);
         primitive.position.x += offset.x;
         primitive.position.y += offset.y;
         primitive.position.z += offset.z;
@@ -1259,7 +1280,29 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         {
             primitive.type = SLAYER3D_GAME_DATA_RENDER_MODEL;
             primitive.model_asset = json_string(component, "model", NULL);
+            const char *space = json_string(component, "space", "world");
+            primitive.view_space = SDL_strcmp(space, "camera") == 0;
+            if (primitive.view_space)
+                primitive.position = offset;
             primitive.model_scale = json_vec3(component, "scale", slayer3d_vec3_make(1.0f, 1.0f, 1.0f));
+            const char *scale_property = json_string(component, "scale_property", NULL);
+            if (scale_property != NULL)
+            {
+                const float scale = slayer3d_properties_get_float(actor->props, scale_property, 1.0f);
+                primitive.model_scale.x *= scale;
+                primitive.model_scale.y *= scale;
+                primitive.model_scale.z *= scale;
+            }
+            primitive.euler_rotation = json_vec3(component, "rotation", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+            const char *pitch_property = json_string(component, "pitch_property", NULL);
+            const char *yaw_property = json_string(component, "yaw_property", NULL);
+            const char *roll_property = json_string(component, "roll_property", NULL);
+            if (pitch_property != NULL)
+                primitive.euler_rotation.x += slayer3d_properties_get_float(actor->props, pitch_property, 0.0f);
+            if (yaw_property != NULL)
+                primitive.euler_rotation.y += slayer3d_properties_get_float(actor->props, yaw_property, 0.0f);
+            if (roll_property != NULL)
+                primitive.euler_rotation.z += slayer3d_properties_get_float(actor->props, roll_property, 0.0f);
             primitive.animation_clip = json_int(component, "animation_clip", -1);
             primitive.animation_time = json_float(component, "animation_time", 0.0f);
             primitive.animation_loop = json_bool(component, "animation_loop", true);

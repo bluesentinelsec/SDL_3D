@@ -6,6 +6,7 @@
   "renders_world": true,
   "entities": [
     "entity.brush_geometry.player",
+    "entity.brush_geometry.revolver_viewmodel",
     "entity.brush_geometry.visible_target",
     "entity.brush_geometry.occluded_target",
     "entity.brush_geometry.zombie",
@@ -55,6 +56,22 @@
       "action.use",
       "action.camera.security.toggle",
       "action.fire",
+      "action.debug.weapon_tuning.toggle",
+      "action.debug.weapon_tuning.x_neg",
+      "action.debug.weapon_tuning.x_pos",
+      "action.debug.weapon_tuning.y_neg",
+      "action.debug.weapon_tuning.y_pos",
+      "action.debug.weapon_tuning.z_neg",
+      "action.debug.weapon_tuning.z_pos",
+      "action.debug.weapon_tuning.scale_down",
+      "action.debug.weapon_tuning.scale_up",
+      "action.debug.weapon_tuning.pitch_down",
+      "action.debug.weapon_tuning.pitch_up",
+      "action.debug.weapon_tuning.yaw_neg",
+      "action.debug.weapon_tuning.yaw_pos",
+      "action.debug.weapon_tuning.roll_neg",
+      "action.debug.weapon_tuning.roll_pos",
+      "action.debug.weapon_tuning.write",
       "action.exit"
     ]
   },
@@ -99,6 +116,27 @@
         "normalized": true,
         "color": [205, 215, 230, 210],
         "scale": 0.62
+      },
+      {
+        "name": "ui.brush_geometry.gun_tuning_hint",
+        "text": "G gun tuning",
+        "font": "font.brush_geometry.hud",
+        "x": 0.02,
+        "y": 0.105,
+        "normalized": true,
+        "color": [190, 235, 185, 205],
+        "scale": 0.52
+      },
+      {
+        "name": "ui.brush_geometry.gun_tuning_active",
+        "text": "GUN TUNE: arrows X/Y  Z/X depth  ,/. scale  I/K pitch  J/L yaw  U/O roll  P write /tmp/gun-placement.txt",
+        "font": "font.brush_geometry.hud",
+        "x": 0.02,
+        "y": 0.135,
+        "normalized": true,
+        "color": [145, 255, 155, 230],
+        "scale": 0.43,
+        "visible_if": { "type": "scene_state.compare", "key": "debug.revolver_tuning.enabled", "op": "==", "value": true }
       },
       {
         "name": "ui.brush_geometry.reticle",
