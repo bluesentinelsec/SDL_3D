@@ -45,6 +45,7 @@ Every root game file is a JSON object.
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
 | `sector_level_fragments` | no | Composition-only material/sector/light fragments merged into named sector levels before validation. |
 | `brush_worlds` | no | Native convex-brush worlds for true 3D FPS-style spaces. |
+| `editor_player_starts` | no | Editor-authored player spawn markers for test-run workflows and level-editing tools. |
 | `sector_navigation` | no | Authored sector navigation graphs for AI/path queries in sector worlds. |
 | `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
 | `sector_platforms` | no | Runtime moving floor/ceiling sectors for lifts, elevators, and oscillating platforms. |
@@ -706,6 +707,27 @@ pinned or current selection. It supplies payload fields such as
 `selection_point`, and `selection_normal`. `editor.selection.clear` clears the
 active selection and republishes the scene's `outputs` as an empty selection.
 
+`editor_player_starts` is a mergeable editor/runtime section for player spawn
+markers. It is deliberately separate from `entities`: a start records where a
+test-run should place an existing actor, while the actor remains defined by the
+game or template data. Each entry has a unique `name`, a required `position`
+vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
+
+```json
+{
+  "editor_player_starts": [
+    {
+      "name": "player_start.level_01",
+      "scene": "scene.level_01",
+      "target": "entity.player",
+      "position": [2.0, 1.6, -4.0],
+      "yaw": 1.5708,
+      "pitch": 0.0
+    }
+  ]
+}
+```
+
 Use `editor.brush_world.create_box` to append a new axis-aligned convex box
 brush to a runtime brush world. The action is intended for first-pass editor
 blockout tools: floors, walls, ceilings, platforms, and simple room pieces. It
@@ -731,6 +753,40 @@ generates a unique brush name under the target world.
   }
 }
 ```
+
+Use `editor.player_start.place` to create or update one runtime player start.
+The action can be bound to editor tools that place a marker at a clicked point,
+or to direct UI controls that place a known target actor at an explicit
+position. `position` is optional when there is an active editor selection or a
+target actor; otherwise it is required. `apply_to_target` defaults to true and
+updates the target actor's position/yaw/pitch immediately so test-run previews
+match the saved marker.
+
+```json
+{
+  "type": "editor.player_start.place",
+  "name": "player_start.level_01",
+  "scene": "scene.level_01",
+  "target": "entity.player",
+  "position": [2.0, 1.6, -4.0],
+  "yaw": 1.5708,
+  "pitch": 0.0,
+  "outputs": {
+    "valid_key": "editor.player_start.valid",
+    "message_key": "editor.player_start.message",
+    "player_start_key": "editor.player_start.name",
+    "position_key": "editor.player_start.position",
+    "dirty_key": "editor.player_start.dirty",
+    "revision_key": "editor.player_start.revision"
+  }
+}
+```
+
+Native editor hosts can call
+`slayer3d_game_data_export_player_starts_fragment_json()` to serialize the
+current player-start collection as a `slayer3d.fragment.v0` document containing
+`editor_player_starts`. File writing remains host-owned, matching brush-world
+exports.
 
 Use `editor.command.preview` to declare a non-mutating command intent against
 the active selection. This is the safe scaffolding layer for editor tools:

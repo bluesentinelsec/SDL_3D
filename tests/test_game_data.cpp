@@ -8410,6 +8410,57 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_create_box_action.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown brush world reference"), std::string::npos) << error;
+
+    write_text(dir / "bad_player_start_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Player Start Action" },
+  "world": { "name": "world.bad_editor_player_start_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.place_player_start"],
+  "entities": [{ "name": "entity.player" }],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.place_player_start",
+        "actions": [
+          {
+            "type": "editor.player_start.place",
+            "name": "player_start.bad",
+            "scene": "scene.missing",
+            "target": "entity.player",
+            "position": [0.0, 1.6, 0.0]
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_player_start_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown scene reference"), std::string::npos) << error;
+
+    write_text(dir / "bad_player_start_section.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Player Start Section" },
+  "world": { "name": "world.bad_editor_player_start_section", "kind": "fixed_screen" },
+  "entities": [{ "name": "entity.player" }],
+  "editor_player_starts": [
+    {
+      "name": "player_start.bad",
+      "scene": "scene.play",
+      "target": "entity.player",
+      "position": [0.0, 1.6]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_player_start_section.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor player start requires position vec3"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -12528,6 +12579,153 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     EXPECT_NEAR(roundtrip_world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     EXPECT_STREQ(roundtrip_world.brushes[2].name, "brush.editor.level.box.1");
     EXPECT_STREQ(roundtrip_world.brushes[2].faces[0].material_name, "mat.floor");
+
+    slayer3d_game_data_destroy(roundtrip_runtime);
+    slayer3d_game_session_destroy(roundtrip_session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EditorPlayerStartPlacesTargetAndRoundTrips)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_player_start");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play", "entities": ["entity.player"] })json");
+    write_text(dir / "player_start.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Editor Player Start Test" },
+  "world": { "name": "world.editor_player_start", "kind": "brush" },
+  "signals": ["signal.editor.place_player_start"],
+  "entities": [
+    {
+      "name": "entity.player",
+      "transform": { "position": [0.0, 1.6, 0.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "editor_player_starts": [
+    {
+      "name": "player_start.initial",
+      "scene": "scene.play",
+      "target": "entity.player",
+      "position": [1.0, 1.6, 2.0],
+      "yaw": 0.25,
+      "pitch": 0.0
+    }
+  ],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.place_player_start",
+        "actions": [
+          {
+            "type": "editor.player_start.place",
+            "name": "player_start.initial",
+            "scene": "scene.play",
+            "target": "entity.player",
+            "position": [3.0, 1.75, 4.0],
+            "yaw": 1.25,
+            "pitch": -0.1,
+            "outputs": {
+              "valid_key": "editor.player_start.valid",
+              "message_key": "editor.player_start.message",
+              "player_start_key": "editor.player_start.name",
+              "scene_key": "editor.player_start.scene",
+              "target_key": "editor.player_start.target",
+              "position_key": "editor.player_start.position",
+              "yaw_key": "editor.player_start.yaw",
+              "pitch_key": "editor.player_start.pitch",
+              "dirty_key": "editor.player_start.dirty",
+              "revision_key": "editor.player_start.revision",
+              "saved_revision_key": "editor.player_start.saved_revision"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "player_start.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_editor_player_start start{};
+    ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.initial", &start));
+    EXPECT_STREQ(start.scene, "scene.play");
+    EXPECT_STREQ(start.target, "entity.player");
+    EXPECT_NEAR(start.position.x, 1.0f, 0.001f);
+    slayer3d_game_data_player_start_editor_state state{};
+    ASSERT_TRUE(slayer3d_game_data_get_player_start_editor_state(runtime, &state));
+    EXPECT_FALSE(state.dirty);
+    EXPECT_EQ(state.count, 1);
+
+    const int place_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.place_player_start");
+    ASSERT_GE(place_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), place_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.name", ""), "player_start.initial");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.scene", ""), "scene.play");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.dirty", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
+
+    ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.initial", &start));
+    EXPECT_NEAR(start.position.x, 3.0f, 0.001f);
+    EXPECT_NEAR(start.position.y, 1.75f, 0.001f);
+    EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(start.yaw, 1.25f, 0.001f);
+    EXPECT_NEAR(start.pitch, -0.1f, 0.001f);
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(player->position.x, 3.0f, 0.001f);
+    EXPECT_NEAR(player->position.y, 1.75f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "yaw", 0.0f), 1.25f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "pitch", 0.0f), -0.1f, 0.001f);
+
+    char *export_json = nullptr;
+    size_t export_size = 0U;
+    ASSERT_TRUE(slayer3d_game_data_export_player_starts_fragment_json(runtime, &export_json, &export_size, error,
+                                                                      sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+    EXPECT_GT(export_size, 0U);
+    write_text(dir / "fragments" / "player_starts.fragment.json", export_json);
+    SDL_free(export_json);
+    write_text(dir / "roundtrip.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "imports": [{ "path": "fragments/player_starts.fragment.json", "sections": ["editor_player_starts"] }],
+  "metadata": { "name": "Editor Player Start Roundtrip" },
+  "world": { "name": "world.editor_player_start_roundtrip", "kind": "brush" },
+  "entities": [{ "name": "entity.player" }],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *roundtrip_session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
+    slayer3d_game_data_runtime *roundtrip_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "roundtrip.game.json").string().c_str(), roundtrip_session,
+                                             &roundtrip_runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(roundtrip_runtime, "player_start.initial", &start));
+    EXPECT_NEAR(start.position.x, 3.0f, 0.001f);
+    EXPECT_NEAR(start.position.y, 1.75f, 0.001f);
+    EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(start.yaw, 1.25f, 0.001f);
+    EXPECT_NEAR(start.pitch, -0.1f, 0.001f);
 
     slayer3d_game_data_destroy(roundtrip_runtime);
     slayer3d_game_session_destroy(roundtrip_session);

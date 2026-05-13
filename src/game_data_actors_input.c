@@ -212,6 +212,51 @@ bool load_entities(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *
     return true;
 }
 
+bool load_editor_player_starts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
+                               int error_buffer_size)
+{
+    yyjson_val *starts = obj_get(root, "editor_player_starts");
+    if (!yyjson_is_arr(starts))
+        return true;
+
+    const size_t count = yyjson_arr_size(starts);
+    if (count > (size_t)SDL_MAX_SINT32)
+    {
+        set_error(error_buffer, error_buffer_size, "too many editor player starts");
+        return false;
+    }
+    runtime->editor_player_start_count = (int)count;
+    runtime->editor_player_start_capacity = (int)count;
+    runtime->editor_player_starts =
+        (editor_player_start_runtime *)SDL_calloc(count, sizeof(*runtime->editor_player_starts));
+    if (runtime->editor_player_starts == NULL && count > 0u)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate editor player starts");
+        return false;
+    }
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        yyjson_val *start = yyjson_arr_get(starts, i);
+        editor_player_start_runtime *entry = &runtime->editor_player_starts[i];
+        const char *name = json_string(start, "name", NULL);
+        const char *scene = json_string(start, "scene", NULL);
+        const char *target = json_string(start, "target", NULL);
+        entry->name = name != NULL ? SDL_strdup(name) : NULL;
+        entry->scene = scene != NULL ? SDL_strdup(scene) : NULL;
+        entry->target = target != NULL ? SDL_strdup(target) : NULL;
+        entry->position = json_vec3(start, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        entry->yaw = json_float(start, "yaw", 0.0f);
+        entry->pitch = json_float(start, "pitch", 0.0f);
+        if (entry->name == NULL || (scene != NULL && entry->scene == NULL) || (target != NULL && entry->target == NULL))
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate editor player start");
+            return false;
+        }
+    }
+    return true;
+}
+
 static yyjson_val *find_actor_archetype_json(yyjson_val *root, const char *name)
 {
     yyjson_val *archetypes = obj_get(root, "actor_archetypes");

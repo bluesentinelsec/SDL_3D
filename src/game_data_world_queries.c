@@ -880,6 +880,204 @@ bool slayer3d_game_data_mark_brush_world_saved(slayer3d_game_data_runtime *runti
     return true;
 }
 
+static editor_player_start_runtime *find_editor_player_start_mutable(slayer3d_game_data_runtime *runtime,
+                                                                     const char *name)
+{
+    if (runtime == NULL || name == NULL)
+        return NULL;
+    for (int i = 0; i < runtime->editor_player_start_count; ++i)
+    {
+        if (runtime->editor_player_starts[i].name != NULL &&
+            SDL_strcmp(runtime->editor_player_starts[i].name, name) == 0)
+        {
+            return &runtime->editor_player_starts[i];
+        }
+    }
+    return NULL;
+}
+
+static const editor_player_start_runtime *find_editor_player_start(const slayer3d_game_data_runtime *runtime,
+                                                                   const char *name)
+{
+    return find_editor_player_start_mutable((slayer3d_game_data_runtime *)runtime, name);
+}
+
+static bool runtime_scene_exists(const slayer3d_game_data_runtime *runtime, const char *scene)
+{
+    if (scene == NULL || scene[0] == '\0')
+        return true;
+    for (int i = 0; runtime != NULL && i < runtime->scene_count; ++i)
+    {
+        if (runtime->scenes[i].name != NULL && SDL_strcmp(runtime->scenes[i].name, scene) == 0)
+            return true;
+    }
+    return false;
+}
+
+bool slayer3d_game_data_get_editor_player_start(const slayer3d_game_data_runtime *runtime, const char *name,
+                                                slayer3d_game_data_editor_player_start *out_start)
+{
+    if (out_start != NULL)
+        SDL_zero(*out_start);
+    const editor_player_start_runtime *start = find_editor_player_start(runtime, name);
+    if (start == NULL || out_start == NULL)
+        return false;
+    out_start->name = start->name;
+    out_start->scene = start->scene;
+    out_start->target = start->target;
+    out_start->position = start->position;
+    out_start->yaw = start->yaw;
+    out_start->pitch = start->pitch;
+    return true;
+}
+
+bool slayer3d_game_data_get_player_start_editor_state(const slayer3d_game_data_runtime *runtime,
+                                                      slayer3d_game_data_player_start_editor_state *out_state)
+{
+    if (out_state != NULL)
+        SDL_zero(*out_state);
+    if (runtime == NULL || out_state == NULL)
+        return false;
+    out_state->source_path = runtime->editor_player_start_source_path;
+    out_state->dirty = runtime->editor_player_start_dirty;
+    out_state->revision = runtime->editor_player_start_revision;
+    out_state->saved_revision = runtime->editor_player_start_saved_revision;
+    out_state->count = runtime->editor_player_start_count;
+    return true;
+}
+
+static bool ensure_editor_player_start_capacity(slayer3d_game_data_runtime *runtime, int required_capacity)
+{
+    if (runtime == NULL || required_capacity <= runtime->editor_player_start_capacity)
+        return runtime != NULL;
+    int capacity = runtime->editor_player_start_capacity > 0 ? runtime->editor_player_start_capacity : 4;
+    while (capacity < required_capacity)
+        capacity *= 2;
+    editor_player_start_runtime *starts =
+        (editor_player_start_runtime *)SDL_realloc(runtime->editor_player_starts, (size_t)capacity * sizeof(*starts));
+    if (starts == NULL)
+        return false;
+    SDL_memset(starts + runtime->editor_player_start_capacity, 0,
+               (size_t)(capacity - runtime->editor_player_start_capacity) * sizeof(*starts));
+    runtime->editor_player_starts = starts;
+    runtime->editor_player_start_capacity = capacity;
+    return true;
+}
+
+static bool duplicate_optional_string(const char *value, char **out_copy)
+{
+    if (out_copy != NULL)
+        *out_copy = NULL;
+    if (out_copy == NULL)
+        return false;
+    if (value == NULL || value[0] == '\0')
+        return true;
+    *out_copy = SDL_strdup(value);
+    return *out_copy != NULL;
+}
+
+static void mark_editor_player_starts_dirty(slayer3d_game_data_runtime *runtime)
+{
+    runtime->editor_player_start_revision++;
+    runtime->editor_player_start_dirty = true;
+}
+
+bool slayer3d_game_data_place_editor_player_start(slayer3d_game_data_runtime *runtime,
+                                                  const slayer3d_game_data_place_player_start_desc *desc,
+                                                  char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || desc == NULL || desc->name == NULL || desc->name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "player start placement requires a runtime and name");
+        return false;
+    }
+
+    const char *scene = first_non_empty_string(desc->scene, slayer3d_game_data_active_scene(runtime), NULL);
+    if (!runtime_scene_exists(runtime, scene))
+    {
+        set_errorf(error_buffer, error_buffer_size, "player start scene '%s' not found", scene);
+        return false;
+    }
+
+    slayer3d_registered_actor *target =
+        desc->target != NULL && desc->target[0] != '\0' ? slayer3d_game_data_find_actor(runtime, desc->target) : NULL;
+    if (desc->target != NULL && desc->target[0] != '\0' && target == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "player start target '%s' not found", desc->target);
+        return false;
+    }
+
+    slayer3d_vec3 position = desc->position;
+    if (!desc->has_position)
+    {
+        slayer3d_game_data_editor_selection selection;
+        SDL_zero(selection);
+        if (slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.hit)
+            position = selection.point;
+        else if (target != NULL)
+            position = target->position;
+        else
+        {
+            set_error(error_buffer, error_buffer_size, "player start placement requires a position or target");
+            return false;
+        }
+    }
+
+    const float yaw =
+        desc->has_yaw || target == NULL ? desc->yaw : slayer3d_properties_get_float(target->props, "yaw", 0.0f);
+    const float pitch =
+        desc->has_pitch || target == NULL ? desc->pitch : slayer3d_properties_get_float(target->props, "pitch", 0.0f);
+
+    char *scene_copy = NULL;
+    char *target_copy = NULL;
+    if (!duplicate_optional_string(scene, &scene_copy) || !duplicate_optional_string(desc->target, &target_copy))
+    {
+        SDL_free(scene_copy);
+        SDL_free(target_copy);
+        set_error(error_buffer, error_buffer_size, "failed to allocate player start fields");
+        return false;
+    }
+
+    editor_player_start_runtime *entry = find_editor_player_start_mutable(runtime, desc->name);
+    if (entry == NULL)
+    {
+        if (!ensure_editor_player_start_capacity(runtime, runtime->editor_player_start_count + 1))
+        {
+            SDL_free(scene_copy);
+            SDL_free(target_copy);
+            set_error(error_buffer, error_buffer_size, "failed to allocate player start");
+            return false;
+        }
+        entry = &runtime->editor_player_starts[runtime->editor_player_start_count];
+        entry->name = SDL_strdup(desc->name);
+        if (entry->name == NULL)
+        {
+            SDL_free(scene_copy);
+            SDL_free(target_copy);
+            set_error(error_buffer, error_buffer_size, "failed to allocate player start name");
+            return false;
+        }
+        runtime->editor_player_start_count++;
+    }
+
+    SDL_free(entry->scene);
+    SDL_free(entry->target);
+    entry->scene = scene_copy;
+    entry->target = target_copy;
+    entry->position = position;
+    entry->yaw = yaw;
+    entry->pitch = pitch;
+    mark_editor_player_starts_dirty(runtime);
+
+    if (desc->apply_to_target && target != NULL)
+    {
+        actor_set_position(target, position);
+        slayer3d_properties_set_float(target->props, "yaw", yaw);
+        slayer3d_properties_set_float(target->props, "pitch", pitch);
+    }
+    return true;
+}
+
 static bool export_add_vec3(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_vec3 value)
 {
     yyjson_mut_val *arr = yyjson_mut_arr(doc);
@@ -1157,6 +1355,78 @@ bool slayer3d_game_data_export_brush_world_fragment_json(const slayer3d_game_dat
     {
         free(json);
         set_error(error_buffer, error_buffer_size, "failed to allocate brush world export JSON");
+        return false;
+    }
+    SDL_memcpy(copy, json, size + 1u);
+    free(json);
+    *out_json = copy;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
+static bool export_add_player_start(yyjson_mut_doc *doc, yyjson_mut_val *starts,
+                                    const editor_player_start_runtime *start)
+{
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    if (obj == NULL || !yyjson_mut_arr_add_val(starts, obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "name", start->name != NULL ? start->name : "") ||
+        !export_add_vec3(doc, obj, "position", start->position) ||
+        !yyjson_mut_obj_add_real(doc, obj, "yaw", start->yaw) ||
+        !yyjson_mut_obj_add_real(doc, obj, "pitch", start->pitch))
+    {
+        return false;
+    }
+    if (start->scene != NULL && !yyjson_mut_obj_add_strcpy(doc, obj, "scene", start->scene))
+        return false;
+    if (start->target != NULL && !yyjson_mut_obj_add_strcpy(doc, obj, "target", start->target))
+        return false;
+    return true;
+}
+
+bool slayer3d_game_data_export_player_starts_fragment_json(const slayer3d_game_data_runtime *runtime, char **out_json,
+                                                           size_t *out_size, char *error_buffer, int error_buffer_size)
+{
+    if (out_json != NULL)
+        *out_json = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (runtime == NULL || out_json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "player start export requires runtime and output");
+        return false;
+    }
+
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *starts = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    if (doc == NULL || root == NULL || starts == NULL)
+    {
+        yyjson_mut_doc_free(doc);
+        set_error(error_buffer, error_buffer_size, "failed to allocate player start export document");
+        return false;
+    }
+
+    yyjson_mut_doc_set_root(doc, root);
+    bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.fragment.v0") &&
+              yyjson_mut_obj_add_val(doc, root, "editor_player_starts", starts);
+    for (int i = 0; ok && i < runtime->editor_player_start_count; ++i)
+        ok = export_add_player_start(doc, starts, &runtime->editor_player_starts[i]);
+
+    size_t size = 0u;
+    char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
+    yyjson_mut_doc_free(doc);
+    if (json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to write player start export JSON");
+        return false;
+    }
+
+    char *copy = (char *)SDL_malloc(size + 1u);
+    if (copy == NULL)
+    {
+        free(json);
+        set_error(error_buffer, error_buffer_size, "failed to allocate player start export JSON");
         return false;
     }
     SDL_memcpy(copy, json, size + 1u);
@@ -2618,6 +2888,29 @@ static bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtim
     return ok;
 }
 
+static void publish_editor_player_start_state(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
+                                              const editor_player_start_runtime *start)
+{
+    if (runtime == NULL || outputs == NULL)
+        return;
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    slayer3d_game_data_player_start_editor_state state;
+    SDL_zero(state);
+    (void)slayer3d_game_data_get_player_start_editor_state(runtime, &state);
+    editor_set_string_output(scene_state, outputs, "player_start_key", start != NULL ? start->name : "");
+    editor_set_string_output(scene_state, outputs, "scene_key",
+                             start != NULL && start->scene != NULL ? start->scene : "");
+    editor_set_string_output(scene_state, outputs, "target_key",
+                             start != NULL && start->target != NULL ? start->target : "");
+    editor_set_vec3_output(scene_state, outputs, "position_key",
+                           start != NULL ? start->position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    editor_set_float_output(scene_state, outputs, "yaw_key", start != NULL ? start->yaw : 0.0f);
+    editor_set_float_output(scene_state, outputs, "pitch_key", start != NULL ? start->pitch : 0.0f);
+    editor_set_bool_output(scene_state, outputs, "dirty_key", state.dirty);
+    editor_set_int_output(scene_state, outputs, "revision_key", editor_revision_to_int(state.revision));
+    editor_set_int_output(scene_state, outputs, "saved_revision_key", editor_revision_to_int(state.saved_revision));
+}
+
 bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");
@@ -2671,6 +2964,37 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
                                 : (error[0] != '\0' ? error : "box brush creation failed"));
     editor_set_string_output(scene_state, outputs, "brush_key", ok ? brush_name : "");
     (void)publish_editor_brush_world_status(runtime, outputs, desc.world_name, NULL, false);
+    return true;
+}
+
+bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_game_data_place_player_start_desc desc;
+    SDL_zero(desc);
+    desc.name = json_string(action, "name", NULL);
+    desc.scene = json_string(action, "scene", NULL);
+    desc.target = json_string(action, "target", NULL);
+    yyjson_val *position = obj_get(action, "position");
+    desc.has_position = position != NULL;
+    desc.position = json_vec3(action, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    yyjson_val *yaw = obj_get(action, "yaw");
+    yyjson_val *pitch = obj_get(action, "pitch");
+    desc.has_yaw = yaw != NULL;
+    desc.yaw = json_float(action, "yaw", 0.0f);
+    desc.has_pitch = pitch != NULL;
+    desc.pitch = json_float(action, "pitch", 0.0f);
+    desc.apply_to_target = json_bool(action, "apply_to_target", true);
+
+    char error[256];
+    error[0] = '\0';
+    const bool ok = slayer3d_game_data_place_editor_player_start(runtime, &desc, error, (int)sizeof(error));
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "player start placed")
+                                : (error[0] != '\0' ? error : "player start placement failed"));
+    publish_editor_player_start_state(runtime, outputs, ok ? find_editor_player_start(runtime, desc.name) : NULL);
     return true;
 }
 
