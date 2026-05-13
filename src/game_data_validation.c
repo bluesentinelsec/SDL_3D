@@ -5773,6 +5773,16 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                                             "lifecycle.ttl property names and reason must be non-empty strings");
                 }
             }
+            else if (SDL_strcmp(type, "particles.emitter") == 0)
+            {
+                const char *render_style = json_string(component, "render_style");
+                if (render_style != NULL && SDL_strcmp(render_style, "default") != 0 &&
+                    SDL_strcmp(render_style, "soft_smoke") != 0)
+                {
+                    return validation_error(ctx, path,
+                                            "particles.emitter render_style must be 'default' or 'soft_smoke'");
+                }
+            }
             else if (SDL_strcmp(type, "motion.spin") == 0)
             {
                 yyjson_val *property = obj_get(component, "property");

@@ -38,6 +38,36 @@ static slayer3d_vec3 slayer3d_effects_camera_right(const slayer3d_render_context
 static slayer3d_vec3 slayer3d_effects_camera_up(const slayer3d_render_context *context);
 static slayer3d_vec3 slayer3d_effects_camera_forward(const slayer3d_render_context *context);
 
+static const char k_soft_smoke_particle_frag[] =
+    "in vec2 vTexCoord;\n"
+    "in vec4 vColor;\n"
+    "uniform vec4 uTint;\n"
+    "out vec4 fragColor;\n"
+    "float hash(vec2 p) {\n"
+    "    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);\n"
+    "}\n"
+    "float noise(vec2 p) {\n"
+    "    vec2 i = floor(p);\n"
+    "    vec2 f = fract(p);\n"
+    "    vec2 u = f * f * (3.0 - 2.0 * f);\n"
+    "    return mix(mix(hash(i + vec2(0.0, 0.0)), hash(i + vec2(1.0, 0.0)), u.x),\n"
+    "               mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);\n"
+    "}\n"
+    "void main() {\n"
+    "    vec2 centered = vTexCoord * 2.0 - 1.0;\n"
+    "    float radius = length(centered);\n"
+    "    if (radius >= 1.0) discard;\n"
+    "    float radial = 1.0 - smoothstep(0.20, 1.0, radius);\n"
+    "    float edge = 1.0 - smoothstep(0.62, 1.0, radius);\n"
+    "    float n1 = noise(vTexCoord * 4.0 + vec2(vColor.r * 3.1, vColor.g * 2.7));\n"
+    "    float n2 = noise(vTexCoord * 9.0 + vec2(vColor.b * 5.3, vColor.a * 1.7));\n"
+    "    float wisps = smoothstep(0.20, 0.95, n1 * 0.65 + n2 * 0.35);\n"
+    "    float alpha = vColor.a * uTint.a * radial * edge * mix(0.55, 1.0, wisps);\n"
+    "    if (alpha <= 0.01) discard;\n"
+    "    vec3 color = vColor.rgb * uTint.rgb * mix(0.72, 1.08, n1);\n"
+    "    fragColor = vec4(color, alpha);\n"
+    "}\n";
+
 static float slayer3d_effects_absf(float value)
 {
     return value < 0.0f ? -value : value;
@@ -126,6 +156,11 @@ static slayer3d_particle_config slayer3d_particle_config_normalized(const slayer
     if (normalized.shape < SLAYER3D_PARTICLE_EMITTER_POINT || normalized.shape > SLAYER3D_PARTICLE_EMITTER_CIRCLE)
     {
         normalized.shape = SLAYER3D_PARTICLE_EMITTER_POINT;
+    }
+    if (normalized.render_style < SLAYER3D_PARTICLE_RENDER_DEFAULT ||
+        normalized.render_style > SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE)
+    {
+        normalized.render_style = SLAYER3D_PARTICLE_RENDER_DEFAULT;
     }
     return normalized;
 }
@@ -472,6 +507,16 @@ static bool slayer3d_draw_particle_quad(slayer3d_render_context *context, const 
     if (size <= 0.0f || color.a == 0)
     {
         return true;
+    }
+
+    if (config->render_style == SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE)
+    {
+        const slayer3d_vec2 billboard_size = {size, size};
+        const slayer3d_vec2 anchor = {0.5f, 0.5f};
+        return slayer3d_draw_billboard_shader_ex(context, config->texture, particle->position, billboard_size, anchor,
+                                                 config->camera_facing ? SLAYER3D_BILLBOARD_SPHERICAL
+                                                                       : SLAYER3D_BILLBOARD_UPRIGHT,
+                                                 color, false, NULL, k_soft_smoke_particle_frag);
     }
 
     if (config->camera_facing)

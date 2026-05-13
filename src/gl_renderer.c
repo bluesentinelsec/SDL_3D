@@ -2747,6 +2747,8 @@ static void apply_geometry_cull_state(slayer3d_gl_context *ctx)
 {
     slayer3d_gl_funcs *gl = &ctx->gl;
     gl->Enable(GL_DEPTH_TEST);
+    gl->Enable(GL_BLEND);
+    gl->BlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     gl->CullFace(GL_BACK);
     gl->FrontFace(GL_CCW);
 

@@ -1540,8 +1540,6 @@ bool slayer3d_draw_billboard_shader_ex(slayer3d_render_context *context, const s
         return slayer3d_draw_billboard_ex(context, texture, position, size, anchor, mode, tint);
     if (!slayer3d_require_mode_3d(context, "slayer3d_draw_billboard_shader_ex"))
         return false;
-    if (texture == NULL)
-        return SDL_InvalidParamError("texture");
     if (size.x <= 0.0f)
         return SDL_SetError("Billboard size.x must be positive.");
     if (size.y <= 0.0f)

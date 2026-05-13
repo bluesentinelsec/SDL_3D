@@ -1533,6 +1533,11 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     out_config->extents = json_vec3(component, "extents", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     out_config->radius = json_float(component, "radius", 0.0f);
     out_config->emissive_intensity = json_float(component, "emissive_intensity", 1.0f);
+    const char *render_style = json_string(component, "render_style", "default");
+    if (SDL_strcmp(render_style, "soft_smoke") == 0)
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE;
+    else
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_DEFAULT;
     out_config->camera_facing = json_bool(component, "camera_facing", true);
     out_config->depth_test = json_bool(component, "depth_test", true);
     out_config->additive_blend = json_bool(component, "additive_blend", false);

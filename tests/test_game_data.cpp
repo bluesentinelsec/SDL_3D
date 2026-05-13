@@ -7955,6 +7955,11 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(smoke->active);
     EXPECT_TRUE(tracer->active);
     EXPECT_TRUE(impact_decal->active);
+    slayer3d_particle_config smoke_config{};
+    ASSERT_TRUE(slayer3d_game_data_get_particle_emitter(runtime, smoke->name, &smoke_config));
+    EXPECT_EQ(smoke_config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
+    EXPECT_LT(smoke_config.color_start.a, 128);
+    EXPECT_GT(smoke_config.size_end, smoke_config.size_start);
     const slayer3d_vec3 tracer_velocity =
         slayer3d_properties_get_vec3(tracer->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_GT(slayer3d_vec3_length_squared(tracer_velocity), 1.0f);

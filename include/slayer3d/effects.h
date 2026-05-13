@@ -32,6 +32,19 @@ extern "C"
     } slayer3d_particle_emitter_shape;
 
     /**
+     * @brief Particle render style.
+     *
+     * The default style draws the authored texture or tinted quad. Soft smoke
+     * uses a procedural GPU fragment shader when available, with the default
+     * quad path as the software fallback.
+     */
+    typedef enum slayer3d_particle_render_style
+    {
+        SLAYER3D_PARTICLE_RENDER_DEFAULT = 0,
+        SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE = 1,
+    } slayer3d_particle_render_style;
+
+    /**
      * @brief Particle emitter configuration.
      *
      * Existing point-emitter fields keep their original meaning. Newly added
@@ -56,12 +69,13 @@ extern "C"
         int max_particles;          /**< Maximum live/storage particles; defaults to 128 when <= 0. */
         float emit_rate;            /**< Continuous emission rate in particles per second. */
 
-        slayer3d_particle_emitter_shape shape; /**< Spawn volume shape. */
-        slayer3d_vec3 extents;                 /**< Half-size for SLAYER3D_PARTICLE_EMITTER_BOX. */
-        float radius;                          /**< XZ radius for SLAYER3D_PARTICLE_EMITTER_CIRCLE. */
-        float emissive_intensity;              /**< Extra unlit brightness scale while drawing particles. */
-        bool camera_facing;                    /**< True for spherical billboards, false for upright billboards. */
-        bool depth_test;                       /**< Reserved for future renderer support; currently depth-tested. */
+        slayer3d_particle_emitter_shape shape;       /**< Spawn volume shape. */
+        slayer3d_particle_render_style render_style; /**< Draw style for each particle billboard. */
+        slayer3d_vec3 extents;                       /**< Half-size for SLAYER3D_PARTICLE_EMITTER_BOX. */
+        float radius;                                /**< XZ radius for SLAYER3D_PARTICLE_EMITTER_CIRCLE. */
+        float emissive_intensity;                    /**< Extra unlit brightness scale while drawing particles. */
+        bool camera_facing;                /**< True for spherical billboards, false for upright billboards. */
+        bool depth_test;                   /**< Reserved for future renderer support; currently depth-tested. */
         bool additive_blend;               /**< Reserved for future renderer support; currently normal geometry path. */
         const slayer3d_texture2d *texture; /**< Optional RGBA particle texture; NULL draws colored quads. */
         Uint32 random_seed;                /**< Nonzero seed makes particle spawning deterministic per emitter. */

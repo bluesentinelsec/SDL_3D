@@ -2052,7 +2052,10 @@ Reusable components include:
   menus and data-authored profile controls can disable a light group without
   removing actors.
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
-  emitter is active only while the actor is active.
+  emitter is active only while the actor is active. `render_style` defaults to
+  `default`; `soft_smoke` renders procedural, soft-edged GPU smoke billboards
+  when a shader backend is available and falls back to the normal particle quad
+  path in software.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
   named by `size_property`. `texture` may reference an image asset id; each cube
   face is UV-mapped to the full image and tinted by `color`. The property path
