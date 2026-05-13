@@ -78,6 +78,46 @@
       "action.exit"
     ]
   },
+  "activity": {
+    "enabled": true,
+    "reset_periodic_on_input": false,
+    "periodic": [
+      {
+        "interval": 0.08,
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                { "type": "scene_state.compare", "key": "debug.revolver_smoke_tuning.enabled", "op": "==", "value": true },
+                { "type": "property.compare", "target": "entity.brush_geometry.player", "key": "revolver", "op": ">", "value": 0 }
+              ]
+            },
+            "then": [
+              {
+                "type": "actor.spawn",
+                "pool": "pool.brush_geometry.revolver_smoke",
+                "from": "entity.brush_geometry.player",
+                "directional_offset": { "property": "camera_forward", "distance": 0.75 },
+                "properties_from_actor": {
+                  "source": "entity.brush_geometry.revolver_smoke_config",
+                  "keys": [
+                    "smoke_offset_x",
+                    "smoke_offset_y",
+                    "smoke_offset_z",
+                    "smoke_size_scale",
+                    "smoke_alpha_scale",
+                    "smoke_emit_rate"
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
   "world": {
     "skybox": {
       "pos_x": "image.brush_geometry.skybox.px",

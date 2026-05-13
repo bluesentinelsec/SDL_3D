@@ -50,8 +50,23 @@
       {
         "signal": "signal.smoke_tune.toggle",
         "actions": [
-          { "type": "scene_state.set", "key": "debug.revolver_tuning.enabled", "value": false },
-          { "type": "scene_state.toggle", "key": "debug.revolver_smoke_tuning.enabled", "default": false }
+          {
+            "type": "branch",
+            "if": {
+              "type": "property.compare",
+              "target": "entity.brush_geometry.player",
+              "key": "revolver",
+              "op": ">",
+              "value": 0
+            },
+            "then": [
+              { "type": "scene_state.set", "key": "debug.revolver_tuning.enabled", "value": false },
+              { "type": "scene_state.toggle", "key": "debug.revolver_smoke_tuning.enabled", "default": false }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "debug.revolver_smoke_tuning.enabled", "value": false }
+            ]
+          }
         ]
       },
       {

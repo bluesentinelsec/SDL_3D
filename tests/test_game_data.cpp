@@ -7903,7 +7903,12 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
     slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
     const int revolver_pickup_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.pickup");
+    const int smoke_tune_toggle_signal = slayer3d_game_data_find_signal(runtime, "signal.smoke_tune.toggle");
     ASSERT_GE(revolver_pickup_signal, 0);
+    ASSERT_GE(smoke_tune_toggle_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), smoke_tune_toggle_signal, nullptr);
+    EXPECT_FALSE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime),
+                                              "debug.revolver_smoke_tuning.enabled", false));
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), revolver_pickup_signal, nullptr);
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "revolver", 0), 1);
     EXPECT_FALSE(revolver_pickup->active);
@@ -7989,10 +7994,8 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_GT(slayer3d_vec3_length_squared(tracer_velocity), 1.0f);
     const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.x_pos");
     const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.write");
-    const int smoke_tune_toggle_signal = slayer3d_game_data_find_signal(runtime, "signal.smoke_tune.toggle");
     ASSERT_GE(tune_x_signal, 0);
     ASSERT_GE(tune_write_signal, 0);
-    ASSERT_GE(smoke_tune_toggle_signal, 0);
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
     const int tune_toggle_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.toggle");
@@ -8014,12 +8017,24 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(
         slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "debug.revolver_tuning.enabled", false));
+    key.type = SDL_EVENT_KEY_UP;
+    key.key.scancode = SDL_SCANCODE_G;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    key.type = SDL_EVENT_KEY_DOWN;
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), smoke_tune_toggle_signal, nullptr);
     EXPECT_FALSE(
         slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "debug.revolver_tuning.enabled", true));
     EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime),
                                              "debug.revolver_smoke_tuning.enabled", false));
     const float old_smoke_x = slayer3d_properties_get_float(smoke_config_actor->props, "smoke_offset_x", 0.0f);
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.0f));
+    ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.08f));
+    slayer3d_registered_actor *preview_smoke =
+        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_smoke.1");
+    ASSERT_NE(preview_smoke, nullptr);
+    EXPECT_TRUE(preview_smoke->active);
+    EXPECT_NEAR(slayer3d_properties_get_float(preview_smoke->props, "smoke_offset_x", 0.0f), old_smoke_x, 0.0001f);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
     EXPECT_NEAR(slayer3d_properties_get_float(smoke_config_actor->props, "smoke_offset_x", 0.0f), old_smoke_x + 0.02f,
                 0.0001f);
@@ -8030,7 +8045,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const float old_gun_x = slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f);
     key.key.scancode = SDL_SCANCODE_RIGHT;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 2);
+    slayer3d_input_update(input, 3);
     EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_x_action));
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.02f, 0.0001f);
@@ -8045,13 +8060,13 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const float old_gun_scale = slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f);
     key.key.scancode = SDL_SCANCODE_COMMA;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 3);
+    slayer3d_input_update(input, 4);
     EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_scale_down_action));
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), old_gun_scale - 0.01f, 0.0001f);
     key.key.scancode = SDL_SCANCODE_PERIOD;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 4);
+    slayer3d_input_update(input, 5);
     EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_scale_up_action));
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), old_gun_scale, 0.0001f);
