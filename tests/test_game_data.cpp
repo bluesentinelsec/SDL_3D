@@ -7887,8 +7887,10 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
         slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_pickup_model, &saw_revolver_pickup));
     EXPECT_TRUE(saw_revolver_pickup);
     const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
+    const std::filesystem::path pickup_placement_path = "/tmp/gun-placement-pickup.txt";
     const std::filesystem::path placement_trace_path = "/tmp/gun-placement-trace.txt";
     std::filesystem::remove(placement_path);
+    std::filesystem::remove(pickup_placement_path);
     std::filesystem::remove(placement_trace_path);
     slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
     slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
@@ -7905,8 +7907,12 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f), -0.05f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -0.125f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_roll", 0.0f), 0.0f, 0.0001f);
-    ASSERT_TRUE(std::filesystem::exists(placement_path));
+    ASSERT_FALSE(std::filesystem::exists(placement_path));
+    ASSERT_TRUE(std::filesystem::exists(pickup_placement_path));
     ASSERT_TRUE(std::filesystem::exists(placement_trace_path));
+    const std::string pickup_placement_text = read_text(pickup_placement_path);
+    EXPECT_NE(pickup_placement_text.find("label=pickup.viewmodel.current"), std::string::npos);
+    EXPECT_NE(pickup_placement_text.find("gun_yaw=-0.125000"), std::string::npos);
     const std::string pickup_trace_text = read_text(placement_trace_path);
     EXPECT_NE(pickup_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
     EXPECT_NE(pickup_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
@@ -8015,6 +8021,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NE(full_trace_text.find("label=manual_write.viewmodel.current"), std::string::npos);
     EXPECT_NE(full_trace_text.find("label=manual_write.player.camera_state"), std::string::npos);
     std::filesystem::remove(placement_path);
+    std::filesystem::remove(pickup_placement_path);
     std::filesystem::remove(placement_trace_path);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);

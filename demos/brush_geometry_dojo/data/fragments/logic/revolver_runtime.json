@@ -47,7 +47,7 @@
           {
             "type": "debug.write_actor_properties",
             "target": "entity.brush_geometry.revolver_viewmodel",
-            "path": "/tmp/gun-placement.txt",
+            "path": "/tmp/gun-placement-pickup.txt",
             "label": "pickup.viewmodel.current",
             "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
           },
