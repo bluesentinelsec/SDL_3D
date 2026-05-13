@@ -97,7 +97,18 @@
                   {
                     "type": "actor.spawn",
                     "pool": "pool.brush_geometry.revolver_muzzle_flashes",
-                    "position": [0.0, 0.0, 0.55]
+                    "position": [0.0, 0.0, 0.55],
+                    "properties_from_actor": {
+                      "source": "entity.brush_geometry.revolver_muzzle_flash_config",
+                      "keys": [
+                        "flash_offset_x",
+                        "flash_offset_y",
+                        "flash_offset_z",
+                        "flash_size_scale",
+                        "flash_alpha_scale",
+                        "flash_emit_rate"
+                      ]
+                    }
                   },
                   {
                     "type": "actor.spawn",

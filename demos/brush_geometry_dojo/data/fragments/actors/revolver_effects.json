@@ -46,14 +46,22 @@
       "tags": ["weapon_effect", "muzzle_flash"],
       "properties": {
         "age": { "type": "float", "value": 0.0 },
-        "ttl": { "type": "float", "value": 0.08 }
+        "ttl": { "type": "float", "value": 0.08 },
+        "flash_offset_x": { "type": "float", "value": 0.04 },
+        "flash_offset_y": { "type": "float", "value": -0.2 },
+        "flash_offset_z": { "type": "float", "value": 0.3 },
+        "flash_size_scale": { "type": "float", "value": 1.0 },
+        "flash_alpha_scale": { "type": "float", "value": 1.0 },
+        "flash_emit_rate": { "type": "float", "value": 520.0 }
       },
       "components": [
         {
           "type": "particles.emitter",
           "render_style": "soft_fire",
           "space": "camera",
-          "position_offset": [0.04, -0.2, 0.3],
+          "position_offset_x_property": "flash_offset_x",
+          "position_offset_y_property": "flash_offset_y",
+          "position_offset_z_property": "flash_offset_z",
           "direction": [0.0, 0.0, 1.0],
           "spread": 0.55,
           "speed_min": 0.03,
@@ -62,9 +70,12 @@
           "lifetime_max": 0.055,
           "size_start": 0.34,
           "size_end": 0.08,
+          "size_scale_property": "flash_size_scale",
           "color_start": [255, 235, 145, 245],
           "color_end": [255, 76, 12, 0],
+          "alpha_scale_property": "flash_alpha_scale",
           "emit_rate": 520.0,
+          "emit_rate_property": "flash_emit_rate",
           "max_particles": 16,
           "camera_facing": true,
           "additive_blend": true,
