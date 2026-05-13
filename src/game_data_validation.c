@@ -3041,12 +3041,12 @@ static bool validate_render_camera_visibility_field(validation_context *ctx, yyj
     if (yyjson_is_str(value))
         return require_ref(ctx, &names->cameras, "camera", yyjson_get_str(value), path);
     if (!yyjson_is_arr(value) || yyjson_arr_size(value) == 0)
-        return validation_error(ctx, path, "render primitive camera visibility must be a string or non-empty array");
+        return validation_error(ctx, path, "camera visibility must be a string or non-empty array");
     for (size_t i = 0; i < yyjson_arr_size(value); ++i)
     {
         yyjson_val *entry = yyjson_arr_get(value, i);
         if (!yyjson_is_str(entry) || yyjson_get_str(entry)[0] == '\0')
-            return validation_error(ctx, path, "render primitive camera visibility must contain camera names");
+            return validation_error(ctx, path, "camera visibility must contain camera names");
         if (!require_ref(ctx, &names->cameras, "camera", yyjson_get_str(entry), path))
             return false;
     }
@@ -3330,7 +3330,8 @@ static bool validate_status_effect_timer_component(validation_context *ctx, yyjs
     return validate_optional_signal_field(ctx, component, path, names, "on_expire");
 }
 
-static bool validate_particle_emitter_component(validation_context *ctx, yyjson_val *component, const char *path)
+static bool validate_particle_emitter_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                                const validation_names *names)
 {
     const char *render_style = json_string(component, "render_style");
     if (render_style != NULL && SDL_strcmp(render_style, "default") != 0 &&
@@ -3348,6 +3349,11 @@ static bool validate_particle_emitter_component(validation_context *ctx, yyjson_
     const char *space = json_string(component, "space");
     if (space != NULL && SDL_strcmp(space, "world") != 0 && SDL_strcmp(space, "camera") != 0)
         return validation_error(ctx, path, "particles.emitter space must be 'world' or 'camera'");
+    if (!validate_render_camera_visibility_field(ctx, component, path, names, "visible_to_cameras") ||
+        !validate_render_camera_visibility_field(ctx, component, path, names, "hidden_from_cameras"))
+    {
+        return false;
+    }
 
     const char *property_fields[] = {
         "position_offset_property",    "position_offset_x_property", "position_offset_y_property",
@@ -5844,7 +5850,7 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
             }
             else if (SDL_strcmp(type, "particles.emitter") == 0)
             {
-                if (!validate_particle_emitter_component(ctx, component, path))
+                if (!validate_particle_emitter_component(ctx, component, path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "motion.spin") == 0)
@@ -6373,7 +6379,7 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             }
             else if (SDL_strcmp(type, "particles.emitter") == 0)
             {
-                if (!validate_particle_emitter_component(ctx, component, component_path))
+                if (!validate_particle_emitter_component(ctx, component, component_path, names))
                     return false;
             }
             else if (SDL_strcmp(type, "motion.grid_agent") == 0)
