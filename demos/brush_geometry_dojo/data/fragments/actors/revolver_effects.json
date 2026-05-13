@@ -78,12 +78,12 @@
       "properties": {
         "age": { "type": "float", "value": 0.0 },
         "ttl": { "type": "float", "value": 0.35 },
-        "smoke_offset_x": { "type": "float", "value": 0.0 },
-        "smoke_offset_y": { "type": "float", "value": 0.0 },
-        "smoke_offset_z": { "type": "float", "value": 0.0 },
-        "smoke_size_scale": { "type": "float", "value": 1.0 },
-        "smoke_alpha_scale": { "type": "float", "value": 1.0 },
-        "smoke_emit_rate": { "type": "float", "value": 48.0 }
+        "smoke_offset_x": { "type": "float", "value": 0.04 },
+        "smoke_offset_y": { "type": "float", "value": -0.24 },
+        "smoke_offset_z": { "type": "float", "value": -0.2 },
+        "smoke_size_scale": { "type": "float", "value": 0.5 },
+        "smoke_alpha_scale": { "type": "float", "value": 0.35 },
+        "smoke_emit_rate": { "type": "float", "value": 20.0 }
       },
       "components": [
         {
