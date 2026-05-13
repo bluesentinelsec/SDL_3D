@@ -2583,13 +2583,13 @@ bool slayer3d_game_data_draw_render_primitives_evaluated(const slayer3d_game_dat
                                                        true);
 }
 
-static slayer3d_camera3d game_data_viewmodel_camera(void)
+static slayer3d_camera3d game_data_viewmodel_camera(const slayer3d_camera3d *scene_camera)
 {
     slayer3d_camera3d camera;
     SDL_zero(camera);
-    camera.projection = SLAYER3D_CAMERA_PERSPECTIVE;
-    camera.fovy = SLAYER3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES;
-    camera.fov_axis = SLAYER3D_CAMERA_FOV_VERTICAL;
+    camera.projection = scene_camera != NULL ? scene_camera->projection : SLAYER3D_CAMERA_PERSPECTIVE;
+    camera.fovy = scene_camera != NULL ? scene_camera->fovy : SLAYER3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES;
+    camera.fov_axis = scene_camera != NULL ? scene_camera->fov_axis : SLAYER3D_CAMERA_FOV_VERTICAL;
     camera.position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     camera.target = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
     camera.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
@@ -3709,7 +3709,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
             ok = slayer3d_game_data_draw_active_editor_debug_primitives(frame->runtime, frame->renderer) && ok;
             ok = run_frame_hook(frame, frame->after_world_3d) && ok;
             slayer3d_end_mode_3d(frame->renderer);
-            const slayer3d_camera3d viewmodel_camera = game_data_viewmodel_camera();
+            const slayer3d_camera3d viewmodel_camera = game_data_viewmodel_camera(&camera);
             if (slayer3d_begin_mode_3d(frame->renderer, viewmodel_camera))
             {
                 ok = draw_render_primitives_evaluated_with_cache(
