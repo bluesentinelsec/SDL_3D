@@ -8075,6 +8075,13 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (!editor_command_target_name_valid(target))
             return validation_error(
                 ctx, json_path, "editor.command.preview target must be selection, world, element, face, or material");
+        yyjson_val *material = obj_get(action, "material");
+        if (SDL_strcmp(command, "paint") == 0 && (!yyjson_is_str(material) || yyjson_get_str(material)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path, "editor.command.preview paint requires a non-empty material");
+        }
+        if (material != NULL && !yyjson_is_str(material))
+            return validation_error(ctx, json_path, "editor.command.preview material must be a string");
         yyjson_val *offset = obj_get(action, "offset");
         if (offset != NULL && !is_vec_array(offset, 3))
             return validation_error(ctx, json_path, "editor.command.preview offset must be a vec3");

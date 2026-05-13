@@ -1824,6 +1824,12 @@ static bool editor_command_target_name_valid(const char *target)
                               SDL_strcmp(target, "material") == 0);
 }
 
+static int find_editor_brush_material_index(const brush_world_runtime *world_runtime, const char *material_name);
+static bool resolve_editor_paint_material(slayer3d_game_data_runtime *runtime,
+                                          const slayer3d_game_data_editor_selection *selection,
+                                          const char *material_name, const char **out_material_name,
+                                          int *out_material_index);
+
 static const char *editor_selection_type_name(slayer3d_game_data_world_model_type type)
 {
     if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL)
@@ -2129,6 +2135,21 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
     }
 
     const slayer3d_vec3 offset = editor_command_preview_offset(action, &selection);
+    const char *paint_material_name = NULL;
+    int paint_material_index = -1;
+    if (SDL_strcmp(command, "paint") == 0)
+    {
+        const char *authored_material = json_string(action, "material", NULL);
+        if (!resolve_editor_paint_material(runtime, &selection, authored_material, &paint_material_name,
+                                           &paint_material_index))
+        {
+            clear_editor_command_preview(runtime);
+            publish_editor_command_preview(runtime, outputs, false, command, target, "paint preview material not found",
+                                           NULL, NULL);
+            return true;
+        }
+    }
+
     slayer3d_bounding_box bounds = selection.has_bounds ? translated_bounds(selection.bounds, offset)
                                                         : (slayer3d_bounding_box){selection.point, selection.point};
 
@@ -2140,8 +2161,16 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
     preview->target = target;
     preview->world_name = selection.world_name;
     preview->element_name = selection.element_name;
-    preview->material_name = selection.material_name;
+    preview->material_name = paint_material_name != NULL ? paint_material_name : selection.material_name;
+    preview->previous_material_name = selection.material_name;
     preview->face_index = selection.face_index;
+    preview->material_index = paint_material_index;
+    preview->previous_material_index = -1;
+    if (selection.world_name != NULL && selection.material_name != NULL)
+    {
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection.world_name);
+        preview->previous_material_index = find_editor_brush_material_index(world_runtime, selection.material_name);
+    }
     preview->outputs = outputs;
     preview->offset = offset;
     preview->has_bounds = true;
@@ -2214,6 +2243,8 @@ static slayer3d_properties *create_editor_transaction_payload(const slayer3d_gam
                                        entry->element_name != NULL ? entry->element_name : "");
         slayer3d_properties_set_string(payload, "editor_transaction_material",
                                        entry->material_name != NULL ? entry->material_name : "");
+        slayer3d_properties_set_string(payload, "editor_transaction_previous_material",
+                                       entry->previous_material_name != NULL ? entry->previous_material_name : "");
         slayer3d_properties_set_int(payload, "editor_transaction_face_index", entry->face_index);
         slayer3d_properties_set_vec3(payload, "editor_transaction_offset", entry->offset);
         slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_min",
@@ -2231,6 +2262,7 @@ static slayer3d_properties *create_editor_transaction_payload(const slayer3d_gam
         slayer3d_properties_set_string(payload, "editor_transaction_world", "");
         slayer3d_properties_set_string(payload, "editor_transaction_element", "");
         slayer3d_properties_set_string(payload, "editor_transaction_material", "");
+        slayer3d_properties_set_string(payload, "editor_transaction_previous_material", "");
         slayer3d_properties_set_int(payload, "editor_transaction_face_index", -1);
         slayer3d_properties_set_vec3(payload, "editor_transaction_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
         slayer3d_properties_set_vec3(payload, "editor_transaction_bounds_min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
@@ -2318,6 +2350,8 @@ static editor_command_transaction_entry *editor_command_history_append(slayer3d_
     SDL_zero(*entry);
     entry->id = ++history->next_id;
     entry->face_index = -1;
+    entry->material_index = -1;
+    entry->previous_material_index = -1;
     history->count++;
     history->cursor = history->count;
     return entry;
@@ -2335,6 +2369,19 @@ static slayer3d_game_data_brush *find_editor_mutable_brush(brush_world_runtime *
             return brush;
     }
     return NULL;
+}
+
+static int find_editor_brush_material_index(const brush_world_runtime *world_runtime, const char *material_name)
+{
+    if (world_runtime == NULL || material_name == NULL || material_name[0] == '\0')
+        return -1;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    for (int i = 0; i < world->material_count; ++i)
+    {
+        if (world->materials[i].name != NULL && SDL_strcmp(world->materials[i].name, material_name) == 0)
+            return i;
+    }
+    return -1;
 }
 
 static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
@@ -2356,6 +2403,32 @@ static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
     slayer3d_free_model(&world_runtime->render_model);
     world_runtime->render_model = render_model;
     world->render_model = &world_runtime->render_model;
+    return true;
+}
+
+static bool resolve_editor_paint_material(slayer3d_game_data_runtime *runtime,
+                                          const slayer3d_game_data_editor_selection *selection,
+                                          const char *material_name, const char **out_material_name,
+                                          int *out_material_index)
+{
+    if (out_material_name != NULL)
+        *out_material_name = NULL;
+    if (out_material_index != NULL)
+        *out_material_index = -1;
+    if (runtime == NULL || selection == NULL || selection->world_name == NULL || material_name == NULL ||
+        material_name[0] == '\0')
+    {
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    const int material_index = find_editor_brush_material_index(world_runtime, material_name);
+    if (material_index < 0)
+        return false;
+    if (out_material_name != NULL)
+        *out_material_name = world_runtime->desc.materials[material_index].name;
+    if (out_material_index != NULL)
+        *out_material_index = material_index;
     return true;
 }
 
@@ -2392,6 +2465,43 @@ static bool apply_editor_brush_translate(slayer3d_game_data_runtime *runtime,
     return false;
 }
 
+static bool set_editor_brush_face_material(brush_world_runtime *world_runtime, slayer3d_game_data_brush *brush,
+                                           int face_index, int material_index)
+{
+    if (world_runtime == NULL || brush == NULL || face_index < 0 || face_index >= brush->face_count ||
+        material_index < 0 || material_index >= world_runtime->desc.material_count)
+    {
+        return false;
+    }
+    slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[face_index];
+    face->material_index = material_index;
+    face->material_name = world_runtime->desc.materials[material_index].name;
+    return true;
+}
+
+static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const editor_command_transaction_entry *entry,
+                                     bool forward)
+{
+    if (runtime == NULL || entry == NULL || entry->world_name == NULL || entry->element_name == NULL ||
+        entry->face_index < 0)
+    {
+        return false;
+    }
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+    slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, entry->element_name);
+    const int material_index = forward ? entry->material_index : entry->previous_material_index;
+    const int rollback_index = forward ? entry->previous_material_index : entry->material_index;
+    if (!set_editor_brush_face_material(world_runtime, brush, entry->face_index, material_index))
+        return false;
+    if (rebuild_editor_brush_world(world_runtime))
+        return true;
+
+    (void)set_editor_brush_face_material(world_runtime, brush, entry->face_index, rollback_index);
+    (void)rebuild_editor_brush_world(world_runtime);
+    return false;
+}
+
 static void translate_active_editor_selection_for_transaction(slayer3d_game_data_runtime *runtime,
                                                               const editor_command_transaction_entry *entry,
                                                               slayer3d_vec3 offset)
@@ -2417,12 +2527,44 @@ static void translate_active_editor_selection_for_transaction(slayer3d_game_data
     publish_editor_selection(runtime, obj_get(selection_json, "outputs"), selection);
 }
 
+static void update_active_editor_selection_material_for_transaction(slayer3d_game_data_runtime *runtime,
+                                                                    const editor_command_transaction_entry *entry,
+                                                                    bool forward)
+{
+    if (runtime == NULL || entry == NULL || !runtime->editor_active_selection.hit)
+        return;
+    slayer3d_game_data_editor_selection *selection = &runtime->editor_active_selection;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (active_scene == NULL || entry->scene == NULL || SDL_strcmp(active_scene, entry->scene) != 0 ||
+        selection->world_name == NULL || entry->world_name == NULL ||
+        SDL_strcmp(selection->world_name, entry->world_name) != 0 || selection->element_name == NULL ||
+        entry->element_name == NULL || SDL_strcmp(selection->element_name, entry->element_name) != 0 ||
+        selection->face_index != entry->face_index)
+    {
+        return;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, entry->world_name);
+    const int material_index = forward ? entry->material_index : entry->previous_material_index;
+    selection->material_name = forward ? entry->material_name : entry->previous_material_name;
+    selection->material_editor =
+        world_runtime != NULL && material_index >= 0 && material_index < world_runtime->desc.material_count
+            ? &world_runtime->desc.materials[material_index].editor
+            : NULL;
+
+    yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
+    publish_editor_selection(runtime, obj_get(selection_json, "outputs"), selection);
+}
+
 static bool editor_transaction_has_brush_mutation(const editor_command_transaction_entry *entry)
 {
-    return entry != NULL && entry->command != NULL && entry->target != NULL &&
-           SDL_strcmp(entry->command, "translate") == 0 && SDL_strcmp(entry->target, "element") == 0 &&
-           entry->world_name != NULL && entry->world_name[0] != '\0' && entry->element_name != NULL &&
-           entry->element_name[0] != '\0';
+    if (entry == NULL || entry->command == NULL || entry->target == NULL || entry->world_name == NULL ||
+        entry->world_name[0] == '\0' || entry->element_name == NULL || entry->element_name[0] == '\0')
+    {
+        return false;
+    }
+    return (SDL_strcmp(entry->command, "translate") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
+           (SDL_strcmp(entry->command, "paint") == 0 && SDL_strcmp(entry->target, "face") == 0);
 }
 
 static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtime,
@@ -2430,6 +2572,14 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
 {
     if (!editor_transaction_has_brush_mutation(entry))
         return true;
+    if (SDL_strcmp(entry->command, "paint") == 0)
+    {
+        if (!apply_editor_brush_paint(runtime, entry, forward))
+            return false;
+        update_active_editor_selection_material_for_transaction(runtime, entry, forward);
+        return true;
+    }
+
     const slayer3d_vec3 offset = forward ? entry->offset : slayer3d_vec3_scale(entry->offset, -1.0f);
     if (!apply_editor_brush_translate(runtime, entry, offset))
         return false;
@@ -2463,7 +2613,10 @@ bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtim
     entry->world_name = preview->world_name;
     entry->element_name = preview->element_name;
     entry->material_name = preview->material_name;
+    entry->previous_material_name = preview->previous_material_name;
     entry->face_index = preview->face_index;
+    entry->material_index = preview->material_index;
+    entry->previous_material_index = preview->previous_material_index;
     entry->offset = preview->offset;
     entry->has_bounds = preview->has_bounds;
     entry->bounds = preview->bounds;

@@ -152,23 +152,50 @@
         "signal": "signal.editor.command.preview",
         "actions": [
           {
-            "type": "editor.command.preview",
-            "command": "translate",
-            "target": "element",
-            "offset": [0.0, 0.35, 0.0],
-            "message": "preview translate {selection_element}",
-            "outputs": {
-              "active_key": "editor.command_preview.active",
-              "valid_key": "editor.command_preview.valid",
-              "command_key": "editor.command_preview.command",
-              "target_key": "editor.command_preview.target",
-              "message_key": "editor.command_preview.message",
-              "world_key": "editor.command_preview.world",
-              "element_key": "editor.command_preview.element",
-              "face_index_key": "editor.command_preview.face_index",
-              "bounds_min_key": "editor.command_preview.bounds_min",
-              "bounds_max_key": "editor.command_preview.bounds_max"
-            }
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "paint" },
+            "then": [
+              {
+                "type": "editor.command.preview",
+                "command": "paint",
+                "target": "face",
+                "material": "mat.editor.floor",
+                "message": "preview paint {selection_element}",
+                "outputs": {
+                  "active_key": "editor.command_preview.active",
+                  "valid_key": "editor.command_preview.valid",
+                  "command_key": "editor.command_preview.command",
+                  "target_key": "editor.command_preview.target",
+                  "message_key": "editor.command_preview.message",
+                  "world_key": "editor.command_preview.world",
+                  "element_key": "editor.command_preview.element",
+                  "face_index_key": "editor.command_preview.face_index",
+                  "bounds_min_key": "editor.command_preview.bounds_min",
+                  "bounds_max_key": "editor.command_preview.bounds_max"
+                }
+              }
+            ],
+            "else": [
+              {
+                "type": "editor.command.preview",
+                "command": "translate",
+                "target": "element",
+                "offset": [0.0, 0.35, 0.0],
+                "message": "preview translate {selection_element}",
+                "outputs": {
+                  "active_key": "editor.command_preview.active",
+                  "valid_key": "editor.command_preview.valid",
+                  "command_key": "editor.command_preview.command",
+                  "target_key": "editor.command_preview.target",
+                  "message_key": "editor.command_preview.message",
+                  "world_key": "editor.command_preview.world",
+                  "element_key": "editor.command_preview.element",
+                  "face_index_key": "editor.command_preview.face_index",
+                  "bounds_min_key": "editor.command_preview.bounds_min",
+                  "bounds_max_key": "editor.command_preview.bounds_max"
+                }
+              }
+            ]
           }
         ]
       },
