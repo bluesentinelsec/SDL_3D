@@ -782,6 +782,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions, const slayer3d_properties *payload);
 bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
                                    const slayer3d_properties *payload);
+bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
+slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
+    const slayer3d_game_data_editor_selection *selection);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,

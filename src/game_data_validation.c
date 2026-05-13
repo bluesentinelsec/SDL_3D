@@ -8048,6 +8048,19 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "scene_state.cycle default must be scalar");
         return true;
     }
+    if (SDL_strcmp(type, "editor.selection.clear") == 0)
+        return true;
+    if (SDL_strcmp(type, "editor.selection.run") == 0)
+    {
+        char actions_path[PATH_BUFFER_SIZE];
+        char else_path[PATH_BUFFER_SIZE];
+        format_path(actions_path, sizeof(actions_path), "%s.actions", json_path);
+        format_path(else_path, sizeof(else_path), "%s.else", json_path);
+        if (!validate_action_array(ctx, obj_get(action, "actions"), actions_path, names))
+            return false;
+        yyjson_val *else_actions = obj_get(action, "else");
+        return else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names);
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))
