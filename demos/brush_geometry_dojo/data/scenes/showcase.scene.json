@@ -98,8 +98,7 @@
               {
                 "type": "actor.spawn",
                 "pool": "pool.brush_geometry.revolver_smoke",
-                "from": "entity.brush_geometry.player",
-                "directional_offset": { "property": "camera_forward", "distance": 0.75 },
+                "position": [0.0, 0.0, 0.75],
                 "properties_from_actor": {
                   "source": "entity.brush_geometry.revolver_smoke_config",
                   "keys": [

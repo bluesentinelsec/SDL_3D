@@ -3307,6 +3307,9 @@ static bool validate_particle_emitter_component(validation_context *ctx, yyjson_
     yyjson_val *position_offset = obj_get(component, "position_offset");
     if (position_offset != NULL && !is_vec_array(position_offset, 3))
         return validation_error(ctx, path, "particles.emitter position_offset must be a vec3");
+    const char *space = json_string(component, "space");
+    if (space != NULL && SDL_strcmp(space, "world") != 0 && SDL_strcmp(space, "camera") != 0)
+        return validation_error(ctx, path, "particles.emitter space must be 'world' or 'camera'");
 
     const char *property_fields[] = {
         "position_offset_property",    "position_offset_x_property", "position_offset_y_property",

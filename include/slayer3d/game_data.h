@@ -1581,6 +1581,8 @@ extern "C"
         const char *entity_name;
         /** @brief Emitter configuration evaluated from authored data and actor position. */
         slayer3d_particle_config config;
+        /** @brief True when particle positions are evaluated in camera/viewmodel space. */
+        bool view_space;
         /** @brief Draw-time emissive color to apply around particle rendering. */
         slayer3d_vec3 draw_emissive;
     } slayer3d_game_data_particle_emitter;

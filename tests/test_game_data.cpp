@@ -226,6 +226,7 @@ struct ParticleCapture
     bool saw_options_flow = false;
     bool saw_pooled_emitter = false;
     bool saw_nukage_vapor = false;
+    bool saw_revolver_smoke = false;
 };
 
 struct EvaluatedPrimitiveCapture
@@ -1759,6 +1760,12 @@ bool capture_particle(void *userdata, const slayer3d_game_data_particle_emitter 
         EXPECT_EQ(emitter->config.max_particles, 360);
         EXPECT_TRUE(emitter->config.additive_blend);
         EXPECT_NEAR(emitter->draw_emissive.y, 0.95f, 0.0001f);
+    }
+    if (std::string(emitter->entity_name) == "pool.brush_geometry.revolver_smoke.0")
+    {
+        capture->saw_revolver_smoke = true;
+        EXPECT_TRUE(emitter->view_space);
+        EXPECT_EQ(emitter->config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
     }
     return true;
 }
@@ -7983,12 +7990,15 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(smoke_config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
     EXPECT_NEAR(smoke_config.position.x, smoke->position.x + 0.11f, 0.0001f);
     EXPECT_NEAR(smoke_config.position.y, smoke->position.y + 0.04f, 0.0001f);
-    EXPECT_NEAR(smoke_config.position.z, smoke->position.z - 0.07f, 0.0001f);
+    EXPECT_NEAR(smoke_config.position.z, -(smoke->position.z - 0.07f), 0.0001f);
     EXPECT_EQ(smoke_config.color_start.a, 48);
     EXPECT_NEAR(smoke_config.emit_rate, 24.0f, 0.0001f);
     EXPECT_NEAR(smoke_config.size_start, 0.13f * 1.5f, 0.0001f);
     EXPECT_NEAR(smoke_config.size_end, 0.46f * 1.5f, 0.0001f);
     EXPECT_GT(smoke_config.size_end, smoke_config.size_start);
+    ParticleCapture revolver_particles{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &revolver_particles));
+    EXPECT_TRUE(revolver_particles.saw_revolver_smoke);
     const slayer3d_vec3 tracer_velocity =
         slayer3d_properties_get_vec3(tracer->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     EXPECT_GT(slayer3d_vec3_length_squared(tracer_velocity), 1.0f);

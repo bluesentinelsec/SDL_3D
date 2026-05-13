@@ -7,6 +7,12 @@
 
 #include "game_data_standard_options.h"
 
+static bool particle_emitter_component_is_view_space(yyjson_val *component)
+{
+    const char *space = json_string(component, "space", "world");
+    return space != NULL && SDL_strcmp(space, "camera") == 0;
+}
+
 bool slayer3d_game_data_get_app_control(const slayer3d_game_data_runtime *runtime,
                                         slayer3d_game_data_app_control *out_control)
 {
@@ -1522,6 +1528,8 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
     position_offset.z +=
         slayer3d_properties_get_float(actor->props, json_string(component, "position_offset_z_property", NULL), 0.0f);
     out_config->position = slayer3d_vec3_add(actor->position, position_offset);
+    if (particle_emitter_component_is_view_space(component))
+        out_config->position.z = -out_config->position.z;
     out_config->direction = json_vec3(component, "direction", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
     out_config->spread = json_float(component, "spread", 0.0f);
     out_config->speed_min = json_float(component, "speed_min", 0.0f);
@@ -1622,6 +1630,7 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
         emitter.entity_name = entity_name;
         if (!slayer3d_game_data_get_particle_emitter(runtime, entity_name, &emitter.config))
             continue;
+        emitter.view_space = particle_emitter_component_is_view_space(component);
         (void)slayer3d_game_data_get_particle_emitter_draw_emissive(runtime, entity_name, &emitter.draw_emissive);
 
         if (!callback(userdata, &emitter))
@@ -1630,8 +1639,8 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
     for (int pool_index = 0; keep_iterating && pool_index < runtime->actor_pool_count; ++pool_index)
     {
         actor_pool_runtime *pool = &runtime->actor_pools[pool_index];
-        if (!actor_pool_in_scene(pool, slayer3d_game_data_active_scene(runtime)) ||
-            find_component_json(pool->archetype_json, "particles.emitter") == NULL)
+        yyjson_val *pool_component = find_component_json(pool->archetype_json, "particles.emitter");
+        if (!actor_pool_in_scene(pool, slayer3d_game_data_active_scene(runtime)) || pool_component == NULL)
         {
             continue;
         }
@@ -1647,6 +1656,7 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
             emitter.entity_name = actor->name;
             if (!slayer3d_game_data_get_particle_emitter(runtime, actor->name, &emitter.config))
                 continue;
+            emitter.view_space = particle_emitter_component_is_view_space(pool_component);
             (void)slayer3d_game_data_get_particle_emitter_draw_emissive(runtime, actor->name, &emitter.draw_emissive);
 
             if (!callback(userdata, &emitter))

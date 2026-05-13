@@ -54,7 +54,7 @@
         "smoke_offset_z": { "type": "float", "value": -0.2 },
         "smoke_size_scale": { "type": "float", "value": 0.5 },
         "smoke_alpha_scale": { "type": "float", "value": 0.35 },
-        "smoke_emit_rate": { "type": "float", "value": 20.0 }
+        "smoke_emit_rate": { "type": "float", "value": 120.0 }
       },
       "editor": {
         "display_name": "Revolver Smoke Config",

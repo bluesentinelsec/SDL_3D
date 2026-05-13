@@ -98,6 +98,7 @@ extern "C"
         const char *entity_name;            /**< Runtime-owned entity name. */
         slayer3d_particle_emitter *emitter; /**< Owned particle emitter instance. */
         slayer3d_vec3 draw_emissive;        /**< Draw-time emissive color. */
+        bool view_space;                    /**< True when drawn with the viewmodel camera pass. */
         bool visible;                       /**< True when active in the current scene/frame. */
     } slayer3d_game_data_particle_cache_entry;
 
