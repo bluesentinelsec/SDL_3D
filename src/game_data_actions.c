@@ -16,6 +16,24 @@ static bool debug_write_all(SDL_IOStream *stream, const char *text)
     return SDL_WriteIO(stream, text, size) == size;
 }
 
+static SDL_IOStream *debug_open_property_dump(const char *path, bool append)
+{
+    if (path == NULL || path[0] == '\0')
+        return NULL;
+    if (!append)
+        return SDL_IOFromFile(path, "wb");
+
+    SDL_IOStream *stream = SDL_IOFromFile(path, "r+b");
+    if (stream == NULL)
+        return SDL_IOFromFile(path, "wb");
+    if (SDL_SeekIO(stream, 0, SDL_IO_SEEK_END) < 0)
+    {
+        (void)SDL_CloseIO(stream);
+        return NULL;
+    }
+    return stream;
+}
+
 static bool debug_write_property_value(SDL_IOStream *stream, const char *key, const slayer3d_value *value)
 {
     char line[256];
@@ -51,7 +69,8 @@ static bool debug_write_actor_properties(slayer3d_game_data_runtime *runtime, yy
     if (actor == NULL || path == NULL || path[0] == '\0' || !yyjson_is_arr(properties))
         return false;
 
-    SDL_IOStream *stream = SDL_IOFromFile(path, json_bool(action, "append", false) ? "ab" : "wb");
+    const bool append = json_bool(action, "append", false);
+    SDL_IOStream *stream = debug_open_property_dump(path, append);
     if (stream == NULL)
         return false;
 

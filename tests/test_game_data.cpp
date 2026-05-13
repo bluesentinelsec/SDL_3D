@@ -7910,6 +7910,8 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const std::string pickup_trace_text = read_text(placement_trace_path);
     EXPECT_NE(pickup_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
     EXPECT_NE(pickup_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
+    EXPECT_LT(pickup_trace_text.find("label=pickup.viewmodel.current"),
+              pickup_trace_text.find("label=pickup.player.camera_state"));
     bool saw_revolver_viewmodel = false;
     auto find_revolver_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
         bool *saw = static_cast<bool *>(userdata);
@@ -8007,6 +8009,11 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const std::string placement_text = read_text(placement_path);
     EXPECT_NE(placement_text.find("actor=entity.brush_geometry.revolver_viewmodel"), std::string::npos);
     EXPECT_NE(placement_text.find("gun_x="), std::string::npos);
+    const std::string full_trace_text = read_text(placement_trace_path);
+    EXPECT_NE(full_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
+    EXPECT_NE(full_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
+    EXPECT_NE(full_trace_text.find("label=manual_write.viewmodel.current"), std::string::npos);
+    EXPECT_NE(full_trace_text.find("label=manual_write.player.camera_state"), std::string::npos);
     std::filesystem::remove(placement_path);
     std::filesystem::remove(placement_trace_path);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
