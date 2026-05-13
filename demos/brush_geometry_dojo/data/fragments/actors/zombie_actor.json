@@ -21,6 +21,7 @@
       "properties": {
         "yaw": { "type": "float", "value": 0.0 },
         "walk_anim_time": { "type": "float", "value": 0.0 },
+        "hit_flash": { "type": "float", "value": 0.0 },
         "on_ground": { "type": "bool", "value": false }
       },
       "components": [
@@ -64,7 +65,16 @@
           "animation_time_property": "walk_anim_time",
           "animation_loop": true,
           "color": [255, 255, 255, 255],
-          "lighting": true
+          "lighting": true,
+          "effects": [
+            {
+              "type": "flash",
+              "source": "entity.brush_geometry.zombie",
+              "property": "hit_flash",
+              "color": [255, 72, 48, 255],
+              "emissive": [2.0, 0.35, 0.12]
+            }
+          ]
         }
       ]
     }

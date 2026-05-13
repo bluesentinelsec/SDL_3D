@@ -7760,7 +7760,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "property.animate") == 0)
     {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+        if (!validate_actor_target_action(ctx, action, json_path, names, "property.animate", "target",
+                                          "target_from_payload"))
             return false;
         if (!is_non_empty_string(action, "key"))
             return validation_error(ctx, json_path, "property.animate requires a non-empty key");
@@ -9762,6 +9763,16 @@ static bool validate_data_condition(validation_context *ctx, yyjson_val *conditi
                                     "scene_state.compare condition requires a supported comparison operator");
         if (obj_get(condition, "value") == NULL)
             return validation_error(ctx, path, "scene_state.compare condition requires a value");
+        return true;
+    }
+    if (SDL_strcmp(type != NULL ? type : "", "payload.compare") == 0)
+    {
+        if (!is_non_empty_string(condition, "key"))
+            return validation_error(ctx, path, "payload.compare condition requires a non-empty key");
+        if (!is_compare_op(json_string(condition, "op")))
+            return validation_error(ctx, path, "payload.compare condition requires a supported comparison operator");
+        if (obj_get(condition, "value") == NULL)
+            return validation_error(ctx, path, "payload.compare condition requires a value");
         return true;
     }
     if (SDL_strcmp(type != NULL ? type : "", "not") == 0)

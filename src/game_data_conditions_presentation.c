@@ -201,8 +201,9 @@ static bool value_equals_json_bool(const slayer3d_value *left, bool right)
     return left != NULL && left->type == SLAYER3D_VALUE_BOOL && left->as_bool == right;
 }
 
-bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
-                         const slayer3d_game_data_ui_metrics *metrics)
+static bool eval_data_condition_internal(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                                         const slayer3d_game_data_ui_metrics *metrics,
+                                         const slayer3d_properties *payload)
 {
     if (condition == NULL)
         return true;
@@ -250,6 +251,17 @@ bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *
             left = &fallback;
         return key != NULL && compare_value(left, op, obj_get(condition, "value"));
     }
+    if (SDL_strcmp(type, "payload.compare") == 0)
+    {
+        const char *key = json_string(condition, "key", NULL);
+        const char *op = json_string(condition, "op", NULL);
+        const slayer3d_value *left =
+            payload != NULL && key != NULL ? slayer3d_properties_get_value(payload, key) : NULL;
+        slayer3d_value fallback;
+        if (left == NULL && json_scalar_to_value(obj_get(condition, "default"), &fallback))
+            left = &fallback;
+        return key != NULL && compare_value(left, op, obj_get(condition, "value"));
+    }
     if (SDL_strcmp(type, "property.bool") == 0)
     {
         slayer3d_registered_actor *target =
@@ -269,7 +281,7 @@ bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *
         for (size_t i = 0; i < yyjson_arr_size(conditions); ++i)
         {
             saw_any = true;
-            const bool passed = eval_data_condition(runtime, yyjson_arr_get(conditions, i), metrics);
+            const bool passed = eval_data_condition_internal(runtime, yyjson_arr_get(conditions, i), metrics, payload);
             if (require_all && !passed)
                 return false;
             if (!require_all && passed)
@@ -278,8 +290,20 @@ bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *
         return require_all && saw_any;
     }
     if (SDL_strcmp(type, "not") == 0)
-        return !eval_data_condition(runtime, obj_get(condition, "condition"), metrics);
+        return !eval_data_condition_internal(runtime, obj_get(condition, "condition"), metrics, payload);
     return false;
+}
+
+bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                         const slayer3d_game_data_ui_metrics *metrics)
+{
+    return eval_data_condition_internal(runtime, condition, metrics, NULL);
+}
+
+bool eval_data_condition_with_payload(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
+                                      const slayer3d_game_data_ui_metrics *metrics, const slayer3d_properties *payload)
+{
+    return eval_data_condition_internal(runtime, condition, metrics, payload);
 }
 
 static bool ui_text_authored_is_visible(const slayer3d_game_data_runtime *runtime,

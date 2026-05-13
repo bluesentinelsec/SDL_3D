@@ -3,7 +3,8 @@
   "signals": [
     "signal.brush_geometry.revolver.pickup",
     "signal.brush_geometry.revolver.fire",
-    "signal.brush_geometry.revolver.recoil.return"
+    "signal.brush_geometry.revolver.recoil.return",
+    "signal.brush_geometry.zombie.hit_flash.return"
   ],
   "logic": {
     "sensors": [
@@ -95,6 +96,7 @@
                 "trace_brush_worlds": true,
                 "brush_contents_mask": ["solid", "projectile_clip"],
                 "direction_from_property": "camera_forward",
+                "target_tag": "zombie",
                 "directional_offset": { "property": "camera_forward", "distance": 0.75 },
                 "range": 80.0,
                 "cooldown_property": "fire_timer",
@@ -173,6 +175,33 @@
                     "target": "entity.brush_geometry.player",
                     "key": "last_revolver_hit_distance",
                     "value_from_payload": "hit_distance"
+                  },
+                  {
+                    "type": "branch",
+                    "if": { "type": "payload.compare", "key": "hit_actor", "op": "==", "value": true },
+                    "then": [
+                      {
+                        "type": "property.animate",
+                        "target_from_payload": "hit_actor_name",
+                        "key": "hit_flash",
+                        "to": 1.0,
+                        "duration": 0.025,
+                        "easing": "out_quad",
+                        "done_signal": "signal.brush_geometry.zombie.hit_flash.return"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "branch",
+                    "if": { "type": "payload.compare", "key": "hit_wall", "op": "==", "value": true },
+                    "then": [
+                      {
+                        "type": "actor.spawn",
+                        "pool": "pool.brush_geometry.revolver_impact_sparks",
+                        "position_from_payload": "hit_position",
+                        "payload_directional_offset": { "property": "hit_normal", "distance": 0.04 }
+                      }
+                    ]
                   }
                 ]
               }
@@ -205,6 +234,19 @@
             "key": "gun_recoil_pitch",
             "to": 0.0,
             "duration": 0.08,
+            "easing": "out_quad"
+          }
+        ]
+      },
+      {
+        "signal": "signal.brush_geometry.zombie.hit_flash.return",
+        "actions": [
+          {
+            "type": "property.animate",
+            "target": "entity.brush_geometry.zombie",
+            "key": "hit_flash",
+            "to": 0.0,
+            "duration": 0.12,
             "easing": "out_quad"
           }
         ]

@@ -505,9 +505,10 @@ static slayer3d_value_type property_type_from_name(const char *name, slayer3d_va
     return fallback;
 }
 
-bool start_property_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+bool start_property_animation_from_json(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                        const slayer3d_properties *payload)
 {
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, json_string(action, "target", NULL));
+    slayer3d_registered_actor *actor = action_target_actor(runtime, action, payload);
     const char *key = json_string(action, "key", NULL);
     yyjson_val *to_json = obj_get(action, "to");
     if (to_json == NULL)

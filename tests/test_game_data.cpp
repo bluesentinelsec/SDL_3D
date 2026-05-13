@@ -10117,6 +10117,7 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
       "transform": { "position": [2.0, 1.5, 4.0] },
       "properties": {
         "hit_radius": { "type": "float", "value": 0.5 },
+        "hit_flash": { "type": "float", "value": 0.0 },
         "health": { "type": "float", "value": 50.0 },
         "max_health": { "type": "float", "value": 50.0 },
         "alive": { "type": "bool", "value": true }
@@ -10151,6 +10152,19 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
                 "target": "entity.player",
                 "key": "last_hit_distance",
                 "value_from_payload": "hit_distance"
+              },
+              {
+                "type": "branch",
+                "if": { "type": "payload.compare", "key": "hit_actor", "op": "==", "value": true },
+                "then": [
+                  {
+                    "type": "property.animate",
+                    "target_from_payload": "actor_name",
+                    "key": "hit_flash",
+                    "to": 1.0,
+                    "duration": 0.0
+                  }
+                ]
               }
             ]
           }
@@ -10204,6 +10218,7 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
     slayer3d_signal_emit(bus, fire, nullptr);
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "energy", -1), 0);
     EXPECT_NEAR(slayer3d_properties_get_float(enemy->props, "health", 0.0f), 35.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(enemy->props, "hit_flash", 0.0f), 1.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(player->props, "last_hit_distance", 0.0f), 3.5f, 0.251f);
 
     slayer3d_signal_emit(bus, fire, nullptr);
@@ -10297,10 +10312,16 @@ TEST(GameDataRuntime, WeaponHitscanTracesActiveBrushWorlds)
                 "speed": 40.0
               },
               {
-                "type": "actor.spawn",
-                "pool": "pool.decals",
-                "position_from_payload": "hit_position",
-                "payload_directional_offset": { "property": "hit_normal", "distance": 0.05 }
+                "type": "branch",
+                "if": { "type": "payload.compare", "key": "hit_wall", "op": "==", "value": true },
+                "then": [
+                  {
+                    "type": "actor.spawn",
+                    "pool": "pool.decals",
+                    "position_from_payload": "hit_position",
+                    "payload_directional_offset": { "property": "hit_normal", "distance": 0.05 }
+                  }
+                ]
               }
             ]
           }

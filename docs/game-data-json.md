@@ -2356,7 +2356,9 @@ as a float so fractional damage, timers, and meters can accumulate correctly:
 
 `branch` executes `then` actions when its `if` condition passes and `else`
 actions when it does not. Either side may be omitted, which makes that branch a
-successful no-op:
+successful no-op. Conditions normally read scene state or actor properties.
+Actions that receive a runtime payload, such as `weapon.hitscan` or sensors,
+can also use `payload.compare` with the same comparison operators:
 
 ```json
 {
@@ -2364,6 +2366,16 @@ successful no-op:
   "if": { "type": "scene_state.compare", "key": "debug.enabled", "op": "==", "value": true },
   "then": [
     { "type": "property.add", "target": "entity.debug_marker", "key": "x", "value": 1.0 }
+  ]
+}
+```
+
+```json
+{
+  "type": "branch",
+  "if": { "type": "payload.compare", "key": "hit_wall", "op": "==", "value": true },
+  "then": [
+    { "type": "actor.spawn", "pool": "pool.impact_sparks", "position_from_payload": "hit_position" }
   ]
 }
 ```
@@ -2384,10 +2396,12 @@ file:
 ```
 
 `property.animate` tweens a numeric, vec3, or color actor property over time.
-It supports `from`, `to`/`value`, `duration`, `easing`, `repeat`, and optional
-`done_signal`. Omit `from` to start from the property's current runtime value;
-this is useful for repeated weapon recoil or other effects that may be
-re-triggered before the previous animation has fully settled.
+It supports `target` or `target_from_payload`, `from`, `to`/`value`,
+`duration`, `easing`, `repeat`, and optional `done_signal`. Omit `from` to
+start from the property's current runtime value; this is useful for repeated
+weapon recoil or other effects that may be re-triggered before the previous
+animation has fully settled. Use `target_from_payload` for generic hit
+reactions such as flashing whichever actor a hitscan weapon struck.
 
 Generic combat actions provide reusable health, armor, death, and revival
 behavior without writing game-specific C:
