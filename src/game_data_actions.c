@@ -5,6 +5,7 @@
 
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
 
@@ -16,9 +17,89 @@ static bool debug_write_all(SDL_IOStream *stream, const char *text)
     return SDL_WriteIO(stream, text, size) == size;
 }
 
+static bool debug_make_directory_recursive(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (SDL_GetPathInfo(path, &info))
+        return info.type == SDL_PATHTYPE_DIRECTORY;
+
+    char *copy = SDL_strdup(path);
+    if (copy == NULL)
+        return false;
+
+    bool ok = true;
+    for (char *p = copy + 1; *p != '\0'; ++p)
+    {
+        if (*p != '/' && *p != '\\')
+            continue;
+        const char saved = *p;
+        *p = '\0';
+        if (copy[0] != '\0')
+        {
+            SDL_zero(info);
+            if (!SDL_GetPathInfo(copy, &info))
+                ok = SDL_CreateDirectory(copy);
+            else
+                ok = info.type == SDL_PATHTYPE_DIRECTORY;
+        }
+        *p = saved;
+        if (!ok)
+            break;
+    }
+
+    if (ok)
+    {
+        SDL_zero(info);
+        if (!SDL_GetPathInfo(copy, &info))
+            ok = SDL_CreateDirectory(copy);
+        else
+            ok = info.type == SDL_PATHTYPE_DIRECTORY;
+    }
+
+    SDL_free(copy);
+    return ok;
+}
+
+static char *debug_parent_directory(const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    const char *slash = SDL_strrchr(path, '/');
+    const char *backslash = SDL_strrchr(path, '\\');
+    if (backslash != NULL && (slash == NULL || backslash > slash))
+        slash = backslash;
+    if (slash == NULL)
+        return SDL_strdup(".");
+    const size_t len = (size_t)(slash - path);
+    if (len == 0u)
+        return SDL_strdup("/");
+    char *parent = (char *)SDL_malloc(len + 1u);
+    if (parent == NULL)
+        return NULL;
+    SDL_memcpy(parent, path, len);
+    parent[len] = '\0';
+    return parent;
+}
+
+static bool debug_ensure_parent_directory(const char *path)
+{
+    char *parent = debug_parent_directory(path);
+    if (parent == NULL)
+        return false;
+    const bool ok = debug_make_directory_recursive(parent);
+    SDL_free(parent);
+    return ok;
+}
+
 static SDL_IOStream *debug_open_property_dump(const char *path, bool append)
 {
     if (path == NULL || path[0] == '\0')
+        return NULL;
+    if (!debug_ensure_parent_directory(path))
         return NULL;
     if (!append)
         return SDL_IOFromFile(path, "wb");
