@@ -3,8 +3,7 @@
   "signals": [
     "signal.brush_geometry.revolver.pickup",
     "signal.brush_geometry.revolver.fire",
-    "signal.brush_geometry.revolver.recoil.return",
-    "signal.brush_geometry.zombie.hit_flash.return"
+    "signal.brush_geometry.revolver.recoil.return"
   ],
   "logic": {
     "sensors": [
@@ -181,13 +180,18 @@
                     "if": { "type": "payload.compare", "key": "hit_actor", "op": "==", "value": true },
                     "then": [
                       {
+                        "type": "property.set",
+                        "target_from_payload": "hit_actor_name",
+                        "key": "hit_flash",
+                        "value": 1.0
+                      },
+                      {
                         "type": "property.animate",
                         "target_from_payload": "hit_actor_name",
                         "key": "hit_flash",
-                        "to": 1.0,
-                        "duration": 0.025,
-                        "easing": "out_quad",
-                        "done_signal": "signal.brush_geometry.zombie.hit_flash.return"
+                        "to": 0.0,
+                        "duration": 0.22,
+                        "easing": "out_quad"
                       }
                     ]
                   },
@@ -234,19 +238,6 @@
             "key": "gun_recoil_pitch",
             "to": 0.0,
             "duration": 0.08,
-            "easing": "out_quad"
-          }
-        ]
-      },
-      {
-        "signal": "signal.brush_geometry.zombie.hit_flash.return",
-        "actions": [
-          {
-            "type": "property.animate",
-            "target": "entity.brush_geometry.zombie",
-            "key": "hit_flash",
-            "to": 0.0,
-            "duration": 0.12,
             "easing": "out_quad"
           }
         ]

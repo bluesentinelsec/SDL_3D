@@ -1820,8 +1820,10 @@ Hitscan payloads include `source_actor_name`, `actor_name` / `hit_actor_name`,
 `hit_normal`, `hit_contents`, and `hit_surface_flags`. Use these fields for
 damage, particles, lights, sounds, decals, or debug UI. Actor hit tests use a
 target actor's `hit_radius` or `radius` property, falling back to the action's
-`hit_radius` value. Brush hits block actor hits behind the wall because the
-actor query is limited to the nearest wall distance.
+`hit_radius` value. The sphere is centered on the actor position plus optional
+`hit_center_offset`; use this for actors whose origin is at the feet rather than
+the torso. Brush hits block actor hits behind the wall because the actor query
+is limited to the nearest wall distance.
 
 ## Sector Level Fragments
 

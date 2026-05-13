@@ -10114,9 +10114,10 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
       "name": "entity.enemy",
       "active": true,
       "tags": ["enemy"],
-      "transform": { "position": [2.0, 1.5, 4.0] },
+      "transform": { "position": [2.0, 0.0, 4.0] },
       "properties": {
         "hit_radius": { "type": "float", "value": 0.5 },
+        "hit_center_offset": { "type": "vec3", "value": [0.0, 1.5, 0.0] },
         "hit_flash": { "type": "float", "value": 0.0 },
         "health": { "type": "float", "value": 50.0 },
         "max_health": { "type": "float", "value": 50.0 },
@@ -10158,11 +10159,17 @@ TEST(GameDataRuntime, WeaponHitscanTracesSectorAndRunsImpactActions)
                 "if": { "type": "payload.compare", "key": "hit_actor", "op": "==", "value": true },
                 "then": [
                   {
+                    "type": "property.set",
+                    "target_from_payload": "actor_name",
+                    "key": "hit_flash",
+                    "value": 1.0
+                  },
+                  {
                     "type": "property.animate",
                     "target_from_payload": "actor_name",
                     "key": "hit_flash",
-                    "to": 1.0,
-                    "duration": 0.0
+                    "to": 0.0,
+                    "duration": 0.2
                   }
                 ]
               }
