@@ -49,9 +49,9 @@
       "id": 812,
       "active": false,
       "properties": {
-        "smoke_offset_x": { "type": "float", "value": 0.04 },
-        "smoke_offset_y": { "type": "float", "value": -0.2 },
-        "smoke_offset_z": { "type": "float", "value": 0.3 },
+        "smoke_offset_x": { "type": "float", "value": -0.06 },
+        "smoke_offset_y": { "type": "float", "value": 0.1 },
+        "smoke_offset_z": { "type": "float", "value": 0.27 },
         "smoke_size_scale": { "type": "float", "value": 0.25 },
         "smoke_alpha_scale": { "type": "float", "value": 0.35 },
         "smoke_emit_rate": { "type": "float", "value": 120.0 }
@@ -68,9 +68,9 @@
       "id": 813,
       "active": false,
       "properties": {
-        "flash_offset_x": { "type": "float", "value": 0.04 },
-        "flash_offset_y": { "type": "float", "value": -0.2 },
-        "flash_offset_z": { "type": "float", "value": 0.36 },
+        "flash_offset_x": { "type": "float", "value": -0.06 },
+        "flash_offset_y": { "type": "float", "value": 0.1 },
+        "flash_offset_z": { "type": "float", "value": 0.33 },
         "flash_size_scale": { "type": "float", "value": 0.15 },
         "flash_alpha_scale": { "type": "float", "value": 1.0 },
         "flash_intensity": { "type": "float", "value": 2.6 }

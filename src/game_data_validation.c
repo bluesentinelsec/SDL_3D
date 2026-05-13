@@ -7821,6 +7821,27 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         {
             return validation_error(ctx, json_path, "actor.spawn position_from_payload must be a non-empty string");
         }
+        yyjson_val *position_from_actor_properties = obj_get(action, "position_from_actor_properties");
+        if (position_from_actor_properties != NULL)
+        {
+            if (!yyjson_is_obj(position_from_actor_properties))
+                return validation_error(ctx, json_path, "actor.spawn position_from_actor_properties must be an object");
+            if (!require_actor_ref(ctx, names, json_string(position_from_actor_properties, "source"), json_path))
+                return false;
+            const char *x = json_string(position_from_actor_properties, "x");
+            const char *y = json_string(position_from_actor_properties, "y");
+            const char *z = json_string(position_from_actor_properties, "z");
+            if (x == NULL || x[0] == '\0' || y == NULL || y[0] == '\0' || z == NULL || z[0] == '\0')
+            {
+                return validation_error(ctx, json_path,
+                                        "actor.spawn position_from_actor_properties requires non-empty x, y, and z "
+                                        "property names");
+            }
+            yyjson_val *property_offset = obj_get(position_from_actor_properties, "offset");
+            if (property_offset != NULL && !is_vec_array(property_offset, 3))
+                return validation_error(ctx, json_path,
+                                        "actor.spawn position_from_actor_properties offset must be a vec3");
+        }
         yyjson_val *offset = obj_get(action, "offset");
         if (offset != NULL && !is_vec_array(offset, 3))
             return validation_error(ctx, json_path, "actor.spawn offset must be a vec3");

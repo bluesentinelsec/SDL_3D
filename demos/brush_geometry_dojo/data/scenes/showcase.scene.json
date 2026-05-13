@@ -100,7 +100,12 @@
               {
                 "type": "actor.spawn",
                 "pool": "pool.brush_geometry.revolver_muzzle_flashes",
-                "position": [0.0, 0.0, 0.55],
+                "position_from_actor_properties": {
+                  "source": "entity.brush_geometry.revolver_viewmodel",
+                  "x": "gun_x",
+                  "y": "gun_y",
+                  "z": "gun_z"
+                },
                 "properties_from_actor": {
                   "source": "entity.brush_geometry.revolver_muzzle_flash_config",
                   "keys": [
@@ -128,7 +133,12 @@
               {
                 "type": "actor.spawn",
                 "pool": "pool.brush_geometry.revolver_smoke",
-                "position": [0.0, 0.0, 0.55],
+                "position_from_actor_properties": {
+                  "source": "entity.brush_geometry.revolver_viewmodel",
+                  "x": "gun_x",
+                  "y": "gun_y",
+                  "z": "gun_z"
+                },
                 "properties_from_actor": {
                   "source": "entity.brush_geometry.revolver_smoke_config",
                   "keys": [

@@ -6985,7 +6985,15 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
   },
   "world": { "name": "world.actor_pools", "kind": "fixed_screen" },
   "entities": [
-    { "name": "entity.player", "transform": { "position": [1.0, 2.0, 3.0] } }
+    {
+      "name": "entity.player",
+      "transform": { "position": [1.0, 2.0, 3.0] },
+      "properties": {
+        "anchor_x": { "type": "float", "value": 2.0 },
+        "anchor_y": { "type": "float", "value": 3.0 },
+        "anchor_z": { "type": "float", "value": 4.0 }
+      }
+    }
   ],
   "actor_archetypes": [
     {
@@ -7029,6 +7037,7 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
     "signal.spawn.reuse.again",
     "signal.spawn.reuse.exhausted",
     "signal.despawn.first",
+    "signal.spawn.property_position",
     "signal.despawn.projectiles"
   ],
   "logic": {
@@ -7093,6 +7102,23 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
         "signal": "signal.despawn.first",
         "actions": [
           { "type": "actor.despawn", "target": "pool.player_shots.0" }
+        ]
+      },
+      {
+        "signal": "signal.spawn.property_position",
+        "actions": [
+          {
+            "type": "actor.spawn",
+            "pool": "pool.player_shots",
+            "position_from_actor_properties": {
+              "source": "entity.player",
+              "x": "anchor_x",
+              "y": "anchor_y",
+              "z": "anchor_z",
+              "offset": [0.25, 0.5, -0.25]
+            },
+            "offset": [1.0, 0.0, 0.0]
+          }
         ]
       },
       {
@@ -7186,9 +7212,9 @@ TEST(GameDataRuntime, ActorPoolsSpawnDespawnAndResetActors)
     EXPECT_EQ(slayer3d_properties_get_int(shot0->props, "damage", 0), 1);
     expect_vec3_near(shot0->position, slayer3d_vec3_make(0.0f, 0.0f, 0.25f));
 
-    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.second"), nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.spawn.property_position"), nullptr);
     EXPECT_TRUE(shot0->active);
-    expect_vec3_near(shot0->position, slayer3d_vec3_make(4.0f, 5.0f, 6.0f));
+    expect_vec3_near(shot0->position, slayer3d_vec3_make(3.25f, 3.5f, 3.75f));
 
     slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.despawn.projectiles"), nullptr);
     EXPECT_FALSE(shot0->active);
@@ -7990,6 +8016,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     slayer3d_properties_set_float(muzzle_flash_config_actor->props, "flash_size_scale", 1.4f);
     slayer3d_properties_set_float(muzzle_flash_config_actor->props, "flash_alpha_scale", 0.8f);
     slayer3d_properties_set_float(muzzle_flash_config_actor->props, "flash_intensity", 3.2f);
+    slayer3d_properties_set_float(revolver->props, "gun_x", 0.2f);
     const int revolver_fire_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.fire");
     ASSERT_GE(revolver_fire_signal, 0);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), revolver_fire_signal, nullptr);
@@ -8003,6 +8030,12 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_impact_decals.0"), nullptr);
     EXPECT_TRUE(muzzle_flash->active);
     EXPECT_TRUE(smoke->active);
+    EXPECT_NEAR(muzzle_flash->position.x, 0.2f, 0.0001f);
+    EXPECT_NEAR(muzzle_flash->position.y, -0.3f, 0.0001f);
+    EXPECT_NEAR(muzzle_flash->position.z, 0.58f, 0.0001f);
+    EXPECT_NEAR(smoke->position.x, 0.2f, 0.0001f);
+    EXPECT_NEAR(smoke->position.y, -0.3f, 0.0001f);
+    EXPECT_NEAR(smoke->position.z, 0.58f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_offset_x", 0.0f), 0.09f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_size_scale", 0.0f), 1.4f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_alpha_scale", 0.0f), 0.8f, 0.0001f);
@@ -8016,7 +8049,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(smoke_config.render_style, SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE);
     EXPECT_NEAR(smoke_config.position.x, smoke->position.x + 0.11f, 0.0001f);
     EXPECT_NEAR(smoke_config.position.y, smoke->position.y + 0.04f, 0.0001f);
-    EXPECT_NEAR(smoke->position.z, 0.55f, 0.0001f);
     EXPECT_NEAR(smoke_config.position.z, -(smoke->position.z - 0.07f), 0.0001f);
     EXPECT_LT(smoke_config.position.z, -0.1f);
     EXPECT_EQ(smoke_config.color_start.a, 48);
@@ -17778,6 +17810,79 @@ TEST(GameDataRuntime, RejectsInvalidActorPoolsAndSpawnActions)
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json",
             "position_from_payload",
+        },
+        {
+            "bad_spawn_property_position_source",
+            R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          {
+            "type": "actor.spawn",
+            "pool": "pool.shots",
+            "position_from_actor_properties": {
+              "source": "entity.missing",
+              "x": "gun_x",
+              "y": "gun_y",
+              "z": "gun_z"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "unknown actor reference",
+        },
+        {
+            "bad_spawn_property_position_axis",
+            R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid", "id": "test.invalid", "version": "0.1.0" },
+  "entities": [
+    { "name": "entity.weapon" }
+  ],
+  "actor_archetypes": [
+    { "name": "archetype.shot" }
+  ],
+  "actor_pools": [
+    { "name": "pool.shots", "archetype": "archetype.shot", "capacity": 1 }
+  ],
+  "signals": ["signal.spawn"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.spawn",
+        "actions": [
+          {
+            "type": "actor.spawn",
+            "pool": "pool.shots",
+            "position_from_actor_properties": {
+              "source": "entity.weapon",
+              "x": "gun_x",
+              "y": "",
+              "z": "gun_z"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json",
+            "position_from_actor_properties",
         },
         {
             "bad_despawn_target",
