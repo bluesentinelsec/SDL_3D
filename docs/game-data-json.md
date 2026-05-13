@@ -2090,7 +2090,11 @@ Reusable components include:
   viewport instead of lingering in world space. Camera-space particle positions
   use the same authoring convention as camera-space models: positive Z is
   forward from the camera and is converted to the renderer's view-space axis at
-  draw time.
+  draw time. Particle emitters also support `visible_to_cameras` and
+  `hidden_from_cameras`, each authored as a camera name or array of camera
+  names. Use those fields for first-person weapon effects, security camera
+  overlays, mirrors, cutscene-only effects, and other camera-specific
+  presentation.
 - `render.cube`: renders a cube using authored `size`, or a vec3 actor property
   named by `size_property`. `texture` may reference an image asset id; each cube
   face is UV-mapped to the full image and tinted by `color`. The property path

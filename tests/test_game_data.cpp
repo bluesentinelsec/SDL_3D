@@ -8124,6 +8124,14 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &revolver_particles));
     EXPECT_TRUE(revolver_particles.saw_revolver_smoke);
     EXPECT_TRUE(revolver_particles.saw_revolver_muzzle_flash);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), security_camera_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.brush_geometry.security");
+    ParticleCapture security_camera_particles{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &security_camera_particles));
+    EXPECT_FALSE(security_camera_particles.saw_revolver_smoke);
+    EXPECT_FALSE(security_camera_particles.saw_revolver_muzzle_flash);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), security_camera_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.brush_geometry.player");
     const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.x_pos");
     const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.write");
     ASSERT_GE(tune_x_signal, 0);
@@ -11030,6 +11038,27 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
+    write_text(dir / "bad_particle_camera_visibility.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Particle Camera", "id": "test.bad_particle_camera", "version": "0.1.0" },
+  "world": {
+    "name": "world.bad_particle_camera",
+    "kind": "fixed_screen",
+    "cameras": [
+      { "name": "camera.main", "type": "perspective", "position": [0.0, 2.0, 5.0], "target": [0.0, 1.0, 0.0] }
+    ]
+  },
+  "entities": [
+    {
+      "name": "entity.bad",
+      "components": [
+        { "type": "particles.emitter", "visible_to_cameras": ["camera.missing"] }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
     write_text(dir / "scenes" / "play.scene.json",
                R"json({
   "schema": "slayer3d.scene.v0",
@@ -11055,6 +11084,10 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
     SDL_zeroa(error);
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_camera_visibility.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown camera reference 'camera.missing'"), std::string::npos) << error;
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_particle_camera_visibility.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown camera reference 'camera.missing'"), std::string::npos) << error;
 
     remove_test_dir(dir);

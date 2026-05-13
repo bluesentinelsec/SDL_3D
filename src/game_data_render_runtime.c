@@ -1067,7 +1067,7 @@ static bool json_string_or_array_contains(yyjson_val *value, const char *needle)
     return false;
 }
 
-static bool render_component_visible_for_active_camera(const slayer3d_game_data_runtime *runtime, yyjson_val *component)
+static bool component_visible_for_active_camera(const slayer3d_game_data_runtime *runtime, yyjson_val *component)
 {
     const char *active_camera = slayer3d_game_data_active_camera(runtime);
     yyjson_val *visible_to = obj_get(component, "visible_to_cameras");
@@ -1246,7 +1246,7 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
     for (size_t c = 0; c < yyjson_arr_size(components); ++c)
     {
         yyjson_val *component = yyjson_arr_get(components, c);
-        if (!render_component_visible_for_active_camera(runtime, component))
+        if (!component_visible_for_active_camera(runtime, component))
             continue;
         const char *type = json_string(component, "type", "");
         slayer3d_game_data_render_primitive primitive;
@@ -1723,6 +1723,8 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
         yyjson_val *component = find_component_json(entity, "particles.emitter");
         if (actor == NULL || !actor->active || component == NULL)
             continue;
+        if (!component_visible_for_active_camera(runtime, component))
+            continue;
 
         slayer3d_game_data_particle_emitter emitter;
         SDL_zero(emitter);
@@ -1743,6 +1745,8 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
         {
             continue;
         }
+        if (!component_visible_for_active_camera(runtime, pool_component))
+            continue;
 
         for (int actor_index = 0; keep_iterating && actor_index < pool->capacity; ++actor_index)
         {
