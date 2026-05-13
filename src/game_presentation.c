@@ -1660,11 +1660,34 @@ static bool draw_mesh_primitive(primitive_draw_context *context, const slayer3d_
     return ok && pop_ok;
 }
 
-static bool camera_space_transform(const slayer3d_camera3d *camera, slayer3d_vec3 local_offset,
-                                   slayer3d_vec3 local_rotation, slayer3d_vec3 *out_position,
-                                   slayer3d_vec3 *out_rotation)
+static slayer3d_mat4 camera_to_world_matrix(const slayer3d_camera3d *camera, slayer3d_vec3 forward, slayer3d_vec3 right,
+                                            slayer3d_vec3 up)
 {
-    if (camera == NULL || out_position == NULL || out_rotation == NULL)
+    slayer3d_mat4 matrix = slayer3d_mat4_identity();
+    matrix.m[0] = right.x;
+    matrix.m[1] = right.y;
+    matrix.m[2] = right.z;
+    matrix.m[3] = 0.0f;
+    matrix.m[4] = up.x;
+    matrix.m[5] = up.y;
+    matrix.m[6] = up.z;
+    matrix.m[7] = 0.0f;
+    matrix.m[8] = -forward.x;
+    matrix.m[9] = -forward.y;
+    matrix.m[10] = -forward.z;
+    matrix.m[11] = 0.0f;
+    matrix.m[12] = camera->position.x;
+    matrix.m[13] = camera->position.y;
+    matrix.m[14] = camera->position.z;
+    matrix.m[15] = 1.0f;
+    return matrix;
+}
+
+static bool camera_space_model_matrix(const slayer3d_camera3d *camera, slayer3d_vec3 local_offset,
+                                      slayer3d_vec3 local_rotation, slayer3d_vec3 local_scale,
+                                      slayer3d_mat4 *out_matrix, slayer3d_vec3 *out_position)
+{
+    if (camera == NULL || out_matrix == NULL || out_position == NULL)
         return false;
 
     const slayer3d_vec3 forward_raw = slayer3d_vec3_sub(camera->target, camera->position);
@@ -1678,13 +1701,22 @@ static bool camera_space_transform(const slayer3d_camera3d *camera, slayer3d_vec
         right = slayer3d_vec3_normalize(right);
     const slayer3d_vec3 up = slayer3d_vec3_normalize(slayer3d_vec3_cross(right, forward));
 
-    *out_position = slayer3d_vec3_add(
-        camera->position, slayer3d_vec3_add(slayer3d_vec3_scale(right, local_offset.x),
-                                            slayer3d_vec3_add(slayer3d_vec3_scale(up, local_offset.y),
-                                                              slayer3d_vec3_scale(forward, local_offset.z))));
-    *out_rotation = local_rotation;
-    out_rotation->y += SDL_atan2f(forward.x, -forward.z);
-    out_rotation->x += SDL_asinf(SDL_clamp(forward.y, -1.0f, 1.0f));
+    slayer3d_mat4 local = slayer3d_mat4_translate(slayer3d_vec3_make(local_offset.x, local_offset.y, -local_offset.z));
+    if (local_rotation.y != 0.0f)
+        local =
+            slayer3d_mat4_multiply(local, slayer3d_mat4_rotate(slayer3d_vec3_make(0.0f, 1.0f, 0.0f), local_rotation.y));
+    if (local_rotation.x != 0.0f)
+        local =
+            slayer3d_mat4_multiply(local, slayer3d_mat4_rotate(slayer3d_vec3_make(1.0f, 0.0f, 0.0f), local_rotation.x));
+    if (local_rotation.z != 0.0f)
+        local =
+            slayer3d_mat4_multiply(local, slayer3d_mat4_rotate(slayer3d_vec3_make(0.0f, 0.0f, 1.0f), local_rotation.z));
+    local = slayer3d_mat4_multiply(local, slayer3d_mat4_scale(local_scale));
+
+    *out_matrix = slayer3d_mat4_multiply(camera_to_world_matrix(camera, forward, right, up), local);
+    const slayer3d_vec4 position =
+        slayer3d_mat4_transform_vec4(*out_matrix, slayer3d_vec4_make(0.0f, 0.0f, 0.0f, 1.0f));
+    *out_position = slayer3d_vec3_make(position.x, position.y, position.z);
     return true;
 }
 
@@ -1759,6 +1791,35 @@ static void trace_viewmodel_transform(const slayer3d_game_data_render_primitive 
     if (viewmodel_trace_write_all(stream, buffer))
         ++trace_count;
     SDL_CloseIO(stream);
+}
+
+static bool draw_model_with_matrix(slayer3d_render_context *renderer, const slayer3d_asset_resolver *assets,
+                                   const slayer3d_model *model, slayer3d_mat4 matrix, slayer3d_color tint)
+{
+    if (!slayer3d_push_matrix(renderer))
+        return false;
+    bool ok = slayer3d_multiply_matrix(renderer, matrix);
+    if (ok)
+        ok = slayer3d_draw_model_ex_with_assets(renderer, assets, model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f,
+                                                slayer3d_vec3_make(1.0f, 1.0f, 1.0f), tint);
+    const bool pop_ok = slayer3d_pop_matrix(renderer);
+    return ok && pop_ok;
+}
+
+static bool draw_skinned_model_with_matrix(slayer3d_render_context *renderer, const slayer3d_asset_resolver *assets,
+                                           const slayer3d_model *model, slayer3d_mat4 matrix, slayer3d_color tint,
+                                           const slayer3d_mat4 *joint_matrices)
+{
+    if (!slayer3d_push_matrix(renderer))
+        return false;
+    bool ok = slayer3d_multiply_matrix(renderer, matrix);
+    if (ok)
+        ok = slayer3d_draw_model_skinned_with_assets(renderer, assets, model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                     slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f,
+                                                     slayer3d_vec3_make(1.0f, 1.0f, 1.0f), tint, joint_matrices);
+    const bool pop_ok = slayer3d_pop_matrix(renderer);
+    return ok && pop_ok;
 }
 
 static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primitive *primitive)
@@ -1843,11 +1904,18 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
             return false;
         slayer3d_vec3 model_position = primitive->position;
         slayer3d_vec3 model_rotation = primitive->euler_rotation;
+        slayer3d_mat4 model_matrix = slayer3d_mat4_identity();
+        bool use_model_matrix = false;
         if (primitive->view_space &&
-            !camera_space_transform(context->camera, primitive->position, primitive->euler_rotation, &model_position,
-                                    &model_rotation))
+            !camera_space_model_matrix(context->camera, primitive->position, primitive->euler_rotation,
+                                       primitive->model_scale, &model_matrix, &model_position))
         {
             return true;
+        }
+        if (primitive->view_space)
+        {
+            model_rotation = primitive->euler_rotation;
+            use_model_matrix = true;
         }
         trace_viewmodel_transform(primitive, context->camera, model_position, model_rotation);
         if (primitive->animation_clip >= 0 && entry->model.skeleton != NULL && entry->model.animation_count > 0)
@@ -1869,15 +1937,28 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
                 return false;
             const bool evaluated =
                 slayer3d_evaluate_animation(entry->model.skeleton, clip, animation_time, joint_matrices);
-            const bool drawn = evaluated && slayer3d_draw_model_skinned_with_assets(
-                                                context->renderer, context->model_cache->assets, &entry->model,
-                                                model_position, primitive->rotation_axis, primitive->rotation_angle,
-                                                primitive->model_scale, primitive->color, joint_matrices);
+            const bool drawn =
+                evaluated &&
+                (use_model_matrix
+                     ? draw_skinned_model_with_matrix(context->renderer, context->model_cache->assets, &entry->model,
+                                                      model_matrix, primitive->color, joint_matrices)
+                     : slayer3d_draw_model_skinned_with_assets(context->renderer, context->model_cache->assets,
+                                                               &entry->model, model_position, primitive->rotation_axis,
+                                                               primitive->rotation_angle, primitive->model_scale,
+                                                               primitive->color, joint_matrices));
             SDL_free(joint_matrices);
             if (!drawn)
                 return false;
         }
-        else if (primitive->view_space || model_has_euler_rotation(model_rotation))
+        else if (use_model_matrix)
+        {
+            if (!draw_model_with_matrix(context->renderer, context->model_cache->assets, &entry->model, model_matrix,
+                                        primitive->color))
+            {
+                return false;
+            }
+        }
+        else if (model_has_euler_rotation(model_rotation))
         {
             if (!slayer3d_draw_model_euler_with_assets(context->renderer, context->model_cache->assets, &entry->model,
                                                        model_position, model_rotation, primitive->model_scale,

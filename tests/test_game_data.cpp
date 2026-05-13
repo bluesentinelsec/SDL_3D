@@ -7900,19 +7900,19 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(slayer3d_properties_get_int(player->props, "revolver", 0), 1);
     EXPECT_FALSE(revolver_pickup->active);
     EXPECT_TRUE(revolver->active);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.06f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), 0.1f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_y", 0.0f), -0.3f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_z", 0.0f), 0.58f, 0.0001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), 0.25f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), 0.27f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f), -0.05f, 0.0001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -0.125f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -1.424999f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_roll", 0.0f), 0.0f, 0.0001f);
     ASSERT_FALSE(std::filesystem::exists(placement_path));
     ASSERT_TRUE(std::filesystem::exists(pickup_placement_path));
     ASSERT_TRUE(std::filesystem::exists(placement_trace_path));
     const std::string pickup_placement_text = read_text(pickup_placement_path);
     EXPECT_NE(pickup_placement_text.find("label=pickup.viewmodel.current"), std::string::npos);
-    EXPECT_NE(pickup_placement_text.find("gun_yaw=-0.125000"), std::string::npos);
+    EXPECT_NE(pickup_placement_text.find("gun_yaw=-1.424999"), std::string::npos);
     const std::string pickup_trace_text = read_text(placement_trace_path);
     EXPECT_NE(pickup_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
     EXPECT_NE(pickup_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
@@ -7930,7 +7930,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
             EXPECT_FALSE(primitive->lighting_enabled);
             EXPECT_STREQ(primitive->model_asset, "model.brush_geometry.revolver");
             EXPECT_GT(primitive->model_scale.x, 0.0f);
-            EXPECT_NEAR(primitive->position.x, 0.06f, 0.0001f);
+            EXPECT_NEAR(primitive->position.x, 0.1f, 0.0001f);
         }
         return true;
     };

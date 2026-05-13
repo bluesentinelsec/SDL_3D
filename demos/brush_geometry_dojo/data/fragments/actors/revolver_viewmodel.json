@@ -12,12 +12,12 @@
       "active": false,
       "position": [0.0, 0.0, 0.0],
       "properties": {
-        "gun_x": { "type": "float", "value": 0.06 },
+        "gun_x": { "type": "float", "value": 0.1 },
         "gun_y": { "type": "float", "value": -0.3 },
         "gun_z": { "type": "float", "value": 0.58 },
-        "gun_scale": { "type": "float", "value": 0.25 },
+        "gun_scale": { "type": "float", "value": 0.27 },
         "gun_pitch": { "type": "float", "value": -0.05 },
-        "gun_yaw": { "type": "float", "value": -0.125 },
+        "gun_yaw": { "type": "float", "value": -1.424999 },
         "gun_roll": { "type": "float", "value": 0.0 }
       },
       "components": [

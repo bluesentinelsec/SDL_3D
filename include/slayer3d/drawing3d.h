@@ -42,6 +42,13 @@ extern "C"
      */
     bool slayer3d_push_matrix(slayer3d_render_context *context);
     bool slayer3d_pop_matrix(slayer3d_render_context *context);
+    /**
+     * @brief Post-multiply the current model matrix by an authored transform.
+     *
+     * This is useful for engine subsystems that need to submit a complete
+     * transform matrix, such as camera-relative viewmodels or editor tools.
+     */
+    bool slayer3d_multiply_matrix(slayer3d_render_context *context, slayer3d_mat4 matrix);
     bool slayer3d_translate(slayer3d_render_context *context, float x, float y, float z);
     bool slayer3d_rotate(slayer3d_render_context *context, slayer3d_vec3 axis, float angle_radians);
     bool slayer3d_scale(slayer3d_render_context *context, float x, float y, float z);

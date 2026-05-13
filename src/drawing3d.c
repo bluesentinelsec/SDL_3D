@@ -1122,6 +1122,19 @@ bool slayer3d_pop_matrix(slayer3d_render_context *context)
     return true;
 }
 
+bool slayer3d_multiply_matrix(slayer3d_render_context *context, slayer3d_mat4 matrix)
+{
+    if (!slayer3d_require_mode_3d(context, "slayer3d_multiply_matrix"))
+    {
+        return false;
+    }
+
+    context->model_stack[context->model_stack_depth - 1] =
+        slayer3d_mat4_multiply(context->model_stack[context->model_stack_depth - 1], matrix);
+    slayer3d_update_current_model_matrices(context);
+    return true;
+}
+
 bool slayer3d_translate(slayer3d_render_context *context, float x, float y, float z)
 {
     if (!slayer3d_require_mode_3d(context, "slayer3d_translate"))
