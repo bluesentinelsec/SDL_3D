@@ -12,6 +12,9 @@
 #include "slayer3d/game.h"
 #include "slayer3d/math.h"
 
+#include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_iostream.h>
+#include <SDL3/SDL_timer.h>
 #include <stdlib.h>
 
 const char *slayer3d_game_data_active_scene(const slayer3d_game_data_runtime *runtime)
@@ -895,6 +898,154 @@ bool slayer3d_game_data_export_brush_world_fragment_json(const slayer3d_game_dat
     SDL_memcpy(copy, json, size + 1u);
     free(json);
     *out_json = copy;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
+static bool editor_save_write_all(SDL_IOStream *stream, const void *data, size_t size)
+{
+    const Uint8 *bytes = (const Uint8 *)data;
+    size_t written = 0u;
+    while (written < size)
+    {
+        const size_t chunk = SDL_WriteIO(stream, bytes + written, size - written);
+        if (chunk == 0u)
+            return false;
+        written += chunk;
+    }
+    return true;
+}
+
+static bool editor_save_make_directory_recursive(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return false;
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (SDL_GetPathInfo(path, &info))
+        return info.type == SDL_PATHTYPE_DIRECTORY;
+
+    char *copy = SDL_strdup(path);
+    if (copy == NULL)
+        return false;
+
+    bool ok = true;
+    for (char *p = copy + 1; *p != '\0'; ++p)
+    {
+        if (*p != '/' && *p != '\\')
+            continue;
+        const char saved = *p;
+        *p = '\0';
+        if (copy[0] != '\0')
+        {
+            SDL_zero(info);
+            if (!SDL_GetPathInfo(copy, &info))
+                ok = SDL_CreateDirectory(copy);
+            else
+                ok = info.type == SDL_PATHTYPE_DIRECTORY;
+        }
+        *p = saved;
+        if (!ok)
+            break;
+    }
+
+    if (ok)
+    {
+        SDL_zero(info);
+        if (!SDL_GetPathInfo(copy, &info))
+            ok = SDL_CreateDirectory(copy);
+        else
+            ok = info.type == SDL_PATHTYPE_DIRECTORY;
+    }
+
+    SDL_free(copy);
+    return ok;
+}
+
+static char *editor_save_parent_directory(const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    const char *slash = SDL_strrchr(path, '/');
+    const char *backslash = SDL_strrchr(path, '\\');
+    if (backslash != NULL && (slash == NULL || backslash > slash))
+        slash = backslash;
+    if (slash == NULL)
+        return SDL_strdup(".");
+    const size_t len = (size_t)(slash - path);
+    if (len == 0u)
+        return SDL_strdup("/");
+    char *parent = (char *)SDL_malloc(len + 1u);
+    if (parent == NULL)
+        return NULL;
+    SDL_memcpy(parent, path, len);
+    parent[len] = '\0';
+    return parent;
+}
+
+bool slayer3d_game_data_save_brush_world_fragment_file(const slayer3d_game_data_runtime *runtime,
+                                                       const char *world_name, const char *path, size_t *out_size,
+                                                       char *error_buffer, int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (path == NULL || path[0] == '\0' || SDL_strstr(path, "://") != NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush world save requires a filesystem path");
+        return false;
+    }
+
+    char *json = NULL;
+    size_t size = 0u;
+    if (!slayer3d_game_data_export_brush_world_fragment_json(runtime, world_name, &json, &size, error_buffer,
+                                                             error_buffer_size))
+    {
+        return false;
+    }
+
+    char *parent = editor_save_parent_directory(path);
+    if (parent == NULL || !editor_save_make_directory_recursive(parent))
+    {
+        SDL_free(parent);
+        SDL_free(json);
+        set_error(error_buffer, error_buffer_size, "failed to create brush world save directory");
+        return false;
+    }
+    SDL_free(parent);
+
+    bool ok = false;
+    char temp_path[4096];
+    for (int attempt = 0; attempt < 16 && !ok; ++attempt)
+    {
+        SDL_snprintf(temp_path, sizeof(temp_path), "%s.tmp.%llu.%d", path, (unsigned long long)SDL_GetTicksNS(),
+                     attempt);
+        SDL_IOStream *stream = SDL_IOFromFile(temp_path, "wb");
+        if (stream == NULL)
+            continue;
+        ok = editor_save_write_all(stream, json, size) && SDL_FlushIO(stream);
+        ok = SDL_CloseIO(stream) && ok;
+        if (!ok)
+        {
+            SDL_RemovePath(temp_path);
+            continue;
+        }
+        if (!SDL_RenamePath(temp_path, path))
+        {
+            SDL_RemovePath(path);
+            ok = SDL_RenamePath(temp_path, path);
+        }
+        if (!ok)
+            SDL_RemovePath(temp_path);
+    }
+
+    SDL_free(json);
+    if (!ok)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to save brush world fragment");
+        return false;
+    }
     if (out_size != NULL)
         *out_size = size;
     return true;
