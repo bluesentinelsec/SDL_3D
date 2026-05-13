@@ -616,6 +616,8 @@ const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_run
     return find_brush_world_runtime_mutable((slayer3d_game_data_runtime *)runtime, name);
 }
 
+static int find_editor_brush_material_index(const brush_world_runtime *world_runtime, const char *material_name);
+
 static bool editor_brush_world_set_source_path(brush_world_runtime *world_runtime, const char *source_path)
 {
     if (world_runtime == NULL || source_path == NULL)
@@ -646,6 +648,202 @@ static bool editor_brush_world_mark_saved(brush_world_runtime *world_runtime, co
         return false;
     world_runtime->editor_saved_revision = world_runtime->editor_revision;
     world_runtime->editor_dirty = false;
+    return true;
+}
+
+static bool editor_brush_world_name_exists(const brush_world_runtime *world_runtime, const char *brush_name)
+{
+    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
+        return false;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[i];
+        if (brush->name != NULL && SDL_strcmp(brush->name, brush_name) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer,
+                                                   size_t buffer_size)
+{
+    if (world_runtime == NULL || buffer == NULL || buffer_size == 0u)
+        return false;
+    const char *world_name = world_runtime->desc.name != NULL ? world_runtime->desc.name : "brush_world";
+    for (int i = 0; i < 1000000; ++i)
+    {
+        SDL_snprintf(buffer, buffer_size, "%s.box.%d", world_name, i + 1);
+        if (buffer[0] == '\0')
+            return false;
+        if (!editor_brush_world_name_exists(world_runtime, buffer))
+            return true;
+    }
+    return false;
+}
+
+static void free_editor_runtime_brush(slayer3d_game_data_brush *brush)
+{
+    if (brush == NULL)
+        return;
+    SDL_free((void *)brush->name);
+    for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
+        SDL_free((void *)brush->tags[tag_index]);
+    SDL_free((void *)brush->tags);
+    for (int face_index = 0; face_index < brush->face_count; ++face_index)
+    {
+        slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[face_index];
+        free_editor_metadata(&face->editor);
+    }
+    SDL_free((void *)brush->faces);
+    free_editor_metadata(&brush->editor);
+    SDL_zero(*brush);
+}
+
+static void init_box_brush_face(slayer3d_game_data_brush_face *face, slayer3d_vec3 normal, float distance,
+                                int material_index, const char *material_name)
+{
+    SDL_zero(*face);
+    face->normal = normal;
+    face->distance = distance;
+    face->material_index = material_index;
+    face->material_name = material_name;
+    face->uv_scale[0] = 1.0f;
+    face->uv_scale[1] = 1.0f;
+}
+
+static bool init_editor_box_brush(const brush_world_runtime *world_runtime,
+                                  const slayer3d_game_data_create_box_brush_desc *desc, const char *brush_name,
+                                  int material_index, slayer3d_game_data_brush *out_brush)
+{
+    if (world_runtime == NULL || desc == NULL || brush_name == NULL || out_brush == NULL || material_index < 0 ||
+        material_index >= world_runtime->desc.material_count)
+    {
+        return false;
+    }
+
+    SDL_zero(*out_brush);
+    out_brush->name = SDL_strdup(brush_name);
+    out_brush->contents = desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    out_brush->face_count = 6;
+    out_brush->faces = (slayer3d_game_data_brush_face *)SDL_calloc(6u, sizeof(*out_brush->faces));
+    if (out_brush->name == NULL || out_brush->faces == NULL)
+    {
+        free_editor_runtime_brush(out_brush);
+        return false;
+    }
+
+    const char *material_name = world_runtime->desc.materials[material_index].name;
+    slayer3d_game_data_brush_face *faces = (slayer3d_game_data_brush_face *)out_brush->faces;
+    init_box_brush_face(&faces[0], slayer3d_vec3_make(1.0f, 0.0f, 0.0f), desc->max.x, material_index, material_name);
+    init_box_brush_face(&faces[1], slayer3d_vec3_make(-1.0f, 0.0f, 0.0f), -desc->min.x, material_index, material_name);
+    init_box_brush_face(&faces[2], slayer3d_vec3_make(0.0f, 1.0f, 0.0f), desc->max.y, material_index, material_name);
+    init_box_brush_face(&faces[3], slayer3d_vec3_make(0.0f, -1.0f, 0.0f), -desc->min.y, material_index, material_name);
+    init_box_brush_face(&faces[4], slayer3d_vec3_make(0.0f, 0.0f, 1.0f), desc->max.z, material_index, material_name);
+    init_box_brush_face(&faces[5], slayer3d_vec3_make(0.0f, 0.0f, -1.0f), -desc->min.z, material_index, material_name);
+    return true;
+}
+
+bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
+                                         const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,
+                                         size_t out_brush_name_size, char *error_buffer, int error_buffer_size)
+{
+    if (out_brush_name != NULL && out_brush_name_size > 0u)
+        out_brush_name[0] = '\0';
+    if (runtime == NULL || desc == NULL || desc->world_name == NULL || desc->world_name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "box brush creation requires a brush world");
+        return false;
+    }
+    if (desc->material_name == NULL || desc->material_name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "box brush creation requires a material");
+        return false;
+    }
+    if (!(desc->min.x < desc->max.x && desc->min.y < desc->max.y && desc->min.z < desc->max.z))
+    {
+        set_error(error_buffer, error_buffer_size, "box brush bounds must have min < max on all axes");
+        return false;
+    }
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, desc->world_name);
+    if (world_runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush world not found");
+        return false;
+    }
+    const int material_index = find_editor_brush_material_index(world_runtime, desc->material_name);
+    if (material_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "box brush material not found");
+        return false;
+    }
+
+    char generated_name[256];
+    const char *brush_name = desc->brush_name;
+    if (brush_name == NULL || brush_name[0] == '\0')
+    {
+        if (!editor_brush_world_generate_brush_name(world_runtime, generated_name, sizeof(generated_name)))
+        {
+            set_error(error_buffer, error_buffer_size, "failed to generate box brush name");
+            return false;
+        }
+        brush_name = generated_name;
+    }
+    else if (editor_brush_world_name_exists(world_runtime, brush_name))
+    {
+        set_error(error_buffer, error_buffer_size, "box brush name already exists");
+        return false;
+    }
+
+    slayer3d_game_data_brush new_brush;
+    if (!init_editor_box_brush(world_runtime, desc, brush_name, material_index, &new_brush))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate box brush");
+        return false;
+    }
+
+    slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    slayer3d_game_data_brush *old_brushes = (slayer3d_game_data_brush *)world->brushes;
+    const int old_count = world->brush_count;
+    slayer3d_game_data_brush *brushes =
+        (slayer3d_game_data_brush *)SDL_calloc((size_t)old_count + 1u, sizeof(*brushes));
+    if (brushes == NULL)
+    {
+        free_editor_runtime_brush(&new_brush);
+        set_error(error_buffer, error_buffer_size, "failed to allocate brush world entries");
+        return false;
+    }
+    if (old_count > 0)
+        SDL_memcpy(brushes, old_brushes, sizeof(*brushes) * (size_t)old_count);
+    brushes[old_count] = new_brush;
+    world->brushes = brushes;
+    world->brush_count = old_count + 1;
+
+    slayer3d_model render_model;
+    SDL_zero(render_model);
+    const bool rebuilt = slayer3d_game_data_brush_world_build_acceleration(world) &&
+                         slayer3d_game_data_brush_world_compile_render_model(world, &render_model);
+    if (!rebuilt)
+    {
+        slayer3d_free_model(&render_model);
+        world->brushes = old_brushes;
+        world->brush_count = old_count;
+        free_editor_runtime_brush(&brushes[old_count]);
+        SDL_free(brushes);
+        (void)slayer3d_game_data_brush_world_build_acceleration(world);
+        set_error(error_buffer, error_buffer_size, "failed to rebuild brush world after box creation");
+        return false;
+    }
+
+    SDL_free(old_brushes);
+    slayer3d_free_model(&world_runtime->render_model);
+    world_runtime->render_model = render_model;
+    world->render_model = &world_runtime->render_model;
+    editor_brush_world_mark_dirty(world_runtime);
+    if (out_brush_name != NULL && out_brush_name_size > 0u)
+        SDL_strlcpy(out_brush_name, brushes[old_count].name != NULL ? brushes[old_count].name : "",
+                    out_brush_name_size);
     return true;
 }
 
@@ -2332,7 +2530,6 @@ static bool editor_command_target_name_valid(const char *target)
                               SDL_strcmp(target, "material") == 0);
 }
 
-static int find_editor_brush_material_index(const brush_world_runtime *world_runtime, const char *material_name);
 static bool resolve_editor_paint_material(slayer3d_game_data_runtime *runtime,
                                           const slayer3d_game_data_editor_selection *selection,
                                           const char *material_name, const char **out_material_name,
@@ -2447,6 +2644,33 @@ bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_d
 {
     return publish_editor_brush_world_status(runtime, obj_get(action, "outputs"), json_string(action, "world", NULL),
                                              json_string(action, "message", "brush world status published"), true);
+}
+
+bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_game_data_create_box_brush_desc desc;
+    SDL_zero(desc);
+    desc.world_name = json_string(action, "world", NULL);
+    desc.brush_name = json_string(action, "name", NULL);
+    desc.material_name = json_string(action, "material", NULL);
+    desc.min = json_vec3(action, "min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    desc.max = json_vec3(action, "max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+
+    char error[256];
+    error[0] = '\0';
+    char brush_name[256];
+    brush_name[0] = '\0';
+    const bool ok =
+        slayer3d_game_data_create_box_brush(runtime, &desc, brush_name, sizeof(brush_name), error, (int)sizeof(error));
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "box brush created")
+                                : (error[0] != '\0' ? error : "box brush creation failed"));
+    editor_set_string_output(scene_state, outputs, "brush_key", ok ? brush_name : "");
+    (void)publish_editor_brush_world_status(runtime, outputs, desc.world_name, NULL, false);
+    return true;
 }
 
 static void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,

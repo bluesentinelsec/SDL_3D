@@ -706,6 +706,32 @@ pinned or current selection. It supplies payload fields such as
 `selection_point`, and `selection_normal`. `editor.selection.clear` clears the
 active selection and republishes the scene's `outputs` as an empty selection.
 
+Use `editor.brush_world.create_box` to append a new axis-aligned convex box
+brush to a runtime brush world. The action is intended for first-pass editor
+blockout tools: floors, walls, ceilings, platforms, and simple room pieces. It
+validates the target world and bounds at load time, resolves the material at
+runtime, rebuilds brush collision/render data atomically, then marks the world
+dirty only after the rebuild succeeds. If `name` is omitted, the runtime
+generates a unique brush name under the target world.
+
+```json
+{
+  "type": "editor.brush_world.create_box",
+  "world": "brush.level.blockout",
+  "name": "brush.room_01.floor",
+  "material": "mat.stone_floor",
+  "min": [-4.0, -0.25, -4.0],
+  "max": [4.0, 0.0, 4.0],
+  "outputs": {
+    "valid_key": "editor.create.valid",
+    "message_key": "editor.create.message",
+    "brush_key": "editor.create.brush",
+    "dirty_key": "editor.brush_world.dirty",
+    "revision_key": "editor.brush_world.revision"
+  }
+}
+```
+
 Use `editor.command.preview` to declare a non-mutating command intent against
 the active selection. This is the safe scaffolding layer for editor tools:
 commands can publish UI state and draw preview bounds without modifying the

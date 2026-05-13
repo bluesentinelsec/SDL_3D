@@ -850,6 +850,7 @@ bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime,
 bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_data_runtime *runtime,
                                                                  yyjson_val *action);
+bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,
