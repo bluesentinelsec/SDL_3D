@@ -69,9 +69,9 @@
       "active": false,
       "properties": {
         "flash_offset_x": { "type": "float", "value": 0.04 },
-        "flash_offset_y": { "type": "float", "value": -0.18 },
+        "flash_offset_y": { "type": "float", "value": -0.2 },
         "flash_offset_z": { "type": "float", "value": 0.36 },
-        "flash_size_scale": { "type": "float", "value": 0.2 },
+        "flash_size_scale": { "type": "float", "value": 0.15 },
         "flash_alpha_scale": { "type": "float", "value": 1.0 },
         "flash_intensity": { "type": "float", "value": 2.6 }
       },

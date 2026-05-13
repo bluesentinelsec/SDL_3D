@@ -7993,22 +7993,16 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const int revolver_fire_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.fire");
     ASSERT_GE(revolver_fire_signal, 0);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), revolver_fire_signal, nullptr);
-    EXPECT_GT(slayer3d_properties_get_float(player->props, "fire_timer", 0.0f), 0.0f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "fire_timer", -1.0f), 0.0f, 0.0001f);
     slayer3d_registered_actor *muzzle_flash =
         slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_muzzle_flashes.0");
     slayer3d_registered_actor *smoke = slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_smoke.0");
-    slayer3d_registered_actor *tracer =
-        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_tracers.0");
-    slayer3d_registered_actor *impact_decal =
-        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_impact_decals.0");
     ASSERT_NE(muzzle_flash, nullptr);
     ASSERT_NE(smoke, nullptr);
-    ASSERT_NE(tracer, nullptr);
-    ASSERT_NE(impact_decal, nullptr);
+    EXPECT_EQ(slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_tracers.0"), nullptr);
+    EXPECT_EQ(slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_impact_decals.0"), nullptr);
     EXPECT_TRUE(muzzle_flash->active);
     EXPECT_TRUE(smoke->active);
-    EXPECT_TRUE(tracer->active);
-    EXPECT_TRUE(impact_decal->active);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_offset_x", 0.0f), 0.09f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_size_scale", 0.0f), 1.4f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(muzzle_flash->props, "flash_alpha_scale", 0.0f), 0.8f, 0.0001f);
@@ -8038,15 +8032,14 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NEAR(muzzle_flash_config.position.z, -(muzzle_flash->position.z + 0.12f), 0.0001f);
     EXPECT_EQ(muzzle_flash_config.color_start.a, 204);
     EXPECT_NEAR(muzzle_flash_config.emissive_intensity, 3.2f, 0.0001f);
+    EXPECT_NEAR(muzzle_flash_config.lifetime_min, 0.012f, 0.0001f);
+    EXPECT_NEAR(muzzle_flash_config.lifetime_max, 0.024f, 0.0001f);
     EXPECT_NEAR(muzzle_flash_config.size_start, 1.7f * 1.4f, 0.0001f);
     EXPECT_NEAR(muzzle_flash_config.size_end, 1.1f * 1.4f, 0.0001f);
     ParticleCapture revolver_particles{};
     ASSERT_TRUE(slayer3d_game_data_for_each_particle_emitter(runtime, capture_particle, &revolver_particles));
     EXPECT_TRUE(revolver_particles.saw_revolver_smoke);
     EXPECT_TRUE(revolver_particles.saw_revolver_muzzle_flash);
-    const slayer3d_vec3 tracer_velocity =
-        slayer3d_properties_get_vec3(tracer->props, "velocity", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    EXPECT_GT(slayer3d_vec3_length_squared(tracer_velocity), 1.0f);
     const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.x_pos");
     const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.write");
     ASSERT_GE(tune_x_signal, 0);
@@ -8105,7 +8098,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     const float old_flash_x = slayer3d_properties_get_float(muzzle_flash_config_actor->props, "flash_offset_x", 0.0f);
     ASSERT_TRUE(slayer3d_game_data_update_scene_activity(runtime, input, 0.06f));
     slayer3d_registered_actor *preview_muzzle_flash =
-        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_muzzle_flashes.1");
+        slayer3d_game_data_find_actor(runtime, "pool.brush_geometry.revolver_muzzle_flashes.0");
     ASSERT_NE(preview_muzzle_flash, nullptr);
     EXPECT_TRUE(preview_muzzle_flash->active);
     EXPECT_NEAR(slayer3d_properties_get_float(preview_muzzle_flash->props, "flash_offset_x", 0.0f), old_flash_x,

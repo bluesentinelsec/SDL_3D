@@ -91,7 +91,7 @@
                 "directional_offset": { "property": "camera_forward", "distance": 0.75 },
                 "range": 80.0,
                 "cooldown_property": "fire_timer",
-                "cooldown": 0.18,
+                "cooldown": 0.0,
                 "run_actions_on_miss": true,
                 "actions": [
                   {
@@ -125,19 +125,6 @@
                         "smoke_emit_rate"
                       ]
                     }
-                  },
-                  {
-                    "type": "actor.spawn",
-                    "pool": "pool.brush_geometry.revolver_tracers",
-                    "position_from_payload": "origin",
-                    "velocity_from_payload": "direction",
-                    "speed": 78.0
-                  },
-                  {
-                    "type": "actor.spawn",
-                    "pool": "pool.brush_geometry.revolver_impact_decals",
-                    "position_from_payload": "hit_position",
-                    "payload_directional_offset": { "property": "hit_normal", "distance": 0.035 }
                   },
                   {
                     "type": "property.set",
