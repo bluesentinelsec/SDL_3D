@@ -2058,9 +2058,10 @@ Reusable components include:
 - `particles.emitter`: actor-attached particle emitter. On pooled actors, the
   emitter is active only while the actor is active. `render_style` defaults to
   `default`; `soft_smoke` renders procedural, soft-edged GPU smoke billboards
-  and `soft_fire` renders procedural fire/muzzle-flash billboards when a shader
-  backend is available. Both shader styles fall back to the normal particle quad
-  path in software. Effects can be tuned per actor with property indirection:
+  and `soft_fire` renders general flame billboards when a shader backend is
+  available. `muzzle_flash` renders a short, irregular hot-core burst intended
+  for firearm discharge effects. Shader styles fall back to the normal particle
+  quad path in software. Effects can be tuned per actor with property indirection:
   `position_offset_property` reads a vec3 offset, `position_offset_x_property`,
   `position_offset_y_property`, and `position_offset_z_property` add scalar
   offsets, `size_start_property`/`size_end_property` override authored sizes,
@@ -2095,9 +2096,10 @@ Reusable components include:
   geometry such as weapon flashes, cockpit markers, and viewmodel-only debug
   shapes. Camera-space mesh primitive offsets use the same convention as
   camera-space models and particles: positive Z is forward from the camera, and
-  the renderer converts it to view space at draw time. This is usually a better
-  fit for directional muzzle flashes than a billboard particle because the
-  flash can be authored as actual geometry pointing down the weapon barrel.
+  the renderer converts it to view space at draw time. This is useful for
+  authored first-person meshes and debug shapes; use `particles.emitter`
+  `render_style: "muzzle_flash"` when a shader-shaped firearm burst is a better
+  fit than solid geometry.
   Render primitive components also support camera-scoped visibility with
   `visible_to_cameras` and `hidden_from_cameras`, each authored as a camera name
   or array of camera names. This is useful for first-person bodies, security

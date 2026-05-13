@@ -34,15 +34,16 @@ extern "C"
     /**
      * @brief Particle render style.
      *
-     * The default style draws the authored texture or tinted quad. Soft smoke
-     * uses a procedural GPU fragment shader when available, with the default
-     * quad path as the software fallback.
+     * The default style draws the authored texture or tinted quad. Soft smoke,
+     * soft fire, and muzzle flash use procedural GPU fragment shaders when
+     * available, with the default quad path as the software fallback.
      */
     typedef enum slayer3d_particle_render_style
     {
         SLAYER3D_PARTICLE_RENDER_DEFAULT = 0,
         SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE = 1,
         SLAYER3D_PARTICLE_RENDER_SOFT_FIRE = 2,
+        SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH = 3,
     } slayer3d_particle_render_style;
 
     /**

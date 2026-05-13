@@ -1615,6 +1615,8 @@ bool slayer3d_game_data_get_particle_emitter(const slayer3d_game_data_runtime *r
         out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_SMOKE;
     else if (SDL_strcmp(render_style, "soft_fire") == 0)
         out_config->render_style = SLAYER3D_PARTICLE_RENDER_SOFT_FIRE;
+    else if (SDL_strcmp(render_style, "muzzle_flash") == 0)
+        out_config->render_style = SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH;
     else
         out_config->render_style = SLAYER3D_PARTICLE_RENDER_DEFAULT;
     out_config->camera_facing = json_bool(component, "camera_facing", true);

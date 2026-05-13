@@ -3316,10 +3316,12 @@ static bool validate_particle_emitter_component(validation_context *ctx, yyjson_
 {
     const char *render_style = json_string(component, "render_style");
     if (render_style != NULL && SDL_strcmp(render_style, "default") != 0 &&
-        SDL_strcmp(render_style, "soft_smoke") != 0 && SDL_strcmp(render_style, "soft_fire") != 0)
+        SDL_strcmp(render_style, "soft_smoke") != 0 && SDL_strcmp(render_style, "soft_fire") != 0 &&
+        SDL_strcmp(render_style, "muzzle_flash") != 0)
     {
-        return validation_error(ctx, path,
-                                "particles.emitter render_style must be 'default', 'soft_smoke', or 'soft_fire'");
+        return validation_error(
+            ctx, path,
+            "particles.emitter render_style must be 'default', 'soft_smoke', 'soft_fire', or 'muzzle_flash'");
     }
 
     yyjson_val *position_offset = obj_get(component, "position_offset");
