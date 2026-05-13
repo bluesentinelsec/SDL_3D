@@ -4101,7 +4101,11 @@ static bool collect_input_actions(validation_context *ctx, yyjson_val *root, val
             yyjson_val *action = yyjson_arr_get(actions, a);
             if (!yyjson_is_obj(action))
                 return validation_error(ctx, path, "input actions must be objects");
-            if (!require_unique_name(ctx, &names->actions, "input action", json_string(action, "name"), path))
+            const char *name = json_string(action, "name");
+            if (name != NULL && SDL_strlen(name) >= SLAYER3D_INPUT_ACTION_NAME_MAX)
+                return validation_error(ctx, path, "input action name must be shorter than %d bytes",
+                                        SLAYER3D_INPUT_ACTION_NAME_MAX);
+            if (!require_unique_name(ctx, &names->actions, "input action", name, path))
                 return false;
         }
     }

@@ -7878,17 +7878,40 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_model, &saw_revolver_viewmodel));
     EXPECT_TRUE(saw_revolver_viewmodel);
-    const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.debug.revolver_tuning.x_pos");
-    const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.debug.revolver_tuning.write");
+    const int tune_x_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.x_pos");
+    const int tune_write_signal = slayer3d_game_data_find_signal(runtime, "signal.gun_tune.write");
     ASSERT_GE(tune_x_signal, 0);
     ASSERT_GE(tune_write_signal, 0);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    const int tune_toggle_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.toggle");
+    const int tune_x_action = slayer3d_game_data_find_action(runtime, "action.gun_tune.x_pos");
+    ASSERT_GE(tune_toggle_action, 0);
+    ASSERT_GE(tune_x_action, 0);
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_G;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_toggle_action));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(
+        slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "debug.revolver_tuning.enabled", false));
     const float old_gun_x = slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f);
+    key.key.scancode = SDL_SCANCODE_RIGHT;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_x_action));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.02f, 0.0001f);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
+                                 false);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
-    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.02f, 0.0001f);
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.revolver_tuning.enabled",
                                  true);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_x_signal, nullptr);
-    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.02f, 0.0001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_x", 0.0f), old_gun_x + 0.04f, 0.0001f);
     const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
     std::filesystem::remove(placement_path);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_write_signal, nullptr);
@@ -7924,8 +7947,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(saw_render_diagnostics);
     EXPECT_STREQ(render_diagnostics, "RENDER 5/7 CULL 2 TRI 128");
 
-    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
-    ASSERT_NE(input, nullptr);
     const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
     ASSERT_GE(fire_action, 0);
     slayer3d_input_set_action_override(input, fire_action, 1.0f);
@@ -18746,6 +18767,29 @@ TEST(GameDataRuntime, RejectsInvalidInputProfiles)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "nongamepad_assignment_slot.game.json").string().c_str(),
                                                   nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("$.input.profiles[0].assignments[0]"), std::string::npos);
+
+    write_text(dir / "long_action_name.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Long Action Name", "id": "test.long_action_name", "version": "0.1.0" },
+  "world": { "name": "world.long_action_name", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.gameplay",
+        "actions": [
+          { "name": "action.this_name_is_too_long_for_runtime_registration" }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "long_action_name.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("input action name must be shorter"), std::string::npos);
     remove_test_dir(dir);
 }
 
