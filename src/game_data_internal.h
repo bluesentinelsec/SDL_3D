@@ -155,9 +155,35 @@ typedef struct editor_command_preview_state
     const char *element_name;
     const char *material_name;
     int face_index;
+    yyjson_val *outputs;
     bool has_bounds;
     slayer3d_bounding_box bounds;
 } editor_command_preview_state;
+
+#define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
+
+typedef struct editor_command_transaction_entry
+{
+    int id;
+    const char *scene;
+    const char *command;
+    const char *target;
+    const char *world_name;
+    const char *element_name;
+    const char *material_name;
+    int face_index;
+    bool has_bounds;
+    slayer3d_bounding_box bounds;
+    char message[128];
+} editor_command_transaction_entry;
+
+typedef struct editor_command_history_state
+{
+    editor_command_transaction_entry entries[SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY];
+    int count;
+    int cursor;
+    int next_id;
+} editor_command_history_state;
 
 typedef struct wave_schedule_entry
 {
@@ -642,6 +668,7 @@ typedef struct slayer3d_game_data_runtime
     slayer3d_game_data_editor_selection editor_active_selection;
     const char *editor_selection_scene;
     editor_command_preview_state editor_command_preview;
+    editor_command_history_state editor_command_history;
     scene_activity_state activity;
     float current_dt;
     unsigned int rng_state;
@@ -802,6 +829,12 @@ slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
     const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_clear_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                              const slayer3d_properties *payload);
+bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const slayer3d_properties *payload);
+bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                            const slayer3d_properties *payload);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 void emit_optional_signal(slayer3d_game_data_runtime *runtime, yyjson_val *json, const char *signal_key,

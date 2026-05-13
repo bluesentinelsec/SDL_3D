@@ -8283,6 +8283,33 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_preview_action.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("editor.command.preview command must be"), std::string::npos) << error;
+
+    write_text(dir / "bad_transaction_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Transaction Action" },
+  "world": { "name": "world.bad_editor_transaction_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.commit"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.commit",
+        "actions": [
+          {
+            "type": "editor.command.commit",
+            "outputs": { "transaction_id_key": "" }
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_transaction_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.command.commit output keys must be non-empty strings"), std::string::npos)
+        << error;
     remove_test_dir(dir);
 }
 
@@ -12364,7 +12391,37 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(inspector.values[3], "World");
     EXPECT_EQ(inspector.values[4], "brush.editor_shell.target");
 
-    press_key(SDL_SCANCODE_BACKSPACE, 7);
+    press_key(SDL_SCANCODE_RETURN, 7);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.event", ""), "commit");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
+                 "committed translate #1");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.id", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.element", ""), "brush.target.cube");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "commit translate #1");
+
+    press_key(SDL_SCANCODE_Z, 8);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.event", ""), "undo");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "undo translate #1");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "undo translate #1");
+
+    press_key(SDL_SCANCODE_Y, 9);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.event", ""), "redo");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "redo translate #1");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
+
+    press_key(SDL_SCANCODE_BACKSPACE, 10);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", true));

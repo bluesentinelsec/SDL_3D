@@ -38,6 +38,18 @@
           {
             "name": "action.editor.command.preview",
             "bindings": [{ "device": "keyboard", "key": "P" }]
+          },
+          {
+            "name": "action.editor.command.commit",
+            "bindings": [{ "device": "keyboard", "key": "RETURN" }]
+          },
+          {
+            "name": "action.editor.command.undo",
+            "bindings": [{ "device": "keyboard", "key": "Z" }]
+          },
+          {
+            "name": "action.editor.command.redo",
+            "bindings": [{ "device": "keyboard", "key": "Y" }]
           }
         ]
       }
@@ -47,7 +59,10 @@
     "signal.editor.tool.cycle",
     "signal.editor.selection.clear",
     "signal.editor.selection.inspect",
-    "signal.editor.command.preview"
+    "signal.editor.command.preview",
+    "signal.editor.command.commit",
+    "signal.editor.command.undo",
+    "signal.editor.command.redo"
   ],
   "logic": {
     "sensors": [
@@ -70,6 +85,21 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.command.preview",
         "on_pressed": "signal.editor.command.preview"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.command.commit",
+        "on_pressed": "signal.editor.command.commit"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.command.undo",
+        "on_pressed": "signal.editor.command.undo"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.command.redo",
+        "on_pressed": "signal.editor.command.redo"
       }
     ],
     "bindings": [
@@ -139,6 +169,103 @@
               "bounds_min_key": "editor.command_preview.bounds_min",
               "bounds_max_key": "editor.command_preview.bounds_max"
             }
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.command.commit",
+        "actions": [
+          {
+            "type": "editor.command.commit",
+            "message": "committed {editor_command} #{editor_transaction_id_text}",
+            "invalid_message": "nothing to commit",
+            "outputs": {
+              "valid_key": "editor.transaction.valid",
+              "event_key": "editor.transaction.event",
+              "message_key": "editor.transaction.message",
+              "transaction_id_key": "editor.transaction.id",
+              "undo_count_key": "editor.transaction.undo_count",
+              "redo_count_key": "editor.transaction.redo_count",
+              "command_key": "editor.transaction.command",
+              "target_key": "editor.transaction.target",
+              "world_key": "editor.transaction.world",
+              "element_key": "editor.transaction.element",
+              "face_index_key": "editor.transaction.face_index",
+              "bounds_min_key": "editor.transaction.bounds_min",
+              "bounds_max_key": "editor.transaction.bounds_max"
+            },
+            "actions": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "commit {editor_command} #{editor_transaction_id_text}"
+              }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to commit" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.command.undo",
+        "actions": [
+          {
+            "type": "editor.command.undo",
+            "message": "undo {editor_command} #{editor_transaction_id_text}",
+            "invalid_message": "nothing to undo",
+            "outputs": {
+              "valid_key": "editor.transaction.valid",
+              "event_key": "editor.transaction.event",
+              "message_key": "editor.transaction.message",
+              "transaction_id_key": "editor.transaction.id",
+              "undo_count_key": "editor.transaction.undo_count",
+              "redo_count_key": "editor.transaction.redo_count",
+              "command_key": "editor.transaction.command",
+              "target_key": "editor.transaction.target",
+              "world_key": "editor.transaction.world",
+              "element_key": "editor.transaction.element",
+              "face_index_key": "editor.transaction.face_index"
+            },
+            "actions": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "undo {editor_command} #{editor_transaction_id_text}"
+              }
+            ],
+            "else": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to undo" }]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.command.redo",
+        "actions": [
+          {
+            "type": "editor.command.redo",
+            "message": "redo {editor_command} #{editor_transaction_id_text}",
+            "invalid_message": "nothing to redo",
+            "outputs": {
+              "valid_key": "editor.transaction.valid",
+              "event_key": "editor.transaction.event",
+              "message_key": "editor.transaction.message",
+              "transaction_id_key": "editor.transaction.id",
+              "undo_count_key": "editor.transaction.undo_count",
+              "redo_count_key": "editor.transaction.redo_count",
+              "command_key": "editor.transaction.command",
+              "target_key": "editor.transaction.target",
+              "world_key": "editor.transaction.world",
+              "element_key": "editor.transaction.element",
+              "face_index_key": "editor.transaction.face_index"
+            },
+            "actions": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "redo {editor_command} #{editor_transaction_id_text}"
+              }
+            ],
+            "else": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to redo" }]
           }
         ]
       }
