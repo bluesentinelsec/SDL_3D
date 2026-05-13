@@ -2325,13 +2325,16 @@ successful no-op:
 ```
 
 `debug.write_actor_properties` is a development-only action for placement and
-tuning workflows. It writes selected actor properties to a host filesystem path:
+tuning workflows. It writes selected actor properties to a host filesystem path.
+Set `append` to true to add another diagnostic block instead of replacing the
+file:
 
 ```json
 {
   "type": "debug.write_actor_properties",
   "target": "entity.weapon.viewmodel",
   "path": "/tmp/gun-placement.txt",
+  "append": false,
   "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
 }
 ```

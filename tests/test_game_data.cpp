@@ -7886,6 +7886,10 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(
         slayer3d_game_data_for_each_render_primitive(runtime, find_revolver_pickup_model, &saw_revolver_pickup));
     EXPECT_TRUE(saw_revolver_pickup);
+    const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
+    const std::filesystem::path placement_trace_path = "/tmp/gun-placement-trace.txt";
+    std::filesystem::remove(placement_path);
+    std::filesystem::remove(placement_trace_path);
     slayer3d_properties_set_float(revolver->props, "gun_x", 9.0f);
     slayer3d_properties_set_float(revolver->props, "gun_yaw", 9.0f);
     const int revolver_pickup_signal = slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.revolver.pickup");
@@ -7901,6 +7905,11 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_pitch", 0.0f), -0.05f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_yaw", 0.0f), -0.125f, 0.0001f);
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_roll", 0.0f), 0.0f, 0.0001f);
+    ASSERT_TRUE(std::filesystem::exists(placement_path));
+    ASSERT_TRUE(std::filesystem::exists(placement_trace_path));
+    const std::string pickup_trace_text = read_text(placement_trace_path);
+    EXPECT_NE(pickup_trace_text.find("label=pickup.viewmodel.current"), std::string::npos);
+    EXPECT_NE(pickup_trace_text.find("label=pickup.player.camera_state"), std::string::npos);
     bool saw_revolver_viewmodel = false;
     auto find_revolver_model = [](void *userdata, const slayer3d_game_data_render_primitive *primitive) -> bool {
         bool *saw = static_cast<bool *>(userdata);
@@ -7992,7 +8001,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(slayer3d_input_is_pressed(input, tune_scale_up_action));
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_NEAR(slayer3d_properties_get_float(revolver->props, "gun_scale", 0.0f), old_gun_scale, 0.0001f);
-    const std::filesystem::path placement_path = "/tmp/gun-placement.txt";
     std::filesystem::remove(placement_path);
     slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), tune_write_signal, nullptr);
     ASSERT_TRUE(std::filesystem::exists(placement_path));
@@ -8000,6 +8008,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_NE(placement_text.find("actor=entity.brush_geometry.revolver_viewmodel"), std::string::npos);
     EXPECT_NE(placement_text.find("gun_x="), std::string::npos);
     std::filesystem::remove(placement_path);
+    std::filesystem::remove(placement_trace_path);
     EXPECT_GT(slayer3d_properties_get_int(visible->props, "spotted", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(occluded->props, "spotted", 0), 0);
 

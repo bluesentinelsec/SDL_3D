@@ -7720,6 +7720,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return false;
         if (!is_non_empty_string(action, "path"))
             return validation_error(ctx, json_path, "debug.write_actor_properties requires a non-empty path");
+        yyjson_val *append = obj_get(action, "append");
+        if (append != NULL && !yyjson_is_bool(append))
+            return validation_error(ctx, json_path, "debug.write_actor_properties append must be a boolean");
         yyjson_val *properties = obj_get(action, "properties");
         if (!yyjson_is_arr(properties) || yyjson_arr_size(properties) == 0)
             return validation_error(ctx, json_path,

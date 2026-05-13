@@ -1682,8 +1682,8 @@ static bool camera_space_transform(const slayer3d_camera3d *camera, slayer3d_vec
                                             slayer3d_vec3_add(slayer3d_vec3_scale(up, local_offset.y),
                                                               slayer3d_vec3_scale(forward, local_offset.z))));
     *out_rotation = local_rotation;
-    out_rotation->y -= SDL_atan2f(forward.x, -forward.z);
-    out_rotation->x -= SDL_asinf(SDL_clamp(forward.y, -1.0f, 1.0f));
+    out_rotation->y += SDL_atan2f(forward.x, -forward.z);
+    out_rotation->x += SDL_asinf(SDL_clamp(forward.y, -1.0f, 1.0f));
     return true;
 }
 

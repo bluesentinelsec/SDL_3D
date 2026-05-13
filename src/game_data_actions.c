@@ -51,7 +51,7 @@ static bool debug_write_actor_properties(slayer3d_game_data_runtime *runtime, yy
     if (actor == NULL || path == NULL || path[0] == '\0' || !yyjson_is_arr(properties))
         return false;
 
-    SDL_IOStream *stream = SDL_IOFromFile(path, "wb");
+    SDL_IOStream *stream = SDL_IOFromFile(path, json_bool(action, "append", false) ? "ab" : "wb");
     if (stream == NULL)
         return false;
 

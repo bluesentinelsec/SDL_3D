@@ -141,6 +141,22 @@
                 "path": "/tmp/gun-placement.txt",
                 "label": "brush_geometry_revolver_viewmodel",
                 "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
+              },
+              {
+                "type": "debug.write_actor_properties",
+                "target": "entity.brush_geometry.revolver_viewmodel",
+                "path": "/tmp/gun-placement-trace.txt",
+                "append": true,
+                "label": "manual_write.viewmodel.current",
+                "properties": ["gun_x", "gun_y", "gun_z", "gun_scale", "gun_pitch", "gun_yaw", "gun_roll"]
+              },
+              {
+                "type": "debug.write_actor_properties",
+                "target": "entity.brush_geometry.player",
+                "path": "/tmp/gun-placement-trace.txt",
+                "append": true,
+                "label": "manual_write.player.camera_state",
+                "properties": ["yaw", "pitch", "camera_forward"]
               }
             ]
           }
