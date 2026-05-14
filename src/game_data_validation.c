@@ -11095,7 +11095,8 @@ static bool editor_debug_flag_name_valid(const char *value)
     return value != NULL && (SDL_strcmp(value, "all") == 0 || SDL_strcmp(value, "world_bounds") == 0 ||
                              SDL_strcmp(value, "selection_bounds") == 0 || SDL_strcmp(value, "trace_ray") == 0 ||
                              SDL_strcmp(value, "face_normal") == 0 || SDL_strcmp(value, "hit_marker") == 0 ||
-                             SDL_strcmp(value, "command_preview") == 0);
+                             SDL_strcmp(value, "command_preview") == 0 || SDL_strcmp(value, "work_plane_grid") == 0 ||
+                             SDL_strcmp(value, "grid") == 0);
 }
 
 static bool editor_command_name_valid(const char *value)
@@ -11404,9 +11405,9 @@ static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *s
         if (!validate_string_or_string_array_names(ctx, obj_get(overlay, "flags"), flags_path, "editor debug flag",
                                                    editor_debug_flag_name_valid))
             return false;
-        static const char *const color_keys[] = {"world_bounds_color", "selection_bounds_color",
-                                                 "trace_color",        "face_normal_color",
-                                                 "hit_marker_color",   "command_preview_color"};
+        static const char *const color_keys[] = {
+            "world_bounds_color", "selection_bounds_color", "trace_color",          "face_normal_color",
+            "hit_marker_color",   "command_preview_color",  "work_plane_grid_color"};
         for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
         {
             yyjson_val *color = obj_get(overlay, color_keys[i]);
@@ -11420,6 +11421,14 @@ static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *s
         yyjson_val *hit_marker_size = obj_get(overlay, "hit_marker_size");
         if (hit_marker_size != NULL && (!yyjson_is_num(hit_marker_size) || yyjson_get_num(hit_marker_size) <= 0.0))
             return validation_error(ctx, overlay_path, "scene editor debug_overlay hit_marker_size must be positive");
+        yyjson_val *grid_size = obj_get(overlay, "work_plane_grid_size");
+        if (grid_size != NULL && (!yyjson_is_num(grid_size) || yyjson_get_num(grid_size) <= 0.0))
+            return validation_error(ctx, overlay_path,
+                                    "scene editor debug_overlay work_plane_grid_size must be positive");
+        yyjson_val *grid_spacing = obj_get(overlay, "work_plane_grid_spacing");
+        if (grid_spacing != NULL && (!yyjson_is_num(grid_spacing) || yyjson_get_num(grid_spacing) <= 0.0))
+            return validation_error(ctx, overlay_path,
+                                    "scene editor debug_overlay work_plane_grid_spacing must be positive");
     }
     return true;
 }

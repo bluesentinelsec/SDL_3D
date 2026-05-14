@@ -8604,6 +8604,7 @@ TEST(GameDataRuntime, RejectsInvalidWorldDisplayAndCameraConventions)
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
     }
+
     remove_test_dir(dir);
 }
 
@@ -8737,6 +8738,39 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
         EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
             << test_case.name << ": " << error;
     }
+
+    write_text(dir / "bad_grid_overlay.game.json", R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Scene Editor Grid" },
+  "world": {
+    "name": "world.bad_scene_editor_grid",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "selection": {
+      "trace": { "source": "camera_screen", "camera": "camera.valid" },
+      "outputs": { "hit_key": "editor.hit" }
+    },
+    "debug_overlay": {
+      "flags": ["work_plane_grid"],
+      "work_plane_grid_spacing": 0
+    }
+  }
+})json");
+    char grid_error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_grid_overlay.game.json").string().c_str(), nullptr,
+                                                  grid_error, sizeof(grid_error)));
+    EXPECT_NE(std::string(grid_error).find("work_plane_grid_spacing must be positive"), std::string::npos)
+        << grid_error;
     remove_test_dir(dir);
 }
 
@@ -13864,6 +13898,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
 
     struct DebugCapture
     {
+        int grid_lines = 0;
         int world_edges = 0;
         int selection_edges = 0;
         int command_preview_edges = 0;
@@ -13873,7 +13908,13 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     } debug;
     auto capture_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
         auto *capture = static_cast<DebugCapture *>(userdata);
-        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORLD_BOUNDS_EDGE)
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID)
+        {
+            capture->grid_lines++;
+            EXPECT_NEAR(primitive->start.y, 0.0f, 0.001f);
+            EXPECT_NEAR(primitive->end.y, 0.0f, 0.001f);
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORLD_BOUNDS_EDGE)
             capture->world_edges++;
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
             capture->selection_edges++;
@@ -13888,6 +13929,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_debug, &debug));
+    EXPECT_EQ(debug.grid_lines, 98);
     EXPECT_EQ(debug.world_edges, 12);
     EXPECT_EQ(debug.selection_edges, 12);
     EXPECT_EQ(debug.command_preview_edges, 12);

@@ -2694,6 +2694,58 @@ static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, sl
     return true;
 }
 
+static bool emit_editor_debug_work_plane_grid(const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (desc == NULL || callback == NULL || !desc->has_work_plane_grid ||
+        slayer3d_vec3_length_squared(desc->work_plane_normal) <= 0.000001f)
+    {
+        return true;
+    }
+
+    const slayer3d_vec3 normal = slayer3d_vec3_normalize(desc->work_plane_normal);
+    slayer3d_vec3 reference =
+        SDL_fabsf(normal.y) < 0.95f ? slayer3d_vec3_make(0.0f, 1.0f, 0.0f) : slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    slayer3d_vec3 tangent = slayer3d_vec3_cross(reference, normal);
+    if (slayer3d_vec3_length_squared(tangent) <= 0.000001f)
+        tangent = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    tangent = slayer3d_vec3_normalize(tangent);
+    const slayer3d_vec3 bitangent = slayer3d_vec3_normalize(slayer3d_vec3_cross(normal, tangent));
+    const slayer3d_vec3 center = slayer3d_vec3_scale(normal, desc->work_plane_distance);
+    const float half_size = desc->work_plane_grid_size > 0.0f ? desc->work_plane_grid_size : 16.0f;
+    const float spacing = desc->work_plane_grid_spacing > 0.0f ? desc->work_plane_grid_spacing : 1.0f;
+    const int line_count = SDL_min((int)SDL_floorf(half_size / spacing), 512);
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.color = editor_debug_color_or_default(desc->work_plane_grid_color, (slayer3d_color){90, 160, 190, 120});
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID;
+    context.face_index = -1;
+
+    for (int i = -line_count; i <= line_count; ++i)
+    {
+        const float offset = (float)i * spacing;
+        const slayer3d_vec3 tangent_offset = slayer3d_vec3_scale(tangent, offset);
+        const slayer3d_vec3 bitangent_offset = slayer3d_vec3_scale(bitangent, offset);
+        if (!emit_editor_debug_line(&context,
+                                    slayer3d_vec3_add(slayer3d_vec3_add(center, tangent_offset),
+                                                      slayer3d_vec3_scale(bitangent, -half_size)),
+                                    slayer3d_vec3_add(slayer3d_vec3_add(center, tangent_offset),
+                                                      slayer3d_vec3_scale(bitangent, half_size))) ||
+            !emit_editor_debug_line(&context,
+                                    slayer3d_vec3_add(slayer3d_vec3_add(center, bitangent_offset),
+                                                      slayer3d_vec3_scale(tangent, -half_size)),
+                                    slayer3d_vec3_add(slayer3d_vec3_add(center, bitangent_offset),
+                                                      slayer3d_vec3_scale(tangent, half_size))))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 typedef struct editor_world_bounds_context
 {
     const slayer3d_game_data_editor_debug_desc *desc;
@@ -2736,6 +2788,12 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         return false;
 
     const unsigned int flags = desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID) != 0u &&
+        !emit_editor_debug_work_plane_grid(desc, callback, userdata))
+    {
+        return true;
+    }
+
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS) != 0u)
     {
         editor_world_bounds_context bounds_context;
@@ -2907,6 +2965,9 @@ static unsigned int editor_debug_flag_from_string(const char *value)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER;
     if (SDL_strcmp(value != NULL ? value : "", "command_preview") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW;
+    if (SDL_strcmp(value != NULL ? value : "", "work_plane_grid") == 0 ||
+        SDL_strcmp(value != NULL ? value : "", "grid") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID;
     return 0u;
 }
 
@@ -3077,6 +3138,22 @@ static bool editor_work_plane_selection_from_trace(yyjson_val *selection,
     out_selection->fraction = fraction;
     out_selection->point = slayer3d_vec3_add(trace->start, slayer3d_vec3_scale(direction, fraction));
     out_selection->normal = normal;
+    return true;
+}
+
+static bool editor_work_plane_desc_from_trace_json(yyjson_val *trace, slayer3d_vec3 *out_normal, float *out_distance)
+{
+    yyjson_val *work_plane = obj_get(trace, "work_plane");
+    if (!yyjson_is_obj(work_plane) || !json_bool(work_plane, "enabled", true) || out_normal == NULL ||
+        out_distance == NULL)
+    {
+        return false;
+    }
+    slayer3d_vec3 normal = json_vec3(work_plane, "normal", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+    if (slayer3d_vec3_length_squared(normal) <= 0.000001f)
+        return false;
+    *out_normal = slayer3d_vec3_normalize(normal);
+    *out_distance = json_float(work_plane, "distance", 0.0f);
     return true;
 }
 
@@ -4681,13 +4758,18 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
     out_desc->face_normal_color = json_color(overlay, "face_normal_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->hit_marker_color = json_color(overlay, "hit_marker_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->command_preview_color = json_color(overlay, "command_preview_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->work_plane_grid_color = json_color(overlay, "work_plane_grid_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->normal_length = json_float(overlay, "normal_length", 0.75f);
     out_desc->hit_marker_size = json_float(overlay, "hit_marker_size", 0.1f);
+    out_desc->work_plane_grid_size = json_float(overlay, "work_plane_grid_size", 16.0f);
+    out_desc->work_plane_grid_spacing = json_float(overlay, "work_plane_grid_spacing", 1.0f);
 
     yyjson_val *selection_json = obj_get(editor, "selection");
     if (editor_trace_desc_from_json(runtime, selection_json, out_trace))
     {
         out_desc->trace = out_trace;
+        out_desc->has_work_plane_grid = editor_work_plane_desc_from_trace_json(
+            obj_get(selection_json, "trace"), &out_desc->work_plane_normal, &out_desc->work_plane_distance);
         if (out_selection != NULL && editor_selection_mode_is_click(selection_json) &&
             editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit)
         {

@@ -802,6 +802,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_HIT_MARKER = 5,
         /** @brief Non-mutating editor command preview bounds edge. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE = 6,
+        /** @brief Authored editor work-plane grid line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID = 7,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -818,11 +820,14 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER = 1u << 4,
         /** @brief Emit active non-mutating editor command preview bounds. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW = 1u << 5,
+        /** @brief Emit authored editor work-plane grid lines. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID = 1u << 6,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
@@ -865,6 +870,18 @@ extern "C"
         slayer3d_color hit_marker_color;
         /** @brief Color for command preview bounds, or alpha 0 for default. */
         slayer3d_color command_preview_color;
+        /** @brief Color for work-plane grid lines, or alpha 0 for default. */
+        slayer3d_color work_plane_grid_color;
+        /** @brief True when work-plane grid settings are valid. */
+        bool has_work_plane_grid;
+        /** @brief Work-plane normal. */
+        slayer3d_vec3 work_plane_normal;
+        /** @brief Work-plane distance for dot(normal, point) = distance. */
+        float work_plane_distance;
+        /** @brief Half-extent of the grid in world units. Defaults to 16. */
+        float work_plane_grid_size;
+        /** @brief Grid line spacing in world units. Defaults to 1. */
+        float work_plane_grid_spacing;
         /** @brief Face-normal line length in world units. Defaults to 0.75. */
         float normal_length;
         /** @brief Hit-marker half-size in world units. Defaults to 0.1. */
