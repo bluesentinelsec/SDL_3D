@@ -56,6 +56,10 @@
             "bindings": [{ "device": "keyboard", "key": "S" }]
           },
           {
+            "name": "action.editor.test_run.prepare",
+            "bindings": [{ "device": "keyboard", "key": "T" }]
+          },
+          {
             "name": "action.editor.tool.floor",
             "bindings": [{ "device": "keyboard", "key": "1" }]
           },
@@ -107,7 +111,8 @@
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
     "signal.editor.tool.player_start",
-    "signal.editor.export"
+    "signal.editor.export",
+    "signal.editor.test_run.prepare"
   ],
   "logic": {
     "sensors": [
@@ -150,6 +155,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.export",
         "on_pressed": "signal.editor.export"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.test_run.prepare",
+        "on_pressed": "signal.editor.test_run.prepare"
       },
       {
         "type": "sensor.input_pressed",
@@ -558,6 +568,28 @@
               "player_start_source_path_key": "editor.player_start.source_path"
             }
           }
+        ]
+      },
+      {
+        "signal": "signal.editor.test_run.prepare",
+        "actions": [
+          {
+            "type": "editor.test_run.prepare",
+            "data_asset": "asset://editor_shell_dojo.game.json",
+            "player_start": "player_start.editor_shell",
+            "message": "test run handoff prepared",
+            "outputs": {
+              "valid_key": "editor.test_run.valid",
+              "message_key": "editor.test_run.message",
+              "manifest_json_key": "editor.test_run.manifest_json",
+              "size_key": "editor.test_run.size",
+              "data_asset_key": "editor.test_run.data_asset",
+              "scene_key": "editor.test_run.scene",
+              "player_start_key": "editor.test_run.player_start",
+              "target_key": "editor.test_run.target"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "test run handoff prepared" }
         ]
       }
     ]

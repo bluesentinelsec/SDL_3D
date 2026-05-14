@@ -2167,6 +2167,33 @@ extern "C"
                                                               size_t *out_size, char *error_buffer,
                                                               int error_buffer_size);
 
+    /** @brief Descriptor for creating an editor test-run handoff manifest. */
+    typedef struct slayer3d_game_data_editor_test_run_desc
+    {
+        /** @brief Root game-data asset path to pass to the generic runner. Required. */
+        const char *data_asset_path;
+        /** @brief Optional scene to direct-start. Must match the player start scene when both are set. */
+        const char *scene;
+        /** @brief Optional editor player start to apply before scene enter. */
+        const char *player_start;
+    } slayer3d_game_data_editor_test_run_desc;
+
+    /**
+     * @brief Export a small JSON handoff manifest for editor test-run workflows.
+     *
+     * The manifest uses `schema: "slayer3d.editor_test_run.v0"` and contains
+     * the runner data asset, resolved scene when known, player start when
+     * provided, and a runner argument array excluding mount flags. Editor hosts
+     * combine this with their current `--root`, `--pack`, or fused executable
+     * context to launch the generic runner without game-specific native code.
+     * The returned string is allocated with SDL_malloc and must be released
+     * with SDL_free().
+     */
+    bool slayer3d_game_data_export_editor_test_run_manifest_json(const slayer3d_game_data_runtime *runtime,
+                                                                 const slayer3d_game_data_editor_test_run_desc *desc,
+                                                                 char **out_json, size_t *out_size, char *error_buffer,
+                                                                 int error_buffer_size);
+
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity
     {

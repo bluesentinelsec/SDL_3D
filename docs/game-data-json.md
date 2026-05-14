@@ -928,6 +928,29 @@ restores floors, walls, ceilings, face materials, and player starts together.
 }
 ```
 
+Use `editor.test_run.prepare` to publish a game-agnostic handoff manifest for
+launching the generic runner from an editor-selected scene or player start. The
+action does not spawn a process and does not write files. It produces
+`slayer3d.editor_test_run.v0` JSON containing the root data asset, resolved
+scene, player start, target actor, and runner argument array excluding mount
+flags. Editor hosts combine those arguments with their current `--root`,
+`--pack`, embedded, or fused launch context.
+
+```json
+{
+  "type": "editor.test_run.prepare",
+  "data_asset": "asset://game.game.json",
+  "player_start": "player_start.level_01",
+  "outputs": {
+    "valid_key": "editor.test_run.valid",
+    "message_key": "editor.test_run.message",
+    "manifest_json_key": "editor.test_run.manifest_json",
+    "scene_key": "editor.test_run.scene",
+    "player_start_key": "editor.test_run.player_start"
+  }
+}
+```
+
 Use `editor.brush_world.status` to publish the current dirty/source state of a
 brush world without exporting its JSON. Outputs support `valid_key`,
 `message_key`, `world_key`, `dirty_key`, `revision_key`, `saved_revision_key`,

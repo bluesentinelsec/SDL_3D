@@ -1779,6 +1779,121 @@ bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_run
     return true;
 }
 
+static bool editor_test_run_add_arg(yyjson_mut_doc *doc, yyjson_mut_val *args, const char *value)
+{
+    yyjson_mut_val *arg = yyjson_mut_strcpy(doc, value != NULL ? value : "");
+    return arg != NULL && yyjson_mut_arr_append(args, arg);
+}
+
+bool slayer3d_game_data_export_editor_test_run_manifest_json(const slayer3d_game_data_runtime *runtime,
+                                                             const slayer3d_game_data_editor_test_run_desc *desc,
+                                                             char **out_json, size_t *out_size, char *error_buffer,
+                                                             int error_buffer_size)
+{
+    if (out_json != NULL)
+        *out_json = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (runtime == NULL || desc == NULL || out_json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editor test run manifest requires runtime, descriptor, and output");
+        return false;
+    }
+    if (desc->data_asset_path == NULL || desc->data_asset_path[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "editor test run manifest requires a data asset path");
+        return false;
+    }
+
+    const char *scene = desc->scene != NULL && desc->scene[0] != '\0' ? desc->scene : NULL;
+    const char *player_start_name =
+        desc->player_start != NULL && desc->player_start[0] != '\0' ? desc->player_start : NULL;
+    slayer3d_game_data_editor_player_start player_start;
+    SDL_zero(player_start);
+    if (player_start_name != NULL)
+    {
+        if (!slayer3d_game_data_get_editor_player_start(runtime, player_start_name, &player_start))
+        {
+            set_errorf(error_buffer, error_buffer_size, "player start '%s' not found", player_start_name);
+            return false;
+        }
+        if (player_start.target == NULL || player_start.target[0] == '\0')
+        {
+            set_errorf(error_buffer, error_buffer_size, "player start '%s' has no target actor", player_start_name);
+            return false;
+        }
+        if (scene != NULL && player_start.scene != NULL && player_start.scene[0] != '\0' &&
+            SDL_strcmp(scene, player_start.scene) != 0)
+        {
+            set_error(error_buffer, error_buffer_size, "editor test run scene conflicts with player start scene");
+            return false;
+        }
+        if (scene == NULL && player_start.scene != NULL && player_start.scene[0] != '\0')
+            scene = player_start.scene;
+    }
+    if (scene == NULL && player_start_name == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editor test run manifest requires a scene or player start");
+        return false;
+    }
+    if (scene != NULL && find_scene_const(runtime, scene) == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "scene '%s' not found", scene);
+        return false;
+    }
+
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *args = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    if (doc == NULL || root == NULL || args == NULL)
+    {
+        yyjson_mut_doc_free(doc);
+        set_error(error_buffer, error_buffer_size, "failed to allocate editor test run manifest");
+        return false;
+    }
+    yyjson_mut_doc_set_root(doc, root);
+
+    bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.editor_test_run.v0") &&
+              yyjson_mut_obj_add_strcpy(doc, root, "data", desc->data_asset_path) &&
+              yyjson_mut_obj_add_val(doc, root, "args", args) && editor_test_run_add_arg(doc, args, "--data") &&
+              editor_test_run_add_arg(doc, args, desc->data_asset_path);
+    if (ok && scene != NULL)
+    {
+        ok = yyjson_mut_obj_add_strcpy(doc, root, "scene", scene) && editor_test_run_add_arg(doc, args, "--scene") &&
+             editor_test_run_add_arg(doc, args, scene);
+    }
+    if (ok && player_start_name != NULL)
+    {
+        ok = yyjson_mut_obj_add_strcpy(doc, root, "player_start", player_start_name) &&
+             yyjson_mut_obj_add_strcpy(doc, root, "target", player_start.target) &&
+             editor_test_run_add_arg(doc, args, "--player-start") &&
+             editor_test_run_add_arg(doc, args, player_start_name);
+    }
+
+    size_t size = 0u;
+    char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
+    yyjson_mut_doc_free(doc);
+    if (json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to write editor test run manifest JSON");
+        return false;
+    }
+
+    char *copy = (char *)SDL_malloc(size + 1u);
+    if (copy == NULL)
+    {
+        free(json);
+        set_error(error_buffer, error_buffer_size, "failed to allocate editor test run manifest JSON");
+        return false;
+    }
+    SDL_memcpy(copy, json, size + 1u);
+    free(json);
+    *out_json = copy;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
 bool slayer3d_game_data_get_brush_world(const slayer3d_game_data_runtime *runtime, const char *name,
                                         slayer3d_game_data_brush_world *out_world)
 {
@@ -3166,6 +3281,46 @@ bool slayer3d_game_data_export_editor_level_action(slayer3d_game_data_runtime *r
                           has_start_state ? editor_revision_to_int(start_state.saved_revision) : 0);
     editor_set_string_output(scene_state, outputs, "player_start_source_path_key",
                              has_start_state && start_state.source_path != NULL ? start_state.source_path : "");
+    SDL_free(json);
+    return true;
+}
+
+bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_game_data_editor_test_run_desc desc;
+    SDL_zero(desc);
+    desc.data_asset_path = json_string(action, "data_asset", NULL);
+    desc.scene = json_string(action, "scene", NULL);
+    desc.player_start = json_string(action, "player_start", NULL);
+
+    char error[256];
+    error[0] = '\0';
+    char *json = NULL;
+    size_t size = 0u;
+    const bool ok = slayer3d_game_data_export_editor_test_run_manifest_json(runtime, &desc, &json, &size, error,
+                                                                            (int)sizeof(error));
+
+    slayer3d_game_data_editor_player_start start;
+    SDL_zero(start);
+    const bool has_start = ok && desc.player_start != NULL && desc.player_start[0] != '\0' &&
+                           slayer3d_game_data_get_editor_player_start(runtime, desc.player_start, &start);
+    const char *resolved_scene = desc.scene != NULL && desc.scene[0] != '\0'
+                                     ? desc.scene
+                                     : (has_start && start.scene != NULL ? start.scene : "");
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "editor test run prepared")
+                                : (error[0] != '\0' ? error : "editor test run preparation failed"));
+    editor_set_int_output(scene_state, outputs, "size_key", ok ? (int)size : 0);
+    editor_set_string_output(scene_state, outputs, "manifest_json_key", ok && json != NULL ? json : "");
+    editor_set_string_output(scene_state, outputs, "data_asset_key", ok ? desc.data_asset_path : "");
+    editor_set_string_output(scene_state, outputs, "scene_key", ok ? resolved_scene : "");
+    editor_set_string_output(scene_state, outputs, "player_start_key",
+                             ok && desc.player_start != NULL ? desc.player_start : "");
+    editor_set_string_output(scene_state, outputs, "target_key", has_start && start.target != NULL ? start.target : "");
     SDL_free(json);
     return true;
 }
