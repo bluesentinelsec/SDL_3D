@@ -8863,6 +8863,29 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown brush world reference"), std::string::npos) << error;
 
+    write_text(dir / "bad_test_run_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Test Run Action" },
+  "world": { "name": "world.bad_editor_test_run_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.test_run"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.test_run",
+        "actions": [
+          { "type": "editor.test_run.prepare", "data_asset": "asset://bad.game.json", "player_start": "player_start.missing" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_test_run_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown editor player start reference"), std::string::npos) << error;
+
     write_text(dir / "bad_status_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -14015,12 +14038,14 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int player_start_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.player_start");
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
     const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
+    const int test_run_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.prepare");
     ASSERT_GE(floor_signal, 0);
     ASSERT_GE(wall_signal, 0);
     ASSERT_GE(ceiling_signal, 0);
     ASSERT_GE(player_start_signal, 0);
     ASSERT_GE(commit_signal, 0);
     ASSERT_GE(export_signal, 0);
+    ASSERT_GE(test_run_signal, 0);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -14106,6 +14131,25 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
+
+    slayer3d_signal_emit(bus, test_run_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.message", ""),
+                 "test run handoff prepared");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.data_asset", ""),
+                 "asset://editor_shell_dojo.game.json");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.scene", ""),
+                 "scene.editor_shell.test_run");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.player_start", ""),
+                 "player_start.editor_shell");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.target", ""),
+                 "entity.editor_shell.player");
+    const char *manifest_json = slayer3d_properties_get_string(scene_state, "editor.test_run.manifest_json", "");
+    ASSERT_NE(manifest_json, nullptr);
+    EXPECT_NE(std::string(manifest_json).find("\"schema\": \"slayer3d.editor_test_run.v0\""), std::string::npos);
+    EXPECT_NE(std::string(manifest_json).find("\"--player-start\""), std::string::npos);
+    EXPECT_NE(std::string(manifest_json).find("\"player_start.editor_shell\""), std::string::npos);
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.test_run.size", 0), 0);
 
     const std::filesystem::path save_dir = unique_test_dir("editor_unified_level_save");
     const std::filesystem::path saved_path = save_dir / "saved" / "editable_level.fragment.json";

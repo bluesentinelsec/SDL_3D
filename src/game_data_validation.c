@@ -82,6 +82,7 @@ typedef struct validation_names
     name_table sector_navigation;
     name_table sector_doors;
     name_table sector_platforms;
+    name_table editor_player_starts;
     name_table signals;
     name_table scripts;
     name_table script_modules;
@@ -3780,6 +3781,30 @@ static bool collect_sector_platforms(validation_context *ctx, yyjson_val *root, 
     return true;
 }
 
+static bool collect_editor_player_starts(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *starts = obj_get(root, "editor_player_starts");
+    if (starts == NULL)
+        return true;
+    if (!yyjson_is_arr(starts))
+        return validation_error(ctx, "$.editor_player_starts", "editor_player_starts must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(starts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.editor_player_starts[%zu]", i);
+        yyjson_val *start = yyjson_arr_get(starts, i);
+        if (!yyjson_is_obj(start))
+            return validation_error(ctx, path, "editor player start entries must be objects");
+        if (!require_unique_name(ctx, &names->editor_player_starts, "editor player start", json_string(start, "name"),
+                                 path))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool collect_actor_archetypes(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *archetypes = obj_get(root, "actor_archetypes");
@@ -4405,15 +4430,15 @@ static bool collect_names(validation_context *ctx, yyjson_val *root, validation_
            collect_grid_maps(ctx, root, names) && collect_grid_pickup_layers(ctx, root, names) &&
            collect_sector_levels(ctx, root, names) && collect_brush_worlds(ctx, root, names) &&
            collect_sector_navigation(ctx, root, names) && collect_sector_doors(ctx, root, names) &&
-           collect_sector_platforms(ctx, root, names) && collect_actor_archetypes(ctx, root, names) &&
-           collect_actor_pools(ctx, root, names) && collect_scripts(ctx, root, names) &&
-           collect_adapters(ctx, root, names) && collect_input_actions(ctx, root, names) &&
-           collect_input_assignment_sets(ctx, root, names) && collect_input_profiles(ctx, root, names) &&
-           collect_network_input_channels(ctx, root, names) && collect_cameras(ctx, root, names) &&
-           collect_fonts(ctx, root, names) && collect_sprite_assets(ctx, root, names) &&
-           collect_images(ctx, root, names) && collect_models(ctx, root, names) &&
-           collect_audio_assets(ctx, root, names) && collect_timers(ctx, root, names) &&
-           collect_sensors(ctx, root, names);
+           collect_sector_platforms(ctx, root, names) && collect_editor_player_starts(ctx, root, names) &&
+           collect_actor_archetypes(ctx, root, names) && collect_actor_pools(ctx, root, names) &&
+           collect_scripts(ctx, root, names) && collect_adapters(ctx, root, names) &&
+           collect_input_actions(ctx, root, names) && collect_input_assignment_sets(ctx, root, names) &&
+           collect_input_profiles(ctx, root, names) && collect_network_input_channels(ctx, root, names) &&
+           collect_cameras(ctx, root, names) && collect_fonts(ctx, root, names) &&
+           collect_sprite_assets(ctx, root, names) && collect_images(ctx, root, names) &&
+           collect_models(ctx, root, names) && collect_audio_assets(ctx, root, names) &&
+           collect_timers(ctx, root, names) && collect_sensors(ctx, root, names);
 }
 
 static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
@@ -8595,6 +8620,37 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.test_run.prepare") == 0)
+    {
+        if (!is_non_empty_string(action, "data_asset"))
+            return validation_error(ctx, json_path, "editor.test_run.prepare requires a non-empty data_asset");
+        const char *scene = json_string(action, "scene");
+        if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+            return false;
+        yyjson_val *player_start = obj_get(action, "player_start");
+        if (player_start != NULL && (!yyjson_is_str(player_start) || yyjson_get_str(player_start)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.test_run.prepare player_start must be a non-empty string");
+        if (player_start != NULL && !require_ref(ctx, &names->editor_player_starts, "editor player start",
+                                                 yyjson_get_str(player_start), json_path))
+        {
+            return false;
+        }
+        if (scene == NULL && player_start == NULL)
+            return validation_error(ctx, json_path, "editor.test_run.prepare requires scene or player_start");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.test_run.prepare outputs must be an object");
+        static const char *const output_keys[] = {"valid_key",      "message_key", "manifest_json_key", "size_key",
+                                                  "data_asset_key", "scene_key",   "player_start_key",  "target_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.test_run.prepare output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.brush_world.status") == 0)
     {
         if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
@@ -11793,6 +11849,7 @@ static void validation_names_destroy(validation_names *names)
     name_table_destroy(&names->sector_navigation);
     name_table_destroy(&names->sector_doors);
     name_table_destroy(&names->sector_platforms);
+    name_table_destroy(&names->editor_player_starts);
     name_table_destroy(&names->signals);
     name_table_destroy(&names->scripts);
     name_table_destroy(&names->script_modules);

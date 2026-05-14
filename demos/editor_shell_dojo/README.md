@@ -10,6 +10,8 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
   `4` player start, then `Enter` to place the selected prefab
 - unified editable-level export: `S` publishes one fragment containing the
   brush world and player starts
+- test-run handoff manifest: `T` publishes runner arguments for the authored
+  player start
 - generic runner test-run support: `--player-start player_start.editor_shell`
   enters the playable FPS scene through the same runtime path a data-only game
   uses
