@@ -8769,6 +8769,16 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *max = obj_get(action, "max");
         if (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3))
             return validation_error(ctx, json_path, "editor.brush_world.create_box requires min and max vec3 values");
+        const char *position_from = json_string(action, "position_from");
+        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0)
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.create_box position_from must be selection_point");
+        yyjson_val *position_offset = obj_get(action, "position_offset");
+        if (position_offset != NULL && !is_exact_vec_array(position_offset, 3))
+            return validation_error(ctx, json_path, "editor.brush_world.create_box position_offset must be a vec3");
+        yyjson_val *snap = obj_get(action, "snap");
+        if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
+            return validation_error(ctx, json_path, "editor.brush_world.create_box snap must be a positive number");
         const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));
         const double min_y = yyjson_get_num(yyjson_arr_get(min, 1));
         const double min_z = yyjson_get_num(yyjson_arr_get(min, 2));
@@ -8780,9 +8790,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.brush_world.create_box outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",    "message_key",       "brush_key",
-                                                  "world_key",    "source_path_key",   "dirty_key",
-                                                  "revision_key", "saved_revision_key"};
+        static const char *const output_keys[] = {
+            "valid_key", "message_key",  "brush_key",          "world_key",      "source_path_key",
+            "dirty_key", "revision_key", "saved_revision_key", "bounds_min_key", "bounds_max_key"};
         for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
         {
             yyjson_val *output = obj_get(outputs, output_keys[i]);
@@ -8806,6 +8816,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (position != NULL && !is_exact_vec_array(position, 3))
             return validation_error(ctx, json_path, "editor.player_start.place position must be a vec3");
         const char *position_from = json_string(action, "position_from");
+        if (position != NULL && position_from != NULL)
+            return validation_error(ctx, json_path,
+                                    "editor.player_start.place requires position or position_from, not both");
         if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0)
             return validation_error(ctx, json_path, "editor.player_start.place position_from must be selection_point");
         yyjson_val *yaw = obj_get(action, "yaw");

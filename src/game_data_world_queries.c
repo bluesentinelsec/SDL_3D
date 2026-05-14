@@ -3505,16 +3505,46 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
 
     char error[256];
     error[0] = '\0';
+    const char *position_from = json_string(action, "position_from", NULL);
+    if (position_from != NULL && SDL_strcmp(position_from, "selection_point") == 0)
+    {
+        slayer3d_game_data_editor_selection selection;
+        SDL_zero(selection);
+        if (!slayer3d_game_data_get_active_editor_selection(runtime, &selection) || !selection.hit)
+        {
+            set_error(error, (int)sizeof(error), "box brush placement requires an active selection point");
+        }
+        else
+        {
+            slayer3d_vec3 origin = selection.point;
+            origin =
+                slayer3d_vec3_add(origin, json_vec3(action, "position_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
+            const float snap = json_float(action, "snap", 0.0f);
+            if (snap > 0.0f)
+            {
+                origin.x = SDL_roundf(origin.x / snap) * snap;
+                origin.y = SDL_roundf(origin.y / snap) * snap;
+                origin.z = SDL_roundf(origin.z / snap) * snap;
+            }
+            desc.min = slayer3d_vec3_add(desc.min, origin);
+            desc.max = slayer3d_vec3_add(desc.max, origin);
+        }
+    }
+
     char brush_name[256];
     brush_name[0] = '\0';
-    const bool ok =
-        slayer3d_game_data_create_box_brush(runtime, &desc, brush_name, sizeof(brush_name), error, (int)sizeof(error));
+    const bool ok = error[0] == '\0' && slayer3d_game_data_create_box_brush(
+                                            runtime, &desc, brush_name, sizeof(brush_name), error, (int)sizeof(error));
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
     editor_set_string_output(scene_state, outputs, "message_key",
                              ok ? json_string(action, "message", "box brush created")
                                 : (error[0] != '\0' ? error : "box brush creation failed"));
     editor_set_string_output(scene_state, outputs, "brush_key", ok ? brush_name : "");
+    editor_set_vec3_output(scene_state, outputs, "bounds_min_key",
+                           ok ? desc.min : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    editor_set_vec3_output(scene_state, outputs, "bounds_max_key",
+                           ok ? desc.max : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     (void)publish_editor_brush_world_status(runtime, outputs, desc.world_name, NULL, false);
     return true;
 }
@@ -3528,7 +3558,8 @@ bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runt
     desc.scene = json_string(action, "scene", NULL);
     desc.target = json_string(action, "target", NULL);
     yyjson_val *position = obj_get(action, "position");
-    desc.has_position = position != NULL;
+    const char *position_from = json_string(action, "position_from", NULL);
+    desc.has_position = position != NULL && position_from == NULL;
     desc.position = json_vec3(action, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     yyjson_val *yaw = obj_get(action, "yaw");
     yyjson_val *pitch = obj_get(action, "pitch");
