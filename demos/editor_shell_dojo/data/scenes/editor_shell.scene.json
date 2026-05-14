@@ -85,6 +85,63 @@
         "face_stable_id_key": "editor.hover.face_stable_id"
       }
     },
+    "placement": {
+      "tool_key": "editor.tool.mode",
+      "snap_key": "editor.placement.snap",
+      "default_snap": 0.5,
+      "outputs": {
+        "active_key": "editor.placement_preview.active",
+        "valid_key": "editor.placement_preview.valid",
+        "mode_key": "editor.placement_preview.mode",
+        "kind_key": "editor.placement_preview.kind",
+        "world_key": "editor.placement_preview.world",
+        "material_key": "editor.placement_preview.material",
+        "message_key": "editor.placement_preview.message",
+        "anchor_key": "editor.placement_preview.anchor",
+        "snap_key": "editor.placement_preview.snap",
+        "bounds_min_key": "editor.placement_preview.bounds_min",
+        "bounds_max_key": "editor.placement_preview.bounds_max"
+      },
+      "previews": [
+        {
+          "mode": "floor",
+          "kind": "box",
+          "world": "brush.editor_shell.target",
+          "material": "mat.editor.floor",
+          "snap": 0.5,
+          "min": [-3.0, -0.2, -3.0],
+          "max": [3.0, 0.0, 3.0],
+          "message": "floor prefab preview"
+        },
+        {
+          "mode": "wall",
+          "kind": "box",
+          "world": "brush.editor_shell.target",
+          "material": "mat.editor.wall",
+          "snap": 0.5,
+          "min": [-0.125, 0.0, -3.0],
+          "max": [0.125, 2.5, 3.0],
+          "message": "wall prefab preview"
+        },
+        {
+          "mode": "ceiling",
+          "kind": "box",
+          "world": "brush.editor_shell.target",
+          "material": "mat.editor.ceiling",
+          "snap": 0.5,
+          "min": [-3.0, 2.5, -3.0],
+          "max": [3.0, 2.7, 3.0],
+          "message": "ceiling prefab preview"
+        },
+        {
+          "mode": "player_start",
+          "kind": "player_start",
+          "snap": 0.5,
+          "size": [0.5, 1.8, 0.5],
+          "message": "player start preview"
+        }
+      ]
+    },
     "debug_overlay": {
       "enabled": true,
       "flags": [
@@ -189,6 +246,14 @@
           {
             "label": "Preview",
             "binding": { "type": "scene_state", "key": "editor.command_preview.message", "default": "none" }
+          },
+          {
+            "label": "Place",
+            "binding": { "type": "scene_state", "key": "editor.placement_preview.message", "default": "none" }
+          },
+          {
+            "label": "Snap",
+            "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 0.5 }
           },
           {
             "label": "Txn",

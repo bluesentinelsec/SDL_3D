@@ -11417,6 +11417,95 @@ static bool validate_scene_editor_selection_options(validation_context *ctx, yyj
     return true;
 }
 
+static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val *placement, const char *placement_path,
+                                            validation_names *names)
+{
+    if (placement == NULL)
+        return true;
+    if (!yyjson_is_obj(placement))
+        return validation_error(ctx, placement_path, "scene editor placement must be an object");
+
+    const char *string_fields[] = {"tool_key", "snap_key", "default_tool"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        char field_path[PATH_BUFFER_SIZE];
+        format_path(field_path, sizeof(field_path), "%s.%s", placement_path, string_fields[i]);
+        if (!validate_optional_non_empty_string(ctx, obj_get(placement, string_fields[i]), field_path,
+                                                "scene editor placement field"))
+            return false;
+    }
+    yyjson_val *default_snap = obj_get(placement, "default_snap");
+    if (default_snap != NULL && (!yyjson_is_num(default_snap) || yyjson_get_num(default_snap) <= 0.0))
+        return validation_error(ctx, placement_path, "scene editor placement default_snap must be positive");
+
+    yyjson_val *outputs = obj_get(placement, "outputs");
+    if (outputs != NULL && !yyjson_is_obj(outputs))
+        return validation_error(ctx, placement_path, "scene editor placement outputs must be an object");
+    static const char *const output_keys[] = {"active_key", "valid_key",      "mode_key",      "kind_key",
+                                              "world_key",  "material_key",   "message_key",   "anchor_key",
+                                              "snap_key",   "bounds_min_key", "bounds_max_key"};
+    for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+    {
+        yyjson_val *output = obj_get(outputs, output_keys[i]);
+        if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+            return validation_error(ctx, placement_path,
+                                    "scene editor placement output keys must be non-empty strings");
+    }
+
+    yyjson_val *previews = obj_get(placement, "previews");
+    if (!yyjson_is_arr(previews) || yyjson_arr_size(previews) == 0)
+        return validation_error(ctx, placement_path, "scene editor placement previews must be a non-empty array");
+    for (size_t i = 0; i < yyjson_arr_size(previews); ++i)
+    {
+        char preview_path[PATH_BUFFER_SIZE];
+        format_path(preview_path, sizeof(preview_path), "%s.previews[%zu]", placement_path, i);
+        yyjson_val *preview = yyjson_arr_get(previews, i);
+        if (!yyjson_is_obj(preview))
+            return validation_error(ctx, preview_path, "scene editor placement preview must be an object");
+        if (!is_non_empty_string(preview, "mode"))
+            return validation_error(ctx, preview_path, "scene editor placement preview requires a non-empty mode");
+        const char *kind = json_string(preview, "kind");
+        if (kind == NULL)
+            kind = "box";
+        if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0)
+            return validation_error(ctx, preview_path,
+                                    "scene editor placement preview kind must be box or player_start");
+        yyjson_val *offset = obj_get(preview, "position_offset");
+        if (offset != NULL && !is_exact_vec_array(offset, 3))
+            return validation_error(ctx, preview_path, "scene editor placement preview position_offset must be a vec3");
+        yyjson_val *snap = obj_get(preview, "snap");
+        if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
+            return validation_error(ctx, preview_path, "scene editor placement preview snap must be positive");
+        if (SDL_strcmp(kind, "player_start") == 0)
+        {
+            yyjson_val *size = obj_get(preview, "size");
+            if (size != NULL &&
+                (!is_exact_vec_array(size, 3) || yyjson_get_num(yyjson_arr_get(size, 0)) <= 0.0 ||
+                 yyjson_get_num(yyjson_arr_get(size, 1)) <= 0.0 || yyjson_get_num(yyjson_arr_get(size, 2)) <= 0.0))
+            {
+                return validation_error(ctx, preview_path,
+                                        "scene editor placement player_start size must be a positive vec3");
+            }
+            continue;
+        }
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(preview, "world"), preview_path))
+            return false;
+        if (!is_non_empty_string(preview, "material"))
+            return validation_error(ctx, preview_path, "scene editor placement box preview requires a material");
+        yyjson_val *min = obj_get(preview, "min");
+        yyjson_val *max = obj_get(preview, "max");
+        if (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3))
+            return validation_error(ctx, preview_path, "scene editor placement box preview requires min and max vec3");
+        if (!(yyjson_get_num(yyjson_arr_get(min, 0)) < yyjson_get_num(yyjson_arr_get(max, 0)) &&
+              yyjson_get_num(yyjson_arr_get(min, 1)) < yyjson_get_num(yyjson_arr_get(max, 1)) &&
+              yyjson_get_num(yyjson_arr_get(min, 2)) < yyjson_get_num(yyjson_arr_get(max, 2))))
+        {
+            return validation_error(ctx, preview_path, "scene editor placement box preview bounds require min < max");
+        }
+    }
+    return true;
+}
+
 static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
                                           validation_names *names)
 {
@@ -11451,6 +11540,11 @@ static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *s
         if (!validate_scene_editor_outputs(ctx, obj_get(selection, "hover_outputs"), hover_outputs_path))
             return false;
     }
+
+    char placement_path[PATH_BUFFER_SIZE];
+    format_path(placement_path, sizeof(placement_path), "%s.editor.placement", json_path);
+    if (!validate_scene_editor_placement(ctx, obj_get(editor, "placement"), placement_path, names))
+        return false;
 
     yyjson_val *overlay = obj_get(editor, "debug_overlay");
     if (overlay != NULL)
