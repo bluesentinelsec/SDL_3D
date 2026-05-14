@@ -51,7 +51,8 @@ game authors a different value.
 
 - `include/`: public C headers
 - `src/`: engine implementation
-- `tools/`: command-line tools such as `slayer3d_runner`, `slayer3d_pack`, and `slayer3d_bundle`
+- `tools/`: command-line tools such as `slayer3d_runner`, `slayer3d_editor`,
+  `slayer3d_pack`, and `slayer3d_bundle`
 - `demos/`: data-authored and low-level capability demos
 - `docs/`: engine documentation
 - `tests/`: GoogleTest and renderer tests registered with CTest

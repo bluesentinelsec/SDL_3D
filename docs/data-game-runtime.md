@@ -169,6 +169,27 @@ build/debug/slayer3d_bundle \
 build/MyGame
 ```
 
+## Generic Editor Host
+
+`slayer3d_editor` is a thin host over the same managed runtime and renderer. It
+launches a data-authored editor project, injects editor output paths as scene
+state, and leaves the actual tool behavior in JSON/Lua. The build-tree default
+opens the editor shell dojo:
+
+```sh
+build/debug/slayer3d_editor
+```
+
+For another editor project, pass explicit paths:
+
+```sh
+build/debug/slayer3d_editor \
+  --root path/to/editor/data \
+  --data asset://editor.game.json \
+  --save path/to/generated/editable_level.fragment.json \
+  --test-run-output build/editor/test-run.json
+```
+
 The fused executable path is still the same generic runner. The game data is
 stored as an appended `.slayer3dpak`, and the runner auto-mounts it only when no
 explicit mount flags are provided.

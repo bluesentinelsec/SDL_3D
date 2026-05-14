@@ -19,6 +19,14 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
 Run it with:
 
 ```sh
+./build/debug/slayer3d_editor
+```
+
+The editor host is a thin wrapper around the generic runner. In the build tree it
+defaults to this dojo, injects `editor.save.path` and `editor.test_run.path`,
+and leaves all editor behavior data-authored. The equivalent runner command is:
+
+```sh
 ./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json
 ```
 
@@ -35,4 +43,10 @@ imported by the dojo on the next launch. `T` writes
 
 ```sh
 ./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --test-run-manifest build/editor_shell_dojo/test-run.json
+```
+
+For another editor project, pass explicit paths:
+
+```sh
+./build/debug/slayer3d_editor --root path/to/editor/data --data asset://editor.game.json --save path/to/generated/editable_level.fragment.json --test-run-output build/editor/test-run.json
 ```

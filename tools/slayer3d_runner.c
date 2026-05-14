@@ -366,7 +366,7 @@ static void runner_shutdown(slayer3d_game_context *ctx, void *userdata)
     }
 }
 
-int main(int argc, char **argv)
+int slayer3d_runner_main(int argc, char **argv)
 {
     runner_state state;
     SDL_zero(state);
@@ -416,3 +416,10 @@ int main(int argc, char **argv)
     slayer3d_runner_args_destroy(&state.args);
     return result;
 }
+
+#if !defined(SLAYER3D_RUNNER_NO_MAIN)
+int main(int argc, char **argv)
+{
+    return slayer3d_runner_main(argc, argv);
+}
+#endif

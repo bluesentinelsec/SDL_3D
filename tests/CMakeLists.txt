@@ -288,6 +288,7 @@ else()
         PRIVATE
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_pack_cli.c
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_bundle_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/slayer3d_editor_cli.c
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_fused.c
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_cli.c
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_manifest.c

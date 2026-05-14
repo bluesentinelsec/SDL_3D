@@ -13,6 +13,7 @@ extern "C"
 #include "slayer3d/math.h"
 #include "slayer3d/properties.h"
 #include "slayer3d_bundle_cli.h"
+#include "slayer3d_editor_cli.h"
 #include "slayer3d_fused.h"
 #include "slayer3d_pack_cli.h"
 #include "slayer3d_runner_cli.h"
@@ -145,6 +146,46 @@ TEST(ToolCli, RunnerRejectsEmptyTestRunManifestPath)
     slayer3d_runner_args args;
     EXPECT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
     slayer3d_runner_args_destroy(&args);
+}
+
+TEST(ToolCli, EditorParsesDefaultsAndBuildsRunnerInvocation)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "--state", "editor.tool.mode=floor"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    slayer3d_editor_args_apply_defaults(&args, "editor/data", "asset://editor.game.json", "build/editor/level.json",
+                                        "build/editor/run.json");
+
+    slayer3d_editor_runner_invocation invocation;
+    ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&args, "slayer3d_editor", &invocation));
+    ASSERT_GE(invocation.argc, 11);
+    EXPECT_STREQ(invocation.argv[0], "slayer3d_editor");
+    EXPECT_STREQ(invocation.argv[1], "--root");
+    EXPECT_STREQ(invocation.argv[2], "editor/data");
+    EXPECT_STREQ(invocation.argv[3], "--data");
+    EXPECT_STREQ(invocation.argv[4], "asset://editor.game.json");
+    std::string joined;
+    for (int i = 0; i < invocation.argc; ++i)
+    {
+        if (!joined.empty())
+            joined += "\n";
+        joined += invocation.argv[i];
+    }
+    EXPECT_NE(joined.find("editor.save.path=build/editor/level.json"), std::string::npos);
+    EXPECT_NE(joined.find("editor.test_run.path=build/editor/run.json"), std::string::npos);
+    EXPECT_NE(joined.find("editor.tool.mode=floor"), std::string::npos);
+    slayer3d_editor_runner_invocation_destroy(&invocation);
+    slayer3d_editor_args_destroy(&args);
+}
+
+TEST(ToolCli, EditorRequiresProjectAndOutputPathsAfterDefaults)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_editor"});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    slayer3d_editor_runner_invocation invocation;
+    EXPECT_FALSE(slayer3d_editor_build_runner_invocation(&args, "slayer3d_editor", &invocation));
+    slayer3d_editor_args_destroy(&args);
 }
 
 TEST(ToolCli, PackParsesRepeatedFiles)
