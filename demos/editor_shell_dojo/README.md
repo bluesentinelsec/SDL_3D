@@ -8,10 +8,10 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
 - reusable `ui.panels` and `ui.inspectors` populated from scene state
 - a first blockout tool palette: `1` floor, `2` wall, `3` ceiling,
   `4` player start, then `Enter` to place the selected prefab
-- unified editable-level export: `S` publishes one fragment containing the
-  brush world and player starts
-- test-run handoff manifest: `T` publishes runner arguments for the authored
-  player start
+- unified editable-level save/export: `S` saves and publishes one fragment
+  containing the brush world and player starts
+- test-run handoff manifest: `T` publishes and saves runner arguments for the
+  authored player start
 - generic runner test-run support: `--player-start player_start.editor_shell`
   enters the playable FPS scene through the same runtime path a data-only game
   uses
@@ -28,9 +28,11 @@ Test-run the authored player start directly:
 ./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --player-start player_start.editor_shell
 ```
 
-The `T` key publishes the equivalent `slayer3d.editor_test_run.v0` handoff
-manifest to scene state. Editor hosts can write that JSON to disk and launch:
+By default, `S` writes
+`demos/editor_shell_dojo/data/generated/editable_level.fragment.json`, which is
+imported by the dojo on the next launch. `T` writes
+`build/editor_shell_dojo/test-run.json`. Launch that saved manifest with:
 
 ```sh
-./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --test-run-manifest /tmp/editor-test-run.json
+./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --test-run-manifest build/editor_shell_dojo/test-run.json
 ```

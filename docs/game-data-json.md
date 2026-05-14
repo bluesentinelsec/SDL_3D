@@ -899,8 +899,9 @@ state for validation and inspection. Native editor hosts can also call
 same fragment JSON to a chosen filesystem path; a successful save marks the
 world clean and records the saved source path. Hosts that save through their own
 project pipeline can call `slayer3d_game_data_mark_brush_world_saved()` after
-their write commits. Authored game data does not get a direct arbitrary-file
-save action; file writes stay under editor host control.
+their write commits. Authored save actions are available for controlled editor
+shells, but they require explicit filesystem paths and never accept `asset://`
+destinations.
 
 Use `editor.level.export` when the editable artifact needs both blockout brush
 geometry and test-run player starts. It serializes a single fragment containing
@@ -928,6 +929,27 @@ restores floors, walls, ceilings, face materials, and player starts together.
 }
 ```
 
+Use `editor.level.save` for the same unified artifact when an authored editor
+shell is allowed to write a filesystem path directly. `path` is a literal host
+path; `path_from_state` reads the path from scene state so a host/editor UI can
+choose the destination. Exactly one must be provided. The action writes
+atomically, creates parent directories, and publishes the same brush/player-start
+revision state as `editor.level.export`.
+
+```json
+{
+  "type": "editor.level.save",
+  "world": "brush.level.blockout",
+  "path_from_state": "editor.save.path",
+  "outputs": {
+    "valid_key": "editor.save.valid",
+    "message_key": "editor.save.message",
+    "path_key": "editor.save.path",
+    "size_key": "editor.save.size"
+  }
+}
+```
+
 Use `editor.test_run.prepare` to publish a game-agnostic handoff manifest for
 launching the generic runner from an editor-selected scene or player start. The
 action does not spawn a process and does not write files. It produces
@@ -948,6 +970,25 @@ manifest directly with `--test-run-manifest <path-or-asset>`.
     "manifest_json_key": "editor.test_run.manifest_json",
     "scene_key": "editor.test_run.scene",
     "player_start_key": "editor.test_run.player_start"
+  }
+}
+```
+
+Use `editor.test_run.save_manifest` when the editor shell should write the
+handoff manifest directly for `slayer3d_runner --test-run-manifest`. It accepts
+the same `data_asset`, `scene`, and `player_start` fields as
+`editor.test_run.prepare`, plus exactly one of `path` or `path_from_state`.
+
+```json
+{
+  "type": "editor.test_run.save_manifest",
+  "data_asset": "asset://game.game.json",
+  "player_start": "player_start.level_01",
+  "path_from_state": "editor.test_run.path",
+  "outputs": {
+    "valid_key": "editor.test_run.saved",
+    "message_key": "editor.test_run.save_message",
+    "path_key": "editor.test_run.path"
   }
 }
 ```

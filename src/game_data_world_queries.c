@@ -3169,6 +3169,71 @@ static int editor_revision_to_int(Uint64 revision)
     return revision > (Uint64)SDL_MAX_SINT32 ? SDL_MAX_SINT32 : (int)revision;
 }
 
+static const char *editor_action_path(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *fallback)
+{
+    const char *path_key = json_string(action, "path_from_state", NULL);
+    if (path_key != NULL && path_key[0] != '\0' && runtime != NULL && runtime->scene_state != NULL)
+    {
+        const char *path = slayer3d_properties_get_string(runtime->scene_state, path_key, NULL);
+        if (path != NULL && path[0] != '\0')
+            return path;
+    }
+    return json_string(action, "path", fallback);
+}
+
+static bool editor_save_text_file(const char *path, const char *text, size_t size, char *error_buffer,
+                                  int error_buffer_size)
+{
+    if (path == NULL || path[0] == '\0' || SDL_strstr(path, "://") != NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editor save requires a filesystem path");
+        return false;
+    }
+    if (text == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editor save requires text");
+        return false;
+    }
+
+    char *parent = editor_save_parent_directory(path);
+    if (parent == NULL || !editor_save_make_directory_recursive(parent))
+    {
+        SDL_free(parent);
+        set_error(error_buffer, error_buffer_size, "failed to create editor save directory");
+        return false;
+    }
+    SDL_free(parent);
+
+    bool ok = false;
+    char temp_path[4096];
+    for (int attempt = 0; attempt < 16 && !ok; ++attempt)
+    {
+        SDL_snprintf(temp_path, sizeof(temp_path), "%s.tmp.%llu.%d", path, (unsigned long long)SDL_GetTicksNS(),
+                     attempt);
+        SDL_IOStream *stream = SDL_IOFromFile(temp_path, "wb");
+        if (stream == NULL)
+            continue;
+        ok = editor_save_write_all(stream, text, size) && SDL_FlushIO(stream);
+        ok = SDL_CloseIO(stream) && ok;
+        if (!ok)
+        {
+            SDL_RemovePath(temp_path);
+            continue;
+        }
+        if (!SDL_RenamePath(temp_path, path))
+        {
+            SDL_RemovePath(path);
+            ok = SDL_RenamePath(temp_path, path);
+        }
+        if (!ok)
+            SDL_RemovePath(temp_path);
+    }
+
+    if (!ok)
+        set_error(error_buffer, error_buffer_size, "failed to save editor file");
+    return ok;
+}
+
 static bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                                               const char *world_name, const char *message, bool publish_result)
 {
@@ -3285,6 +3350,57 @@ bool slayer3d_game_data_export_editor_level_action(slayer3d_game_data_runtime *r
     return true;
 }
 
+static void publish_editor_level_state_outputs(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
+                                               const char *world_name)
+{
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    slayer3d_game_data_brush_world_editor_state brush_state;
+    SDL_zero(brush_state);
+    const bool has_brush_state = slayer3d_game_data_get_brush_world_editor_state(runtime, world_name, &brush_state);
+    slayer3d_game_data_player_start_editor_state start_state;
+    SDL_zero(start_state);
+    const bool has_start_state = slayer3d_game_data_get_player_start_editor_state(runtime, &start_state);
+    editor_set_string_output(scene_state, outputs, "brush_world_key",
+                             has_brush_state && brush_state.world_name != NULL ? brush_state.world_name : "");
+    editor_set_bool_output(scene_state, outputs, "brush_dirty_key", has_brush_state && brush_state.dirty);
+    editor_set_int_output(scene_state, outputs, "brush_revision_key",
+                          has_brush_state ? editor_revision_to_int(brush_state.revision) : 0);
+    editor_set_int_output(scene_state, outputs, "brush_saved_revision_key",
+                          has_brush_state ? editor_revision_to_int(brush_state.saved_revision) : 0);
+    editor_set_string_output(scene_state, outputs, "brush_source_path_key",
+                             has_brush_state && brush_state.source_path != NULL ? brush_state.source_path : "");
+    editor_set_bool_output(scene_state, outputs, "player_start_dirty_key", has_start_state && start_state.dirty);
+    editor_set_int_output(scene_state, outputs, "player_start_count_key", has_start_state ? start_state.count : 0);
+    editor_set_int_output(scene_state, outputs, "player_start_revision_key",
+                          has_start_state ? editor_revision_to_int(start_state.revision) : 0);
+    editor_set_int_output(scene_state, outputs, "player_start_saved_revision_key",
+                          has_start_state ? editor_revision_to_int(start_state.saved_revision) : 0);
+    editor_set_string_output(scene_state, outputs, "player_start_source_path_key",
+                             has_start_state && start_state.source_path != NULL ? start_state.source_path : "");
+}
+
+bool slayer3d_game_data_save_editor_level_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    const char *path = editor_action_path(runtime, action, NULL);
+    char error[256];
+    error[0] = '\0';
+    size_t size = 0u;
+    const bool ok = slayer3d_game_data_save_editable_level_fragment_file(runtime, world_name, path, &size, error,
+                                                                         (int)sizeof(error));
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "editable level saved")
+                                : (error[0] != '\0' ? error : "editable level save failed"));
+    editor_set_int_output(scene_state, outputs, "size_key", ok ? (int)size : 0);
+    editor_set_string_output(scene_state, outputs, "path_key", ok && path != NULL ? path : "");
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    return true;
+}
+
 bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");
@@ -3315,6 +3431,50 @@ bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtim
                              ok ? json_string(action, "message", "editor test run prepared")
                                 : (error[0] != '\0' ? error : "editor test run preparation failed"));
     editor_set_int_output(scene_state, outputs, "size_key", ok ? (int)size : 0);
+    editor_set_string_output(scene_state, outputs, "manifest_json_key", ok && json != NULL ? json : "");
+    editor_set_string_output(scene_state, outputs, "data_asset_key", ok ? desc.data_asset_path : "");
+    editor_set_string_output(scene_state, outputs, "scene_key", ok ? resolved_scene : "");
+    editor_set_string_output(scene_state, outputs, "player_start_key",
+                             ok && desc.player_start != NULL ? desc.player_start : "");
+    editor_set_string_output(scene_state, outputs, "target_key", has_start && start.target != NULL ? start.target : "");
+    SDL_free(json);
+    return true;
+}
+
+bool slayer3d_game_data_save_editor_test_run_manifest_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_game_data_editor_test_run_desc desc;
+    SDL_zero(desc);
+    desc.data_asset_path = json_string(action, "data_asset", NULL);
+    desc.scene = json_string(action, "scene", NULL);
+    desc.player_start = json_string(action, "player_start", NULL);
+    const char *path = editor_action_path(runtime, action, NULL);
+
+    char error[256];
+    error[0] = '\0';
+    char *json = NULL;
+    size_t size = 0u;
+    bool ok = slayer3d_game_data_export_editor_test_run_manifest_json(runtime, &desc, &json, &size, error,
+                                                                      (int)sizeof(error));
+    if (ok)
+        ok = editor_save_text_file(path, json, size, error, (int)sizeof(error));
+
+    slayer3d_game_data_editor_player_start start;
+    SDL_zero(start);
+    const bool has_start = ok && desc.player_start != NULL && desc.player_start[0] != '\0' &&
+                           slayer3d_game_data_get_editor_player_start(runtime, desc.player_start, &start);
+    const char *resolved_scene = desc.scene != NULL && desc.scene[0] != '\0'
+                                     ? desc.scene
+                                     : (has_start && start.scene != NULL ? start.scene : "");
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "editor test run manifest saved")
+                                : (error[0] != '\0' ? error : "editor test run manifest save failed"));
+    editor_set_int_output(scene_state, outputs, "size_key", ok ? (int)size : 0);
+    editor_set_string_output(scene_state, outputs, "path_key", ok && path != NULL ? path : "");
     editor_set_string_output(scene_state, outputs, "manifest_json_key", ok && json != NULL ? json : "");
     editor_set_string_output(scene_state, outputs, "data_asset_key", ok ? desc.data_asset_path : "");
     editor_set_string_output(scene_state, outputs, "scene_key", ok ? resolved_scene : "");

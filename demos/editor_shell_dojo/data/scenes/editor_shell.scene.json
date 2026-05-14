@@ -4,6 +4,14 @@
   "camera": "camera.editor_shell.viewport",
   "updates_game": true,
   "renders_world": true,
+  "on_enter": [
+    {
+      "type": "scene_state.set",
+      "key": "editor.save.path",
+      "value": "demos/editor_shell_dojo/data/generated/editable_level.fragment.json"
+    },
+    { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" }
+  ],
   "input": {
     "actions": [
       "action.exit",
@@ -150,6 +158,10 @@
             "binding": { "type": "scene_state", "key": "editor.test_run.message", "default": "none" }
           },
           {
+            "label": "Saved",
+            "binding": { "type": "scene_state", "key": "editor.save.path", "default": "none" }
+          },
+          {
             "label": "Preview",
             "binding": { "type": "scene_state", "key": "editor.command_preview.message", "default": "none" }
           },
@@ -174,7 +186,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. 1 floor 2 wall 3 ceiling 4 start. Enter commit. S export. T run manifest. Z/Y undo-redo.",
+        "text": "Click select. 1 floor 2 wall 3 ceiling 4 start. Enter commit. S save. T run manifest. Z/Y undo-redo.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

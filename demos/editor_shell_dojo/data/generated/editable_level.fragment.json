@@ -1,0 +1,78 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "editor_player_starts": [
+    {
+      "name": "player_start.editor_shell",
+      "scene": "scene.editor_shell.test_run",
+      "target": "entity.editor_shell.player",
+      "position": [0.0, 1.6, 4.0],
+      "yaw": 3.14159,
+      "pitch": 0.0
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "editor": {
+        "stable_id": "editor.world.target",
+        "display_name": "Target Brush World",
+        "category": "editor/dojo"
+      },
+      "materials": [
+        {
+          "name": "mat.editor.wall",
+          "albedo": [0.58, 0.18, 0.16, 1.0],
+          "roughness": 0.8,
+          "editor": {
+            "stable_id": "editor.material.wall",
+            "display_name": "Red Wall Material"
+          }
+        },
+        {
+          "name": "mat.editor.floor",
+          "albedo": [0.22, 0.24, 0.28, 1.0],
+          "roughness": 0.9,
+          "editor": {
+            "stable_id": "editor.material.floor",
+            "display_name": "Dark Floor Material"
+          }
+        },
+        {
+          "name": "mat.editor.ceiling",
+          "albedo": [0.42, 0.44, 0.48, 1.0],
+          "roughness": 0.85,
+          "editor": {
+            "stable_id": "editor.material.ceiling",
+            "display_name": "Soft Ceiling Material"
+          }
+        }
+      ],
+      "brushes": [
+        {
+          "name": "brush.target.cube",
+          "contents": ["solid", "player_clip"],
+          "editor": {
+            "stable_id": "editor.brush.target_cube",
+            "display_name": "Selectable Cube",
+            "prefab": "prefab.editor_shell.cube"
+          },
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            {
+              "plane": { "normal": [-1, 0, 0], "distance": 0 },
+              "material": "mat.editor.wall",
+              "editor": {
+                "stable_id": "editor.face.target_cube.left",
+                "display_name": "Left Face"
+              }
+            },
+            { "plane": { "normal": [0, 1, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
+          ]
+        }
+      ]
+    }
+  ]
+}
