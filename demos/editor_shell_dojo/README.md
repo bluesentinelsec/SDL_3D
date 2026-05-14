@@ -10,9 +10,18 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
   `4` player start, then `Enter` to place the selected prefab
 - unified editable-level export: `S` publishes one fragment containing the
   brush world and player starts
+- generic runner test-run support: `--player-start player_start.editor_shell`
+  enters the playable FPS scene through the same runtime path a data-only game
+  uses
 
 Run it with:
 
 ```sh
 ./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json
+```
+
+Test-run the authored player start directly:
+
+```sh
+./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --player-start player_start.editor_shell
 ```

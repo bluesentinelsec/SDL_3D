@@ -14084,9 +14084,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.name", ""),
                  "player_start.editor_shell");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.scene", ""),
-                 "scene.editor_shell.dojo");
+                 "scene.editor_shell.test_run");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.target", ""),
+                 "entity.editor_shell.player");
     slayer3d_game_data_editor_player_start start{};
     ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.editor_shell", &start));
+    EXPECT_STREQ(start.target, "entity.editor_shell.player");
     EXPECT_NEAR(start.position.x, 0.0f, 0.001f);
     EXPECT_NEAR(start.position.y, 1.6f, 0.001f);
     EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
@@ -14129,6 +14132,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     write_text(save_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.editor_shell.dojo" })json");
+    write_text(save_dir / "scenes" / "test_run.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.editor_shell.test_run" })json");
     write_text(save_dir / "roundtrip.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -14140,7 +14145,20 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
   ],
   "metadata": { "name": "Editor Unified Level Roundtrip" },
   "world": { "name": "world.editor_unified_level_roundtrip", "kind": "brush" },
-  "scenes": { "initial": "scene.editor_shell.dojo", "files": ["scenes/play.scene.json"] }
+  "entities": [
+    {
+      "name": "entity.editor_shell.player",
+      "transform": { "position": [0.0, 1.6, 0.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "scenes": {
+    "initial": "scene.editor_shell.dojo",
+    "files": ["scenes/play.scene.json", "scenes/test_run.scene.json"]
+  }
 })json");
     slayer3d_game_session *roundtrip_session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &roundtrip_session));
@@ -14153,6 +14171,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_EQ(roundtrip_world.brush_count, 4);
     EXPECT_STREQ(roundtrip_world.brushes[3].faces[0].material_name, "mat.editor.ceiling");
     ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(roundtrip_runtime, "player_start.editor_shell", &start));
+    EXPECT_STREQ(start.scene, "scene.editor_shell.test_run");
+    EXPECT_STREQ(start.target, "entity.editor_shell.player");
     EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
     EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
 
@@ -14161,6 +14181,55 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     remove_test_dir(save_dir);
 
     slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoDirectStartsPlayableSceneFromPlayerStart)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::string root = dojo_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + dojo_path.filename().string();
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.media_dir = SLAYER3D_MEDIA_DIR;
+    desc.data_asset_path = asset_path.c_str();
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+    desc.initial_player_start = "player_start.editor_shell";
+    desc.skip_app_flow_startup = true;
+
+    char error[512]{};
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(data), "scene.editor_shell.test_run");
+    EXPECT_STREQ(slayer3d_game_data_active_camera(data), "camera.editor_shell.player");
+    EXPECT_TRUE(slayer3d_game_data_active_scene_updates_game(data));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_renders_world(data));
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(data, "entity.editor_shell.player"));
+
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(data, "entity.editor_shell.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(player->position.x, 0.0f, 0.001f);
+    EXPECT_NEAR(player->position.y, 1.6f, 0.001f);
+    EXPECT_NEAR(player->position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "yaw", 0.0f), 3.14159f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "pitch", 1.0f), 0.0f, 0.001f);
+
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(data, "camera.editor_shell.player", &camera));
+    EXPECT_NEAR(camera.position.x, player->position.x, 0.001f);
+    EXPECT_NEAR(camera.position.y, player->position.y, 0.001f);
+    EXPECT_NEAR(camera.position.z, player->position.z, 0.001f);
+
+    slayer3d_data_game_runtime_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
 
