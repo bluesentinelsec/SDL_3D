@@ -3,12 +3,13 @@
 This data-only dojo demonstrates the first reusable editor shell pieces:
 
 - a normal Slayer3D runtime viewport
-- authored brush-world selection trace metadata
+- authored brush-world selection trace metadata with a ground work-plane
+  fallback for placing the first brush in empty space
 - data-authored world/selection/normal/hit debug overlay drawing
 - reusable `ui.panels` and `ui.inspectors` populated from scene state
 - a first blockout tool palette: `1` floor, `2` wall, `3` ceiling,
-  `4` player start, then click a placement point and press `Enter` to place the
-  selected prefab at that point
+  `4` player start, then click a brush face or the ground work plane and press
+  `Enter` to place the selected prefab at that point
 - unified editable-level save/export: `S` saves and publishes one fragment
   containing the brush world and player starts
 - test-run handoff manifest: `T` publishes and saves runner arguments for the

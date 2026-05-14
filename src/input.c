@@ -65,6 +65,10 @@ struct slayer3d_input_manager
     float mouse_wheel_y_accum;
     float mouse_x;
     float mouse_y;
+    float mouse_position_scale_x;
+    float mouse_position_scale_y;
+    float mouse_position_offset_x;
+    float mouse_position_offset_y;
     bool has_mouse_position;
     bool discard_mouse_motion_until_update;
     bool discard_next_mouse_motion;
@@ -108,8 +112,8 @@ static void slayer3d_input_set_mouse_position(slayer3d_input_manager *input, flo
 {
     if (input == NULL)
         return;
-    input->mouse_x = x;
-    input->mouse_y = y;
+    input->mouse_x = (x - input->mouse_position_offset_x) * input->mouse_position_scale_x;
+    input->mouse_y = (y - input->mouse_position_offset_y) * input->mouse_position_scale_y;
     input->has_mouse_position = true;
 }
 
@@ -1012,6 +1016,8 @@ slayer3d_input_manager *slayer3d_input_create(void)
     }
 
     input->deadzone = SLAYER3D_INPUT_DEFAULT_DEADZONE;
+    input->mouse_position_scale_x = 1.0f;
+    input->mouse_position_scale_y = 1.0f;
     input->pressed_scancode = SDL_SCANCODE_UNKNOWN;
     input->pressed_gamepad_button = SDL_GAMEPAD_BUTTON_INVALID;
     slayer3d_input_refresh_gamepads(input);
@@ -1540,6 +1546,17 @@ float slayer3d_input_get_mouse_dx(const slayer3d_input_manager *input)
 float slayer3d_input_get_mouse_dy(const slayer3d_input_manager *input)
 {
     return input != NULL ? input->snapshot.mouse_dy : 0.0f;
+}
+
+void slayer3d_input_set_mouse_position_transform(slayer3d_input_manager *input, float scale_x, float scale_y,
+                                                 float offset_x, float offset_y)
+{
+    if (input == NULL)
+        return;
+    input->mouse_position_scale_x = scale_x > 0.0f ? scale_x : 1.0f;
+    input->mouse_position_scale_y = scale_y > 0.0f ? scale_y : 1.0f;
+    input->mouse_position_offset_x = offset_x;
+    input->mouse_position_offset_y = offset_y;
 }
 
 bool slayer3d_input_get_mouse_position(const slayer3d_input_manager *input, float *out_x, float *out_y)

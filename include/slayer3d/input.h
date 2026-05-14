@@ -413,12 +413,29 @@ extern "C"
     float slayer3d_input_get_mouse_dy(const slayer3d_input_manager *input);
 
     /**
+     * @brief Map subsequent absolute SDL mouse positions into logical space.
+     *
+     * SDL mouse events report window-space coordinates. The managed game loop
+     * sets this to the current letterbox transform so callers that use
+     * absolute mouse positions, such as UI and editor picking, receive
+     * coordinates in the authored logical viewport. Relative mouse deltas are
+     * not transformed.
+     *
+     * logical_x = (window_x - offset_x) * scale_x
+     * logical_y = (window_y - offset_y) * scale_y
+     *
+     * Pass scale 1 and offset 0 to restore identity mapping.
+     */
+    void slayer3d_input_set_mouse_position_transform(slayer3d_input_manager *input, float scale_x, float scale_y,
+                                                     float offset_x, float offset_y);
+
+    /**
      * @brief Return the latest absolute mouse position observed from SDL events.
      *
-     * Coordinates are in the window/logical space reported by SDL for the
-     * source event. Returns false when no absolute mouse position has been
-     * observed yet or live mouse input is unavailable, such as during demo
-     * playback.
+     * Coordinates are transformed by
+     * slayer3d_input_set_mouse_position_transform. Returns false when no
+     * absolute mouse position has been observed yet or live mouse input is
+     * unavailable, such as during demo playback.
      */
     bool slayer3d_input_get_mouse_position(const slayer3d_input_manager *input, float *out_x, float *out_y);
 

@@ -453,6 +453,37 @@ static float slayer3d_game_frame_delta(Uint64 now, Uint64 last)
     return (float)(now - last) / (float)frequency;
 }
 
+static void slayer3d_game_sync_input_mouse_transform(const slayer3d_game_context *ctx)
+{
+    if (ctx == NULL || ctx->window == NULL || ctx->renderer == NULL || ctx->session == NULL)
+        return;
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(ctx->session);
+    if (input == NULL)
+        return;
+
+    const int logical_width = slayer3d_get_render_context_width(ctx->renderer);
+    const int logical_height = slayer3d_get_render_context_height(ctx->renderer);
+    int window_width = 0;
+    int window_height = 0;
+    SDL_GetWindowSize(ctx->window, &window_width, &window_height);
+    if (logical_width <= 0 || logical_height <= 0 || window_width <= 0 || window_height <= 0)
+    {
+        slayer3d_input_set_mouse_position_transform(input, 1.0f, 1.0f, 0.0f, 0.0f);
+        return;
+    }
+
+    const float scale_x = (float)window_width / (float)logical_width;
+    const float scale_y = (float)window_height / (float)logical_height;
+    const float scale = scale_x < scale_y ? scale_x : scale_y;
+    const float viewport_width = (float)logical_width * scale;
+    const float viewport_height = (float)logical_height * scale;
+    const float viewport_x = ((float)window_width - viewport_width) * 0.5f;
+    const float viewport_y = ((float)window_height - viewport_height) * 0.5f;
+    slayer3d_input_set_mouse_position_transform(input, (float)logical_width / viewport_width,
+                                                (float)logical_height / viewport_height, viewport_x, viewport_y);
+}
+
 int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_callbacks *callbacks, void *userdata)
 {
     slayer3d_game_context ctx;
@@ -513,6 +544,7 @@ int slayer3d_run_game(const slayer3d_game_config *config, const slayer3d_game_ca
         Uint64 present_start_counter;
         Uint64 present_end_counter;
         SDL_Event event;
+        slayer3d_game_sync_input_mouse_transform(&ctx);
         while (SDL_PollEvent(&event))
         {
             ctx.input_event_consumed = false;

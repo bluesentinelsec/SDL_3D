@@ -11252,6 +11252,42 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     return true;
 }
 
+static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val *trace, const char *trace_path)
+{
+    yyjson_val *work_plane = obj_get(trace, "work_plane");
+    if (work_plane == NULL)
+        return true;
+    char work_plane_path[PATH_BUFFER_SIZE];
+    format_path(work_plane_path, sizeof(work_plane_path), "%s.work_plane", trace_path);
+    if (!yyjson_is_obj(work_plane))
+        return validation_error(ctx, work_plane_path, "scene editor selection work_plane must be an object");
+
+    yyjson_val *enabled = obj_get(work_plane, "enabled");
+    if (enabled != NULL && !yyjson_is_bool(enabled))
+        return validation_error(ctx, work_plane_path, "scene editor selection work_plane enabled must be a boolean");
+
+    yyjson_val *normal = obj_get(work_plane, "normal");
+    if (normal != NULL)
+    {
+        if (!is_exact_vec_array(normal, 3))
+            return validation_error(ctx, work_plane_path, "scene editor selection work_plane normal must be a vec3");
+        const double x = yyjson_get_num(yyjson_arr_get(normal, 0));
+        const double y = yyjson_get_num(yyjson_arr_get(normal, 1));
+        const double z = yyjson_get_num(yyjson_arr_get(normal, 2));
+        if ((x * x + y * y + z * z) <= 0.000001)
+            return validation_error(ctx, work_plane_path, "scene editor selection work_plane normal must be non-zero");
+    }
+
+    char distance_path[PATH_BUFFER_SIZE];
+    format_path(distance_path, sizeof(distance_path), "%s.distance", work_plane_path);
+    if (!validate_optional_number(ctx, obj_get(work_plane, "distance"), distance_path,
+                                  "scene editor selection work_plane distance"))
+    {
+        return false;
+    }
+    return true;
+}
+
 static bool validate_scene_editor_trace(validation_context *ctx, yyjson_val *trace, const char *trace_path,
                                         validation_names *names)
 {
@@ -11286,6 +11322,8 @@ static bool validate_scene_editor_trace(validation_context *ctx, yyjson_val *tra
     format_path(filter_path, sizeof(filter_path), "%s.model_filter", trace_path);
     if (!validate_string_or_string_array_names(ctx, obj_get(trace, "model_filter"), filter_path, "world model filter",
                                                editor_model_filter_name_valid))
+        return false;
+    if (!validate_scene_editor_work_plane(ctx, trace, trace_path))
         return false;
     return true;
 }

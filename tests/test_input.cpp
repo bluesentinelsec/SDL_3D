@@ -283,6 +283,30 @@ TEST(Input, TracksAbsoluteMousePosition)
     EXPECT_FLOAT_EQ(456.0f, y);
 }
 
+TEST(Input, MapsAbsoluteMousePositionThroughLogicalTransform)
+{
+    InputPtr input;
+    slayer3d_input_set_mouse_position_transform(input.input, 0.5f, 0.5f, 100.0f, 50.0f);
+
+    push_mouse_motion_at(input.input, 740.0f, 410.0f, 10.0f, -6.0f);
+    slayer3d_input_update(input.input, 10);
+
+    float x = 0.0f;
+    float y = 0.0f;
+    ASSERT_TRUE(slayer3d_input_get_mouse_position(input.input, &x, &y));
+    EXPECT_FLOAT_EQ(320.0f, x);
+    EXPECT_FLOAT_EQ(180.0f, y);
+    EXPECT_FLOAT_EQ(10.0f, slayer3d_input_get_mouse_dx(input.input));
+    EXPECT_FLOAT_EQ(-6.0f, slayer3d_input_get_mouse_dy(input.input));
+
+    slayer3d_input_set_mouse_position_transform(input.input, 1.0f, 1.0f, 0.0f, 0.0f);
+    push_mouse_motion_at(input.input, 12.0f, 34.0f, 0.0f, 0.0f);
+    slayer3d_input_update(input.input, 11);
+    ASSERT_TRUE(slayer3d_input_get_mouse_position(input.input, &x, &y));
+    EXPECT_FLOAT_EQ(12.0f, x);
+    EXPECT_FLOAT_EQ(34.0f, y);
+}
+
 TEST(Input, DiscardsMouseMotionUntilNextSnapshot)
 {
     InputPtr input;
