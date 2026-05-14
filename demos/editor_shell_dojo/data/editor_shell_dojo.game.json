@@ -70,6 +70,26 @@
           {
             "name": "action.editor.tool.player_start",
             "bindings": [{ "device": "keyboard", "key": "4" }]
+          },
+          {
+            "name": "action.move.forward",
+            "bindings": [{ "device": "keyboard", "key": "W" }]
+          },
+          {
+            "name": "action.move.back",
+            "bindings": [{ "device": "keyboard", "key": "S" }]
+          },
+          {
+            "name": "action.move.left",
+            "bindings": [{ "device": "keyboard", "key": "A" }]
+          },
+          {
+            "name": "action.move.right",
+            "bindings": [{ "device": "keyboard", "key": "D" }]
+          },
+          {
+            "name": "action.jump",
+            "bindings": [{ "device": "keyboard", "key": "SPACE" }]
           }
         ]
       }
@@ -371,7 +391,8 @@
                           {
                             "type": "editor.player_start.place",
                             "name": "player_start.editor_shell",
-                            "scene": "scene.editor_shell.dojo",
+                            "scene": "scene.editor_shell.test_run",
+                            "target": "entity.editor_shell.player",
                             "position": [0.0, 1.6, 4.0],
                             "yaw": 3.14159,
                             "pitch": 0.0,
@@ -380,6 +401,7 @@
                               "message_key": "editor.player_start.message",
                               "player_start_key": "editor.player_start.name",
                               "scene_key": "editor.player_start.scene",
+                              "target_key": "editor.player_start.target",
                               "position_key": "editor.player_start.position",
                               "yaw_key": "editor.player_start.yaw",
                               "pitch_key": "editor.player_start.pitch",
@@ -556,6 +578,13 @@
         "fov": 70.0,
         "fov_axis": "horizontal",
         "active": true
+      },
+      {
+        "name": "camera.editor_shell.player",
+        "type": "fps",
+        "target_entity": "entity.editor_shell.player",
+        "fov": 90.0,
+        "fov_axis": "horizontal"
       }
     ]
   },
@@ -569,6 +598,52 @@
     "bloom": false,
     "clear_color": [0.04, 0.045, 0.055]
   },
+  "entities": [
+    {
+      "name": "entity.editor_shell.player",
+      "active": true,
+      "transform": { "position": [0.0, 1.6, 4.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 3.14159 },
+        "pitch": { "type": "float", "value": 0.0 },
+        "camera_forward": { "type": "vec3", "value": [0.0, 0.0, -1.0] },
+        "on_ground": { "type": "bool", "value": false },
+        "vertical_velocity": { "type": "float", "value": 0.0 }
+      },
+      "components": [
+        {
+          "type": "controller.fps_brush",
+          "brush_world": "brush.editor_shell.target",
+          "contents_mask": ["solid", "player_clip"],
+          "actions": {
+            "forward": "action.move.forward",
+            "back": "action.move.back",
+            "left": "action.move.left",
+            "right": "action.move.right",
+            "jump": "action.jump"
+          },
+          "move_speed": 6.0,
+          "jump_velocity": 5.8,
+          "gravity": 14.0,
+          "player_height": 1.6,
+          "player_radius": 0.35,
+          "step_height": 0.55,
+          "ceiling_clearance": 0.1,
+          "mouse_sensitivity": 0.002
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": [
+    {
+      "name": "player_start.editor_shell",
+      "scene": "scene.editor_shell.test_run",
+      "target": "entity.editor_shell.player",
+      "position": [0.0, 1.6, 4.0],
+      "yaw": 3.14159,
+      "pitch": 0.0
+    }
+  ],
   "brush_worlds": [
     {
       "name": "brush.editor_shell.target",
@@ -636,6 +711,6 @@
   ],
   "scenes": {
     "initial": "scene.editor_shell.dojo",
-    "files": ["scenes/editor_shell.scene.json"]
+    "files": ["scenes/editor_shell.scene.json", "scenes/test_run.scene.json"]
   }
 }
