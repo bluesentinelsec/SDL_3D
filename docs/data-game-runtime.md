@@ -188,6 +188,10 @@ Optional flags:
 - `--scene <scene-id>` starts directly in a loaded scene instead of
   `scenes.initial`. This is intended for editor and developer workflows such as
   play-testing a level without sitting through splash, title, or cutscene flow.
+- `--player-start <name>` applies an authored `editor_player_starts` marker
+  before the first scene-enter signal. If the marker declares a scene and
+  `--scene` is omitted, that scene becomes the initial scene. If both are
+  supplied, they must reference the same scene.
 - `--state <key=value>` injects one scene-state value before the direct scene
   enter signal runs. The value is parsed as JSON when possible, so
   `--state lives=3`, `--state debug=true`, `--state spawn=[1,2,3]`, and

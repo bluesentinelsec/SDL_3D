@@ -728,6 +728,20 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 }
 ```
 
+The generic runner can apply a marker directly:
+
+```sh
+build/debug/slayer3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --player-start player_start.level_01
+```
+
+When the marker has a `scene`, that scene is used as the initial scene unless
+`--scene` is also provided. Supplying both is allowed only when they agree. The
+target actor's position, `yaw`, and `pitch` are applied before camera setup and
+before the first scene-enter signal runs.
+
 Use `editor.brush_world.create_box` to append a new axis-aligned convex box
 brush to a runtime brush world. The action is intended for first-pass editor
 blockout tools: floors, walls, ceilings, platforms, and simple room pieces. It

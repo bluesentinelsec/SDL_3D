@@ -97,12 +97,14 @@ TEST(ToolCli, RunnerAllowsFusedExecutableWithoutExplicitMount)
 
 TEST(ToolCli, RunnerParsesDirectStartStateInputs)
 {
-    std::vector<char *> argv = argv_from({"slayer3d_runner", "--root", "game/data", "--data", "asset://game.game.json",
-                                          "--scene", "scene.level1", "--state-file", "dev/level1.json", "--state-json",
-                                          "{\"lives\":3}", "--state", "checkpoint=midboss", "--state", "debug=true"});
+    std::vector<char *> argv =
+        argv_from({"slayer3d_runner", "--root", "game/data", "--data", "asset://game.game.json", "--scene",
+                   "scene.level1", "--player-start", "player_start.level1", "--state-file", "dev/level1.json",
+                   "--state-json", "{\"lives\":3}", "--state", "checkpoint=midboss", "--state", "debug=true"});
     slayer3d_runner_args args;
     ASSERT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
     EXPECT_STREQ(args.scene, "scene.level1");
+    EXPECT_STREQ(args.player_start, "player_start.level1");
     ASSERT_EQ(args.state_file_count, 1);
     EXPECT_STREQ(args.state_files[0], "dev/level1.json");
     ASSERT_EQ(args.state_json_count, 1);
@@ -110,6 +112,15 @@ TEST(ToolCli, RunnerParsesDirectStartStateInputs)
     ASSERT_EQ(args.state_assignment_count, 2);
     EXPECT_STREQ(args.state_assignments[0], "checkpoint=midboss");
     EXPECT_STREQ(args.state_assignments[1], "debug=true");
+    slayer3d_runner_args_destroy(&args);
+}
+
+TEST(ToolCli, RunnerRejectsEmptyPlayerStart)
+{
+    std::vector<char *> argv =
+        argv_from({"slayer3d_runner", "--root", "game/data", "--data", "asset://game.game.json", "--player-start", ""});
+    slayer3d_runner_args args;
+    EXPECT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
     slayer3d_runner_args_destroy(&args);
 }
 

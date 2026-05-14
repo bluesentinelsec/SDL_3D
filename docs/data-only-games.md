@@ -116,10 +116,21 @@ build/debug/slayer3d_runner \
   --state lives=3
 ```
 
+Start from an editor-authored player spawn marker:
+
+```sh
+build/debug/slayer3d_runner \
+  --root path/to/game/data \
+  --data asset://game.game.json \
+  --player-start player_start.level_1
+```
+
 For larger setup payloads, use `--state-json '{"checkpoint":"midboss"}'` or
 `--state-file dev/level_1_state.json`. Direct-start state is applied before the
 scene enter signal runs, so authored setup logic can read it through normal
-scene-state conditions and Lua state APIs.
+scene-state conditions and Lua state APIs. Player-start launches also apply the
+target actor's position and view angles before the first scene-enter signal, and
+use the marker's scene when `--scene` is omitted.
 
 Demo targets may compile the same runner source with embedded assets and a
 default root data path. That wrapper should only supply build-time defaults; it
@@ -160,6 +171,8 @@ build/debug/slayer3d_runner \
 Focused dojo scenes should use authored scene-enter setup to place the player
 near the mechanic being tuned. That keeps the workflow equivalent to the final
 runner path while avoiding splash/title/campaign flow during development.
+As dojos add `editor_player_starts`, prefer `--player-start` for exact
+spawn-point test runs.
 
 `demos/mesh_primitives_dojo` is a graybox showcase for procedural 3D placeholder
 geometry. It uses a sector-bounded room, one directional sun light, an FPS

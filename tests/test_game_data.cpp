@@ -756,6 +756,26 @@ void write_direct_start_json(const std::filesystem::path &dir)
   "metadata": { "name": "Direct Start", "id": "test.direct_start", "version": "0.1.0" },
   "world": { "name": "world.direct_start", "kind": "fixed_screen" },
   "signals": ["signal.intro.enter", "signal.level.enter"],
+  "entities": [
+    {
+      "name": "entity.player",
+      "transform": { "position": [0.0, 1.6, 0.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.0 },
+        "pitch": { "type": "float", "value": 0.0 }
+      }
+    }
+  ],
+  "editor_player_starts": [
+    {
+      "name": "player_start.level1",
+      "scene": "scene.level1",
+      "target": "entity.player",
+      "position": [3.0, 1.75, 4.0],
+      "yaw": 1.25,
+      "pitch": -0.2
+    }
+  ],
   "logic": {
     "bindings": [
       {
@@ -2144,6 +2164,78 @@ TEST(GameDataRuntime, DirectStartRejectsUnknownScene)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, DirectStartPlayerStartSelectsSceneAndPlacesTarget)
+{
+    const std::filesystem::path dir = unique_test_dir("direct_start_player_start");
+    write_direct_start_json(dir);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_load_options options{};
+    options.session = session;
+    options.initial_player_start = "player_start.level1";
+
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options, &runtime,
+                                                           error, sizeof(error)))
+        << error;
+    ASSERT_NE(runtime, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.level1");
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "intro_entered", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "level_entered", false));
+
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(player->position.x, 3.0f, 0.001f);
+    EXPECT_NEAR(player->position.y, 1.75f, 0.001f);
+    EXPECT_NEAR(player->position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "yaw", 0.0f), 1.25f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(player->props, "pitch", 0.0f), -0.2f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, DirectStartPlayerStartRejectsConflictingSceneOverride)
+{
+    const std::filesystem::path dir = unique_test_dir("direct_start_player_start_conflict");
+    write_direct_start_json(dir);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_load_options options{};
+    options.session = session;
+    options.initial_scene_override = "scene.intro";
+    options.initial_player_start = "player_start.level1";
+
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_asset_with_options(assets, "asset://direct_start.game.json", &options,
+                                                            &runtime, error, sizeof(error)));
+    EXPECT_EQ(runtime, nullptr);
+    EXPECT_NE(std::string(error).find("conflicts with player start scene"), std::string::npos) << error;
+
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, DataGameRuntimeDirectStartPassesSceneState)
 {
     const std::filesystem::path dir = unique_test_dir("data_runtime_direct_start");
@@ -2178,6 +2270,41 @@ TEST(GameDataRuntime, DataGameRuntimeDirectStartPassesSceneState)
 
     slayer3d_data_game_runtime_destroy(runtime);
     slayer3d_properties_destroy(initial_state);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, DataGameRuntimeDirectStartAppliesPlayerStart)
+{
+    const std::filesystem::path dir = unique_test_dir("data_runtime_direct_start_player_start");
+    write_direct_start_json(dir);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    slayer3d_data_game_runtime_desc desc{};
+    const std::string root = dir.string();
+    slayer3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.data_asset_path = "asset://direct_start.game.json";
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+    desc.initial_player_start = "player_start.level1";
+    desc.skip_app_flow_startup = true;
+
+    char error[512]{};
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_scene(data), "scene.level1");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(data, "entity.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(player->position.x, 3.0f, 0.001f);
+    EXPECT_NEAR(player->position.y, 1.75f, 0.001f);
+    EXPECT_NEAR(player->position.z, 4.0f, 0.001f);
+
+    slayer3d_data_game_runtime_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }

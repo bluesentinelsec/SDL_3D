@@ -967,6 +967,7 @@ bool slayer3d_data_game_runtime_create(const slayer3d_data_game_runtime_desc *de
     load_options.initial_scene_override = desc->initial_scene_override;
     load_options.initial_scene_state = desc->initial_scene_state;
     load_options.initial_scene_payload = desc->initial_scene_payload;
+    load_options.initial_player_start = desc->initial_player_start;
     if (!slayer3d_game_data_load_asset_with_options(runtime->assets, desc->data_asset_path, &load_options,
                                                     &runtime->data, load_error, (int)sizeof(load_error)))
     {

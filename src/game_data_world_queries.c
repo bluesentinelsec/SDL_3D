@@ -1108,6 +1108,34 @@ bool slayer3d_game_data_place_editor_player_start(slayer3d_game_data_runtime *ru
     return true;
 }
 
+bool slayer3d_game_data_apply_editor_player_start(slayer3d_game_data_runtime *runtime, const char *name,
+                                                  char *error_buffer, int error_buffer_size)
+{
+    const editor_player_start_runtime *start = find_editor_player_start(runtime, name);
+    if (runtime == NULL || name == NULL || name[0] == '\0' || start == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "player start '%s' not found", name);
+        return false;
+    }
+    if (start->target == NULL || start->target[0] == '\0')
+    {
+        set_errorf(error_buffer, error_buffer_size, "player start '%s' has no target actor", name);
+        return false;
+    }
+
+    slayer3d_registered_actor *target = slayer3d_game_data_find_actor(runtime, start->target);
+    if (target == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "player start target '%s' not found", start->target);
+        return false;
+    }
+
+    actor_set_position(target, start->position);
+    slayer3d_properties_set_float(target->props, "yaw", start->yaw);
+    slayer3d_properties_set_float(target->props, "pitch", start->pitch);
+    return true;
+}
+
 static bool export_add_vec3(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_vec3 value)
 {
     yyjson_mut_val *arr = yyjson_mut_arr(doc);

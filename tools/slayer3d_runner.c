@@ -267,9 +267,11 @@ static bool runner_init(slayer3d_game_context *ctx, void *userdata)
     desc.mount_userdata = state;
     desc.enable_managed_network = true;
     desc.initial_scene_override = state->args.scene;
+    desc.initial_player_start = state->args.player_start;
     desc.initial_scene_state = initial_state;
     desc.initial_scene_payload = initial_state;
-    desc.skip_app_flow_startup = state->args.scene != NULL && state->args.scene[0] != '\0';
+    desc.skip_app_flow_startup = (state->args.scene != NULL && state->args.scene[0] != '\0') ||
+                                 (state->args.player_start != NULL && state->args.player_start[0] != '\0');
 
     if (!slayer3d_data_game_runtime_create(&desc, &state->runtime, error, (int)sizeof(error)))
     {

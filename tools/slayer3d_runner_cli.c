@@ -17,14 +17,17 @@ void slayer3d_runner_args_print_usage(const char *argv0, FILE *stream)
             "Usage:\n"
             "  %s\n"
             "  %s --root <asset-root> --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
-            "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n"
+            "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
+            "[--state-file <path-or-asset>]\n"
             "  %s --pack <game.slayer3dpak> --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
-            "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n",
+            "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
+            "[--state-file <path-or-asset>]\n",
             program, program, program);
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
     fprintf(out,
             "  %s --embedded --data <asset://game.json> [--media <media-dir>] [--scene <scene>] "
-            "[--state <key=value> ...] [--state-json <object>] [--state-file <path-or-asset>]\n",
+            "[--player-start <name>] [--state <key=value> ...] [--state-json <object>] "
+            "[--state-file <path-or-asset>]\n",
             program);
 #endif
 }
@@ -73,6 +76,8 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     struct arg_str *data = arg_str0(NULL, "data", "<asset://game.json>", "root game-data asset path");
     struct arg_str *media = arg_str0(NULL, "media", "<media-dir>", "built-in media directory");
     struct arg_str *scene = arg_str0(NULL, "scene", "<scene>", "start directly in an authored scene");
+    struct arg_str *player_start =
+        arg_str0(NULL, "player-start", "<name>", "apply an editor player start before first scene enter");
     struct arg_str *state = arg_strn(NULL, "state", "<key=value>", 0, argc > 0 ? argc : 1, "scene-state override");
     struct arg_str *state_json =
         arg_strn(NULL, "state-json", "<json-object>", 0, argc > 0 ? argc : 1, "scene-state JSON object");
@@ -85,7 +90,7 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
         embedded,
 #endif
-        data,     media, scene, state, state_json, state_file, help, end,
+        data,     media, scene, player_start, state, state_json, state_file, help, end,
     };
     const char *program = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : "slayer3d_runner";
     FILE *out = stream != NULL ? stream : stderr;
@@ -161,6 +166,8 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
         args->media_dir = media->sval[0];
     if (scene->count > 0)
         args->scene = scene->sval[0];
+    if (player_start->count > 0)
+        args->player_start = player_start->sval[0];
 
     const bool mount_path_required =
         args->mount_kind == SLAYER3D_RUNNER_MOUNT_DIRECTORY || args->mount_kind == SLAYER3D_RUNNER_MOUNT_PACK;
@@ -175,6 +182,7 @@ slayer3d_tool_cli_result slayer3d_runner_args_parse(int argc, char **argv, slaye
     }
 
     if ((args->scene != NULL && args->scene[0] == '\0') ||
+        (args->player_start != NULL && args->player_start[0] == '\0') ||
         !copy_string_list(&args->state_assignments, &args->state_assignment_count, state->sval, state->count) ||
         !copy_string_list(&args->state_json_values, &args->state_json_count, state_json->sval, state_json->count) ||
         !copy_string_list(&args->state_files, &args->state_file_count, state_file->sval, state_file->count))
