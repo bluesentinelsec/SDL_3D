@@ -3,6 +3,7 @@
  * @brief Generic SLAYER3D data-game runner.
  */
 
+#include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_main.h>
 #include <SDL3/SDL_stdinc.h>
@@ -13,6 +14,7 @@
 
 #include "slayer3d_fused.h"
 #include "slayer3d_runner_cli.h"
+#include "slayer3d_runner_manifest.h"
 #include "slayer3d_runner_state.h"
 
 #if defined(SLAYER3D_RUNNER_EMBEDDED_ASSETS)
@@ -149,6 +151,51 @@ static bool runner_read_asset_state_file(runner_state *state, const char *path, 
     }
     slayer3d_asset_buffer_free(&buffer);
     slayer3d_asset_resolver_destroy(assets);
+    return ok;
+}
+
+static bool runner_read_text_file(runner_state *state, const char *path, char **out_text, size_t *out_size,
+                                  char *error_buffer, int error_buffer_size)
+{
+    if (runner_is_asset_path(path))
+        return runner_read_asset_state_file(state, path, out_text, out_size, error_buffer, error_buffer_size);
+
+    *out_text = NULL;
+    *out_size = 0u;
+    size_t size = 0u;
+    char *text = (char *)SDL_LoadFile(path, &size);
+    if (text == NULL)
+        return runner_set_errorf(error_buffer, error_buffer_size, "failed to read file '%s'", path);
+
+    char *terminated = (char *)SDL_realloc(text, size + 1u);
+    if (terminated == NULL)
+    {
+        SDL_free(text);
+        runner_set_error(error_buffer, error_buffer_size, "failed to terminate file buffer");
+        return false;
+    }
+    terminated[size] = '\0';
+    *out_text = terminated;
+    *out_size = size;
+    return true;
+}
+
+static bool runner_apply_test_run_manifest(runner_state *state, char *error_buffer, int error_buffer_size)
+{
+    if (state == NULL || state->args.test_run_manifest_path == NULL)
+        return true;
+
+    char *text = NULL;
+    size_t size = 0u;
+    if (!runner_read_text_file(state, state->args.test_run_manifest_path, &text, &size, error_buffer,
+                               error_buffer_size))
+    {
+        return false;
+    }
+
+    const bool ok = slayer3d_runner_apply_test_run_manifest_json(
+        &state->args, text, size, state->args.test_run_manifest_path, error_buffer, error_buffer_size);
+    SDL_free(text);
     return ok;
 }
 
@@ -334,6 +381,12 @@ int main(int argc, char **argv)
     if (!runner_prepare_fused_defaults(&state, error, (int)sizeof(error)))
     {
         fprintf(stderr, "slayer3d_runner: %s\n", error[0] != '\0' ? error : "failed to inspect fused runner");
+        slayer3d_runner_args_destroy(&state.args);
+        return 1;
+    }
+    if (!runner_apply_test_run_manifest(&state, error, (int)sizeof(error)))
+    {
+        fprintf(stderr, "slayer3d_runner: %s\n", error[0] != '\0' ? error : "failed to apply test-run manifest");
         slayer3d_runner_args_destroy(&state.args);
         return 1;
     }

@@ -16,6 +16,7 @@ extern "C"
 #include "slayer3d_fused.h"
 #include "slayer3d_pack_cli.h"
 #include "slayer3d_runner_cli.h"
+#include "slayer3d_runner_manifest.h"
 #include "slayer3d_runner_state.h"
 }
 
@@ -115,10 +116,32 @@ TEST(ToolCli, RunnerParsesDirectStartStateInputs)
     slayer3d_runner_args_destroy(&args);
 }
 
+TEST(ToolCli, RunnerParsesTestRunManifestWithoutData)
+{
+    std::vector<char *> argv =
+        argv_from({"slayer3d_runner", "--root", "game/data", "--test-run-manifest", "asset://editor/run.json"});
+    slayer3d_runner_args args;
+    ASSERT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+    EXPECT_EQ(args.mount_kind, SLAYER3D_RUNNER_MOUNT_DIRECTORY);
+    EXPECT_STREQ(args.mount_path, "game/data");
+    EXPECT_EQ(args.data_asset_path, nullptr);
+    EXPECT_FALSE(args.data_asset_path_explicit);
+    EXPECT_STREQ(args.test_run_manifest_path, "asset://editor/run.json");
+    slayer3d_runner_args_destroy(&args);
+}
+
 TEST(ToolCli, RunnerRejectsEmptyPlayerStart)
 {
     std::vector<char *> argv =
         argv_from({"slayer3d_runner", "--root", "game/data", "--data", "asset://game.game.json", "--player-start", ""});
+    slayer3d_runner_args args;
+    EXPECT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
+    slayer3d_runner_args_destroy(&args);
+}
+
+TEST(ToolCli, RunnerRejectsEmptyTestRunManifestPath)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_runner", "--root", "game/data", "--test-run-manifest", ""});
     slayer3d_runner_args args;
     EXPECT_EQ(slayer3d_runner_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
     slayer3d_runner_args_destroy(&args);
@@ -318,6 +341,62 @@ TEST(ToolCli, RunnerStateInputsMergeWithExpectedPrecedenceAndTypes)
 
     slayer3d_properties_destroy(props);
     std::filesystem::remove(path);
+}
+
+TEST(ToolCli, RunnerTestRunManifestAppliesCanonicalDirectStartArgs)
+{
+    const char manifest[] = R"json({
+  "schema": "slayer3d.editor_test_run.v0",
+  "data": "asset://game.game.json",
+  "scene": "scene.level1",
+  "player_start": "player_start.level1",
+  "target": "entity.player",
+  "args": ["--data", "asset://game.game.json", "--scene", "scene.level1", "--player-start", "player_start.level1"]
+})json";
+
+    slayer3d_runner_args args{};
+    char error[256]{};
+    ASSERT_TRUE(slayer3d_runner_apply_test_run_manifest_json(&args, manifest, std::strlen(manifest), "manifest", error,
+                                                             sizeof(error)))
+        << error;
+    EXPECT_STREQ(args.data_asset_path, "asset://game.game.json");
+    EXPECT_STREQ(args.scene, "scene.level1");
+    EXPECT_STREQ(args.player_start, "player_start.level1");
+    EXPECT_NE(args.owned_data_asset_path, nullptr);
+    EXPECT_NE(args.owned_scene, nullptr);
+    EXPECT_NE(args.owned_player_start, nullptr);
+    slayer3d_runner_args_destroy(&args);
+}
+
+TEST(ToolCli, RunnerTestRunManifestRejectsConflictingExplicitArgs)
+{
+    const char manifest[] = R"json({
+  "schema": "slayer3d.editor_test_run.v0",
+  "data": "asset://game.game.json",
+  "scene": "scene.level1"
+})json";
+
+    slayer3d_runner_args args{};
+    args.data_asset_path = "asset://other.game.json";
+    args.data_asset_path_explicit = true;
+    char error[256]{};
+    EXPECT_FALSE(slayer3d_runner_apply_test_run_manifest_json(&args, manifest, std::strlen(manifest), "manifest", error,
+                                                              sizeof(error)));
+    EXPECT_NE(std::string(error).find("conflicts"), std::string::npos) << error;
+    slayer3d_runner_args_destroy(&args);
+}
+
+TEST(ToolCli, RunnerTestRunManifestRejectsInvalidSchema)
+{
+    const char manifest[] =
+        R"json({"schema":"slayer3d.game.v0","data":"asset://game.game.json","scene":"scene.level1"})json";
+
+    slayer3d_runner_args args{};
+    char error[256]{};
+    EXPECT_FALSE(slayer3d_runner_apply_test_run_manifest_json(&args, manifest, std::strlen(manifest), "manifest", error,
+                                                              sizeof(error)));
+    EXPECT_NE(std::string(error).find("schema"), std::string::npos) << error;
+    slayer3d_runner_args_destroy(&args);
 }
 
 TEST(ToolCli, RunnerStateInputsRejectMalformedValues)

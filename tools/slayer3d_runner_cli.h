@@ -29,9 +29,16 @@ extern "C"
         slayer3d_runner_mount_kind mount_kind;
         const char *mount_path;
         const char *data_asset_path;
+        const char *test_run_manifest_path;
         const char *media_dir;
         const char *scene;
         const char *player_start;
+        bool data_asset_path_explicit;
+        bool scene_explicit;
+        bool player_start_explicit;
+        char *owned_data_asset_path;
+        char *owned_scene;
+        char *owned_player_start;
         const char **state_assignments;
         int state_assignment_count;
         const char **state_json_values;

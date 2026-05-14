@@ -934,7 +934,8 @@ action does not spawn a process and does not write files. It produces
 `slayer3d.editor_test_run.v0` JSON containing the root data asset, resolved
 scene, player start, target actor, and runner argument array excluding mount
 flags. Editor hosts combine those arguments with their current `--root`,
-`--pack`, embedded, or fused launch context.
+`--pack`, embedded, or fused launch context. The generic runner can consume the
+manifest directly with `--test-run-manifest <path-or-asset>`.
 
 ```json
 {
