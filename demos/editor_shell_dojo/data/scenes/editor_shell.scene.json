@@ -27,9 +27,18 @@
       "action.editor.tool.floor",
       "action.editor.tool.wall",
       "action.editor.tool.ceiling",
-      "action.editor.tool.player_start"
+      "action.editor.tool.player_start",
+      "action.editor.camera.forward",
+      "action.editor.camera.back",
+      "action.editor.camera.left",
+      "action.editor.camera.right",
+      "action.editor.camera.up",
+      "action.editor.camera.down",
+      "action.editor.camera.look",
+      "action.editor.camera.fast"
     ]
   },
+  "entities": ["entity.editor_shell.camera"],
   "world": {
     "brush_worlds": [
       { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0] }
@@ -202,7 +211,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. 1 floor 2 wall 3 ceiling 4 start. Enter commit. S save. T run manifest. Z/Y undo-redo.",
+        "text": "Click select. Arrows move, Q/E down/up, RMB look. 1 floor 2 wall 3 ceiling 4 start. Enter commit. S save.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

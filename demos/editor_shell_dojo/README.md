@@ -3,6 +3,8 @@
 This data-only dojo demonstrates the first reusable editor shell pieces:
 
 - a normal Slayer3D runtime viewport
+- a data-authored editor camera controller: arrow keys move horizontally,
+  `Q`/`E` move down/up, and right mouse button + drag looks around
 - authored brush-world selection trace metadata with a ground work-plane
   fallback for placing the first brush in empty space
 - data-authored world/selection/normal/hit debug overlay drawing, including a

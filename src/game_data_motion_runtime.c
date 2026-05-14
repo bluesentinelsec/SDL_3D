@@ -420,6 +420,10 @@ void update_control_components(slayer3d_game_data_runtime *runtime, yyjson_val *
             {
                 update_fps_brush_controller(runtime, component, actor, input, dt);
             }
+            else if (SDL_strcmp(type, "controller.editor_camera") == 0)
+            {
+                update_editor_camera_controller(runtime, component, actor, input, dt);
+            }
             else if (SDL_strcmp(type, "weapon.projectile") == 0 && input != NULL)
             {
                 const int action_id = slayer3d_game_data_find_action(runtime, json_string(component, "action", NULL));

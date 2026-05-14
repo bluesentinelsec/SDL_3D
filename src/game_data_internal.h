@@ -961,6 +961,8 @@ void update_fps_sector_controller(slayer3d_game_data_runtime *runtime, yyjson_va
                                   slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
 void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
                                  slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
+void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                     slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
 bool update_brush_velocity_motion(slayer3d_game_data_runtime *runtime, yyjson_val *component,
                                   slayer3d_registered_actor *actor, int actor_id, int pool_index, int actor_index,
                                   float dt);

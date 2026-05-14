@@ -77,6 +77,38 @@
             "bindings": [{ "device": "keyboard", "key": "4" }]
           },
           {
+            "name": "action.editor.camera.forward",
+            "bindings": [{ "device": "keyboard", "key": "UP" }]
+          },
+          {
+            "name": "action.editor.camera.back",
+            "bindings": [{ "device": "keyboard", "key": "DOWN" }]
+          },
+          {
+            "name": "action.editor.camera.left",
+            "bindings": [{ "device": "keyboard", "key": "LEFT" }]
+          },
+          {
+            "name": "action.editor.camera.right",
+            "bindings": [{ "device": "keyboard", "key": "RIGHT" }]
+          },
+          {
+            "name": "action.editor.camera.up",
+            "bindings": [{ "device": "keyboard", "key": "E" }]
+          },
+          {
+            "name": "action.editor.camera.down",
+            "bindings": [{ "device": "keyboard", "key": "Q" }]
+          },
+          {
+            "name": "action.editor.camera.look",
+            "bindings": [{ "device": "mouse", "button": "RIGHT" }]
+          },
+          {
+            "name": "action.editor.camera.fast",
+            "bindings": [{ "device": "keyboard", "key": "LSHIFT" }]
+          },
+          {
             "name": "action.move.forward",
             "bindings": [{ "device": "keyboard", "key": "W" }]
           },
@@ -659,10 +691,8 @@
     "cameras": [
       {
         "name": "camera.editor_shell.viewport",
-        "type": "perspective",
-        "position": [-5.0, 3.2, 5.0],
-        "target": [1.0, 1.0, 1.0],
-        "up": [0.0, 1.0, 0.0],
+        "type": "fps",
+        "target_entity": "entity.editor_shell.camera",
         "fov": 70.0,
         "fov_axis": "horizontal",
         "active": true
@@ -687,6 +717,36 @@
     "clear_color": [0.04, 0.045, 0.055]
   },
   "entities": [
+    {
+      "name": "entity.editor_shell.camera",
+      "active": true,
+      "transform": { "position": [-5.0, 3.2, 5.0] },
+      "properties": {
+        "yaw": { "type": "float", "value": 0.98279 },
+        "pitch": { "type": "float", "value": -0.29566 },
+        "camera_forward": { "type": "vec3", "value": [0.79584, -0.29161, -0.53056] }
+      },
+      "components": [
+        {
+          "type": "controller.editor_camera",
+          "actions": {
+            "forward": "action.editor.camera.forward",
+            "back": "action.editor.camera.back",
+            "left": "action.editor.camera.left",
+            "right": "action.editor.camera.right",
+            "up": "action.editor.camera.up",
+            "down": "action.editor.camera.down",
+            "look": "action.editor.camera.look",
+            "fast": "action.editor.camera.fast"
+          },
+          "move_speed": 8.0,
+          "fast_speed": 22.0,
+          "mouse_sensitivity": 0.002,
+          "pitch_min": -1.45,
+          "pitch_max": 1.45
+        }
+      ]
+    },
     {
       "name": "entity.editor_shell.player",
       "active": true,
