@@ -2045,6 +2045,16 @@ extern "C"
                                                       char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Apply one editor player start to its target actor.
+     *
+     * The start must exist and define a target actor. The target actor position
+     * and yaw/pitch properties are updated to match the stored marker. This is
+     * intended for editor test-run and direct-start workflows.
+     */
+    bool slayer3d_game_data_apply_editor_player_start(slayer3d_game_data_runtime *runtime, const char *name,
+                                                      char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Export all runtime editor player starts as a fragment JSON string.
      *
      * The caller owns @p out_json and must release it with SDL_free().
@@ -2231,7 +2241,10 @@ extern "C"
      * `initial_scene_override` to enter a different scene before any enter
      * signal fires. `initial_scene_state` is copied into the persistent
      * scene-state bag before the first enter signal; `initial_scene_payload`
-     * is passed only to that initial scene-enter signal.
+     * is passed only to that initial scene-enter signal. `initial_player_start`
+     * applies an editor-authored player start before camera setup and the first
+     * enter signal; when it has a scene and no explicit scene override is set,
+     * that scene becomes the initial scene.
      */
     typedef struct slayer3d_game_data_load_options
     {
@@ -2243,6 +2256,8 @@ extern "C"
         const slayer3d_properties *initial_scene_state;
         /** @brief Optional transient payload passed to the first scene-enter signal. */
         const slayer3d_properties *initial_scene_payload;
+        /** @brief Optional editor player start to apply for direct test-run workflows. */
+        const char *initial_player_start;
     } slayer3d_game_data_load_options;
 
     /**

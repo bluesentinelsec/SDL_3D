@@ -31,6 +31,7 @@ extern "C"
         const char *data_asset_path;
         const char *media_dir;
         const char *scene;
+        const char *player_start;
         const char **state_assignments;
         int state_assignment_count;
         const char **state_json_values;

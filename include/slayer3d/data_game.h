@@ -62,6 +62,8 @@ extern "C"
         const slayer3d_properties *initial_scene_state;
         /** @brief Optional transient payload passed to the first scene-enter signal. */
         const slayer3d_properties *initial_scene_payload;
+        /** @brief Optional editor player start applied before first scene-enter. */
+        const char *initial_player_start;
         /** @brief Suppress the authored app startup transition when using direct-start tooling. */
         bool skip_app_flow_startup;
         /**

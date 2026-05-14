@@ -627,22 +627,51 @@ bool load_scenes(slayer3d_game_data_runtime *runtime, yyjson_val *root, const sl
     runtime->active_scene_index = runtime->scene_count > 0 ? 0 : -1;
     const bool using_initial_override =
         options != NULL && options->initial_scene_override != NULL && options->initial_scene_override[0] != '\0';
+    const char *initial_player_start_name =
+        options != NULL && options->initial_player_start != NULL && options->initial_player_start[0] != '\0'
+            ? options->initial_player_start
+            : NULL;
+    slayer3d_game_data_editor_player_start initial_player_start;
+    SDL_zero(initial_player_start);
+    const bool using_initial_player_start = initial_player_start_name != NULL;
+    if (using_initial_player_start &&
+        !slayer3d_game_data_get_editor_player_start(runtime, initial_player_start_name, &initial_player_start))
+    {
+        set_error(error_buffer, error_buffer_size, "initial player start does not reference a loaded player start");
+        return false;
+    }
+    if (using_initial_override && using_initial_player_start && initial_player_start.scene != NULL &&
+        initial_player_start.scene[0] != '\0' &&
+        SDL_strcmp(options->initial_scene_override, initial_player_start.scene) != 0)
+    {
+        set_error(error_buffer, error_buffer_size, "initial scene override conflicts with player start scene");
+        return false;
+    }
     const char *initial =
-        using_initial_override ? options->initial_scene_override : json_string(scenes, "initial", NULL);
+        using_initial_override ? options->initial_scene_override
+        : using_initial_player_start && initial_player_start.scene != NULL && initial_player_start.scene[0] != '\0'
+            ? initial_player_start.scene
+            : json_string(scenes, "initial", NULL);
     if (initial != NULL)
     {
         scene_entry *scene = find_scene(runtime, initial);
         if (scene == NULL)
         {
             set_error(error_buffer, error_buffer_size,
-                      using_initial_override ? "initial scene override does not reference a loaded scene"
-                                             : "initial scene does not reference a loaded scene");
+                      using_initial_override       ? "initial scene override does not reference a loaded scene"
+                      : using_initial_player_start ? "initial player start scene does not reference a loaded scene"
+                                                   : "initial scene does not reference a loaded scene");
             return false;
         }
         runtime->active_scene_index = (int)(scene - runtime->scenes);
     }
     if (options != NULL && options->initial_scene_state != NULL)
         copy_all_properties(runtime->scene_state, options->initial_scene_state);
+    if (using_initial_player_start && !slayer3d_game_data_apply_editor_player_start(runtime, initial_player_start_name,
+                                                                                    error_buffer, error_buffer_size))
+    {
+        return false;
+    }
     apply_scene_camera(runtime, active_scene_entry(runtime));
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D game data initial scene: %s",
                  slayer3d_game_data_active_scene(runtime) != NULL ? slayer3d_game_data_active_scene(runtime)
