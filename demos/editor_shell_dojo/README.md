@@ -7,7 +7,8 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
 - data-authored world/selection/normal/hit debug overlay drawing
 - reusable `ui.panels` and `ui.inspectors` populated from scene state
 - a first blockout tool palette: `1` floor, `2` wall, `3` ceiling,
-  `4` player start, then `Enter` to place the selected prefab
+  `4` player start, then click a placement point and press `Enter` to place the
+  selected prefab at that point
 - unified editable-level save/export: `S` saves and publishes one fragment
   containing the brush world and player starts
 - test-run handoff manifest: `T` publishes and saves runner arguments for the

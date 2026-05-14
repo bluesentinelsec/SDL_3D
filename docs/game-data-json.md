@@ -755,18 +755,26 @@ prefab-specific `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
 
+For interactive placement, set `position_from` to `selection_point`. The action
+then treats `min` and `max` as offsets from the current active editor selection
+point. `position_offset` can move the prefab anchor before creation, and `snap`
+rounds the anchor to a grid size in world units before applying the offsets.
+
 ```json
 {
   "type": "editor.brush_world.create_box",
   "world": "brush.level.blockout",
-  "name": "brush.room_01.floor",
   "material": "mat.stone_floor",
+  "position_from": "selection_point",
+  "snap": 0.5,
   "min": [-4.0, -0.25, -4.0],
   "max": [4.0, 0.0, 4.0],
   "outputs": {
     "valid_key": "editor.create.valid",
     "message_key": "editor.create.message",
     "brush_key": "editor.create.brush",
+    "bounds_min_key": "editor.create.bounds_min",
+    "bounds_max_key": "editor.create.bounds_max",
     "dirty_key": "editor.brush_world.dirty",
     "revision_key": "editor.brush_world.revision"
   }

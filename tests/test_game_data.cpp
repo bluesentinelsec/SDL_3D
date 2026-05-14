@@ -14123,6 +14123,27 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                                    saved_path.string().c_str());
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.test_run.path",
                                    manifest_path.string().c_str());
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 564.8f;
+    motion.motion.y = 392.9f;
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    slayer3d_game_data_editor_selection placement_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &placement_selection));
+    ASSERT_TRUE(placement_selection.hit);
+    const slayer3d_vec3 placement_origin = slayer3d_vec3_make(SDL_roundf(placement_selection.point.x / 0.5f) * 0.5f,
+                                                              SDL_roundf(placement_selection.point.y / 0.5f) * 0.5f,
+                                                              SDL_roundf(placement_selection.point.z / 0.5f) * 0.5f);
     auto world = [&]() {
         slayer3d_game_data_brush_world brush_world{};
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
@@ -14142,8 +14163,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GT(brush_world.brush_count, 0);
     const slayer3d_game_data_brush *brush = &brush_world.brushes[brush_world.brush_count - 1];
     EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.floor");
-    EXPECT_NEAR(brush->bounds.min.y, -0.2f, 0.001f);
-    EXPECT_NEAR(brush->bounds.max.y, 0.0f, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.x, placement_origin.x - 3.0f, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.y, placement_origin.y - 0.2f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.y, placement_origin.y, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.z, placement_origin.z + 3.0f, 0.001f);
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
@@ -14156,8 +14179,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GT(brush_world.brush_count, 0);
     brush = &brush_world.brushes[brush_world.brush_count - 1];
     EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.wall");
-    EXPECT_NEAR(brush->bounds.min.x, 3.0f, 0.001f);
-    EXPECT_NEAR(brush->bounds.max.y, 2.5f, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.x, placement_origin.x - 0.125f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.x, placement_origin.x + 0.125f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.y, placement_origin.y + 2.5f, 0.001f);
 
     slayer3d_signal_emit(bus, ceiling_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "ceiling");
@@ -14170,8 +14194,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GT(brush_world.brush_count, 0);
     brush = &brush_world.brushes[brush_world.brush_count - 1];
     EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.ceiling");
-    EXPECT_NEAR(brush->bounds.min.y, 2.5f, 0.001f);
-    EXPECT_NEAR(brush->bounds.max.y, 2.7f, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.y, placement_origin.y + 2.5f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.y, placement_origin.y + 2.7f, 0.001f);
     EXPECT_EQ(world().brush_count, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 3);
@@ -14189,9 +14213,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_game_data_editor_player_start start{};
     ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.editor_shell", &start));
     EXPECT_STREQ(start.target, "entity.editor_shell.player");
-    EXPECT_NEAR(start.position.x, 0.0f, 0.001f);
-    EXPECT_NEAR(start.position.y, 1.6f, 0.001f);
-    EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(start.position.x, placement_selection.point.x, 0.001f);
+    EXPECT_NEAR(start.position.y, placement_selection.point.y, 0.001f);
+    EXPECT_NEAR(start.position.z, placement_selection.point.z, 0.001f);
     EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
@@ -14293,7 +14317,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(roundtrip_runtime, "player_start.editor_shell", &start));
     EXPECT_STREQ(start.scene, "scene.editor_shell.test_run");
     EXPECT_STREQ(start.target, "entity.editor_shell.player");
-    EXPECT_NEAR(start.position.z, 4.0f, 0.001f);
+    EXPECT_NEAR(start.position.x, placement_selection.point.x, 0.001f);
+    EXPECT_NEAR(start.position.y, placement_selection.point.y, 0.001f);
+    EXPECT_NEAR(start.position.z, placement_selection.point.z, 0.001f);
     EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
 
     slayer3d_game_data_destroy(roundtrip_runtime);
