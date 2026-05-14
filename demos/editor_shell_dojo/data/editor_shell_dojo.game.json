@@ -1,5 +1,6 @@
 {
   "schema": "slayer3d.game.v0",
+  "imports": [{ "path": "generated/editable_level.fragment.json", "sections": ["brush_worlds", "editor_player_starts"] }],
   "metadata": {
     "name": "Slayer 3D Editor Shell Dojo",
     "id": "demo.editor_shell_dojo",
@@ -549,6 +550,28 @@
         "signal": "signal.editor.export",
         "actions": [
           {
+            "type": "editor.level.save",
+            "world": "brush.editor_shell.target",
+            "path_from_state": "editor.save.path",
+            "message": "editable level saved",
+            "outputs": {
+              "valid_key": "editor.save.valid",
+              "message_key": "editor.save.message",
+              "path_key": "editor.save.path",
+              "size_key": "editor.save.size",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          {
             "type": "editor.level.export",
             "world": "brush.editor_shell.target",
             "outputs": {
@@ -581,6 +604,24 @@
             "outputs": {
               "valid_key": "editor.test_run.valid",
               "message_key": "editor.test_run.message",
+              "manifest_json_key": "editor.test_run.manifest_json",
+              "size_key": "editor.test_run.size",
+              "data_asset_key": "editor.test_run.data_asset",
+              "scene_key": "editor.test_run.scene",
+              "player_start_key": "editor.test_run.player_start",
+              "target_key": "editor.test_run.target"
+            }
+          },
+          {
+            "type": "editor.test_run.save_manifest",
+            "data_asset": "asset://editor_shell_dojo.game.json",
+            "player_start": "player_start.editor_shell",
+            "path_from_state": "editor.test_run.path",
+            "message": "test run manifest saved",
+            "outputs": {
+              "valid_key": "editor.test_run.saved",
+              "message_key": "editor.test_run.save_message",
+              "path_key": "editor.test_run.path",
               "manifest_json_key": "editor.test_run.manifest_json",
               "size_key": "editor.test_run.size",
               "data_asset_key": "editor.test_run.data_asset",
@@ -662,81 +703,6 @@
           "step_height": 0.55,
           "ceiling_clearance": 0.1,
           "mouse_sensitivity": 0.002
-        }
-      ]
-    }
-  ],
-  "editor_player_starts": [
-    {
-      "name": "player_start.editor_shell",
-      "scene": "scene.editor_shell.test_run",
-      "target": "entity.editor_shell.player",
-      "position": [0.0, 1.6, 4.0],
-      "yaw": 3.14159,
-      "pitch": 0.0
-    }
-  ],
-  "brush_worlds": [
-    {
-      "name": "brush.editor_shell.target",
-      "editor": {
-        "stable_id": "editor.world.target",
-        "display_name": "Target Brush World",
-        "category": "editor/dojo"
-      },
-      "materials": [
-        {
-          "name": "mat.editor.wall",
-          "albedo": [0.58, 0.18, 0.16, 1.0],
-          "roughness": 0.8,
-          "editor": {
-            "stable_id": "editor.material.wall",
-            "display_name": "Red Wall Material"
-          }
-        },
-        {
-          "name": "mat.editor.floor",
-          "albedo": [0.22, 0.24, 0.28, 1.0],
-          "roughness": 0.9,
-          "editor": {
-            "stable_id": "editor.material.floor",
-            "display_name": "Dark Floor Material"
-          }
-        },
-        {
-          "name": "mat.editor.ceiling",
-          "albedo": [0.42, 0.44, 0.48, 1.0],
-          "roughness": 0.85,
-          "editor": {
-            "stable_id": "editor.material.ceiling",
-            "display_name": "Soft Ceiling Material"
-          }
-        }
-      ],
-      "brushes": [
-        {
-          "name": "brush.target.cube",
-          "contents": ["solid", "player_clip"],
-          "editor": {
-            "stable_id": "editor.brush.target_cube",
-            "display_name": "Selectable Cube",
-            "prefab": "prefab.editor_shell.cube"
-          },
-          "faces": [
-            { "plane": { "normal": [1, 0, 0], "distance": 2 }, "material": "mat.editor.wall" },
-            {
-              "plane": { "normal": [-1, 0, 0], "distance": 0 },
-              "material": "mat.editor.wall",
-              "editor": {
-                "stable_id": "editor.face.target_cube.left",
-                "display_name": "Left Face"
-              }
-            },
-            { "plane": { "normal": [0, 1, 0], "distance": 2 }, "material": "mat.editor.wall" },
-            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.editor.floor" },
-            { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
-            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
-          ]
         }
       ]
     }

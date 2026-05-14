@@ -8886,6 +8886,73 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown editor player start reference"), std::string::npos) << error;
 
+    write_text(dir / "bad_level_save_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Level Save Action" },
+  "world": { "name": "world.bad_editor_level_save_action", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "world.editable",
+      "materials": [{ "name": "mat.default", "albedo": [1, 1, 1, 1] }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.default" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1 }, "material": "mat.default" }
+          ]
+        }
+      ]
+    }
+  ],
+  "signals": ["signal.editor.save"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.save",
+        "actions": [
+          { "type": "editor.level.save", "world": "world.editable" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_level_save_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("requires exactly one of path or path_from_state"), std::string::npos) << error;
+
+    write_text(dir / "bad_test_run_save_manifest_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Test Run Save Manifest Action" },
+  "world": { "name": "world.bad_editor_test_run_save_manifest_action", "kind": "fixed_screen" },
+  "editor_player_starts": [{ "name": "player_start.test", "scene": "scene.play", "target": "entity.player", "position": [0, 1, 0] }],
+  "entities": [{ "name": "entity.player" }],
+  "signals": ["signal.editor.test_run"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.test_run",
+        "actions": [
+          { "type": "editor.test_run.save_manifest", "data_asset": "asset://bad.game.json", "player_start": "player_start.test" }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file(
+        (dir / "bad_test_run_save_manifest_action.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("requires exactly one of path or path_from_state"), std::string::npos) << error;
+
     write_text(dir / "bad_status_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -14049,6 +14116,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    const std::filesystem::path save_dir = unique_test_dir("editor_unified_level_save");
+    const std::filesystem::path saved_path = save_dir / "saved" / "editable_level.fragment.json";
+    const std::filesystem::path manifest_path = save_dir / "saved" / "test-run.json";
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.save.path",
+                                   saved_path.string().c_str());
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.test_run.path",
+                                   manifest_path.string().c_str());
     auto world = [&]() {
         slayer3d_game_data_brush_world brush_world{};
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
@@ -14123,6 +14197,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
 
     slayer3d_signal_emit(bus, export_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.save.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.message", ""), "editable level saved");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), saved_path.string().c_str());
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.save.size", 0), 0);
+    EXPECT_TRUE(std::filesystem::exists(saved_path));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.export.valid", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.count", 0), 1);
     const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
@@ -14131,34 +14210,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
-
-    slayer3d_signal_emit(bus, test_run_signal, nullptr);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.message", ""),
-                 "test run handoff prepared");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.data_asset", ""),
-                 "asset://editor_shell_dojo.game.json");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.scene", ""),
-                 "scene.editor_shell.test_run");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.player_start", ""),
-                 "player_start.editor_shell");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.target", ""),
-                 "entity.editor_shell.player");
-    const char *manifest_json = slayer3d_properties_get_string(scene_state, "editor.test_run.manifest_json", "");
-    ASSERT_NE(manifest_json, nullptr);
-    EXPECT_NE(std::string(manifest_json).find("\"schema\": \"slayer3d.editor_test_run.v0\""), std::string::npos);
-    EXPECT_NE(std::string(manifest_json).find("\"--player-start\""), std::string::npos);
-    EXPECT_NE(std::string(manifest_json).find("\"player_start.editor_shell\""), std::string::npos);
-    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.test_run.size", 0), 0);
-
-    const std::filesystem::path save_dir = unique_test_dir("editor_unified_level_save");
-    const std::filesystem::path saved_path = save_dir / "saved" / "editable_level.fragment.json";
-    size_t saved_size = 0U;
-    ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
-        runtime, "brush.editor_shell.target", saved_path.string().c_str(), &saved_size, error, sizeof(error)))
-        << error;
-    EXPECT_GT(saved_size, 0U);
-    EXPECT_TRUE(std::filesystem::exists(saved_path));
     slayer3d_game_data_brush_world_editor_state brush_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &brush_state));
     EXPECT_FALSE(brush_state.dirty);
@@ -14173,6 +14224,31 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_EQ(player_start_state.saved_revision, 1U);
     ASSERT_NE(player_start_state.source_path, nullptr);
     EXPECT_EQ(std::string(player_start_state.source_path), saved_path.string());
+
+    slayer3d_signal_emit(bus, test_run_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.valid", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.saved", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.message", ""),
+                 "test run handoff prepared");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.save_message", ""),
+                 "test run manifest saved");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.path", ""),
+                 manifest_path.string().c_str());
+    EXPECT_TRUE(std::filesystem::exists(manifest_path));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.data_asset", ""),
+                 "asset://editor_shell_dojo.game.json");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.scene", ""),
+                 "scene.editor_shell.test_run");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.player_start", ""),
+                 "player_start.editor_shell");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.target", ""),
+                 "entity.editor_shell.player");
+    const char *manifest_json = slayer3d_properties_get_string(scene_state, "editor.test_run.manifest_json", "");
+    ASSERT_NE(manifest_json, nullptr);
+    EXPECT_NE(std::string(manifest_json).find("\"schema\": \"slayer3d.editor_test_run.v0\""), std::string::npos);
+    EXPECT_NE(std::string(manifest_json).find("\"--player-start\""), std::string::npos);
+    EXPECT_NE(std::string(manifest_json).find("\"player_start.editor_shell\""), std::string::npos);
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.test_run.size", 0), 0);
 
     write_text(save_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.editor_shell.dojo" })json");
