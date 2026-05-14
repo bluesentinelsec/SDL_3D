@@ -666,7 +666,17 @@ face normal through the normal 3D presentation path:
     },
     "debug_overlay": {
       "enabled": true,
-      "flags": ["world_bounds", "selection_bounds", "trace_ray", "face_normal", "hit_marker"]
+      "flags": [
+        "work_plane_grid",
+        "world_bounds",
+        "selection_bounds",
+        "trace_ray",
+        "face_normal",
+        "hit_marker"
+      ],
+      "work_plane_grid_color": [80, 140, 170, 95],
+      "work_plane_grid_size": 24.0,
+      "work_plane_grid_spacing": 1.0
     }
   }
 }
@@ -687,6 +697,12 @@ plane described by `dot(normal, point) = distance` and publishes that as a hit
 with `selection_type: "none"`. This is intended for blockout tools: a blank
 scene can still place the first floor on the ground plane, while later clicks on
 real brush faces keep returning normal brush-world selections.
+
+Add `work_plane_grid` (or `grid`) to `editor.debug_overlay.flags` to visualize
+the authored work plane with reusable debug lines. `work_plane_grid_size` is the
+grid half-extent in world units, and `work_plane_grid_spacing` controls line
+spacing. The grid uses the same `work_plane.normal` and `work_plane.distance`
+as placement, so visual feedback and picking stay aligned.
 
 Selection mode defaults to `hover`, where `outputs` receives the current pick
 every frame. In `mode: "click"`, `outputs` receives the pinned selection and
