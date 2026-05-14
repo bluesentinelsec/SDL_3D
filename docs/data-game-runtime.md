@@ -192,6 +192,12 @@ Optional flags:
   before the first scene-enter signal. If the marker declares a scene and
   `--scene` is omitted, that scene becomes the initial scene. If both are
   supplied, they must reference the same scene.
+- `--test-run-manifest <path-or-asset>` reads a
+  `slayer3d.editor_test_run.v0` handoff manifest produced by editor data. The
+  manifest supplies the runner `--data`, `--scene`, and/or `--player-start`
+  values, while mount flags remain explicit on the runner command line. Explicit
+  `--data`, `--scene`, or `--player-start` arguments must agree with manifest
+  values when both are present.
 - `--state <key=value>` injects one scene-state value before the direct scene
   enter signal runs. The value is parsed as JSON when possible, so
   `--state lives=3`, `--state debug=true`, `--state spawn=[1,2,3]`, and
@@ -205,8 +211,10 @@ Optional flags:
   `SLAYER3D_RUNNER_EMBEDDED_ASSETS` and provides the generic
   `slayer3d_runner_embedded_assets` pack blob symbols.
 
-State inputs are applied in this order: `--state-file`, then `--state-json`,
-then `--state`. Later values overwrite earlier values with the same key.
+Test-run manifests are applied before app config loading so the manifest's data
+asset can become the game entry point. State inputs are applied in this order:
+`--state-file`, then `--state-json`, then `--state`. Later values overwrite
+earlier values with the same key.
 Injected state is available to the scene's `on_enter` signal and to authored
 conditions during scene entry. Direct scene launch also suppresses startup
 app-flow transitions so the requested scene is immediately usable.

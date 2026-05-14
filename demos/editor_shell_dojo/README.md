@@ -27,3 +27,10 @@ Test-run the authored player start directly:
 ```sh
 ./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --player-start player_start.editor_shell
 ```
+
+The `T` key publishes the equivalent `slayer3d.editor_test_run.v0` handoff
+manifest to scene state. Editor hosts can write that JSON to disk and launch:
+
+```sh
+./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --test-run-manifest /tmp/editor-test-run.json
+```

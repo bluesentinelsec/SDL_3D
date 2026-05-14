@@ -290,6 +290,7 @@ else()
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_bundle_cli.c
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_fused.c
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_cli.c
+            ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_manifest.c
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_state.c
     )
     target_link_libraries(slayer3d_tool_cli_test PRIVATE slayer3d_argtable3)

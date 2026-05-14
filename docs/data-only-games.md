@@ -132,6 +132,21 @@ scene-state conditions and Lua state APIs. Player-start launches also apply the
 target actor's position and view angles before the first scene-enter signal, and
 use the marker's scene when `--scene` is omitted.
 
+Editor hosts can hand the same direct-start data to the runner with a test-run
+manifest:
+
+```sh
+build/debug/slayer3d_runner \
+  --root path/to/game/data \
+  --test-run-manifest /tmp/slayer3d-test-run.json
+```
+
+The manifest uses `schema: "slayer3d.editor_test_run.v0"` and supplies
+`data`, `scene`, and/or `player_start`. Mount options such as `--root`,
+`--pack`, `--embedded`, or fused executable context remain outside the manifest
+so the same handoff can work during loose-file editing, pack-file testing, and
+shipping builds.
+
 Demo targets may compile the same runner source with embedded assets and a
 default root data path. That wrapper should only supply build-time defaults; it
 should not contain game rules.

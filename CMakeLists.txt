@@ -345,7 +345,14 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     slayer3d_enable_warnings(slayer3d_bundle)
     slayer3d_enable_sanitizers(slayer3d_bundle)
 
-    add_executable(slayer3d_runner tools/slayer3d_runner.c tools/slayer3d_runner_cli.c tools/slayer3d_runner_state.c tools/slayer3d_fused.c)
+    add_executable(
+        slayer3d_runner
+        tools/slayer3d_runner.c
+        tools/slayer3d_runner_cli.c
+        tools/slayer3d_runner_manifest.c
+        tools/slayer3d_runner_state.c
+        tools/slayer3d_fused.c
+    )
     target_link_libraries(slayer3d_runner PRIVATE Slayer3D::slayer3d slayer3d_argtable3)
     target_compile_features(slayer3d_runner PRIVATE c_std_17)
     target_include_directories(slayer3d_runner PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
