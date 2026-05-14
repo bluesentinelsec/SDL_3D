@@ -359,6 +359,32 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     target_compile_definitions(slayer3d_runner PRIVATE SLAYER3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
     slayer3d_enable_warnings(slayer3d_runner)
     slayer3d_enable_sanitizers(slayer3d_runner)
+
+    add_executable(
+        slayer3d_editor
+        tools/slayer3d_editor.c
+        tools/slayer3d_editor_cli.c
+        tools/slayer3d_runner.c
+        tools/slayer3d_runner_cli.c
+        tools/slayer3d_runner_manifest.c
+        tools/slayer3d_runner_state.c
+        tools/slayer3d_fused.c
+    )
+    target_link_libraries(slayer3d_editor PRIVATE Slayer3D::slayer3d slayer3d_argtable3)
+    target_compile_features(slayer3d_editor PRIVATE c_std_17)
+    target_include_directories(slayer3d_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+    target_compile_definitions(
+        slayer3d_editor
+        PRIVATE
+            SLAYER3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media"
+            SLAYER3D_RUNNER_NO_MAIN
+            SLAYER3D_EDITOR_DEFAULT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/demos/editor_shell_dojo/data"
+            SLAYER3D_EDITOR_DEFAULT_DATA="asset://editor_shell_dojo.game.json"
+            SLAYER3D_EDITOR_DEFAULT_SAVE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/demos/editor_shell_dojo/data/generated/editable_level.fragment.json"
+            SLAYER3D_EDITOR_DEFAULT_TEST_RUN_PATH="${CMAKE_CURRENT_BINARY_DIR}/editor_shell_dojo/test-run.json"
+    )
+    slayer3d_enable_warnings(slayer3d_editor)
+    slayer3d_enable_sanitizers(slayer3d_editor)
 endif()
 
 if(SLAYER3D_BUILD_TESTS)
