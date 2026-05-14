@@ -2053,6 +2053,15 @@ extern "C"
                                                                char **out_json, size_t *out_size, char *error_buffer,
                                                                int error_buffer_size);
 
+    /**
+     * @brief Mark the runtime editor player-start collection as saved.
+     *
+     * @p source_path may be NULL to keep the existing source path, or a
+     * filesystem path to associate with the saved revision.
+     */
+    bool slayer3d_game_data_mark_player_starts_saved(slayer3d_game_data_runtime *runtime, const char *source_path,
+                                                     char *error_buffer, int error_buffer_size);
+
     /** @brief Descriptor for resizing one brush face plane. */
     typedef struct slayer3d_game_data_resize_brush_face_desc
     {
@@ -2117,6 +2126,36 @@ extern "C"
     bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
                                                            const char *path, size_t *out_size, char *error_buffer,
                                                            int error_buffer_size);
+
+    /**
+     * @brief Export one editable level fragment containing brushes and starts.
+     *
+     * The exported document uses `schema: "slayer3d.fragment.v0"` and contains
+     * the selected `brush_worlds` entry plus the runtime `editor_player_starts`
+     * collection. This is the canonical first-pass editor level artifact for
+     * blockout workflows that need geometry and test-run spawn points to reload
+     * together. The returned string is allocated with SDL_malloc and must be
+     * released with SDL_free().
+     */
+    bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_data_runtime *runtime,
+                                                                const char *world_name, char **out_json,
+                                                                size_t *out_size, char *error_buffer,
+                                                                int error_buffer_size);
+
+    /**
+     * @brief Atomically save one editable level fragment file.
+     *
+     * This saves the same JSON produced by
+     * @ref slayer3d_game_data_export_editable_level_fragment_json. Parent
+     * directories are created automatically, and the target path is updated via
+     * a same-directory temporary file. On success, both the selected brush world
+     * and the player-start collection are marked saved at their current
+     * revisions and @p path becomes their editor source path.
+     */
+    bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_runtime *runtime,
+                                                              const char *world_name, const char *path,
+                                                              size_t *out_size, char *error_buffer,
+                                                              int error_buffer_size);
 
     /** @brief Authored game data diagnostic severity. */
     typedef enum slayer3d_game_data_diagnostic_severity

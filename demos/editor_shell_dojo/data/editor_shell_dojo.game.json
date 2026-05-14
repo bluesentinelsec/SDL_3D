@@ -52,6 +52,10 @@
             "bindings": [{ "device": "keyboard", "key": "Y" }]
           },
           {
+            "name": "action.editor.export",
+            "bindings": [{ "device": "keyboard", "key": "S" }]
+          },
+          {
             "name": "action.editor.tool.floor",
             "bindings": [{ "device": "keyboard", "key": "1" }]
           },
@@ -121,6 +125,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.export",
+        "on_pressed": "signal.editor.export"
       },
       {
         "type": "sensor.input_pressed",
@@ -508,18 +517,23 @@
         "signal": "signal.editor.export",
         "actions": [
           {
-            "type": "editor.brush_world.export",
+            "type": "editor.level.export",
             "world": "brush.editor_shell.target",
             "outputs": {
               "valid_key": "editor.export.valid",
               "message_key": "editor.export.message",
               "json_key": "editor.export.json",
               "size_key": "editor.export.size",
-              "world_key": "editor.brush_world.name",
-              "dirty_key": "editor.brush_world.dirty",
-              "revision_key": "editor.brush_world.revision",
-              "saved_revision_key": "editor.brush_world.saved_revision",
-              "source_path_key": "editor.brush_world.source_path"
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
             }
           }
         ]

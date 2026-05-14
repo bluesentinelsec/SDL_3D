@@ -14,6 +14,7 @@
       "action.editor.command.commit",
       "action.editor.command.undo",
       "action.editor.command.redo",
+      "action.editor.export",
       "action.editor.tool.floor",
       "action.editor.tool.wall",
       "action.editor.tool.ceiling",
@@ -168,7 +169,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. 1 floor 2 wall 3 ceiling 4 start. P preview. Enter commit. Z/Y undo-redo.",
+        "text": "Click select. 1 floor 2 wall 3 ceiling 4 start. Enter commit. S export. Z/Y undo-redo.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

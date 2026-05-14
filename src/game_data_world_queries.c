@@ -982,6 +982,36 @@ static void mark_editor_player_starts_dirty(slayer3d_game_data_runtime *runtime)
     runtime->editor_player_start_dirty = true;
 }
 
+static bool editor_player_starts_set_source_path(slayer3d_game_data_runtime *runtime, const char *source_path)
+{
+    if (runtime == NULL || source_path == NULL)
+        return true;
+    char *copy = SDL_strdup(source_path);
+    if (copy == NULL)
+        return false;
+    SDL_free(runtime->editor_player_start_source_path);
+    runtime->editor_player_start_source_path = copy;
+    return true;
+}
+
+bool slayer3d_game_data_mark_player_starts_saved(slayer3d_game_data_runtime *runtime, const char *source_path,
+                                                 char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "player start save state requires runtime");
+        return false;
+    }
+    if (!editor_player_starts_set_source_path(runtime, source_path))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to update player start save state");
+        return false;
+    }
+    runtime->editor_player_start_saved_revision = runtime->editor_player_start_revision;
+    runtime->editor_player_start_dirty = false;
+    return true;
+}
+
 bool slayer3d_game_data_place_editor_player_start(slayer3d_game_data_runtime *runtime,
                                                   const slayer3d_game_data_place_player_start_desc *desc,
                                                   char *error_buffer, int error_buffer_size)
@@ -1437,6 +1467,70 @@ bool slayer3d_game_data_export_player_starts_fragment_json(const slayer3d_game_d
     return true;
 }
 
+bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_data_runtime *runtime,
+                                                            const char *world_name, char **out_json, size_t *out_size,
+                                                            char *error_buffer, int error_buffer_size)
+{
+    if (out_json != NULL)
+        *out_json = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (runtime == NULL || out_json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editable level export requires runtime and output");
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "brush world '%s' not found", world_name);
+        return false;
+    }
+
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    yyjson_mut_val *worlds = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *starts = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    if (doc == NULL || root == NULL || worlds == NULL || starts == NULL)
+    {
+        yyjson_mut_doc_free(doc);
+        set_error(error_buffer, error_buffer_size, "failed to allocate editable level export document");
+        return false;
+    }
+
+    yyjson_mut_doc_set_root(doc, root);
+    bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.fragment.v0") &&
+              yyjson_mut_obj_add_val(doc, root, "brush_worlds", worlds) &&
+              export_add_brush_world(doc, worlds, &world_runtime->desc) &&
+              yyjson_mut_obj_add_val(doc, root, "editor_player_starts", starts);
+    for (int i = 0; ok && i < runtime->editor_player_start_count; ++i)
+        ok = export_add_player_start(doc, starts, &runtime->editor_player_starts[i]);
+
+    size_t size = 0u;
+    char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
+    yyjson_mut_doc_free(doc);
+    if (json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to write editable level export JSON");
+        return false;
+    }
+
+    char *copy = (char *)SDL_malloc(size + 1u);
+    if (copy == NULL)
+    {
+        free(json);
+        set_error(error_buffer, error_buffer_size, "failed to allocate editable level export JSON");
+        return false;
+    }
+    SDL_memcpy(copy, json, size + 1u);
+    free(json);
+    *out_json = copy;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
 static bool editor_save_write_all(SDL_IOStream *stream, const void *data, size_t size)
 {
     const Uint8 *bytes = (const Uint8 *)data;
@@ -1581,6 +1675,76 @@ bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtim
         return false;
     }
     if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size))
+        return false;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
+bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                          const char *path, size_t *out_size, char *error_buffer,
+                                                          int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (path == NULL || path[0] == '\0' || SDL_strstr(path, "://") != NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editable level save requires a filesystem path");
+        return false;
+    }
+
+    char *json = NULL;
+    size_t size = 0u;
+    if (!slayer3d_game_data_export_editable_level_fragment_json(runtime, world_name, &json, &size, error_buffer,
+                                                                error_buffer_size))
+    {
+        return false;
+    }
+
+    char *parent = editor_save_parent_directory(path);
+    if (parent == NULL || !editor_save_make_directory_recursive(parent))
+    {
+        SDL_free(parent);
+        SDL_free(json);
+        set_error(error_buffer, error_buffer_size, "failed to create editable level save directory");
+        return false;
+    }
+    SDL_free(parent);
+
+    bool ok = false;
+    char temp_path[4096];
+    for (int attempt = 0; attempt < 16 && !ok; ++attempt)
+    {
+        SDL_snprintf(temp_path, sizeof(temp_path), "%s.tmp.%llu.%d", path, (unsigned long long)SDL_GetTicksNS(),
+                     attempt);
+        SDL_IOStream *stream = SDL_IOFromFile(temp_path, "wb");
+        if (stream == NULL)
+            continue;
+        ok = editor_save_write_all(stream, json, size) && SDL_FlushIO(stream);
+        ok = SDL_CloseIO(stream) && ok;
+        if (!ok)
+        {
+            SDL_RemovePath(temp_path);
+            continue;
+        }
+        if (!SDL_RenamePath(temp_path, path))
+        {
+            SDL_RemovePath(path);
+            ok = SDL_RenamePath(temp_path, path);
+        }
+        if (!ok)
+            SDL_RemovePath(temp_path);
+    }
+
+    SDL_free(json);
+    if (!ok)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to save editable level fragment");
+        return false;
+    }
+    if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size))
+        return false;
+    if (!slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))
         return false;
     if (out_size != NULL)
         *out_size = size;
@@ -2929,6 +3093,51 @@ bool slayer3d_game_data_export_editor_brush_world_action(slayer3d_game_data_runt
     editor_set_int_output(scene_state, outputs, "size_key", ok ? (int)size : 0);
     editor_set_string_output(scene_state, outputs, "json_key", ok && json != NULL ? json : "");
     (void)publish_editor_brush_world_status(runtime, outputs, world_name, NULL, false);
+    SDL_free(json);
+    return true;
+}
+
+bool slayer3d_game_data_export_editor_level_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    char error[256];
+    error[0] = '\0';
+    char *json = NULL;
+    size_t size = 0u;
+    const bool ok = slayer3d_game_data_export_editable_level_fragment_json(runtime, world_name, &json, &size, error,
+                                                                           (int)sizeof(error));
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "editable level exported")
+                                : (error[0] != '\0' ? error : "editable level export failed"));
+    editor_set_int_output(scene_state, outputs, "size_key", ok ? (int)size : 0);
+    editor_set_string_output(scene_state, outputs, "json_key", ok && json != NULL ? json : "");
+
+    slayer3d_game_data_brush_world_editor_state brush_state;
+    SDL_zero(brush_state);
+    const bool has_brush_state = slayer3d_game_data_get_brush_world_editor_state(runtime, world_name, &brush_state);
+    slayer3d_game_data_player_start_editor_state start_state;
+    SDL_zero(start_state);
+    const bool has_start_state = slayer3d_game_data_get_player_start_editor_state(runtime, &start_state);
+    editor_set_string_output(scene_state, outputs, "brush_world_key",
+                             has_brush_state && brush_state.world_name != NULL ? brush_state.world_name : "");
+    editor_set_bool_output(scene_state, outputs, "brush_dirty_key", has_brush_state && brush_state.dirty);
+    editor_set_int_output(scene_state, outputs, "brush_revision_key",
+                          has_brush_state ? editor_revision_to_int(brush_state.revision) : 0);
+    editor_set_int_output(scene_state, outputs, "brush_saved_revision_key",
+                          has_brush_state ? editor_revision_to_int(brush_state.saved_revision) : 0);
+    editor_set_string_output(scene_state, outputs, "brush_source_path_key",
+                             has_brush_state && brush_state.source_path != NULL ? brush_state.source_path : "");
+    editor_set_bool_output(scene_state, outputs, "player_start_dirty_key", has_start_state && start_state.dirty);
+    editor_set_int_output(scene_state, outputs, "player_start_count_key", has_start_state ? start_state.count : 0);
+    editor_set_int_output(scene_state, outputs, "player_start_revision_key",
+                          has_start_state ? editor_revision_to_int(start_state.revision) : 0);
+    editor_set_int_output(scene_state, outputs, "player_start_saved_revision_key",
+                          has_start_state ? editor_revision_to_int(start_state.saved_revision) : 0);
+    editor_set_string_output(scene_state, outputs, "player_start_source_path_key",
+                             has_start_state && start_state.source_path != NULL ? start_state.source_path : "");
     SDL_free(json);
     return true;
 }
