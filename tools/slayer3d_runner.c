@@ -5,7 +5,9 @@
 
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_log.h>
+#if !defined(SLAYER3D_RUNNER_NO_MAIN)
 #include <SDL3/SDL_main.h>
+#endif
 #include <SDL3/SDL_stdinc.h>
 
 #include <stdio.h>
