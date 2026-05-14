@@ -14388,6 +14388,61 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    slayer3d_registered_actor *camera_actor = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
+    ASSERT_NE(camera_actor, nullptr);
+    const slayer3d_vec3 start_position = camera_actor->position;
+    const float start_yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", 0.0f);
+
+    slayer3d_camera3d before{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.viewport", &before));
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_UP;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, start_position)), 0.1f);
+
+    key.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key);
+
+    SDL_Event right_down{};
+    right_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    right_down.button.button = SDL_BUTTON_RIGHT;
+    slayer3d_input_process_event(input, &right_down);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.xrel = 60.0f;
+    motion.motion.yrel = -15.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+
+    const float yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);
+    EXPECT_GT(SDL_fabsf(yaw - start_yaw), 0.01f);
+    slayer3d_camera3d after{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.viewport", &after));
+    EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(after.target, before.target)), 0.01f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoDirectStartsPlayableSceneFromPlayerStart)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

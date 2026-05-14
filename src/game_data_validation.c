@@ -2866,6 +2866,7 @@ static bool is_supported_component_type(const char *type)
         "collision.circle",
         "combat.health",
         "control.axis_1d",
+        "controller.editor_camera",
         "controller.fps_brush",
         "controller.fps_sector",
         "lifecycle.ttl",
@@ -3175,6 +3176,61 @@ static bool validate_fps_brush_component(validation_context *ctx, yyjson_val *co
             return validation_error(ctx, path,
                                     "controller.fps_brush diagnostic property names must be non-empty strings");
     }
+    return true;
+}
+
+static bool validate_editor_camera_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                             validation_names *names)
+{
+    yyjson_val *actions = obj_get(component, "actions");
+    if (!yyjson_is_obj(actions))
+        return validation_error(ctx, path, "controller.editor_camera requires an actions object");
+
+    const char *action_keys[] = {"forward", "back", "left", "right", "up", "down", "look", "fast"};
+    bool has_action = false;
+    for (size_t i = 0; i < SDL_arraysize(action_keys); ++i)
+    {
+        const char *action = json_string(actions, action_keys[i]);
+        if (action == NULL)
+            continue;
+        has_action = true;
+        if (!require_ref(ctx, &names->actions, "input action", action, path))
+            return false;
+    }
+    if (!has_action)
+        return validation_error(ctx, path, "controller.editor_camera actions must reference at least one input action");
+
+    const char *property_keys[] = {"yaw_property", "pitch_property", "forward_property"};
+    for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
+    {
+        yyjson_val *value = obj_get(component, property_keys[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, path, "controller.editor_camera property names must be non-empty strings");
+    }
+
+    const char *numeric_keys[] = {"move_speed",  "fast_speed", "mouse_sensitivity", "spawn_yaw",
+                                  "spawn_pitch", "pitch_min",  "pitch_max"};
+    for (size_t i = 0; i < SDL_arraysize(numeric_keys); ++i)
+    {
+        yyjson_val *value = obj_get(component, numeric_keys[i]);
+        if (value != NULL && !yyjson_is_num(value))
+            return validation_error(ctx, path, "controller.editor_camera numeric tuning values must be numbers");
+    }
+    const char *non_negative[] = {"move_speed", "fast_speed", "mouse_sensitivity"};
+    for (size_t i = 0; i < SDL_arraysize(non_negative); ++i)
+    {
+        yyjson_val *value = obj_get(component, non_negative[i]);
+        if (value != NULL && yyjson_get_num(value) < 0.0)
+            return validation_error(ctx, path,
+                                    "controller.editor_camera speed and sensitivity values must be non-negative");
+    }
+    yyjson_val *pitch_min = obj_get(component, "pitch_min");
+    yyjson_val *pitch_max = obj_get(component, "pitch_max");
+    if (pitch_min != NULL && pitch_max != NULL && yyjson_get_num(pitch_min) >= yyjson_get_num(pitch_max))
+        return validation_error(ctx, path, "controller.editor_camera pitch_min must be less than pitch_max");
+    yyjson_val *mouse_look = obj_get(component, "mouse_look");
+    if (mouse_look != NULL && !yyjson_is_bool(mouse_look))
+        return validation_error(ctx, path, "controller.editor_camera mouse_look must be a boolean");
     return true;
 }
 
@@ -5706,6 +5762,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 if (!validate_fps_brush_component(ctx, component, path, names))
                     return false;
             }
+            else if (SDL_strcmp(type, "controller.editor_camera") == 0)
+            {
+                if (!validate_editor_camera_component(ctx, component, path, names))
+                    return false;
+            }
             else if (SDL_strcmp(type, "combat.health") == 0)
             {
                 if (!validate_combat_health_component(ctx, component, path))
@@ -6363,10 +6424,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
             {
                 return false;
             }
-            if (SDL_strcmp(type, "controller.fps_sector") == 0 || SDL_strcmp(type, "controller.fps_brush") == 0)
+            if (SDL_strcmp(type, "controller.fps_sector") == 0 || SDL_strcmp(type, "controller.fps_brush") == 0 ||
+                SDL_strcmp(type, "controller.editor_camera") == 0)
             {
                 return validation_error(ctx, component_path,
-                                        "first-person controllers are only supported on static entities");
+                                        "camera and first-person controllers are only supported on static entities");
             }
             else if (SDL_strcmp(type, "combat.health") == 0)
             {

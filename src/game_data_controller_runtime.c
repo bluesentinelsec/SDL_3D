@@ -275,6 +275,88 @@ static void fps_controller_publish_actor_state(const fps_controller_runtime *con
                                 controller->mover.current_sector);
 }
 
+static void publish_editor_camera_actor_state(yyjson_val *component, slayer3d_registered_actor *actor, float yaw,
+                                              float pitch)
+{
+    if (component == NULL || actor == NULL)
+        return;
+
+    const float cos_pitch = SDL_cosf(pitch);
+    const slayer3d_vec3 forward =
+        slayer3d_vec3_make(SDL_sinf(yaw) * cos_pitch, SDL_sinf(pitch), -SDL_cosf(yaw) * cos_pitch);
+    slayer3d_properties_set_float(actor->props, json_string(component, "yaw_property", "yaw"), yaw);
+    slayer3d_properties_set_float(actor->props, json_string(component, "pitch_property", "pitch"), pitch);
+    slayer3d_properties_set_vec3(actor->props, json_string(component, "forward_property", "camera_forward"), forward);
+}
+
+static float editor_camera_clampf(float value, float min_value, float max_value)
+{
+    if (value < min_value)
+        return min_value;
+    if (value > max_value)
+        return max_value;
+    return value;
+}
+
+void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                     slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt)
+{
+    if (runtime == NULL || component == NULL || actor == NULL)
+        return;
+
+    const char *yaw_property = json_string(component, "yaw_property", "yaw");
+    const char *pitch_property = json_string(component, "pitch_property", "pitch");
+    float yaw = slayer3d_properties_get_float(actor->props, yaw_property, json_float(component, "spawn_yaw", 0.0f));
+    float pitch =
+        slayer3d_properties_get_float(actor->props, pitch_property, json_float(component, "spawn_pitch", 0.0f));
+
+    const int look_action = fps_controller_action_id(runtime, component, "look");
+    const bool look_active =
+        input != NULL && (look_action < 0 || fps_controller_action_value(runtime, input, look_action) > 0.0f);
+    if (json_bool(component, "mouse_look", true) && look_active)
+    {
+        const float sensitivity = json_float(component, "mouse_sensitivity", 0.002f);
+        yaw += slayer3d_input_get_mouse_dx(input) * sensitivity;
+        pitch -= slayer3d_input_get_mouse_dy(input) * sensitivity;
+    }
+    const float pitch_min = json_float(component, "pitch_min", -1.4f);
+    const float pitch_max = json_float(component, "pitch_max", 1.4f);
+    pitch = editor_camera_clampf(pitch, SDL_min(pitch_min, pitch_max), SDL_max(pitch_min, pitch_max));
+
+    float forward =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "forward")) -
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "back"));
+    float side = fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "right")) -
+                 fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "left"));
+    float vertical = fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "up")) -
+                     fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "down"));
+    const float len_sq = forward * forward + side * side + vertical * vertical;
+    if (len_sq > 1.0f)
+    {
+        const float inv_len = 1.0f / SDL_sqrtf(len_sq);
+        forward *= inv_len;
+        side *= inv_len;
+        vertical *= inv_len;
+    }
+
+    const float fast =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "fast"));
+    const float speed = fast > 0.0f
+                            ? json_float(component, "fast_speed", json_float(component, "move_speed", 8.0f) * 2.5f)
+                            : json_float(component, "move_speed", 8.0f);
+    const float fwd_x = SDL_sinf(yaw);
+    const float fwd_z = -SDL_cosf(yaw);
+    const float right_x = SDL_cosf(yaw);
+    const float right_z = SDL_sinf(yaw);
+    const slayer3d_vec3 delta = slayer3d_vec3_make((fwd_x * forward + right_x * side) * speed * SDL_max(dt, 0.0f),
+                                                   vertical * speed * SDL_max(dt, 0.0f),
+                                                   (fwd_z * forward + right_z * side) * speed * SDL_max(dt, 0.0f));
+    if (slayer3d_vec3_length_squared(delta) > 0.0000001f)
+        actor_set_position(actor, slayer3d_vec3_add(actor->position, delta));
+
+    publish_editor_camera_actor_state(component, actor, yaw, pitch);
+}
+
 static bool initialize_fps_controller_runtime(slayer3d_game_data_runtime *runtime, fps_controller_runtime *controller,
                                               yyjson_val *component, slayer3d_registered_actor *actor)
 {

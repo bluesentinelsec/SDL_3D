@@ -1050,7 +1050,51 @@ and `source_path_key`.
 Supported `model_filter` values are `all`, `sector_levels`/`sector`, and
 `brush_worlds`/`brush`. Supported debug flags are `all`, `world_bounds`,
 `selection_bounds`, `trace_ray`, `face_normal`, `hit_marker`, and
-`command_preview`.
+`command_preview`, plus `work_plane_grid` when a selection work plane is
+authored.
+
+Use `controller.editor_camera` on an actor to drive an editor/free-flight
+viewport camera without collision:
+
+```json
+{
+  "name": "entity.editor.camera",
+  "active": true,
+  "transform": { "position": [-5.0, 3.2, 5.0] },
+  "properties": {
+    "yaw": { "type": "float", "value": 0.98 },
+    "pitch": { "type": "float", "value": -0.3 }
+  },
+  "components": [
+    {
+      "type": "controller.editor_camera",
+      "actions": {
+        "forward": "action.editor.camera.forward",
+        "back": "action.editor.camera.back",
+        "left": "action.editor.camera.left",
+        "right": "action.editor.camera.right",
+        "up": "action.editor.camera.up",
+        "down": "action.editor.camera.down",
+        "look": "action.editor.camera.look",
+        "fast": "action.editor.camera.fast"
+      },
+      "move_speed": 8.0,
+      "fast_speed": 22.0,
+      "mouse_sensitivity": 0.002,
+      "pitch_min": -1.45,
+      "pitch_max": 1.45
+    }
+  ]
+}
+```
+
+Pair it with an `fps` camera targeting the camera actor. Movement uses the
+actor's yaw on the horizontal plane; `up` and `down` move along world Y. The
+optional `look` action gates mouse-look, which is useful for editors that need
+normal mouse clicking and right-button camera look in the same scene. If `look`
+is omitted, mouse-look is active whenever `mouse_look` is true. The controller
+writes `yaw`, `pitch`, and `camera_forward` by default; override those names
+with `yaw_property`, `pitch_property`, and `forward_property`.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
