@@ -748,12 +748,12 @@ extern "C"
         slayer3d_game_data_brush_diagnostics brush;
     } slayer3d_game_data_world_model_diagnostics;
 
-    /** @brief Editor/tooling selection produced by world-model picking. */
+    /** @brief Editor/tooling selection produced by world picking or an authored work plane. */
     typedef struct slayer3d_game_data_editor_selection
     {
-        /** @brief True when the selection hit a world model. */
+        /** @brief True when the selection hit a world model or work plane. */
         bool hit;
-        /** @brief Implementation kind that produced the selection. */
+        /** @brief Implementation kind that produced the selection, or INVALID for a work-plane hit. */
         slayer3d_game_data_world_model_type type;
         /** @brief Authored world model name. */
         const char *world_name;

@@ -47,7 +47,12 @@
         "near": 0.05,
         "far": 100.0,
         "model_filter": "brush_worlds",
-        "contents_mask": "solid"
+        "contents_mask": "solid",
+        "work_plane": {
+          "enabled": true,
+          "normal": [0.0, 1.0, 0.0],
+          "distance": 0.0
+        }
       },
       "outputs": {
         "hit_key": "editor.selection.hit",

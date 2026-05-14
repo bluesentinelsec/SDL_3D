@@ -8678,6 +8678,11 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
             "scene editor selection trace source must be 'world' or 'camera_screen'",
         },
         {
+            "bad_work_plane_normal",
+            R"json({ "trace": { "source": "camera_screen", "camera": "camera.valid", "work_plane": { "normal": [0.0, 0.0, 0.0] } }, "outputs": { "hit_key": "editor.hit" } })json",
+            "scene editor selection work_plane normal must be non-zero",
+        },
+        {
             "bad_camera",
             R"json({ "trace": { "source": "camera_screen", "camera": "camera.missing", "viewport": [1280, 720] }, "outputs": { "hit_key": "editor.hit" } })json",
             "unknown camera",
@@ -14067,7 +14072,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     SDL_Event miss_motion{};
     miss_motion.type = SDL_EVENT_MOUSE_MOTION;
     miss_motion.motion.x = 20.0f;
-    miss_motion.motion.y = 20.0f;
+    miss_motion.motion.y = 700.0f;
     SDL_Event miss_click{};
     miss_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     miss_click.button.button = SDL_BUTTON_LEFT;
@@ -14077,9 +14082,19 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_input_process_event(input, &miss_click);
     slayer3d_input_update(input, 3);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.hover.hit", true));
-    EXPECT_FALSE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.hover.hit", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.type", ""), "none");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.world", "not-empty"), "");
+    const slayer3d_value *work_plane_point = slayer3d_properties_get_value(scene_state, "editor.selection.point");
+    ASSERT_NE(work_plane_point, nullptr);
+    ASSERT_EQ(work_plane_point->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(work_plane_point->as_vec3.y, 0.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_TRUE(active_selection.hit);
+    EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID);
+    EXPECT_NEAR(active_selection.point.y, 0.0f, 0.001f);
+    EXPECT_NEAR(active_selection.normal.y, 1.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -14127,8 +14142,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_NE(input, nullptr);
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
-    motion.motion.x = 564.8f;
-    motion.motion.y = 392.9f;
+    motion.motion.x = 20.0f;
+    motion.motion.y = 700.0f;
     SDL_Event click{};
     click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     click.button.button = SDL_BUTTON_LEFT;
@@ -14141,6 +14156,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_game_data_editor_selection placement_selection{};
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &placement_selection));
     ASSERT_TRUE(placement_selection.hit);
+    EXPECT_EQ(placement_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID);
     const slayer3d_vec3 placement_origin = slayer3d_vec3_make(SDL_roundf(placement_selection.point.x / 0.5f) * 0.5f,
                                                               SDL_roundf(placement_selection.point.y / 0.5f) * 0.5f,
                                                               SDL_roundf(placement_selection.point.z / 0.5f) * 0.5f);

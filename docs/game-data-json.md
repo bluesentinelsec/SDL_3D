@@ -644,7 +644,12 @@ face normal through the normal 3D presentation path:
         "near": 0.05,
         "far": 100.0,
         "model_filter": "brush_worlds",
-        "contents_mask": "solid"
+        "contents_mask": "solid",
+        "work_plane": {
+          "enabled": true,
+          "normal": [0, 1, 0],
+          "distance": 0.0
+        }
       },
       "outputs": {
         "hit_key": "editor.selection.hit",
@@ -675,6 +680,13 @@ Tooling can override that point with `screen`, `screen_x`/`screen_y`, or
 with `viewport`, `viewport_width`/`viewport_height`, or scene-state keys. This
 lets editor dojos and future editor hosts share the same data-authored picking
 primitive.
+
+Selection traces may also author `work_plane` as a fallback placement plane.
+When the ray misses world geometry, the editor intersects the same ray with the
+plane described by `dot(normal, point) = distance` and publishes that as a hit
+with `selection_type: "none"`. This is intended for blockout tools: a blank
+scene can still place the first floor on the ground plane, while later clicks on
+real brush faces keep returning normal brush-world selections.
 
 Selection mode defaults to `hover`, where `outputs` receives the current pick
 every frame. In `mode: "click"`, `outputs` receives the pinned selection and
