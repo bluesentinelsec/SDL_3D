@@ -19,6 +19,11 @@
 
 #include "slayer3d/types.h"
 
+/* Keep the built-in OpenGL skinning path within the minimum WebGL2/GL ES
+ * vertex uniform budget. Larger skeletons transparently fall back to CPU
+ * skinning so correctness does not depend on GPU limits. */
+#define SLAYER3D_GPU_SKINNING_MAX_JOINTS 64
+
 /* Forward declarations. */
 typedef struct slayer3d_render_context slayer3d_render_context;
 typedef struct slayer3d_texture2d slayer3d_texture2d;
@@ -87,6 +92,10 @@ typedef struct slayer3d_draw_params_lit
     const float *shadow_vp;         /* 16 floats (mat4), or NULL */
     float shadow_bias;
     bool static_geometry;
+    const unsigned short *joint_indices;
+    const float *joint_weights;
+    const slayer3d_mat4 *joint_matrices;
+    int joint_count;
 } slayer3d_draw_params_lit;
 
 /* ------------------------------------------------------------------ */
