@@ -428,8 +428,24 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     EXPECT_LT(diagnostics.visibility_brush_visible, diagnostics.visibility_brush_candidates);
     EXPECT_GE(diagnostics.visibility_brush_occluded, 1u);
     EXPECT_GE(diagnostics.visibility_triangles_culled, 12u);
+    EXPECT_EQ(diagnostics.visibility_grid_cache_misses, 1u);
+    EXPECT_EQ(diagnostics.visibility_grid_cache_hits, 0u);
     EXPECT_EQ(diagnostics.render_mesh_submissions, 2u);
     EXPECT_LT(diagnostics.render_triangles_submitted, 36u);
+
+    slayer3d_reset_render_stats(ctx);
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.visibility_grid_cache_misses, 0u);
+    EXPECT_EQ(diagnostics.visibility_grid_cache_hits, 1u);
+    EXPECT_EQ(diagnostics.visibility_brush_candidates, 3u);
+    EXPECT_LT(diagnostics.visibility_brush_visible, diagnostics.visibility_brush_candidates);
+    EXPECT_GE(diagnostics.visibility_brush_occluded, 1u);
 
     slayer3d_game_data_destroy(runtime);
     runtime = nullptr;

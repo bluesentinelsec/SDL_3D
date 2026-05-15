@@ -638,6 +638,10 @@ extern "C"
         Uint64 visibility_brush_occluded;
         /** @brief Approximate triangles skipped by brush-world visibility culling. */
         Uint64 visibility_triangles_culled;
+        /** @brief Brush visibility-grid cells reused from a cached camera cell. */
+        Uint64 visibility_grid_cache_hits;
+        /** @brief Brush visibility-grid cells rebuilt for a new camera cell. */
+        Uint64 visibility_grid_cache_misses;
     } slayer3d_game_data_brush_diagnostics;
 
     /** @brief Runtime world model implementation kind. */

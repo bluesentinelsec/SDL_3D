@@ -677,6 +677,9 @@ instrumentation; reset them with
 derived from the generic render-context stats exposed by
 `slayer3d_get_render_stats()`, because brush worlds compile to static model
 meshes that use the same frustum culling path as other models.
+Visibility-grid diagnostics also expose cache hit/miss counters so scenes can
+confirm automatic occlusion is reusing the visible-cell set while the camera
+remains in the same coarse grid cell.
 
 Editor metadata attached to brush worlds, materials, brushes, and faces is
 loaded into the runtime descriptors returned by
@@ -2641,7 +2644,9 @@ Supported brush metrics are `brush.trace_count`,
 `brush.render_mesh_culled`, `brush.render_mesh_draws`, and
 `brush.render_triangles_submitted`, plus visibility counters
 `brush.visibility_brush_candidates`, `brush.visibility_brush_visible`,
-`brush.visibility_brush_occluded`, and `brush.visibility_triangles_culled`.
+`brush.visibility_brush_occluded`, `brush.visibility_triangles_culled`,
+`brush.visibility_grid_cache_hits`, and
+`brush.visibility_grid_cache_misses`.
 
 For editor-like tools and diagnostics, `ui.panels` and `ui.inspectors` provide
 reusable higher-level overlay widgets while still rendering through the normal

@@ -10282,6 +10282,8 @@ static bool ui_metric_name_valid(const char *metric)
         "brush.visibility_brush_visible",
         "brush.visibility_brush_occluded",
         "brush.visibility_triangles_culled",
+        "brush.visibility_grid_cache_hits",
+        "brush.visibility_grid_cache_misses",
     };
 
     for (size_t i = 0; i < SDL_arraysize(metrics); ++i)

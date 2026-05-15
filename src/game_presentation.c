@@ -2884,6 +2884,45 @@ static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_
     return brush_visibility_grid_mark_visible_los(world_runtime, local_camera, visible_cells);
 }
 
+static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
+                                                        slayer3d_game_data_brush_diagnostics *diagnostics)
+{
+    int start = -1;
+    if (world_runtime == NULL || world_runtime->visibility_grid_solid == NULL ||
+        world_runtime->visibility_grid_cell_count <= 0 ||
+        !brush_visibility_grid_cell(world_runtime, local_camera, &start) || start < 0 ||
+        world_runtime->visibility_grid_solid[start])
+    {
+        return NULL;
+    }
+
+    if (world_runtime->visibility_grid_visible_cache != NULL &&
+        world_runtime->visibility_grid_visible_cache_start == start)
+    {
+        if (diagnostics != NULL)
+            ++diagnostics->visibility_grid_cache_hits;
+        return world_runtime->visibility_grid_visible_cache;
+    }
+
+    if (diagnostics != NULL)
+        ++diagnostics->visibility_grid_cache_misses;
+    if (world_runtime->visibility_grid_visible_cache == NULL)
+    {
+        world_runtime->visibility_grid_visible_cache = (Uint8 *)SDL_calloc(
+            (size_t)world_runtime->visibility_grid_cell_count, sizeof(*world_runtime->visibility_grid_visible_cache));
+        if (world_runtime->visibility_grid_visible_cache == NULL)
+            return NULL;
+    }
+    SDL_memset(world_runtime->visibility_grid_visible_cache, 0,
+               (size_t)world_runtime->visibility_grid_cell_count *
+                   sizeof(*world_runtime->visibility_grid_visible_cache));
+    world_runtime->visibility_grid_visible_cache_start = -1;
+    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera, world_runtime->visibility_grid_visible_cache))
+        return NULL;
+    world_runtime->visibility_grid_visible_cache_start = start;
+    return world_runtime->visibility_grid_visible_cache;
+}
+
 static bool brush_visibility_forced_visible(const slayer3d_game_data_brush *brush)
 {
     return brush != NULL && brush->visibility == SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS;
@@ -2940,7 +2979,7 @@ static bool brush_visible_from_visibility_grid(const brush_world_runtime *world_
     return false;
 }
 
-static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime,
+static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
                                         const slayer3d_game_data_brush_world_instance *instance,
                                         const slayer3d_camera3d *camera, bool *brush_visible, int brush_count,
                                         int *out_occluded_count, slayer3d_game_data_runtime *mutable_runtime)
@@ -2953,17 +2992,11 @@ static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime
     {
         return false;
     }
-    Uint8 *visible_cells =
-        (Uint8 *)SDL_calloc((size_t)world_runtime->visibility_grid_cell_count, sizeof(*visible_cells));
+    const slayer3d_vec3 local_camera = slayer3d_vec3_sub(camera->position, instance->position);
+    const Uint8 *visible_cells =
+        brush_visibility_grid_visible_cells(world_runtime, local_camera, &mutable_runtime->brush_diagnostics);
     if (visible_cells == NULL)
         return false;
-
-    const slayer3d_vec3 local_camera = slayer3d_vec3_sub(camera->position, instance->position);
-    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera, visible_cells))
-    {
-        SDL_free(visible_cells);
-        return false;
-    }
 
     int occluded_count = 0;
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
@@ -2990,7 +3023,6 @@ static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime
             ++occluded_count;
         }
     }
-    SDL_free(visible_cells);
     if (out_occluded_count != NULL)
         *out_occluded_count = occluded_count;
     return true;
@@ -3005,7 +3037,9 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
         return false;
     if (!instance->visibility_occlusion_enabled || context->camera == NULL)
         return draw_brush_world_instance(userdata, instance);
-    const brush_world_runtime *world_runtime = find_brush_world_runtime(context->runtime, instance->world_name);
+    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
+    brush_world_runtime *world_runtime =
+        (brush_world_runtime *)find_brush_world_runtime(mutable_runtime, instance->world_name);
     if (world_runtime == NULL || world_runtime->brush_render_models == NULL || instance->world->brushes == NULL ||
         instance->world->brush_count <= 0)
     {
@@ -3021,7 +3055,6 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
         brush_visible[brush_index] = true;
 
-    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
     int occluded_count = 0;
     const bool used_visibility_grid = apply_brush_visibility_grid(
         world_runtime, instance, context->camera, brush_visible, brush_count, &occluded_count, mutable_runtime);

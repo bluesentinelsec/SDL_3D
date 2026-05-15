@@ -454,6 +454,8 @@ typedef struct brush_world_runtime
     int visibility_grid_dim_z;
     int visibility_grid_cell_count;
     Uint8 *visibility_grid_solid;
+    Uint8 *visibility_grid_visible_cache;
+    int visibility_grid_visible_cache_start;
     char *editor_source_path;
     Uint64 editor_revision;
     Uint64 editor_saved_revision;
