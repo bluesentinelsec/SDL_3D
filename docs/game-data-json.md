@@ -596,16 +596,22 @@ Scenes instantiate brush worlds through `world.brush_worlds`:
         "position": [0.0, 0.0, 0.0],
         "acceleration": true,
         "lighting": true,
-        "debug_wireframe": false
+        "debug_wireframe": false,
+        "visibility_occlusion": false
       }
     ]
   }
 }
 ```
 
-`acceleration_key`, `lighting_key`, and `debug_wireframe_key` may name
-scene-state booleans that override the authored defaults. Runtime and editor
-code should use
+`visibility_occlusion` is an opt-in CPU-side brush visibility pass. When a
+camera is available, the generic frame path tests each renderable brush against
+solid brush blockers and skips brush submodels that are fully hidden. The test
+is conservative: ambiguous brushes remain visible. Use it for indoor/high
+occlusion brush worlds where skipped triangles and material meshes outweigh the
+extra per-brush visibility checks. `acceleration_key`, `lighting_key`,
+`debug_wireframe_key`, and `visibility_occlusion_key` may name scene-state
+booleans that override the authored defaults. Runtime and editor code should use
 `slayer3d_game_data_get_brush_world()` and
 `slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
 Brush render meshes are available through `brush_world.render_model` and are
@@ -2591,7 +2597,9 @@ Supported brush metrics are `brush.trace_count`,
 `brush.bounds_reject_count`, `brush.collision_candidate_count`,
 `brush.hit_count`, `brush.render_mesh_submissions`,
 `brush.render_mesh_culled`, `brush.render_mesh_draws`, and
-`brush.render_triangles_submitted`.
+`brush.render_triangles_submitted`, plus visibility counters
+`brush.visibility_brush_candidates`, `brush.visibility_brush_visible`,
+`brush.visibility_brush_occluded`, and `brush.visibility_triangles_culled`.
 
 For editor-like tools and diagnostics, `ui.panels` and `ui.inspectors` provide
 reusable higher-level overlay widgets while still rendering through the normal

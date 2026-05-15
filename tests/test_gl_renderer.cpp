@@ -8,11 +8,19 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <string>
+
 extern "C"
 {
 #include "gl_renderer.h"
 #include "render_context_internal.h"
 #include "slayer3d/effects.h"
+#include "slayer3d/game.h"
+#include "slayer3d/game_data.h"
+#include "slayer3d/game_presentation.h"
 #include "slayer3d/level.h"
 #include "slayer3d/slayer3d.h"
 }
@@ -31,6 +39,23 @@ slayer3d_texture2d MakeTextureFromPixels(const Uint8 *pixels, int width, int hei
     EXPECT_TRUE(slayer3d_create_texture_from_image(&image, &texture));
     EXPECT_TRUE(slayer3d_set_texture_filter(&texture, SLAYER3D_TEXTURE_FILTER_NEAREST));
     return texture;
+}
+
+std::filesystem::path UniqueTempDir(const char *name)
+{
+    const auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    std::filesystem::path dir =
+        std::filesystem::temp_directory_path() / (std::string("slayer3d_") + name + "_" + std::to_string(now));
+    std::filesystem::create_directories(dir);
+    return dir;
+}
+
+void WriteText(const std::filesystem::path &path, const std::string &text)
+{
+    std::filesystem::create_directories(path.parent_path());
+    std::ofstream out(path);
+    ASSERT_TRUE(out.good()) << "failed to open " << path;
+    out << text;
 }
 
 } // namespace
@@ -285,6 +310,125 @@ TEST_F(GLRendererTest, StaticModelMeshesUseInstancedBackendDraws)
     EXPECT_EQ(stats.static_mesh_instanced_draw_calls, 1u);
     EXPECT_EQ(stats.static_mesh_instances_batched, 5u);
     EXPECT_EQ(stats.static_mesh_draw_calls_saved, 4u);
+}
+
+TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
+{
+    const std::filesystem::path dir = UniqueTempDir("brush_visibility_occlusion");
+    WriteText(dir / "scenes" / "play.scene.json",
+              R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [
+      { "world": "brush.visibility", "visibility_occlusion_key": "brush.visibility.enabled" }
+    ]
+  }
+})json");
+    WriteText(dir / "visibility.game.json",
+              R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Visibility Occlusion Test" },
+  "world": { "name": "world.visibility", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.visibility",
+      "materials": [
+        { "name": "mat.front", "albedo": [0.2, 0.8, 0.2, 1.0] },
+        { "name": "mat.blocker", "albedo": [0.8, 0.2, 0.2, 1.0] },
+        { "name": "mat.hidden", "albedo": [0.2, 0.2, 0.8, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.front",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance": -0.5 }, "material": "mat.front" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  1.5 }, "material": "mat.front" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  2.0 }, "material": "mat.front" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0.0 }, "material": "mat.front" },
+            { "plane": { "normal": [ 0,  0,  1], "distance": -1.0 }, "material": "mat.front" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  1.5 }, "material": "mat.front" }
+          ]
+        },
+        {
+          "name": "brush.blocker",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  3.0 }, "material": "mat.blocker" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  3.0 }, "material": "mat.blocker" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  4.0 }, "material": "mat.blocker" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  1.0 }, "material": "mat.blocker" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  0.2 }, "material": "mat.blocker" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0.0 }, "material": "mat.blocker" }
+          ]
+        },
+        {
+          "name": "brush.hidden",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1.0 }, "material": "mat.hidden" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  1.0 }, "material": "mat.hidden" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  2.0 }, "material": "mat.hidden" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0.0 }, "material": "mat.hidden" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  3.0 }, "material": "mat.hidden" },
+            { "plane": { "normal": [ 0,  0, -1], "distance": -2.0 }, "material": "mat.hidden" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "visibility.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_camera3d cam{};
+    cam.position = slayer3d_vec3_make(0.0f, 1.0f, -3.0f);
+    cam.target = slayer3d_vec3_make(0.0f, 1.0f, 4.0f);
+    cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 70.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
+    ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.45f, 0.45f, 0.45f));
+    slayer3d_reset_render_stats(ctx);
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    slayer3d_game_data_brush_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.render_mesh_submissions, 3u);
+    EXPECT_EQ(diagnostics.visibility_brush_candidates, 0u);
+
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "brush.visibility.enabled", true);
+    slayer3d_reset_render_stats(ctx);
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.visibility_brush_candidates, 3u);
+    EXPECT_EQ(diagnostics.visibility_brush_visible, 2u);
+    EXPECT_EQ(diagnostics.visibility_brush_occluded, 1u);
+    EXPECT_EQ(diagnostics.visibility_triangles_culled, 12u);
+    EXPECT_EQ(diagnostics.render_mesh_submissions, 2u);
+    EXPECT_EQ(diagnostics.render_triangles_submitted, 24u);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    std::filesystem::remove_all(dir);
 }
 
 TEST_F(GLRendererTest, DepthPrepassDisabledDoesNotReplayEligibleMeshes)

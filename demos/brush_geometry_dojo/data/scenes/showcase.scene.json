@@ -58,6 +58,7 @@
       "action.jump",
       "action.use",
       "action.camera.security.toggle",
+      "action.render.brush_visibility.toggle",
       "action.fire",
       "action.gun_tune.toggle",
       "action.smoke_tune.toggle",
@@ -173,7 +174,8 @@
         "position": [0.0, 0.0, 0.0],
         "acceleration": true,
         "lighting": true,
-        "debug_wireframe": false
+        "debug_wireframe": false,
+        "visibility_occlusion_key": "debug.render.brush_visibility.enabled"
       }
     ]
   },
@@ -416,6 +418,22 @@
         "scale": 0.48
       },
       {
+        "name": "ui.brush_geometry.brush_visibility_metrics",
+        "font": "font.brush_geometry.hud",
+        "format": "OCC %llu/%llu TRI %llu",
+        "bindings": [
+          { "type": "metric", "metric": "brush.visibility_brush_occluded" },
+          { "type": "metric", "metric": "brush.visibility_brush_candidates" },
+          { "type": "metric", "metric": "brush.visibility_triangles_culled" }
+        ],
+        "x": 0.985,
+        "y": 0.144,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
         "name": "ui.brush_geometry.light_selection_state",
         "font": "font.brush_geometry.hud",
         "format": "B LIGHT CULL %d",
@@ -423,7 +441,21 @@
           { "type": "scene_state", "key": "debug.render.per_object_lights.enabled", "default": true }
         ],
         "x": 0.985,
-        "y": 0.144,
+        "y": 0.172,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.brush_visibility_state",
+        "font": "font.brush_geometry.hud",
+        "format": "O BRUSH OCC %d",
+        "bindings": [
+          { "type": "scene_state", "key": "debug.render.brush_visibility.enabled", "default": false }
+        ],
+        "x": 0.985,
+        "y": 0.200,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],
@@ -439,7 +471,7 @@
           { "type": "metric", "metric": "perf.render_cpu_ms" }
         ],
         "x": 0.985,
-        "y": 0.172,
+        "y": 0.228,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],
@@ -454,7 +486,7 @@
           { "type": "metric", "metric": "render.depth_prepass_triangles_per_frame" }
         ],
         "x": 0.985,
-        "y": 0.200,
+        "y": 0.256,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],
@@ -469,7 +501,7 @@
           { "type": "metric", "metric": "render.depth_prepass_samples_per_frame" }
         ],
         "x": 0.985,
-        "y": 0.228,
+        "y": 0.284,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],
@@ -485,7 +517,7 @@
           { "type": "metric", "metric": "render.light_selection_ratio" }
         ],
         "x": 0.985,
-        "y": 0.256,
+        "y": 0.312,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],
