@@ -238,6 +238,7 @@ struct slayer3d_gl_context
     /* PBR uniform locations */
     GLint pbr_model_loc;
     GLint pbr_normal_matrix_loc;
+    GLint pbr_use_instancing_loc;
     GLint pbr_texture_loc;
     GLint pbr_has_texture_loc;
     GLint pbr_tint_loc;
@@ -285,6 +286,8 @@ struct slayer3d_gl_context
     GLuint lit_lightmap_uv_vbo;
     GLuint lit_color_vbo;
     GLuint lit_ebo;
+    GLuint instance_model_vbo;
+    GLuint instance_normal_vbo;
 
     /* Unlit streaming buffers */
     GLuint unlit_vao;
@@ -432,6 +435,13 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "layout(location = 2) in vec2 aTexCoord;\n"
                                  "layout(location = 3) in vec4 aColor;\n"
                                  "layout(location = 4) in vec2 aLightmapUV;\n"
+                                 "layout(location = 5) in vec4 aInstanceModel0;\n"
+                                 "layout(location = 6) in vec4 aInstanceModel1;\n"
+                                 "layout(location = 7) in vec4 aInstanceModel2;\n"
+                                 "layout(location = 8) in vec4 aInstanceModel3;\n"
+                                 "layout(location = 9) in vec3 aInstanceNormal0;\n"
+                                 "layout(location = 10) in vec3 aInstanceNormal1;\n"
+                                 "layout(location = 11) in vec3 aInstanceNormal2;\n"
                                  "\n"
                                  "#define MAX_LIGHTS 8\n"
                                  "struct Light {\n"
@@ -461,6 +471,7 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "\n"
                                  "uniform mat4 uModel;\n"
                                  "uniform mat3 uNormalMatrix;\n"
+                                 "uniform int uUseInstancing;\n"
                                  "\n"
                                  "out vec3 vWorldPos;\n"
                                  "out vec3 vWorldNormal;\n"
@@ -469,9 +480,13 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "out vec4 vColor;\n"
                                  "\n"
                                  "void main() {\n"
-                                 "    vec4 worldPos = uModel * vec4(aPosition, 1.0);\n"
+                                 "    mat4 model = (uUseInstancing != 0) ? mat4(aInstanceModel0, aInstanceModel1, "
+                                 "aInstanceModel2, aInstanceModel3) : uModel;\n"
+                                 "    mat3 normalMatrix = (uUseInstancing != 0) ? mat3(aInstanceNormal0, "
+                                 "aInstanceNormal1, aInstanceNormal2) : uNormalMatrix;\n"
+                                 "    vec4 worldPos = model * vec4(aPosition, 1.0);\n"
                                  "    vWorldPos = worldPos.xyz;\n"
-                                 "    vWorldNormal = normalize(uNormalMatrix * aNormal);\n"
+                                 "    vWorldNormal = normalize(normalMatrix * aNormal);\n"
                                  "    vTexCoord = aTexCoord;\n"
                                  "    vLightmapUV = aLightmapUV;\n"
                                  "    vColor = aColor;\n"
@@ -2634,6 +2649,258 @@ static void flush_scene_ubo_for_draw_entry(slayer3d_gl_context *ctx, const slaye
     gl->BindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->scene_ubo);
 }
 
+static void bind_builtin_pbr_entry(slayer3d_gl_context *ctx, const slayer3d_draw_entry *e, GLuint tex,
+                                   bool use_instancing)
+{
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    gl->UseProgram(ctx->pbr_program);
+    gl->UniformMatrix4fv(ctx->pbr_model_loc, 1, GL_FALSE, e->model_matrix);
+    gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
+    if (ctx->pbr_use_instancing_loc >= 0)
+        gl->Uniform1i(ctx->pbr_use_instancing_loc, use_instancing ? 1 : 0);
+    gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
+    gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
+    gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
+    gl->Uniform3f(ctx->pbr_emissive_loc, e->emissive[0], e->emissive[1], e->emissive[2]);
+    gl->Uniform1i(ctx->pbr_baked_light_mode_loc, e->baked_light_mode ? 1 : 0);
+
+    gl->ActiveTexture(GL_TEXTURE0);
+    gl->BindTexture(GL_TEXTURE_2D, tex);
+    gl->Uniform1i(ctx->pbr_texture_loc, 0);
+    gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
+    gl->ActiveTexture(GL_TEXTURE0 + 7);
+    gl->BindTexture(GL_TEXTURE_2D, e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+    gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
+    gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
+    gl->ActiveTexture(GL_TEXTURE0);
+
+    /* Shadow uniforms — always bind the texture array to prevent undefined
+     * sampler behavior on some drivers. */
+    gl->ActiveTexture(GL_TEXTURE0 + 1);
+    gl->BindTexture(GL_TEXTURE_2D_ARRAY, ctx->shadow_depth_tex);
+    gl->Uniform1i(ctx->pbr_shadow_map_loc, 1);
+    if (ctx->shadow_depth_tex && ctx->shadow_bias > 0.0f)
+    {
+        gl->UniformMatrix4fv(ctx->pbr_shadow_vp_loc, 1, GL_FALSE, ctx->shadow_light_vp);
+        gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
+        gl->Uniform1f(ctx->pbr_shadow_bias_loc, ctx->shadow_bias);
+        if (ctx->csm_fragment_enabled)
+        {
+            gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[0], 1, GL_FALSE, ctx->shadow_light_vp);
+            for (int c = 1; c < 4; c++)
+                gl->UniformMatrix4fv(ctx->pbr_csm_vp_loc[c], 1, GL_FALSE, ctx->csm_light_vp[c]);
+            gl->Uniform1fv(ctx->pbr_csm_splits_loc, 4, ctx->csm_split_depths);
+            gl->UniformMatrix4fv(ctx->pbr_view_matrix_loc, 1, GL_FALSE, e->view_matrix);
+            gl->Uniform1i(ctx->pbr_csm_enabled_loc, 1);
+        }
+        else
+        {
+            gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
+        }
+    }
+    else
+    {
+        gl->Uniform1i(ctx->pbr_shadow_enabled_loc, 0);
+        gl->Uniform1i(ctx->pbr_csm_enabled_loc, 0);
+    }
+    gl->ActiveTexture(GL_TEXTURE0);
+
+    for (int ps = 0; ps < SLAYER3D_MAX_POINT_SHADOWS; ps++)
+    {
+        gl->ActiveTexture(GL_TEXTURE0 + 2 + (GLenum)ps);
+        gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->point_shadow_cubemap[ps]);
+        gl->Uniform1i(ctx->pbr_point_shadow_map_loc[ps], 2 + ps);
+        if (ps < ctx->point_shadow_count)
+        {
+            const slayer3d_light *pl = &ctx->current_ctx->lights[ctx->point_shadow_light_index[ps]];
+            gl->Uniform3f(ctx->pbr_point_shadow_light_pos_loc[ps], pl->position.x, pl->position.y, pl->position.z);
+            gl->Uniform1f(ctx->pbr_point_shadow_far_loc[ps], ctx->point_shadow_far_plane[ps]);
+        }
+    }
+    gl->Uniform1i(ctx->pbr_point_shadow_count_loc, ctx->point_shadow_count);
+    gl->ActiveTexture(GL_TEXTURE0);
+
+    if (ctx->ibl_ready)
+    {
+        gl->ActiveTexture(GL_TEXTURE0 + 4);
+        gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
+        gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
+        gl->ActiveTexture(GL_TEXTURE0 + 5);
+        gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
+        gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
+        gl->ActiveTexture(GL_TEXTURE0 + 6);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
+        gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
+        gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 1);
+        gl->Uniform1f(ctx->pbr_max_reflection_lod_loc, 4.0f);
+        gl->ActiveTexture(GL_TEXTURE0);
+    }
+    else
+    {
+        gl->ActiveTexture(GL_TEXTURE0 + 4);
+        gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+        gl->Uniform1i(ctx->pbr_irradiance_map_loc, 4);
+        gl->ActiveTexture(GL_TEXTURE0 + 5);
+        gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->black_cubemap);
+        gl->Uniform1i(ctx->pbr_prefilter_map_loc, 5);
+        gl->ActiveTexture(GL_TEXTURE0 + 6);
+        gl->BindTexture(GL_TEXTURE_2D, ctx->black_texture);
+        gl->Uniform1i(ctx->pbr_brdf_lut_loc, 6);
+        gl->Uniform1i(ctx->pbr_ibl_enabled_loc, 0);
+        gl->ActiveTexture(GL_TEXTURE0);
+    }
+}
+
+static bool draw_entry_float4_equal(const float *a, const float *b)
+{
+    for (int i = 0; i < 4; ++i)
+    {
+        if (SDL_fabsf(a[i] - b[i]) > 0.000001f)
+            return false;
+    }
+    return true;
+}
+
+static bool draw_entry_float3_equal(const float *a, const float *b)
+{
+    for (int i = 0; i < 3; ++i)
+    {
+        if (SDL_fabsf(a[i] - b[i]) > 0.000001f)
+            return false;
+    }
+    return true;
+}
+
+static bool draw_entry_matrix_equal(const float *a, const float *b, int count)
+{
+    for (int i = 0; i < count; ++i)
+    {
+        if (SDL_fabsf(a[i] - b[i]) > 0.000001f)
+            return false;
+    }
+    return true;
+}
+
+static bool draw_entry_instancing_light_safe(const slayer3d_gl_context *ctx)
+{
+    const slayer3d_render_context *rc = ctx != NULL ? ctx->current_ctx : NULL;
+    if (rc == NULL)
+        return false;
+    const int limit = SDL_clamp(rc->per_object_light_limit, 0, SLAYER3D_MAX_SHADER_LIGHTS);
+    return !rc->per_object_light_selection_enabled || rc->light_count <= limit;
+}
+
+static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slayer3d_draw_entry *a,
+                                      const slayer3d_draw_entry *b)
+{
+    if (ctx == NULL || a == NULL || b == NULL || ctx->gl.DrawElementsInstanced == NULL ||
+        ctx->gl.DrawArraysInstanced == NULL || ctx->gl.VertexAttribDivisor == NULL)
+        return false;
+    if (!draw_entry_instancing_light_safe(ctx))
+        return false;
+    if (!a->lit || !b->lit || a->mesh_cache == NULL || a->mesh_cache != b->mesh_cache ||
+        a->primitive_mode != GL_TRIANGLES || b->primitive_mode != GL_TRIANGLES || a->tint[3] < 0.999f ||
+        b->tint[3] < 0.999f || a->shader_vertex_source != NULL || a->shader_fragment_source != NULL ||
+        b->shader_vertex_source != NULL || b->shader_fragment_source != NULL)
+        return false;
+    return a->texture == b->texture && a->lightmap_texture == b->lightmap_texture &&
+           a->has_lightmap == b->has_lightmap && a->baked_light_mode == b->baked_light_mode &&
+           a->vertex_count == b->vertex_count && a->index_count == b->index_count && a->positions == b->positions &&
+           a->normals == b->normals && a->uvs == b->uvs && a->lightmap_uvs == b->lightmap_uvs &&
+           a->colors == b->colors && a->indices == b->indices && draw_entry_float4_equal(a->tint, b->tint) &&
+           SDL_fabsf(a->metallic - b->metallic) <= 0.000001f && SDL_fabsf(a->roughness - b->roughness) <= 0.000001f &&
+           draw_entry_float3_equal(a->emissive, b->emissive) &&
+           draw_entry_matrix_equal(a->view_projection, b->view_projection, 16) &&
+           draw_entry_float3_equal(a->camera_pos, b->camera_pos);
+}
+
+static int draw_entry_instance_batch_count(const slayer3d_gl_context *ctx, int start)
+{
+    if (ctx == NULL || start < 0 || start >= ctx->draw_count)
+        return 0;
+    const slayer3d_draw_entry *first = &ctx->draw_list[start];
+    int count = 1;
+    while (start + count < ctx->draw_count && draw_entries_can_instance(ctx, first, &ctx->draw_list[start + count]))
+        ++count;
+    return count;
+}
+
+static bool upload_instance_attributes(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entries, int count)
+{
+    if (ctx == NULL || entries == NULL || count <= 0)
+        return false;
+    float *model_matrices = (float *)SDL_malloc((size_t)count * 16u * sizeof(float));
+    float *normal_matrices = (float *)SDL_malloc((size_t)count * 9u * sizeof(float));
+    if (model_matrices == NULL || normal_matrices == NULL)
+    {
+        SDL_free(model_matrices);
+        SDL_free(normal_matrices);
+        SDL_OutOfMemory();
+        return false;
+    }
+    for (int i = 0; i < count; ++i)
+    {
+        SDL_memcpy(&model_matrices[i * 16], entries[i].model_matrix, 16u * sizeof(float));
+        SDL_memcpy(&normal_matrices[i * 9], entries[i].normal_matrix, 9u * sizeof(float));
+    }
+
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->instance_model_vbo);
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)count * 16u * sizeof(float)), model_matrices, GL_DYNAMIC_DRAW);
+    for (GLuint column = 0; column < 4; ++column)
+    {
+        const GLuint attrib = 5u + column;
+        gl->EnableVertexAttribArray(attrib);
+        gl->VertexAttribPointer(attrib, 4, GL_FLOAT, GL_FALSE, 16 * (GLsizei)sizeof(float),
+                                (const void *)(size_t)(column * 4u * sizeof(float)));
+        gl->VertexAttribDivisor(attrib, 1u);
+    }
+
+    gl->BindBuffer(GL_ARRAY_BUFFER, ctx->instance_normal_vbo);
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)count * 9u * sizeof(float)), normal_matrices, GL_DYNAMIC_DRAW);
+    for (GLuint column = 0; column < 3; ++column)
+    {
+        const GLuint attrib = 9u + column;
+        gl->EnableVertexAttribArray(attrib);
+        gl->VertexAttribPointer(attrib, 3, GL_FLOAT, GL_FALSE, 9 * (GLsizei)sizeof(float),
+                                (const void *)(size_t)(column * 3u * sizeof(float)));
+        gl->VertexAttribDivisor(attrib, 1u);
+    }
+
+    SDL_free(model_matrices);
+    SDL_free(normal_matrices);
+    return true;
+}
+
+static bool draw_static_mesh_instance_batch(slayer3d_gl_context *ctx, int start, int count)
+{
+    if (ctx == NULL || count <= 1)
+        return false;
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    slayer3d_draw_entry *e = &ctx->draw_list[start];
+    GLuint tex = resolve_texture(ctx, e->texture);
+
+    flush_scene_ubo_for_draw_entry(ctx, e);
+    bind_builtin_pbr_entry(ctx, e, tex, true);
+    gl->BindVertexArray(e->mesh_cache->vao);
+    if (!upload_instance_attributes(ctx, e, count))
+        return false;
+
+    if (e->indices && e->index_count > 0)
+        gl->DrawElementsInstanced(e->primitive_mode, e->index_count, GL_UNSIGNED_INT, NULL, count);
+    else
+        gl->DrawArraysInstanced(e->primitive_mode, 0, e->vertex_count, count);
+
+    if (ctx->current_ctx != NULL)
+    {
+        ctx->current_ctx->stats.geometry_draw_calls += 1u;
+        ctx->current_ctx->stats.static_mesh_instanced_draw_calls += 1u;
+        ctx->current_ctx->stats.static_mesh_instances_batched += (Uint64)count;
+        ctx->current_ctx->stats.static_mesh_draw_calls_saved += (Uint64)(count - 1);
+    }
+    return true;
+}
+
 static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
 {
     slayer3d_gl_funcs *gl = &ctx->gl;
@@ -2645,6 +2912,13 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
 
         if (e->lit)
         {
+            const int instance_batch_count = draw_entry_instance_batch_count(ctx, i);
+            if (instance_batch_count > 1 && draw_static_mesh_instance_batch(ctx, i, instance_batch_count))
+            {
+                i += instance_batch_count - 1;
+                continue;
+            }
+
             flush_scene_ubo_for_draw_entry(ctx, e);
             slayer3d_custom_shader_cache_entry *custom =
                 (e->shader_fragment_source != NULL && e->shader_fragment_source[0] != '\0')
@@ -2783,6 +3057,8 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                 gl->UseProgram(ctx->pbr_program);
                 gl->UniformMatrix4fv(ctx->pbr_model_loc, 1, GL_FALSE, e->model_matrix);
                 gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
+                if (ctx->pbr_use_instancing_loc >= 0)
+                    gl->Uniform1i(ctx->pbr_use_instancing_loc, 0);
                 gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
                 gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
                 gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
@@ -2909,10 +3185,14 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                                    e->indices, GL_DYNAMIC_DRAW);
                 }
                 gl->DrawElements(e->primitive_mode, e->index_count, GL_UNSIGNED_INT, NULL);
+                if (ctx->current_ctx != NULL)
+                    ctx->current_ctx->stats.geometry_draw_calls += 1u;
             }
             else
             {
                 gl->DrawArrays(e->primitive_mode, 0, e->vertex_count);
+                if (ctx->current_ctx != NULL)
+                    ctx->current_ctx->stats.geometry_draw_calls += 1u;
             }
         }
         else
@@ -2971,10 +3251,14 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                                    e->indices, GL_DYNAMIC_DRAW);
                 }
                 gl->DrawElements(e->primitive_mode, e->index_count, GL_UNSIGNED_INT, NULL);
+                if (ctx->current_ctx != NULL)
+                    ctx->current_ctx->stats.geometry_draw_calls += 1u;
             }
             else
             {
                 gl->DrawArrays(e->primitive_mode, 0, e->vertex_count);
+                if (ctx->current_ctx != NULL)
+                    ctx->current_ctx->stats.geometry_draw_calls += 1u;
             }
         }
     }
@@ -3413,6 +3697,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     /* PBR uniform locations. */
     ctx->pbr_model_loc = gl->GetUniformLocation(ctx->pbr_program, "uModel");
     ctx->pbr_normal_matrix_loc = gl->GetUniformLocation(ctx->pbr_program, "uNormalMatrix");
+    ctx->pbr_use_instancing_loc = gl->GetUniformLocation(ctx->pbr_program, "uUseInstancing");
     ctx->pbr_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uTexture");
     ctx->pbr_has_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uHasTexture");
     ctx->pbr_lightmap_loc = gl->GetUniformLocation(ctx->pbr_program, "uLightmap");
@@ -3538,6 +3823,8 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     gl->VertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, 0, NULL);
 
     gl->GenBuffers(1, &ctx->lit_ebo);
+    gl->GenBuffers(1, &ctx->instance_model_vbo);
+    gl->GenBuffers(1, &ctx->instance_normal_vbo);
 
     /* ---- Unlit streaming VAO/VBOs ---- */
     gl->GenVertexArrays(1, &ctx->unlit_vao);
@@ -3817,9 +4104,9 @@ void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
             gl->DeleteQueries(1, &ctx->geometry_query);
     }
 
-    GLuint lit_bufs[] = {ctx->lit_position_vbo,    ctx->lit_normal_vbo, ctx->lit_uv_vbo,
-                         ctx->lit_lightmap_uv_vbo, ctx->lit_color_vbo,  ctx->lit_ebo};
-    gl->DeleteBuffers(6, lit_bufs);
+    GLuint lit_bufs[] = {ctx->lit_position_vbo, ctx->lit_normal_vbo, ctx->lit_uv_vbo,         ctx->lit_lightmap_uv_vbo,
+                         ctx->lit_color_vbo,    ctx->lit_ebo,        ctx->instance_model_vbo, ctx->instance_normal_vbo};
+    gl->DeleteBuffers(8, lit_bufs);
     if (ctx->lit_vao)
         gl->DeleteVertexArrays(1, &ctx->lit_vao);
 

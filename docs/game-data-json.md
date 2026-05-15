@@ -2555,6 +2555,10 @@ time covers the managed data-game draw path and intentionally excludes backend
 present/swap time. Renderer submission metrics are exposed as per-frame sampled
 averages: `render.model_mesh_submissions_per_frame`,
 `render.model_mesh_draws_per_frame`, `render.model_triangles_per_frame`,
+`render.geometry_draw_calls_per_frame`,
+`render.static_mesh_instanced_draw_calls_per_frame`,
+`render.static_mesh_instances_batched_per_frame`,
+`render.static_mesh_draw_calls_saved_per_frame`,
 `render.depth_prepass_draws_per_frame`, and
 `render.depth_prepass_triangles_per_frame`. Per-object light selection exposes
 `render.light_candidates_per_frame`, `render.lights_selected_per_frame`,
