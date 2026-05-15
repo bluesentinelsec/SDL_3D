@@ -12409,6 +12409,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
       "name": "brush.test",
       "units": "meters",
       "meters_per_unit": 1.0,
+      "visibility_cell_size": 1.5,
       "editor": {
         "stable_id": "brush_world.test.v1",
         "display_name": "Brush Test World",
@@ -12488,6 +12489,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_STREQ(world.name, "brush.test");
     EXPECT_STREQ(world.units, "meters");
     EXPECT_FLOAT_EQ(world.meters_per_unit, 1.0f);
+    EXPECT_FLOAT_EQ(world.visibility_cell_size, 1.5f);
     EXPECT_STREQ(world.editor.stable_id, "brush_world.test.v1");
     EXPECT_STREQ(world.editor.display_name, "Brush Test World");
     EXPECT_STREQ(world.editor.category, "tests/brush");
@@ -12649,6 +12651,31 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
 })json",
             nullptr,
             "brush content value is unknown",
+        },
+        {
+            "bad_visibility_cell_size",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "visibility_cell_size": 0.0,
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush world visibility_cell_size must be positive",
         },
         {
             "bad_emissive",

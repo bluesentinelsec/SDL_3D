@@ -502,6 +502,7 @@ in later slices.
       "name": "brush.keep_01",
       "units": "meters",
       "meters_per_unit": 1.0,
+      "visibility_cell_size": 2.0,
       "editor": {
         "stable_id": "brush_world.keep_01.v1",
         "display_name": "Keep 01",
@@ -561,6 +562,8 @@ Validation requires:
 
 - unique brush world names
 - `units` omitted or `"meters"`, with positive `meters_per_unit`
+- optional positive `visibility_cell_size`, default `2.0`; this controls the
+  coarse empty-space grid used by automatic brush visibility culling
 - optional `editor` metadata on brush worlds, materials, brushes, and faces;
   `editor.stable_id` values must be unique inside each brush world
 - non-empty `materials` with unique names
@@ -608,15 +611,17 @@ Scenes instantiate brush worlds through `world.brush_worlds`:
 }
 ```
 
-`visibility_occlusion` is an opt-in CPU-side brush visibility pass. When a
-camera is available, the generic frame path tests brushes authored with
-`visibility_cullable: true` against solid brush blockers and skips cullable
-brush submodels that are fully hidden. Structural floors, walls, ceilings, and
-large world-shell brushes should normally leave `visibility_cullable` unset so
-they cannot disappear from conservative trace ambiguity around shared edges,
-thin openings, or connected-room geometry. Use cullable brushes for discrete
-detail/prop-style brush geometry where skipped triangles and material meshes
-outweigh the extra per-brush visibility checks. `acceleration_key`,
+`visibility_occlusion` is an opt-in CPU-side brush visibility pass. At load
+time, the engine automatically compiles a conservative empty-space visibility
+grid from the brush world's solid/player-clip contents. When a camera is
+available, the generic frame path flood-fills visible empty cells from the
+camera and skips brush submodels that have no neighboring visible cell. This is
+intentionally fail-open: if the grid is missing, the camera is outside the grid,
+or a brush is ambiguous, the brush remains visible. Smaller
+`visibility_cell_size` values improve blocker precision and doorway behavior at
+higher memory/compile cost; larger values are cheaper but more conservative.
+Brushes authored with `visibility_cullable: true` still participate in the
+older trace-based fallback when no visibility grid is available. `acceleration_key`,
 `lighting_key`, `debug_wireframe_key`, and `visibility_occlusion_key` may name
 scene-state booleans that override the authored defaults. Runtime and editor
 code should use `slayer3d_game_data_get_brush_world()` and

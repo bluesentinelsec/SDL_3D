@@ -2533,6 +2533,181 @@ static bool brush_occluded_from_camera(const slayer3d_game_data_brush_world_inst
     return true;
 }
 
+static bool brush_visibility_grid_cell(const brush_world_runtime *world_runtime, slayer3d_vec3 point, int *out_index)
+{
+    if (out_index != NULL)
+        *out_index = -1;
+    if (world_runtime == NULL || world_runtime->visibility_grid_solid == NULL ||
+        world_runtime->visibility_grid_cell_count <= 0 || world_runtime->visibility_cell_size <= 0.0f)
+    {
+        return false;
+    }
+    const float cell_size = world_runtime->visibility_cell_size;
+    const int x = (int)SDL_floorf((point.x - world_runtime->visibility_grid_bounds.min.x) / cell_size);
+    const int y = (int)SDL_floorf((point.y - world_runtime->visibility_grid_bounds.min.y) / cell_size);
+    const int z = (int)SDL_floorf((point.z - world_runtime->visibility_grid_bounds.min.z) / cell_size);
+    if (x < 0 || y < 0 || z < 0 || x >= world_runtime->visibility_grid_dim_x ||
+        y >= world_runtime->visibility_grid_dim_y || z >= world_runtime->visibility_grid_dim_z)
+    {
+        return false;
+    }
+    const int index = x + y * world_runtime->visibility_grid_dim_x +
+                      z * world_runtime->visibility_grid_dim_x * world_runtime->visibility_grid_dim_y;
+    if (index < 0 || index >= world_runtime->visibility_grid_cell_count)
+        return false;
+    if (out_index != NULL)
+        *out_index = index;
+    return true;
+}
+
+static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
+                                               Uint8 *visible_cells)
+{
+    int start = -1;
+    if (world_runtime == NULL || visible_cells == NULL ||
+        !brush_visibility_grid_cell(world_runtime, local_camera, &start) || start < 0 ||
+        world_runtime->visibility_grid_solid[start])
+    {
+        return false;
+    }
+
+    int *queue = (int *)SDL_malloc(sizeof(*queue) * (size_t)world_runtime->visibility_grid_cell_count);
+    if (queue == NULL)
+        return false;
+
+    int head = 0;
+    int tail = 0;
+    visible_cells[start] = 1u;
+    queue[tail++] = start;
+    const int dim_x = world_runtime->visibility_grid_dim_x;
+    const int dim_y = world_runtime->visibility_grid_dim_y;
+    const int dim_z = world_runtime->visibility_grid_dim_z;
+    while (head < tail)
+    {
+        const int index = queue[head++];
+        const int z = index / (dim_x * dim_y);
+        const int rem = index - z * dim_x * dim_y;
+        const int y = rem / dim_x;
+        const int x = rem - y * dim_x;
+        const int neighbors[6][3] = {
+            {x - 1, y, z}, {x + 1, y, z}, {x, y - 1, z}, {x, y + 1, z}, {x, y, z - 1}, {x, y, z + 1},
+        };
+        for (int i = 0; i < 6; ++i)
+        {
+            const int nx = neighbors[i][0];
+            const int ny = neighbors[i][1];
+            const int nz = neighbors[i][2];
+            if (nx < 0 || ny < 0 || nz < 0 || nx >= dim_x || ny >= dim_y || nz >= dim_z)
+                continue;
+            const int neighbor = nx + ny * dim_x + nz * dim_x * dim_y;
+            if (visible_cells[neighbor] || world_runtime->visibility_grid_solid[neighbor])
+                continue;
+            visible_cells[neighbor] = 1u;
+            queue[tail++] = neighbor;
+        }
+    }
+    SDL_free(queue);
+    return true;
+}
+
+static bool brush_visible_from_visibility_grid(const brush_world_runtime *world_runtime,
+                                               const slayer3d_game_data_brush *brush, const Uint8 *visible_cells)
+{
+    if (world_runtime == NULL || brush == NULL || visible_cells == NULL || !brush->has_bounds ||
+        world_runtime->visibility_cell_size <= 0.0f)
+    {
+        return true;
+    }
+    const float cell_size = world_runtime->visibility_cell_size;
+    const float expand = cell_size * 0.5f;
+    const int min_x = SDL_max(
+        0, (int)SDL_floorf((brush->bounds.min.x - expand - world_runtime->visibility_grid_bounds.min.x) / cell_size));
+    const int min_y = SDL_max(
+        0, (int)SDL_floorf((brush->bounds.min.y - expand - world_runtime->visibility_grid_bounds.min.y) / cell_size));
+    const int min_z = SDL_max(
+        0, (int)SDL_floorf((brush->bounds.min.z - expand - world_runtime->visibility_grid_bounds.min.z) / cell_size));
+    const int max_x = SDL_min(
+        world_runtime->visibility_grid_dim_x - 1,
+        (int)SDL_floorf((brush->bounds.max.x + expand - world_runtime->visibility_grid_bounds.min.x) / cell_size));
+    const int max_y = SDL_min(
+        world_runtime->visibility_grid_dim_y - 1,
+        (int)SDL_floorf((brush->bounds.max.y + expand - world_runtime->visibility_grid_bounds.min.y) / cell_size));
+    const int max_z = SDL_min(
+        world_runtime->visibility_grid_dim_z - 1,
+        (int)SDL_floorf((brush->bounds.max.z + expand - world_runtime->visibility_grid_bounds.min.z) / cell_size));
+    if (min_x > max_x || min_y > max_y || min_z > max_z)
+        return true;
+
+    const int dim_x = world_runtime->visibility_grid_dim_x;
+    const int dim_y = world_runtime->visibility_grid_dim_y;
+    for (int z = min_z; z <= max_z; ++z)
+    {
+        for (int y = min_y; y <= max_y; ++y)
+        {
+            for (int x = min_x; x <= max_x; ++x)
+            {
+                const int index = x + y * dim_x + z * dim_x * dim_y;
+                if (index >= 0 && index < world_runtime->visibility_grid_cell_count && visible_cells[index])
+                    return true;
+            }
+        }
+    }
+    return false;
+}
+
+static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime,
+                                        const slayer3d_game_data_brush_world_instance *instance,
+                                        const slayer3d_camera3d *camera, bool *brush_visible, int brush_count,
+                                        int *out_occluded_count, slayer3d_game_data_runtime *mutable_runtime)
+{
+    if (out_occluded_count != NULL)
+        *out_occluded_count = 0;
+    if (world_runtime == NULL || instance == NULL || camera == NULL || brush_visible == NULL ||
+        mutable_runtime == NULL || world_runtime->visibility_grid_solid == NULL ||
+        world_runtime->visibility_grid_cell_count <= 0)
+    {
+        return false;
+    }
+    Uint8 *visible_cells =
+        (Uint8 *)SDL_calloc((size_t)world_runtime->visibility_grid_cell_count, sizeof(*visible_cells));
+    if (visible_cells == NULL)
+        return false;
+
+    const slayer3d_vec3 local_camera = slayer3d_vec3_sub(camera->position, instance->position);
+    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera, visible_cells))
+    {
+        SDL_free(visible_cells);
+        return false;
+    }
+
+    int occluded_count = 0;
+    for (int brush_index = 0; brush_index < brush_count; ++brush_index)
+    {
+        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];
+        const Uint64 triangles = brush_model_triangle_count(brush_model);
+        if (triangles == 0u)
+            continue;
+
+        ++mutable_runtime->brush_diagnostics.visibility_brush_candidates;
+        if (brush_visible_from_visibility_grid(world_runtime, brush, visible_cells))
+        {
+            ++mutable_runtime->brush_diagnostics.visibility_brush_visible;
+        }
+        else
+        {
+            ++mutable_runtime->brush_diagnostics.visibility_brush_occluded;
+            mutable_runtime->brush_diagnostics.visibility_triangles_culled += triangles;
+            brush_visible[brush_index] = false;
+            ++occluded_count;
+        }
+    }
+    SDL_free(visible_cells);
+    if (out_occluded_count != NULL)
+        *out_occluded_count = occluded_count;
+    return true;
+}
+
 static bool draw_brush_world_instance_with_visibility(void *userdata,
                                                       const slayer3d_game_data_brush_world_instance *instance)
 {
@@ -2560,7 +2735,9 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
 
     slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
     int occluded_count = 0;
-    for (int brush_index = 0; brush_index < brush_count; ++brush_index)
+    const bool used_visibility_grid = apply_brush_visibility_grid(
+        world_runtime, instance, context->camera, brush_visible, brush_count, &occluded_count, mutable_runtime);
+    for (int brush_index = 0; !used_visibility_grid && brush_index < brush_count; ++brush_index)
     {
         const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
         const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];

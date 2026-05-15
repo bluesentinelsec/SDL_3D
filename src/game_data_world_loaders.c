@@ -627,6 +627,7 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
         world->name = SDL_strdup(json_string(world_json, "name", ""));
         world->units = SDL_strdup(json_string(world_json, "units", "meters"));
         world->meters_per_unit = json_float(world_json, "meters_per_unit", 1.0f);
+        world->visibility_cell_size = json_float(world_json, "visibility_cell_size", 2.0f);
         world->material_count = (int)yyjson_arr_size(materials_json);
         world->brush_count = (int)yyjson_arr_size(brushes_json);
         if (world->name == NULL || world->units == NULL)
@@ -768,6 +769,12 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
                            world->name != NULL ? world->name : "<unnamed>");
                 return false;
             }
+        }
+        if (!compile_brush_world_visibility_grid(&runtime->brush_worlds[world_index]))
+        {
+            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' visibility grid",
+                       world->name != NULL ? world->name : "<unnamed>");
+            return false;
         }
     }
     return true;

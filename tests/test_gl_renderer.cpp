@@ -11,6 +11,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
 
 extern "C"
@@ -315,6 +316,30 @@ TEST_F(GLRendererTest, StaticModelMeshesUseInstancedBackendDraws)
 TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
 {
     const std::filesystem::path dir = UniqueTempDir("brush_visibility_occlusion");
+    auto box = [](const char *name, const char *material, float min_x, float max_x, float min_y, float max_y,
+                  float min_z, float max_z) {
+        std::ostringstream json;
+        json << R"json({
+          "name": ")json"
+             << name << R"json(",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance": )json"
+             << max_x << R"json( }, "material": ")json" << material << R"json(" },
+            { "plane": { "normal": [-1,  0,  0], "distance": )json"
+             << -min_x << R"json( }, "material": ")json" << material << R"json(" },
+            { "plane": { "normal": [ 0,  1,  0], "distance": )json"
+             << max_y << R"json( }, "material": ")json" << material << R"json(" },
+            { "plane": { "normal": [ 0, -1,  0], "distance": )json"
+             << -min_y << R"json( }, "material": ")json" << material << R"json(" },
+            { "plane": { "normal": [ 0,  0,  1], "distance": )json"
+             << max_z << R"json( }, "material": ")json" << material << R"json(" },
+            { "plane": { "normal": [ 0,  0, -1], "distance": )json"
+             << -min_z << R"json( }, "material": ")json" << material << R"json(" }
+          ]
+        })json";
+        return json.str();
+    };
     WriteText(dir / "scenes" / "play.scene.json",
               R"json({
   "schema": "slayer3d.scene.v0",
@@ -325,62 +350,30 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     ]
   }
 })json");
-    WriteText(dir / "visibility.game.json",
-              R"json({
+    std::ostringstream game_json;
+    game_json << R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Brush Visibility Occlusion Test" },
   "world": { "name": "world.visibility", "kind": "brush" },
   "brush_worlds": [
     {
       "name": "brush.visibility",
+      "visibility_cell_size": 0.5,
       "materials": [
         { "name": "mat.front", "albedo": [0.2, 0.8, 0.2, 1.0] },
         { "name": "mat.blocker", "albedo": [0.8, 0.2, 0.2, 1.0] },
         { "name": "mat.hidden", "albedo": [0.2, 0.2, 0.8, 1.0] }
       ],
       "brushes": [
-        {
-          "name": "brush.front",
-          "contents": "solid",
-          "faces": [
-            { "plane": { "normal": [ 1,  0,  0], "distance": -0.5 }, "material": "mat.front" },
-            { "plane": { "normal": [-1,  0,  0], "distance":  1.5 }, "material": "mat.front" },
-            { "plane": { "normal": [ 0,  1,  0], "distance":  2.0 }, "material": "mat.front" },
-            { "plane": { "normal": [ 0, -1,  0], "distance":  0.0 }, "material": "mat.front" },
-            { "plane": { "normal": [ 0,  0,  1], "distance": -1.0 }, "material": "mat.front" },
-            { "plane": { "normal": [ 0,  0, -1], "distance":  1.5 }, "material": "mat.front" }
-          ]
-        },
-        {
-          "name": "brush.blocker",
-          "contents": "solid",
-          "faces": [
-            { "plane": { "normal": [ 1,  0,  0], "distance":  3.0 }, "material": "mat.blocker" },
-            { "plane": { "normal": [-1,  0,  0], "distance":  3.0 }, "material": "mat.blocker" },
-            { "plane": { "normal": [ 0,  1,  0], "distance":  4.0 }, "material": "mat.blocker" },
-            { "plane": { "normal": [ 0, -1,  0], "distance":  1.0 }, "material": "mat.blocker" },
-            { "plane": { "normal": [ 0,  0,  1], "distance":  0.2 }, "material": "mat.blocker" },
-            { "plane": { "normal": [ 0,  0, -1], "distance":  0.0 }, "material": "mat.blocker" }
-          ]
-        },
-        {
-          "name": "brush.hidden",
-          "contents": "solid",
-          "visibility_cullable": true,
-          "faces": [
-            { "plane": { "normal": [ 1,  0,  0], "distance":  1.0 }, "material": "mat.hidden" },
-            { "plane": { "normal": [-1,  0,  0], "distance":  1.0 }, "material": "mat.hidden" },
-            { "plane": { "normal": [ 0,  1,  0], "distance":  2.0 }, "material": "mat.hidden" },
-            { "plane": { "normal": [ 0, -1,  0], "distance":  0.0 }, "material": "mat.hidden" },
-            { "plane": { "normal": [ 0,  0,  1], "distance":  3.0 }, "material": "mat.hidden" },
-            { "plane": { "normal": [ 0,  0, -1], "distance": -2.0 }, "material": "mat.hidden" }
-          ]
-        }
+)json" << box("brush.front_marker", "mat.front", -0.75f, 0.75f, 0.5f, 1.5f, -2.5f, -2.0f)
+              << "," << box("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f) << ","
+              << box("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f) << R"json(
       ]
     }
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
-})json");
+})json";
+    WriteText(dir / "visibility.game.json", game_json.str());
 
     slayer3d_game_session *session = nullptr;
     ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
@@ -391,7 +384,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
         << error;
 
     slayer3d_camera3d cam{};
-    cam.position = slayer3d_vec3_make(0.0f, 1.0f, -3.0f);
+    cam.position = slayer3d_vec3_make(0.0f, 1.0f, -2.75f);
     cam.target = slayer3d_vec3_make(0.0f, 1.0f, 4.0f);
     cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
     cam.fovy = 70.0f;
@@ -420,10 +413,10 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
-    EXPECT_EQ(diagnostics.visibility_brush_candidates, 1u);
-    EXPECT_EQ(diagnostics.visibility_brush_visible, 0u);
-    EXPECT_EQ(diagnostics.visibility_brush_occluded, 1u);
-    EXPECT_EQ(diagnostics.visibility_triangles_culled, 12u);
+    EXPECT_EQ(diagnostics.visibility_brush_candidates, 3u);
+    EXPECT_LT(diagnostics.visibility_brush_visible, diagnostics.visibility_brush_candidates);
+    EXPECT_GE(diagnostics.visibility_brush_occluded, 1u);
+    EXPECT_GE(diagnostics.visibility_triangles_culled, 12u);
     EXPECT_EQ(diagnostics.render_mesh_submissions, 2u);
     EXPECT_EQ(diagnostics.render_triangles_submitted, 24u);
 

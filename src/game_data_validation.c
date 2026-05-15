@@ -5389,6 +5389,13 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, val
             ok = validation_error(ctx, world_path, "brush world meters_per_unit must be positive");
             goto done;
         }
+        yyjson_val *visibility_cell_size = obj_get(world, "visibility_cell_size");
+        if (visibility_cell_size != NULL &&
+            (!yyjson_is_num(visibility_cell_size) || yyjson_get_num(visibility_cell_size) <= 0.0))
+        {
+            ok = validation_error(ctx, world_path, "brush world visibility_cell_size must be positive");
+            goto done;
+        }
         {
             char editor_path[PATH_BUFFER_SIZE];
             format_path(editor_path, sizeof(editor_path), "%s.editor", world_path);

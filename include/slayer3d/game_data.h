@@ -490,6 +490,8 @@ extern "C"
         const char *units;
         /** @brief Conversion factor from authored units to meters. */
         float meters_per_unit;
+        /** @brief Positive cell size for automatic visibility culling, in local world units. */
+        float visibility_cell_size;
         /** @brief Runtime material palette for brush faces. */
         const slayer3d_game_data_brush_material *materials;
         /** @brief Number of entries in @p materials. */
