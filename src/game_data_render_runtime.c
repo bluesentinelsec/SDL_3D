@@ -1781,6 +1781,8 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
         out_settings->bloom_enabled = true;
         out_settings->ssao_enabled = true;
         out_settings->depth_prepass_enabled = false;
+        out_settings->per_object_light_selection_enabled = false;
+        out_settings->per_object_light_limit = SLAYER3D_MAX_SHADER_LIGHTS;
         out_settings->performance_queries_enabled = false;
         out_settings->tonemap = SLAYER3D_TONEMAP_ACES;
     }
@@ -1801,6 +1803,14 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
     out_settings->depth_prepass_enabled =
         scene_state_bool(runtime, json_string(render, "depth_prepass_key", NULL),
                          json_bool(render, "depth_prepass", out_settings->depth_prepass_enabled));
+    out_settings->per_object_light_selection_enabled = scene_state_bool(
+        runtime, json_string(render, "per_object_light_selection_key", NULL),
+        json_bool(render, "per_object_light_selection", out_settings->per_object_light_selection_enabled));
+    out_settings->per_object_light_limit =
+        scene_state_int(runtime, json_string(render, "per_object_light_limit_key", NULL),
+                        json_int(render, "per_object_light_limit", out_settings->per_object_light_limit));
+    out_settings->per_object_light_limit =
+        SDL_clamp(out_settings->per_object_light_limit, 0, SLAYER3D_MAX_SHADER_LIGHTS);
     out_settings->performance_queries_enabled =
         scene_state_bool(runtime, json_string(render, "performance_queries_key", NULL),
                          json_bool(render, "performance_queries", out_settings->performance_queries_enabled));

@@ -15,7 +15,8 @@ extern "C"
 
     struct slayer3d_mesh;
 
-#define SLAYER3D_MAX_LIGHTS 8
+#define SLAYER3D_MAX_LIGHTS 64
+#define SLAYER3D_MAX_SHADER_LIGHTS 8
 
     /* ============================================================== */
     /* Shading modes                                                  */
@@ -62,7 +63,9 @@ extern "C"
     } slayer3d_light;
 
     /*
-     * Add a light to the scene. Up to SLAYER3D_MAX_LIGHTS may be active.
+     * Add a light to the scene candidate set. Up to SLAYER3D_MAX_LIGHTS may be
+     * active; capable backends upload at most SLAYER3D_MAX_SHADER_LIGHTS to one
+     * draw unless per-object light selection lowers that cap further.
      * Returns false if the light list is full or context is NULL.
      */
     bool slayer3d_add_light(slayer3d_render_context *context, const slayer3d_light *light);

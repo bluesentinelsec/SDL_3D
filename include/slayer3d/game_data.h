@@ -953,6 +953,14 @@ extern "C"
         float render_depth_prepass_samples_per_frame;
         /** @brief Sampled main-geometry depth-passing samples per frame when performance queries are enabled. */
         float render_geometry_samples_per_frame;
+        /** @brief Sampled candidate lights considered by lit draws per frame. */
+        float render_light_candidates_per_frame;
+        /** @brief Sampled lights selected and uploaded by lit draws per frame. */
+        float render_lights_selected_per_frame;
+        /** @brief Sampled lit draws that performed per-object light selection per frame. */
+        float render_light_selection_draws_per_frame;
+        /** @brief Ratio of selected lights to candidate lights in the current metrics window. */
+        float render_light_selection_ratio;
     } slayer3d_game_data_ui_metrics;
 
     /** @brief Optional render evaluation inputs for dynamic visual effects. */
@@ -1161,6 +1169,10 @@ extern "C"
         bool ssao_enabled;
         /** @brief Whether the GL backend should run an opaque depth pre-pass before lit geometry. */
         bool depth_prepass_enabled;
+        /** @brief Whether lit draws should select only their most relevant lights from the scene candidate set. */
+        bool per_object_light_selection_enabled;
+        /** @brief Maximum lights uploaded to the shader for one lit draw. */
+        int per_object_light_limit;
         /** @brief Whether capable backends should collect GPU sample-count diagnostics. */
         bool performance_queries_enabled;
         /** @brief Tonemap operator for lit rendering. */

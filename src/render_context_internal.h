@@ -64,6 +64,8 @@ struct slayer3d_render_context
     bool point_shadows_enabled;
     bool depth_prepass_enabled;
     bool render_sample_queries_enabled;
+    bool per_object_light_selection_enabled;
+    int per_object_light_limit;
     bool depth_prepass_scope_enabled;
 
     /* Z-fighting detection callback. */

@@ -718,6 +718,14 @@ static bool read_performance_metric(const char *metric, const slayer3d_game_data
         out_value->as_float = metrics != NULL ? metrics->render_depth_prepass_samples_per_frame : 0.0f;
     else if (SDL_strcmp(metric, "render.geometry_samples_per_frame") == 0)
         out_value->as_float = metrics != NULL ? metrics->render_geometry_samples_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.light_candidates_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_light_candidates_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.lights_selected_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_lights_selected_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.light_selection_draws_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_light_selection_draws_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.light_selection_ratio") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_light_selection_ratio : 0.0f;
     else
         return false;
 

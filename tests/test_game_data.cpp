@@ -5092,6 +5092,34 @@ TEST(GameDataRuntime, FrameStateSamplesDataDrivenPerformanceMetrics)
     EXPECT_NEAR(state.metrics.render_cpu_ms, 4.0f, 0.0001f);
 }
 
+TEST(GameDataValidation, RejectsInvalidRenderLightSelectionSettings)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_render_light_selection");
+    write_text(dir / "bad_render.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Render Settings", "id": "test.bad_render_settings", "version": "0.1.0" },
+  "world": { "name": "world.bad_render_settings", "kind": "fixed_screen" },
+  "render": {
+    "per_object_light_selection": true,
+    "per_object_light_limit": 99
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_render.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("per_object_light_limit"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataValidation, RejectsInvalidUiTooling)
 {
     const std::filesystem::path dir = unique_test_dir("ui_tooling_validation");
@@ -7851,6 +7879,14 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     slayer3d_game_data_render_settings render_settings{};
     ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
     EXPECT_TRUE(render_settings.depth_prepass_enabled);
+    EXPECT_TRUE(render_settings.per_object_light_selection_enabled);
+    EXPECT_EQ(render_settings.per_object_light_limit, 4);
+    const int light_selection_toggle_signal =
+        slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.render.light_selection.toggle");
+    ASSERT_GE(light_selection_toggle_signal, 0);
+    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), light_selection_toggle_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_FALSE(render_settings.per_object_light_selection_enabled);
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.brush_geometry.showcase"));
     slayer3d_game_data_scene_skybox skybox{};

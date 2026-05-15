@@ -334,6 +334,8 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
     context->point_shadows_enabled = true;
     context->depth_prepass_enabled = false;
     context->render_sample_queries_enabled = false;
+    context->per_object_light_selection_enabled = false;
+    context->per_object_light_limit = SLAYER3D_MAX_SHADER_LIGHTS;
     context->fog.mode = SLAYER3D_FOG_NONE;
     context->tonemap_mode = SLAYER3D_TONEMAP_NONE;
     SDL_memset(context->shadow_depth, 0, sizeof(context->shadow_depth));
@@ -466,6 +468,36 @@ bool slayer3d_set_render_sample_queries_enabled(slayer3d_render_context *context
 bool slayer3d_render_sample_queries_enabled(const slayer3d_render_context *context)
 {
     return context != NULL && context->render_sample_queries_enabled;
+}
+
+bool slayer3d_set_per_object_light_selection_enabled(slayer3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->per_object_light_selection_enabled = enabled;
+    return true;
+}
+
+bool slayer3d_per_object_light_selection_enabled(const slayer3d_render_context *context)
+{
+    return context != NULL && context->per_object_light_selection_enabled;
+}
+
+bool slayer3d_set_per_object_light_limit(slayer3d_render_context *context, int limit)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->per_object_light_limit = SDL_clamp(limit, 0, SLAYER3D_MAX_SHADER_LIGHTS);
+    return true;
+}
+
+int slayer3d_per_object_light_limit(const slayer3d_render_context *context)
+{
+    return context != NULL ? context->per_object_light_limit : 0;
 }
 
 bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color)

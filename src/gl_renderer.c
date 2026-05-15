@@ -59,7 +59,7 @@ typedef struct slayer3d_scene_ubo_data
         float inner_cutoff;
         float outer_cutoff;
         float _pad3;
-    } lights[8];
+    } lights[SLAYER3D_MAX_SHADER_LIGHTS];
     int fog_mode;
     float fog_start;
     float fog_end;
@@ -135,6 +135,9 @@ typedef struct slayer3d_draw_entry
     float mvp[16];
     bool owns_arrays;
     bool depth_prepass_eligible;
+    bool bounds_valid;
+    slayer3d_vec3 bounds_center;
+    float bounds_radius;
     struct slayer3d_gl_mesh_cache_entry *mesh_cache;
 } slayer3d_draw_entry;
 
@@ -2463,6 +2466,122 @@ static void camera_position_from_view_matrix(const slayer3d_mat4 *view, float ou
     out_position[2] = -(view->m[8] * view->m[12] + view->m[9] * view->m[13] + view->m[10] * view->m[14]);
 }
 
+static slayer3d_vec3 transform_point3(const float *m, slayer3d_vec3 p)
+{
+    return slayer3d_vec3_make(m[0] * p.x + m[4] * p.y + m[8] * p.z + m[12],
+                              m[1] * p.x + m[5] * p.y + m[9] * p.z + m[13],
+                              m[2] * p.x + m[6] * p.y + m[10] * p.z + m[14]);
+}
+
+static void draw_entry_compute_bounds(slayer3d_draw_entry *entry)
+{
+    if (entry == NULL || entry->positions == NULL || entry->vertex_count <= 0)
+        return;
+
+    slayer3d_vec3 minv = transform_point3(
+        entry->model_matrix, slayer3d_vec3_make(entry->positions[0], entry->positions[1], entry->positions[2]));
+    slayer3d_vec3 maxv = minv;
+    for (int i = 1; i < entry->vertex_count; ++i)
+    {
+        const size_t offset = (size_t)i * 3U;
+        const slayer3d_vec3 point = transform_point3(
+            entry->model_matrix,
+            slayer3d_vec3_make(entry->positions[offset], entry->positions[offset + 1U], entry->positions[offset + 2U]));
+        minv.x = SDL_min(minv.x, point.x);
+        minv.y = SDL_min(minv.y, point.y);
+        minv.z = SDL_min(minv.z, point.z);
+        maxv.x = SDL_max(maxv.x, point.x);
+        maxv.y = SDL_max(maxv.y, point.y);
+        maxv.z = SDL_max(maxv.z, point.z);
+    }
+
+    entry->bounds_center = slayer3d_vec3_scale(slayer3d_vec3_add(minv, maxv), 0.5f);
+    entry->bounds_radius = 0.0f;
+    for (int i = 0; i < entry->vertex_count; ++i)
+    {
+        const size_t offset = (size_t)i * 3U;
+        const slayer3d_vec3 point = transform_point3(
+            entry->model_matrix,
+            slayer3d_vec3_make(entry->positions[offset], entry->positions[offset + 1U], entry->positions[offset + 2U]));
+        entry->bounds_radius =
+            SDL_max(entry->bounds_radius, slayer3d_vec3_length(slayer3d_vec3_sub(point, entry->bounds_center)));
+    }
+    entry->bounds_valid = true;
+}
+
+static float light_selection_score(const slayer3d_light *light, const slayer3d_draw_entry *entry, bool *out_relevant)
+{
+    if (out_relevant != NULL)
+        *out_relevant = false;
+    if (light == NULL)
+        return -1.0f;
+    if (light->type == SLAYER3D_LIGHT_DIRECTIONAL)
+    {
+        if (out_relevant != NULL)
+            *out_relevant = true;
+        return 1000000.0f + SDL_max(light->intensity, 0.0f);
+    }
+
+    const slayer3d_vec3 center =
+        (entry != NULL && entry->bounds_valid) ? entry->bounds_center : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const float radius = (entry != NULL && entry->bounds_valid) ? entry->bounds_radius : 0.0f;
+    const float distance = slayer3d_vec3_length(slayer3d_vec3_sub(light->position, center));
+    const float range = light->range > 0.0f ? light->range : 0.0f;
+    if (range > 0.0f && distance > range + radius)
+        return -1.0f;
+
+    const float distance_weight =
+        range > 0.0f ? SDL_clamp(1.0f - distance / (range + radius + 0.0001f), 0.0f, 1.0f) : 1.0f / (1.0f + distance);
+    if (out_relevant != NULL)
+        *out_relevant = true;
+    return SDL_max(light->intensity, 0.0f) * SDL_max(distance_weight, 0.0001f);
+}
+
+static int select_lights_for_draw_entry(slayer3d_render_context *rc, const slayer3d_draw_entry *entry,
+                                        const slayer3d_light **out_lights, int out_capacity)
+{
+    if (rc == NULL || out_lights == NULL || out_capacity <= 0)
+        return 0;
+
+    const int capacity = SDL_clamp(rc->per_object_light_limit, 0, SDL_min(out_capacity, SLAYER3D_MAX_SHADER_LIGHTS));
+    if (capacity <= 0)
+        return 0;
+
+    rc->stats.light_selection_draws += 1u;
+    rc->stats.light_candidates += (Uint64)SDL_max(rc->light_count, 0);
+
+    int selected_count = 0;
+    float scores[SLAYER3D_MAX_SHADER_LIGHTS] = {0.0f};
+    for (int i = 0; i < rc->light_count; ++i)
+    {
+        bool relevant = true;
+        const float score = rc->per_object_light_selection_enabled
+                                ? light_selection_score(&rc->lights[i], entry, &relevant)
+                                : (float)(SLAYER3D_MAX_LIGHTS - i);
+        if (!relevant || score < 0.0f)
+            continue;
+
+        int insert = selected_count;
+        while (insert > 0 && score > scores[insert - 1])
+            --insert;
+        if (insert >= capacity)
+            continue;
+
+        if (selected_count < capacity)
+            ++selected_count;
+        for (int move = selected_count - 1; move > insert; --move)
+        {
+            out_lights[move] = out_lights[move - 1];
+            scores[move] = scores[move - 1];
+        }
+        out_lights[insert] = &rc->lights[i];
+        scores[insert] = score;
+    }
+
+    rc->stats.lights_selected += (Uint64)selected_count;
+    return selected_count;
+}
+
 static void flush_scene_ubo_for_draw_entry(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entry)
 {
     slayer3d_render_context *rc = ctx->current_ctx;
@@ -2478,13 +2597,12 @@ static void flush_scene_ubo_for_draw_entry(slayer3d_gl_context *ctx, const slaye
     ubo.ambient[1] = rc->ambient[1];
     ubo.ambient[2] = rc->ambient[2];
 
-    int lc = rc->light_count;
-    if (lc > 8)
-        lc = 8;
+    const slayer3d_light *selected_lights[SLAYER3D_MAX_SHADER_LIGHTS] = {0};
+    int lc = select_lights_for_draw_entry(rc, entry, selected_lights, SLAYER3D_MAX_SHADER_LIGHTS);
     ubo.light_count = lc;
     for (int i = 0; i < lc; i++)
     {
-        const slayer3d_light *l = &rc->lights[i];
+        const slayer3d_light *l = selected_lights[i];
         ubo.lights[i].type = (int)l->type;
         ubo.lights[i].position[0] = l->position.x;
         ubo.lights[i].position[1] = l->position.y;
@@ -2948,8 +3066,8 @@ static void flush_scene_ubo(slayer3d_gl_context *ctx)
     ubo.ambient[2] = rc->ambient[2];
 
     int lc = rc->light_count;
-    if (lc > 8)
-        lc = 8;
+    if (lc > SLAYER3D_MAX_SHADER_LIGHTS)
+        lc = SLAYER3D_MAX_SHADER_LIGHTS;
     ubo.light_count = lc;
     for (int i = 0; i < lc; i++)
     {
@@ -3891,6 +4009,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
         e->lightmap_uvs = params->lightmap_uvs;
         e->colors = colors;
         e->indices = params->indices;
+        draw_entry_compute_bounds(e);
         e->mesh_cache =
             mesh_cache_lookup_or_create(ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs, e->lightmap_uvs,
                                         e->colors, e->indices, e->vertex_count, e->index_count, e->has_lightmap);
@@ -3903,6 +4022,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     e->lightmap_uvs = copy_floats(params->lightmap_uvs, (size_t)params->vertex_count * 2);
     e->colors = copy_floats(colors, (size_t)params->vertex_count * 4);
     e->indices = copy_indices(params->indices, (size_t)e->index_count);
+    draw_entry_compute_bounds(e);
 
     /* check_z_fighting(ctx, e); — disabled: triggers on authored model geometry */
     (void)check_z_fighting;

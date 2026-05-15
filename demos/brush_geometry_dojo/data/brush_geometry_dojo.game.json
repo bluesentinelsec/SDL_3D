@@ -29,7 +29,7 @@
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",
-    "window": { "renderer": "opengl", "vsync": true },
+    "window": { "renderer": "opengl", "vsync": false },
     "quit": { "action": "action.exit" },
     "input_policy": { "global_actions": ["action.exit"] }
   },
@@ -91,6 +91,9 @@
     "lighting": true,
     "depth_prepass": true,
     "depth_prepass_key": "debug.render.depth_prepass.enabled",
+    "per_object_light_selection": true,
+    "per_object_light_selection_key": "debug.render.per_object_lights.enabled",
+    "per_object_light_limit": 4,
     "performance_queries": true,
     "bloom": false,
     "ssao": false,

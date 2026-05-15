@@ -161,31 +161,6 @@ static NET_DatagramSocket *slayer3d_network_create_datagram_socket(Uint16 port, 
 #endif
 
 #if SLAYER3D_NETWORKING_ENABLED
-static NET_DatagramSocket *slayer3d_network_create_datagram_socket(Uint16 port, bool allow_broadcast)
-{
-    SDL_PropertiesID props = 0;
-    NET_DatagramSocket *socket = NULL;
-    if (allow_broadcast)
-    {
-        props = SDL_CreateProperties();
-        if (props != 0 && SDL_SetBooleanProperty(props, NET_PROP_DATAGRAM_SOCKET_ALLOW_BROADCAST_BOOLEAN, true))
-        {
-            socket = NET_CreateDatagramSocket(NULL, port, props);
-            if (socket == NULL)
-            {
-                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
-                            "SLAYER3D broadcast socket create failed, retrying without broadcast: %s", SDL_GetError());
-            }
-        }
-        if (props != 0)
-            SDL_DestroyProperties(props);
-    }
-
-    return socket != NULL ? socket : NET_CreateDatagramSocket(NULL, port, 0);
-}
-#endif
-
-#if SLAYER3D_NETWORKING_ENABLED
 static void slayer3d_network_set_status(slayer3d_network_session *session, slayer3d_network_state state,
                                         const char *status)
 {

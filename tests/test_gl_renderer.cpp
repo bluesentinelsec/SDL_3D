@@ -450,6 +450,147 @@ TEST_F(GLRendererTest, AmbientOnlyPhongModelUsesLitPath)
     EXPECT_LT(px[2], 220);
 }
 
+TEST_F(GLRendererTest, PerObjectLightSelectionCapsShaderLightsPerDraw)
+{
+    ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
+    ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.05f, 0.05f, 0.05f));
+    ASSERT_TRUE(slayer3d_set_per_object_light_selection_enabled(ctx, true));
+    ASSERT_TRUE(slayer3d_set_per_object_light_limit(ctx, 4));
+
+    for (int i = 0; i < SLAYER3D_MAX_LIGHTS; ++i)
+    {
+        slayer3d_light light = {};
+        light.type = SLAYER3D_LIGHT_POINT;
+        light.position = slayer3d_vec3_make((float)(i % 8) - 3.5f, 2.0f, 2.0f + (float)(i / 8));
+        light.color[0] = 1.0f;
+        light.color[1] = 1.0f;
+        light.color[2] = 1.0f;
+        light.intensity = 2.0f;
+        light.range = 100.0f;
+        ASSERT_TRUE(slayer3d_add_light(ctx, &light));
+    }
+
+    float positions[] = {
+        -0.5f, -0.5f, 0.0f, 0.5f, -0.5f, 0.0f, 0.5f, 0.5f, 0.0f, -0.5f, 0.5f, 0.0f,
+    };
+    float normals[] = {
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+    };
+    unsigned int indices[] = {0, 1, 2, 0, 2, 3};
+    slayer3d_mesh mesh = {};
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 6;
+    mesh.material_index = -1;
+    slayer3d_model model = {};
+    model.meshes = &mesh;
+    model.mesh_count = 1;
+
+    slayer3d_camera3d cam;
+    cam.position = slayer3d_vec3_make(0, 0, 5);
+    cam.target = slayer3d_vec3_make(0, 0, 0);
+    cam.up = slayer3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    slayer3d_reset_render_stats(ctx);
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(-1.2f, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0.0f, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(1.2f, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    EXPECT_GT(px[0] + px[1] + px[2], 20);
+
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.light_selection_draws, 3u);
+    EXPECT_EQ(stats.light_candidates, (Uint64)SLAYER3D_MAX_LIGHTS * 3u);
+    EXPECT_EQ(stats.lights_selected, 12u);
+}
+
+TEST_F(GLRendererTest, PerObjectLightSelectionChoosesRelevantLocalLight)
+{
+    ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
+    ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.0f, 0.0f, 0.0f));
+    ASSERT_TRUE(slayer3d_set_per_object_light_selection_enabled(ctx, true));
+    ASSERT_TRUE(slayer3d_set_per_object_light_limit(ctx, 1));
+
+    for (int i = 0; i < SLAYER3D_MAX_SHADER_LIGHTS; ++i)
+    {
+        slayer3d_light light = {};
+        light.type = SLAYER3D_LIGHT_POINT;
+        light.position = slayer3d_vec3_make(30.0f + (float)i, 0.0f, 2.0f);
+        light.color[0] = 1.0f;
+        light.color[1] = 0.0f;
+        light.color[2] = 0.0f;
+        light.intensity = 40.0f;
+        light.range = 2.0f;
+        ASSERT_TRUE(slayer3d_add_light(ctx, &light));
+    }
+
+    slayer3d_light green = {};
+    green.type = SLAYER3D_LIGHT_POINT;
+    green.position = slayer3d_vec3_make(0.0f, 0.0f, 2.0f);
+    green.color[0] = 0.0f;
+    green.color[1] = 1.0f;
+    green.color[2] = 0.0f;
+    green.intensity = 12.0f;
+    green.range = 8.0f;
+    ASSERT_TRUE(slayer3d_add_light(ctx, &green));
+
+    float positions[] = {
+        -1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, 1.0f, 1.0f, 0.0f, -1.0f, 1.0f, 0.0f,
+    };
+    float normals[] = {
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+    };
+    unsigned int indices[] = {0, 1, 2, 0, 2, 3};
+    slayer3d_mesh mesh = {};
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 6;
+    mesh.material_index = -1;
+    slayer3d_model model = {};
+    model.meshes = &mesh;
+    model.mesh_count = 1;
+
+    slayer3d_camera3d cam;
+    cam.position = slayer3d_vec3_make(0, 0, 5);
+    cam.target = slayer3d_vec3_make(0, 0, 0);
+    cam.up = slayer3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    slayer3d_reset_render_stats(ctx);
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    EXPECT_GT(px[1], px[0]);
+    EXPECT_GT(px[1], px[2]);
+
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.light_selection_draws, 1u);
+    EXPECT_EQ(stats.light_candidates, (Uint64)SLAYER3D_MAX_SHADER_LIGHTS + 1u);
+    EXPECT_EQ(stats.lights_selected, 1u);
+}
+
 TEST_F(GLRendererTest, CubeVisibleOnFirstFrame)
 {
     /* This specifically tests lesson #1 and #9: first frame must be correct. */

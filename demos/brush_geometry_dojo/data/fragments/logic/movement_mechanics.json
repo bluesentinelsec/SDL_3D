@@ -1,6 +1,10 @@
 {
   "schema": "slayer3d.fragment.v0",
-  "signals": ["signal.brush_geometry.camera.toggle", "signal.brush_geometry.render.depth_prepass.toggle"],
+  "signals": [
+    "signal.brush_geometry.camera.toggle",
+    "signal.brush_geometry.render.depth_prepass.toggle",
+    "signal.brush_geometry.render.light_selection.toggle"
+  ],
   "logic": {
     "sensors": [
       {
@@ -14,6 +18,12 @@
         "type": "sensor.input_pressed",
         "action": "action.render.depth_prepass.toggle",
         "on_pressed": "signal.brush_geometry.render.depth_prepass.toggle"
+      },
+      {
+        "name": "sensor.brush_geometry.light_selection_toggle",
+        "type": "sensor.input_pressed",
+        "action": "action.render.light_selection.toggle",
+        "on_pressed": "signal.brush_geometry.render.light_selection.toggle"
       },
       {
         "name": "sensor.brush_geometry.conveyor.stay",
@@ -80,6 +90,16 @@
           {
             "type": "scene_state.toggle",
             "key": "debug.render.depth_prepass.enabled",
+            "default": true
+          }
+        ]
+      },
+      {
+        "signal": "signal.brush_geometry.render.light_selection.toggle",
+        "actions": [
+          {
+            "type": "scene_state.toggle",
+            "key": "debug.render.per_object_lights.enabled",
             "default": true
           }
         ]
