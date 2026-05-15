@@ -2952,6 +2952,12 @@ static bool validate_render_mesh_primitive_component(validation_context *ctx, yy
     yyjson_val *lighting_key = obj_get(component, "lighting_key");
     if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
         return validation_error(ctx, path, "render.mesh_primitive lighting_key must be non-empty");
+    yyjson_val *lod = obj_get(component, "lod");
+    if (lod != NULL && !yyjson_is_bool(lod))
+        return validation_error(ctx, path, "render.mesh_primitive lod must be a boolean");
+    yyjson_val *lod_bias = obj_get(component, "lod_bias");
+    if (lod_bias != NULL && (!yyjson_is_num(lod_bias) || yyjson_get_num(lod_bias) <= 0.0))
+        return validation_error(ctx, path, "render.mesh_primitive lod_bias must be a positive number");
     yyjson_val *space = obj_get(component, "space");
     if (space != NULL && (!yyjson_is_str(space) || (SDL_strcmp(yyjson_get_str(space), "world") != 0 &&
                                                     SDL_strcmp(yyjson_get_str(space), "camera") != 0)))
@@ -6008,6 +6014,12 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lighting_key = obj_get(component, "lighting_key");
                 if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
                     return validation_error(ctx, path, "render primitive lighting_key must be non-empty");
+                yyjson_val *lod = obj_get(component, "lod");
+                if (lod != NULL && !yyjson_is_bool(lod))
+                    return validation_error(ctx, path, "render primitive lod must be a boolean");
+                yyjson_val *lod_bias = obj_get(component, "lod_bias");
+                if (lod_bias != NULL && (!yyjson_is_num(lod_bias) || yyjson_get_num(lod_bias) <= 0.0))
+                    return validation_error(ctx, path, "render primitive lod_bias must be a positive number");
                 const char *offset_properties[] = {"offset_x_property",     "offset_y_property",
                                                    "offset_z_property",     "offset_x_add_property",
                                                    "offset_y_add_property", "offset_z_add_property"};
@@ -12173,14 +12185,16 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
     yyjson_val *ssao = obj_get(render, "ssao");
     yyjson_val *depth_prepass = obj_get(render, "depth_prepass");
     yyjson_val *per_object_light_selection = obj_get(render, "per_object_light_selection");
+    yyjson_val *procedural_lod = obj_get(render, "procedural_lod");
     yyjson_val *performance_queries = obj_get(render, "performance_queries");
     if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
         (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)) ||
         (per_object_light_selection != NULL && !yyjson_is_bool(per_object_light_selection)) ||
+        (procedural_lod != NULL && !yyjson_is_bool(procedural_lod)) ||
         (performance_queries != NULL && !yyjson_is_bool(performance_queries)))
         return validation_error(ctx, "$.render",
-                                "render lighting, bloom, ssao, depth_prepass, per_object_light_selection, and "
-                                "performance_queries must be booleans");
+                                "render lighting, bloom, ssao, depth_prepass, per_object_light_selection, "
+                                "procedural_lod, and performance_queries must be booleans");
     yyjson_val *per_object_light_limit = obj_get(render, "per_object_light_limit");
     if (per_object_light_limit != NULL &&
         (!yyjson_is_int(per_object_light_limit) || yyjson_get_int(per_object_light_limit) < 0 ||
@@ -12188,6 +12202,30 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
         return validation_error(ctx, "$.render.per_object_light_limit",
                                 "render per_object_light_limit must be an integer from 0 to %d",
                                 SLAYER3D_MAX_SHADER_LIGHTS);
+    yyjson_val *procedural_lod_near_pixels = obj_get(render, "procedural_lod_near_pixels");
+    yyjson_val *procedural_lod_far_pixels = obj_get(render, "procedural_lod_far_pixels");
+    if ((procedural_lod_near_pixels != NULL &&
+         (!yyjson_is_num(procedural_lod_near_pixels) || yyjson_get_num(procedural_lod_near_pixels) <= 0.0)) ||
+        (procedural_lod_far_pixels != NULL &&
+         (!yyjson_is_num(procedural_lod_far_pixels) || yyjson_get_num(procedural_lod_far_pixels) <= 0.0)))
+    {
+        return validation_error(ctx, "$.render", "render procedural_lod pixel thresholds must be positive numbers");
+    }
+    if (procedural_lod_near_pixels != NULL && procedural_lod_far_pixels != NULL &&
+        yyjson_get_num(procedural_lod_far_pixels) > yyjson_get_num(procedural_lod_near_pixels))
+    {
+        return validation_error(ctx, "$.render",
+                                "render procedural_lod_far_pixels must be less than or equal to "
+                                "procedural_lod_near_pixels");
+    }
+    yyjson_val *procedural_lod_min_segments = obj_get(render, "procedural_lod_min_segments");
+    if (procedural_lod_min_segments != NULL &&
+        (!yyjson_is_int(procedural_lod_min_segments) || yyjson_get_int(procedural_lod_min_segments) < 3 ||
+         yyjson_get_int(procedural_lod_min_segments) > 64))
+    {
+        return validation_error(ctx, "$.render.procedural_lod_min_segments",
+                                "render procedural_lod_min_segments must be an integer from 3 to 64");
+    }
     if (obj_get(render, "clear_color") != NULL && !is_vec_array(obj_get(render, "clear_color"), 3))
         return validation_error(ctx, "$.render.clear_color", "render clear_color must be a vec3 or vec4 color");
     const char *tonemap = json_string(render, "tonemap");
@@ -12205,7 +12243,11 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
                                 "profile_key",
                                 "performance_queries_key",
                                 "per_object_light_selection_key",
-                                "per_object_light_limit_key"};
+                                "per_object_light_limit_key",
+                                "procedural_lod_key",
+                                "procedural_lod_near_pixels_key",
+                                "procedural_lod_far_pixels_key",
+                                "procedural_lod_min_segments_key"};
     for (size_t i = 0; i < SDL_arraysize(key_fields); ++i)
     {
         if (obj_get(render, key_fields[i]) != NULL && !is_non_empty_string(render, key_fields[i]))

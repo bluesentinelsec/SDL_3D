@@ -98,6 +98,11 @@ The root `render` object configures frame-level presentation defaults:
     "per_object_light_selection_key": "render_per_object_light_selection_enabled",
     "per_object_light_limit": 8,
     "per_object_light_limit_key": "render_per_object_light_limit",
+    "procedural_lod": true,
+    "procedural_lod_key": "render_procedural_lod_enabled",
+    "procedural_lod_near_pixels": 128.0,
+    "procedural_lod_far_pixels": 24.0,
+    "procedural_lod_min_segments": 8,
     "performance_queries": false,
     "performance_queries_key": "render_performance_queries_enabled",
     "profile": "modern",
@@ -136,6 +141,16 @@ ranks point/spot lights by draw bounds, light range, intensity, and distance.
 This is useful in scenes with many localized dynamic lights: shader work scales
 with the authored per-object limit instead of total active scene lights. Optional
 `*_key` fields allow data-authored debug toggles and A/B tests without host C.
+`procedural_lod` allows the presentation layer to reduce tessellation for
+eligible procedural geometry when it projects to a small screen area.
+`procedural_lod_near_pixels` is the projected diameter at or above which the
+authored tessellation is preserved, `procedural_lod_far_pixels` is the projected
+diameter at or below which the minimum tessellation is used, and
+`procedural_lod_min_segments` is the lowest generated segment/ring count. The
+far threshold must be less than or equal to the near threshold. LOD is skipped
+for camera-space viewmodels/effects so first-person weapons and HUD-adjacent
+geometry keep stable authored detail. Optional `*_key` fields let debug menus
+and tuning scenes toggle the feature or tune thresholds from scene state.
 `performance_queries` enables optional backend sample-count queries for
 diagnostic overlays. Capable OpenGL backends expose depth-passing sample counts
 for the depth pre-pass and main geometry pass through UI metrics. These queries
@@ -2421,6 +2436,13 @@ Reusable components include:
   or array of camera names. This is useful for first-person bodies, security
   camera overlays, mirrors, cutscene-only props, and similar camera-specific
   presentation.
+  `lod` defaults to `true` and lets the root `render.procedural_lod` settings
+  reduce tessellation for distant procedural primitives. Set `lod` to `false`
+  for inspection objects or silhouettes that must keep authored tessellation at
+  any distance. `lod_bias` defaults to `1.0`; values above `1.0` make the
+  primitive behave as if it is larger on screen and therefore keep higher detail
+  longer, while values below `1.0` make it drop detail sooner. Camera-space
+  primitives ignore procedural LOD.
   Dimension fields include `size`, `radius`, `height`, `radius_top`,
   `radius_bottom`, `major_radius`, `minor_radius`, `bevel_radius`, `arc_angle`,
   `segments`/`slices`, `rings`, and `tube_segments`. Authored property fields

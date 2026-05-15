@@ -1296,6 +1296,8 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         primitive.slices = 24;
         primitive.rings = 8;
         primitive.tube_segments = primitive.rings;
+        primitive.lod_enabled = json_bool(component, "lod", true);
+        primitive.lod_bias = SDL_max(json_float(component, "lod_bias", 1.0f), 0.001f);
 
         if (SDL_strcmp(type, "render.cube") == 0)
         {
@@ -1343,6 +1345,8 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
                 part_primitive.emissive_color =
                     part_primitive.emissive ? slayer3d_vec3_make(0.2f, 0.2f, 0.2f) : part_primitive.emissive_color;
                 part_primitive.wire_color = json_color(part, "wire_color", part_primitive.wire_color);
+                part_primitive.lod_enabled = json_bool(part, "lod", part_primitive.lod_enabled);
+                part_primitive.lod_bias = SDL_max(json_float(part, "lod_bias", part_primitive.lod_bias), 0.001f);
                 populate_mesh_primitive_descriptor(actor, part, &part_primitive);
                 if (eval != NULL)
                 {
@@ -1479,6 +1483,8 @@ static bool emit_grid_pickup_layer_render_primitives(const slayer3d_game_data_ru
         primitive.emissive = kind->emissive;
         primitive.emissive_color =
             kind->emissive ? slayer3d_vec3_make(0.25f, 0.22f, 0.08f) : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        primitive.lod_enabled = true;
+        primitive.lod_bias = 1.0f;
         primitive.instances = layer->render_positions;
         primitive.instance_count = count;
         if (!callback(userdata, &primitive))
@@ -1783,6 +1789,10 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
         out_settings->depth_prepass_enabled = false;
         out_settings->per_object_light_selection_enabled = false;
         out_settings->per_object_light_limit = SLAYER3D_MAX_SHADER_LIGHTS;
+        out_settings->procedural_lod_enabled = false;
+        out_settings->procedural_lod_near_pixels = 128.0f;
+        out_settings->procedural_lod_far_pixels = 24.0f;
+        out_settings->procedural_lod_min_segments = 8;
         out_settings->performance_queries_enabled = false;
         out_settings->tonemap = SLAYER3D_TONEMAP_ACES;
     }
@@ -1811,6 +1821,22 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
                         json_int(render, "per_object_light_limit", out_settings->per_object_light_limit));
     out_settings->per_object_light_limit =
         SDL_clamp(out_settings->per_object_light_limit, 0, SLAYER3D_MAX_SHADER_LIGHTS);
+    out_settings->procedural_lod_enabled =
+        scene_state_bool(runtime, json_string(render, "procedural_lod_key", NULL),
+                         json_bool(render, "procedural_lod", out_settings->procedural_lod_enabled));
+    out_settings->procedural_lod_near_pixels =
+        scene_state_float(runtime, json_string(render, "procedural_lod_near_pixels_key", NULL),
+                          json_float(render, "procedural_lod_near_pixels", out_settings->procedural_lod_near_pixels));
+    out_settings->procedural_lod_far_pixels =
+        scene_state_float(runtime, json_string(render, "procedural_lod_far_pixels_key", NULL),
+                          json_float(render, "procedural_lod_far_pixels", out_settings->procedural_lod_far_pixels));
+    out_settings->procedural_lod_min_segments =
+        scene_state_int(runtime, json_string(render, "procedural_lod_min_segments_key", NULL),
+                        json_int(render, "procedural_lod_min_segments", out_settings->procedural_lod_min_segments));
+    out_settings->procedural_lod_near_pixels = SDL_max(out_settings->procedural_lod_near_pixels, 1.0f);
+    out_settings->procedural_lod_far_pixels =
+        SDL_clamp(out_settings->procedural_lod_far_pixels, 1.0f, out_settings->procedural_lod_near_pixels);
+    out_settings->procedural_lod_min_segments = SDL_clamp(out_settings->procedural_lod_min_segments, 3, 64);
     out_settings->performance_queries_enabled =
         scene_state_bool(runtime, json_string(render, "performance_queries_key", NULL),
                          json_bool(render, "performance_queries", out_settings->performance_queries_enabled));
