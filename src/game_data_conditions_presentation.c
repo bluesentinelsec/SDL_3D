@@ -621,8 +621,9 @@ float slayer3d_game_data_fps_sample_seconds(const slayer3d_game_data_runtime *ru
 {
     if (runtime == NULL)
         return fallback;
-    return json_float(obj_get(obj_get(runtime_root(runtime), "presentation"), "metrics"), "fps_sample_seconds",
-                      fallback);
+    const float sample_seconds =
+        json_float(obj_get(obj_get(runtime_root(runtime), "presentation"), "metrics"), "fps_sample_seconds", fallback);
+    return sample_seconds > 0.0f ? sample_seconds : fallback;
 }
 
 typedef enum ui_value_type
@@ -691,6 +692,35 @@ static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runti
     return true;
 }
 
+static bool read_performance_metric(const char *metric, const slayer3d_game_data_ui_metrics *metrics,
+                                    ui_value *out_value)
+{
+    if (metric == NULL || out_value == NULL)
+        return false;
+
+    if (SDL_strcmp(metric, "perf.frame_ms") == 0)
+        out_value->as_float = metrics != NULL ? metrics->frame_ms : 0.0f;
+    else if (SDL_strcmp(metric, "perf.update_cpu_ms") == 0)
+        out_value->as_float = metrics != NULL ? metrics->update_cpu_ms : 0.0f;
+    else if (SDL_strcmp(metric, "perf.render_cpu_ms") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_cpu_ms : 0.0f;
+    else if (SDL_strcmp(metric, "render.model_mesh_submissions_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_model_mesh_submissions_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.model_mesh_draws_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_model_mesh_draws_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.model_triangles_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_model_triangles_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.depth_prepass_draws_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_depth_prepass_draws_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.depth_prepass_triangles_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_depth_prepass_triangles_per_frame : 0.0f;
+    else
+        return false;
+
+    out_value->type = UI_VALUE_FLOAT;
+    return true;
+}
+
 static bool read_ui_binding_value(const slayer3d_game_data_runtime *runtime, yyjson_val *binding,
                                   const slayer3d_game_data_ui_metrics *metrics, ui_value *out_value)
 {
@@ -721,6 +751,8 @@ static bool read_ui_binding_value(const slayer3d_game_data_runtime *runtime, yyj
             out_value->as_bool = metrics != NULL && metrics->paused;
             return true;
         }
+        if (read_performance_metric(metric, metrics, out_value))
+            return true;
         if (read_brush_diagnostic_metric(runtime, metric, out_value))
             return true;
         return false;
@@ -826,6 +858,11 @@ static bool format_bound_ui_text(const char *format, const ui_value *values, int
         SDL_snprintf(buffer, buffer_size, format, values[0].as_float, (unsigned long long)values[1].as_uint64);
         return true;
     }
+    if (value_count == 2 && values[0].type == UI_VALUE_FLOAT && values[1].type == UI_VALUE_FLOAT)
+    {
+        SDL_snprintf(buffer, buffer_size, format, values[0].as_float, values[1].as_float);
+        return true;
+    }
     if (value_count == 2 && values[0].type == UI_VALUE_UINT64 && values[1].type == UI_VALUE_UINT64)
     {
         SDL_snprintf(buffer, buffer_size, format, (unsigned long long)values[0].as_uint64,
@@ -839,12 +876,25 @@ static bool format_bound_ui_text(const char *format, const ui_value *values, int
                      (unsigned long long)values[1].as_uint64, (unsigned long long)values[2].as_uint64);
         return true;
     }
+    if (value_count == 3 && values[0].type == UI_VALUE_FLOAT && values[1].type == UI_VALUE_FLOAT &&
+        values[2].type == UI_VALUE_FLOAT)
+    {
+        SDL_snprintf(buffer, buffer_size, format, values[0].as_float, values[1].as_float, values[2].as_float);
+        return true;
+    }
     if (value_count == 4 && values[0].type == UI_VALUE_UINT64 && values[1].type == UI_VALUE_UINT64 &&
         values[2].type == UI_VALUE_UINT64 && values[3].type == UI_VALUE_UINT64)
     {
         SDL_snprintf(buffer, buffer_size, format, (unsigned long long)values[0].as_uint64,
                      (unsigned long long)values[1].as_uint64, (unsigned long long)values[2].as_uint64,
                      (unsigned long long)values[3].as_uint64);
+        return true;
+    }
+    if (value_count == 4 && values[0].type == UI_VALUE_FLOAT && values[1].type == UI_VALUE_FLOAT &&
+        values[2].type == UI_VALUE_FLOAT && values[3].type == UI_VALUE_FLOAT)
+    {
+        SDL_snprintf(buffer, buffer_size, format, values[0].as_float, values[1].as_float, values[2].as_float,
+                     values[3].as_float);
         return true;
     }
     return false;

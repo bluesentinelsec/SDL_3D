@@ -404,12 +404,43 @@
       {
         "name": "ui.brush_geometry.depth_prepass_state",
         "font": "font.brush_geometry.hud",
-        "format": "Z PREPASS %d",
+        "format": "N Z PREPASS %d",
         "bindings": [
           { "type": "scene_state", "key": "debug.render.depth_prepass.enabled", "default": true }
         ],
         "x": 0.985,
         "y": 0.116,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.frame_perf",
+        "font": "font.brush_geometry.hud",
+        "format": "FRAME %.2fms CPU %.2f/%.2fms",
+        "bindings": [
+          { "type": "metric", "metric": "perf.frame_ms" },
+          { "type": "metric", "metric": "perf.update_cpu_ms" },
+          { "type": "metric", "metric": "perf.render_cpu_ms" }
+        ],
+        "x": 0.985,
+        "y": 0.144,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.depth_prepass_perf",
+        "font": "font.brush_geometry.hud",
+        "format": "Z AVG %.1f TRI %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "render.depth_prepass_draws_per_frame" },
+          { "type": "metric", "metric": "render.depth_prepass_triangles_per_frame" }
+        ],
+        "x": 0.985,
+        "y": 0.172,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],

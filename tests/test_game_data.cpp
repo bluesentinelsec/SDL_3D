@@ -4996,6 +4996,14 @@ TEST(GameDataRuntime, UiToolPanelsAndInspectorsEmitReusableOverlayPrimitives)
           {
             "label": "FPS",
             "binding": { "type": "metric", "metric": "fps", "default": 0 }
+          },
+          {
+            "label": "Frame ms",
+            "binding": { "type": "metric", "metric": "perf.frame_ms" }
+          },
+          {
+            "label": "Z prepass",
+            "binding": { "type": "metric", "metric": "render.depth_prepass_draws_per_frame" }
           }
         ]
       }
@@ -5029,10 +5037,12 @@ TEST(GameDataRuntime, UiToolPanelsAndInspectorsEmitReusableOverlayPrimitives)
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_tool_rects, &rects));
     EXPECT_EQ(rects.sidebar_rects, 5);
-    EXPECT_EQ(rects.inspector_rects, 4);
+    EXPECT_EQ(rects.inspector_rects, 6);
 
     slayer3d_game_data_ui_metrics metrics{};
     metrics.fps = 59.75f;
+    metrics.frame_ms = 8.33f;
+    metrics.render_depth_prepass_draws_per_frame = 14.25f;
     struct Texts
     {
         std::vector<std::string> values;
@@ -5044,7 +5054,7 @@ TEST(GameDataRuntime, UiToolPanelsAndInspectorsEmitReusableOverlayPrimitives)
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_tool_texts, &texts));
-    ASSERT_EQ(texts.values.size(), 7U);
+    ASSERT_EQ(texts.values.size(), 11U);
     EXPECT_EQ(texts.values[0], "Selection");
     EXPECT_EQ(texts.values[1], "World");
     EXPECT_EQ(texts.values[2], "brush.dojo");
@@ -5052,10 +5062,34 @@ TEST(GameDataRuntime, UiToolPanelsAndInspectorsEmitReusableOverlayPrimitives)
     EXPECT_EQ(texts.values[4], "100");
     EXPECT_EQ(texts.values[5], "FPS");
     EXPECT_EQ(texts.values[6], "59.8");
+    EXPECT_EQ(texts.values[7], "Frame ms");
+    EXPECT_EQ(texts.values[8], "8.3");
+    EXPECT_EQ(texts.values[9], "Z prepass");
+    EXPECT_EQ(texts.values[10], "14.2");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, FrameStateSamplesDataDrivenPerformanceMetrics)
+{
+    slayer3d_game_data_frame_state state{};
+    slayer3d_game_data_frame_state_init(&state);
+
+    slayer3d_game_context ctx{};
+    ctx.real_time = 0.0f;
+    slayer3d_game_data_frame_state_record_render(&state, &ctx, nullptr);
+
+    slayer3d_game_data_frame_state_record_update_cpu_time(&state, 0.002f);
+    slayer3d_game_data_frame_state_record_render_cpu_time(&state, 0.004f);
+    ctx.real_time = 0.25f;
+    slayer3d_game_data_frame_state_record_render(&state, &ctx, nullptr);
+
+    EXPECT_NEAR(state.metrics.fps, 4.0f, 0.0001f);
+    EXPECT_NEAR(state.metrics.frame_ms, 250.0f, 0.0001f);
+    EXPECT_NEAR(state.metrics.update_cpu_ms, 2.0f, 0.0001f);
+    EXPECT_NEAR(state.metrics.render_cpu_ms, 4.0f, 0.0001f);
 }
 
 TEST(GameDataValidation, RejectsInvalidUiTooling)

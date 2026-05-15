@@ -3003,6 +3003,25 @@ void slayer3d_game_data_frame_state_init(slayer3d_game_data_frame_state *state)
     SDL_zero(*state);
 }
 
+void slayer3d_game_data_frame_state_record_update_cpu_time(slayer3d_game_data_frame_state *state, float seconds)
+{
+    if (state == NULL || seconds < 0.0f)
+        return;
+    state->update_cpu_ms_sample_sum += seconds * 1000.0f;
+}
+
+void slayer3d_game_data_frame_state_record_render_cpu_time(slayer3d_game_data_frame_state *state, float seconds)
+{
+    if (state == NULL || seconds < 0.0f)
+        return;
+    state->render_cpu_ms_sample_sum += seconds * 1000.0f;
+}
+
+static float render_stat_delta_u64(Uint64 before, Uint64 after)
+{
+    return (float)(after >= before ? after - before : 0u);
+}
+
 bool slayer3d_game_data_update_frame(slayer3d_game_data_frame_state *state,
                                      const slayer3d_game_data_update_frame_desc *desc)
 {
@@ -3071,12 +3090,55 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
         if (frame_dt > 0.0f)
         {
             state->fps_sample_time += frame_dt;
+            state->frame_ms_sample_sum += frame_dt * 1000.0f;
             ++state->fps_sample_frames;
+            if (ctx->renderer != NULL)
+            {
+                slayer3d_render_stats stats;
+                if (slayer3d_get_render_stats(ctx->renderer, &stats))
+                {
+                    if (state->have_last_render_stats)
+                    {
+                        state->render_mesh_submissions_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.model_mesh_submissions, stats.model_mesh_submissions);
+                        state->render_mesh_draws_sample_sum +=
+                            render_stat_delta_u64(state->last_render_stats.model_mesh_draws, stats.model_mesh_draws);
+                        state->render_triangles_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.model_triangles_submitted, stats.model_triangles_submitted);
+                        state->depth_prepass_draws_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.depth_prepass_draws, stats.depth_prepass_draws);
+                        state->depth_prepass_triangles_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.depth_prepass_triangles, stats.depth_prepass_triangles);
+                    }
+                    state->last_render_stats = stats;
+                    state->have_last_render_stats = true;
+                }
+            }
             const float sample_seconds = slayer3d_game_data_fps_sample_seconds(runtime, 0.25f);
             if (state->fps_sample_time >= sample_seconds)
             {
+                const float sample_frames = (float)SDL_max(state->fps_sample_frames, 1);
                 state->displayed_fps = (float)state->fps_sample_frames / state->fps_sample_time;
+                state->metrics.frame_ms = state->frame_ms_sample_sum / sample_frames;
+                state->metrics.update_cpu_ms = state->update_cpu_ms_sample_sum / sample_frames;
+                state->metrics.render_cpu_ms = state->render_cpu_ms_sample_sum / sample_frames;
+                state->metrics.render_model_mesh_submissions_per_frame =
+                    state->render_mesh_submissions_sample_sum / sample_frames;
+                state->metrics.render_model_mesh_draws_per_frame = state->render_mesh_draws_sample_sum / sample_frames;
+                state->metrics.render_model_triangles_per_frame = state->render_triangles_sample_sum / sample_frames;
+                state->metrics.render_depth_prepass_draws_per_frame =
+                    state->depth_prepass_draws_sample_sum / sample_frames;
+                state->metrics.render_depth_prepass_triangles_per_frame =
+                    state->depth_prepass_triangles_sample_sum / sample_frames;
                 state->fps_sample_time = 0.0f;
+                state->frame_ms_sample_sum = 0.0f;
+                state->update_cpu_ms_sample_sum = 0.0f;
+                state->render_cpu_ms_sample_sum = 0.0f;
+                state->render_mesh_submissions_sample_sum = 0.0f;
+                state->render_mesh_draws_sample_sum = 0.0f;
+                state->render_triangles_sample_sum = 0.0f;
+                state->depth_prepass_draws_sample_sum = 0.0f;
+                state->depth_prepass_triangles_sample_sum = 0.0f;
                 state->fps_sample_frames = 0;
             }
         }

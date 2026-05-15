@@ -2502,8 +2502,19 @@ keeps HUD text renderable before the first action writes a transient value:
 ```
 
 UI text can also bind engine metrics. `fps`, `frame`, and `paused` are always
-available. Brush-world diagnostics are exposed with `brush.*` metric names so
-debug overlays can inspect collision and render cost without game-specific C:
+available. Frame-performance metrics are sampled over
+`presentation.metrics.fps_sample_seconds`, the same data-authored window used by
+the FPS counter. They are intended for human-facing diagnostics and quick A/B
+checks, not deterministic assertions. Available performance metrics are
+`perf.frame_ms`, `perf.update_cpu_ms`, and `perf.render_cpu_ms`. The render CPU
+time covers the managed data-game draw path and intentionally excludes backend
+present/swap time. Renderer submission metrics are exposed as per-frame sampled
+averages: `render.model_mesh_submissions_per_frame`,
+`render.model_mesh_draws_per_frame`, `render.model_triangles_per_frame`,
+`render.depth_prepass_draws_per_frame`, and
+`render.depth_prepass_triangles_per_frame`. Brush-world diagnostics are exposed
+with `brush.*` metric names so debug overlays can inspect collision and render
+cost without game-specific C:
 
 ```json
 {

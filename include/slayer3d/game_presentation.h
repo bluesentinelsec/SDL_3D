@@ -267,8 +267,18 @@ extern "C"
         float last_render_time;                     /**< Last sampled real render time. */
         float fps_sample_time;                      /**< Accumulated FPS sample time. */
         float displayed_fps;                        /**< Most recently sampled FPS. */
+        float frame_ms_sample_sum;                  /**< Accumulated wall-clock frame milliseconds. */
+        float update_cpu_ms_sample_sum;             /**< Accumulated managed update CPU milliseconds. */
+        float render_cpu_ms_sample_sum;             /**< Accumulated managed render CPU milliseconds. */
+        float render_mesh_submissions_sample_sum;   /**< Accumulated render mesh submission deltas. */
+        float render_mesh_draws_sample_sum;         /**< Accumulated render mesh draw deltas. */
+        float render_triangles_sample_sum;          /**< Accumulated render triangle deltas. */
+        float depth_prepass_draws_sample_sum;       /**< Accumulated depth-prepass draw deltas. */
+        float depth_prepass_triangles_sample_sum;   /**< Accumulated depth-prepass triangle deltas. */
+        slayer3d_render_stats last_render_stats;    /**< Previous cumulative render stats sample. */
         int fps_sample_frames;                      /**< Frames accumulated in current FPS sample. */
         Uint64 rendered_frames;                     /**< Number of rendered frames. */
+        bool have_last_render_stats;                /**< True once last_render_stats has been initialized. */
         bool was_paused;                            /**< Pause state from the previous update. */
     } slayer3d_game_data_frame_state;
 
@@ -558,6 +568,22 @@ extern "C"
      * @brief Initialize reusable frame/update state.
      */
     void slayer3d_game_data_frame_state_init(slayer3d_game_data_frame_state *state);
+
+    /**
+     * @brief Record CPU time spent updating managed data-game systems.
+     *
+     * The value is accumulated into the same authored metrics sample window as
+     * FPS and exposed through `perf.update_cpu_ms` UI metric bindings.
+     */
+    void slayer3d_game_data_frame_state_record_update_cpu_time(slayer3d_game_data_frame_state *state, float seconds);
+
+    /**
+     * @brief Record CPU time spent drawing managed data-game systems.
+     *
+     * This excludes the backend present/swap. The sampled value is exposed
+     * through `perf.render_cpu_ms` UI metric bindings.
+     */
+    void slayer3d_game_data_frame_state_record_render_cpu_time(slayer3d_game_data_frame_state *state, float seconds);
 
     /**
      * @brief Advance authored app flow, update phases, presentation clocks, and simulation.

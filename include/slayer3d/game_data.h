@@ -933,6 +933,22 @@ extern "C"
         float fps;
         /** @brief Number of rendered frames. */
         Uint64 frame;
+        /** @brief Sampled wall-clock frame time in milliseconds. */
+        float frame_ms;
+        /** @brief Sampled managed data-game update CPU time in milliseconds. */
+        float update_cpu_ms;
+        /** @brief Sampled managed data-game render CPU time in milliseconds, excluding GPU present. */
+        float render_cpu_ms;
+        /** @brief Sampled renderer model meshes submitted per frame. */
+        float render_model_mesh_submissions_per_frame;
+        /** @brief Sampled renderer model meshes accepted per frame. */
+        float render_model_mesh_draws_per_frame;
+        /** @brief Sampled renderer triangles submitted per frame. */
+        float render_model_triangles_per_frame;
+        /** @brief Sampled depth-prepass draw calls per frame. */
+        float render_depth_prepass_draws_per_frame;
+        /** @brief Sampled depth-prepass triangles per frame. */
+        float render_depth_prepass_triangles_per_frame;
     } slayer3d_game_data_ui_metrics;
 
     /** @brief Optional render evaluation inputs for dynamic visual effects. */

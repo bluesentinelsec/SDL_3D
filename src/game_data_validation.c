@@ -9983,6 +9983,14 @@ static bool validate_presentation(validation_context *ctx, yyjson_val *root, val
     if (!yyjson_is_obj(presentation))
         return validation_error(ctx, "$.presentation", "presentation must be an object");
 
+    yyjson_val *metrics = obj_get(presentation, "metrics");
+    if (metrics != NULL && !yyjson_is_obj(metrics))
+        return validation_error(ctx, "$.presentation.metrics", "presentation metrics must be an object");
+    yyjson_val *fps_sample_seconds = obj_get(metrics, "fps_sample_seconds");
+    if (fps_sample_seconds != NULL && (!yyjson_is_num(fps_sample_seconds) || yyjson_get_num(fps_sample_seconds) <= 0.0))
+        return validation_error(ctx, "$.presentation.metrics.fps_sample_seconds",
+                                "fps_sample_seconds must be positive");
+
     yyjson_val *clocks = obj_get(presentation, "clocks");
     if (clocks != NULL && !yyjson_is_arr(clocks))
         return validation_error(ctx, "$.presentation.clocks", "clocks must be an array");
@@ -10186,6 +10194,14 @@ static bool ui_metric_name_valid(const char *metric)
         "fps",
         "frame",
         "paused",
+        "perf.frame_ms",
+        "perf.update_cpu_ms",
+        "perf.render_cpu_ms",
+        "render.model_mesh_submissions_per_frame",
+        "render.model_mesh_draws_per_frame",
+        "render.model_triangles_per_frame",
+        "render.depth_prepass_draws_per_frame",
+        "render.depth_prepass_triangles_per_frame",
         "brush.trace_count",
         "brush.world_instance_count",
         "brush.world_bounds_reject_count",
