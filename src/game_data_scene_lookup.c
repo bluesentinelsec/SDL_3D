@@ -570,6 +570,22 @@ bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key
     return fallback;
 }
 
+int scene_state_int(const slayer3d_game_data_runtime *runtime, const char *key, int fallback)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')
+        return fallback;
+    const slayer3d_value *value = slayer3d_properties_get_value(runtime->scene_state, key);
+    if (value == NULL)
+        return fallback;
+    if (value->type == SLAYER3D_VALUE_INT)
+        return value->as_int;
+    if (value->type == SLAYER3D_VALUE_FLOAT)
+        return (int)value->as_float;
+    if (value->type == SLAYER3D_VALUE_BOOL)
+        return value->as_bool ? 1 : 0;
+    return fallback;
+}
+
 float scene_state_float(const slayer3d_game_data_runtime *runtime, const char *key, float fallback)
 {
     if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0')

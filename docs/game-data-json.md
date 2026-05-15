@@ -94,6 +94,10 @@ The root `render` object configures frame-level presentation defaults:
     "ssao": true,
     "depth_prepass": false,
     "depth_prepass_key": "render_depth_prepass_enabled",
+    "per_object_light_selection": false,
+    "per_object_light_selection_key": "render_per_object_light_selection_enabled",
+    "per_object_light_limit": 8,
+    "per_object_light_limit_key": "render_per_object_light_limit",
     "performance_queries": false,
     "performance_queries_key": "render_performance_queries_enabled",
     "profile": "modern",
@@ -124,6 +128,14 @@ debug primitives. This can reduce expensive fragment shading in dense brush
 scenes with overdraw, especially when many dynamic lights are active. It adds an
 extra position-only replay of eligible opaque geometry, so leave it disabled for
 very simple or CPU-bound scenes unless profiling shows a benefit.
+`per_object_light_selection` lets capable renderers keep a larger scene-level
+candidate light set, then upload only the most relevant lights for each lit draw.
+`per_object_light_limit` is clamped to the backend shader capacity, currently 8.
+The selector always preserves directional lights as high-priority candidates and
+ranks point/spot lights by draw bounds, light range, intensity, and distance.
+This is useful in scenes with many localized dynamic lights: shader work scales
+with the authored per-object limit instead of total active scene lights. Optional
+`*_key` fields allow data-authored debug toggles and A/B tests without host C.
 `performance_queries` enables optional backend sample-count queries for
 diagnostic overlays. Capable OpenGL backends expose depth-passing sample counts
 for the depth pre-pass and main geometry pass through UI metrics. These queries
@@ -2539,8 +2551,12 @@ present/swap time. Renderer submission metrics are exposed as per-frame sampled
 averages: `render.model_mesh_submissions_per_frame`,
 `render.model_mesh_draws_per_frame`, `render.model_triangles_per_frame`,
 `render.depth_prepass_draws_per_frame`, and
-`render.depth_prepass_triangles_per_frame`. When `render.performance_queries`
-is enabled, capable backends also expose `render.geometry_samples_per_frame` and
+`render.depth_prepass_triangles_per_frame`. Per-object light selection exposes
+`render.light_candidates_per_frame`, `render.lights_selected_per_frame`,
+`render.light_selection_draws_per_frame`, and `render.light_selection_ratio` so
+debug overlays can prove that lit draws are selecting a bounded subset of the
+available scene lights. When `render.performance_queries` is enabled, capable
+backends also expose `render.geometry_samples_per_frame` and
 `render.depth_prepass_samples_per_frame`. These two metrics are useful for
 depth-prepass A/B checks: in high-overdraw scenes, toggling pre-pass on should
 lower main geometry depth-passing samples while adding a cheaper position-only

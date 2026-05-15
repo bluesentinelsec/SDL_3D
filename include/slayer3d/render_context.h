@@ -60,6 +60,12 @@ extern "C"
         Uint64 depth_prepass_samples_passed;
         /** @brief Optional main geometry samples that passed the depth test. */
         Uint64 geometry_samples_passed;
+        /** @brief Light candidates considered for lit draws. */
+        Uint64 light_candidates;
+        /** @brief Lights selected and uploaded to the shader for lit draws. */
+        Uint64 lights_selected;
+        /** @brief Lit draws that performed light selection or global light upload. */
+        Uint64 light_selection_draws;
     } slayer3d_render_stats;
 
     /**
@@ -213,6 +219,14 @@ extern "C"
     bool slayer3d_set_render_sample_queries_enabled(slayer3d_render_context *context, bool enabled);
     /** @brief Return whether render sample queries are requested. */
     bool slayer3d_render_sample_queries_enabled(const slayer3d_render_context *context);
+    /** @brief Enable per-object selection of the most relevant shader lights. */
+    bool slayer3d_set_per_object_light_selection_enabled(slayer3d_render_context *context, bool enabled);
+    /** @brief Return whether per-object light selection is enabled. */
+    bool slayer3d_per_object_light_selection_enabled(const slayer3d_render_context *context);
+    /** @brief Set the maximum number of lights uploaded per lit draw, clamped to shader capacity. */
+    bool slayer3d_set_per_object_light_limit(slayer3d_render_context *context, int limit);
+    /** @brief Return the current per-object light upload limit. */
+    int slayer3d_per_object_light_limit(const slayer3d_render_context *context);
     bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color);
     bool slayer3d_clear_render_context_rect(slayer3d_render_context *context, const SDL_Rect *rect,
                                             slayer3d_color color);

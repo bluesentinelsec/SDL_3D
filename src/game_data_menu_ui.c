@@ -1418,6 +1418,14 @@ static bool ui_tool_metric_to_string(const slayer3d_game_data_ui_metrics *metric
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_samples_per_frame);
     else if (SDL_strcmp(metric, "render.geometry_samples_per_frame") == 0)
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_geometry_samples_per_frame);
+    else if (SDL_strcmp(metric, "render.light_candidates_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_light_candidates_per_frame);
+    else if (SDL_strcmp(metric, "render.lights_selected_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_lights_selected_per_frame);
+    else if (SDL_strcmp(metric, "render.light_selection_draws_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_light_selection_draws_per_frame);
+    else if (SDL_strcmp(metric, "render.light_selection_ratio") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.3f", metrics->render_light_selection_ratio);
     else
         return false;
     return true;

@@ -743,6 +743,7 @@ slayer3d_vec4 json_vec4_value(yyjson_val *value, slayer3d_vec4 fallback);
 slayer3d_vec4 json_vec4(yyjson_val *object, const char *key, slayer3d_vec4 fallback);
 const char *scene_state_string(const slayer3d_game_data_runtime *runtime, const char *key, const char *fallback);
 bool scene_state_bool(const slayer3d_game_data_runtime *runtime, const char *key, bool fallback);
+int scene_state_int(const slayer3d_game_data_runtime *runtime, const char *key, int fallback);
 float scene_state_float(const slayer3d_game_data_runtime *runtime, const char *key, float fallback);
 
 slayer3d_actor_registry *runtime_registry(const slayer3d_game_data_runtime *runtime);
