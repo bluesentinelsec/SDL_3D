@@ -1398,6 +1398,26 @@ static bool ui_tool_metric_to_string(const slayer3d_game_data_ui_metrics *metric
         SDL_snprintf(buffer, buffer_size, "%llu", (unsigned long long)metrics->frame);
     else if (SDL_strcmp(metric, "paused") == 0)
         SDL_snprintf(buffer, buffer_size, "%s", metrics->paused ? "true" : "false");
+    else if (SDL_strcmp(metric, "perf.frame_ms") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->frame_ms);
+    else if (SDL_strcmp(metric, "perf.update_cpu_ms") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->update_cpu_ms);
+    else if (SDL_strcmp(metric, "perf.render_cpu_ms") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_cpu_ms);
+    else if (SDL_strcmp(metric, "render.model_mesh_submissions_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_mesh_submissions_per_frame);
+    else if (SDL_strcmp(metric, "render.model_mesh_draws_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_mesh_draws_per_frame);
+    else if (SDL_strcmp(metric, "render.model_triangles_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_triangles_per_frame);
+    else if (SDL_strcmp(metric, "render.depth_prepass_draws_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_draws_per_frame);
+    else if (SDL_strcmp(metric, "render.depth_prepass_triangles_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_triangles_per_frame);
+    else if (SDL_strcmp(metric, "render.depth_prepass_samples_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_samples_per_frame);
+    else if (SDL_strcmp(metric, "render.geometry_samples_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_geometry_samples_per_frame);
     else
         return false;
     return true;

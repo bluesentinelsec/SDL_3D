@@ -82,6 +82,7 @@ typedef struct slayer3d_draw_params_lit
     bool vertex_snap;
     int vertex_snap_precision;
     int texture_filter;
+    bool depth_prepass_eligible;
     const float *shadow_depth_data; /* 512*512 floats, or NULL */
     const float *shadow_vp;         /* 16 floats (mat4), or NULL */
     float shadow_bias;

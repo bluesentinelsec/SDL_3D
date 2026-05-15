@@ -134,6 +134,7 @@ typedef struct slayer3d_draw_entry
     const char *shader_fragment_source;
     float mvp[16];
     bool owns_arrays;
+    bool depth_prepass_eligible;
     struct slayer3d_gl_mesh_cache_entry *mesh_cache;
 } slayer3d_draw_entry;
 
@@ -220,6 +221,7 @@ struct slayer3d_gl_context
     SDL_GLContext gl_context;
     slayer3d_gl_funcs gl;
     bool is_es;
+    bool sample_queries_supported;
     Uint64 frame_index;
     bool ubo_dirty;
 
@@ -227,6 +229,8 @@ struct slayer3d_gl_context
     GLuint unlit_program;
     GLuint copy_program;
     slayer3d_custom_shader_cache_entry *custom_shader_cache;
+    GLuint depth_prepass_query;
+    GLuint geometry_query;
 
     /* PBR uniform locations */
     GLint pbr_model_loc;
@@ -2335,6 +2339,121 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
     gl->BindVertexArray(0);
 }
 
+static bool draw_entry_depth_prepass_eligible(const slayer3d_draw_entry *entry)
+{
+    return entry != NULL && entry->depth_prepass_eligible && entry->lit && entry->primitive_mode == GL_TRIANGLES &&
+           entry->vertex_count > 0 && entry->mesh_cache != NULL && entry->tint[3] >= 0.999f;
+}
+
+static Uint64 draw_entry_triangle_count(const slayer3d_draw_entry *entry)
+{
+    if (entry == NULL)
+        return 0u;
+    if (entry->indices != NULL && entry->index_count > 0)
+        return (Uint64)(entry->index_count / 3);
+    return (Uint64)(entry->vertex_count / 3);
+}
+
+static bool gl_sample_queries_enabled(const slayer3d_gl_context *ctx)
+{
+    return ctx != NULL && ctx->sample_queries_supported && ctx->current_ctx != NULL &&
+           ctx->current_ctx->render_sample_queries_enabled;
+}
+
+static void replay_draw_list_geometry(slayer3d_gl_context *ctx);
+
+static Uint64 gl_query_samples_passed(slayer3d_gl_context *ctx, GLuint query)
+{
+    if (ctx == NULL || query == 0u || ctx->gl.GetQueryObjectuiv == NULL)
+        return 0u;
+    GLuint samples = 0u;
+    ctx->gl.GetQueryObjectuiv(query, GL_QUERY_RESULT, &samples);
+    return (Uint64)samples;
+}
+
+static void replay_draw_list_geometry_measured(slayer3d_gl_context *ctx)
+{
+    if (ctx == NULL)
+        return;
+
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    const bool sample_query = gl_sample_queries_enabled(ctx) && ctx->geometry_query != 0u;
+    if (sample_query)
+        gl->BeginQuery(GL_SAMPLES_PASSED, ctx->geometry_query);
+
+    replay_draw_list_geometry(ctx);
+
+    if (sample_query)
+    {
+        gl->EndQuery(GL_SAMPLES_PASSED);
+        ctx->current_ctx->stats.geometry_samples_passed += gl_query_samples_passed(ctx, ctx->geometry_query);
+    }
+}
+
+static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
+{
+    if (ctx == NULL || ctx->current_ctx == NULL || !ctx->current_ctx->depth_prepass_enabled || !ctx->shadow_program)
+        return;
+
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->Enable(GL_DEPTH_TEST);
+    gl->DepthMask(GL_TRUE);
+    gl->DepthFunc(GL_LESS);
+    gl->ColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    gl->UseProgram(ctx->shadow_program);
+    const bool sample_query = gl_sample_queries_enabled(ctx) && ctx->depth_prepass_query != 0u;
+    if (sample_query)
+        gl->BeginQuery(GL_SAMPLES_PASSED, ctx->depth_prepass_query);
+
+    for (int i = 0; i < ctx->draw_count; i++)
+    {
+        slayer3d_draw_entry *e = &ctx->draw_list[i];
+        if (!draw_entry_depth_prepass_eligible(e))
+            continue;
+
+        gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, e->view_projection);
+        gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+
+        gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
+        if (e->mesh_cache == NULL)
+        {
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                           GL_DYNAMIC_DRAW);
+        }
+
+        if (e->indices && e->index_count > 0)
+        {
+            if (e->mesh_cache == NULL)
+            {
+                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                               e->indices, GL_DYNAMIC_DRAW);
+            }
+            gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+        }
+        else
+        {
+            gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+        }
+
+        ctx->current_ctx->stats.depth_prepass_draws += 1u;
+        ctx->current_ctx->stats.depth_prepass_triangles += draw_entry_triangle_count(e);
+    }
+
+    if (sample_query)
+    {
+        gl->EndQuery(GL_SAMPLES_PASSED);
+        ctx->current_ctx->stats.depth_prepass_samples_passed += gl_query_samples_passed(ctx, ctx->depth_prepass_query);
+    }
+
+    gl->BindVertexArray(0);
+    gl->ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    gl->DepthFunc(GL_LEQUAL);
+}
+
 static void camera_position_from_view_matrix(const slayer3d_mat4 *view, float out_position[3])
 {
     if (view == NULL || out_position == NULL)
@@ -3138,6 +3257,14 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
 
     /* Detect ES. */
     ctx->is_es = false;
+    ctx->sample_queries_supported = !ctx->is_es && gl->GenQueries != NULL && gl->DeleteQueries != NULL &&
+                                    gl->BeginQuery != NULL && gl->EndQuery != NULL && gl->GetQueryObjectuiv != NULL;
+    if (ctx->sample_queries_supported)
+    {
+        gl->GenQueries(1, &ctx->depth_prepass_query);
+        gl->GenQueries(1, &ctx->geometry_query);
+        ctx->sample_queries_supported = ctx->depth_prepass_query != 0u && ctx->geometry_query != 0u;
+    }
 
     const char *version_prefix = ctx->is_es ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
 
@@ -3564,6 +3691,13 @@ void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
 
     if (ctx->scene_ubo)
         gl->DeleteBuffers(1, &ctx->scene_ubo);
+    if (gl->DeleteQueries != NULL)
+    {
+        if (ctx->depth_prepass_query)
+            gl->DeleteQueries(1, &ctx->depth_prepass_query);
+        if (ctx->geometry_query)
+            gl->DeleteQueries(1, &ctx->geometry_query);
+    }
 
     GLuint lit_bufs[] = {ctx->lit_position_vbo,    ctx->lit_normal_vbo, ctx->lit_uv_vbo,
                          ctx->lit_lightmap_uv_vbo, ctx->lit_color_vbo,  ctx->lit_ebo};
@@ -3747,6 +3881,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     e->baked_light_mode = params->baked_light_mode;
     e->has_lightmap = params->lightmap_uvs != NULL && params->lightmap != NULL;
     e->owns_arrays = !params->static_geometry;
+    e->depth_prepass_eligible = params->depth_prepass_eligible;
 
     if (params->static_geometry)
     {
@@ -4096,8 +4231,9 @@ static bool gl_present(slayer3d_render_context *context)
     /* Geometry pass: replay all entries into main FBO using the caller's
      * configured backface-culling state. Post-process passes disable culling,
      * so this must be restored explicitly every frame. */
+    replay_draw_list_depth_prepass(ctx);
     apply_geometry_cull_state(ctx);
-    replay_draw_list_geometry(ctx);
+    replay_draw_list_geometry_measured(ctx);
 
     /* ---- Post-process pipeline ---- */
     gl->Disable(GL_DEPTH_TEST);
@@ -4380,8 +4516,9 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
             gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
+        replay_draw_list_depth_prepass(ctx);
         apply_geometry_cull_state(ctx);
-        replay_draw_list_geometry(ctx);
+        replay_draw_list_geometry_measured(ctx);
     }
     rgba[0] = rgba[1] = rgba[2] = rgba[3] = 0;
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);

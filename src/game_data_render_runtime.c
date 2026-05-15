@@ -1780,6 +1780,8 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
         out_settings->lighting_enabled = true;
         out_settings->bloom_enabled = true;
         out_settings->ssao_enabled = true;
+        out_settings->depth_prepass_enabled = false;
+        out_settings->performance_queries_enabled = false;
         out_settings->tonemap = SLAYER3D_TONEMAP_ACES;
     }
     if (runtime == NULL || out_settings == NULL)
@@ -1796,6 +1798,12 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
                                                    json_bool(render, "bloom", out_settings->bloom_enabled));
     out_settings->ssao_enabled = scene_state_bool(runtime, json_string(render, "ssao_key", NULL),
                                                   json_bool(render, "ssao", out_settings->ssao_enabled));
+    out_settings->depth_prepass_enabled =
+        scene_state_bool(runtime, json_string(render, "depth_prepass_key", NULL),
+                         json_bool(render, "depth_prepass", out_settings->depth_prepass_enabled));
+    out_settings->performance_queries_enabled =
+        scene_state_bool(runtime, json_string(render, "performance_queries_key", NULL),
+                         json_bool(render, "performance_queries", out_settings->performance_queries_enabled));
     const char *tonemap_name =
         scene_state_string(runtime, json_string(render, "tonemap_key", NULL), json_string(render, "tonemap", NULL));
     out_settings->tonemap = parse_tonemap(tonemap_name, out_settings->tonemap);

@@ -1,6 +1,6 @@
 {
   "schema": "slayer3d.fragment.v0",
-  "signals": ["signal.brush_geometry.camera.toggle"],
+  "signals": ["signal.brush_geometry.camera.toggle", "signal.brush_geometry.render.depth_prepass.toggle"],
   "logic": {
     "sensors": [
       {
@@ -8,6 +8,12 @@
         "type": "sensor.input_pressed",
         "action": "action.camera.security.toggle",
         "on_pressed": "signal.brush_geometry.camera.toggle"
+      },
+      {
+        "name": "sensor.brush_geometry.depth_prepass_toggle",
+        "type": "sensor.input_pressed",
+        "action": "action.render.depth_prepass.toggle",
+        "on_pressed": "signal.brush_geometry.render.depth_prepass.toggle"
       },
       {
         "name": "sensor.brush_geometry.conveyor.stay",
@@ -65,6 +71,16 @@
             "type": "camera.toggle",
             "camera": "camera.brush_geometry.security",
             "fallback": "camera.brush_geometry.player"
+          }
+        ]
+      },
+      {
+        "signal": "signal.brush_geometry.render.depth_prepass.toggle",
+        "actions": [
+          {
+            "type": "scene_state.toggle",
+            "key": "debug.render.depth_prepass.enabled",
+            "default": true
           }
         ]
       }

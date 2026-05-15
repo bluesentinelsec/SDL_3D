@@ -933,6 +933,26 @@ extern "C"
         float fps;
         /** @brief Number of rendered frames. */
         Uint64 frame;
+        /** @brief Sampled wall-clock frame time in milliseconds. */
+        float frame_ms;
+        /** @brief Sampled managed data-game update CPU time in milliseconds. */
+        float update_cpu_ms;
+        /** @brief Sampled managed data-game render CPU time in milliseconds, excluding GPU present. */
+        float render_cpu_ms;
+        /** @brief Sampled renderer model meshes submitted per frame. */
+        float render_model_mesh_submissions_per_frame;
+        /** @brief Sampled renderer model meshes accepted per frame. */
+        float render_model_mesh_draws_per_frame;
+        /** @brief Sampled renderer triangles submitted per frame. */
+        float render_model_triangles_per_frame;
+        /** @brief Sampled depth-prepass draw calls per frame. */
+        float render_depth_prepass_draws_per_frame;
+        /** @brief Sampled depth-prepass triangles per frame. */
+        float render_depth_prepass_triangles_per_frame;
+        /** @brief Sampled depth-prepass depth-passing samples per frame when performance queries are enabled. */
+        float render_depth_prepass_samples_per_frame;
+        /** @brief Sampled main-geometry depth-passing samples per frame when performance queries are enabled. */
+        float render_geometry_samples_per_frame;
     } slayer3d_game_data_ui_metrics;
 
     /** @brief Optional render evaluation inputs for dynamic visual effects. */
@@ -1139,6 +1159,10 @@ extern "C"
         bool bloom_enabled;
         /** @brief Whether SSAO post-processing should be enabled. */
         bool ssao_enabled;
+        /** @brief Whether the GL backend should run an opaque depth pre-pass before lit geometry. */
+        bool depth_prepass_enabled;
+        /** @brief Whether capable backends should collect GPU sample-count diagnostics. */
+        bool performance_queries_enabled;
         /** @brief Tonemap operator for lit rendering. */
         slayer3d_tonemap_mode tonemap;
     } slayer3d_game_data_render_settings;

@@ -92,6 +92,10 @@ The root `render` object configures frame-level presentation defaults:
     "bloom": true,
     "bloom_key": "render_bloom_enabled",
     "ssao": true,
+    "depth_prepass": false,
+    "depth_prepass_key": "render_depth_prepass_enabled",
+    "performance_queries": false,
+    "performance_queries_key": "render_performance_queries_enabled",
     "profile": "modern",
     "profile_key": "render_profile"
   }
@@ -113,6 +117,18 @@ are drawn after this presentation pass so menus and HUD text remain readable. If
 profile. Optional `*_key` fields read scene-state values at draw time and
 override the authored defaults. This lets games author debug/profile toggles
 through sensors and logic actions while keeping the runner game-agnostic.
+`depth_prepass` enables an OpenGL opaque depth pre-pass for eligible static lit
+triangle meshes. The data-game runtime currently opts brush-world meshes into
+this pass and excludes actors, viewmodels, particles, billboards, and immediate
+debug primitives. This can reduce expensive fragment shading in dense brush
+scenes with overdraw, especially when many dynamic lights are active. It adds an
+extra position-only replay of eligible opaque geometry, so leave it disabled for
+very simple or CPU-bound scenes unless profiling shows a benefit.
+`performance_queries` enables optional backend sample-count queries for
+diagnostic overlays. Capable OpenGL backends expose depth-passing sample counts
+for the depth pre-pass and main geometry pass through UI metrics. These queries
+can block while reading GPU results, so use them for profiling and do not leave
+them enabled in production scenes by default.
 
 ## Structured Imports
 
@@ -2513,8 +2529,24 @@ keeps HUD text renderable before the first action writes a transient value:
 ```
 
 UI text can also bind engine metrics. `fps`, `frame`, and `paused` are always
-available. Brush-world diagnostics are exposed with `brush.*` metric names so
-debug overlays can inspect collision and render cost without game-specific C:
+available. Frame-performance metrics are sampled over
+`presentation.metrics.fps_sample_seconds`, the same data-authored window used by
+the FPS counter. They are intended for human-facing diagnostics and quick A/B
+checks, not deterministic assertions. Available performance metrics are
+`perf.frame_ms`, `perf.update_cpu_ms`, and `perf.render_cpu_ms`. The render CPU
+time covers the managed data-game draw path and intentionally excludes backend
+present/swap time. Renderer submission metrics are exposed as per-frame sampled
+averages: `render.model_mesh_submissions_per_frame`,
+`render.model_mesh_draws_per_frame`, `render.model_triangles_per_frame`,
+`render.depth_prepass_draws_per_frame`, and
+`render.depth_prepass_triangles_per_frame`. When `render.performance_queries`
+is enabled, capable backends also expose `render.geometry_samples_per_frame` and
+`render.depth_prepass_samples_per_frame`. These two metrics are useful for
+depth-prepass A/B checks: in high-overdraw scenes, toggling pre-pass on should
+lower main geometry depth-passing samples while adding a cheaper position-only
+pre-pass sample count. Brush-world diagnostics are exposed with `brush.*` metric
+names so debug overlays can inspect collision and render cost without
+game-specific C:
 
 ```json
 {

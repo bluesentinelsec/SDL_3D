@@ -87,6 +87,14 @@ static Uint32 data_game_input_tick(const slayer3d_data_game_runtime *runtime)
     return snapshot != NULL ? (Uint32)SDL_max(snapshot->tick, 0) : (Uint32)SDL_GetTicks();
 }
 
+static float data_game_elapsed_seconds(Uint64 start_counter, Uint64 end_counter)
+{
+    const Uint64 frequency = SDL_GetPerformanceFrequency();
+    if (frequency == 0 || end_counter < start_counter)
+        return 0.0f;
+    return (float)((double)(end_counter - start_counter) / (double)frequency);
+}
+
 static void data_game_release_mouse_capture(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || ctx == NULL || ctx->window == NULL || !runtime->mouse_capture_applied ||
@@ -1370,6 +1378,7 @@ static bool refresh_active_input_profile_if_available(slayer3d_data_game_runtime
 
 bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx, float dt)
 {
+    const Uint64 start_counter = SDL_GetPerformanceCounter();
     if (runtime == NULL || runtime->data == NULL)
     {
         return false;
@@ -1390,6 +1399,8 @@ bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime
 
     managed_network_update_after_frame(runtime, ctx);
     data_game_apply_scene_mouse_capture(runtime, ctx);
+    slayer3d_game_data_frame_state_record_update_cpu_time(
+        &runtime->frame_state, data_game_elapsed_seconds(start_counter, SDL_GetPerformanceCounter()));
     return true;
 }
 
@@ -1416,5 +1427,8 @@ void slayer3d_data_game_runtime_render(slayer3d_data_game_runtime *runtime, slay
     frame.metrics = &runtime->frame_state.metrics;
     frame.render_eval = &runtime->frame_state.render_eval;
     frame.pulse_phase = runtime->frame_state.ui_pulse_phase;
+    const Uint64 start_counter = SDL_GetPerformanceCounter();
     slayer3d_game_data_draw_frame(&frame);
+    slayer3d_game_data_frame_state_record_render_cpu_time(
+        &runtime->frame_state, data_game_elapsed_seconds(start_counter, SDL_GetPerformanceCounter()));
 }
