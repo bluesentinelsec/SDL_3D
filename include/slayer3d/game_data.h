@@ -463,6 +463,8 @@ extern "C"
         const char *name;
         /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_CONTENT_* flags. */
         unsigned int contents;
+        /** @brief True when runtime visibility occlusion may cull this brush. */
+        bool visibility_cullable;
         /** @brief Optional authored tags for editor/runtime queries. */
         const char *const *tags;
         /** @brief Number of entries in @p tags. */

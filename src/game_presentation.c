@@ -2555,6 +2555,9 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
         context->ok = false;
         return false;
     }
+    for (int brush_index = 0; brush_index < brush_count; ++brush_index)
+        brush_visible[brush_index] = true;
+
     slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
     int occluded_count = 0;
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
@@ -2564,18 +2567,20 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
             continue;
+        if (!brush->visibility_cullable)
+            continue;
 
         ++mutable_runtime->brush_diagnostics.visibility_brush_candidates;
         if (brush_occluded_from_camera(instance, brush, context->camera))
         {
             ++mutable_runtime->brush_diagnostics.visibility_brush_occluded;
             mutable_runtime->brush_diagnostics.visibility_triangles_culled += triangles;
+            brush_visible[brush_index] = false;
             ++occluded_count;
         }
         else
         {
             ++mutable_runtime->brush_diagnostics.visibility_brush_visible;
-            brush_visible[brush_index] = true;
         }
     }
     if (occluded_count <= 0)

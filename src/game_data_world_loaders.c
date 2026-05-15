@@ -682,6 +682,7 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             brush->name = SDL_strdup(json_string(brush_json, "name", ""));
             brush->contents = brush_flags_from_json(obj_get(brush_json, "contents"), brush_content_flag_from_string,
                                                     SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+            brush->visibility_cullable = json_bool(brush_json, "visibility_cullable", false);
             brush->tag_count = yyjson_is_arr(tags_json) ? (int)yyjson_arr_size(tags_json) : 0;
             brush->face_count = (int)yyjson_arr_size(faces_json);
             if (brush->name == NULL)

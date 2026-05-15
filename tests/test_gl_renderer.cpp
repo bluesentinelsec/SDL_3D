@@ -366,6 +366,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
         {
           "name": "brush.hidden",
           "contents": "solid",
+          "visibility_cullable": true,
           "faces": [
             { "plane": { "normal": [ 1,  0,  0], "distance":  1.0 }, "material": "mat.hidden" },
             { "plane": { "normal": [-1,  0,  0], "distance":  1.0 }, "material": "mat.hidden" },
@@ -419,8 +420,8 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
-    EXPECT_EQ(diagnostics.visibility_brush_candidates, 3u);
-    EXPECT_EQ(diagnostics.visibility_brush_visible, 2u);
+    EXPECT_EQ(diagnostics.visibility_brush_candidates, 1u);
+    EXPECT_EQ(diagnostics.visibility_brush_visible, 0u);
     EXPECT_EQ(diagnostics.visibility_brush_occluded, 1u);
     EXPECT_EQ(diagnostics.visibility_triangles_culled, 12u);
     EXPECT_EQ(diagnostics.render_mesh_submissions, 2u);

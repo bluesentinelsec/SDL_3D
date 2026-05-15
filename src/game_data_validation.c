@@ -5541,6 +5541,12 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, val
                 ok = false;
                 break;
             }
+            yyjson_val *visibility_cullable = obj_get(brush, "visibility_cullable");
+            if (visibility_cullable != NULL && !yyjson_is_bool(visibility_cullable))
+            {
+                ok = validation_error(ctx, brush_path, "brush visibility_cullable must be a boolean");
+                break;
+            }
             if (!yyjson_is_arr(faces) || yyjson_arr_size(faces) < 4)
             {
                 ok = validation_error(ctx, brush_path, "brush faces must contain at least 4 entries");
