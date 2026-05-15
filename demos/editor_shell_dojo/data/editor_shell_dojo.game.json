@@ -77,6 +77,18 @@
             "bindings": [{ "device": "keyboard", "key": "4" }]
           },
           {
+            "name": "action.editor.snap.finer",
+            "bindings": [{ "device": "keyboard", "key": "LEFTBRACKET" }]
+          },
+          {
+            "name": "action.editor.snap.coarser",
+            "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
+          },
+          {
+            "name": "action.editor.wall_axis.toggle",
+            "bindings": [{ "device": "keyboard", "key": "R" }]
+          },
+          {
             "name": "action.editor.camera.forward",
             "bindings": [{ "device": "keyboard", "key": "UP" }]
           },
@@ -144,6 +156,9 @@
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
     "signal.editor.tool.player_start",
+    "signal.editor.snap.finer",
+    "signal.editor.snap.coarser",
+    "signal.editor.wall_axis.toggle",
     "signal.editor.export",
     "signal.editor.test_run.prepare"
   ],
@@ -213,6 +228,21 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.tool.player_start",
         "on_pressed": "signal.editor.tool.player_start"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.snap.finer",
+        "on_pressed": "signal.editor.snap.finer"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.snap.coarser",
+        "on_pressed": "signal.editor.snap.coarser"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.wall_axis.toggle",
+        "on_pressed": "signal.editor.wall_axis.toggle"
       }
     ],
     "bindings": [
@@ -253,6 +283,44 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start tool selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.snap.finer",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.placement.snap",
+            "default": 0.5,
+            "direction": -1,
+            "values": [0.25, 0.5, 1.0, 2.0]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "placement snap decreased" }
+        ]
+      },
+      {
+        "signal": "signal.editor.snap.coarser",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.placement.snap",
+            "default": 0.5,
+            "direction": 1,
+            "values": [0.25, 0.5, 1.0, 2.0]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "placement snap increased" }
+        ]
+      },
+      {
+        "signal": "signal.editor.wall_axis.toggle",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.placement.wall_axis",
+            "default": "z",
+            "values": ["z", "x"]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall axis toggled" }
         ]
       },
       {
@@ -349,13 +417,8 @@
             "then": [
               {
                 "type": "editor.brush_world.create_box",
-                "world": "brush.editor_shell.target",
-                "material": "mat.editor.floor",
-                "position_from": "selection_point",
-                "position_offset": [0.0, 0.0, 0.0],
-                "snap": 0.5,
-                "min": [-3.0, -0.2, -3.0],
-                "max": [3.0, 0.0, 3.0],
+                "position_from": "placement_preview",
+                "preview_mode": "floor",
                 "message": "floor prefab created",
                 "outputs": {
                   "valid_key": "editor.create.valid",
@@ -379,13 +442,8 @@
                 "then": [
                   {
                     "type": "editor.brush_world.create_box",
-                    "world": "brush.editor_shell.target",
-                    "material": "mat.editor.wall",
-                    "position_from": "selection_point",
-                    "position_offset": [0.0, 0.0, 0.0],
-                    "snap": 0.5,
-                    "min": [-0.125, 0.0, -3.0],
-                    "max": [0.125, 2.5, 3.0],
+                    "position_from": "placement_preview",
+                    "preview_mode": "wall",
                     "message": "wall prefab created",
                     "outputs": {
                       "valid_key": "editor.create.valid",
@@ -409,13 +467,8 @@
                     "then": [
                       {
                         "type": "editor.brush_world.create_box",
-                        "world": "brush.editor_shell.target",
-                        "material": "mat.editor.ceiling",
-                        "position_from": "selection_point",
-                        "position_offset": [0.0, 0.0, 0.0],
-                        "snap": 0.5,
-                        "min": [-3.0, 2.5, -3.0],
-                        "max": [3.0, 2.7, 3.0],
+                        "position_from": "placement_preview",
+                        "preview_mode": "ceiling",
                         "message": "ceiling prefab created",
                         "outputs": {
                           "valid_key": "editor.create.valid",
@@ -451,7 +504,8 @@
                             "name": "player_start.editor_shell",
                             "scene": "scene.editor_shell.test_run",
                             "target": "entity.editor_shell.player",
-                            "position_from": "selection_point",
+                            "position_from": "placement_preview",
+                            "preview_mode": "player_start",
                             "yaw": 3.14159,
                             "pitch": 0.0,
                             "outputs": {

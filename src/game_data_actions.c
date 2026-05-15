@@ -350,13 +350,18 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         slayer3d_value fallback;
         if (current == NULL && json_scalar_to_value(obj_get(action, "default"), &fallback))
             current = &fallback;
+        const int direction = json_int(action, "direction", 1);
         size_t next = 0U;
         for (size_t i = 0; i < count; ++i)
         {
             yyjson_val *value = yyjson_arr_get(values, i);
             if (json_value_matches_property(value, current))
             {
-                next = (i + 1U) % count;
+                const int signed_count = (int)count;
+                int signed_next = ((int)i + direction) % signed_count;
+                if (signed_next < 0)
+                    signed_next += signed_count;
+                next = (size_t)signed_next;
                 break;
             }
         }

@@ -170,6 +170,7 @@ typedef struct editor_placement_preview_state
     const char *scene;
     const char *mode;
     const char *kind;
+    const char *axis;
     const char *world_name;
     const char *material_name;
     slayer3d_vec3 anchor;

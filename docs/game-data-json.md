@@ -811,10 +811,13 @@ rounds the anchor to a grid size in world units before applying the offsets.
 
 Scenes can also author `editor.placement` to show a live placement preview while
 the mouse hovers over a brush or work plane. `tool_key` names the scene-state
-property that selects the active tool. Each preview entry maps a tool `mode` to
-either a `box` ghost or a `player_start` marker. The preview reuses the editor
-debug overlay's `command_preview` flag and color, so editor hosts do not need a
-second rendering path.
+property that selects the active tool. `snap_key` can point at a runtime
+scene-state float so UI or keyboard shortcuts can change grid size without
+reloading data. Each preview entry maps a tool `mode` to either a `box` ghost or
+a `player_start` marker. Box previews can use `axis_key` with `axis` `x` or `z`
+to rotate wall-like prefabs between horizontal grid axes. The preview reuses
+the editor debug overlay's `command_preview` flag and color, so editor hosts do
+not need a second rendering path.
 
 ```json
 {
@@ -840,6 +843,16 @@ second rendering path.
           "snap": 0.5
         },
         {
+          "mode": "wall",
+          "kind": "box",
+          "world": "brush.level.blockout",
+          "material": "mat.stone_wall",
+          "axis_key": "editor.wall_axis",
+          "axis": "z",
+          "min": [-0.125, 0.0, -3.0],
+          "max": [0.125, 2.5, 3.0]
+        },
+        {
           "mode": "player_start",
           "kind": "player_start",
           "size": [0.5, 1.8, 0.5]
@@ -849,6 +862,12 @@ second rendering path.
   }
 }
 ```
+
+`editor.brush_world.create_box` and `editor.player_start.place` may use
+`"position_from": "placement_preview"` to commit exactly the active preview.
+Set `preview_mode` on the action to fail closed if the active preview belongs
+to a different tool. This keeps authored preview geometry and committed
+geometry in one place.
 
 Use `editor.player_start.place` to create or update one runtime player start.
 The action can be bound to editor tools that place a marker at a clicked point,
@@ -2480,7 +2499,8 @@ instances, and conditions can read:
 ```
 
 Use `set` for fixed values, `toggle` for booleans, and `cycle` for small
-ordered sets such as render profiles or debug variants.
+ordered sets such as render profiles or debug variants. `cycle` accepts an
+optional non-zero integer `direction`; use `-1` for previous-value shortcuts.
 
 UI text bindings can read scene state with an optional scalar `default`, which
 keeps HUD text renderable before the first action writes a transient value:

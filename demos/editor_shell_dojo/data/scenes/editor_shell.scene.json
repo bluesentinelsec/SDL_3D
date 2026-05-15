@@ -10,7 +10,9 @@
       "key": "editor.save.path",
       "value": "demos/editor_shell_dojo/data/generated/editable_level.fragment.json"
     },
-    { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" }
+    { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
+    { "type": "scene_state.set", "key": "editor.placement.snap", "value": 0.5 },
+    { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
   ],
   "input": {
     "actions": [
@@ -28,6 +30,9 @@
       "action.editor.tool.wall",
       "action.editor.tool.ceiling",
       "action.editor.tool.player_start",
+      "action.editor.snap.finer",
+      "action.editor.snap.coarser",
+      "action.editor.wall_axis.toggle",
       "action.editor.camera.forward",
       "action.editor.camera.back",
       "action.editor.camera.left",
@@ -94,6 +99,7 @@
         "valid_key": "editor.placement_preview.valid",
         "mode_key": "editor.placement_preview.mode",
         "kind_key": "editor.placement_preview.kind",
+        "axis_key": "editor.placement_preview.axis",
         "world_key": "editor.placement_preview.world",
         "material_key": "editor.placement_preview.material",
         "message_key": "editor.placement_preview.message",
@@ -118,6 +124,8 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.wall",
+          "axis_key": "editor.placement.wall_axis",
+          "axis": "z",
           "snap": 0.5,
           "min": [-0.125, 0.0, -3.0],
           "max": [0.125, 2.5, 3.0],
@@ -256,6 +264,10 @@
             "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 0.5 }
           },
           {
+            "label": "Axis",
+            "binding": { "type": "scene_state", "key": "editor.placement_preview.axis", "default": "none" }
+          },
+          {
             "label": "Txn",
             "binding": { "type": "scene_state", "key": "editor.transaction.message", "default": "none" }
           }
@@ -276,7 +288,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. Arrows move, Q/E down/up, RMB look. 1 floor 2 wall 3 ceiling 4 start. Enter commit. S save.",
+        "text": "Click select. Arrows move, Q/E down/up, RMB look. 1 floor 2 wall 3 ceiling 4 start. [/] snap, R axis. Enter commit. S save.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,
