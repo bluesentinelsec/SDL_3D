@@ -3672,7 +3672,30 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
     char error[256];
     error[0] = '\0';
     const char *position_from = json_string(action, "position_from", NULL);
-    if (position_from != NULL && SDL_strcmp(position_from, "selection_point") == 0)
+    if (position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0)
+    {
+        if (!editor_placement_preview_active_for_scene(runtime) || !runtime->editor_placement_preview.has_bounds)
+        {
+            set_error(error, (int)sizeof(error), "box brush placement requires an active placement preview");
+        }
+        else
+        {
+            const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
+            const char *preview_mode = json_string(action, "preview_mode", NULL);
+            if (preview_mode != NULL && preview->mode != NULL && SDL_strcmp(preview_mode, preview->mode) != 0)
+            {
+                set_error(error, (int)sizeof(error), "box brush placement preview mode does not match action");
+            }
+            else
+            {
+                desc.world_name = json_string(action, "world", preview->world_name);
+                desc.material_name = json_string(action, "material", preview->material_name);
+                desc.min = preview->bounds.min;
+                desc.max = preview->bounds.max;
+            }
+        }
+    }
+    else if (position_from != NULL && SDL_strcmp(position_from, "selection_point") == 0)
     {
         slayer3d_game_data_editor_selection selection;
         SDL_zero(selection);
@@ -3727,6 +3750,27 @@ bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runt
     const char *position_from = json_string(action, "position_from", NULL);
     desc.has_position = position != NULL && position_from == NULL;
     desc.position = json_vec3(action, "position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    char error[256];
+    error[0] = '\0';
+    if (position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0)
+    {
+        if (!editor_placement_preview_active_for_scene(runtime))
+        {
+            set_error(error, (int)sizeof(error), "player start placement requires an active placement preview");
+        }
+        else
+        {
+            const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
+            const char *preview_mode = json_string(action, "preview_mode", NULL);
+            if (preview_mode != NULL && preview->mode != NULL && SDL_strcmp(preview_mode, preview->mode) != 0)
+                set_error(error, (int)sizeof(error), "player start placement preview mode does not match action");
+            else
+            {
+                desc.has_position = true;
+                desc.position = preview->anchor;
+            }
+        }
+    }
     yyjson_val *yaw = obj_get(action, "yaw");
     yyjson_val *pitch = obj_get(action, "pitch");
     desc.has_yaw = yaw != NULL;
@@ -3735,9 +3779,8 @@ bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runt
     desc.pitch = json_float(action, "pitch", 0.0f);
     desc.apply_to_target = json_bool(action, "apply_to_target", true);
 
-    char error[256];
-    error[0] = '\0';
-    const bool ok = slayer3d_game_data_place_editor_player_start(runtime, &desc, error, (int)sizeof(error));
+    const bool ok =
+        error[0] == '\0' && slayer3d_game_data_place_editor_player_start(runtime, &desc, error, (int)sizeof(error));
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
     editor_set_string_output(scene_state, outputs, "message_key",
@@ -3799,6 +3842,7 @@ static void publish_editor_placement_preview(slayer3d_game_data_runtime *runtime
     editor_set_bool_output(scene_state, outputs, "valid_key", valid);
     editor_set_string_output(scene_state, outputs, "mode_key", valid && preview != NULL ? preview->mode : "");
     editor_set_string_output(scene_state, outputs, "kind_key", valid && preview != NULL ? preview->kind : "");
+    editor_set_string_output(scene_state, outputs, "axis_key", valid && preview != NULL ? preview->axis : "");
     editor_set_string_output(scene_state, outputs, "world_key", valid && preview != NULL ? preview->world_name : "");
     editor_set_string_output(scene_state, outputs, "material_key",
                              valid && preview != NULL ? preview->material_name : "");
@@ -3824,6 +3868,34 @@ static float editor_placement_snap(slayer3d_game_data_runtime *runtime, yyjson_v
     if (runtime != NULL && snap_key != NULL && snap_key[0] != '\0')
         return slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), snap_key, authored_snap);
     return authored_snap;
+}
+
+static const char *editor_placement_axis(slayer3d_game_data_runtime *runtime, yyjson_val *preview)
+{
+    const char *authored_axis = json_string(preview, "axis", "z");
+    const char *axis_key = json_string(preview, "axis_key", NULL);
+    if (runtime != NULL && axis_key != NULL && axis_key[0] != '\0')
+        return slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), axis_key, authored_axis);
+    return authored_axis;
+}
+
+static slayer3d_bounding_box editor_placement_oriented_box_bounds(yyjson_val *preview_json, slayer3d_vec3 anchor,
+                                                                  const char *axis)
+{
+    const slayer3d_vec3 source_min = json_vec3(preview_json, "min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 source_max = json_vec3(preview_json, "max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_bounding_box bounds;
+    if (axis != NULL && SDL_strcmp(axis, "x") == 0)
+    {
+        bounds.min = slayer3d_vec3_make(anchor.x + source_min.z, anchor.y + source_min.y, anchor.z + source_min.x);
+        bounds.max = slayer3d_vec3_make(anchor.x + source_max.z, anchor.y + source_max.y, anchor.z + source_max.x);
+    }
+    else
+    {
+        bounds.min = slayer3d_vec3_add(anchor, source_min);
+        bounds.max = slayer3d_vec3_add(anchor, source_max);
+    }
+    return bounds;
 }
 
 static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
@@ -3874,6 +3946,7 @@ static void update_editor_placement_preview(slayer3d_game_data_runtime *runtime,
     preview->scene = slayer3d_game_data_active_scene(runtime);
     preview->mode = json_string(preview_json, "mode", mode);
     preview->kind = json_string(preview_json, "kind", "box");
+    preview->axis = editor_placement_axis(runtime, preview_json);
     preview->world_name = json_string(preview_json, "world", hover_selection->world_name);
     preview->material_name = json_string(preview_json, "material", hover_selection->material_name);
     preview->anchor = anchor;
@@ -3887,10 +3960,7 @@ static void update_editor_placement_preview(slayer3d_game_data_runtime *runtime,
     }
     else
     {
-        preview->bounds.min =
-            slayer3d_vec3_add(anchor, json_vec3(preview_json, "min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
-        preview->bounds.max =
-            slayer3d_vec3_add(anchor, json_vec3(preview_json, "max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
+        preview->bounds = editor_placement_oriented_box_bounds(preview_json, anchor, preview->axis);
     }
     publish_editor_placement_preview(runtime, outputs, true, preview_json, preview,
                                      json_string(preview_json, "message", "placement preview"));

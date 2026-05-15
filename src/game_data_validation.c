@@ -8517,6 +8517,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (default_value != NULL &&
             !(yyjson_is_bool(default_value) || yyjson_is_num(default_value) || yyjson_is_str(default_value)))
             return validation_error(ctx, json_path, "scene_state.cycle default must be scalar");
+        yyjson_val *direction = obj_get(action, "direction");
+        if (direction != NULL && (!yyjson_is_int(direction) || yyjson_get_int(direction) == 0))
+            return validation_error(ctx, json_path, "scene_state.cycle direction must be a non-zero integer");
         return true;
     }
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
@@ -8819,36 +8822,46 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "editor.brush_world.create_box") == 0)
     {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        const char *position_from = json_string(action, "position_from");
+        const bool from_preview = position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0;
+        if (!from_preview &&
+            !require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
             return false;
-        if (!is_non_empty_string(action, "material"))
+        if (!from_preview && !is_non_empty_string(action, "material"))
             return validation_error(ctx, json_path, "editor.brush_world.create_box requires a non-empty material");
         yyjson_val *name = obj_get(action, "name");
         if (name != NULL && (!yyjson_is_str(name) || yyjson_get_str(name)[0] == '\0'))
             return validation_error(ctx, json_path,
                                     "editor.brush_world.create_box name must be non-empty when present");
+        yyjson_val *preview_mode = obj_get(action, "preview_mode");
+        if (preview_mode != NULL && (!yyjson_is_str(preview_mode) || yyjson_get_str(preview_mode)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.brush_world.create_box preview_mode must be non-empty");
         yyjson_val *min = obj_get(action, "min");
         yyjson_val *max = obj_get(action, "max");
-        if (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3))
+        if (!from_preview && (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3)))
             return validation_error(ctx, json_path, "editor.brush_world.create_box requires min and max vec3 values");
-        const char *position_from = json_string(action, "position_from");
-        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0)
+        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
+            SDL_strcmp(position_from, "placement_preview") != 0)
             return validation_error(ctx, json_path,
-                                    "editor.brush_world.create_box position_from must be selection_point");
+                                    "editor.brush_world.create_box position_from must be selection_point or "
+                                    "placement_preview");
         yyjson_val *position_offset = obj_get(action, "position_offset");
         if (position_offset != NULL && !is_exact_vec_array(position_offset, 3))
             return validation_error(ctx, json_path, "editor.brush_world.create_box position_offset must be a vec3");
         yyjson_val *snap = obj_get(action, "snap");
         if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
             return validation_error(ctx, json_path, "editor.brush_world.create_box snap must be a positive number");
-        const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));
-        const double min_y = yyjson_get_num(yyjson_arr_get(min, 1));
-        const double min_z = yyjson_get_num(yyjson_arr_get(min, 2));
-        const double max_x = yyjson_get_num(yyjson_arr_get(max, 0));
-        const double max_y = yyjson_get_num(yyjson_arr_get(max, 1));
-        const double max_z = yyjson_get_num(yyjson_arr_get(max, 2));
-        if (!(min_x < max_x && min_y < max_y && min_z < max_z))
-            return validation_error(ctx, json_path, "editor.brush_world.create_box bounds require min < max");
+        if (!from_preview)
+        {
+            const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));
+            const double min_y = yyjson_get_num(yyjson_arr_get(min, 1));
+            const double min_z = yyjson_get_num(yyjson_arr_get(min, 2));
+            const double max_x = yyjson_get_num(yyjson_arr_get(max, 0));
+            const double max_y = yyjson_get_num(yyjson_arr_get(max, 1));
+            const double max_z = yyjson_get_num(yyjson_arr_get(max, 2));
+            if (!(min_x < max_x && min_y < max_y && min_z < max_z))
+                return validation_error(ctx, json_path, "editor.brush_world.create_box bounds require min < max");
+        }
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.brush_world.create_box outputs must be an object");
@@ -8881,8 +8894,14 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (position != NULL && position_from != NULL)
             return validation_error(ctx, json_path,
                                     "editor.player_start.place requires position or position_from, not both");
-        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0)
-            return validation_error(ctx, json_path, "editor.player_start.place position_from must be selection_point");
+        yyjson_val *preview_mode = obj_get(action, "preview_mode");
+        if (preview_mode != NULL && (!yyjson_is_str(preview_mode) || yyjson_get_str(preview_mode)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.player_start.place preview_mode must be non-empty");
+        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
+            SDL_strcmp(position_from, "placement_preview") != 0)
+            return validation_error(ctx, json_path,
+                                    "editor.player_start.place position_from must be selection_point or "
+                                    "placement_preview");
         yyjson_val *yaw = obj_get(action, "yaw");
         yyjson_val *pitch = obj_get(action, "pitch");
         yyjson_val *apply_to_target = obj_get(action, "apply_to_target");
@@ -11441,9 +11460,9 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
     yyjson_val *outputs = obj_get(placement, "outputs");
     if (outputs != NULL && !yyjson_is_obj(outputs))
         return validation_error(ctx, placement_path, "scene editor placement outputs must be an object");
-    static const char *const output_keys[] = {"active_key", "valid_key",      "mode_key",      "kind_key",
-                                              "world_key",  "material_key",   "message_key",   "anchor_key",
-                                              "snap_key",   "bounds_min_key", "bounds_max_key"};
+    static const char *const output_keys[] = {"active_key", "valid_key", "mode_key",       "kind_key",
+                                              "axis_key",   "world_key", "material_key",   "message_key",
+                                              "anchor_key", "snap_key",  "bounds_min_key", "bounds_max_key"};
     for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
     {
         yyjson_val *output = obj_get(outputs, output_keys[i]);
@@ -11470,6 +11489,12 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0)
             return validation_error(ctx, preview_path,
                                     "scene editor placement preview kind must be box or player_start");
+        yyjson_val *axis_key = obj_get(preview, "axis_key");
+        if (axis_key != NULL && (!yyjson_is_str(axis_key) || yyjson_get_str(axis_key)[0] == '\0'))
+            return validation_error(ctx, preview_path, "scene editor placement preview axis_key must be non-empty");
+        const char *axis = json_string(preview, "axis");
+        if (axis != NULL && SDL_strcmp(axis, "x") != 0 && SDL_strcmp(axis, "z") != 0)
+            return validation_error(ctx, preview_path, "scene editor placement preview axis must be x or z");
         yyjson_val *offset = obj_get(preview, "position_offset");
         if (offset != NULL && !is_exact_vec_array(offset, 3))
             return validation_error(ctx, preview_path, "scene editor placement preview position_offset must be a vec3");
