@@ -62,6 +62,7 @@ struct slayer3d_render_context
     bool bloom_enabled;
     bool ssao_enabled;
     bool point_shadows_enabled;
+    bool depth_prepass_enabled;
 
     /* Z-fighting detection callback. */
     void (*zfight_callback)(const char *message, void *userdata);

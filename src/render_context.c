@@ -332,6 +332,7 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
     context->bloom_enabled = true;
     context->ssao_enabled = true;
     context->point_shadows_enabled = true;
+    context->depth_prepass_enabled = false;
     context->fog.mode = SLAYER3D_FOG_NONE;
     context->tonemap_mode = SLAYER3D_TONEMAP_NONE;
     SDL_memset(context->shadow_depth, 0, sizeof(context->shadow_depth));
@@ -434,6 +435,21 @@ void slayer3d_reset_render_stats(slayer3d_render_context *context)
         return;
     }
     SDL_zero(context->stats);
+}
+
+bool slayer3d_set_depth_prepass_enabled(slayer3d_render_context *context, bool enabled)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    context->depth_prepass_enabled = enabled;
+    return true;
+}
+
+bool slayer3d_is_depth_prepass_enabled(const slayer3d_render_context *context)
+{
+    return context != NULL && context->depth_prepass_enabled;
 }
 
 bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color)

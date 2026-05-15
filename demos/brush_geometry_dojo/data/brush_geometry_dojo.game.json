@@ -89,6 +89,7 @@
   },
   "render": {
     "lighting": true,
+    "depth_prepass": true,
     "bloom": false,
     "ssao": false,
     "clear_color": [0.035, 0.04, 0.05]

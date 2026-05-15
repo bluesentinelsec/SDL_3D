@@ -611,6 +611,10 @@ extern "C"
         Uint64 render_mesh_draws;
         /** @brief Approximate brush-world triangles submitted after renderer culling. */
         Uint64 render_triangles_submitted;
+        /** @brief Opaque brush-world draw calls replayed during the depth pre-pass. */
+        Uint64 render_depth_prepass_draws;
+        /** @brief Approximate brush-world triangles replayed during the depth pre-pass. */
+        Uint64 render_depth_prepass_triangles;
     } slayer3d_game_data_brush_diagnostics;
 
     /** @brief Runtime world model implementation kind. */
@@ -1139,6 +1143,8 @@ extern "C"
         bool bloom_enabled;
         /** @brief Whether SSAO post-processing should be enabled. */
         bool ssao_enabled;
+        /** @brief Whether the GL backend should run an opaque depth pre-pass before lit geometry. */
+        bool depth_prepass_enabled;
         /** @brief Tonemap operator for lit rendering. */
         slayer3d_tonemap_mode tonemap;
     } slayer3d_game_data_render_settings;

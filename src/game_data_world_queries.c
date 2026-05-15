@@ -2044,6 +2044,14 @@ void slayer3d_game_data_accumulate_brush_render_diagnostics(slayer3d_game_data_r
         after->model_triangles_submitted >= before->model_triangles_submitted
             ? after->model_triangles_submitted - before->model_triangles_submitted
             : 0u;
+    runtime->brush_diagnostics.render_depth_prepass_draws +=
+        after->depth_prepass_draws >= before->depth_prepass_draws
+            ? after->depth_prepass_draws - before->depth_prepass_draws
+            : 0u;
+    runtime->brush_diagnostics.render_depth_prepass_triangles +=
+        after->depth_prepass_triangles >= before->depth_prepass_triangles
+            ? after->depth_prepass_triangles - before->depth_prepass_triangles
+            : 0u;
 }
 
 typedef struct brush_named_trace_context

@@ -197,6 +197,7 @@ static bool apply_render_settings(const slayer3d_game_data_runtime *runtime, sla
         ok = slayer3d_set_render_profile(renderer, &settings.profile) && ok;
     ok = slayer3d_set_bloom_enabled(renderer, settings.bloom_enabled) && ok;
     ok = slayer3d_set_ssao_enabled(renderer, settings.ssao_enabled) && ok;
+    ok = slayer3d_set_depth_prepass_enabled(renderer, settings.depth_prepass_enabled) && ok;
     ok = slayer3d_set_tonemap_mode(renderer, settings.tonemap) && ok;
     ok = slayer3d_clear_render_context(renderer, settings.clear_color) && ok;
     return ok;

@@ -10198,6 +10198,8 @@ static bool ui_metric_name_valid(const char *metric)
         "brush.render_mesh_culled",
         "brush.render_mesh_draws",
         "brush.render_triangles_submitted",
+        "brush.render_depth_prepass_draws",
+        "brush.render_depth_prepass_triangles",
     };
 
     for (size_t i = 0; i < SDL_arraysize(metrics); ++i)
@@ -12087,9 +12089,10 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
     yyjson_val *lighting = obj_get(render, "lighting");
     yyjson_val *bloom = obj_get(render, "bloom");
     yyjson_val *ssao = obj_get(render, "ssao");
+    yyjson_val *depth_prepass = obj_get(render, "depth_prepass");
     if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
-        (ssao != NULL && !yyjson_is_bool(ssao)))
-        return validation_error(ctx, "$.render", "render lighting, bloom, and ssao must be booleans");
+        (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)))
+        return validation_error(ctx, "$.render", "render lighting, bloom, ssao, and depth_prepass must be booleans");
     if (obj_get(render, "clear_color") != NULL && !is_vec_array(obj_get(render, "clear_color"), 3))
         return validation_error(ctx, "$.render.clear_color", "render clear_color must be a vec3 or vec4 color");
     const char *tonemap = json_string(render, "tonemap");
@@ -12099,7 +12102,8 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
     if (profile != NULL && !valid_render_profile_name(profile))
         return validation_error(ctx, "$.render.profile", "render profile is unknown");
 
-    const char *key_fields[] = {"lighting_key", "bloom_key", "ssao_key", "tonemap_key", "profile_key"};
+    const char *key_fields[] = {"lighting_key",      "bloom_key",   "ssao_key",
+                                "depth_prepass_key", "tonemap_key", "profile_key"};
     for (size_t i = 0; i < SDL_arraysize(key_fields); ++i)
     {
         if (obj_get(render, key_fields[i]) != NULL && !is_non_empty_string(render, key_fields[i]))

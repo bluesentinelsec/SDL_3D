@@ -99,6 +99,8 @@ typedef void (*PFNGLCLEARCOLORPROC)(GLfloat, GLfloat, GLfloat, GLfloat);
 typedef void (*PFNGLENABLEPROC)(GLenum);
 typedef void (*PFNGLDISABLEPROC)(GLenum);
 typedef void (*PFNGLDEPTHFUNCPROC)(GLenum);
+typedef void (*PFNGLDEPTHMASKPROC)(GLboolean);
+typedef void (*PFNGLCOLORMASKPROC)(GLboolean, GLboolean, GLboolean, GLboolean);
 typedef void (*PFNGLCULLFACEPROC)(GLenum);
 typedef void (*PFNGLFRONTFACEPROC)(GLenum);
 typedef void (*PFNGLVIEWPORTPROC)(GLint, GLint, GLsizei, GLsizei);
@@ -178,6 +180,8 @@ typedef struct slayer3d_gl_funcs
     PFNGLENABLEPROC Enable;
     PFNGLDISABLEPROC Disable;
     PFNGLDEPTHFUNCPROC DepthFunc;
+    PFNGLDEPTHMASKPROC DepthMask;
+    PFNGLCOLORMASKPROC ColorMask;
     PFNGLCULLFACEPROC CullFace;
     PFNGLFRONTFACEPROC FrontFace;
     PFNGLVIEWPORTPROC Viewport;
@@ -267,6 +271,8 @@ static bool slayer3d_gl_load_funcs(slayer3d_gl_funcs *gl)
     LOAD(Enable);
     LOAD(Disable);
     LOAD(DepthFunc);
+    LOAD(DepthMask);
+    LOAD(ColorMask);
     LOAD(CullFace);
     LOAD(FrontFace);
     LOAD(Viewport);

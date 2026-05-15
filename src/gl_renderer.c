@@ -2335,6 +2335,76 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
     gl->BindVertexArray(0);
 }
 
+static bool draw_entry_depth_prepass_eligible(const slayer3d_draw_entry *entry)
+{
+    return entry != NULL && entry->lit && entry->primitive_mode == GL_TRIANGLES && entry->vertex_count > 0 &&
+           entry->tint[3] >= 0.999f;
+}
+
+static Uint64 draw_entry_triangle_count(const slayer3d_draw_entry *entry)
+{
+    if (entry == NULL)
+        return 0u;
+    if (entry->indices != NULL && entry->index_count > 0)
+        return (Uint64)(entry->index_count / 3);
+    return (Uint64)(entry->vertex_count / 3);
+}
+
+static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
+{
+    if (ctx == NULL || ctx->current_ctx == NULL || !ctx->current_ctx->depth_prepass_enabled || !ctx->shadow_program)
+        return;
+
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    gl->Viewport(0, 0, ctx->logical_w, ctx->logical_h);
+    gl->Enable(GL_DEPTH_TEST);
+    gl->DepthMask(GL_TRUE);
+    gl->DepthFunc(GL_LESS);
+    gl->ColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
+    gl->UseProgram(ctx->shadow_program);
+
+    for (int i = 0; i < ctx->draw_count; i++)
+    {
+        slayer3d_draw_entry *e = &ctx->draw_list[i];
+        if (!draw_entry_depth_prepass_eligible(e))
+            continue;
+
+        gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, e->view_projection);
+        gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+
+        gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
+        if (e->mesh_cache == NULL)
+        {
+            gl->BindBuffer(GL_ARRAY_BUFFER, ctx->shadow_position_vbo);
+            gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->vertex_count * 3 * sizeof(float)), e->positions,
+                           GL_DYNAMIC_DRAW);
+        }
+
+        if (e->indices && e->index_count > 0)
+        {
+            if (e->mesh_cache == NULL)
+            {
+                gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->shadow_ebo);
+                gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)e->index_count * sizeof(unsigned int)),
+                               e->indices, GL_DYNAMIC_DRAW);
+            }
+            gl->DrawElements(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL);
+        }
+        else
+        {
+            gl->DrawArrays(GL_TRIANGLES, 0, e->vertex_count);
+        }
+
+        ctx->current_ctx->stats.depth_prepass_draws += 1u;
+        ctx->current_ctx->stats.depth_prepass_triangles += draw_entry_triangle_count(e);
+    }
+
+    gl->BindVertexArray(0);
+    gl->ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    gl->DepthFunc(GL_LEQUAL);
+}
+
 static void camera_position_from_view_matrix(const slayer3d_mat4 *view, float out_position[3])
 {
     if (view == NULL || out_position == NULL)
@@ -4096,6 +4166,7 @@ static bool gl_present(slayer3d_render_context *context)
     /* Geometry pass: replay all entries into main FBO using the caller's
      * configured backface-culling state. Post-process passes disable culling,
      * so this must be restored explicitly every frame. */
+    replay_draw_list_depth_prepass(ctx);
     apply_geometry_cull_state(ctx);
     replay_draw_list_geometry(ctx);
 
@@ -4380,6 +4451,7 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
             gl->Disable(GL_CULL_FACE);
             gl->CullFace(GL_BACK);
         }
+        replay_draw_list_depth_prepass(ctx);
         apply_geometry_cull_state(ctx);
         replay_draw_list_geometry(ctx);
     }

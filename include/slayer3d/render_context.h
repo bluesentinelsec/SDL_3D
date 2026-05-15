@@ -52,6 +52,10 @@ extern "C"
         Uint64 model_mesh_draws;
         /** @brief Approximate triangles submitted by accepted model meshes. */
         Uint64 model_triangles_submitted;
+        /** @brief Opaque draw calls replayed during the depth pre-pass. */
+        Uint64 depth_prepass_draws;
+        /** @brief Approximate triangles replayed during the depth pre-pass. */
+        Uint64 depth_prepass_triangles;
     } slayer3d_render_stats;
 
     /**
@@ -185,6 +189,16 @@ extern "C"
     int slayer3d_get_render_context_height(const slayer3d_render_context *context);
     bool slayer3d_get_render_stats(const slayer3d_render_context *context, slayer3d_render_stats *out_stats);
     void slayer3d_reset_render_stats(slayer3d_render_context *context);
+    /**
+     * @brief Enable or disable the opaque depth pre-pass for capable backends.
+     *
+     * The OpenGL backend replays eligible opaque lit triangle meshes with a
+     * position-only shader before the main geometry pass. This can reduce
+     * expensive fragment shading in high-overdraw scenes.
+     */
+    bool slayer3d_set_depth_prepass_enabled(slayer3d_render_context *context, bool enabled);
+    /** @brief Return whether the opaque depth pre-pass is enabled on this context. */
+    bool slayer3d_is_depth_prepass_enabled(const slayer3d_render_context *context);
     bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color);
     bool slayer3d_clear_render_context_rect(slayer3d_render_context *context, const SDL_Rect *rect,
                                             slayer3d_color color);
