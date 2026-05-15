@@ -945,6 +945,14 @@ extern "C"
         float render_model_mesh_draws_per_frame;
         /** @brief Sampled renderer triangles submitted per frame. */
         float render_model_triangles_per_frame;
+        /** @brief Sampled backend geometry draw calls per frame. */
+        float render_geometry_draw_calls_per_frame;
+        /** @brief Sampled backend instanced static mesh draw calls per frame. */
+        float render_static_mesh_instanced_draw_calls_per_frame;
+        /** @brief Sampled static mesh instances batched by the backend per frame. */
+        float render_static_mesh_instances_batched_per_frame;
+        /** @brief Sampled backend draw calls avoided by static mesh instancing per frame. */
+        float render_static_mesh_draw_calls_saved_per_frame;
         /** @brief Sampled depth-prepass draw calls per frame. */
         float render_depth_prepass_draws_per_frame;
         /** @brief Sampled depth-prepass triangles per frame. */

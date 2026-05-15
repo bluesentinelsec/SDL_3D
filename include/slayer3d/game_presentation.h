@@ -260,31 +260,35 @@ extern "C"
      */
     typedef struct slayer3d_game_data_frame_state
     {
-        slayer3d_game_data_ui_metrics metrics;      /**< Latest UI metrics. */
-        slayer3d_game_data_render_eval render_eval; /**< Latest render effect inputs. */
-        float time;                                 /**< Presentation time in seconds. */
-        float ui_pulse_phase;                       /**< Normalized phase for pulse_alpha UI. */
-        float last_render_time;                     /**< Last sampled real render time. */
-        float fps_sample_time;                      /**< Accumulated FPS sample time. */
-        float displayed_fps;                        /**< Most recently sampled FPS. */
-        float frame_ms_sample_sum;                  /**< Accumulated wall-clock frame milliseconds. */
-        float update_cpu_ms_sample_sum;             /**< Accumulated managed update CPU milliseconds. */
-        float render_cpu_ms_sample_sum;             /**< Accumulated managed render CPU milliseconds. */
-        float render_mesh_submissions_sample_sum;   /**< Accumulated render mesh submission deltas. */
-        float render_mesh_draws_sample_sum;         /**< Accumulated render mesh draw deltas. */
-        float render_triangles_sample_sum;          /**< Accumulated render triangle deltas. */
-        float depth_prepass_draws_sample_sum;       /**< Accumulated depth-prepass draw deltas. */
-        float depth_prepass_triangles_sample_sum;   /**< Accumulated depth-prepass triangle deltas. */
-        float depth_prepass_samples_sample_sum;     /**< Accumulated depth-prepass sample-query deltas. */
-        float geometry_samples_sample_sum;          /**< Accumulated main geometry sample-query deltas. */
-        float light_candidates_sample_sum;          /**< Accumulated light-candidate deltas. */
-        float lights_selected_sample_sum;           /**< Accumulated selected-light deltas. */
-        float light_selection_draws_sample_sum;     /**< Accumulated lit draw light-selection deltas. */
-        slayer3d_render_stats last_render_stats;    /**< Previous cumulative render stats sample. */
-        int fps_sample_frames;                      /**< Frames accumulated in current FPS sample. */
-        Uint64 rendered_frames;                     /**< Number of rendered frames. */
-        bool have_last_render_stats;                /**< True once last_render_stats has been initialized. */
-        bool was_paused;                            /**< Pause state from the previous update. */
+        slayer3d_game_data_ui_metrics metrics;       /**< Latest UI metrics. */
+        slayer3d_game_data_render_eval render_eval;  /**< Latest render effect inputs. */
+        float time;                                  /**< Presentation time in seconds. */
+        float ui_pulse_phase;                        /**< Normalized phase for pulse_alpha UI. */
+        float last_render_time;                      /**< Last sampled real render time. */
+        float fps_sample_time;                       /**< Accumulated FPS sample time. */
+        float displayed_fps;                         /**< Most recently sampled FPS. */
+        float frame_ms_sample_sum;                   /**< Accumulated wall-clock frame milliseconds. */
+        float update_cpu_ms_sample_sum;              /**< Accumulated managed update CPU milliseconds. */
+        float render_cpu_ms_sample_sum;              /**< Accumulated managed render CPU milliseconds. */
+        float render_mesh_submissions_sample_sum;    /**< Accumulated render mesh submission deltas. */
+        float render_mesh_draws_sample_sum;          /**< Accumulated render mesh draw deltas. */
+        float render_triangles_sample_sum;           /**< Accumulated render triangle deltas. */
+        float geometry_draw_calls_sample_sum;        /**< Accumulated backend geometry draw-call deltas. */
+        float static_mesh_instanced_draw_sample_sum; /**< Accumulated static mesh instanced draw-call deltas. */
+        float static_mesh_instances_batched_sum;     /**< Accumulated static mesh instance batching deltas. */
+        float static_mesh_draw_calls_saved_sum;      /**< Accumulated static mesh saved draw-call deltas. */
+        float depth_prepass_draws_sample_sum;        /**< Accumulated depth-prepass draw deltas. */
+        float depth_prepass_triangles_sample_sum;    /**< Accumulated depth-prepass triangle deltas. */
+        float depth_prepass_samples_sample_sum;      /**< Accumulated depth-prepass sample-query deltas. */
+        float geometry_samples_sample_sum;           /**< Accumulated main geometry sample-query deltas. */
+        float light_candidates_sample_sum;           /**< Accumulated light-candidate deltas. */
+        float lights_selected_sample_sum;            /**< Accumulated selected-light deltas. */
+        float light_selection_draws_sample_sum;      /**< Accumulated lit draw light-selection deltas. */
+        slayer3d_render_stats last_render_stats;     /**< Previous cumulative render stats sample. */
+        int fps_sample_frames;                       /**< Frames accumulated in current FPS sample. */
+        Uint64 rendered_frames;                      /**< Number of rendered frames. */
+        bool have_last_render_stats;                 /**< True once last_render_stats has been initialized. */
+        bool was_paused;                             /**< Pause state from the previous update. */
     } slayer3d_game_data_frame_state;
 
     /**

@@ -3108,6 +3108,16 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                             render_stat_delta_u64(state->last_render_stats.model_mesh_draws, stats.model_mesh_draws);
                         state->render_triangles_sample_sum += render_stat_delta_u64(
                             state->last_render_stats.model_triangles_submitted, stats.model_triangles_submitted);
+                        state->geometry_draw_calls_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.geometry_draw_calls, stats.geometry_draw_calls);
+                        state->static_mesh_instanced_draw_sample_sum +=
+                            render_stat_delta_u64(state->last_render_stats.static_mesh_instanced_draw_calls,
+                                                  stats.static_mesh_instanced_draw_calls);
+                        state->static_mesh_instances_batched_sum +=
+                            render_stat_delta_u64(state->last_render_stats.static_mesh_instances_batched,
+                                                  stats.static_mesh_instances_batched);
+                        state->static_mesh_draw_calls_saved_sum += render_stat_delta_u64(
+                            state->last_render_stats.static_mesh_draw_calls_saved, stats.static_mesh_draw_calls_saved);
                         state->depth_prepass_draws_sample_sum += render_stat_delta_u64(
                             state->last_render_stats.depth_prepass_draws, stats.depth_prepass_draws);
                         state->depth_prepass_triangles_sample_sum += render_stat_delta_u64(
@@ -3139,6 +3149,14 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                     state->render_mesh_submissions_sample_sum / sample_frames;
                 state->metrics.render_model_mesh_draws_per_frame = state->render_mesh_draws_sample_sum / sample_frames;
                 state->metrics.render_model_triangles_per_frame = state->render_triangles_sample_sum / sample_frames;
+                state->metrics.render_geometry_draw_calls_per_frame =
+                    state->geometry_draw_calls_sample_sum / sample_frames;
+                state->metrics.render_static_mesh_instanced_draw_calls_per_frame =
+                    state->static_mesh_instanced_draw_sample_sum / sample_frames;
+                state->metrics.render_static_mesh_instances_batched_per_frame =
+                    state->static_mesh_instances_batched_sum / sample_frames;
+                state->metrics.render_static_mesh_draw_calls_saved_per_frame =
+                    state->static_mesh_draw_calls_saved_sum / sample_frames;
                 state->metrics.render_depth_prepass_draws_per_frame =
                     state->depth_prepass_draws_sample_sum / sample_frames;
                 state->metrics.render_depth_prepass_triangles_per_frame =
@@ -3161,6 +3179,10 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                 state->render_mesh_submissions_sample_sum = 0.0f;
                 state->render_mesh_draws_sample_sum = 0.0f;
                 state->render_triangles_sample_sum = 0.0f;
+                state->geometry_draw_calls_sample_sum = 0.0f;
+                state->static_mesh_instanced_draw_sample_sum = 0.0f;
+                state->static_mesh_instances_batched_sum = 0.0f;
+                state->static_mesh_draw_calls_saved_sum = 0.0f;
                 state->depth_prepass_draws_sample_sum = 0.0f;
                 state->depth_prepass_triangles_sample_sum = 0.0f;
                 state->depth_prepass_samples_sample_sum = 0.0f;

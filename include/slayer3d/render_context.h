@@ -66,6 +66,14 @@ extern "C"
         Uint64 lights_selected;
         /** @brief Lit draws that performed light selection or global light upload. */
         Uint64 light_selection_draws;
+        /** @brief Backend geometry draw calls replayed by capable renderers. */
+        Uint64 geometry_draw_calls;
+        /** @brief Backend geometry draw calls issued through static mesh instancing. */
+        Uint64 static_mesh_instanced_draw_calls;
+        /** @brief Static mesh instances rendered through instanced backend draw calls. */
+        Uint64 static_mesh_instances_batched;
+        /** @brief Backend draw calls avoided by static mesh instancing. */
+        Uint64 static_mesh_draw_calls_saved;
     } slayer3d_render_stats;
 
     /**
