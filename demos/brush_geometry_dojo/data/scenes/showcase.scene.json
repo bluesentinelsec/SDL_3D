@@ -191,7 +191,7 @@
       },
       {
         "name": "ui.brush_geometry.help",
-        "text": "WASD move  Mouse look  Space jump  E use  V camera  F/Mouse fire  Esc quit",
+        "text": "WASD move  Mouse look  Space jump  E use  V camera  N z-prepass  F/Mouse fire  Esc quit",
         "font": "font.brush_geometry.hud",
         "x": 0.02,
         "y": 0.075,
@@ -396,6 +396,20 @@
         ],
         "x": 0.985,
         "y": 0.091,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.depth_prepass_state",
+        "font": "font.brush_geometry.hud",
+        "format": "Z PREPASS %d",
+        "bindings": [
+          { "type": "scene_state", "key": "debug.render.depth_prepass.enabled", "default": true }
+        ],
+        "x": 0.985,
+        "y": 0.116,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],

@@ -220,6 +220,55 @@ TEST_F(GLRendererTest, DepthPrepassReplaysOpaqueLitTriangles)
     EXPECT_GT(px[0] + px[1] + px[2], 20);
 }
 
+TEST_F(GLRendererTest, DepthPrepassDisabledDoesNotReplayEligibleMeshes)
+{
+    ASSERT_TRUE(slayer3d_set_depth_prepass_enabled(ctx, false));
+    ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
+    ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.2f, 0.2f, 0.2f));
+    ctx->depth_prepass_scope_enabled = true;
+
+    float positions[] = {
+        -1.0f, -1.0f, 0.0f, 1.0f, -1.0f, 0.0f, 1.0f, 1.0f, 0.0f, -1.0f, 1.0f, 0.0f,
+    };
+    float normals[] = {
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+    };
+    unsigned int indices[] = {0, 1, 2, 0, 2, 3};
+    slayer3d_mesh mesh = {};
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.vertex_count = 4;
+    mesh.indices = indices;
+    mesh.index_count = 6;
+    mesh.material_index = -1;
+
+    slayer3d_model model = {};
+    model.meshes = &mesh;
+    model.mesh_count = 1;
+
+    slayer3d_camera3d cam;
+    cam.position = slayer3d_vec3_make(0, 0, 5);
+    cam.target = slayer3d_vec3_make(0, 0, 0);
+    cam.up = slayer3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.depth_prepass_draws, 0u);
+    EXPECT_EQ(stats.depth_prepass_triangles, 0u);
+    EXPECT_GT(px[0] + px[1] + px[2], 20);
+}
+
 TEST_F(GLRendererTest, PhongCubeVisibleWithoutIBL)
 {
     ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
