@@ -13352,6 +13352,103 @@ TEST(GameDataRuntime, EditorPickingPreservesRepeatedBrushWorldInstancePlacement)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, BrushRenderModelBatchesEquivalentMaterialsAndPreservesEditorSelection)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_equivalent_material_batching");
+    write_text(dir / "textures" / "wall_metal.jpg", "placeholder");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [{ "world": "brush.batched", "position": [0.0, 0.0, 0.0] }]
+  }
+})json");
+    write_text(dir / "equivalent_material_batching.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Equivalent Brush Material Batching Test" },
+  "world": { "name": "world.batch", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.batched",
+      "materials": [
+        {
+          "name": "mat.semantic.wall",
+          "texture": "asset://textures/wall_metal.jpg",
+          "albedo": [0.75, 0.75, 0.75, 1.0],
+          "roughness": 0.8,
+          "tex_scale": 1.0,
+          "editor": { "stable_id": "editor.material.semantic.wall" }
+        },
+        {
+          "name": "mat.semantic.trim",
+          "texture": "asset://textures/wall_metal.jpg",
+          "albedo": [0.75, 0.75, 0.75, 1.0],
+          "roughness": 0.8,
+          "tex_scale": 4.0,
+          "editor": { "stable_id": "editor.material.semantic.trim" }
+        }
+      ],
+      "brushes": [
+        {
+          "name": "brush.room",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.semantic.trim" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.semantic.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  2 }, "material": "mat.semantic.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.semantic.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  2 }, "material": "mat.semantic.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.semantic.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "equivalent_material_batching.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.batched", &world));
+    ASSERT_EQ(world.material_count, 2);
+    ASSERT_NE(world.render_model, nullptr);
+    EXPECT_EQ(world.render_model->material_count, 2);
+    EXPECT_EQ(world.render_model->mesh_count, 1)
+        << "render-equivalent authored materials should submit as one static brush mesh";
+    EXPECT_EQ(world.render_model->meshes[0].material_index, 0);
+    EXPECT_EQ(world.render_model->meshes[0].vertex_count, 36);
+
+    slayer3d_game_data_world_trace_desc trace{};
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    trace.model_filter = SLAYER3D_GAME_DATA_WORLD_MODEL_FILTER_BRUSH_WORLDS;
+    trace.start = slayer3d_vec3_make(4.0f, 1.0f, 1.0f);
+    trace.end = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+
+    slayer3d_game_data_editor_selection selection{};
+    ASSERT_TRUE(slayer3d_game_data_pick_editor_world_model(runtime, &trace, &selection));
+    EXPECT_TRUE(selection.hit);
+    EXPECT_STREQ(selection.world_name, "brush.batched");
+    EXPECT_STREQ(selection.element_name, "brush.room");
+    EXPECT_STREQ(selection.material_name, "mat.semantic.trim");
+    ASSERT_NE(selection.material_editor, nullptr);
+    EXPECT_STREQ(selection.material_editor->stable_id, "editor.material.semantic.trim");
+    EXPECT_EQ(selection.face_index, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
 {
     const std::filesystem::path dir = unique_test_dir("editor_create_box_brush");

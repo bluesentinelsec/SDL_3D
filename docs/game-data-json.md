@@ -610,7 +610,12 @@ code should use
 `slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
 Brush render meshes are available through `brush_world.render_model` and are
 drawn by the generic data-game frame path. During load, brush worlds also
-precompute local AABBs for each brush and for the whole world. When
+batch render-equivalent authored materials into shared static meshes. Materials
+remain distinct for editor picking, exports, and face metadata, but materials
+with the same texture, color, metallic/roughness, and emissive response can be
+submitted as one mesh; per-face UVs still honor each material's `tex_scale` and
+face UV overrides. During load, brush worlds also precompute local AABBs for
+each brush and for the whole world. When
 `acceleration` is enabled on a scene instance, active-scene trace queries use
 those bounds as a broad phase before exact plane clipping.
 

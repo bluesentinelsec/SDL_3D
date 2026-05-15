@@ -255,6 +255,60 @@ static void brush_mesh_bounds_add(slayer3d_mesh *mesh, slayer3d_vec3 p)
     mesh->local_bounds.max.z = SDL_max(mesh->local_bounds.max.z, p.z);
 }
 
+static bool brush_float_equal(float a, float b)
+{
+    return SDL_fabsf(a - b) <= 0.000001f;
+}
+
+static bool brush_string_equal(const char *a, const char *b)
+{
+    if (a == NULL || a[0] == '\0')
+        a = "";
+    if (b == NULL || b[0] == '\0')
+        b = "";
+    return SDL_strcmp(a, b) == 0;
+}
+
+static bool brush_materials_render_equivalent(const slayer3d_game_data_brush_material *a,
+                                              const slayer3d_game_data_brush_material *b)
+{
+    if (a == NULL || b == NULL)
+        return false;
+    return brush_string_equal(a->texture, b->texture) && brush_float_equal(a->albedo.x, b->albedo.x) &&
+           brush_float_equal(a->albedo.y, b->albedo.y) && brush_float_equal(a->albedo.z, b->albedo.z) &&
+           brush_float_equal(a->albedo.w, b->albedo.w) && brush_float_equal(a->metallic, b->metallic) &&
+           brush_float_equal(a->roughness, b->roughness) && brush_float_equal(a->emissive.x, b->emissive.x) &&
+           brush_float_equal(a->emissive.y, b->emissive.y) && brush_float_equal(a->emissive.z, b->emissive.z);
+}
+
+static int brush_model_build_material_batches(const slayer3d_game_data_brush_world *world, int *material_to_batch,
+                                              int *batch_material_indices)
+{
+    if (world == NULL || material_to_batch == NULL || batch_material_indices == NULL)
+        return 0;
+
+    int batch_count = 0;
+    for (int material_index = 0; material_index < world->material_count; ++material_index)
+    {
+        material_to_batch[material_index] = -1;
+        for (int batch_index = 0; batch_index < batch_count; ++batch_index)
+        {
+            const int representative = batch_material_indices[batch_index];
+            if (brush_materials_render_equivalent(&world->materials[material_index], &world->materials[representative]))
+            {
+                material_to_batch[material_index] = batch_index;
+                break;
+            }
+        }
+        if (material_to_batch[material_index] < 0)
+        {
+            material_to_batch[material_index] = batch_count;
+            batch_material_indices[batch_count++] = material_index;
+        }
+    }
+    return batch_count;
+}
+
 bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_world *world)
 {
     if (world == NULL)
@@ -337,9 +391,22 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
     if (!brush_model_copy_materials(world, model))
         return false;
 
-    int *triangle_counts = (int *)SDL_calloc((size_t)world->material_count, sizeof(*triangle_counts));
-    if (triangle_counts == NULL)
+    int *material_to_batch = (int *)SDL_malloc((size_t)world->material_count * sizeof(*material_to_batch));
+    int *batch_material_indices = (int *)SDL_malloc((size_t)world->material_count * sizeof(*batch_material_indices));
+    if (material_to_batch == NULL || batch_material_indices == NULL)
+    {
+        SDL_free(material_to_batch);
+        SDL_free(batch_material_indices);
         return false;
+    }
+    const int batch_count = brush_model_build_material_batches(world, material_to_batch, batch_material_indices);
+    int *triangle_counts = (int *)SDL_calloc((size_t)batch_count, sizeof(*triangle_counts));
+    if (triangle_counts == NULL)
+    {
+        SDL_free(material_to_batch);
+        SDL_free(batch_material_indices);
+        return false;
+    }
 
     int max_face_count = 0;
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
@@ -348,6 +415,8 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
     slayer3d_vec3 *polygon = (slayer3d_vec3 *)SDL_malloc((size_t)polygon_capacity * sizeof(*polygon));
     if (polygon == NULL)
     {
+        SDL_free(material_to_batch);
+        SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
         return false;
     }
@@ -364,19 +433,21 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
                 continue;
             const int count = brush_build_face_polygon(brush, face_index, polygon, polygon_capacity, NULL, NULL, NULL);
             if (count >= 3)
-                triangle_counts[material_index] += count - 2;
+                triangle_counts[material_to_batch[material_index]] += count - 2;
         }
     }
 
     int mesh_count = 0;
-    for (int material_index = 0; material_index < world->material_count; ++material_index)
+    for (int batch_index = 0; batch_index < batch_count; ++batch_index)
     {
-        if (triangle_counts[material_index] > 0)
+        if (triangle_counts[batch_index] > 0)
             ++mesh_count;
     }
     if (mesh_count <= 0)
     {
         SDL_free(polygon);
+        SDL_free(material_to_batch);
+        SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
         world->render_model = NULL;
         return true;
@@ -392,22 +463,25 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
     model->mesh_count = mesh_count;
 
     int mesh_index = 0;
-    int *material_to_mesh = (int *)SDL_malloc((size_t)world->material_count * sizeof(*material_to_mesh));
-    int *vertex_offsets = (int *)SDL_calloc((size_t)world->material_count, sizeof(*vertex_offsets));
-    if (material_to_mesh == NULL || vertex_offsets == NULL)
+    int *batch_to_mesh = (int *)SDL_malloc((size_t)batch_count * sizeof(*batch_to_mesh));
+    int *vertex_offsets = (int *)SDL_calloc((size_t)batch_count, sizeof(*vertex_offsets));
+    if (batch_to_mesh == NULL || vertex_offsets == NULL)
     {
-        SDL_free(material_to_mesh);
+        SDL_free(batch_to_mesh);
         SDL_free(vertex_offsets);
         SDL_free(polygon);
+        SDL_free(material_to_batch);
+        SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
         return false;
     }
-    for (int material_index = 0; material_index < world->material_count; ++material_index)
+    for (int batch_index = 0; batch_index < batch_count; ++batch_index)
     {
-        material_to_mesh[material_index] = -1;
-        const int triangles = triangle_counts[material_index];
+        batch_to_mesh[batch_index] = -1;
+        const int triangles = triangle_counts[batch_index];
         if (triangles <= 0)
             continue;
+        const int material_index = batch_material_indices[batch_index];
         slayer3d_mesh *mesh = &model->meshes[mesh_index];
         const int vertex_count = triangles * 3;
         mesh->name =
@@ -423,15 +497,17 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
         if (mesh->name == NULL || mesh->positions == NULL || mesh->normals == NULL || mesh->uvs == NULL ||
             mesh->colors == NULL || mesh->indices == NULL)
         {
-            SDL_free(material_to_mesh);
+            SDL_free(batch_to_mesh);
             SDL_free(vertex_offsets);
             SDL_free(polygon);
+            SDL_free(material_to_batch);
+            SDL_free(batch_material_indices);
             SDL_free(triangle_counts);
             return false;
         }
         for (int i = 0; i < vertex_count; ++i)
             mesh->indices[i] = (unsigned int)i;
-        material_to_mesh[material_index] = mesh_index++;
+        batch_to_mesh[batch_index] = mesh_index++;
     }
 
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
@@ -442,9 +518,11 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
         for (int face_index = 0; face_index < brush->face_count; ++face_index)
         {
             const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
-            const int mesh_for_material = face->material_index >= 0 && face->material_index < world->material_count
-                                              ? material_to_mesh[face->material_index]
-                                              : -1;
+            const int batch_for_material = face->material_index >= 0 && face->material_index < world->material_count
+                                               ? material_to_batch[face->material_index]
+                                               : -1;
+            const int mesh_for_material =
+                batch_for_material >= 0 && batch_for_material < batch_count ? batch_to_mesh[batch_for_material] : -1;
             slayer3d_vec3 normal;
             slayer3d_vec3 u;
             slayer3d_vec3 v;
@@ -471,7 +549,7 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
                 const slayer3d_vec3 verts[3] = {polygon[0], polygon[tri], polygon[tri + 1]};
                 for (int corner = 0; corner < 3; ++corner)
                 {
-                    const int vertex = vertex_offsets[face->material_index]++;
+                    const int vertex = vertex_offsets[batch_for_material]++;
                     if (vertex >= mesh->vertex_count)
                         continue;
                     mesh->positions[vertex * 3 + 0] = verts[corner].x;
@@ -495,9 +573,11 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
     }
 
     world->render_model = model;
-    SDL_free(material_to_mesh);
+    SDL_free(batch_to_mesh);
     SDL_free(vertex_offsets);
     SDL_free(polygon);
+    SDL_free(material_to_batch);
+    SDL_free(batch_material_indices);
     SDL_free(triangle_counts);
     return true;
 }
