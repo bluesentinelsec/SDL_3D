@@ -900,6 +900,32 @@ static float projected_primitive_pixels(const primitive_draw_context *context,
     return ((radius * 2.0f) * (float)axis_pixels / denominator) * SDL_max(primitive->lod_bias, 0.001f);
 }
 
+static bool primitive_mesh_uses_procedural_lod(slayer3d_game_data_mesh_primitive_kind primitive)
+{
+    switch (primitive)
+    {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return true;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        return false;
+    }
+}
+
 static int lod_segment_count(int authored, int minimum, float projected_pixels, float near_pixels, float far_pixels)
 {
     authored = SDL_max(authored, 3);
@@ -911,17 +937,22 @@ static int lod_segment_count(int authored, int minimum, float projected_pixels, 
     if (projected_pixels <= far_pixels)
         return minimum;
     const float t = (projected_pixels - far_pixels) / (near_pixels - far_pixels);
-    const int resolved = minimum + (int)SDL_floorf((float)(authored - minimum) * t + 0.5f);
+    const float multiplier = t >= 0.66f ? 0.75f : (t >= 0.33f ? 0.5f : 0.0f);
+    const int resolved = multiplier > 0.0f ? (int)SDL_floorf((float)authored * multiplier + 0.5f) : minimum;
     return SDL_clamp(resolved, minimum, authored);
 }
 
 static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL || !context->render_settings.procedural_lod_enabled ||
-        !primitive->lod_enabled || primitive->view_space ||
-        (primitive->type != SLAYER3D_GAME_DATA_RENDER_SPHERE &&
-         primitive->type != SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH &&
-         primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE))
+        !primitive->lod_enabled || primitive->view_space)
+    {
+        return;
+    }
+    if (primitive->type != SLAYER3D_GAME_DATA_RENDER_SPHERE &&
+        primitive->type != SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH &&
+        (primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE ||
+         !primitive_mesh_uses_procedural_lod(primitive->mesh_primitive)))
     {
         return;
     }
@@ -932,9 +963,46 @@ static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_
     const int minimum = context->render_settings.procedural_lod_min_segments;
     const float near_pixels = context->render_settings.procedural_lod_near_pixels;
     const float far_pixels = context->render_settings.procedural_lod_far_pixels;
-    primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
-    primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
-    primitive->tube_segments = lod_segment_count(primitive->tube_segments, minimum, projected, near_pixels, far_pixels);
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE ||
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    {
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        return;
+    }
+
+    switch (primitive->mesh_primitive)
+    {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        primitive->tube_segments =
+            lod_segment_count(primitive->tube_segments, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        break;
+    }
 }
 
 static bool primitive_sphere_batch_matches(const slayer3d_game_data_render_primitive *batch,

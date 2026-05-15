@@ -573,6 +573,90 @@ TEST_F(GLRendererTest, ProceduralLodReducesDistantPrimitiveTriangles)
     std::filesystem::remove_all(dir);
 }
 
+TEST_F(GLRendererTest, ProceduralLodDoesNotCreateUnusedCubeVariants)
+{
+    const std::filesystem::path dir = UniqueTempDir("procedural_lod_cube");
+    WriteText(dir / "scenes" / "play.scene.json",
+              R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "renders_world": true
+})json");
+    WriteText(dir / "procedural_lod_cube.game.json",
+              R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Procedural LOD Cube Test" },
+  "world": { "name": "world.lod_cube", "kind": "fixed_screen" },
+  "render": {
+    "lighting": false,
+    "procedural_lod": false,
+    "procedural_lod_key": "debug.procedural_lod",
+    "procedural_lod_near_pixels": 120.0,
+    "procedural_lod_far_pixels": 24.0,
+    "procedural_lod_min_segments": 8
+  },
+  "entities": [
+    {
+      "name": "entity.lod.cube",
+      "active": true,
+      "transform": { "position": [0.0, 1.0, -80.0] },
+      "components": [
+        {
+          "type": "render.mesh_primitive",
+          "primitive": "cube",
+          "size": [2.0, 2.0, 2.0],
+          "segments": 64,
+          "rings": 32,
+          "color": [220, 80, 80, 255],
+          "lighting": false
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "procedural_lod_cube.game.json").string().c_str(), session,
+                                             &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_camera3d cam{};
+    cam.position = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.target = slayer3d_vec3_make(0.0f, 1.0f, -1.0f);
+    cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 70.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    slayer3d_game_data_mesh_primitive_cache cache{};
+    slayer3d_game_data_mesh_primitive_cache_init(&cache);
+    slayer3d_game_data_frame_desc frame{};
+    frame.runtime = runtime;
+    frame.renderer = ctx;
+    frame.mesh_primitive_cache = &cache;
+    frame.fallback_camera = &cam;
+
+    ASSERT_TRUE(slayer3d_game_data_draw_frame(&frame));
+    EXPECT_EQ(cache.misses, 1);
+    ASSERT_EQ(cache.count, 1);
+    const int index_count = cache.entries[0].mesh.index_count;
+
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.procedural_lod", true);
+    ASSERT_TRUE(slayer3d_game_data_draw_frame(&frame));
+    EXPECT_EQ(cache.count, 1);
+    EXPECT_EQ(cache.misses, 1);
+    EXPECT_GT(cache.hits, 0);
+    EXPECT_EQ(cache.entries[0].mesh.index_count, index_count);
+
+    slayer3d_game_data_mesh_primitive_cache_free(&cache);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    std::filesystem::remove_all(dir);
+}
+
 TEST_F(GLRendererTest, DepthPrepassDisabledDoesNotReplayEligibleMeshes)
 {
     ASSERT_TRUE(slayer3d_set_depth_prepass_enabled(ctx, false));
