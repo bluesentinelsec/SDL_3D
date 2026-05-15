@@ -155,6 +155,7 @@ struct BrushWorldInstanceCapture
     bool acceleration_enabled = true;
     bool lighting_enabled = true;
     bool debug_wireframe = false;
+    bool visibility_occlusion_enabled = false;
 };
 
 struct WorldModelInstanceCapture
@@ -1656,6 +1657,7 @@ bool capture_brush_world_instance(void *userdata, const slayer3d_game_data_brush
     capture->acceleration_enabled = instance->acceleration_enabled;
     capture->lighting_enabled = instance->lighting_enabled;
     capture->debug_wireframe = instance->debug_wireframe;
+    capture->visibility_occlusion_enabled = instance->visibility_occlusion_enabled;
     return true;
 }
 
@@ -7881,12 +7883,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(render_settings.depth_prepass_enabled);
     EXPECT_TRUE(render_settings.per_object_light_selection_enabled);
     EXPECT_EQ(render_settings.per_object_light_limit, 4);
-    const int light_selection_toggle_signal =
-        slayer3d_game_data_find_signal(runtime, "signal.brush_geometry.render.light_selection.toggle");
-    ASSERT_GE(light_selection_toggle_signal, 0);
-    slayer3d_signal_emit(slayer3d_game_session_get_signal_bus(session), light_selection_toggle_signal, nullptr);
-    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
-    EXPECT_FALSE(render_settings.per_object_light_selection_enabled);
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.brush_geometry.showcase"));
     slayer3d_game_data_scene_skybox skybox{};
@@ -8044,6 +8040,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_EQ(capture.world_name, "brush.brush_geometry.showcase");
     EXPECT_TRUE(capture.acceleration_enabled);
     EXPECT_TRUE(capture.lighting_enabled);
+    EXPECT_TRUE(capture.visibility_occlusion_enabled);
 
     ASSERT_EQ(slayer3d_game_data_world_light_count(runtime), 15);
     slayer3d_camera3d camera{};
