@@ -137,9 +137,9 @@ struct slayer3d_network_discovery_session
 static int slayer3d_network_library_refs = 0;
 #endif
 
+#if SLAYER3D_NETWORKING_ENABLED
 static NET_DatagramSocket *slayer3d_network_create_datagram_socket(Uint16 port, bool allow_broadcast)
 {
-#if SLAYER3D_NETWORKING_ENABLED
     SDL_PropertiesID props = 0;
     NET_DatagramSocket *socket = NULL;
     if (allow_broadcast)
@@ -159,12 +159,8 @@ static NET_DatagramSocket *slayer3d_network_create_datagram_socket(Uint16 port, 
     }
 
     return socket != NULL ? socket : NET_CreateDatagramSocket(NULL, port, 0);
-#else
-    (void)port;
-    (void)allow_broadcast;
-    return NULL;
-#endif
 }
+#endif
 
 #if SLAYER3D_NETWORKING_ENABLED
 static void slayer3d_network_set_status(slayer3d_network_session *session, slayer3d_network_state state,
