@@ -304,6 +304,7 @@ struct slayer3d_gl_context
     GLuint shadow_program;
     GLint shadow_light_vp_loc;
     GLint shadow_model_loc;
+    GLint shadow_use_instancing_loc;
     GLuint shadow_vao;
     GLuint shadow_position_vbo;
     GLuint shadow_ebo;
@@ -858,12 +859,19 @@ static const char k_transition_frag[] =
     "    }\n"
     "}\n";
 
-static const char k_shadow_vert[] = "layout(location = 0) in vec3 aPosition;\n"
-                                    "uniform mat4 uLightVP;\n"
-                                    "uniform mat4 uModel;\n"
-                                    "void main() {\n"
-                                    "    gl_Position = uLightVP * uModel * vec4(aPosition, 1.0);\n"
-                                    "}\n";
+static const char k_shadow_vert[] =
+    "layout(location = 0) in vec3 aPosition;\n"
+    "layout(location = 5) in vec4 iModel0;\n"
+    "layout(location = 6) in vec4 iModel1;\n"
+    "layout(location = 7) in vec4 iModel2;\n"
+    "layout(location = 8) in vec4 iModel3;\n"
+    "uniform mat4 uLightVP;\n"
+    "uniform mat4 uModel;\n"
+    "uniform int uUseInstancing;\n"
+    "void main() {\n"
+    "    mat4 model = (uUseInstancing != 0) ? mat4(iModel0, iModel1, iModel2, iModel3) : uModel;\n"
+    "    gl_Position = uLightVP * model * vec4(aPosition, 1.0);\n"
+    "}\n";
 
 static const char k_shadow_frag[] = "out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n";
 
@@ -2317,11 +2325,18 @@ static void compute_point_shadow_matrices(slayer3d_gl_context *ctx, const slayer
 /* Draw list replay                                                    */
 /* ------------------------------------------------------------------ */
 
+static void replay_draw_list_geometry(slayer3d_gl_context *ctx);
+static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slayer3d_draw_entry *a,
+                                      const slayer3d_draw_entry *b);
+static bool upload_instance_model_attributes(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entries, int count);
+
 static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
 {
     slayer3d_gl_funcs *gl = &ctx->gl;
     gl->UseProgram(ctx->shadow_program);
     /* lightVP uniform is set by the caller per cascade. */
+    if (ctx->shadow_use_instancing_loc >= 0)
+        gl->Uniform1i(ctx->shadow_use_instancing_loc, 0);
 
     for (int i = 0; i < ctx->draw_count; i++)
     {
@@ -2363,6 +2378,23 @@ static bool draw_entry_depth_prepass_eligible(const slayer3d_draw_entry *entry)
            entry->vertex_count > 0 && entry->mesh_cache != NULL && entry->tint[3] >= 0.999f;
 }
 
+static int draw_entry_depth_instance_batch_count(const slayer3d_gl_context *ctx, int start)
+{
+    if (ctx == NULL || start < 0 || start >= ctx->draw_count)
+        return 0;
+    const slayer3d_draw_entry *first = &ctx->draw_list[start];
+    if (!draw_entry_depth_prepass_eligible(first))
+        return 0;
+
+    int count = 1;
+    while (start + count < ctx->draw_count && draw_entry_depth_prepass_eligible(&ctx->draw_list[start + count]) &&
+           draw_entries_can_instance(ctx, first, &ctx->draw_list[start + count]))
+    {
+        ++count;
+    }
+    return count;
+}
+
 static Uint64 draw_entry_triangle_count(const slayer3d_draw_entry *entry)
 {
     if (entry == NULL)
@@ -2377,8 +2409,6 @@ static bool gl_sample_queries_enabled(const slayer3d_gl_context *ctx)
     return ctx != NULL && ctx->sample_queries_supported && ctx->current_ctx != NULL &&
            ctx->current_ctx->render_sample_queries_enabled;
 }
-
-static void replay_draw_list_geometry(slayer3d_gl_context *ctx);
 
 static Uint64 gl_query_samples_passed(slayer3d_gl_context *ctx, GLuint query)
 {
@@ -2431,6 +2461,32 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
         if (!draw_entry_depth_prepass_eligible(e))
             continue;
 
+        const int instance_batch_count = draw_entry_depth_instance_batch_count(ctx, i);
+        if (instance_batch_count > 1)
+        {
+            gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, e->view_projection);
+            gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+            if (ctx->shadow_use_instancing_loc >= 0)
+                gl->Uniform1i(ctx->shadow_use_instancing_loc, 1);
+            gl->BindVertexArray(e->mesh_cache->shadow_vao);
+            if (upload_instance_model_attributes(ctx, e, instance_batch_count))
+            {
+                if (e->indices && e->index_count > 0)
+                    gl->DrawElementsInstanced(GL_TRIANGLES, e->index_count, GL_UNSIGNED_INT, NULL,
+                                              instance_batch_count);
+                else
+                    gl->DrawArraysInstanced(GL_TRIANGLES, 0, e->vertex_count, instance_batch_count);
+
+                ctx->current_ctx->stats.depth_prepass_draws += 1u;
+                ctx->current_ctx->stats.depth_prepass_triangles +=
+                    draw_entry_triangle_count(e) * (Uint64)instance_batch_count;
+                i += instance_batch_count - 1;
+                continue;
+            }
+        }
+
+        if (ctx->shadow_use_instancing_loc >= 0)
+            gl->Uniform1i(ctx->shadow_use_instancing_loc, 0);
         gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, e->view_projection);
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
 
@@ -2825,24 +2881,18 @@ static int draw_entry_instance_batch_count(const slayer3d_gl_context *ctx, int s
     return count;
 }
 
-static bool upload_instance_attributes(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entries, int count)
+static bool upload_instance_model_attributes(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entries, int count)
 {
     if (ctx == NULL || entries == NULL || count <= 0)
         return false;
     float *model_matrices = (float *)SDL_malloc((size_t)count * 16u * sizeof(float));
-    float *normal_matrices = (float *)SDL_malloc((size_t)count * 9u * sizeof(float));
-    if (model_matrices == NULL || normal_matrices == NULL)
+    if (model_matrices == NULL)
     {
-        SDL_free(model_matrices);
-        SDL_free(normal_matrices);
         SDL_OutOfMemory();
         return false;
     }
     for (int i = 0; i < count; ++i)
-    {
         SDL_memcpy(&model_matrices[i * 16], entries[i].model_matrix, 16u * sizeof(float));
-        SDL_memcpy(&normal_matrices[i * 9], entries[i].normal_matrix, 9u * sizeof(float));
-    }
 
     slayer3d_gl_funcs *gl = &ctx->gl;
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->instance_model_vbo);
@@ -2856,6 +2906,24 @@ static bool upload_instance_attributes(slayer3d_gl_context *ctx, const slayer3d_
         gl->VertexAttribDivisor(attrib, 1u);
     }
 
+    SDL_free(model_matrices);
+    return true;
+}
+
+static bool upload_instance_attributes(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entries, int count)
+{
+    if (!upload_instance_model_attributes(ctx, entries, count))
+        return false;
+    float *normal_matrices = (float *)SDL_malloc((size_t)count * 9u * sizeof(float));
+    if (normal_matrices == NULL)
+    {
+        SDL_OutOfMemory();
+        return false;
+    }
+    for (int i = 0; i < count; ++i)
+        SDL_memcpy(&normal_matrices[i * 9], entries[i].normal_matrix, 9u * sizeof(float));
+
+    slayer3d_gl_funcs *gl = &ctx->gl;
     gl->BindBuffer(GL_ARRAY_BUFFER, ctx->instance_normal_vbo);
     gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)((size_t)count * 9u * sizeof(float)), normal_matrices, GL_DYNAMIC_DRAW);
     for (GLuint column = 0; column < 3; ++column)
@@ -2867,7 +2935,6 @@ static bool upload_instance_attributes(slayer3d_gl_context *ctx, const slayer3d_
         gl->VertexAttribDivisor(attrib, 1u);
     }
 
-    SDL_free(model_matrices);
     SDL_free(normal_matrices);
     return true;
 }
@@ -3886,6 +3953,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     {
         ctx->shadow_light_vp_loc = gl->GetUniformLocation(ctx->shadow_program, "uLightVP");
         ctx->shadow_model_loc = gl->GetUniformLocation(ctx->shadow_program, "uModel");
+        ctx->shadow_use_instancing_loc = gl->GetUniformLocation(ctx->shadow_program, "uUseInstancing");
     }
 
     /* Point light shadow: 1024x1024 depth cubemaps. */

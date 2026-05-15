@@ -225,6 +225,8 @@ TEST_F(GLRendererTest, StaticModelMeshesUseInstancedBackendDraws)
     ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
     ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.25f, 0.25f, 0.25f));
     ASSERT_TRUE(slayer3d_set_per_object_light_selection_enabled(ctx, false));
+    ASSERT_TRUE(slayer3d_set_depth_prepass_enabled(ctx, true));
+    ctx->depth_prepass_scope_enabled = true;
 
     float positions[] = {
         -0.35f, -0.35f, 0.0f, 0.35f, -0.35f, 0.0f, 0.0f, 0.35f, 0.0f,
@@ -281,6 +283,8 @@ TEST_F(GLRendererTest, StaticModelMeshesUseInstancedBackendDraws)
     ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
     EXPECT_EQ(stats.model_mesh_submissions, 5u);
     EXPECT_EQ(stats.model_mesh_draws, 5u);
+    EXPECT_EQ(stats.depth_prepass_draws, 1u);
+    EXPECT_EQ(stats.depth_prepass_triangles, 5u);
     EXPECT_EQ(stats.geometry_draw_calls, 1u);
     EXPECT_EQ(stats.static_mesh_instanced_draw_calls, 1u);
     EXPECT_EQ(stats.static_mesh_instances_batched, 5u);
