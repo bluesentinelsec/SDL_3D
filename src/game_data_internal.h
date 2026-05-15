@@ -164,6 +164,20 @@ typedef struct editor_command_preview_state
     slayer3d_bounding_box bounds;
 } editor_command_preview_state;
 
+typedef struct editor_placement_preview_state
+{
+    bool active;
+    const char *scene;
+    const char *mode;
+    const char *kind;
+    const char *world_name;
+    const char *material_name;
+    slayer3d_vec3 anchor;
+    float snap;
+    bool has_bounds;
+    slayer3d_bounding_box bounds;
+} editor_placement_preview_state;
+
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
 
 typedef struct editor_command_transaction_entry
@@ -697,6 +711,7 @@ typedef struct slayer3d_game_data_runtime
     slayer3d_game_data_editor_selection editor_active_selection;
     const char *editor_selection_scene;
     editor_command_preview_state editor_command_preview;
+    editor_placement_preview_state editor_placement_preview;
     editor_command_history_state editor_command_history;
     scene_activity_state activity;
     float current_dt;

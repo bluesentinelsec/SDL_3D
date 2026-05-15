@@ -809,6 +809,47 @@ rounds the anchor to a grid size in world units before applying the offsets.
 }
 ```
 
+Scenes can also author `editor.placement` to show a live placement preview while
+the mouse hovers over a brush or work plane. `tool_key` names the scene-state
+property that selects the active tool. Each preview entry maps a tool `mode` to
+either a `box` ghost or a `player_start` marker. The preview reuses the editor
+debug overlay's `command_preview` flag and color, so editor hosts do not need a
+second rendering path.
+
+```json
+{
+  "editor": {
+    "placement": {
+      "tool_key": "editor.tool.mode",
+      "snap_key": "editor.placement.snap",
+      "default_snap": 0.5,
+      "outputs": {
+        "active_key": "editor.placement_preview.active",
+        "mode_key": "editor.placement_preview.mode",
+        "bounds_min_key": "editor.placement_preview.bounds_min",
+        "bounds_max_key": "editor.placement_preview.bounds_max"
+      },
+      "previews": [
+        {
+          "mode": "floor",
+          "kind": "box",
+          "world": "brush.level.blockout",
+          "material": "mat.stone_floor",
+          "min": [-4.0, -0.25, -4.0],
+          "max": [4.0, 0.0, 4.0],
+          "snap": 0.5
+        },
+        {
+          "mode": "player_start",
+          "kind": "player_start",
+          "size": [0.5, 1.8, 0.5]
+        }
+      ]
+    }
+  }
+}
+```
+
 Use `editor.player_start.place` to create or update one runtime player start.
 The action can be bound to editor tools that place a marker at a clicked point,
 or to direct UI controls that place a known target actor at an explicit

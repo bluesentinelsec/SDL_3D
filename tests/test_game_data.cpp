@@ -8771,6 +8771,40 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
                                                   grid_error, sizeof(grid_error)));
     EXPECT_NE(std::string(grid_error).find("work_plane_grid_spacing must be positive"), std::string::npos)
         << grid_error;
+
+    write_text(dir / "bad_placement.game.json", R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Scene Editor Placement" },
+  "world": {
+    "name": "world.bad_scene_editor_placement",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "selection": {
+      "trace": { "source": "camera_screen", "camera": "camera.valid" },
+      "outputs": { "hit_key": "editor.hit" }
+    },
+    "placement": {
+      "previews": [
+        { "mode": "floor", "kind": "capsule" }
+      ]
+    }
+  }
+})json");
+    char placement_error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_placement.game.json").string().c_str(), nullptr,
+                                                  placement_error, sizeof(placement_error)));
+    EXPECT_NE(std::string(placement_error).find("preview kind must be box or player_start"), std::string::npos)
+        << placement_error;
     remove_test_dir(dir);
 }
 
@@ -14195,6 +14229,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_input_process_event(input, &click);
     slayer3d_input_update(input, 1);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    SDL_Event release{};
+    release.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    release.button.button = SDL_BUTTON_LEFT;
+    release.button.x = click.button.x;
+    release.button.y = click.button.y;
+    slayer3d_input_process_event(input, &release);
+    slayer3d_input_update(input, 2);
     slayer3d_game_data_editor_selection placement_selection{};
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &placement_selection));
     ASSERT_TRUE(placement_selection.hit);
@@ -14212,6 +14253,39 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, floor_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.material", ""),
+                 "mat.editor.floor");
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 0.5f, 0.001f);
+    const slayer3d_value *placement_min =
+        slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    const slayer3d_value *placement_max =
+        slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_NE(placement_max, nullptr);
+    ASSERT_EQ(placement_min->type, SLAYER3D_VALUE_VEC3);
+    ASSERT_EQ(placement_max->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x - 3.0f, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.y, placement_origin.y - 0.2f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 3.0f, 0.001f);
+    struct PlacementPreviewDebug
+    {
+        int edges = 0;
+    } placement_debug;
+    auto count_placement_preview = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
+        auto *debug = static_cast<PlacementPreviewDebug *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE &&
+            primitive->element_name != nullptr && std::string(primitive->element_name) == "floor")
+        {
+            debug->edges++;
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_placement_preview, &placement_debug));
+    EXPECT_EQ(placement_debug.edges, 12);
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "floor prefab created");
@@ -14260,6 +14334,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     slayer3d_signal_emit(bus, player_start_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "player_start");
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.kind", ""), "player_start");
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.name", ""),
