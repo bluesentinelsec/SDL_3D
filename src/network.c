@@ -3,6 +3,7 @@
 #include <SDL3/SDL_endian.h>
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
+#include <SDL3/SDL_properties.h>
 #include <SDL3/SDL_stdinc.h>
 
 #if SLAYER3D_NETWORKING_ENABLED
@@ -45,7 +46,7 @@ typedef int NET_Status;
     do                                                                                                                 \
     {                                                                                                                  \
     } while (0)
-#define NET_CreateDatagramSocket(interface, port) ((NET_DatagramSocket *)NULL)
+#define NET_CreateDatagramSocket(interface, port, props) ((NET_DatagramSocket *)NULL)
 #define NET_DestroyDatagramSocket(socket)                                                                              \
     do                                                                                                                 \
     {                                                                                                                  \
@@ -134,6 +135,29 @@ struct slayer3d_network_discovery_session
 
 #if SLAYER3D_NETWORKING_ENABLED
 static int slayer3d_network_library_refs = 0;
+
+static NET_DatagramSocket *slayer3d_network_create_datagram_socket(Uint16 port, bool allow_broadcast)
+{
+    SDL_PropertiesID props = 0;
+    NET_DatagramSocket *socket = NULL;
+    if (allow_broadcast)
+    {
+        props = SDL_CreateProperties();
+        if (props != 0 && SDL_SetBooleanProperty(props, NET_PROP_DATAGRAM_SOCKET_ALLOW_BROADCAST_BOOLEAN, true))
+        {
+            socket = NET_CreateDatagramSocket(NULL, port, props);
+            if (socket == NULL)
+            {
+                SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                            "SLAYER3D broadcast socket create failed, retrying without broadcast: %s", SDL_GetError());
+            }
+        }
+        if (props != 0)
+            SDL_DestroyProperties(props);
+    }
+
+    return socket != NULL ? socket : NET_CreateDatagramSocket(NULL, port, 0);
+}
 #endif
 
 #if SLAYER3D_NETWORKING_ENABLED
@@ -1105,7 +1129,7 @@ bool slayer3d_network_session_create(const slayer3d_network_session_desc *desc, 
     const Uint16 bound_port = effective->role == SLAYER3D_NETWORK_ROLE_HOST
                                   ? effective->port
                                   : (effective->local_port != 0 ? effective->local_port : 0);
-    session->socket = NET_CreateDatagramSocket(NULL, bound_port);
+    session->socket = slayer3d_network_create_datagram_socket(bound_port, false);
     if (session->socket == NULL)
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D network socket create failed: %s", SDL_GetError());
@@ -1444,7 +1468,9 @@ bool slayer3d_network_discovery_session_create(const slayer3d_network_discovery_
     }
 
 #if SLAYER3D_NETWORKING_ENABLED
-    session->socket = NET_CreateDatagramSocket(NULL, effective->local_port != 0 ? effective->local_port : 0);
+    const bool allow_broadcast = effective->host == NULL || effective->host[0] == '\0';
+    session->socket = slayer3d_network_create_datagram_socket(effective->local_port != 0 ? effective->local_port : 0,
+                                                              allow_broadcast);
     if (session->socket == NULL)
     {
         SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D discovery socket create failed: %s", SDL_GetError());
