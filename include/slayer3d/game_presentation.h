@@ -275,6 +275,8 @@ extern "C"
         float render_triangles_sample_sum;          /**< Accumulated render triangle deltas. */
         float depth_prepass_draws_sample_sum;       /**< Accumulated depth-prepass draw deltas. */
         float depth_prepass_triangles_sample_sum;   /**< Accumulated depth-prepass triangle deltas. */
+        float depth_prepass_samples_sample_sum;     /**< Accumulated depth-prepass sample-query deltas. */
+        float geometry_samples_sample_sum;          /**< Accumulated main geometry sample-query deltas. */
         slayer3d_render_stats last_render_stats;    /**< Previous cumulative render stats sample. */
         int fps_sample_frames;                      /**< Frames accumulated in current FPS sample. */
         Uint64 rendered_frames;                     /**< Number of rendered frames. */

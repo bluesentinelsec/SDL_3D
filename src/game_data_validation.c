@@ -10202,6 +10202,8 @@ static bool ui_metric_name_valid(const char *metric)
         "render.model_triangles_per_frame",
         "render.depth_prepass_draws_per_frame",
         "render.depth_prepass_triangles_per_frame",
+        "render.depth_prepass_samples_per_frame",
+        "render.geometry_samples_per_frame",
         "brush.trace_count",
         "brush.world_instance_count",
         "brush.world_bounds_reject_count",
@@ -12104,9 +12106,13 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
     yyjson_val *bloom = obj_get(render, "bloom");
     yyjson_val *ssao = obj_get(render, "ssao");
     yyjson_val *depth_prepass = obj_get(render, "depth_prepass");
+    yyjson_val *performance_queries = obj_get(render, "performance_queries");
     if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
-        (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)))
-        return validation_error(ctx, "$.render", "render lighting, bloom, ssao, and depth_prepass must be booleans");
+        (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)) ||
+        (performance_queries != NULL && !yyjson_is_bool(performance_queries)))
+        return validation_error(ctx, "$.render",
+                                "render lighting, bloom, ssao, depth_prepass, and performance_queries must be "
+                                "booleans");
     if (obj_get(render, "clear_color") != NULL && !is_vec_array(obj_get(render, "clear_color"), 3))
         return validation_error(ctx, "$.render.clear_color", "render clear_color must be a vec3 or vec4 color");
     const char *tonemap = json_string(render, "tonemap");
@@ -12116,8 +12122,9 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
     if (profile != NULL && !valid_render_profile_name(profile))
         return validation_error(ctx, "$.render.profile", "render profile is unknown");
 
-    const char *key_fields[] = {"lighting_key",      "bloom_key",   "ssao_key",
-                                "depth_prepass_key", "tonemap_key", "profile_key"};
+    const char *key_fields[] = {"lighting_key",           "bloom_key",   "ssao_key",
+                                "depth_prepass_key",      "tonemap_key", "profile_key",
+                                "performance_queries_key"};
     for (size_t i = 0; i < SDL_arraysize(key_fields); ++i)
     {
         if (obj_get(render, key_fields[i]) != NULL && !is_non_empty_string(render, key_fields[i]))

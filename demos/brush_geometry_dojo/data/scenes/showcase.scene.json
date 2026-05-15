@@ -447,6 +447,21 @@
         "scale": 0.48
       },
       {
+        "name": "ui.brush_geometry.sample_perf",
+        "font": "font.brush_geometry.hud",
+        "format": "SAMPLES GEO %.0f Z %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "render.geometry_samples_per_frame" },
+          { "type": "metric", "metric": "render.depth_prepass_samples_per_frame" }
+        ],
+        "x": 0.985,
+        "y": 0.200,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
         "name": "ui.brush_geometry.trigger_state",
         "font": "font.brush_geometry.hud",
         "format": "TRIGGER %d",

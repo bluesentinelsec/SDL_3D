@@ -34,6 +34,8 @@ typedef unsigned int GLbitfield;
 #define GL_CCW 0x0901
 #define GL_LESS 0x0201
 #define GL_LEQUAL 0x0203
+#define GL_QUERY_RESULT 0x8866
+#define GL_SAMPLES_PASSED 0x8914
 #define GL_COLOR_BUFFER_BIT 0x00004000
 #define GL_DEPTH_BUFFER_BIT 0x00000100
 #define GL_VERTEX_SHADER 0x8B31
@@ -172,6 +174,11 @@ typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
 typedef void (*PFNGLREADBUFFERPROC)(GLenum);
 typedef void (*PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
 typedef void (*PFNGLGENERATEMIPMAPPROC)(GLenum);
+typedef void (*PFNGLGENQUERIESPROC)(GLsizei, GLuint *);
+typedef void (*PFNGLDELETEQUERIESPROC)(GLsizei, const GLuint *);
+typedef void (*PFNGLBEGINQUERYPROC)(GLenum, GLuint);
+typedef void (*PFNGLENDQUERYPROC)(GLenum);
+typedef void (*PFNGLGETQUERYOBJECTUIVPROC)(GLuint, GLenum, GLuint *);
 /* Global function pointers. */
 typedef struct slayer3d_gl_funcs
 {
@@ -252,6 +259,11 @@ typedef struct slayer3d_gl_funcs
     PFNGLREADBUFFERPROC ReadBuffer;
     PFNGLUNIFORM1FVPROC Uniform1fv;
     PFNGLGENERATEMIPMAPPROC GenerateMipmap;
+    PFNGLGENQUERIESPROC GenQueries;
+    PFNGLDELETEQUERIESPROC DeleteQueries;
+    PFNGLBEGINQUERYPROC BeginQuery;
+    PFNGLENDQUERYPROC EndQuery;
+    PFNGLGETQUERYOBJECTUIVPROC GetQueryObjectuiv;
 } slayer3d_gl_funcs;
 
 static bool slayer3d_gl_load_funcs(slayer3d_gl_funcs *gl)
@@ -265,6 +277,17 @@ static bool slayer3d_gl_load_funcs(slayer3d_gl_funcs *gl)
             return false;                                                                                              \
         }                                                                                                              \
         SDL_memcpy(&gl->name, &fp, sizeof(fp));                                                                        \
+    } while (0)
+#define LOAD_OPTIONAL_ARB(name)                                                                                        \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        SDL_FunctionPointer fp = SDL_GL_GetProcAddress("gl" #name);                                                    \
+        if (fp == NULL)                                                                                                \
+            fp = SDL_GL_GetProcAddress("gl" #name "ARB");                                                              \
+        if (fp != NULL)                                                                                                \
+        {                                                                                                              \
+            SDL_memcpy(&gl->name, &fp, sizeof(fp));                                                                    \
+        }                                                                                                              \
     } while (0)
     LOAD(Clear);
     LOAD(ClearColor);
@@ -343,7 +366,13 @@ static bool slayer3d_gl_load_funcs(slayer3d_gl_funcs *gl)
     LOAD(ReadBuffer);
     LOAD(Uniform1fv);
     LOAD(GenerateMipmap);
+    LOAD_OPTIONAL_ARB(GenQueries);
+    LOAD_OPTIONAL_ARB(DeleteQueries);
+    LOAD_OPTIONAL_ARB(BeginQuery);
+    LOAD_OPTIONAL_ARB(EndQuery);
+    LOAD_OPTIONAL_ARB(GetQueryObjectuiv);
 #undef LOAD
+#undef LOAD_OPTIONAL_ARB
     return true;
 }
 

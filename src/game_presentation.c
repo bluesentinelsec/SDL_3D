@@ -200,6 +200,7 @@ static bool apply_render_settings(const slayer3d_game_data_runtime *runtime, sla
     ok = slayer3d_set_bloom_enabled(renderer, settings.bloom_enabled) && ok;
     ok = slayer3d_set_ssao_enabled(renderer, settings.ssao_enabled) && ok;
     ok = slayer3d_set_depth_prepass_enabled(renderer, settings.depth_prepass_enabled) && ok;
+    ok = slayer3d_set_render_sample_queries_enabled(renderer, settings.performance_queries_enabled) && ok;
     ok = slayer3d_set_tonemap_mode(renderer, settings.tonemap) && ok;
     ok = slayer3d_clear_render_context(renderer, settings.clear_color) && ok;
     return ok;
@@ -3109,6 +3110,10 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                             state->last_render_stats.depth_prepass_draws, stats.depth_prepass_draws);
                         state->depth_prepass_triangles_sample_sum += render_stat_delta_u64(
                             state->last_render_stats.depth_prepass_triangles, stats.depth_prepass_triangles);
+                        state->depth_prepass_samples_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.depth_prepass_samples_passed, stats.depth_prepass_samples_passed);
+                        state->geometry_samples_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.geometry_samples_passed, stats.geometry_samples_passed);
                     }
                     state->last_render_stats = stats;
                     state->have_last_render_stats = true;
@@ -3130,6 +3135,9 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                     state->depth_prepass_draws_sample_sum / sample_frames;
                 state->metrics.render_depth_prepass_triangles_per_frame =
                     state->depth_prepass_triangles_sample_sum / sample_frames;
+                state->metrics.render_depth_prepass_samples_per_frame =
+                    state->depth_prepass_samples_sample_sum / sample_frames;
+                state->metrics.render_geometry_samples_per_frame = state->geometry_samples_sample_sum / sample_frames;
                 state->fps_sample_time = 0.0f;
                 state->frame_ms_sample_sum = 0.0f;
                 state->update_cpu_ms_sample_sum = 0.0f;
@@ -3139,6 +3147,8 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                 state->render_triangles_sample_sum = 0.0f;
                 state->depth_prepass_draws_sample_sum = 0.0f;
                 state->depth_prepass_triangles_sample_sum = 0.0f;
+                state->depth_prepass_samples_sample_sum = 0.0f;
+                state->geometry_samples_sample_sum = 0.0f;
                 state->fps_sample_frames = 0;
             }
         }

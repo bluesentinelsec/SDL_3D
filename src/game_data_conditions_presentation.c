@@ -714,6 +714,10 @@ static bool read_performance_metric(const char *metric, const slayer3d_game_data
         out_value->as_float = metrics != NULL ? metrics->render_depth_prepass_draws_per_frame : 0.0f;
     else if (SDL_strcmp(metric, "render.depth_prepass_triangles_per_frame") == 0)
         out_value->as_float = metrics != NULL ? metrics->render_depth_prepass_triangles_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.depth_prepass_samples_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_depth_prepass_samples_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.geometry_samples_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_geometry_samples_per_frame : 0.0f;
     else
         return false;
 

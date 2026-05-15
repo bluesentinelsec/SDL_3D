@@ -949,6 +949,10 @@ extern "C"
         float render_depth_prepass_draws_per_frame;
         /** @brief Sampled depth-prepass triangles per frame. */
         float render_depth_prepass_triangles_per_frame;
+        /** @brief Sampled depth-prepass depth-passing samples per frame when performance queries are enabled. */
+        float render_depth_prepass_samples_per_frame;
+        /** @brief Sampled main-geometry depth-passing samples per frame when performance queries are enabled. */
+        float render_geometry_samples_per_frame;
     } slayer3d_game_data_ui_metrics;
 
     /** @brief Optional render evaluation inputs for dynamic visual effects. */
@@ -1157,6 +1161,8 @@ extern "C"
         bool ssao_enabled;
         /** @brief Whether the GL backend should run an opaque depth pre-pass before lit geometry. */
         bool depth_prepass_enabled;
+        /** @brief Whether capable backends should collect GPU sample-count diagnostics. */
+        bool performance_queries_enabled;
         /** @brief Tonemap operator for lit rendering. */
         slayer3d_tonemap_mode tonemap;
     } slayer3d_game_data_render_settings;
