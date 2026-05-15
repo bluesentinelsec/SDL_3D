@@ -456,6 +456,17 @@ extern "C"
         slayer3d_game_data_editor_metadata editor;
     } slayer3d_game_data_brush_face;
 
+    /** @brief Authored per-brush visibility override for automatic occlusion. */
+    typedef enum slayer3d_game_data_brush_visibility
+    {
+        /** @brief Let the renderer decide visibility from the brush world visibility grid. */
+        SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_AUTO = 0,
+        /** @brief Never hide this brush through visibility occlusion. */
+        SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS = 1,
+        /** @brief Use explicit camera-to-brush trace fallback if the automatic grid is unavailable. */
+        SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_TRACE = 2,
+    } slayer3d_game_data_brush_visibility;
+
     /** @brief Authored convex brush loaded into runtime-owned data. */
     typedef struct slayer3d_game_data_brush
     {
@@ -465,6 +476,8 @@ extern "C"
         unsigned int contents;
         /** @brief True when runtime visibility occlusion may cull this brush. */
         bool visibility_cullable;
+        /** @brief Authored visibility override, normally automatic. */
+        slayer3d_game_data_brush_visibility visibility;
         /** @brief Optional authored tags for editor/runtime queries. */
         const char *const *tags;
         /** @brief Number of entries in @p tags. */
@@ -490,6 +503,8 @@ extern "C"
         const char *units;
         /** @brief Conversion factor from authored units to meters. */
         float meters_per_unit;
+        /** @brief Positive cell size for automatic visibility culling, in local world units. */
+        float visibility_cell_size;
         /** @brief Runtime material palette for brush faces. */
         const slayer3d_game_data_brush_material *materials;
         /** @brief Number of entries in @p materials. */

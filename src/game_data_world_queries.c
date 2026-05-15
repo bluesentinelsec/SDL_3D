@@ -662,6 +662,129 @@ static void free_brush_world_visibility_models(brush_world_runtime *world_runtim
     world_runtime->brush_render_model_count = 0;
 }
 
+void free_brush_world_visibility_grid(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return;
+    SDL_free(world_runtime->visibility_grid_solid);
+    world_runtime->visibility_grid_solid = NULL;
+    world_runtime->visibility_cell_size = 0.0f;
+    world_runtime->visibility_grid_dim_x = 0;
+    world_runtime->visibility_grid_dim_y = 0;
+    world_runtime->visibility_grid_dim_z = 0;
+    world_runtime->visibility_grid_cell_count = 0;
+    SDL_zero(world_runtime->visibility_grid_bounds);
+}
+
+static bool brush_point_inside_contents(const slayer3d_game_data_brush *brush, slayer3d_vec3 point,
+                                        unsigned int contents_mask)
+{
+    if (brush == NULL || (brush->contents & contents_mask) == 0u)
+        return false;
+    const float epsilon = 0.0005f;
+    for (int face_index = 0; face_index < brush->face_count; ++face_index)
+    {
+        const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+        if ((face->surface_flags & SLAYER3D_GAME_DATA_BRUSH_SURFACE_NO_COLLIDE) != 0u)
+            continue;
+        const float len = slayer3d_vec3_length(face->normal);
+        if (len <= 0.000001f)
+            continue;
+        const slayer3d_vec3 normal = slayer3d_vec3_scale(face->normal, 1.0f / len);
+        const float distance = face->distance / len;
+        if (slayer3d_vec3_dot(normal, point) - distance > epsilon)
+            return false;
+    }
+    return true;
+}
+
+static bool brush_world_point_inside_contents(const slayer3d_game_data_brush_world *world, slayer3d_vec3 point,
+                                              unsigned int contents_mask)
+{
+    if (world == NULL)
+        return false;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if (brush->has_bounds &&
+            (point.x < brush->bounds.min.x || point.x > brush->bounds.max.x || point.y < brush->bounds.min.y ||
+             point.y > brush->bounds.max.y || point.z < brush->bounds.min.z || point.z > brush->bounds.max.z))
+        {
+            continue;
+        }
+        if (brush_point_inside_contents(brush, point, contents_mask))
+            return true;
+    }
+    return false;
+}
+
+static int visibility_grid_index(int x, int y, int z, int dim_x, int dim_y)
+{
+    return x + y * dim_x + z * dim_x * dim_y;
+}
+
+bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime)
+{
+    static const int max_cells = 524288;
+    static const float min_cell_size = 0.25f;
+    static const float max_cell_size = 64.0f;
+    free_brush_world_visibility_grid(world_runtime);
+    if (world_runtime == NULL)
+        return false;
+
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    if (world == NULL || !world->has_bounds || world->brush_count <= 0)
+        return true;
+    const float cell_size = SDL_clamp(world->visibility_cell_size > 0.0f ? world->visibility_cell_size : 2.0f,
+                                      min_cell_size, max_cell_size);
+    slayer3d_bounding_box bounds = world->bounds;
+    bounds.min.x -= cell_size;
+    bounds.min.y -= cell_size;
+    bounds.min.z -= cell_size;
+    bounds.max.x += cell_size;
+    bounds.max.y += cell_size;
+    bounds.max.z += cell_size;
+
+    const int dim_x = SDL_max(1, (int)SDL_ceilf((bounds.max.x - bounds.min.x) / cell_size));
+    const int dim_y = SDL_max(1, (int)SDL_ceilf((bounds.max.y - bounds.min.y) / cell_size));
+    const int dim_z = SDL_max(1, (int)SDL_ceilf((bounds.max.z - bounds.min.z) / cell_size));
+    if (dim_x <= 0 || dim_y <= 0 || dim_z <= 0 || dim_x > max_cells / SDL_max(dim_y, 1) / SDL_max(dim_z, 1))
+        return true;
+    const int cell_count = dim_x * dim_y * dim_z;
+    if (cell_count <= 0 || cell_count > max_cells)
+        return true;
+
+    Uint8 *solid = (Uint8 *)SDL_calloc((size_t)cell_count, sizeof(*solid));
+    if (solid == NULL)
+        return false;
+
+    const unsigned int blocker_mask =
+        SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    for (int z = 0; z < dim_z; ++z)
+    {
+        for (int y = 0; y < dim_y; ++y)
+        {
+            for (int x = 0; x < dim_x; ++x)
+            {
+                const slayer3d_vec3 point = slayer3d_vec3_make(bounds.min.x + ((float)x + 0.5f) * cell_size,
+                                                               bounds.min.y + ((float)y + 0.5f) * cell_size,
+                                                               bounds.min.z + ((float)z + 0.5f) * cell_size);
+                if (brush_world_point_inside_contents(world, point, blocker_mask))
+                    solid[visibility_grid_index(x, y, z, dim_x, dim_y)] = 1u;
+            }
+        }
+    }
+
+    world_runtime->visibility_grid_bounds = bounds;
+    world_runtime->visibility_cell_size = cell_size;
+    world_runtime->visibility_grid_dim_x = dim_x;
+    world_runtime->visibility_grid_dim_y = dim_y;
+    world_runtime->visibility_grid_dim_z = dim_z;
+    world_runtime->visibility_grid_cell_count = cell_count;
+    world_runtime->visibility_grid_solid = solid;
+    return true;
+}
+
 static bool compile_brush_world_visibility_models(brush_world_runtime *world_runtime, slayer3d_model **out_models,
                                                   int *out_model_count)
 {
@@ -864,7 +987,8 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     const bool rebuilt =
         slayer3d_game_data_brush_world_build_acceleration(world) &&
         slayer3d_game_data_brush_world_compile_render_model(world, &render_model) &&
-        compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count);
+        compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count) &&
+        compile_brush_world_visibility_grid(world_runtime);
     if (!rebuilt)
     {
         slayer3d_free_model(&render_model);
@@ -1361,6 +1485,20 @@ static bool export_add_brush_face(yyjson_mut_doc *doc, yyjson_mut_val *faces,
            export_add_editor_metadata(doc, obj, &face->editor);
 }
 
+static const char *brush_visibility_name(slayer3d_game_data_brush_visibility visibility)
+{
+    switch (visibility)
+    {
+    case SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS:
+        return "always";
+    case SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_TRACE:
+        return "trace";
+    case SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_AUTO:
+    default:
+        return "auto";
+    }
+}
+
 static bool export_add_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes, const slayer3d_game_data_brush_world *world,
                              const slayer3d_game_data_brush *brush)
 {
@@ -1370,6 +1508,8 @@ static bool export_add_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes, const
         !yyjson_mut_obj_add_strcpy(doc, obj, "name", brush->name != NULL ? brush->name : "") ||
         !export_add_brush_contents(doc, obj, brush->contents) ||
         !export_add_string_array(doc, obj, "tags", brush->tags, brush->tag_count) ||
+        (brush->visibility != SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_AUTO &&
+         !yyjson_mut_obj_add_strcpy(doc, obj, "visibility", brush_visibility_name(brush->visibility))) ||
         (brush->visibility_cullable && !yyjson_mut_obj_add_bool(doc, obj, "visibility_cullable", true)) ||
         !export_add_editor_metadata(doc, obj, &brush->editor) || !yyjson_mut_obj_add_val(doc, obj, "faces", faces))
     {
@@ -1393,6 +1533,7 @@ static bool export_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *worlds,
         !yyjson_mut_obj_add_strcpy(doc, obj, "name", world->name != NULL ? world->name : "") ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "units", world->units != NULL ? world->units : "meters") ||
         !yyjson_mut_obj_add_real(doc, obj, "meters_per_unit", world->meters_per_unit) ||
+        !yyjson_mut_obj_add_real(doc, obj, "visibility_cell_size", world->visibility_cell_size) ||
         !export_add_editor_metadata(doc, obj, &world->editor) ||
         !yyjson_mut_obj_add_val(doc, obj, "materials", materials) ||
         !yyjson_mut_obj_add_val(doc, obj, "brushes", brushes))
@@ -4562,7 +4703,8 @@ static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
     int brush_render_model_count = 0;
     SDL_zero(render_model);
     if (!slayer3d_game_data_brush_world_compile_render_model(world, &render_model) ||
-        !compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count))
+        !compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count) ||
+        !compile_brush_world_visibility_grid(world_runtime))
     {
         slayer3d_free_model(&render_model);
         for (int i = 0; i < brush_render_model_count; ++i)

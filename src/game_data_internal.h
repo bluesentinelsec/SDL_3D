@@ -447,6 +447,13 @@ typedef struct brush_world_runtime
     slayer3d_model render_model;
     slayer3d_model *brush_render_models;
     int brush_render_model_count;
+    slayer3d_bounding_box visibility_grid_bounds;
+    float visibility_cell_size;
+    int visibility_grid_dim_x;
+    int visibility_grid_dim_y;
+    int visibility_grid_dim_z;
+    int visibility_grid_cell_count;
+    Uint8 *visibility_grid_solid;
     char *editor_source_path;
     Uint64 editor_revision;
     Uint64 editor_saved_revision;
@@ -1020,6 +1027,8 @@ sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runti
 const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
 const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
+bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
+void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);

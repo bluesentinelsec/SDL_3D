@@ -494,8 +494,9 @@ extern "C"
      *
      * Passing NULL for @p camera preserves the baseline whole-world static mesh
      * path. Scene instances that opt into `visibility_occlusion` use @p camera
-     * to conservatively skip fully occluded brush submodels before renderer
-     * submission.
+     * to flood-fill the brush world's compiled empty-space visibility grid and
+     * conservatively skip brush submodels with no neighboring visible cell
+     * before renderer submission.
      */
     bool slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(const slayer3d_game_data_runtime *runtime,
                                                                      slayer3d_render_context *renderer,

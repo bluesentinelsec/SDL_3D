@@ -556,6 +556,17 @@ static unsigned int brush_surface_flag_from_string(const char *name)
     return 0u;
 }
 
+static slayer3d_game_data_brush_visibility brush_visibility_from_string(const char *name)
+{
+    if (name == NULL || name[0] == '\0' || SDL_strcmp(name, "auto") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_AUTO;
+    if (SDL_strcmp(name, "always") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS;
+    if (SDL_strcmp(name, "trace") == 0)
+        return SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_TRACE;
+    return SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_AUTO;
+}
+
 unsigned int brush_flags_from_json(yyjson_val *value, unsigned int (*flag_from_string)(const char *name),
                                    unsigned int fallback)
 {
@@ -627,6 +638,7 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
         world->name = SDL_strdup(json_string(world_json, "name", ""));
         world->units = SDL_strdup(json_string(world_json, "units", "meters"));
         world->meters_per_unit = json_float(world_json, "meters_per_unit", 1.0f);
+        world->visibility_cell_size = json_float(world_json, "visibility_cell_size", 2.0f);
         world->material_count = (int)yyjson_arr_size(materials_json);
         world->brush_count = (int)yyjson_arr_size(brushes_json);
         if (world->name == NULL || world->units == NULL)
@@ -683,6 +695,9 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             brush->contents = brush_flags_from_json(obj_get(brush_json, "contents"), brush_content_flag_from_string,
                                                     SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
             brush->visibility_cullable = json_bool(brush_json, "visibility_cullable", false);
+            brush->visibility = brush_visibility_from_string(json_string(brush_json, "visibility", NULL));
+            if (brush->visibility_cullable && obj_get(brush_json, "visibility") == NULL)
+                brush->visibility = SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_TRACE;
             brush->tag_count = yyjson_is_arr(tags_json) ? (int)yyjson_arr_size(tags_json) : 0;
             brush->face_count = (int)yyjson_arr_size(faces_json);
             if (brush->name == NULL)
@@ -768,6 +783,12 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
                            world->name != NULL ? world->name : "<unnamed>");
                 return false;
             }
+        }
+        if (!compile_brush_world_visibility_grid(&runtime->brush_worlds[world_index]))
+        {
+            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' visibility grid",
+                       world->name != NULL ? world->name : "<unnamed>");
+            return false;
         }
     }
     return true;
