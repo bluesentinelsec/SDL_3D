@@ -529,7 +529,7 @@ in later slices.
           "name": "brush.start_room",
           "tags": ["room", "solid"],
           "contents": ["solid", "player_clip"],
-          "visibility_cullable": false,
+          "visibility": "auto",
           "editor": {
             "stable_id": "brush.keep_01.start_room.v1",
             "display_name": "Start Room",
@@ -577,9 +577,12 @@ Validation requires:
 - optional `contents` as one value or an array of unique values: `solid`,
   `player_clip`, `projectile_clip`, `trigger`, `water`, `lava`, or `sky`;
   omitted contents default to `solid`
-- optional `visibility_cullable` boolean, default `false`; enable this only on
-  discrete/detail brushes that are safe to skip when hidden by other solid
-  brushes
+- optional `visibility` override: `auto` (default), `always`, or `trace`;
+  `auto` lets the compiled visibility grid decide, `always` keeps rare
+  exception brushes visible, and `trace` enables the older camera-to-brush
+  trace fallback when the automatic grid is unavailable
+- optional legacy `visibility_cullable` boolean, default `false`; when no
+  `visibility` override is authored, `true` is treated as `visibility: "trace"`
 - each brush to contain at least four `faces`
 - each face to declare `plane.normal` as a non-zero vec3 and
   `plane.distance` as a number
@@ -614,17 +617,22 @@ Scenes instantiate brush worlds through `world.brush_worlds`:
 `visibility_occlusion` is an opt-in CPU-side brush visibility pass. At load
 time, the engine automatically compiles a conservative empty-space visibility
 grid from the brush world's solid/player-clip contents. When a camera is
-available, the generic frame path flood-fills visible empty cells from the
-camera and skips brush submodels that have no neighboring visible cell. This is
-intentionally fail-open: if the grid is missing, the camera is outside the grid,
-or a brush is ambiguous, the brush remains visible. Smaller
+available, the generic frame path marks empty cells that have unobstructed
+grid line-of-sight from the camera and skips brush submodels that have no
+neighboring visible cell. This catches common room/corner occlusion without
+requiring authors to place portals by hand. It is intentionally fail-open: if
+the grid is missing, too large for the current CPU pass, the camera is outside
+the grid, or a brush is ambiguous, the brush remains visible. Use
+`visibility: "always"` for rare sky, vista, or effect brushes that must never
+be culled. Smaller
 `visibility_cell_size` values improve blocker precision and doorway behavior at
 higher memory/compile cost; larger values are cheaper but more conservative.
-Brushes authored with `visibility_cullable: true` still participate in the
-older trace-based fallback when no visibility grid is available. `acceleration_key`,
-`lighting_key`, `debug_wireframe_key`, and `visibility_occlusion_key` may name
-scene-state booleans that override the authored defaults. Runtime and editor
-code should use `slayer3d_game_data_get_brush_world()` and
+Brushes authored with `visibility: "trace"` or legacy
+`visibility_cullable: true` still participate in the older trace-based fallback
+when no visibility grid is available. `acceleration_key`, `lighting_key`,
+`debug_wireframe_key`, and `visibility_occlusion_key` may name scene-state
+booleans that override the authored defaults. Runtime and editor code should
+use `slayer3d_game_data_get_brush_world()` and
 `slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
 Brush render meshes are available through `brush_world.render_model` and are
 drawn by the generic data-game frame path. During load, brush worlds also

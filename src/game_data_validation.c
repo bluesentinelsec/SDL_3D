@@ -5554,6 +5554,15 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, val
                 ok = validation_error(ctx, brush_path, "brush visibility_cullable must be a boolean");
                 break;
             }
+            yyjson_val *visibility = obj_get(brush, "visibility");
+            if (visibility != NULL &&
+                (!yyjson_is_str(visibility) || (SDL_strcmp(yyjson_get_str(visibility), "auto") != 0 &&
+                                                SDL_strcmp(yyjson_get_str(visibility), "always") != 0 &&
+                                                SDL_strcmp(yyjson_get_str(visibility), "trace") != 0)))
+            {
+                ok = validation_error(ctx, brush_path, "brush visibility must be 'auto', 'always', or 'trace'");
+                break;
+            }
             if (!yyjson_is_arr(faces) || yyjson_arr_size(faces) < 4)
             {
                 ok = validation_error(ctx, brush_path, "brush faces must contain at least 4 entries");

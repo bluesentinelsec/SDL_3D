@@ -5,6 +5,7 @@
       "name": "brush.brush_geometry.showcase",
       "units": "meters",
       "meters_per_unit": 1.0,
+      "visibility_cell_size": 2.0,
       "editor": {
         "stable_id": "brush_world.showcase.v1",
         "display_name": "Brush Geometry Showcase",

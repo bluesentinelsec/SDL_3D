@@ -12444,6 +12444,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
           "name": "brush.room",
           "tags": ["solid", "room"],
           "contents": ["solid", "player_clip"],
+          "visibility": "always",
           "editor": {
             "stable_id": "brush.test.room.v1",
             "display_name": "Runtime Test Room",
@@ -12518,6 +12519,7 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_STREQ(world.brushes[0].editor.prefab, "prefab.test.room");
     EXPECT_EQ(world.brushes[0].contents,
               SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP);
+    EXPECT_EQ(world.brushes[0].visibility, SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS);
     ASSERT_EQ(world.brushes[0].tag_count, 2);
     EXPECT_STREQ(world.brushes[0].tags[1], "room");
     ASSERT_EQ(world.brushes[0].face_count, 6);
@@ -12676,6 +12678,31 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
 })json",
             nullptr,
             "brush world visibility_cell_size must be positive",
+        },
+        {
+            "bad_visibility",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "visibility": "maybe",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush visibility must be 'auto', 'always', or 'trace'",
         },
         {
             "bad_emissive",

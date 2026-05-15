@@ -2560,8 +2560,89 @@ static bool brush_visibility_grid_cell(const brush_world_runtime *world_runtime,
     return true;
 }
 
-static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
-                                               Uint8 *visible_cells)
+static void brush_visibility_grid_cell_coords(const brush_world_runtime *world_runtime, int index, int *out_x,
+                                              int *out_y, int *out_z)
+{
+    const int dim_x = world_runtime != NULL ? world_runtime->visibility_grid_dim_x : 1;
+    const int dim_y = world_runtime != NULL ? world_runtime->visibility_grid_dim_y : 1;
+    const int z = index / (dim_x * dim_y);
+    const int rem = index - z * dim_x * dim_y;
+    const int y = rem / dim_x;
+    const int x = rem - y * dim_x;
+    if (out_x != NULL)
+        *out_x = x;
+    if (out_y != NULL)
+        *out_y = y;
+    if (out_z != NULL)
+        *out_z = z;
+}
+
+static slayer3d_vec3 brush_visibility_grid_cell_center(const brush_world_runtime *world_runtime, int x, int y, int z)
+{
+    const float cell_size = world_runtime->visibility_cell_size;
+    return slayer3d_vec3_make(world_runtime->visibility_grid_bounds.min.x + ((float)x + 0.5f) * cell_size,
+                              world_runtime->visibility_grid_bounds.min.y + ((float)y + 0.5f) * cell_size,
+                              world_runtime->visibility_grid_bounds.min.z + ((float)z + 0.5f) * cell_size);
+}
+
+static bool brush_visibility_grid_ray_clear(const brush_world_runtime *world_runtime, int start_index,
+                                            slayer3d_vec3 local_camera, slayer3d_vec3 target)
+{
+    if (world_runtime == NULL || world_runtime->visibility_grid_solid == NULL)
+        return false;
+    const slayer3d_vec3 delta = slayer3d_vec3_sub(target, local_camera);
+    const float distance = slayer3d_vec3_length(delta);
+    if (distance <= 0.0001f)
+        return true;
+    const float cell_size = world_runtime->visibility_cell_size;
+    const int steps = SDL_max(1, SDL_min(4096, (int)SDL_ceilf(distance / SDL_max(cell_size * 0.35f, 0.05f))));
+    for (int step = 1; step <= steps; ++step)
+    {
+        const float t = (float)step / (float)steps;
+        const slayer3d_vec3 point = slayer3d_vec3_add(local_camera, slayer3d_vec3_scale(delta, t));
+        int index = -1;
+        if (!brush_visibility_grid_cell(world_runtime, point, &index))
+            return false;
+        if (index == start_index)
+            continue;
+        if (world_runtime->visibility_grid_solid[index])
+            return false;
+    }
+    return true;
+}
+
+static void brush_visibility_grid_mark_neighborhood_visible(const brush_world_runtime *world_runtime, int start,
+                                                            Uint8 *visible_cells)
+{
+    int sx = 0;
+    int sy = 0;
+    int sz = 0;
+    brush_visibility_grid_cell_coords(world_runtime, start, &sx, &sy, &sz);
+    for (int z = sz - 1; z <= sz + 1; ++z)
+    {
+        for (int y = sy - 1; y <= sy + 1; ++y)
+        {
+            for (int x = sx - 1; x <= sx + 1; ++x)
+            {
+                if (x < 0 || y < 0 || z < 0 || x >= world_runtime->visibility_grid_dim_x ||
+                    y >= world_runtime->visibility_grid_dim_y || z >= world_runtime->visibility_grid_dim_z)
+                {
+                    continue;
+                }
+                const int index = x + y * world_runtime->visibility_grid_dim_x +
+                                  z * world_runtime->visibility_grid_dim_x * world_runtime->visibility_grid_dim_y;
+                if (index >= 0 && index < world_runtime->visibility_grid_cell_count &&
+                    !world_runtime->visibility_grid_solid[index])
+                {
+                    visible_cells[index] = 1u;
+                }
+            }
+        }
+    }
+}
+
+static bool brush_visibility_grid_mark_visible_los(const brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
+                                                   Uint8 *visible_cells)
 {
     int start = -1;
     if (world_runtime == NULL || visible_cells == NULL ||
@@ -2571,43 +2652,48 @@ static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_
         return false;
     }
 
-    int *queue = (int *)SDL_malloc(sizeof(*queue) * (size_t)world_runtime->visibility_grid_cell_count);
-    if (queue == NULL)
+    static const int max_los_cells = 131072;
+    if (world_runtime->visibility_grid_cell_count > max_los_cells)
         return false;
 
-    int head = 0;
-    int tail = 0;
     visible_cells[start] = 1u;
-    queue[tail++] = start;
+    brush_visibility_grid_mark_neighborhood_visible(world_runtime, start, visible_cells);
     const int dim_x = world_runtime->visibility_grid_dim_x;
     const int dim_y = world_runtime->visibility_grid_dim_y;
     const int dim_z = world_runtime->visibility_grid_dim_z;
-    while (head < tail)
+    for (int z = 0; z < dim_z; ++z)
     {
-        const int index = queue[head++];
-        const int z = index / (dim_x * dim_y);
-        const int rem = index - z * dim_x * dim_y;
-        const int y = rem / dim_x;
-        const int x = rem - y * dim_x;
-        const int neighbors[6][3] = {
-            {x - 1, y, z}, {x + 1, y, z}, {x, y - 1, z}, {x, y + 1, z}, {x, y, z - 1}, {x, y, z + 1},
-        };
-        for (int i = 0; i < 6; ++i)
+        for (int y = 0; y < dim_y; ++y)
         {
-            const int nx = neighbors[i][0];
-            const int ny = neighbors[i][1];
-            const int nz = neighbors[i][2];
-            if (nx < 0 || ny < 0 || nz < 0 || nx >= dim_x || ny >= dim_y || nz >= dim_z)
-                continue;
-            const int neighbor = nx + ny * dim_x + nz * dim_x * dim_y;
-            if (visible_cells[neighbor] || world_runtime->visibility_grid_solid[neighbor])
-                continue;
-            visible_cells[neighbor] = 1u;
-            queue[tail++] = neighbor;
+            for (int x = 0; x < dim_x; ++x)
+            {
+                const int index = x + y * dim_x + z * dim_x * dim_y;
+                if (visible_cells[index] || world_runtime->visibility_grid_solid[index])
+                    continue;
+                const slayer3d_vec3 target = brush_visibility_grid_cell_center(world_runtime, x, y, z);
+                if (brush_visibility_grid_ray_clear(world_runtime, start, local_camera, target))
+                    visible_cells[index] = 1u;
+            }
         }
     }
-    SDL_free(queue);
     return true;
+}
+
+static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
+                                               Uint8 *visible_cells)
+{
+    return brush_visibility_grid_mark_visible_los(world_runtime, local_camera, visible_cells);
+}
+
+static bool brush_visibility_forced_visible(const slayer3d_game_data_brush *brush)
+{
+    return brush != NULL && brush->visibility == SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS;
+}
+
+static bool brush_visibility_trace_fallback_enabled(const slayer3d_game_data_brush *brush)
+{
+    return brush != NULL &&
+           (brush->visibility == SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_TRACE || brush->visibility_cullable);
 }
 
 static bool brush_visible_from_visibility_grid(const brush_world_runtime *world_runtime,
@@ -2688,9 +2774,12 @@ static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
             continue;
+        if (brush_visibility_forced_visible(brush))
+            continue;
 
         ++mutable_runtime->brush_diagnostics.visibility_brush_candidates;
-        if (brush_visible_from_visibility_grid(world_runtime, brush, visible_cells))
+        if (brush_visible_from_visibility_grid(world_runtime, brush, visible_cells) ||
+            !brush_occluded_from_camera(instance, brush, camera))
         {
             ++mutable_runtime->brush_diagnostics.visibility_brush_visible;
         }
@@ -2744,7 +2833,7 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
             continue;
-        if (!brush->visibility_cullable)
+        if (!brush_visibility_trace_fallback_enabled(brush))
             continue;
 
         ++mutable_runtime->brush_diagnostics.visibility_brush_candidates;

@@ -1485,6 +1485,20 @@ static bool export_add_brush_face(yyjson_mut_doc *doc, yyjson_mut_val *faces,
            export_add_editor_metadata(doc, obj, &face->editor);
 }
 
+static const char *brush_visibility_name(slayer3d_game_data_brush_visibility visibility)
+{
+    switch (visibility)
+    {
+    case SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS:
+        return "always";
+    case SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_TRACE:
+        return "trace";
+    case SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_AUTO:
+    default:
+        return "auto";
+    }
+}
+
 static bool export_add_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes, const slayer3d_game_data_brush_world *world,
                              const slayer3d_game_data_brush *brush)
 {
@@ -1494,6 +1508,8 @@ static bool export_add_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes, const
         !yyjson_mut_obj_add_strcpy(doc, obj, "name", brush->name != NULL ? brush->name : "") ||
         !export_add_brush_contents(doc, obj, brush->contents) ||
         !export_add_string_array(doc, obj, "tags", brush->tags, brush->tag_count) ||
+        (brush->visibility != SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_AUTO &&
+         !yyjson_mut_obj_add_strcpy(doc, obj, "visibility", brush_visibility_name(brush->visibility))) ||
         (brush->visibility_cullable && !yyjson_mut_obj_add_bool(doc, obj, "visibility_cullable", true)) ||
         !export_add_editor_metadata(doc, obj, &brush->editor) || !yyjson_mut_obj_add_val(doc, obj, "faces", faces))
     {
