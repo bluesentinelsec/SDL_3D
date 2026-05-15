@@ -928,6 +928,7 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
         lp.vertex_snap_precision = context->vertex_snap_precision;
         lp.texture_filter = (int)context->texture_filter;
         lp.static_geometry = static_geometry && !skinned && !mesh->dynamic_geometry;
+        lp.depth_prepass_eligible = context->depth_prepass_scope_enabled && lp.static_geometry;
 
         if (lighting->shadow_enabled[0] && lighting->shadow_depth[0] != NULL)
         {

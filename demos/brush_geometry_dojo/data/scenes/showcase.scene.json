@@ -402,21 +402,6 @@
         "scale": 0.48
       },
       {
-        "name": "ui.brush_geometry.depth_prepass_diagnostics",
-        "font": "font.brush_geometry.hud",
-        "format": "Z PREPASS %llu / TRI %llu",
-        "bindings": [
-          { "type": "metric", "metric": "brush.render_depth_prepass_draws" },
-          { "type": "metric", "metric": "brush.render_depth_prepass_triangles" }
-        ],
-        "x": 0.985,
-        "y": 0.116,
-        "normalized": true,
-        "align": "right",
-        "color": [175, 220, 255, 220],
-        "scale": 0.48
-      },
-      {
         "name": "ui.brush_geometry.trigger_state",
         "font": "font.brush_geometry.hud",
         "format": "TRIGGER %d",

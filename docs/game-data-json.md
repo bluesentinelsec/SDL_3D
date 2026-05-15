@@ -115,11 +115,13 @@ are drawn after this presentation pass so menus and HUD text remain readable. If
 profile. Optional `*_key` fields read scene-state values at draw time and
 override the authored defaults. This lets games author debug/profile toggles
 through sensors and logic actions while keeping the runner game-agnostic.
-`depth_prepass` enables an OpenGL opaque depth pre-pass for lit triangle meshes.
-This can reduce expensive fragment shading in dense brush/model scenes with
-overdraw, especially when many dynamic lights are active. It adds an extra
-position-only replay of eligible opaque geometry, so leave it disabled for very
-simple or CPU-bound scenes unless profiling shows a benefit.
+`depth_prepass` enables an OpenGL opaque depth pre-pass for eligible static lit
+triangle meshes. The data-game runtime currently opts brush-world meshes into
+this pass and excludes actors, viewmodels, particles, billboards, and immediate
+debug primitives. This can reduce expensive fragment shading in dense brush
+scenes with overdraw, especially when many dynamic lights are active. It adds an
+extra position-only replay of eligible opaque geometry, so leave it disabled for
+very simple or CPU-bound scenes unless profiling shows a benefit.
 
 ## Structured Imports
 
@@ -2515,26 +2517,13 @@ debug overlays can inspect collision and render cost without game-specific C:
 }
 ```
 
-Use a second text entry for depth-prepass counters when needed:
-
-```json
-{
-  "format": "Z PREPASS %llu / TRI %llu",
-  "bindings": [
-    { "type": "metric", "metric": "brush.render_depth_prepass_draws" },
-    { "type": "metric", "metric": "brush.render_depth_prepass_triangles" }
-  ]
-}
-```
-
 Supported brush metrics are `brush.trace_count`,
 `brush.world_instance_count`, `brush.world_bounds_reject_count`,
 `brush.brush_count`, `brush.contents_reject_count`,
 `brush.bounds_reject_count`, `brush.collision_candidate_count`,
 `brush.hit_count`, `brush.render_mesh_submissions`,
 `brush.render_mesh_culled`, `brush.render_mesh_draws`, and
-`brush.render_triangles_submitted`, `brush.render_depth_prepass_draws`, and
-`brush.render_depth_prepass_triangles`.
+`brush.render_triangles_submitted`.
 
 For editor-like tools and diagnostics, `ui.panels` and `ui.inspectors` provide
 reusable higher-level overlay widgets while still rendering through the normal

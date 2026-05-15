@@ -683,10 +683,6 @@ static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runti
         value = diagnostics.render_mesh_draws;
     else if (SDL_strcmp(name, "render_triangles_submitted") == 0)
         value = diagnostics.render_triangles_submitted;
-    else if (SDL_strcmp(name, "render_depth_prepass_draws") == 0)
-        value = diagnostics.render_depth_prepass_draws;
-    else if (SDL_strcmp(name, "render_depth_prepass_triangles") == 0)
-        value = diagnostics.render_depth_prepass_triangles;
     else
         return false;
 

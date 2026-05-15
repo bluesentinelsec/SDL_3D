@@ -16,6 +16,8 @@
 #include "slayer3d/math.h"
 #include "slayer3d/shapes.h"
 
+#include "render_context_internal.h"
+
 typedef struct primitive_draw_context
 {
     const slayer3d_game_data_runtime *runtime;
@@ -2463,8 +2465,11 @@ bool slayer3d_game_data_draw_brush_worlds_with_assets(const slayer3d_game_data_r
     context.renderer = renderer;
     context.assets = assets;
     context.ok = true;
+    const bool previous_depth_prepass_scope = renderer->depth_prepass_scope_enabled;
+    renderer->depth_prepass_scope_enabled = true;
     const bool iterated =
         slayer3d_game_data_for_each_brush_world_instance(runtime, draw_brush_world_instance, &context);
+    renderer->depth_prepass_scope_enabled = previous_depth_prepass_scope;
     slayer3d_render_stats after_stats;
     SDL_zero(after_stats);
     if (have_before_stats && slayer3d_get_render_stats(renderer, &after_stats))

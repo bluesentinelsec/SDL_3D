@@ -134,6 +134,7 @@ typedef struct slayer3d_draw_entry
     const char *shader_fragment_source;
     float mvp[16];
     bool owns_arrays;
+    bool depth_prepass_eligible;
     struct slayer3d_gl_mesh_cache_entry *mesh_cache;
 } slayer3d_draw_entry;
 
@@ -2337,8 +2338,8 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
 
 static bool draw_entry_depth_prepass_eligible(const slayer3d_draw_entry *entry)
 {
-    return entry != NULL && entry->lit && entry->primitive_mode == GL_TRIANGLES && entry->vertex_count > 0 &&
-           entry->tint[3] >= 0.999f;
+    return entry != NULL && entry->depth_prepass_eligible && entry->lit && entry->primitive_mode == GL_TRIANGLES &&
+           entry->vertex_count > 0 && entry->mesh_cache != NULL && entry->tint[3] >= 0.999f;
 }
 
 static Uint64 draw_entry_triangle_count(const slayer3d_draw_entry *entry)
@@ -3817,6 +3818,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     e->baked_light_mode = params->baked_light_mode;
     e->has_lightmap = params->lightmap_uvs != NULL && params->lightmap != NULL;
     e->owns_arrays = !params->static_geometry;
+    e->depth_prepass_eligible = params->depth_prepass_eligible;
 
     if (params->static_geometry)
     {

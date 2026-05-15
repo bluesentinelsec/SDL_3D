@@ -10198,8 +10198,6 @@ static bool ui_metric_name_valid(const char *metric)
         "brush.render_mesh_culled",
         "brush.render_mesh_draws",
         "brush.render_triangles_submitted",
-        "brush.render_depth_prepass_draws",
-        "brush.render_depth_prepass_triangles",
     };
 
     for (size_t i = 0; i < SDL_arraysize(metrics); ++i)

@@ -611,10 +611,6 @@ extern "C"
         Uint64 render_mesh_draws;
         /** @brief Approximate brush-world triangles submitted after renderer culling. */
         Uint64 render_triangles_submitted;
-        /** @brief Opaque brush-world draw calls replayed during the depth pre-pass. */
-        Uint64 render_depth_prepass_draws;
-        /** @brief Approximate brush-world triangles replayed during the depth pre-pass. */
-        Uint64 render_depth_prepass_triangles;
     } slayer3d_game_data_brush_diagnostics;
 
     /** @brief Runtime world model implementation kind. */

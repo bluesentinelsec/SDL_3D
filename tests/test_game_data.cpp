@@ -8401,7 +8401,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     after_stats.model_mesh_culled = 2;
     after_stats.model_mesh_draws = 5;
     after_stats.model_triangles_submitted = 128;
-    after_stats.depth_prepass_draws = 5;
     slayer3d_game_data_accumulate_brush_render_diagnostics(runtime, &before_stats, &after_stats);
     bool saw_render_diagnostics = false;
     char render_diagnostics[128]{};
@@ -8419,23 +8418,6 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, find_render_diagnostics, &render_diagnostics_args));
     EXPECT_TRUE(saw_render_diagnostics);
     EXPECT_STREQ(render_diagnostics, "RENDER 5/7 CULL 2 TRI 128");
-    bool saw_depth_prepass_diagnostics = false;
-    char depth_prepass_diagnostics[128]{};
-    auto find_depth_prepass_diagnostics = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
-        if (std::string(text->name) != "ui.brush_geometry.depth_prepass_diagnostics")
-            return true;
-        auto *args = static_cast<std::tuple<slayer3d_game_data_runtime *, bool *, char *> *>(userdata);
-        *std::get<1>(*args) = true;
-        slayer3d_game_data_ui_metrics metrics{};
-        EXPECT_TRUE(slayer3d_game_data_format_ui_text(std::get<0>(*args), text, &metrics, std::get<2>(*args), 128));
-        return false;
-    };
-    std::tuple<slayer3d_game_data_runtime *, bool *, char *> depth_prepass_diagnostics_args{
-        runtime, &saw_depth_prepass_diagnostics, depth_prepass_diagnostics};
-    ASSERT_TRUE(
-        slayer3d_game_data_for_each_ui_text(runtime, find_depth_prepass_diagnostics, &depth_prepass_diagnostics_args));
-    EXPECT_TRUE(saw_depth_prepass_diagnostics);
-    EXPECT_STREQ(depth_prepass_diagnostics, "Z PREPASS 5 / TRI 0");
 
     const int forward = slayer3d_game_data_find_action(runtime, "action.move.forward");
     ASSERT_GE(forward, 0);
@@ -12981,22 +12963,16 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     before_stats.model_mesh_culled = 1;
     before_stats.model_mesh_draws = 3;
     before_stats.model_triangles_submitted = 48;
-    before_stats.depth_prepass_draws = 2;
-    before_stats.depth_prepass_triangles = 36;
     after_stats.model_mesh_submissions = 7;
     after_stats.model_mesh_culled = 2;
     after_stats.model_mesh_draws = 5;
     after_stats.model_triangles_submitted = 96;
-    after_stats.depth_prepass_draws = 6;
-    after_stats.depth_prepass_triangles = 84;
     slayer3d_game_data_accumulate_brush_render_diagnostics(runtime, &before_stats, &after_stats);
     ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
     EXPECT_EQ(diagnostics.render_mesh_submissions, 3u);
     EXPECT_EQ(diagnostics.render_mesh_culled, 1u);
     EXPECT_EQ(diagnostics.render_mesh_draws, 2u);
     EXPECT_EQ(diagnostics.render_triangles_submitted, 48u);
-    EXPECT_EQ(diagnostics.render_depth_prepass_draws, 4u);
-    EXPECT_EQ(diagnostics.render_depth_prepass_triangles, 48u);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
