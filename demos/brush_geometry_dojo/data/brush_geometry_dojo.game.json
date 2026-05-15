@@ -29,7 +29,7 @@
     "logical_width": 1280,
     "logical_height": 720,
     "backend": "opengl",
-    "window": { "renderer": "opengl", "vsync": true },
+    "window": { "renderer": "opengl", "vsync": false },
     "quit": { "action": "action.exit" },
     "input_policy": { "global_actions": ["action.exit"] }
   },
