@@ -145,18 +145,34 @@ extern "C"
         bool loaded;          /**< True once the model owns loaded meshes/materials. */
     } slayer3d_game_data_model_cache_entry;
 
+    /** @brief One frame-local cached skeletal pose for an authored render.model draw. */
+    typedef struct slayer3d_game_data_model_pose_cache_entry
+    {
+        const slayer3d_model *model;   /**< Model that owns the skeleton/clip. */
+        int animation_clip;            /**< Animation clip index on model. */
+        float animation_time;          /**< Normalized animation time used for evaluation. */
+        slayer3d_mat4 *joint_matrices; /**< Owned matrix palette reused across frames. */
+        int joint_count;               /**< Number of valid joint matrices. */
+        int joint_capacity;            /**< Allocated matrix capacity. */
+    } slayer3d_game_data_model_pose_cache_entry;
+
     /**
      * @brief Runtime cache for model assets referenced by authored world models.
      *
      * The cache owns loaded model data. Current model loaders require a
      * filesystem path, so model assets must resolve through a directory mount.
+     * It also owns a frame-local skeletal pose cache used by presentation
+     * helpers to avoid re-evaluating identical model/clip/time poses.
      */
     typedef struct slayer3d_game_data_model_cache
     {
-        slayer3d_game_data_model_cache_entry *entries; /**< Cached model entries. */
-        int count;                                     /**< Number of cached models. */
-        int capacity;                                  /**< Allocated cache slots. */
-        slayer3d_asset_resolver *assets;               /**< Resolver used for lazy loads; not owned. */
+        slayer3d_game_data_model_cache_entry *entries;           /**< Cached model entries. */
+        int count;                                               /**< Number of cached models. */
+        int capacity;                                            /**< Allocated cache slots. */
+        slayer3d_asset_resolver *assets;                         /**< Resolver used for lazy loads; not owned. */
+        slayer3d_game_data_model_pose_cache_entry *pose_entries; /**< Frame-local cached skeletal poses. */
+        int pose_count;                                          /**< Number of poses used this frame. */
+        int pose_capacity;                                       /**< Allocated pose cache slots. */
     } slayer3d_game_data_model_cache;
 
     /** @brief One cached procedural mesh generated from an authored render.mesh_primitive descriptor. */
@@ -435,6 +451,29 @@ extern "C"
      * @param assets Asset resolver used to resolve authored model paths; not owned.
      */
     void slayer3d_game_data_model_cache_init(slayer3d_game_data_model_cache *cache, slayer3d_asset_resolver *assets);
+
+    /**
+     * @brief Clear frame-local skeletal poses while keeping allocated matrix storage.
+     *
+     * Call once at the beginning of a presented frame before evaluating
+     * render.model animation poses. slayer3d_game_data_draw_frame() does this
+     * automatically for its model cache.
+     */
+    void slayer3d_game_data_model_cache_begin_pose_frame(slayer3d_game_data_model_cache *cache);
+
+    /**
+     * @brief Evaluate or reuse a cached model animation pose.
+     *
+     * The returned matrix palette is owned by @p cache and remains valid until
+     * the next slayer3d_game_data_model_cache_begin_pose_frame() or
+     * slayer3d_game_data_model_cache_free(). @p animation_time is wrapped by
+     * clip duration when @p loop is true.
+     */
+    const slayer3d_mat4 *slayer3d_game_data_model_cache_evaluate_pose(slayer3d_game_data_model_cache *cache,
+                                                                      slayer3d_render_context *renderer,
+                                                                      const slayer3d_model *model, int animation_clip,
+                                                                      float animation_time, bool loop,
+                                                                      int *out_joint_count);
 
     /**
      * @brief Free all models owned by a world model cache.

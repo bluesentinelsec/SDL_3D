@@ -421,6 +421,26 @@ static bool ensure_model_cache_capacity(slayer3d_game_data_model_cache *cache, i
     return true;
 }
 
+static bool ensure_model_pose_cache_capacity(slayer3d_game_data_model_cache *cache, int required)
+{
+    if (cache == NULL || required <= cache->pose_capacity)
+        return cache != NULL;
+
+    int next_capacity = cache->pose_capacity < 16 ? 16 : cache->pose_capacity * 2;
+    while (next_capacity < required)
+        next_capacity *= 2;
+
+    slayer3d_game_data_model_pose_cache_entry *entries = (slayer3d_game_data_model_pose_cache_entry *)SDL_realloc(
+        cache->pose_entries, (size_t)next_capacity * sizeof(*entries));
+    if (entries == NULL)
+        return false;
+
+    SDL_memset(entries + cache->pose_capacity, 0, (size_t)(next_capacity - cache->pose_capacity) * sizeof(*entries));
+    cache->pose_entries = entries;
+    cache->pose_capacity = next_capacity;
+    return true;
+}
+
 static bool ensure_mesh_primitive_cache_capacity(slayer3d_game_data_mesh_primitive_cache *cache, int required)
 {
     if (cache == NULL || required <= cache->capacity)
@@ -715,6 +735,94 @@ static slayer3d_game_data_model_cache_entry *find_or_load_model_entry(const slay
 
     ++cache->count;
     return entry;
+}
+
+void slayer3d_game_data_model_cache_begin_pose_frame(slayer3d_game_data_model_cache *cache)
+{
+    if (cache != NULL)
+        cache->pose_count = 0;
+}
+
+static const slayer3d_mat4 *model_pose_cache_evaluate_clip(slayer3d_game_data_model_cache *cache,
+                                                           slayer3d_render_context *renderer,
+                                                           const slayer3d_model *model,
+                                                           const slayer3d_animation_clip *clip, int animation_clip,
+                                                           float animation_time, int *out_joint_count)
+{
+    if (out_joint_count != NULL)
+        *out_joint_count = 0;
+    if (cache == NULL || model == NULL || model->skeleton == NULL || clip == NULL || out_joint_count == NULL)
+        return NULL;
+
+    const int joint_count = model->skeleton->joint_count;
+    if (joint_count <= 0)
+        return NULL;
+
+    for (int i = 0; i < cache->pose_count; ++i)
+    {
+        slayer3d_game_data_model_pose_cache_entry *entry = &cache->pose_entries[i];
+        if (entry->model == model && entry->animation_clip == animation_clip &&
+            entry->animation_time == animation_time && entry->joint_count == joint_count)
+        {
+            *out_joint_count = joint_count;
+            if (renderer != NULL)
+                renderer->stats.animation_pose_cache_hits += 1u;
+            return entry->joint_matrices;
+        }
+    }
+
+    if (!ensure_model_pose_cache_capacity(cache, cache->pose_count + 1))
+        return NULL;
+
+    slayer3d_game_data_model_pose_cache_entry *entry = &cache->pose_entries[cache->pose_count];
+    if (entry->joint_capacity < joint_count)
+    {
+        slayer3d_mat4 *matrices =
+            (slayer3d_mat4 *)SDL_realloc(entry->joint_matrices, (size_t)joint_count * sizeof(*matrices));
+        if (matrices == NULL)
+            return NULL;
+        entry->joint_matrices = matrices;
+        entry->joint_capacity = joint_count;
+    }
+
+    if (!slayer3d_evaluate_animation(model->skeleton, clip, animation_time, entry->joint_matrices))
+        return NULL;
+
+    entry->model = model;
+    entry->animation_clip = animation_clip;
+    entry->animation_time = animation_time;
+    entry->joint_count = joint_count;
+    ++cache->pose_count;
+    *out_joint_count = joint_count;
+    if (renderer != NULL)
+        renderer->stats.animation_pose_evaluations += 1u;
+    return entry->joint_matrices;
+}
+
+const slayer3d_mat4 *slayer3d_game_data_model_cache_evaluate_pose(slayer3d_game_data_model_cache *cache,
+                                                                  slayer3d_render_context *renderer,
+                                                                  const slayer3d_model *model, int animation_clip,
+                                                                  float animation_time, bool loop, int *out_joint_count)
+{
+    if (out_joint_count != NULL)
+        *out_joint_count = 0;
+    if (cache == NULL || model == NULL || model->skeleton == NULL || model->animations == NULL ||
+        model->animation_count <= 0 || animation_clip < 0 || out_joint_count == NULL)
+    {
+        return NULL;
+    }
+
+    int clip_index = animation_clip;
+    if (clip_index >= model->animation_count)
+        clip_index = 0;
+    const slayer3d_animation_clip *clip = &model->animations[clip_index];
+    if (loop && clip->duration > 0.0f)
+    {
+        animation_time = SDL_fmodf(animation_time, clip->duration);
+        if (animation_time < 0.0f)
+            animation_time += clip->duration;
+    }
+    return model_pose_cache_evaluate_clip(cache, renderer, model, clip, clip_index, animation_time, out_joint_count);
 }
 
 static bool draw_sphere_batch(slayer3d_render_context *renderer, const slayer3d_game_data_render_primitive *primitive)
@@ -2062,33 +2170,20 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
         }
         if (primitive->animation_clip >= 0 && entry->model.skeleton != NULL && entry->model.animation_count > 0)
         {
-            int clip_index = primitive->animation_clip;
-            if (clip_index >= entry->model.animation_count)
-                clip_index = 0;
-            const slayer3d_animation_clip *clip = &entry->model.animations[clip_index];
-            float animation_time = primitive->animation_time;
-            if (primitive->animation_loop && clip->duration > 0.0f)
-            {
-                animation_time = SDL_fmodf(animation_time, clip->duration);
-                if (animation_time < 0.0f)
-                    animation_time += clip->duration;
-            }
-            const int joint_count = entry->model.skeleton->joint_count;
-            slayer3d_mat4 *joint_matrices = (slayer3d_mat4 *)SDL_calloc((size_t)joint_count, sizeof(*joint_matrices));
-            if (joint_matrices == NULL)
+            int joint_count = 0;
+            const slayer3d_mat4 *joint_matrices = slayer3d_game_data_model_cache_evaluate_pose(
+                context->model_cache, context->renderer, &entry->model, primitive->animation_clip,
+                primitive->animation_time, primitive->animation_loop, &joint_count);
+            if (joint_matrices == NULL || joint_count <= 0)
                 return false;
-            const bool evaluated =
-                slayer3d_evaluate_animation(entry->model.skeleton, clip, animation_time, joint_matrices);
             const bool drawn =
-                evaluated &&
-                (use_model_matrix
-                     ? draw_skinned_model_with_matrix(context->renderer, context->model_cache->assets, &entry->model,
-                                                      model_matrix, primitive->color, joint_matrices)
-                     : slayer3d_draw_model_skinned_with_assets(context->renderer, context->model_cache->assets,
-                                                               &entry->model, model_position, primitive->rotation_axis,
-                                                               primitive->rotation_angle, primitive->model_scale,
-                                                               primitive->color, joint_matrices));
-            SDL_free(joint_matrices);
+                use_model_matrix
+                    ? draw_skinned_model_with_matrix(context->renderer, context->model_cache->assets, &entry->model,
+                                                     model_matrix, primitive->color, joint_matrices)
+                    : slayer3d_draw_model_skinned_with_assets(context->renderer, context->model_cache->assets,
+                                                              &entry->model, model_position, primitive->rotation_axis,
+                                                              primitive->rotation_angle, primitive->model_scale,
+                                                              primitive->color, joint_matrices);
             if (!drawn)
                 return false;
         }
@@ -2453,6 +2548,9 @@ void slayer3d_game_data_model_cache_free(slayer3d_game_data_model_cache *cache)
         if (cache->entries[i].loaded)
             slayer3d_free_model(&cache->entries[i].model);
     }
+    for (int i = 0; i < cache->pose_capacity; ++i)
+        SDL_free(cache->pose_entries[i].joint_matrices);
+    SDL_free(cache->pose_entries);
     SDL_free(cache->entries);
     SDL_zero(*cache);
 }
@@ -4437,6 +4535,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
     bool ok = true;
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;
+    slayer3d_game_data_model_cache_begin_pose_frame(frame->model_cache);
 
     if (slayer3d_game_data_active_scene_renders_world(frame->runtime))
     {
