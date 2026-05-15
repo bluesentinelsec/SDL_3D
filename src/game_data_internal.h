@@ -445,6 +445,8 @@ typedef struct brush_world_runtime
 {
     slayer3d_game_data_brush_world desc;
     slayer3d_model render_model;
+    slayer3d_model *brush_render_models;
+    int brush_render_model_count;
     char *editor_source_path;
     Uint64 editor_revision;
     Uint64 editor_saved_revision;

@@ -383,7 +383,13 @@ static bool brush_model_copy_materials(const slayer3d_game_data_brush_world *wor
     return true;
 }
 
-bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brush_world *world, slayer3d_model *model)
+static bool brush_index_in_render_filter(int brush_index, int only_brush_index)
+{
+    return only_brush_index < 0 || brush_index == only_brush_index;
+}
+
+static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_world *world, slayer3d_model *model,
+                                                      int only_brush_index)
 {
     if (world == NULL || model == NULL)
         return false;
@@ -423,6 +429,8 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
 
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
+        if (!brush_index_in_render_filter(brush_index, only_brush_index))
+            continue;
         const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
         if (!brush_is_renderable(brush))
             continue;
@@ -449,7 +457,6 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
         SDL_free(material_to_batch);
         SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
-        world->render_model = NULL;
         return true;
     }
 
@@ -512,6 +519,8 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
 
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
+        if (!brush_index_in_render_filter(brush_index, only_brush_index))
+            continue;
         const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
         if (!brush_is_renderable(brush))
             continue;
@@ -572,13 +581,38 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
         }
     }
 
-    world->render_model = model;
     SDL_free(batch_to_mesh);
     SDL_free(vertex_offsets);
     SDL_free(polygon);
     SDL_free(material_to_batch);
     SDL_free(batch_material_indices);
     SDL_free(triangle_counts);
+    return true;
+}
+
+bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brush_world *world, slayer3d_model *model)
+{
+    if (!brush_world_compile_render_model_filtered(world, model, -1))
+        return false;
+    world->render_model = model->mesh_count > 0 ? model : NULL;
+    return true;
+}
+
+bool slayer3d_game_data_brush_world_compile_brush_render_models(slayer3d_game_data_brush_world *world,
+                                                                slayer3d_model *models, int model_count)
+{
+    if (world == NULL || models == NULL || model_count < world->brush_count)
+        return false;
+
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        if (!brush_world_compile_render_model_filtered(world, &models[brush_index], brush_index))
+        {
+            for (int cleanup = 0; cleanup <= brush_index; ++cleanup)
+                slayer3d_free_model(&models[cleanup]);
+            return false;
+        }
+    }
     return true;
 }
 

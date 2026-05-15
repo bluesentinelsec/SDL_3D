@@ -16,6 +16,7 @@
 #include "slayer3d/math.h"
 #include "slayer3d/shapes.h"
 
+#include "game_data_internal.h"
 #include "render_context_internal.h"
 
 typedef struct primitive_draw_context
@@ -51,8 +52,10 @@ typedef struct sector_level_draw_context
 
 typedef struct brush_world_draw_context
 {
+    const slayer3d_game_data_runtime *runtime;
     slayer3d_render_context *renderer;
     const slayer3d_asset_resolver *assets;
+    const slayer3d_camera3d *camera;
     bool ok;
 } brush_world_draw_context;
 
@@ -2448,6 +2451,186 @@ static bool draw_brush_world_instance(void *userdata, const slayer3d_game_data_b
     return context->ok;
 }
 
+static Uint64 brush_model_triangle_count(const slayer3d_model *model)
+{
+    if (model == NULL || model->meshes == NULL || model->mesh_count <= 0)
+        return 0u;
+    Uint64 triangles = 0u;
+    for (int mesh_index = 0; mesh_index < model->mesh_count; ++mesh_index)
+    {
+        const slayer3d_mesh *mesh = &model->meshes[mesh_index];
+        triangles += (Uint64)((mesh->index_count > 0 ? mesh->index_count : mesh->vertex_count) / 3);
+    }
+    return triangles;
+}
+
+static slayer3d_vec3 brush_bounds_sample(const slayer3d_bounding_box *bounds, int sample_index)
+{
+    if (bounds == NULL)
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (sample_index <= 0)
+    {
+        return slayer3d_vec3_scale(slayer3d_vec3_add(bounds->min, bounds->max), 0.5f);
+    }
+    const int corner = sample_index - 1;
+    return slayer3d_vec3_make((corner & 1) != 0 ? bounds->max.x : bounds->min.x,
+                              (corner & 2) != 0 ? bounds->max.y : bounds->min.y,
+                              (corner & 4) != 0 ? bounds->max.z : bounds->min.z);
+}
+
+static bool point_inside_bounds(slayer3d_vec3 point, const slayer3d_bounding_box *bounds)
+{
+    if (bounds == NULL)
+        return false;
+    return point.x >= bounds->min.x && point.x <= bounds->max.x && point.y >= bounds->min.y &&
+           point.y <= bounds->max.y && point.z >= bounds->min.z && point.z <= bounds->max.z;
+}
+
+static bool brush_visibility_sample_occluded(const slayer3d_game_data_brush_world_instance *instance,
+                                             const slayer3d_game_data_brush *brush, slayer3d_vec3 local_camera,
+                                             slayer3d_vec3 sample)
+{
+    if (instance == NULL || instance->world == NULL || brush == NULL)
+        return false;
+    if (slayer3d_vec3_length_squared(slayer3d_vec3_sub(sample, local_camera)) <= 0.0001f)
+        return false;
+
+    slayer3d_game_data_brush_trace_desc trace;
+    SDL_zero(trace);
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER |
+                          SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA | SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY;
+    trace.start = local_camera;
+    trace.end = sample;
+
+    slayer3d_game_data_brush_trace_result result;
+    if (!slayer3d_game_data_brush_world_trace_local_with_diagnostics(instance->world, &trace,
+                                                                     instance->acceleration_enabled, &result, NULL) ||
+        !result.hit)
+    {
+        return false;
+    }
+    if (brush->name != NULL && result.brush_name != NULL && SDL_strcmp(brush->name, result.brush_name) == 0)
+        return false;
+    return result.fraction < 0.995f;
+}
+
+static bool brush_occluded_from_camera(const slayer3d_game_data_brush_world_instance *instance,
+                                       const slayer3d_game_data_brush *brush, const slayer3d_camera3d *camera)
+{
+    if (instance == NULL || brush == NULL || camera == NULL || !brush->has_bounds)
+        return false;
+    const slayer3d_vec3 local_camera = slayer3d_vec3_sub(camera->position, instance->position);
+    if (point_inside_bounds(local_camera, &brush->bounds))
+        return false;
+
+    for (int sample_index = 0; sample_index < 9; ++sample_index)
+    {
+        const slayer3d_vec3 sample = brush_bounds_sample(&brush->bounds, sample_index);
+        if (!brush_visibility_sample_occluded(instance, brush, local_camera, sample))
+            return false;
+    }
+    return true;
+}
+
+static bool draw_brush_world_instance_with_visibility(void *userdata,
+                                                      const slayer3d_game_data_brush_world_instance *instance)
+{
+    brush_world_draw_context *context = (brush_world_draw_context *)userdata;
+    if (context == NULL || context->renderer == NULL || context->runtime == NULL || instance == NULL ||
+        instance->world == NULL)
+        return false;
+    if (!instance->visibility_occlusion_enabled || context->camera == NULL)
+        return draw_brush_world_instance(userdata, instance);
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(context->runtime, instance->world_name);
+    if (world_runtime == NULL || world_runtime->brush_render_models == NULL || instance->world->brushes == NULL ||
+        instance->world->brush_count <= 0)
+    {
+        return draw_brush_world_instance(userdata, instance);
+    }
+    const int brush_count = SDL_min(instance->world->brush_count, world_runtime->brush_render_model_count);
+    bool *brush_visible = (bool *)SDL_calloc((size_t)brush_count, sizeof(*brush_visible));
+    if (brush_visible == NULL)
+    {
+        context->ok = false;
+        return false;
+    }
+    for (int brush_index = 0; brush_index < brush_count; ++brush_index)
+        brush_visible[brush_index] = true;
+
+    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
+    int occluded_count = 0;
+    for (int brush_index = 0; brush_index < brush_count; ++brush_index)
+    {
+        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];
+        const Uint64 triangles = brush_model_triangle_count(brush_model);
+        if (triangles == 0u)
+            continue;
+        if (!brush->visibility_cullable)
+            continue;
+
+        ++mutable_runtime->brush_diagnostics.visibility_brush_candidates;
+        if (brush_occluded_from_camera(instance, brush, context->camera))
+        {
+            ++mutable_runtime->brush_diagnostics.visibility_brush_occluded;
+            mutable_runtime->brush_diagnostics.visibility_triangles_culled += triangles;
+            brush_visible[brush_index] = false;
+            ++occluded_count;
+        }
+        else
+        {
+            ++mutable_runtime->brush_diagnostics.visibility_brush_visible;
+        }
+    }
+    if (occluded_count <= 0)
+    {
+        SDL_free(brush_visible);
+        return draw_brush_world_instance(userdata, instance);
+    }
+
+    bool pushed = false;
+    bool ok = true;
+    if (instance->position.x != 0.0f || instance->position.y != 0.0f || instance->position.z != 0.0f)
+    {
+        if (!slayer3d_push_matrix(context->renderer))
+        {
+            context->ok = false;
+            return false;
+        }
+        pushed = true;
+        ok = slayer3d_translate(context->renderer, instance->position.x, instance->position.y, instance->position.z);
+    }
+
+    const bool restore_lighting = slayer3d_is_lighting_enabled(context->renderer);
+    if (!instance->lighting_enabled)
+        slayer3d_set_lighting_enabled(context->renderer, false);
+
+    for (int brush_index = 0; ok && brush_index < brush_count; ++brush_index)
+    {
+        if (!brush_visible[brush_index])
+            continue;
+        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const Uint64 triangles = brush_model_triangle_count(brush_model);
+        if (triangles == 0u)
+            continue;
+
+        ok = slayer3d_draw_model_ex_with_assets(
+            context->renderer, context->assets, brush_model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+            slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f, slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+            (slayer3d_color){255, 255, 255, 255});
+    }
+
+    if (!instance->lighting_enabled)
+        slayer3d_set_lighting_enabled(context->renderer, restore_lighting);
+    if (pushed && !slayer3d_pop_matrix(context->renderer))
+        ok = false;
+    SDL_free(brush_visible);
+    if (!ok)
+        context->ok = false;
+    return context->ok;
+}
+
 bool slayer3d_game_data_draw_brush_worlds(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer)
 {
     return slayer3d_game_data_draw_brush_worlds_with_assets(runtime, renderer, NULL);
@@ -2457,6 +2640,14 @@ bool slayer3d_game_data_draw_brush_worlds_with_assets(const slayer3d_game_data_r
                                                       slayer3d_render_context *renderer,
                                                       const slayer3d_asset_resolver *assets)
 {
+    return slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, renderer, assets, NULL);
+}
+
+bool slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(const slayer3d_game_data_runtime *runtime,
+                                                                 slayer3d_render_context *renderer,
+                                                                 const slayer3d_asset_resolver *assets,
+                                                                 const slayer3d_camera3d *camera)
+{
     if (runtime == NULL || renderer == NULL)
         return false;
 
@@ -2465,13 +2656,15 @@ bool slayer3d_game_data_draw_brush_worlds_with_assets(const slayer3d_game_data_r
     const bool have_before_stats = slayer3d_get_render_stats(renderer, &before_stats);
     brush_world_draw_context context;
     SDL_zero(context);
+    context.runtime = runtime;
     context.renderer = renderer;
     context.assets = assets;
+    context.camera = camera;
     context.ok = true;
     const bool previous_depth_prepass_scope = renderer->depth_prepass_scope_enabled;
     renderer->depth_prepass_scope_enabled = true;
-    const bool iterated =
-        slayer3d_game_data_for_each_brush_world_instance(runtime, draw_brush_world_instance, &context);
+    const bool iterated = slayer3d_game_data_for_each_brush_world_instance(
+        runtime, camera != NULL ? draw_brush_world_instance_with_visibility : draw_brush_world_instance, &context);
     renderer->depth_prepass_scope_enabled = previous_depth_prepass_scope;
     slayer3d_render_stats after_stats;
     SDL_zero(after_stats);
@@ -3758,8 +3951,9 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
                      frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
                      &camera) &&
                  ok;
-            ok = slayer3d_game_data_draw_brush_worlds_with_assets(
-                     frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL) &&
+            ok = slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(
+                     frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
+                     &camera) &&
                  ok;
             if (frame->particle_cache != NULL)
                 ok = draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache, true, false) && ok;

@@ -651,6 +651,43 @@ static bool editor_brush_world_mark_saved(brush_world_runtime *world_runtime, co
     return true;
 }
 
+static void free_brush_world_visibility_models(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return;
+    for (int i = 0; i < world_runtime->brush_render_model_count; ++i)
+        slayer3d_free_model(&world_runtime->brush_render_models[i]);
+    SDL_free(world_runtime->brush_render_models);
+    world_runtime->brush_render_models = NULL;
+    world_runtime->brush_render_model_count = 0;
+}
+
+static bool compile_brush_world_visibility_models(brush_world_runtime *world_runtime, slayer3d_model **out_models,
+                                                  int *out_model_count)
+{
+    if (out_models != NULL)
+        *out_models = NULL;
+    if (out_model_count != NULL)
+        *out_model_count = 0;
+    if (world_runtime == NULL || out_models == NULL || out_model_count == NULL)
+        return false;
+
+    slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    if (world->brush_count <= 0)
+        return true;
+    slayer3d_model *models = (slayer3d_model *)SDL_calloc((size_t)world->brush_count, sizeof(*models));
+    if (models == NULL)
+        return false;
+    if (!slayer3d_game_data_brush_world_compile_brush_render_models(world, models, world->brush_count))
+    {
+        SDL_free(models);
+        return false;
+    }
+    *out_models = models;
+    *out_model_count = world->brush_count;
+    return true;
+}
+
 static bool editor_brush_world_name_exists(const brush_world_runtime *world_runtime, const char *brush_name)
 {
     if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
@@ -821,12 +858,19 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     world->brush_count = old_count + 1;
 
     slayer3d_model render_model;
+    slayer3d_model *brush_render_models = NULL;
+    int brush_render_model_count = 0;
     SDL_zero(render_model);
-    const bool rebuilt = slayer3d_game_data_brush_world_build_acceleration(world) &&
-                         slayer3d_game_data_brush_world_compile_render_model(world, &render_model);
+    const bool rebuilt =
+        slayer3d_game_data_brush_world_build_acceleration(world) &&
+        slayer3d_game_data_brush_world_compile_render_model(world, &render_model) &&
+        compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count);
     if (!rebuilt)
     {
         slayer3d_free_model(&render_model);
+        for (int i = 0; i < brush_render_model_count; ++i)
+            slayer3d_free_model(&brush_render_models[i]);
+        SDL_free(brush_render_models);
         world->brushes = old_brushes;
         world->brush_count = old_count;
         free_editor_runtime_brush(&brushes[old_count]);
@@ -838,7 +882,10 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
 
     SDL_free(old_brushes);
     slayer3d_free_model(&world_runtime->render_model);
+    free_brush_world_visibility_models(world_runtime);
     world_runtime->render_model = render_model;
+    world_runtime->brush_render_models = brush_render_models;
+    world_runtime->brush_render_model_count = brush_render_model_count;
     world->render_model = &world_runtime->render_model;
     editor_brush_world_mark_dirty(world_runtime);
     if (out_brush_name != NULL && out_brush_name_size > 0u)
@@ -1323,6 +1370,7 @@ static bool export_add_brush(yyjson_mut_doc *doc, yyjson_mut_val *brushes, const
         !yyjson_mut_obj_add_strcpy(doc, obj, "name", brush->name != NULL ? brush->name : "") ||
         !export_add_brush_contents(doc, obj, brush->contents) ||
         !export_add_string_array(doc, obj, "tags", brush->tags, brush->tag_count) ||
+        (brush->visibility_cullable && !yyjson_mut_obj_add_bool(doc, obj, "visibility_cullable", true)) ||
         !export_add_editor_metadata(doc, obj, &brush->editor) || !yyjson_mut_obj_add_val(doc, obj, "faces", faces))
     {
         return false;
@@ -2298,6 +2346,9 @@ bool slayer3d_game_data_for_each_brush_world_instance(const slayer3d_game_data_r
             scene_state_bool(runtime, json_string(entry, "lighting_key", NULL), json_bool(entry, "lighting", true));
         instance.debug_wireframe = scene_state_bool(runtime, json_string(entry, "debug_wireframe_key", NULL),
                                                     json_bool(entry, "debug_wireframe", false));
+        instance.visibility_occlusion_enabled =
+            scene_state_bool(runtime, json_string(entry, "visibility_occlusion_key", NULL),
+                             json_bool(entry, "visibility_occlusion", false));
         if (!callback(userdata, &instance))
             return true;
     }
@@ -4507,15 +4558,24 @@ static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
         return false;
 
     slayer3d_model render_model;
+    slayer3d_model *brush_render_models = NULL;
+    int brush_render_model_count = 0;
     SDL_zero(render_model);
-    if (!slayer3d_game_data_brush_world_compile_render_model(world, &render_model))
+    if (!slayer3d_game_data_brush_world_compile_render_model(world, &render_model) ||
+        !compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count))
     {
         slayer3d_free_model(&render_model);
+        for (int i = 0; i < brush_render_model_count; ++i)
+            slayer3d_free_model(&brush_render_models[i]);
+        SDL_free(brush_render_models);
         return false;
     }
 
     slayer3d_free_model(&world_runtime->render_model);
+    free_brush_world_visibility_models(world_runtime);
     world_runtime->render_model = render_model;
+    world_runtime->brush_render_models = brush_render_models;
+    world_runtime->brush_render_model_count = brush_render_model_count;
     world->render_model = &world_runtime->render_model;
     return true;
 }

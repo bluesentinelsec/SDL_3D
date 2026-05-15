@@ -463,6 +463,8 @@ extern "C"
         const char *name;
         /** @brief Bitmask of SLAYER3D_GAME_DATA_BRUSH_CONTENT_* flags. */
         unsigned int contents;
+        /** @brief True when runtime visibility occlusion may cull this brush. */
+        bool visibility_cullable;
         /** @brief Optional authored tags for editor/runtime queries. */
         const char *const *tags;
         /** @brief Number of entries in @p tags. */
@@ -521,6 +523,8 @@ extern "C"
         bool lighting_enabled;
         /** @brief Whether debug wireframe should be requested for this instance. */
         bool debug_wireframe;
+        /** @brief Whether camera-based brush visibility/occlusion should be evaluated before drawing. */
+        bool visibility_occlusion_enabled;
     } slayer3d_game_data_brush_world_instance;
 
     /** @brief Collision shape used by a brush-world trace. */
@@ -611,6 +615,14 @@ extern "C"
         Uint64 render_mesh_draws;
         /** @brief Approximate brush-world triangles submitted after renderer culling. */
         Uint64 render_triangles_submitted;
+        /** @brief Renderable brushes tested by brush-world visibility culling. */
+        Uint64 visibility_brush_candidates;
+        /** @brief Renderable brushes accepted by brush-world visibility culling. */
+        Uint64 visibility_brush_visible;
+        /** @brief Renderable brushes rejected by brush-world visibility culling. */
+        Uint64 visibility_brush_occluded;
+        /** @brief Approximate triangles skipped by brush-world visibility culling. */
+        Uint64 visibility_triangles_culled;
     } slayer3d_game_data_brush_diagnostics;
 
     /** @brief Runtime world model implementation kind. */

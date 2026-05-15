@@ -490,6 +490,19 @@ extern "C"
                                                           const slayer3d_asset_resolver *assets);
 
     /**
+     * @brief Draw active-scene brush worlds with optional camera visibility culling.
+     *
+     * Passing NULL for @p camera preserves the baseline whole-world static mesh
+     * path. Scene instances that opt into `visibility_occlusion` use @p camera
+     * to conservatively skip fully occluded brush submodels before renderer
+     * submission.
+     */
+    bool slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(const slayer3d_game_data_runtime *runtime,
+                                                                     slayer3d_render_context *renderer,
+                                                                     const slayer3d_asset_resolver *assets,
+                                                                     const slayer3d_camera3d *camera);
+
+    /**
      * @brief Draw authored UI text for the active scene.
      *
      * Built-in font assets are loaded on demand through @p font_cache. Text is

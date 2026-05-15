@@ -528,6 +528,7 @@ in later slices.
           "name": "brush.start_room",
           "tags": ["room", "solid"],
           "contents": ["solid", "player_clip"],
+          "visibility_cullable": false,
           "editor": {
             "stable_id": "brush.keep_01.start_room.v1",
             "display_name": "Start Room",
@@ -573,6 +574,9 @@ Validation requires:
 - optional `contents` as one value or an array of unique values: `solid`,
   `player_clip`, `projectile_clip`, `trigger`, `water`, `lava`, or `sky`;
   omitted contents default to `solid`
+- optional `visibility_cullable` boolean, default `false`; enable this only on
+  discrete/detail brushes that are safe to skip when hidden by other solid
+  brushes
 - each brush to contain at least four `faces`
 - each face to declare `plane.normal` as a non-zero vec3 and
   `plane.distance` as a number
@@ -596,17 +600,26 @@ Scenes instantiate brush worlds through `world.brush_worlds`:
         "position": [0.0, 0.0, 0.0],
         "acceleration": true,
         "lighting": true,
-        "debug_wireframe": false
+        "debug_wireframe": false,
+        "visibility_occlusion": false
       }
     ]
   }
 }
 ```
 
-`acceleration_key`, `lighting_key`, and `debug_wireframe_key` may name
+`visibility_occlusion` is an opt-in CPU-side brush visibility pass. When a
+camera is available, the generic frame path tests brushes authored with
+`visibility_cullable: true` against solid brush blockers and skips cullable
+brush submodels that are fully hidden. Structural floors, walls, ceilings, and
+large world-shell brushes should normally leave `visibility_cullable` unset so
+they cannot disappear from conservative trace ambiguity around shared edges,
+thin openings, or connected-room geometry. Use cullable brushes for discrete
+detail/prop-style brush geometry where skipped triangles and material meshes
+outweigh the extra per-brush visibility checks. `acceleration_key`,
+`lighting_key`, `debug_wireframe_key`, and `visibility_occlusion_key` may name
 scene-state booleans that override the authored defaults. Runtime and editor
-code should use
-`slayer3d_game_data_get_brush_world()` and
+code should use `slayer3d_game_data_get_brush_world()` and
 `slayer3d_game_data_for_each_brush_world_instance()` rather than reparsing JSON.
 Brush render meshes are available through `brush_world.render_model` and are
 drawn by the generic data-game frame path. During load, brush worlds also
@@ -2591,7 +2604,9 @@ Supported brush metrics are `brush.trace_count`,
 `brush.bounds_reject_count`, `brush.collision_candidate_count`,
 `brush.hit_count`, `brush.render_mesh_submissions`,
 `brush.render_mesh_culled`, `brush.render_mesh_draws`, and
-`brush.render_triangles_submitted`.
+`brush.render_triangles_submitted`, plus visibility counters
+`brush.visibility_brush_candidates`, `brush.visibility_brush_visible`,
+`brush.visibility_brush_occluded`, and `brush.visibility_triangles_culled`.
 
 For editor-like tools and diagnostics, `ui.panels` and `ui.inspectors` provide
 reusable higher-level overlay widgets while still rendering through the normal

@@ -5541,6 +5541,12 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, val
                 ok = false;
                 break;
             }
+            yyjson_val *visibility_cullable = obj_get(brush, "visibility_cullable");
+            if (visibility_cullable != NULL && !yyjson_is_bool(visibility_cullable))
+            {
+                ok = validation_error(ctx, brush_path, "brush visibility_cullable must be a boolean");
+                break;
+            }
             if (!yyjson_is_arr(faces) || yyjson_arr_size(faces) < 4)
             {
                 ok = validation_error(ctx, brush_path, "brush faces must contain at least 4 entries");
@@ -10244,6 +10250,10 @@ static bool ui_metric_name_valid(const char *metric)
         "brush.render_mesh_culled",
         "brush.render_mesh_draws",
         "brush.render_triangles_submitted",
+        "brush.visibility_brush_candidates",
+        "brush.visibility_brush_visible",
+        "brush.visibility_brush_occluded",
+        "brush.visibility_triangles_culled",
     };
 
     for (size_t i = 0; i < SDL_arraysize(metrics); ++i)
@@ -11145,6 +11155,9 @@ static bool validate_scene_brush_worlds(validation_context *ctx, yyjson_val *sce
         yyjson_val *debug_wireframe = obj_get(entry, "debug_wireframe");
         if (debug_wireframe != NULL && !yyjson_is_bool(debug_wireframe))
             return validation_error(ctx, entry_path, "scene brush world debug_wireframe must be a boolean");
+        yyjson_val *visibility_occlusion = obj_get(entry, "visibility_occlusion");
+        if (visibility_occlusion != NULL && !yyjson_is_bool(visibility_occlusion))
+            return validation_error(ctx, entry_path, "scene brush world visibility_occlusion must be a boolean");
         yyjson_val *acceleration_key = obj_get(entry, "acceleration_key");
         if (acceleration_key != NULL && !is_non_empty_string(entry, "acceleration_key"))
             return validation_error(ctx, entry_path, "scene brush world acceleration_key must be non-empty");
@@ -11154,6 +11167,9 @@ static bool validate_scene_brush_worlds(validation_context *ctx, yyjson_val *sce
         yyjson_val *debug_wireframe_key = obj_get(entry, "debug_wireframe_key");
         if (debug_wireframe_key != NULL && !is_non_empty_string(entry, "debug_wireframe_key"))
             return validation_error(ctx, entry_path, "scene brush world debug_wireframe_key must be non-empty");
+        yyjson_val *visibility_occlusion_key = obj_get(entry, "visibility_occlusion_key");
+        if (visibility_occlusion_key != NULL && !is_non_empty_string(entry, "visibility_occlusion_key"))
+            return validation_error(ctx, entry_path, "scene brush world visibility_occlusion_key must be non-empty");
     }
     return true;
 }
