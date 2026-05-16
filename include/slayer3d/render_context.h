@@ -78,10 +78,16 @@ extern "C"
         Uint64 gpu_skinned_draws;
         /** @brief Vertices skinned on the GPU by capable renderers. */
         Uint64 gpu_skinned_vertices;
-        /** @brief GPU skinning joint palette uniform uploads issued by capable renderers. */
+        /** @brief Fallback GPU skinning joint palette uniform uploads issued by capable renderers. */
         Uint64 gpu_skinning_palette_uploads;
-        /** @brief Joint matrices uploaded for GPU skinning palettes. */
+        /** @brief Joint matrices uploaded through fallback GPU skinning uniforms. */
         Uint64 gpu_skinning_palette_matrices_uploaded;
+        /** @brief Shared GPU pose palette buffer uploads issued by capable renderers. */
+        Uint64 gpu_skinning_palette_buffer_uploads;
+        /** @brief Joint matrices uploaded through the shared GPU pose palette buffer. */
+        Uint64 gpu_skinning_palette_buffer_matrices_uploaded;
+        /** @brief GPU-skinned draws that used the shared pose palette buffer. */
+        Uint64 gpu_skinning_palette_buffer_draws;
         /** @brief Vertices skinned on the CPU fallback path. */
         Uint64 cpu_skinned_vertices;
         /** @brief Authored model animation poses evaluated by the presentation layer. */
