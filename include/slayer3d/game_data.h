@@ -651,7 +651,7 @@ extern "C"
         Uint64 world_bounds_reject_count;
         /** @brief Authored brushes considered by local trace loops. */
         Uint64 brush_count;
-        /** @brief Brushes rejected because contents did not overlap the trace mask. */
+        /** @brief Visited brushes rejected because contents did not overlap the trace mask. */
         Uint64 contents_reject_count;
         /** @brief Brushes rejected by precomputed brush bounds. */
         Uint64 bounds_reject_count;

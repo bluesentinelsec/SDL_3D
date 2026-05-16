@@ -13109,8 +13109,10 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     slayer3d_game_data_brush_diagnostics diagnostics{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
     EXPECT_EQ(diagnostics.trace_count, 1u);
-    EXPECT_EQ(diagnostics.brush_count, 3u);
-    EXPECT_EQ(diagnostics.contents_reject_count, 1u);
+    EXPECT_GT(diagnostics.collision_chunk_count, 0u);
+    EXPECT_GT(diagnostics.collision_chunk_reject_count, 0u);
+    EXPECT_EQ(diagnostics.brush_count, 2u);
+    EXPECT_EQ(diagnostics.contents_reject_count, 0u);
     EXPECT_EQ(diagnostics.bounds_reject_count, 1u);
     EXPECT_EQ(diagnostics.collision_candidate_count, 1u);
     EXPECT_EQ(diagnostics.hit_count, 1u);
