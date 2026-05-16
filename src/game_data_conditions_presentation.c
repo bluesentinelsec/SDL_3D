@@ -692,6 +692,10 @@ static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runti
         value = diagnostics.visibility_brush_occluded;
     else if (SDL_strcmp(name, "visibility_triangles_culled") == 0)
         value = diagnostics.visibility_triangles_culled;
+    else if (SDL_strcmp(name, "visibility_grid_cache_hits") == 0)
+        value = diagnostics.visibility_grid_cache_hits;
+    else if (SDL_strcmp(name, "visibility_grid_cache_misses") == 0)
+        value = diagnostics.visibility_grid_cache_misses;
     else
         return false;
 

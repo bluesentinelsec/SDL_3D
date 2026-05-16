@@ -638,6 +638,10 @@ extern "C"
         Uint64 visibility_brush_occluded;
         /** @brief Approximate triangles skipped by brush-world visibility culling. */
         Uint64 visibility_triangles_culled;
+        /** @brief Brush visibility-grid cells reused from a cached camera cell. */
+        Uint64 visibility_grid_cache_hits;
+        /** @brief Brush visibility-grid cells rebuilt for a new camera cell. */
+        Uint64 visibility_grid_cache_misses;
     } slayer3d_game_data_brush_diagnostics;
 
     /** @brief Runtime world model implementation kind. */
@@ -1147,6 +1151,10 @@ extern "C"
         float arc_angle;
         /** @brief Secondary tessellation count, such as torus tube segments. */
         int tube_segments;
+        /** @brief Whether global procedural LOD may reduce tessellation for this primitive. */
+        bool lod_enabled;
+        /** @brief Multiplicative bias applied to projected size for procedural LOD selection. */
+        float lod_bias;
         /** @brief Authored tint color. */
         slayer3d_color color;
         /** @brief Optional wire overlay color for mesh primitive wire draw modes. */
@@ -1208,6 +1216,14 @@ extern "C"
         bool per_object_light_selection_enabled;
         /** @brief Maximum lights uploaded to the shader for one lit draw. */
         int per_object_light_limit;
+        /** @brief Whether procedural primitives may reduce tessellation based on projected screen size. */
+        bool procedural_lod_enabled;
+        /** @brief Projected diameter in pixels at or above which authored tessellation is preserved. */
+        float procedural_lod_near_pixels;
+        /** @brief Projected diameter in pixels at or below which minimum tessellation is selected. */
+        float procedural_lod_far_pixels;
+        /** @brief Minimum generated segment/ring count for procedural LOD. */
+        int procedural_lod_min_segments;
         /** @brief Whether capable backends should collect GPU sample-count diagnostics. */
         bool performance_queries_enabled;
         /** @brief Tonemap operator for lit rendering. */

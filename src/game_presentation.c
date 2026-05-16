@@ -29,6 +29,7 @@ typedef struct primitive_draw_context
     slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache;
     const slayer3d_camera3d *camera;
     const slayer3d_game_data_render_eval *eval;
+    slayer3d_game_data_render_settings render_settings;
     slayer3d_game_data_render_primitive sphere_batch;
     slayer3d_vec3 *sphere_batch_positions;
     int sphere_batch_count;
@@ -808,6 +809,200 @@ static bool primitive_sphere_can_batch(const slayer3d_game_data_render_primitive
         return false;
     return SDL_fabsf(primitive->rotation_angle) <= 0.0001f && SDL_fabsf(primitive->rotation_axis.x) <= 0.0001f &&
            SDL_fabsf(primitive->rotation_axis.y) <= 0.0001f && SDL_fabsf(primitive->rotation_axis.z) <= 0.0001f;
+}
+
+static float primitive_lod_bounding_radius(const slayer3d_game_data_render_primitive *primitive)
+{
+    if (primitive == NULL)
+        return 0.0f;
+    switch (primitive->type)
+    {
+    case SLAYER3D_GAME_DATA_RENDER_SPHERE:
+    case SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH:
+        return SDL_max(primitive->radius, 0.0f);
+    case SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE:
+        switch (primitive->mesh_primitive)
+        {
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+            return SDL_max(primitive->radius, 0.0f);
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+            return SDL_sqrtf(primitive->radius * primitive->radius +
+                             (primitive->height * 0.5f) * (primitive->height * 0.5f));
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+            return SDL_max(primitive->major_radius + primitive->minor_radius, 0.0f);
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+            return 0.5f * SDL_sqrtf(primitive->size.x * primitive->size.x + primitive->size.y * primitive->size.y +
+                                    primitive->size.z * primitive->size.z);
+        case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+        default:
+            return 0.0f;
+        }
+    case SLAYER3D_GAME_DATA_RENDER_CUBE:
+    case SLAYER3D_GAME_DATA_RENDER_SPRITE:
+    case SLAYER3D_GAME_DATA_RENDER_MODEL:
+    default:
+        return 0.0f;
+    }
+}
+
+static float projected_primitive_pixels(const primitive_draw_context *context,
+                                        const slayer3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || context->camera == NULL || primitive == NULL)
+        return 0.0f;
+    const float radius = primitive_lod_bounding_radius(primitive);
+    if (radius <= 0.0f)
+        return 0.0f;
+
+    slayer3d_vec3 center = primitive->position;
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH && primitive->instances != NULL &&
+        primitive->instance_count > 0)
+    {
+        float best = 0.0f;
+        slayer3d_game_data_render_primitive sample = *primitive;
+        sample.type = SLAYER3D_GAME_DATA_RENDER_SPHERE;
+        sample.instances = NULL;
+        sample.instance_count = 0;
+        for (int i = 0; i < primitive->instance_count; ++i)
+        {
+            sample.position = primitive->instances[i];
+            best = SDL_max(best, projected_primitive_pixels(context, &sample));
+        }
+        return best;
+    }
+
+    const slayer3d_vec3 forward =
+        slayer3d_vec3_normalize(slayer3d_vec3_sub(context->camera->target, context->camera->position));
+    if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
+        return 0.0f;
+    const float distance = slayer3d_vec3_dot(slayer3d_vec3_sub(center, context->camera->position), forward);
+    if (distance <= 0.01f)
+        return context->render_settings.procedural_lod_near_pixels;
+
+    const int axis_pixels = context->camera->fov_axis == SLAYER3D_CAMERA_FOV_HORIZONTAL
+                                ? slayer3d_get_render_context_width(context->renderer)
+                                : slayer3d_get_render_context_height(context->renderer);
+    const float fov = SDL_clamp(context->camera->fovy, 1.0f, 175.0f) * SLAYER3D_GAME_PRESENTATION_PI / 180.0f;
+    const float denominator = 2.0f * distance * SDL_tanf(fov * 0.5f);
+    if (axis_pixels <= 0 || denominator <= 0.0001f)
+        return 0.0f;
+    return ((radius * 2.0f) * (float)axis_pixels / denominator) * SDL_max(primitive->lod_bias, 0.001f);
+}
+
+static bool primitive_mesh_uses_procedural_lod(slayer3d_game_data_mesh_primitive_kind primitive)
+{
+    switch (primitive)
+    {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return true;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        return false;
+    }
+}
+
+static int lod_segment_count(int authored, int minimum, float projected_pixels, float near_pixels, float far_pixels)
+{
+    authored = SDL_max(authored, 3);
+    minimum = SDL_clamp(minimum, 3, authored);
+    if (authored <= minimum || near_pixels <= far_pixels + 0.001f)
+        return authored;
+    if (projected_pixels >= near_pixels)
+        return authored;
+    if (projected_pixels <= far_pixels)
+        return minimum;
+    const float t = (projected_pixels - far_pixels) / (near_pixels - far_pixels);
+    const float multiplier = t >= 0.66f ? 0.75f : (t >= 0.33f ? 0.5f : 0.0f);
+    const int resolved = multiplier > 0.0f ? (int)SDL_floorf((float)authored * multiplier + 0.5f) : minimum;
+    return SDL_clamp(resolved, minimum, authored);
+}
+
+static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || primitive == NULL || !context->render_settings.procedural_lod_enabled ||
+        !primitive->lod_enabled || primitive->view_space)
+    {
+        return;
+    }
+    if (primitive->type != SLAYER3D_GAME_DATA_RENDER_SPHERE &&
+        primitive->type != SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH &&
+        (primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE ||
+         !primitive_mesh_uses_procedural_lod(primitive->mesh_primitive)))
+    {
+        return;
+    }
+
+    const float projected = projected_primitive_pixels(context, primitive);
+    if (projected <= 0.0f)
+        return;
+    const int minimum = context->render_settings.procedural_lod_min_segments;
+    const float near_pixels = context->render_settings.procedural_lod_near_pixels;
+    const float far_pixels = context->render_settings.procedural_lod_far_pixels;
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE ||
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    {
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        return;
+    }
+
+    switch (primitive->mesh_primitive)
+    {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
+        primitive->tube_segments =
+            lod_segment_count(primitive->tube_segments, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        break;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        break;
+    }
 }
 
 static bool primitive_sphere_batch_matches(const slayer3d_game_data_render_primitive *batch,
@@ -1770,6 +1965,9 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
     primitive_draw_context *context = (primitive_draw_context *)userdata;
     if (context == NULL || context->renderer == NULL || primitive == NULL)
         return false;
+    slayer3d_game_data_render_primitive resolved = *primitive;
+    apply_primitive_lod(context, &resolved);
+    primitive = &resolved;
     if ((primitive->view_space && !context->draw_view_space) || (!primitive->view_space && !context->draw_world_space))
         return true;
     if (primitive_sphere_can_batch(primitive))
@@ -2298,6 +2496,7 @@ static bool draw_render_primitives_evaluated_with_cache(
     context.eval = eval;
     context.draw_world_space = draw_world_space;
     context.draw_view_space = draw_view_space;
+    (void)slayer3d_game_data_get_render_settings(runtime, &context.render_settings);
     bool ok = slayer3d_game_data_for_each_render_primitive_evaluated(runtime, eval, draw_primitive, &context);
     ok = flush_sphere_draw_batch(&context) && ok;
     SDL_free(context.sphere_batch_positions);
@@ -2685,6 +2884,45 @@ static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_
     return brush_visibility_grid_mark_visible_los(world_runtime, local_camera, visible_cells);
 }
 
+static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
+                                                        slayer3d_game_data_brush_diagnostics *diagnostics)
+{
+    int start = -1;
+    if (world_runtime == NULL || world_runtime->visibility_grid_solid == NULL ||
+        world_runtime->visibility_grid_cell_count <= 0 ||
+        !brush_visibility_grid_cell(world_runtime, local_camera, &start) || start < 0 ||
+        world_runtime->visibility_grid_solid[start])
+    {
+        return NULL;
+    }
+
+    if (world_runtime->visibility_grid_visible_cache != NULL &&
+        world_runtime->visibility_grid_visible_cache_start == start)
+    {
+        if (diagnostics != NULL)
+            ++diagnostics->visibility_grid_cache_hits;
+        return world_runtime->visibility_grid_visible_cache;
+    }
+
+    if (diagnostics != NULL)
+        ++diagnostics->visibility_grid_cache_misses;
+    if (world_runtime->visibility_grid_visible_cache == NULL)
+    {
+        world_runtime->visibility_grid_visible_cache = (Uint8 *)SDL_calloc(
+            (size_t)world_runtime->visibility_grid_cell_count, sizeof(*world_runtime->visibility_grid_visible_cache));
+        if (world_runtime->visibility_grid_visible_cache == NULL)
+            return NULL;
+    }
+    SDL_memset(world_runtime->visibility_grid_visible_cache, 0,
+               (size_t)world_runtime->visibility_grid_cell_count *
+                   sizeof(*world_runtime->visibility_grid_visible_cache));
+    world_runtime->visibility_grid_visible_cache_start = -1;
+    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera, world_runtime->visibility_grid_visible_cache))
+        return NULL;
+    world_runtime->visibility_grid_visible_cache_start = start;
+    return world_runtime->visibility_grid_visible_cache;
+}
+
 static bool brush_visibility_forced_visible(const slayer3d_game_data_brush *brush)
 {
     return brush != NULL && brush->visibility == SLAYER3D_GAME_DATA_BRUSH_VISIBILITY_ALWAYS;
@@ -2741,7 +2979,7 @@ static bool brush_visible_from_visibility_grid(const brush_world_runtime *world_
     return false;
 }
 
-static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime,
+static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
                                         const slayer3d_game_data_brush_world_instance *instance,
                                         const slayer3d_camera3d *camera, bool *brush_visible, int brush_count,
                                         int *out_occluded_count, slayer3d_game_data_runtime *mutable_runtime)
@@ -2754,17 +2992,11 @@ static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime
     {
         return false;
     }
-    Uint8 *visible_cells =
-        (Uint8 *)SDL_calloc((size_t)world_runtime->visibility_grid_cell_count, sizeof(*visible_cells));
+    const slayer3d_vec3 local_camera = slayer3d_vec3_sub(camera->position, instance->position);
+    const Uint8 *visible_cells =
+        brush_visibility_grid_visible_cells(world_runtime, local_camera, &mutable_runtime->brush_diagnostics);
     if (visible_cells == NULL)
         return false;
-
-    const slayer3d_vec3 local_camera = slayer3d_vec3_sub(camera->position, instance->position);
-    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera, visible_cells))
-    {
-        SDL_free(visible_cells);
-        return false;
-    }
 
     int occluded_count = 0;
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
@@ -2791,7 +3023,6 @@ static bool apply_brush_visibility_grid(const brush_world_runtime *world_runtime
             ++occluded_count;
         }
     }
-    SDL_free(visible_cells);
     if (out_occluded_count != NULL)
         *out_occluded_count = occluded_count;
     return true;
@@ -2806,7 +3037,9 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
         return false;
     if (!instance->visibility_occlusion_enabled || context->camera == NULL)
         return draw_brush_world_instance(userdata, instance);
-    const brush_world_runtime *world_runtime = find_brush_world_runtime(context->runtime, instance->world_name);
+    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
+    brush_world_runtime *world_runtime =
+        (brush_world_runtime *)find_brush_world_runtime(mutable_runtime, instance->world_name);
     if (world_runtime == NULL || world_runtime->brush_render_models == NULL || instance->world->brushes == NULL ||
         instance->world->brush_count <= 0)
     {
@@ -2822,7 +3055,6 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
         brush_visible[brush_index] = true;
 
-    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
     int occluded_count = 0;
     const bool used_visibility_grid = apply_brush_visibility_grid(
         world_runtime, instance, context->camera, brush_visible, brush_count, &occluded_count, mutable_runtime);

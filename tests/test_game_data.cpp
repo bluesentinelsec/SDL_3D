@@ -5122,6 +5122,35 @@ TEST(GameDataValidation, RejectsInvalidRenderLightSelectionSettings)
     remove_test_dir(dir);
 }
 
+TEST(GameDataValidation, RejectsInvalidProceduralLodSettings)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_procedural_lod");
+    write_text(dir / "bad_lod.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Procedural LOD", "id": "test.bad_procedural_lod", "version": "0.1.0" },
+  "world": { "name": "world.bad_procedural_lod", "kind": "fixed_screen" },
+  "render": {
+    "procedural_lod": true,
+    "procedural_lod_near_pixels": 16.0,
+    "procedural_lod_far_pixels": 32.0
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(
+        slayer3d_game_data_validate_file((dir / "bad_lod.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("procedural_lod_far_pixels"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataValidation, RejectsInvalidUiTooling)
 {
     const std::filesystem::path dir = unique_test_dir("ui_tooling_validation");
@@ -11379,6 +11408,21 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
   ],
   "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
 })json");
+    write_text(dir / "bad_lod_bias.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Mesh Primitive", "id": "test.bad_mesh_primitive", "version": "0.1.0" },
+  "world": { "name": "world.bad_mesh_primitive", "kind": "fixed_screen" },
+  "entities": [
+    {
+      "name": "entity.bad",
+      "components": [
+        { "type": "render.mesh_primitive", "primitive": "sphere", "lod_bias": 0.0 }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
     write_text(dir / "bad_camera_visibility.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -11443,6 +11487,10 @@ TEST(GameDataValidation, RejectsInvalidMeshPrimitiveComponents)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_draw_mode.game.json").string().c_str(), nullptr, error,
                                                   sizeof(error)));
     EXPECT_NE(std::string(error).find("render.mesh_primitive draw_mode is unknown"), std::string::npos) << error;
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_lod_bias.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("lod_bias"), std::string::npos) << error;
     SDL_zeroa(error);
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_camera_visibility.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));

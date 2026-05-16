@@ -667,7 +667,10 @@ void free_brush_world_visibility_grid(brush_world_runtime *world_runtime)
     if (world_runtime == NULL)
         return;
     SDL_free(world_runtime->visibility_grid_solid);
+    SDL_free(world_runtime->visibility_grid_visible_cache);
     world_runtime->visibility_grid_solid = NULL;
+    world_runtime->visibility_grid_visible_cache = NULL;
+    world_runtime->visibility_grid_visible_cache_start = -1;
     world_runtime->visibility_cell_size = 0.0f;
     world_runtime->visibility_grid_dim_x = 0;
     world_runtime->visibility_grid_dim_y = 0;
@@ -782,6 +785,7 @@ bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime)
     world_runtime->visibility_grid_dim_z = dim_z;
     world_runtime->visibility_grid_cell_count = cell_count;
     world_runtime->visibility_grid_solid = solid;
+    world_runtime->visibility_grid_visible_cache_start = -1;
     return true;
 }
 
