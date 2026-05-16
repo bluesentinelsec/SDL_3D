@@ -80,6 +80,10 @@ extern "C"
         Uint64 gpu_skinned_vertices;
         /** @brief Vertices skinned on the CPU fallback path. */
         Uint64 cpu_skinned_vertices;
+        /** @brief Authored model animation poses evaluated by the presentation layer. */
+        Uint64 animation_pose_evaluations;
+        /** @brief Authored model animation pose cache hits in the presentation layer. */
+        Uint64 animation_pose_cache_hits;
     } slayer3d_render_stats;
 
     /**

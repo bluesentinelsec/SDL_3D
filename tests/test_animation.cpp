@@ -10,6 +10,7 @@
 extern "C"
 {
 #include "slayer3d/animation.h"
+#include "slayer3d/game_presentation.h"
 #include "slayer3d/math.h"
 #include "slayer3d/scene.h"
 }
@@ -133,6 +134,65 @@ TEST(SLAYER3DAnimation, TranslationKeyframes)
     /* At t=1.0: translation = (10,0,0). */
     ASSERT_TRUE(slayer3d_evaluate_animation(&skel, &clip, 1.0f, matrices));
     EXPECT_NEAR(matrices[0].m[12], 10.0f, 1e-5f);
+}
+
+TEST(SLAYER3DAnimation, ModelPoseCacheReusesIdenticalFramePoses)
+{
+    slayer3d_joint joints[1] = {make_joint("root", -1, 0, 0, 0)};
+    slayer3d_skeleton skel{};
+    skel.joints = joints;
+    skel.joint_count = 1;
+
+    slayer3d_keyframe keyframes[2] = {kf(0.0f, 0, 0, 0, 0), kf(1.0f, 10, 0, 0, 0)};
+    slayer3d_anim_channel ch{};
+    ch.joint_index = 0;
+    ch.path = SLAYER3D_ANIM_TRANSLATION;
+    ch.keyframes = keyframes;
+    ch.keyframe_count = 2;
+
+    slayer3d_animation_clip clip{};
+    clip.duration = 1.0f;
+    clip.channels = &ch;
+    clip.channel_count = 1;
+
+    slayer3d_model model{};
+    model.skeleton = &skel;
+    model.animations = &clip;
+    model.animation_count = 1;
+
+    slayer3d_game_data_model_cache cache{};
+    slayer3d_game_data_model_cache_init(&cache, nullptr);
+    slayer3d_game_data_model_cache_begin_pose_frame(&cache);
+
+    int joint_count = 0;
+    const slayer3d_mat4 *first =
+        slayer3d_game_data_model_cache_evaluate_pose(&cache, nullptr, &model, 0, 1.25f, true, &joint_count);
+    ASSERT_NE(first, nullptr);
+    EXPECT_EQ(joint_count, 1);
+    EXPECT_EQ(cache.pose_count, 1);
+    EXPECT_NEAR(first[0].m[12], 2.5f, 1e-5f);
+
+    const slayer3d_mat4 *second =
+        slayer3d_game_data_model_cache_evaluate_pose(&cache, nullptr, &model, 0, 1.25f, true, &joint_count);
+    EXPECT_EQ(second, first);
+    EXPECT_EQ(cache.pose_count, 1);
+
+    const slayer3d_mat4 *different_time =
+        slayer3d_game_data_model_cache_evaluate_pose(&cache, nullptr, &model, 0, 0.5f, true, &joint_count);
+    ASSERT_NE(different_time, nullptr);
+    EXPECT_NE(different_time, first);
+    EXPECT_EQ(cache.pose_count, 2);
+    EXPECT_NEAR(different_time[0].m[12], 5.0f, 1e-5f);
+
+    slayer3d_game_data_model_cache_begin_pose_frame(&cache);
+    EXPECT_EQ(cache.pose_count, 0);
+    const slayer3d_mat4 *next_frame =
+        slayer3d_game_data_model_cache_evaluate_pose(&cache, nullptr, &model, 0, 1.25f, true, &joint_count);
+    ASSERT_NE(next_frame, nullptr);
+    EXPECT_EQ(cache.pose_count, 1);
+    EXPECT_NEAR(next_frame[0].m[12], 2.5f, 1e-5f);
+
+    slayer3d_game_data_model_cache_free(&cache);
 }
 
 TEST(SLAYER3DAnimation, RotationKeyframesSlerp)
