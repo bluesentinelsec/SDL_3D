@@ -1064,6 +1064,7 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     world_runtime->chunk_render_models = chunk_render_models;
     world_runtime->chunk_render_model_count = chunk_render_model_count;
     world->render_model = &world_runtime->render_model;
+    world->compile_artifact_hash = slayer3d_game_data_brush_world_compute_compile_artifact_hash(world);
     editor_brush_world_mark_dirty(world_runtime);
     if (out_brush_name != NULL && out_brush_name_size > 0u)
         SDL_strlcpy(out_brush_name, brushes[old_count].name != NULL ? brushes[old_count].name : "",
@@ -1582,6 +1583,7 @@ static bool export_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *worlds,
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
     yyjson_mut_val *materials = yyjson_mut_arr(doc);
     yyjson_mut_val *brushes = yyjson_mut_arr(doc);
+    yyjson_mut_val *compile = yyjson_mut_obj(doc);
     if (obj == NULL || materials == NULL || brushes == NULL || !yyjson_mut_arr_add_val(worlds, obj) ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "name", world->name != NULL ? world->name : "") ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "units", world->units != NULL ? world->units : "meters") ||
@@ -1592,6 +1594,17 @@ static bool export_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *worlds,
         !yyjson_mut_obj_add_val(doc, obj, "brushes", brushes))
     {
         return false;
+    }
+    if (world->compile_hidden_face_culling == false || world->compile_chunk_cell_size_hint > 0.0f)
+    {
+        if (compile == NULL ||
+            !yyjson_mut_obj_add_bool(doc, compile, "hidden_face_culling", world->compile_hidden_face_culling) ||
+            (world->compile_chunk_cell_size_hint > 0.0f &&
+             !yyjson_mut_obj_add_real(doc, compile, "chunk_cell_size", world->compile_chunk_cell_size_hint)) ||
+            !yyjson_mut_obj_add_val(doc, obj, "compile", compile))
+        {
+            return false;
+        }
     }
     for (int i = 0; i < world->material_count; ++i)
     {
@@ -4792,6 +4805,7 @@ static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
     world_runtime->chunk_render_models = chunk_render_models;
     world_runtime->chunk_render_model_count = chunk_render_model_count;
     world->render_model = &world_runtime->render_model;
+    world->compile_artifact_hash = slayer3d_game_data_brush_world_compute_compile_artifact_hash(world);
     return true;
 }
 

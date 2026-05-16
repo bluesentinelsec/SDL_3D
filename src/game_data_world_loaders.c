@@ -639,6 +639,9 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
         world->units = SDL_strdup(json_string(world_json, "units", "meters"));
         world->meters_per_unit = json_float(world_json, "meters_per_unit", 1.0f);
         world->visibility_cell_size = json_float(world_json, "visibility_cell_size", 2.0f);
+        yyjson_val *compile_json = obj_get(world_json, "compile");
+        world->compile_hidden_face_culling = json_bool(compile_json, "hidden_face_culling", true);
+        world->compile_chunk_cell_size_hint = json_float(compile_json, "chunk_cell_size", 0.0f);
         world->material_count = (int)yyjson_arr_size(materials_json);
         world->brush_count = (int)yyjson_arr_size(brushes_json);
         if (world->name == NULL || world->units == NULL)
@@ -815,6 +818,7 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
                 return false;
             }
         }
+        world->compile_artifact_hash = slayer3d_game_data_brush_world_compute_compile_artifact_hash(world);
     }
     return true;
 }

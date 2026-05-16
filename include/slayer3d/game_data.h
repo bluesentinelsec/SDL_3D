@@ -520,6 +520,10 @@ extern "C"
         float meters_per_unit;
         /** @brief Positive cell size for automatic visibility culling, in local world units. */
         float visibility_cell_size;
+        /** @brief True when fully hidden adjacent solid faces are removed from compiled render meshes. */
+        bool compile_hidden_face_culling;
+        /** @brief Optional authored spatial compile chunk cell size, or <= 0 for automatic sizing. */
+        float compile_chunk_cell_size_hint;
         /** @brief Runtime material palette for brush faces. */
         const slayer3d_game_data_brush_material *materials;
         /** @brief Number of entries in @p materials. */
@@ -552,6 +556,8 @@ extern "C"
         int compile_chunk_brush_index_count;
         /** @brief Local-space cell size used to build the compile chunks. */
         float compile_chunk_cell_size;
+        /** @brief Deterministic hash of the compiled render/chunk artifact metadata. */
+        Uint64 compile_artifact_hash;
         /** @brief Precomputed local-space bounds spanning all bounded brushes. */
         slayer3d_bounding_box bounds;
         /** @brief True when @p bounds is valid. */

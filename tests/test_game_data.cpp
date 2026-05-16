@@ -12628,6 +12628,9 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_STREQ(world.units, "meters");
     EXPECT_FLOAT_EQ(world.meters_per_unit, 1.0f);
     EXPECT_FLOAT_EQ(world.visibility_cell_size, 1.5f);
+    EXPECT_TRUE(world.compile_hidden_face_culling);
+    EXPECT_FLOAT_EQ(world.compile_chunk_cell_size_hint, 0.0f);
+    EXPECT_NE(world.compile_artifact_hash, 0u);
     EXPECT_STREQ(world.editor.stable_id, "brush_world.test.v1");
     EXPECT_STREQ(world.editor.display_name, "Brush Test World");
     EXPECT_STREQ(world.editor.category, "tests/brush");
@@ -12815,6 +12818,56 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
 })json",
             nullptr,
             "brush world visibility_cell_size must be positive",
+        },
+        {
+            "bad_compile",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "compile": "fast",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush world compile must be an object",
+        },
+        {
+            "bad_compile_chunk_cell_size",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "compile": { "chunk_cell_size": 0.0 },
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush world compile chunk_cell_size must be positive",
         },
         {
             "bad_visibility",
@@ -13723,6 +13776,128 @@ TEST(GameDataRuntime, BrushRenderCompileCullsFullyHiddenAdjacentSolidFaces)
     EXPECT_EQ(diagnostics.compile_degenerate_face_count, 0u);
 
     slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_options");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": { "brush_worlds": [{ "world": "brush.compile_options" }] }
+})json");
+
+    auto write_game = [&](const char *filename, bool hidden_face_culling) {
+        std::ostringstream json;
+        json << R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Compile Options Test" },
+  "world": { "name": "world.compile_options", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.compile_options",
+      "compile": { "hidden_face_culling": )json"
+             << (hidden_face_culling ? "true" : "false") << R"json(, "chunk_cell_size": 1.0 },
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.left",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.right",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": -1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+        write_text(dir / filename, json.str().c_str());
+    };
+    write_game("compile_culled.game.json", true);
+    write_game("compile_unculled.game.json", false);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *culled_a = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_culled.game.json").string().c_str(), session, &culled_a,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world culled_world_a{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(culled_a, "brush.compile_options", &culled_world_a));
+    EXPECT_TRUE(culled_world_a.compile_hidden_face_culling);
+    EXPECT_FLOAT_EQ(culled_world_a.compile_chunk_cell_size_hint, 1.0f);
+    EXPECT_FLOAT_EQ(culled_world_a.compile_chunk_cell_size, 1.0f);
+    EXPECT_EQ(culled_world_a.compile_face_count, 12);
+    EXPECT_EQ(culled_world_a.compile_culled_face_count, 2);
+    EXPECT_EQ(culled_world_a.compile_rendered_face_count, 10);
+    EXPECT_EQ(culled_world_a.compile_triangle_count, 20);
+    EXPECT_NE(culled_world_a.compile_artifact_hash, 0u);
+
+    slayer3d_game_data_runtime *culled_b = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_culled.game.json").string().c_str(), session, &culled_b,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world culled_world_b{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(culled_b, "brush.compile_options", &culled_world_b));
+    EXPECT_EQ(culled_world_b.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+
+    slayer3d_game_data_runtime *unculled = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_unculled.game.json").string().c_str(), session, &unculled,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world unculled_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(unculled, "brush.compile_options", &unculled_world));
+    EXPECT_FALSE(unculled_world.compile_hidden_face_culling);
+    EXPECT_FLOAT_EQ(unculled_world.compile_chunk_cell_size_hint, 1.0f);
+    EXPECT_FLOAT_EQ(unculled_world.compile_chunk_cell_size, 1.0f);
+    EXPECT_EQ(unculled_world.compile_face_count, 12);
+    EXPECT_EQ(unculled_world.compile_culled_face_count, 0);
+    EXPECT_EQ(unculled_world.compile_rendered_face_count, 12);
+    EXPECT_EQ(unculled_world.compile_triangle_count, 24);
+    EXPECT_NE(unculled_world.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+
+    char *exported_json = nullptr;
+    size_t exported_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_fragment_json(unculled, "brush.compile_options", &exported_json,
+                                                                    &exported_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(exported_json, nullptr);
+    EXPECT_GT(exported_size, 0u);
+    const std::string export_text(exported_json);
+    EXPECT_NE(export_text.find("\"compile\""), std::string::npos);
+    EXPECT_NE(export_text.find("\"hidden_face_culling\""), std::string::npos);
+    EXPECT_NE(export_text.find("false"), std::string::npos);
+    EXPECT_NE(export_text.find("\"chunk_cell_size\""), std::string::npos);
+    EXPECT_NE(export_text.find("1.0"), std::string::npos);
+    SDL_free(exported_json);
+
+    slayer3d_game_data_destroy(unculled);
+    slayer3d_game_data_destroy(culled_b);
+    slayer3d_game_data_destroy(culled_a);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }

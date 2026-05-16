@@ -562,6 +562,10 @@ in later slices.
       "units": "meters",
       "meters_per_unit": 1.0,
       "visibility_cell_size": 2.0,
+      "compile": {
+        "hidden_face_culling": true,
+        "chunk_cell_size": 8.0
+      },
       "editor": {
         "stable_id": "brush_world.keep_01.v1",
         "display_name": "Keep 01",
@@ -623,6 +627,12 @@ Validation requires:
 - `units` omitted or `"meters"`, with positive `meters_per_unit`
 - optional positive `visibility_cell_size`, default `2.0`; this controls the
   coarse empty-space grid used by automatic brush visibility culling
+- optional `compile` object for runtime/offline compile policy
+- optional `compile.hidden_face_culling` boolean, default `true`; when enabled,
+  fully covered adjacent opaque solid faces are removed from compiled render
+  meshes
+- optional positive `compile.chunk_cell_size`; when omitted, the engine derives
+  a deterministic chunk size from the world bounds and visibility cell size
 - optional `editor` metadata on brush worlds, materials, brushes, and faces;
   `editor.stable_id` values must be unique inside each brush world
 - non-empty `materials` with unique names
@@ -711,12 +721,18 @@ ambiguous cases fail open. Runtime descriptors expose
 `compile_invalid_brush_count`, and `compile_degenerate_face_count` for tests,
 editor diagnostics, and performance audits. Brush worlds fail to load when an
 authored brush cannot produce bounded geometry; degenerate faces are counted so
-tooling can surface geometry-health issues. During load, brush worlds also precompute
+tooling can surface geometry-health issues. `compile.hidden_face_culling` can be
+disabled by editor/debug content when authors need to compare the source faces
+against the optimized render artifact. During load, brush worlds also precompute
 local AABBs for each brush and for the whole world, then build spatial compile
-chunks from those bounds. Compile chunks preserve authored brushes as the source
-of truth while grouping them into optimized runtime broad-phase artifacts for
-collision traces, editor diagnostics, and future render/collision chunk
-generation. When visibility culling leaves every brush in a compile chunk
+chunks from those bounds. `compile.chunk_cell_size` gives editor/offline compile
+tools a stable chunking knob; otherwise the runtime computes a conservative
+automatic size. Compile chunks preserve authored brushes as the source of truth
+while grouping them into optimized runtime broad-phase artifacts for collision
+traces, editor diagnostics, and future render/collision chunk generation. The
+runtime descriptor's `compile_artifact_hash` is a deterministic hash of the
+compiled mesh/chunk metadata and can be used by tests, tools, and future offline
+cache invalidation. When visibility culling leaves every brush in a compile chunk
 visible, the renderer can draw that chunk as one optimized model instead of
 submitting each brush model separately; partially visible chunks still fall back
 to per-brush models so occlusion correctness is preserved. When
