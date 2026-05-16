@@ -3179,6 +3179,40 @@ static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_
     return brush_visibility_grid_mark_visible_los(world_runtime, local_camera, visible_cells);
 }
 
+static int brush_visibility_grid_cache_slot_for_start(brush_world_runtime *world_runtime, int start)
+{
+    if (world_runtime == NULL)
+        return -1;
+    for (int slot = 0; slot < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++slot)
+    {
+        if (world_runtime->visibility_grid_visible_cache[slot] != NULL &&
+            world_runtime->visibility_grid_visible_cache_start[slot] == start)
+        {
+            return slot;
+        }
+    }
+    return -1;
+}
+
+static int brush_visibility_grid_cache_slot_for_write(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return -1;
+    int oldest_slot = 0;
+    Uint64 oldest_tick = ~(Uint64)0;
+    for (int slot = 0; slot < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++slot)
+    {
+        if (world_runtime->visibility_grid_visible_cache[slot] == NULL)
+            return slot;
+        if (world_runtime->visibility_grid_visible_cache_tick[slot] < oldest_tick)
+        {
+            oldest_tick = world_runtime->visibility_grid_visible_cache_tick[slot];
+            oldest_slot = slot;
+        }
+    }
+    return oldest_slot;
+}
+
 static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
                                                         slayer3d_game_data_brush_diagnostics *diagnostics)
 {
@@ -3191,31 +3225,40 @@ static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *wor
         return NULL;
     }
 
-    if (world_runtime->visibility_grid_visible_cache != NULL &&
-        world_runtime->visibility_grid_visible_cache_start == start)
+    int cache_slot = brush_visibility_grid_cache_slot_for_start(world_runtime, start);
+    if (cache_slot >= 0)
     {
         if (diagnostics != NULL)
             ++diagnostics->visibility_grid_cache_hits;
-        return world_runtime->visibility_grid_visible_cache;
+        world_runtime->visibility_grid_visible_cache_tick[cache_slot] =
+            ++world_runtime->visibility_grid_visible_cache_clock;
+        return world_runtime->visibility_grid_visible_cache[cache_slot];
     }
 
     if (diagnostics != NULL)
         ++diagnostics->visibility_grid_cache_misses;
-    if (world_runtime->visibility_grid_visible_cache == NULL)
+    cache_slot = brush_visibility_grid_cache_slot_for_write(world_runtime);
+    if (cache_slot < 0)
+        return NULL;
+    if (world_runtime->visibility_grid_visible_cache[cache_slot] == NULL)
     {
-        world_runtime->visibility_grid_visible_cache = (Uint8 *)SDL_calloc(
-            (size_t)world_runtime->visibility_grid_cell_count, sizeof(*world_runtime->visibility_grid_visible_cache));
-        if (world_runtime->visibility_grid_visible_cache == NULL)
+        world_runtime->visibility_grid_visible_cache[cache_slot] =
+            (Uint8 *)SDL_calloc((size_t)world_runtime->visibility_grid_cell_count,
+                                sizeof(*world_runtime->visibility_grid_visible_cache[cache_slot]));
+        if (world_runtime->visibility_grid_visible_cache[cache_slot] == NULL)
             return NULL;
     }
-    SDL_memset(world_runtime->visibility_grid_visible_cache, 0,
+    SDL_memset(world_runtime->visibility_grid_visible_cache[cache_slot], 0,
                (size_t)world_runtime->visibility_grid_cell_count *
-                   sizeof(*world_runtime->visibility_grid_visible_cache));
-    world_runtime->visibility_grid_visible_cache_start = -1;
-    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera, world_runtime->visibility_grid_visible_cache))
+                   sizeof(*world_runtime->visibility_grid_visible_cache[cache_slot]));
+    world_runtime->visibility_grid_visible_cache_start[cache_slot] = -1;
+    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera,
+                                            world_runtime->visibility_grid_visible_cache[cache_slot]))
         return NULL;
-    world_runtime->visibility_grid_visible_cache_start = start;
-    return world_runtime->visibility_grid_visible_cache;
+    world_runtime->visibility_grid_visible_cache_start[cache_slot] = start;
+    world_runtime->visibility_grid_visible_cache_tick[cache_slot] =
+        ++world_runtime->visibility_grid_visible_cache_clock;
+    return world_runtime->visibility_grid_visible_cache[cache_slot];
 }
 
 static bool brush_visibility_forced_visible(const slayer3d_game_data_brush *brush)

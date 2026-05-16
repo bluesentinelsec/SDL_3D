@@ -686,6 +686,9 @@ the grid, or a brush is ambiguous, the brush remains visible. Use
 be culled. Smaller
 `visibility_cell_size` values improve blocker precision and doorway behavior at
 higher memory/compile cost; larger values are cheaper but more conservative.
+Visibility results are cached for a small set of recently visited camera cells,
+so normal player movement and debug camera toggles do not force a full visible
+cell rebuild every time the view returns to a nearby cell.
 Brushes authored with `visibility: "trace"` or legacy
 `visibility_cullable: true` still participate in the older trace-based fallback
 when no visibility grid is available. `acceleration_key`, `lighting_key`,

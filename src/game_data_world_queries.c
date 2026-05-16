@@ -672,10 +672,15 @@ void free_brush_world_visibility_grid(brush_world_runtime *world_runtime)
     if (world_runtime == NULL)
         return;
     SDL_free(world_runtime->visibility_grid_solid);
-    SDL_free(world_runtime->visibility_grid_visible_cache);
+    for (int i = 0; i < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++i)
+    {
+        SDL_free(world_runtime->visibility_grid_visible_cache[i]);
+        world_runtime->visibility_grid_visible_cache[i] = NULL;
+        world_runtime->visibility_grid_visible_cache_start[i] = -1;
+        world_runtime->visibility_grid_visible_cache_tick[i] = 0u;
+    }
     world_runtime->visibility_grid_solid = NULL;
-    world_runtime->visibility_grid_visible_cache = NULL;
-    world_runtime->visibility_grid_visible_cache_start = -1;
+    world_runtime->visibility_grid_visible_cache_clock = 0u;
     world_runtime->visibility_cell_size = 0.0f;
     world_runtime->visibility_grid_dim_x = 0;
     world_runtime->visibility_grid_dim_y = 0;
@@ -790,7 +795,8 @@ bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime)
     world_runtime->visibility_grid_dim_z = dim_z;
     world_runtime->visibility_grid_cell_count = cell_count;
     world_runtime->visibility_grid_solid = solid;
-    world_runtime->visibility_grid_visible_cache_start = -1;
+    for (int i = 0; i < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++i)
+        world_runtime->visibility_grid_visible_cache_start[i] = -1;
     return true;
 }
 
