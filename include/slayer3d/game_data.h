@@ -1000,6 +1000,12 @@ extern "C"
         float render_light_selection_draws_per_frame;
         /** @brief Ratio of selected lights to candidate lights in the current metrics window. */
         float render_light_selection_ratio;
+        /** @brief Current 3D/world render scale. */
+        float render_world_scale;
+        /** @brief Current 3D/world framebuffer width. */
+        float render_world_width;
+        /** @brief Current 3D/world framebuffer height. */
+        float render_world_height;
     } slayer3d_game_data_ui_metrics;
 
     /** @brief Optional render evaluation inputs for dynamic visual effects. */
@@ -1226,6 +1232,8 @@ extern "C"
         int procedural_lod_min_segments;
         /** @brief Whether capable backends should collect GPU sample-count diagnostics. */
         bool performance_queries_enabled;
+        /** @brief Internal 3D/world render scale; UI and logical presentation remain full resolution. */
+        float world_render_scale;
         /** @brief Tonemap operator for lit rendering. */
         slayer3d_tonemap_mode tonemap;
     } slayer3d_game_data_render_settings;

@@ -225,6 +225,19 @@ extern "C"
     slayer3d_backend slayer3d_get_render_context_backend(const slayer3d_render_context *context);
     int slayer3d_get_render_context_width(const slayer3d_render_context *context);
     int slayer3d_get_render_context_height(const slayer3d_render_context *context);
+    /**
+     * @brief Set the internal 3D/world render scale for capable backends.
+     *
+     * The logical presentation size, UI coordinates, input mapping, and camera
+     * aspect ratio are unchanged. Capable backends render the world layer to a
+     * smaller framebuffer and upscale it before drawing the UI overlay at full
+     * logical resolution. Valid scales are 0.25 through 1.0.
+     */
+    bool slayer3d_set_world_render_scale(slayer3d_render_context *context, float scale);
+    /** @brief Return the requested 3D/world render scale. */
+    float slayer3d_get_world_render_scale(const slayer3d_render_context *context);
+    /** @brief Return the active 3D/world framebuffer size. */
+    bool slayer3d_get_world_render_size(const slayer3d_render_context *context, int *out_width, int *out_height);
     bool slayer3d_get_render_stats(const slayer3d_render_context *context, slayer3d_render_stats *out_stats);
     void slayer3d_reset_render_stats(slayer3d_render_context *context);
     /**

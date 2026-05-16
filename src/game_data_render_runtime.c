@@ -1794,6 +1794,7 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
         out_settings->procedural_lod_far_pixels = 24.0f;
         out_settings->procedural_lod_min_segments = 8;
         out_settings->performance_queries_enabled = false;
+        out_settings->world_render_scale = 1.0f;
         out_settings->tonemap = SLAYER3D_TONEMAP_ACES;
     }
     if (runtime == NULL || out_settings == NULL)
@@ -1840,6 +1841,10 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
     out_settings->performance_queries_enabled =
         scene_state_bool(runtime, json_string(render, "performance_queries_key", NULL),
                          json_bool(render, "performance_queries", out_settings->performance_queries_enabled));
+    out_settings->world_render_scale =
+        scene_state_float(runtime, json_string(render, "world_render_scale_key", NULL),
+                          json_float(render, "world_render_scale", out_settings->world_render_scale));
+    out_settings->world_render_scale = SDL_clamp(out_settings->world_render_scale, 0.25f, 1.0f);
     const char *tonemap_name =
         scene_state_string(runtime, json_string(render, "tonemap_key", NULL), json_string(render, "tonemap", NULL));
     out_settings->tonemap = parse_tonemap(tonemap_name, out_settings->tonemap);

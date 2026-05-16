@@ -105,6 +105,8 @@ The root `render` object configures frame-level presentation defaults:
     "procedural_lod_min_segments": 8,
     "performance_queries": false,
     "performance_queries_key": "render_performance_queries_enabled",
+    "world_render_scale": 1.0,
+    "world_render_scale_key": "render_world_scale",
     "profile": "modern",
     "profile_key": "render_profile"
   }
@@ -156,6 +158,14 @@ diagnostic overlays. Capable OpenGL backends expose depth-passing sample counts
 for the depth pre-pass and main geometry pass through UI metrics. These queries
 can block while reading GPU results, so use them for profiling and do not leave
 them enabled in production scenes by default.
+`world_render_scale` renders only the 3D/world layer at a lower internal
+resolution on capable backends, then upscales it into the normal logical
+viewport before drawing UI. Valid values are `0.25` through `1.0`; `1.0`
+preserves full logical resolution. UI overlays, menu text, mouse/input mapping,
+and camera aspect ratio remain tied to the authored logical resolution, so HUDs
+stay sharp even when the world layer is scaled down. Use
+`world_render_scale_key` for options menus or profiling scenes that need a
+runtime quality slider without host C.
 
 ## Structured Imports
 
@@ -2611,7 +2621,10 @@ averages: `render.model_mesh_submissions_per_frame`,
 `render.static_mesh_instances_batched_per_frame`,
 `render.static_mesh_draw_calls_saved_per_frame`,
 `render.depth_prepass_draws_per_frame`, and
-`render.depth_prepass_triangles_per_frame`. Per-object light selection exposes
+`render.depth_prepass_triangles_per_frame`. The current world render target is
+available as `render.world_scale`, `render.world_width`, and
+`render.world_height`, which is useful when testing dynamic render scale while
+keeping UI sharp. Per-object light selection exposes
 `render.light_candidates_per_frame`, `render.lights_selected_per_frame`,
 `render.light_selection_draws_per_frame`, and `render.light_selection_ratio` so
 debug overlays can prove that lit draws are selecting a bounded subset of the

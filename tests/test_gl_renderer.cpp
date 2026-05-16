@@ -155,6 +155,31 @@ TEST_F(GLRendererTest, ClearProducesExpectedColor)
     EXPECT_LE(px[2], 30) << "Blue channel should be low after red clear";
 }
 
+TEST_F(GLRendererTest, WorldRenderScaleResizesOnlyWorldFramebuffer)
+{
+    EXPECT_EQ(slayer3d_get_render_context_width(ctx), 320);
+    EXPECT_EQ(slayer3d_get_render_context_height(ctx), 240);
+    EXPECT_FLOAT_EQ(slayer3d_get_world_render_scale(ctx), 1.0f);
+
+    int world_width = 0;
+    int world_height = 0;
+    ASSERT_TRUE(slayer3d_get_world_render_size(ctx, &world_width, &world_height));
+    EXPECT_EQ(world_width, 320);
+    EXPECT_EQ(world_height, 240);
+
+    ASSERT_TRUE(slayer3d_set_world_render_scale(ctx, 0.5f)) << SDL_GetError();
+    EXPECT_EQ(slayer3d_get_render_context_width(ctx), 320);
+    EXPECT_EQ(slayer3d_get_render_context_height(ctx), 240);
+    EXPECT_FLOAT_EQ(slayer3d_get_world_render_scale(ctx), 0.5f);
+    ASSERT_TRUE(slayer3d_get_world_render_size(ctx, &world_width, &world_height));
+    EXPECT_EQ(world_width, 160);
+    EXPECT_EQ(world_height, 120);
+
+    EXPECT_FALSE(slayer3d_set_world_render_scale(ctx, 0.1f));
+    SDL_ClearError();
+    EXPECT_FLOAT_EQ(slayer3d_get_world_render_scale(ctx), 0.5f);
+}
+
 TEST_F(GLRendererTest, RenderProfilesSelectRetroPostProcess)
 {
     struct ProfileCase

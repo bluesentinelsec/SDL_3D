@@ -100,6 +100,8 @@
     "procedural_lod_far_pixels": 26.0,
     "procedural_lod_min_segments": 8,
     "performance_queries": true,
+    "world_render_scale": 1.0,
+    "world_render_scale_key": "debug.render.world_scale",
     "bloom": false,
     "ssao": false,
     "clear_color": [0.035, 0.04, 0.05]

@@ -10266,6 +10266,9 @@ static bool ui_metric_name_valid(const char *metric)
         "render.lights_selected_per_frame",
         "render.light_selection_draws_per_frame",
         "render.light_selection_ratio",
+        "render.world_scale",
+        "render.world_width",
+        "render.world_height",
         "brush.trace_count",
         "brush.world_instance_count",
         "brush.world_bounds_reject_count",
@@ -12204,6 +12207,14 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
         return validation_error(ctx, "$.render.per_object_light_limit",
                                 "render per_object_light_limit must be an integer from 0 to %d",
                                 SLAYER3D_MAX_SHADER_LIGHTS);
+    yyjson_val *world_render_scale = obj_get(render, "world_render_scale");
+    if (world_render_scale != NULL &&
+        (!yyjson_is_num(world_render_scale) || yyjson_get_num(world_render_scale) < 0.25 ||
+         yyjson_get_num(world_render_scale) > 1.0))
+    {
+        return validation_error(ctx, "$.render.world_render_scale",
+                                "render world_render_scale must be a number from 0.25 to 1.0");
+    }
     yyjson_val *procedural_lod_near_pixels = obj_get(render, "procedural_lod_near_pixels");
     yyjson_val *procedural_lod_far_pixels = obj_get(render, "procedural_lod_far_pixels");
     if ((procedural_lod_near_pixels != NULL &&
@@ -12244,6 +12255,7 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
                                 "tonemap_key",
                                 "profile_key",
                                 "performance_queries_key",
+                                "world_render_scale_key",
                                 "per_object_light_selection_key",
                                 "per_object_light_limit_key",
                                 "procedural_lod_key",

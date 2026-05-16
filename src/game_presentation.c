@@ -207,6 +207,7 @@ static bool apply_render_settings(const slayer3d_game_data_runtime *runtime, sla
     ok = slayer3d_set_per_object_light_selection_enabled(renderer, settings.per_object_light_selection_enabled) && ok;
     ok = slayer3d_set_per_object_light_limit(renderer, settings.per_object_light_limit) && ok;
     ok = slayer3d_set_render_sample_queries_enabled(renderer, settings.performance_queries_enabled) && ok;
+    ok = slayer3d_set_world_render_scale(renderer, settings.world_render_scale) && ok;
     ok = slayer3d_set_tonemap_mode(renderer, settings.tonemap) && ok;
     ok = slayer3d_clear_render_context(renderer, settings.clear_color) && ok;
     return ok;
@@ -3981,6 +3982,17 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                 state->light_selection_draws_sample_sum = 0.0f;
                 state->fps_sample_frames = 0;
             }
+        }
+    }
+    if (ctx->renderer != NULL)
+    {
+        int world_width = 0;
+        int world_height = 0;
+        if (slayer3d_get_world_render_size(ctx->renderer, &world_width, &world_height))
+        {
+            state->metrics.render_world_scale = slayer3d_get_world_render_scale(ctx->renderer);
+            state->metrics.render_world_width = (float)world_width;
+            state->metrics.render_world_height = (float)world_height;
         }
     }
     state->last_render_time = ctx->real_time;

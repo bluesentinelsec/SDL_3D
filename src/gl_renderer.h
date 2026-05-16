@@ -15,6 +15,10 @@ typedef struct slayer3d_gl_context slayer3d_gl_context;
 
 slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int height);
 void slayer3d_gl_destroy(slayer3d_gl_context *ctx);
+bool slayer3d_gl_set_world_render_scale(slayer3d_gl_context *ctx, int logical_width, int logical_height, float scale,
+                                        int *out_width, int *out_height);
+float slayer3d_gl_world_render_scale(const slayer3d_gl_context *ctx);
+void slayer3d_gl_world_render_size(const slayer3d_gl_context *ctx, int *out_width, int *out_height);
 
 void slayer3d_gl_post_process(slayer3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
                               float vignette_intensity, float contrast, float brightness, float saturation);

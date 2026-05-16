@@ -3110,6 +3110,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_TRUE(render.bloom_enabled);
     EXPECT_TRUE(render.ssao_enabled);
     EXPECT_FALSE(render.depth_prepass_enabled);
+    EXPECT_FLOAT_EQ(render.world_render_scale, 1.0f);
     EXPECT_EQ(render.tonemap, SLAYER3D_TONEMAP_ACES);
 
     slayer3d_game_data_transition_desc transition{};
@@ -5119,6 +5120,33 @@ TEST(GameDataValidation, RejectsInvalidRenderLightSelectionSettings)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_render.game.json").string().c_str(), nullptr, error,
                                                   sizeof(error)));
     EXPECT_NE(std::string(error).find("per_object_light_limit"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataValidation, RejectsInvalidWorldRenderScale)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_world_render_scale");
+    write_text(dir / "bad_render_scale.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Render Scale", "id": "test.bad_world_render_scale", "version": "0.1.0" },
+  "world": { "name": "world.bad_world_render_scale", "kind": "fixed_screen" },
+  "render": {
+    "world_render_scale": 1.5
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_render_scale.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("world_render_scale"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -7912,6 +7940,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(render_settings.depth_prepass_enabled);
     EXPECT_TRUE(render_settings.per_object_light_selection_enabled);
     EXPECT_EQ(render_settings.per_object_light_limit, 4);
+    EXPECT_FLOAT_EQ(render_settings.world_render_scale, 1.0f);
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.brush_geometry.showcase"));
     slayer3d_game_data_scene_skybox skybox{};
