@@ -109,6 +109,12 @@ The root `render` object configures frame-level presentation defaults:
     "performance_queries_key": "render_performance_queries_enabled",
     "world_render_scale": 1.0,
     "world_render_scale_key": "render_world_scale",
+    "quality": "quality",
+    "quality_key": "render_quality",
+    "quality_presets": [
+      { "name": "performance", "label": "Performance", "world_render_scale": 0.5, "procedural_lod": true },
+      { "name": "quality", "label": "Quality", "world_render_scale": 1.0, "procedural_lod": false }
+    ],
     "profile": "modern",
     "profile_key": "render_profile"
   }
@@ -183,6 +189,13 @@ runtime quality slider without host C. The UI metrics namespace exposes
 `render.window_pixel_width`, `render.window_pixel_height`, and
 `render.window_pixel_density` so profiling screens can verify the actual
 platform backing size independently from the authored logical size.
+`quality_presets` are named render-setting bundles selected by `quality` or the
+scene-state value at `quality_key`. Presets may author the same performance
+knobs as the root `render` object, including world scale, depth pre-pass,
+per-object light selection, procedural LOD, model LOD culling, and performance
+queries. Root settings provide defaults, the selected quality preset overrides
+those defaults, and individual `*_key` scene-state values still win last for
+fine tuning and debug sliders.
 
 ## Structured Imports
 

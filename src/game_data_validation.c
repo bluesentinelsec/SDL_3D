@@ -12210,6 +12210,74 @@ static bool valid_tonemap_name(const char *name)
                             SDL_strcasecmp(name, "aces") == 0);
 }
 
+static bool validate_render_tunable_values(validation_context *ctx, yyjson_val *object, const char *path)
+{
+    yyjson_val *lighting = obj_get(object, "lighting");
+    yyjson_val *bloom = obj_get(object, "bloom");
+    yyjson_val *ssao = obj_get(object, "ssao");
+    yyjson_val *depth_prepass = obj_get(object, "depth_prepass");
+    yyjson_val *per_object_light_selection = obj_get(object, "per_object_light_selection");
+    yyjson_val *procedural_lod = obj_get(object, "procedural_lod");
+    yyjson_val *model_lod_culling = obj_get(object, "model_lod_culling");
+    yyjson_val *performance_queries = obj_get(object, "performance_queries");
+    if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
+        (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)) ||
+        (per_object_light_selection != NULL && !yyjson_is_bool(per_object_light_selection)) ||
+        (procedural_lod != NULL && !yyjson_is_bool(procedural_lod)) ||
+        (model_lod_culling != NULL && !yyjson_is_bool(model_lod_culling)) ||
+        (performance_queries != NULL && !yyjson_is_bool(performance_queries)))
+    {
+        return validation_error(ctx, path,
+                                "render lighting, bloom, ssao, depth_prepass, per_object_light_selection, "
+                                "procedural_lod, model_lod_culling, and performance_queries must be booleans");
+    }
+    yyjson_val *per_object_light_limit = obj_get(object, "per_object_light_limit");
+    if (per_object_light_limit != NULL &&
+        (!yyjson_is_int(per_object_light_limit) || yyjson_get_int(per_object_light_limit) < 0 ||
+         yyjson_get_int(per_object_light_limit) > SLAYER3D_MAX_SHADER_LIGHTS))
+    {
+        return validation_error(ctx, path, "render per_object_light_limit must be an integer from 0 to %d",
+                                SLAYER3D_MAX_SHADER_LIGHTS);
+    }
+    yyjson_val *world_render_scale = obj_get(object, "world_render_scale");
+    if (world_render_scale != NULL &&
+        (!yyjson_is_num(world_render_scale) || yyjson_get_num(world_render_scale) < 0.25 ||
+         yyjson_get_num(world_render_scale) > 1.0))
+    {
+        return validation_error(ctx, path, "render world_render_scale must be a number from 0.25 to 1.0");
+    }
+    yyjson_val *procedural_lod_near_pixels = obj_get(object, "procedural_lod_near_pixels");
+    yyjson_val *procedural_lod_far_pixels = obj_get(object, "procedural_lod_far_pixels");
+    if ((procedural_lod_near_pixels != NULL &&
+         (!yyjson_is_num(procedural_lod_near_pixels) || yyjson_get_num(procedural_lod_near_pixels) <= 0.0)) ||
+        (procedural_lod_far_pixels != NULL &&
+         (!yyjson_is_num(procedural_lod_far_pixels) || yyjson_get_num(procedural_lod_far_pixels) <= 0.0)))
+    {
+        return validation_error(ctx, path, "render procedural_lod pixel thresholds must be positive numbers");
+    }
+    if (procedural_lod_near_pixels != NULL && procedural_lod_far_pixels != NULL &&
+        yyjson_get_num(procedural_lod_far_pixels) > yyjson_get_num(procedural_lod_near_pixels))
+    {
+        return validation_error(ctx, path,
+                                "render procedural_lod_far_pixels must be less than or equal to "
+                                "procedural_lod_near_pixels");
+    }
+    yyjson_val *procedural_lod_min_segments = obj_get(object, "procedural_lod_min_segments");
+    if (procedural_lod_min_segments != NULL &&
+        (!yyjson_is_int(procedural_lod_min_segments) || yyjson_get_int(procedural_lod_min_segments) < 3 ||
+         yyjson_get_int(procedural_lod_min_segments) > 64))
+    {
+        return validation_error(ctx, path, "render procedural_lod_min_segments must be an integer from 3 to 64");
+    }
+    yyjson_val *model_lod_cull_pixels = obj_get(object, "model_lod_cull_pixels");
+    if (model_lod_cull_pixels != NULL &&
+        (!yyjson_is_num(model_lod_cull_pixels) || yyjson_get_num(model_lod_cull_pixels) < 0.0))
+    {
+        return validation_error(ctx, path, "render model_lod_cull_pixels must be a non-negative number");
+    }
+    return true;
+}
+
 static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
 {
     yyjson_val *render = obj_get(root, "render");
@@ -12218,69 +12286,8 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
     if (!yyjson_is_obj(render))
         return validation_error(ctx, "$.render", "render must be an object");
 
-    yyjson_val *lighting = obj_get(render, "lighting");
-    yyjson_val *bloom = obj_get(render, "bloom");
-    yyjson_val *ssao = obj_get(render, "ssao");
-    yyjson_val *depth_prepass = obj_get(render, "depth_prepass");
-    yyjson_val *per_object_light_selection = obj_get(render, "per_object_light_selection");
-    yyjson_val *procedural_lod = obj_get(render, "procedural_lod");
-    yyjson_val *model_lod_culling = obj_get(render, "model_lod_culling");
-    yyjson_val *performance_queries = obj_get(render, "performance_queries");
-    if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
-        (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)) ||
-        (per_object_light_selection != NULL && !yyjson_is_bool(per_object_light_selection)) ||
-        (procedural_lod != NULL && !yyjson_is_bool(procedural_lod)) ||
-        (model_lod_culling != NULL && !yyjson_is_bool(model_lod_culling)) ||
-        (performance_queries != NULL && !yyjson_is_bool(performance_queries)))
-        return validation_error(ctx, "$.render",
-                                "render lighting, bloom, ssao, depth_prepass, per_object_light_selection, "
-                                "procedural_lod, model_lod_culling, and performance_queries must be booleans");
-    yyjson_val *per_object_light_limit = obj_get(render, "per_object_light_limit");
-    if (per_object_light_limit != NULL &&
-        (!yyjson_is_int(per_object_light_limit) || yyjson_get_int(per_object_light_limit) < 0 ||
-         yyjson_get_int(per_object_light_limit) > SLAYER3D_MAX_SHADER_LIGHTS))
-        return validation_error(ctx, "$.render.per_object_light_limit",
-                                "render per_object_light_limit must be an integer from 0 to %d",
-                                SLAYER3D_MAX_SHADER_LIGHTS);
-    yyjson_val *world_render_scale = obj_get(render, "world_render_scale");
-    if (world_render_scale != NULL &&
-        (!yyjson_is_num(world_render_scale) || yyjson_get_num(world_render_scale) < 0.25 ||
-         yyjson_get_num(world_render_scale) > 1.0))
-    {
-        return validation_error(ctx, "$.render.world_render_scale",
-                                "render world_render_scale must be a number from 0.25 to 1.0");
-    }
-    yyjson_val *procedural_lod_near_pixels = obj_get(render, "procedural_lod_near_pixels");
-    yyjson_val *procedural_lod_far_pixels = obj_get(render, "procedural_lod_far_pixels");
-    if ((procedural_lod_near_pixels != NULL &&
-         (!yyjson_is_num(procedural_lod_near_pixels) || yyjson_get_num(procedural_lod_near_pixels) <= 0.0)) ||
-        (procedural_lod_far_pixels != NULL &&
-         (!yyjson_is_num(procedural_lod_far_pixels) || yyjson_get_num(procedural_lod_far_pixels) <= 0.0)))
-    {
-        return validation_error(ctx, "$.render", "render procedural_lod pixel thresholds must be positive numbers");
-    }
-    if (procedural_lod_near_pixels != NULL && procedural_lod_far_pixels != NULL &&
-        yyjson_get_num(procedural_lod_far_pixels) > yyjson_get_num(procedural_lod_near_pixels))
-    {
-        return validation_error(ctx, "$.render",
-                                "render procedural_lod_far_pixels must be less than or equal to "
-                                "procedural_lod_near_pixels");
-    }
-    yyjson_val *procedural_lod_min_segments = obj_get(render, "procedural_lod_min_segments");
-    if (procedural_lod_min_segments != NULL &&
-        (!yyjson_is_int(procedural_lod_min_segments) || yyjson_get_int(procedural_lod_min_segments) < 3 ||
-         yyjson_get_int(procedural_lod_min_segments) > 64))
-    {
-        return validation_error(ctx, "$.render.procedural_lod_min_segments",
-                                "render procedural_lod_min_segments must be an integer from 3 to 64");
-    }
-    yyjson_val *model_lod_cull_pixels = obj_get(render, "model_lod_cull_pixels");
-    if (model_lod_cull_pixels != NULL &&
-        (!yyjson_is_num(model_lod_cull_pixels) || yyjson_get_num(model_lod_cull_pixels) < 0.0))
-    {
-        return validation_error(ctx, "$.render.model_lod_cull_pixels",
-                                "render model_lod_cull_pixels must be a non-negative number");
-    }
+    if (!validate_render_tunable_values(ctx, render, "$.render"))
+        return false;
     if (obj_get(render, "clear_color") != NULL && !is_vec_array(obj_get(render, "clear_color"), 3))
         return validation_error(ctx, "$.render.clear_color", "render clear_color must be a vec3 or vec4 color");
     const char *tonemap = json_string(render, "tonemap");
@@ -12296,6 +12303,7 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
                                 "depth_prepass_key",
                                 "tonemap_key",
                                 "profile_key",
+                                "quality_key",
                                 "performance_queries_key",
                                 "world_render_scale_key",
                                 "per_object_light_selection_key",
@@ -12311,6 +12319,35 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
         if (obj_get(render, key_fields[i]) != NULL && !is_non_empty_string(render, key_fields[i]))
             return validation_error(ctx, "$.render", "render scene-state key fields must be non-empty strings");
     }
+    yyjson_val *quality_presets = obj_get(render, "quality_presets");
+    if (quality_presets != NULL && !yyjson_is_arr(quality_presets))
+        return validation_error(ctx, "$.render.quality_presets", "render quality_presets must be an array");
+    if (obj_get(render, "quality") != NULL && !is_non_empty_string(render, "quality"))
+        return validation_error(ctx, "$.render.quality", "render quality must be a non-empty string");
+    name_table quality_names;
+    SDL_zero(quality_names);
+    bool ok = true;
+    for (size_t i = 0; ok && yyjson_is_arr(quality_presets) && i < yyjson_arr_size(quality_presets); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.render.quality_presets[%zu]", i);
+        yyjson_val *preset = yyjson_arr_get(quality_presets, i);
+        if (!yyjson_is_obj(preset))
+        {
+            ok = validation_error(ctx, path, "render quality preset must be an object");
+            break;
+        }
+        ok = require_unique_name(ctx, &quality_names, "render quality preset", json_string(preset, "name"), path) &&
+             (obj_get(preset, "label") == NULL || is_non_empty_string(preset, "label") ||
+              validation_error(ctx, path, "render quality preset label must be a non-empty string")) &&
+             validate_render_tunable_values(ctx, preset, path);
+    }
+    const char *quality = json_string(render, "quality");
+    if (ok && quality != NULL && !name_table_contains(&quality_names, quality))
+        ok = validation_error(ctx, "$.render.quality", "unknown render quality preset '%s'", quality);
+    name_table_destroy(&quality_names);
+    if (!ok)
+        return false;
     return true;
 }
 

@@ -884,6 +884,24 @@ static const char *menu_control_string_value(const slayer3d_game_data_runtime *r
     return props != NULL && key != NULL ? slayer3d_properties_get_string(props, key, fallback) : fallback;
 }
 
+static const slayer3d_value *menu_control_value_or_default(const slayer3d_properties *props, const char *key,
+                                                           yyjson_val *control, slayer3d_value *default_value)
+{
+    const slayer3d_value *value = props != NULL && key != NULL ? slayer3d_properties_get_value(props, key) : NULL;
+    if (value == NULL && default_value != NULL)
+    {
+        yyjson_val *fallback = obj_get(control, "default");
+        if (yyjson_is_str(fallback))
+        {
+            SDL_zero(*default_value);
+            default_value->type = SLAYER3D_VALUE_STRING;
+            default_value->as_string = (char *)yyjson_get_str(fallback);
+            value = default_value;
+        }
+    }
+    return value;
+}
+
 static bool menu_control_set_string_value(slayer3d_game_data_runtime *runtime, yyjson_val *control, const char *value)
 {
     const char *key = json_string(control, "key", NULL);
@@ -1195,7 +1213,9 @@ bool slayer3d_game_data_adjust_menu_item_control(slayer3d_game_data_runtime *run
         yyjson_val *choices = obj_get(control, "choices");
         if (!yyjson_is_arr(choices) || yyjson_arr_size(choices) == 0)
             return false;
-        const slayer3d_value *current = slayer3d_properties_get_value(props, item->control_key);
+        slayer3d_value default_value;
+        const slayer3d_value *current =
+            menu_control_value_or_default(props, item->control_key, control, &default_value);
         int current_index = -1;
         for (size_t i = 0; i < yyjson_arr_size(choices); ++i)
         {
@@ -1601,10 +1621,10 @@ static bool emit_ui_menu_cursor(yyjson_val *presenter, float row_y, slayer3d_gam
 
 static const char *choice_label_for_property(const slayer3d_game_data_runtime *runtime, yyjson_val *control)
 {
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, json_string(control, "target", NULL));
+    const slayer3d_properties *props = menu_control_properties_const(runtime, control);
     const char *key = json_string(control, "key", NULL);
-    const slayer3d_value *value =
-        actor != NULL && key != NULL ? slayer3d_properties_get_value(actor->props, key) : NULL;
+    slayer3d_value default_value;
+    const slayer3d_value *value = menu_control_value_or_default(props, key, control, &default_value);
     yyjson_val *choices = obj_get(control, "choices");
     for (size_t i = 0; yyjson_is_arr(choices) && i < yyjson_arr_size(choices); ++i)
     {
@@ -1675,10 +1695,10 @@ static void format_menu_item_label(const slayer3d_game_data_runtime *runtime, yy
         return;
     }
 
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, json_string(control, "target", NULL));
+    const slayer3d_properties *props = menu_control_properties_const(runtime, control);
     const char *key = json_string(control, "key", NULL);
-    const slayer3d_value *value =
-        actor != NULL && key != NULL ? slayer3d_properties_get_value(actor->props, key) : NULL;
+    slayer3d_value default_value;
+    const slayer3d_value *value = menu_control_value_or_default(props, key, control, &default_value);
     if (type == SLAYER3D_GAME_DATA_MENU_CONTROL_TOGGLE)
     {
         const bool enabled =

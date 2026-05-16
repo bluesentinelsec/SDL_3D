@@ -5151,6 +5151,37 @@ TEST(GameDataValidation, RejectsInvalidWorldRenderScale)
     remove_test_dir(dir);
 }
 
+TEST(GameDataValidation, RejectsInvalidRenderQualityPresets)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_render_quality_presets");
+    write_text(dir / "bad_render_quality.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Render Quality", "id": "test.bad_render_quality", "version": "0.1.0" },
+  "world": { "name": "world.bad_render_quality", "kind": "fixed_screen" },
+  "render": {
+    "quality": "performance",
+    "quality_presets": [
+      { "name": "quality", "world_render_scale": 1.0 },
+      { "name": "quality", "world_render_scale": 0.1 }
+    ]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_render_quality.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("render quality preset"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataValidation, RejectsInvalidProceduralLodSettings)
 {
     const std::filesystem::path dir = unique_test_dir("bad_procedural_lod");
@@ -20785,6 +20816,21 @@ TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
     ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.display");
     ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
+    EXPECT_STREQ(item.label, "Render Quality");
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    EXPECT_STREQ(item.control_target, "scene_state");
+    EXPECT_STREQ(item.control_key, "render_quality");
+    EXPECT_EQ(item.choice_count, 2);
+    ASSERT_TRUE(slayer3d_game_data_adjust_menu_item_control(runtime, &item, -1));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "render_quality", ""),
+                 "performance");
+    slayer3d_game_data_render_settings render_settings{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_FLOAT_EQ(render_settings.world_render_scale, 0.5f);
+    EXPECT_TRUE(render_settings.procedural_lod_enabled);
+    EXPECT_TRUE(render_settings.model_lod_culling_enabled);
+
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
     EXPECT_STREQ(item.label, "World Render Scale");
     EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_RANGE);
     EXPECT_STREQ(item.control_target, "scene_state");
@@ -20792,6 +20838,8 @@ TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
     ASSERT_TRUE(slayer3d_game_data_adjust_menu_item_control(runtime, &item, -1));
     EXPECT_NEAR(slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), "render_world_scale", 0.0f),
                 0.95f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_NEAR(render_settings.world_render_scale, 0.95f, 0.0001f);
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.audio"));
     ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));

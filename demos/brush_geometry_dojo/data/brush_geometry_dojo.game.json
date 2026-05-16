@@ -105,6 +105,34 @@
     "performance_queries": true,
     "world_render_scale": 1.0,
     "world_render_scale_key": "debug.render.world_scale",
+    "quality": "quality",
+    "quality_key": "debug.render.quality",
+    "quality_presets": [
+      {
+        "name": "performance",
+        "label": "Performance",
+        "world_render_scale": 0.5,
+        "per_object_light_limit": 3,
+        "procedural_lod": true,
+        "model_lod_culling": true
+      },
+      {
+        "name": "balanced",
+        "label": "Balanced",
+        "world_render_scale": 0.75,
+        "per_object_light_limit": 4,
+        "procedural_lod": true,
+        "model_lod_culling": true
+      },
+      {
+        "name": "quality",
+        "label": "Quality",
+        "world_render_scale": 1.0,
+        "per_object_light_limit": 4,
+        "procedural_lod": true,
+        "model_lod_culling": true
+      }
+    ],
     "bloom": false,
     "ssao": false,
     "clear_color": [0.035, 0.04, 0.05]

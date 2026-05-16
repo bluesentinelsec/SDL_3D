@@ -147,6 +147,10 @@ root `render` object authors `world_render_scale_key`. The slider writes a
 float from `0.25` to `1.0` into scene state, and the managed presentation path
 applies it every frame to the 3D/world layer only. UI remains at the authored
 logical resolution so menus stay readable on weak GPUs or high-DPI displays.
+When the root `render` object also authors `quality_key` and `quality_presets`,
+the Display menu includes a `Render Quality` choice control. The generated
+choice writes the selected preset name into scene state, letting games expose
+Performance/Balanced/Quality-style bundles without custom menu scenes.
 
 ## Backgrounds
 

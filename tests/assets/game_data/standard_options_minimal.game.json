@@ -27,7 +27,13 @@
   },
   "render": {
     "world_render_scale": 1.0,
-    "world_render_scale_key": "render_world_scale"
+    "world_render_scale_key": "render_world_scale",
+    "quality": "quality",
+    "quality_key": "render_quality",
+    "quality_presets": [
+      { "name": "performance", "label": "Performance", "world_render_scale": 0.5, "procedural_lod": true, "model_lod_culling": true },
+      { "name": "quality", "label": "Quality", "world_render_scale": 1.0, "procedural_lod": false, "model_lod_culling": false }
+    ]
   },
   "scenes": {
     "initial": "scene.title",
