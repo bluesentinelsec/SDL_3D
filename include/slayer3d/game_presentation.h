@@ -293,6 +293,11 @@ extern "C"
         float static_mesh_instanced_draw_sample_sum; /**< Accumulated static mesh instanced draw-call deltas. */
         float static_mesh_instances_batched_sum;     /**< Accumulated static mesh instance batching deltas. */
         float static_mesh_draw_calls_saved_sum;      /**< Accumulated static mesh saved draw-call deltas. */
+        float procedural_lod_candidates_sample_sum;  /**< Accumulated procedural LOD candidate deltas. */
+        float procedural_lod_reduced_sample_sum;     /**< Accumulated reduced procedural LOD deltas. */
+        float procedural_lod_authored_triangles_sum; /**< Accumulated authored procedural LOD triangle deltas. */
+        float procedural_lod_resolved_triangles_sum; /**< Accumulated resolved procedural LOD triangle deltas. */
+        float procedural_lod_triangles_saved_sum;    /**< Accumulated procedural LOD saved triangle deltas. */
         float depth_prepass_draws_sample_sum;        /**< Accumulated depth-prepass draw deltas. */
         float depth_prepass_triangles_sample_sum;    /**< Accumulated depth-prepass triangle deltas. */
         float depth_prepass_samples_sample_sum;      /**< Accumulated depth-prepass sample-query deltas. */

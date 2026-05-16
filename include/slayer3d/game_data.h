@@ -1043,6 +1043,16 @@ extern "C"
         float render_static_mesh_instances_batched_per_frame;
         /** @brief Sampled backend draw calls avoided by static mesh instancing per frame. */
         float render_static_mesh_draw_calls_saved_per_frame;
+        /** @brief Sampled procedural LOD candidates per frame. */
+        float render_procedural_lod_candidates_per_frame;
+        /** @brief Sampled procedural primitives reduced by LOD per frame. */
+        float render_procedural_lod_reduced_per_frame;
+        /** @brief Sampled authored procedural triangle budget before LOD per frame. */
+        float render_procedural_lod_authored_triangles_per_frame;
+        /** @brief Sampled resolved procedural triangle budget after LOD per frame. */
+        float render_procedural_lod_resolved_triangles_per_frame;
+        /** @brief Sampled procedural triangles avoided by LOD per frame. */
+        float render_procedural_lod_triangles_saved_per_frame;
         /** @brief Sampled depth-prepass draw calls per frame. */
         float render_depth_prepass_draws_per_frame;
         /** @brief Sampled depth-prepass triangles per frame. */

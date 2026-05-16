@@ -1051,7 +1051,77 @@ static int lod_segment_count(int authored, int minimum, float projected_pixels, 
     return SDL_clamp(resolved, minimum, authored);
 }
 
-static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_game_data_render_primitive *primitive)
+static Uint64 procedural_lod_triangle_count(const slayer3d_game_data_render_primitive *primitive)
+{
+    if (primitive == NULL)
+        return 0u;
+
+    const int slices = SDL_max(primitive->slices, 3);
+    const int rings = SDL_max(primitive->rings, 3);
+    const int tube_segments = SDL_max(primitive->tube_segments, 3);
+    const int instance_count = SDL_max(primitive->instance_count, 1);
+    Uint64 triangles = 0u;
+
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE ||
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    {
+        triangles = (Uint64)rings * (Uint64)slices * 2u;
+        return triangles * (Uint64)instance_count;
+    }
+
+    if (primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+        return 0u;
+
+    switch (primitive->mesh_primitive)
+    {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        return (Uint64)rings * (Uint64)slices * 2u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+        return (Uint64)slices * (Uint64)(SDL_max(rings, 1) * 2 + 1) * 2u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        return (Uint64)slices * 4u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return (Uint64)slices * (Uint64)tube_segments * 2u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return (Uint64)slices;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return (Uint64)rings * (Uint64)slices * 2u + (Uint64)slices;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return (Uint64)SDL_max(rings, 1) * 72u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        return 0u;
+    }
+}
+
+static void record_procedural_lod_stats(primitive_draw_context *context,
+                                        const slayer3d_game_data_render_primitive *authored,
+                                        const slayer3d_game_data_render_primitive *resolved)
+{
+    if (context == NULL || context->renderer == NULL || authored == NULL || resolved == NULL)
+        return;
+
+    const Uint64 authored_triangles = procedural_lod_triangle_count(authored);
+    const Uint64 resolved_triangles = procedural_lod_triangle_count(resolved);
+    ++context->renderer->stats.procedural_lod_candidates;
+    context->renderer->stats.procedural_lod_authored_triangles += authored_triangles;
+    context->renderer->stats.procedural_lod_resolved_triangles += resolved_triangles;
+    if (authored_triangles > resolved_triangles)
+    {
+        ++context->renderer->stats.procedural_lod_reduced;
+        context->renderer->stats.procedural_lod_triangles_saved += authored_triangles - resolved_triangles;
+    }
+}
+
+static void apply_primitive_lod(primitive_draw_context *context, slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL || !context->render_settings.procedural_lod_enabled ||
         !primitive->lod_enabled || primitive->view_space)
@@ -1069,6 +1139,7 @@ static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_
     const float projected = projected_primitive_pixels(context, primitive);
     if (projected <= 0.0f)
         return;
+    const slayer3d_game_data_render_primitive authored = *primitive;
     const int minimum = context->render_settings.procedural_lod_min_segments;
     const float near_pixels = context->render_settings.procedural_lod_near_pixels;
     const float far_pixels = context->render_settings.procedural_lod_far_pixels;
@@ -1077,6 +1148,7 @@ static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_
     {
         primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
         primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        record_procedural_lod_stats(context, &authored, primitive);
         return;
     }
 
@@ -1112,6 +1184,7 @@ static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_
     default:
         break;
     }
+    record_procedural_lod_stats(context, &authored, primitive);
 }
 
 static bool primitive_sphere_batch_matches(const slayer3d_game_data_render_primitive *batch,
@@ -2075,10 +2148,10 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
     if (context == NULL || context->renderer == NULL || primitive == NULL)
         return false;
     slayer3d_game_data_render_primitive resolved = *primitive;
-    apply_primitive_lod(context, &resolved);
-    primitive = &resolved;
     if ((primitive->view_space && !context->draw_view_space) || (!primitive->view_space && !context->draw_world_space))
         return true;
+    apply_primitive_lod(context, &resolved);
+    primitive = &resolved;
     if (primitive_sphere_can_batch(primitive))
         return append_sphere_draw_batch(context, primitive);
     if (!flush_sphere_draw_batch(context))
@@ -3969,6 +4042,19 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                                                   stats.static_mesh_instances_batched);
                         state->static_mesh_draw_calls_saved_sum += render_stat_delta_u64(
                             state->last_render_stats.static_mesh_draw_calls_saved, stats.static_mesh_draw_calls_saved);
+                        state->procedural_lod_candidates_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.procedural_lod_candidates, stats.procedural_lod_candidates);
+                        state->procedural_lod_reduced_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.procedural_lod_reduced, stats.procedural_lod_reduced);
+                        state->procedural_lod_authored_triangles_sum +=
+                            render_stat_delta_u64(state->last_render_stats.procedural_lod_authored_triangles,
+                                                  stats.procedural_lod_authored_triangles);
+                        state->procedural_lod_resolved_triangles_sum +=
+                            render_stat_delta_u64(state->last_render_stats.procedural_lod_resolved_triangles,
+                                                  stats.procedural_lod_resolved_triangles);
+                        state->procedural_lod_triangles_saved_sum +=
+                            render_stat_delta_u64(state->last_render_stats.procedural_lod_triangles_saved,
+                                                  stats.procedural_lod_triangles_saved);
                         state->depth_prepass_draws_sample_sum += render_stat_delta_u64(
                             state->last_render_stats.depth_prepass_draws, stats.depth_prepass_draws);
                         state->depth_prepass_triangles_sample_sum += render_stat_delta_u64(
@@ -4008,6 +4094,16 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                     state->static_mesh_instances_batched_sum / sample_frames;
                 state->metrics.render_static_mesh_draw_calls_saved_per_frame =
                     state->static_mesh_draw_calls_saved_sum / sample_frames;
+                state->metrics.render_procedural_lod_candidates_per_frame =
+                    state->procedural_lod_candidates_sample_sum / sample_frames;
+                state->metrics.render_procedural_lod_reduced_per_frame =
+                    state->procedural_lod_reduced_sample_sum / sample_frames;
+                state->metrics.render_procedural_lod_authored_triangles_per_frame =
+                    state->procedural_lod_authored_triangles_sum / sample_frames;
+                state->metrics.render_procedural_lod_resolved_triangles_per_frame =
+                    state->procedural_lod_resolved_triangles_sum / sample_frames;
+                state->metrics.render_procedural_lod_triangles_saved_per_frame =
+                    state->procedural_lod_triangles_saved_sum / sample_frames;
                 state->metrics.render_depth_prepass_draws_per_frame =
                     state->depth_prepass_draws_sample_sum / sample_frames;
                 state->metrics.render_depth_prepass_triangles_per_frame =
@@ -4034,6 +4130,11 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                 state->static_mesh_instanced_draw_sample_sum = 0.0f;
                 state->static_mesh_instances_batched_sum = 0.0f;
                 state->static_mesh_draw_calls_saved_sum = 0.0f;
+                state->procedural_lod_candidates_sample_sum = 0.0f;
+                state->procedural_lod_reduced_sample_sum = 0.0f;
+                state->procedural_lod_authored_triangles_sum = 0.0f;
+                state->procedural_lod_resolved_triangles_sum = 0.0f;
+                state->procedural_lod_triangles_saved_sum = 0.0f;
                 state->depth_prepass_draws_sample_sum = 0.0f;
                 state->depth_prepass_triangles_sample_sum = 0.0f;
                 state->depth_prepass_samples_sample_sum = 0.0f;

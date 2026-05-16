@@ -1089,6 +1089,11 @@ TEST_F(GLRendererTest, ProceduralLodReducesDistantPrimitiveTriangles)
     slayer3d_reset_render_stats(ctx);
     ASSERT_TRUE(slayer3d_game_data_draw_frame(&frame));
     EXPECT_EQ(cache.misses, 1);
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.procedural_lod_candidates, 0u);
+    EXPECT_EQ(stats.procedural_lod_reduced, 0u);
+    EXPECT_EQ(stats.procedural_lod_triangles_saved, 0u);
     ASSERT_EQ(cache.count, 1);
     const int full_index_count = cache.entries[0].mesh.index_count;
     EXPECT_GT(full_index_count, 0);
@@ -1096,6 +1101,13 @@ TEST_F(GLRendererTest, ProceduralLodReducesDistantPrimitiveTriangles)
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.procedural_lod", true);
     slayer3d_reset_render_stats(ctx);
     ASSERT_TRUE(slayer3d_game_data_draw_frame(&frame));
+    SDL_zero(stats);
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.procedural_lod_candidates, 1u);
+    EXPECT_EQ(stats.procedural_lod_reduced, 1u);
+    EXPECT_EQ(stats.procedural_lod_authored_triangles, 3072u);
+    EXPECT_EQ(stats.procedural_lod_resolved_triangles, 128u);
+    EXPECT_EQ(stats.procedural_lod_triangles_saved, 2944u);
     EXPECT_EQ(cache.misses, 2);
     ASSERT_EQ(cache.count, 2);
     const int lod_index_count = cache.entries[1].mesh.index_count;
@@ -1180,7 +1192,13 @@ TEST_F(GLRendererTest, ProceduralLodDoesNotCreateUnusedCubeVariants)
     const int index_count = cache.entries[0].mesh.index_count;
 
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.procedural_lod", true);
+    slayer3d_reset_render_stats(ctx);
     ASSERT_TRUE(slayer3d_game_data_draw_frame(&frame));
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.procedural_lod_candidates, 0u);
+    EXPECT_EQ(stats.procedural_lod_reduced, 0u);
+    EXPECT_EQ(stats.procedural_lod_triangles_saved, 0u);
     EXPECT_EQ(cache.count, 1);
     EXPECT_EQ(cache.misses, 1);
     EXPECT_GT(cache.hits, 0);

@@ -153,6 +153,9 @@ far threshold must be less than or equal to the near threshold. LOD is skipped
 for camera-space viewmodels/effects so first-person weapons and HUD-adjacent
 geometry keep stable authored detail. Optional `*_key` fields let debug menus
 and tuning scenes toggle the feature or tune thresholds from scene state.
+Renderer stats expose candidate, reduced, authored-triangle,
+resolved-triangle, and saved-triangle counts so performance dojos can prove the
+effect quantitatively instead of relying on visual inspection.
 `performance_queries` enables optional backend sample-count queries for
 diagnostic overlays. Capable OpenGL backends expose depth-passing sample counts
 for the depth pre-pass and main geometry pass through UI metrics. These queries
@@ -2649,6 +2652,11 @@ averages: `render.model_mesh_submissions_per_frame`,
 `render.static_mesh_instanced_draw_calls_per_frame`,
 `render.static_mesh_instances_batched_per_frame`,
 `render.static_mesh_draw_calls_saved_per_frame`,
+`render.procedural_lod_candidates_per_frame`,
+`render.procedural_lod_reduced_per_frame`,
+`render.procedural_lod_authored_triangles_per_frame`,
+`render.procedural_lod_resolved_triangles_per_frame`,
+`render.procedural_lod_triangles_saved_per_frame`,
 `render.depth_prepass_draws_per_frame`, and
 `render.depth_prepass_triangles_per_frame`. The current world render target is
 available as `render.world_scale`, `render.world_width`, and
