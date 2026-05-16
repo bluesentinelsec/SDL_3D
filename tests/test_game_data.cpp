@@ -13647,6 +13647,8 @@ TEST(GameDataRuntime, BrushRenderCompileCullsFullyHiddenAdjacentSolidFaces)
     EXPECT_EQ(world.compile_culled_face_count, 2);
     EXPECT_EQ(world.compile_rendered_face_count, 10);
     EXPECT_EQ(world.compile_triangle_count, 20);
+    EXPECT_EQ(world.compile_invalid_brush_count, 0);
+    EXPECT_EQ(world.compile_degenerate_face_count, 0);
     EXPECT_EQ(world.render_model->meshes[0].vertex_count, 60);
     EXPECT_EQ(world.render_model->meshes[0].index_count, 60);
 
@@ -13656,8 +13658,61 @@ TEST(GameDataRuntime, BrushRenderCompileCullsFullyHiddenAdjacentSolidFaces)
     EXPECT_EQ(diagnostics.compile_culled_face_count, 2u);
     EXPECT_EQ(diagnostics.compile_rendered_face_count, 10u);
     EXPECT_EQ(diagnostics.compile_triangle_count, 20u);
+    EXPECT_EQ(diagnostics.compile_invalid_brush_count, 0u);
+    EXPECT_EQ(diagnostics.compile_degenerate_face_count, 0u);
 
     slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, BrushCompileRejectsUnboundedInvalidGeometry)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_invalid_geometry");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "invalid.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Invalid Geometry Test" },
+  "world": { "name": "world.invalid", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.invalid",
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.contradictory",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": -1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid.game.json").string().c_str(), session, &runtime, error,
+                                              sizeof(error)));
+    EXPECT_EQ(runtime, nullptr);
+    const std::string error_message(error);
+    EXPECT_NE(error_message.find("invalid brush geometry"), std::string::npos);
+    EXPECT_NE(error_message.find("brush.contradictory"), std::string::npos);
+    EXPECT_NE(error_message.find("degenerate faces 6"), std::string::npos);
+
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }

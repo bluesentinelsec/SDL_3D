@@ -692,6 +692,10 @@ static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runti
         value = diagnostics.compile_culled_face_count;
     else if (SDL_strcmp(name, "compile_triangle_count") == 0)
         value = diagnostics.compile_triangle_count;
+    else if (SDL_strcmp(name, "compile_invalid_brush_count") == 0)
+        value = diagnostics.compile_invalid_brush_count;
+    else if (SDL_strcmp(name, "compile_degenerate_face_count") == 0)
+        value = diagnostics.compile_degenerate_face_count;
     else if (SDL_strcmp(name, "compile_chunk_count") == 0)
         value = diagnostics.compile_chunk_count;
     else if (SDL_strcmp(name, "collision_chunk_count") == 0)

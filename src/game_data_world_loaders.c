@@ -753,10 +753,12 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             }
         }
 
-        if (!slayer3d_game_data_brush_world_build_acceleration(world))
+        char compile_error[256] = {0};
+        if (!slayer3d_game_data_brush_world_build_acceleration_checked(world, compile_error, sizeof(compile_error)))
         {
-            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' acceleration data",
-                       world->name != NULL ? world->name : "<unnamed>");
+            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' acceleration data: %s",
+                       world->name != NULL ? world->name : "<unnamed>",
+                       compile_error[0] != '\0' ? compile_error : "unknown compile error");
             return false;
         }
 

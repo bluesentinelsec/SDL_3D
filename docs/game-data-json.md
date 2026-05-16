@@ -670,8 +670,11 @@ contact faces between adjacent opaque solid brushes: a face is culled only when
 an opposite coplanar neighboring face fully covers it, so partial overlaps and
 ambiguous cases fail open. Runtime descriptors expose
 `compile_face_count`, `compile_rendered_face_count`,
-`compile_culled_face_count`, and `compile_triangle_count` for tests, editor
-diagnostics, and performance audits. During load, brush worlds also precompute
+`compile_culled_face_count`, `compile_triangle_count`,
+`compile_invalid_brush_count`, and `compile_degenerate_face_count` for tests,
+editor diagnostics, and performance audits. Brush worlds fail to load when an
+authored brush cannot produce bounded geometry; degenerate faces are counted so
+tooling can surface geometry-health issues. During load, brush worlds also precompute
 local AABBs for each brush and for the whole world, then build spatial compile
 chunks from those bounds. Compile chunks preserve authored brushes as the source
 of truth while grouping them into optimized runtime broad-phase artifacts for
@@ -702,9 +705,11 @@ derived from the generic render-context stats exposed by
 meshes that use the same frustum culling path as other models.
 Compile-time brush diagnostics are also exposed as `brush.compile_face_count`,
 `brush.compile_rendered_face_count`, `brush.compile_culled_face_count`, and
-`brush.compile_triangle_count` so profiling overlays can verify how much
-hidden interior surface area was removed before runtime rendering. The compile
-pipeline also exposes `brush.compile_chunk_count`,
+`brush.compile_triangle_count`, plus geometry-health metrics
+`brush.compile_invalid_brush_count` and
+`brush.compile_degenerate_face_count`, so profiling overlays can verify how much
+hidden interior surface area was removed before runtime rendering and whether
+authored brush volumes compiled cleanly. The compile pipeline also exposes `brush.compile_chunk_count`,
 `brush.collision_chunk_count`, and `brush.collision_chunk_reject_count` so tests
 and profiling overlays can confirm trace broad-phase chunking is active and
 rejecting irrelevant spatial groups before exact brush collision. Chunk render
@@ -2682,6 +2687,7 @@ Supported brush metrics are `brush.trace_count`,
 `brush.render_triangles_submitted`, compile counters
 `brush.compile_face_count`, `brush.compile_rendered_face_count`,
 `brush.compile_culled_face_count`, `brush.compile_triangle_count`,
+`brush.compile_invalid_brush_count`, `brush.compile_degenerate_face_count`,
 `brush.compile_chunk_count`, `brush.collision_chunk_count`, and
 `brush.collision_chunk_reject_count`, chunk render counters
 `brush.render_chunk_draws` and `brush.render_chunk_brushes_drawn`, plus

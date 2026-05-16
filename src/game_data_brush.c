@@ -309,7 +309,21 @@ static int brush_model_build_material_batches(const slayer3d_game_data_brush_wor
     return batch_count;
 }
 
-bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_world *world)
+static void brush_compile_set_error(char *error_buffer, int error_buffer_size, const char *world_name,
+                                    const char *brush_name, int invalid_brush_count, int degenerate_face_count)
+{
+    if (error_buffer == NULL || error_buffer_size <= 0)
+        return;
+    SDL_snprintf(error_buffer, (size_t)error_buffer_size,
+                 "brush world '%s' contains invalid brush geometry: first invalid brush '%s', invalid brushes %d, "
+                 "degenerate faces %d",
+                 world_name != NULL ? world_name : "<unnamed>", brush_name != NULL ? brush_name : "<unnamed>",
+                 invalid_brush_count, degenerate_face_count);
+    error_buffer[error_buffer_size - 1] = '\0';
+}
+
+bool slayer3d_game_data_brush_world_build_acceleration_checked(slayer3d_game_data_brush_world *world,
+                                                               char *error_buffer, int error_buffer_size)
 {
     if (world == NULL)
         return false;
@@ -325,6 +339,9 @@ bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_
     bool world_has_bounds = false;
     slayer3d_bounding_box world_bounds;
     SDL_zero(world_bounds);
+    int invalid_brush_count = 0;
+    int degenerate_face_count = 0;
+    const char *first_invalid_brush_name = NULL;
     slayer3d_game_data_brush *brushes = (slayer3d_game_data_brush *)world->brushes;
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
@@ -335,6 +352,11 @@ bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_
         for (int face_index = 0; face_index < brush->face_count; ++face_index)
         {
             const int count = brush_build_face_polygon(brush, face_index, polygon, polygon_capacity, NULL, NULL, NULL);
+            if (count < 3)
+            {
+                ++degenerate_face_count;
+                continue;
+            }
             for (int vertex_index = 0; vertex_index < count; ++vertex_index)
                 brush_bounds_add_point(&brush_bounds, &brush_has_bounds, polygon[vertex_index]);
         }
@@ -345,12 +367,31 @@ bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_
             brush_bounds_add_point(&world_bounds, &world_has_bounds, brush_bounds.min);
             brush_bounds_add_point(&world_bounds, &world_has_bounds, brush_bounds.max);
         }
+        else
+        {
+            ++invalid_brush_count;
+            if (first_invalid_brush_name == NULL)
+                first_invalid_brush_name = brush->name;
+        }
     }
     world->has_bounds = world_has_bounds;
     if (world_has_bounds)
         world->bounds = world_bounds;
     SDL_free(polygon);
+    world->compile_invalid_brush_count = invalid_brush_count;
+    world->compile_degenerate_face_count = degenerate_face_count;
+    if (invalid_brush_count > 0)
+    {
+        brush_compile_set_error(error_buffer, error_buffer_size, world->name, first_invalid_brush_name,
+                                invalid_brush_count, degenerate_face_count);
+        return false;
+    }
     return true;
+}
+
+bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_world *world)
+{
+    return slayer3d_game_data_brush_world_build_acceleration_checked(world, NULL, 0);
 }
 
 void slayer3d_game_data_brush_world_free_compile_chunks(slayer3d_game_data_brush_world *world)

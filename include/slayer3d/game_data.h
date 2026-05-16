@@ -538,6 +538,10 @@ extern "C"
         int compile_culled_face_count;
         /** @brief Triangles emitted to the compiled render model after compile-time face culling. */
         int compile_triangle_count;
+        /** @brief Authored brushes that failed to produce bounded geometry during compile. */
+        int compile_invalid_brush_count;
+        /** @brief Authored brush faces that produced fewer than three clipped vertices during compile. */
+        int compile_degenerate_face_count;
         /** @brief Spatial compile chunks used by broad-phase collision/tooling queries. */
         const slayer3d_game_data_brush_compile_chunk *compile_chunks;
         /** @brief Number of entries in @p compile_chunks. */
@@ -671,6 +675,10 @@ extern "C"
         Uint64 compile_culled_face_count;
         /** @brief Triangles emitted by brush-world compile steps after compile-time face culling. */
         Uint64 compile_triangle_count;
+        /** @brief Authored brushes that failed to produce bounded geometry during compile. */
+        Uint64 compile_invalid_brush_count;
+        /** @brief Authored brush faces that produced fewer than three clipped vertices during compile. */
+        Uint64 compile_degenerate_face_count;
         /** @brief Spatial chunks emitted by brush-world compile steps. */
         Uint64 compile_chunk_count;
         /** @brief Collision chunks tested by brush-world trace broad-phase. */

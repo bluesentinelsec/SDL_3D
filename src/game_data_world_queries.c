@@ -1020,9 +1020,10 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     slayer3d_model *chunk_render_models = NULL;
     int brush_render_model_count = 0;
     int chunk_render_model_count = 0;
+    char compile_error[256] = {0};
     SDL_zero(render_model);
     const bool rebuilt =
-        slayer3d_game_data_brush_world_build_acceleration(world) &&
+        slayer3d_game_data_brush_world_build_acceleration_checked(world, compile_error, sizeof(compile_error)) &&
         slayer3d_game_data_brush_world_compile_render_model(world, &render_model) &&
         compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count) &&
         compile_brush_world_visibility_grid(world_runtime) &&
@@ -1041,9 +1042,10 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
         world->brush_count = old_count;
         free_editor_runtime_brush(&brushes[old_count]);
         SDL_free(brushes);
-        (void)slayer3d_game_data_brush_world_build_acceleration(world);
+        (void)slayer3d_game_data_brush_world_build_acceleration_checked(world, NULL, 0);
         (void)slayer3d_game_data_brush_world_build_compile_chunks(world);
-        set_error(error_buffer, error_buffer_size, "failed to rebuild brush world after box creation");
+        set_errorf(error_buffer, error_buffer_size, "failed to rebuild brush world after box creation%s%s",
+                   compile_error[0] != '\0' ? ": " : "", compile_error[0] != '\0' ? compile_error : "");
         return false;
     }
 
@@ -2255,6 +2257,8 @@ bool slayer3d_game_data_get_brush_diagnostics(const slayer3d_game_data_runtime *
         out_diagnostics->compile_rendered_face_count += (Uint64)SDL_max(world->compile_rendered_face_count, 0);
         out_diagnostics->compile_culled_face_count += (Uint64)SDL_max(world->compile_culled_face_count, 0);
         out_diagnostics->compile_triangle_count += (Uint64)SDL_max(world->compile_triangle_count, 0);
+        out_diagnostics->compile_invalid_brush_count += (Uint64)SDL_max(world->compile_invalid_brush_count, 0);
+        out_diagnostics->compile_degenerate_face_count += (Uint64)SDL_max(world->compile_degenerate_face_count, 0);
         out_diagnostics->compile_chunk_count += (Uint64)SDL_max(world->compile_chunk_count, 0);
     }
     return true;
@@ -4749,7 +4753,7 @@ static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
     if (world_runtime == NULL)
         return false;
     slayer3d_game_data_brush_world *world = &world_runtime->desc;
-    if (!slayer3d_game_data_brush_world_build_acceleration(world))
+    if (!slayer3d_game_data_brush_world_build_acceleration_checked(world, NULL, 0))
         return false;
 
     slayer3d_model render_model;
