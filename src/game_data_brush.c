@@ -564,9 +564,16 @@ static bool brush_model_copy_materials(const slayer3d_game_data_brush_world *wor
     return true;
 }
 
-static bool brush_index_in_render_filter(int brush_index, int only_brush_index)
+static bool brush_index_in_render_filter(int brush_index, const int *filter_indices, int filter_count)
 {
-    return only_brush_index < 0 || brush_index == only_brush_index;
+    if (filter_indices == NULL || filter_count <= 0)
+        return true;
+    for (int i = 0; i < filter_count; ++i)
+    {
+        if (filter_indices[i] == brush_index)
+            return true;
+    }
+    return false;
 }
 
 static bool brush_polygon_point_inside_convex_2d(const slayer3d_vec3 *polygon, int count, float u, float v,
@@ -686,12 +693,13 @@ static bool brush_face_hidden_by_neighbor(const slayer3d_game_data_brush_world *
 }
 
 static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_world *world, slayer3d_model *model,
-                                                      int only_brush_index)
+                                                      const int *filter_indices, int filter_count,
+                                                      bool update_compile_counters)
 {
     if (world == NULL || model == NULL)
         return false;
     SDL_zero(*model);
-    if (only_brush_index < 0)
+    if (update_compile_counters)
     {
         world->compile_face_count = 0;
         world->compile_rendered_face_count = 0;
@@ -736,7 +744,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
 
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
-        if (!brush_index_in_render_filter(brush_index, only_brush_index))
+        if (!brush_index_in_render_filter(brush_index, filter_indices, filter_count))
             continue;
         const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
         if (!brush_is_renderable(brush))
@@ -755,16 +763,16 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             const int count = brush_build_face_polygon(brush, face_index, polygon, polygon_capacity, &normal, &u, &v);
             if (count >= 3)
             {
-                if (only_brush_index < 0)
+                if (update_compile_counters)
                     ++world->compile_face_count;
                 if (brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
                                                   distance, neighbor_polygon, polygon_capacity))
                 {
-                    if (only_brush_index < 0)
+                    if (update_compile_counters)
                         ++world->compile_culled_face_count;
                     continue;
                 }
-                if (only_brush_index < 0)
+                if (update_compile_counters)
                 {
                     ++world->compile_rendered_face_count;
                     world->compile_triangle_count += count - 2;
@@ -855,7 +863,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
 
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
-        if (!brush_index_in_render_filter(brush_index, only_brush_index))
+        if (!brush_index_in_render_filter(brush_index, filter_indices, filter_count))
             continue;
         const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
         if (!brush_is_renderable(brush))
@@ -936,7 +944,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
 
 bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brush_world *world, slayer3d_model *model)
 {
-    if (!brush_world_compile_render_model_filtered(world, model, -1))
+    if (!brush_world_compile_render_model_filtered(world, model, NULL, 0, true))
         return false;
     world->render_model = model->mesh_count > 0 ? model : NULL;
     return true;
@@ -950,9 +958,29 @@ bool slayer3d_game_data_brush_world_compile_brush_render_models(slayer3d_game_da
 
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
-        if (!brush_world_compile_render_model_filtered(world, &models[brush_index], brush_index))
+        if (!brush_world_compile_render_model_filtered(world, &models[brush_index], &brush_index, 1, false))
         {
             for (int cleanup = 0; cleanup <= brush_index; ++cleanup)
+                slayer3d_free_model(&models[cleanup]);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool slayer3d_game_data_brush_world_compile_chunk_render_models(slayer3d_game_data_brush_world *world,
+                                                                slayer3d_model *models, int model_count)
+{
+    if (world == NULL || models == NULL || model_count < world->compile_chunk_count)
+        return false;
+
+    for (int chunk_index = 0; chunk_index < world->compile_chunk_count; ++chunk_index)
+    {
+        const slayer3d_game_data_brush_compile_chunk *chunk = &world->compile_chunks[chunk_index];
+        if (!brush_world_compile_render_model_filtered(world, &models[chunk_index], chunk->brush_indices,
+                                                       chunk->brush_count, false))
+        {
+            for (int cleanup = 0; cleanup <= chunk_index; ++cleanup)
                 slayer3d_free_model(&models[cleanup]);
             return false;
         }

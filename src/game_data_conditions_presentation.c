@@ -698,6 +698,10 @@ static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runti
         value = diagnostics.collision_chunk_count;
     else if (SDL_strcmp(name, "collision_chunk_reject_count") == 0)
         value = diagnostics.collision_chunk_reject_count;
+    else if (SDL_strcmp(name, "render_chunk_draws") == 0)
+        value = diagnostics.render_chunk_draws;
+    else if (SDL_strcmp(name, "render_chunk_brushes_drawn") == 0)
+        value = diagnostics.render_chunk_brushes_drawn;
     else if (SDL_strcmp(name, "visibility_brush_candidates") == 0)
         value = diagnostics.visibility_brush_candidates;
     else if (SDL_strcmp(name, "visibility_brush_visible") == 0)

@@ -677,6 +677,10 @@ extern "C"
         Uint64 collision_chunk_count;
         /** @brief Collision chunks rejected by bounds or contents masks. */
         Uint64 collision_chunk_reject_count;
+        /** @brief Brush-world compile chunk models drawn instead of per-brush visibility models. */
+        Uint64 render_chunk_draws;
+        /** @brief Visible brushes covered by chunk-level draw submissions. */
+        Uint64 render_chunk_brushes_drawn;
         /** @brief Renderable brushes tested by brush-world visibility culling. */
         Uint64 visibility_brush_candidates;
         /** @brief Renderable brushes accepted by brush-world visibility culling. */

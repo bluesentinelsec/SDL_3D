@@ -447,6 +447,8 @@ typedef struct brush_world_runtime
     slayer3d_model render_model;
     slayer3d_model *brush_render_models;
     int brush_render_model_count;
+    slayer3d_model *chunk_render_models;
+    int chunk_render_model_count;
     slayer3d_bounding_box visibility_grid_bounds;
     float visibility_cell_size;
     int visibility_grid_dim_x;

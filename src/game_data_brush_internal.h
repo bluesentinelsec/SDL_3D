@@ -36,6 +36,9 @@ bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brus
 bool slayer3d_game_data_brush_world_compile_brush_render_models(slayer3d_game_data_brush_world *world,
                                                                 slayer3d_model *models, int model_count);
 
+bool slayer3d_game_data_brush_world_compile_chunk_render_models(slayer3d_game_data_brush_world *world,
+                                                                slayer3d_model *models, int model_count);
+
 bool slayer3d_game_data_brush_slide_with_trace(slayer3d_game_data_brush_trace_fn trace_fn, void *trace_userdata,
                                                const slayer3d_game_data_brush_trace_desc *desc, int max_bumps,
                                                slayer3d_game_data_brush_trace_result *out_result);

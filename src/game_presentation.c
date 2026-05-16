@@ -3127,6 +3127,66 @@ static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
     return true;
 }
 
+static bool brush_render_chunk_all_visible(const slayer3d_game_data_brush_compile_chunk *chunk,
+                                           const bool *brush_visible, int brush_count)
+{
+    if (chunk == NULL || brush_visible == NULL || chunk->brush_count <= 1)
+        return false;
+    for (int i = 0; i < chunk->brush_count; ++i)
+    {
+        const int brush_index = chunk->brush_indices[i];
+        if (brush_index < 0 || brush_index >= brush_count || !brush_visible[brush_index])
+            return false;
+    }
+    return true;
+}
+
+static void brush_render_chunk_mark_drawn(const slayer3d_game_data_brush_compile_chunk *chunk, bool *brush_visible,
+                                          int brush_count)
+{
+    if (chunk == NULL || brush_visible == NULL)
+        return;
+    for (int i = 0; i < chunk->brush_count; ++i)
+    {
+        const int brush_index = chunk->brush_indices[i];
+        if (brush_index >= 0 && brush_index < brush_count)
+            brush_visible[brush_index] = false;
+    }
+}
+
+static bool draw_visible_brush_chunks(brush_world_draw_context *context, brush_world_runtime *world_runtime,
+                                      bool *brush_visible, int brush_count)
+{
+    if (context == NULL || context->renderer == NULL || context->runtime == NULL || world_runtime == NULL ||
+        world_runtime->chunk_render_models == NULL || world_runtime->desc.compile_chunks == NULL)
+    {
+        return true;
+    }
+
+    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
+    const int chunk_count = SDL_min(world_runtime->desc.compile_chunk_count, world_runtime->chunk_render_model_count);
+    for (int chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
+    {
+        const slayer3d_game_data_brush_compile_chunk *chunk = &world_runtime->desc.compile_chunks[chunk_index];
+        if (!brush_render_chunk_all_visible(chunk, brush_visible, brush_count))
+            continue;
+        const slayer3d_model *chunk_model = &world_runtime->chunk_render_models[chunk_index];
+        if (brush_model_triangle_count(chunk_model) == 0u)
+            continue;
+        if (!slayer3d_draw_model_ex_with_assets(
+                context->renderer, context->assets, chunk_model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f, slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                (slayer3d_color){255, 255, 255, 255}))
+        {
+            return false;
+        }
+        ++mutable_runtime->brush_diagnostics.render_chunk_draws;
+        mutable_runtime->brush_diagnostics.render_chunk_brushes_drawn += (Uint64)chunk->brush_count;
+        brush_render_chunk_mark_drawn(chunk, brush_visible, brush_count);
+    }
+    return true;
+}
+
 static bool draw_brush_world_instance_with_visibility(void *userdata,
                                                       const slayer3d_game_data_brush_world_instance *instance)
 {
@@ -3203,6 +3263,7 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     if (!instance->lighting_enabled)
         slayer3d_set_lighting_enabled(context->renderer, false);
 
+    ok = draw_visible_brush_chunks(context, world_runtime, brush_visible, brush_count);
     for (int brush_index = 0; ok && brush_index < brush_count; ++brush_index)
     {
         if (!brush_visible[brush_index])

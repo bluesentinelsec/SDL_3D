@@ -10288,6 +10288,8 @@ static bool ui_metric_name_valid(const char *metric)
         "brush.compile_chunk_count",
         "brush.collision_chunk_count",
         "brush.collision_chunk_reject_count",
+        "brush.render_chunk_draws",
+        "brush.render_chunk_brushes_drawn",
         "brush.visibility_brush_candidates",
         "brush.visibility_brush_visible",
         "brush.visibility_brush_occluded",

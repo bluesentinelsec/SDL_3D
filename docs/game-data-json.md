@@ -676,7 +676,10 @@ local AABBs for each brush and for the whole world, then build spatial compile
 chunks from those bounds. Compile chunks preserve authored brushes as the source
 of truth while grouping them into optimized runtime broad-phase artifacts for
 collision traces, editor diagnostics, and future render/collision chunk
-generation. When
+generation. When visibility culling leaves every brush in a compile chunk
+visible, the renderer can draw that chunk as one optimized model instead of
+submitting each brush model separately; partially visible chunks still fall back
+to per-brush models so occlusion correctness is preserved. When
 `acceleration` is enabled on a scene instance, active-scene trace queries use
 those chunks and bounds as a broad phase before exact plane clipping.
 
@@ -704,7 +707,10 @@ hidden interior surface area was removed before runtime rendering. The compile
 pipeline also exposes `brush.compile_chunk_count`,
 `brush.collision_chunk_count`, and `brush.collision_chunk_reject_count` so tests
 and profiling overlays can confirm trace broad-phase chunking is active and
-rejecting irrelevant spatial groups before exact brush collision.
+rejecting irrelevant spatial groups before exact brush collision. Chunk render
+diagnostics `brush.render_chunk_draws` and
+`brush.render_chunk_brushes_drawn` confirm when visibility rendering uses
+compiled chunk models rather than per-brush models.
 Visibility-grid diagnostics also expose cache hit/miss counters so scenes can
 confirm automatic occlusion is reusing the visible-cell set while the camera
 remains in the same coarse grid cell.
@@ -2677,7 +2683,9 @@ Supported brush metrics are `brush.trace_count`,
 `brush.compile_face_count`, `brush.compile_rendered_face_count`,
 `brush.compile_culled_face_count`, `brush.compile_triangle_count`,
 `brush.compile_chunk_count`, `brush.collision_chunk_count`, and
-`brush.collision_chunk_reject_count`, plus visibility counters
+`brush.collision_chunk_reject_count`, chunk render counters
+`brush.render_chunk_draws` and `brush.render_chunk_brushes_drawn`, plus
+visibility counters
 `brush.visibility_brush_candidates`, `brush.visibility_brush_visible`,
 `brush.visibility_brush_occluded`, `brush.visibility_triangles_culled`,
 `brush.visibility_grid_cache_hits`, and
