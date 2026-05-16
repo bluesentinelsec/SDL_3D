@@ -139,6 +139,11 @@ typedef struct slayer3d_draw_entry
     slayer3d_vec3 bounds_center;
     float bounds_radius;
     struct slayer3d_gl_mesh_cache_entry *mesh_cache;
+    const unsigned short *joint_indices;
+    const float *joint_weights;
+    float *joint_matrices;
+    int joint_count;
+    bool gpu_skinned;
 } slayer3d_draw_entry;
 
 typedef struct slayer3d_custom_shader_cache_entry
@@ -195,18 +200,25 @@ typedef struct slayer3d_gl_mesh_cache_entry
     const float *lightmap_uvs;
     const float *colors;
     const unsigned int *indices;
+    const unsigned short *joint_indices;
+    const float *joint_weights;
     int vertex_count;
     int index_count;
     bool has_lightmap_uvs;
+    bool gpu_skinned;
     GLuint vao;
     GLuint position_vbo;
     GLuint normal_vbo;
     GLuint uv_vbo;
     GLuint lightmap_uv_vbo;
     GLuint color_vbo;
+    GLuint joint_index_vbo;
+    GLuint joint_weight_vbo;
     GLuint ebo;
     GLuint shadow_vao;
     GLuint shadow_position_vbo;
+    GLuint shadow_joint_index_vbo;
+    GLuint shadow_joint_weight_vbo;
     GLuint shadow_ebo;
     struct slayer3d_gl_mesh_cache_entry *next;
 } slayer3d_gl_mesh_cache_entry;
@@ -239,6 +251,8 @@ struct slayer3d_gl_context
     GLint pbr_model_loc;
     GLint pbr_normal_matrix_loc;
     GLint pbr_use_instancing_loc;
+    GLint pbr_use_skinning_loc;
+    GLint pbr_joint_matrices_loc;
     GLint pbr_texture_loc;
     GLint pbr_has_texture_loc;
     GLint pbr_tint_loc;
@@ -305,6 +319,8 @@ struct slayer3d_gl_context
     GLint shadow_light_vp_loc;
     GLint shadow_model_loc;
     GLint shadow_use_instancing_loc;
+    GLint shadow_use_skinning_loc;
+    GLint shadow_joint_matrices_loc;
     GLuint shadow_vao;
     GLuint shadow_position_vbo;
     GLuint shadow_ebo;
@@ -337,6 +353,8 @@ struct slayer3d_gl_context
     GLint point_shadow_light_vp_loc;
     GLint point_shadow_light_pos_loc;
     GLint point_shadow_far_loc;
+    GLint point_shadow_use_skinning_loc;
+    GLint point_shadow_joint_matrices_loc;
     int point_shadow_light_index[SLAYER3D_MAX_POINT_SHADOWS];
     float point_shadow_far_plane[SLAYER3D_MAX_POINT_SHADOWS];
     float point_shadow_vp[SLAYER3D_MAX_POINT_SHADOWS][6][16];
@@ -443,8 +461,11 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "layout(location = 9) in vec3 aInstanceNormal0;\n"
                                  "layout(location = 10) in vec3 aInstanceNormal1;\n"
                                  "layout(location = 11) in vec3 aInstanceNormal2;\n"
+                                 "layout(location = 12) in vec4 aJointIndices;\n"
+                                 "layout(location = 13) in vec4 aJointWeights;\n"
                                  "\n"
                                  "#define MAX_LIGHTS 8\n"
+                                 "#define MAX_SKIN_JOINTS 64\n"
                                  "struct Light {\n"
                                  "    int type;\n"
                                  "    vec3 position;\n"
@@ -473,6 +494,8 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "uniform mat4 uModel;\n"
                                  "uniform mat3 uNormalMatrix;\n"
                                  "uniform int uUseInstancing;\n"
+                                 "uniform int uUseSkinning;\n"
+                                 "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
                                  "\n"
                                  "out vec3 vWorldPos;\n"
                                  "out vec3 vWorldNormal;\n"
@@ -485,9 +508,23 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "aInstanceModel2, aInstanceModel3) : uModel;\n"
                                  "    mat3 normalMatrix = (uUseInstancing != 0) ? mat3(aInstanceNormal0, "
                                  "aInstanceNormal1, aInstanceNormal2) : uNormalMatrix;\n"
-                                 "    vec4 worldPos = model * vec4(aPosition, 1.0);\n"
+                                 "    vec4 localPos = vec4(aPosition, 1.0);\n"
+                                 "    vec3 localNormal = aNormal;\n"
+                                 "    if (uUseSkinning != 0) {\n"
+                                 "        mat4 skin = aJointWeights.x * uJointMatrices[int(clamp(aJointIndices.x, "
+                                 "0.0, float(MAX_SKIN_JOINTS - 1)))]\n"
+                                 "                  + aJointWeights.y * uJointMatrices[int(clamp(aJointIndices.y, "
+                                 "0.0, float(MAX_SKIN_JOINTS - 1)))]\n"
+                                 "                  + aJointWeights.z * uJointMatrices[int(clamp(aJointIndices.z, "
+                                 "0.0, float(MAX_SKIN_JOINTS - 1)))]\n"
+                                 "                  + aJointWeights.w * uJointMatrices[int(clamp(aJointIndices.w, "
+                                 "0.0, float(MAX_SKIN_JOINTS - 1)))];\n"
+                                 "        localPos = skin * localPos;\n"
+                                 "        localNormal = mat3(skin) * localNormal;\n"
+                                 "    }\n"
+                                 "    vec4 worldPos = model * localPos;\n"
                                  "    vWorldPos = worldPos.xyz;\n"
-                                 "    vWorldNormal = normalize(normalMatrix * aNormal);\n"
+                                 "    vWorldNormal = normalize(normalMatrix * localNormal);\n"
                                  "    vTexCoord = aTexCoord;\n"
                                  "    vLightmapUV = aLightmapUV;\n"
                                  "    vColor = aColor;\n"
@@ -865,25 +902,60 @@ static const char k_shadow_vert[] =
     "layout(location = 6) in vec4 iModel1;\n"
     "layout(location = 7) in vec4 iModel2;\n"
     "layout(location = 8) in vec4 iModel3;\n"
+    "layout(location = 12) in vec4 aJointIndices;\n"
+    "layout(location = 13) in vec4 aJointWeights;\n"
+    "#define MAX_SKIN_JOINTS 64\n"
     "uniform mat4 uLightVP;\n"
     "uniform mat4 uModel;\n"
     "uniform int uUseInstancing;\n"
+    "uniform int uUseSkinning;\n"
+    "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
     "void main() {\n"
     "    mat4 model = (uUseInstancing != 0) ? mat4(iModel0, iModel1, iModel2, iModel3) : uModel;\n"
-    "    gl_Position = uLightVP * model * vec4(aPosition, 1.0);\n"
+    "    vec4 localPos = vec4(aPosition, 1.0);\n"
+    "    if (uUseSkinning != 0) {\n"
+    "        mat4 skin = aJointWeights.x * uJointMatrices[int(clamp(aJointIndices.x, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))]\n"
+    "                  + aJointWeights.y * uJointMatrices[int(clamp(aJointIndices.y, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))]\n"
+    "                  + aJointWeights.z * uJointMatrices[int(clamp(aJointIndices.z, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))]\n"
+    "                  + aJointWeights.w * uJointMatrices[int(clamp(aJointIndices.w, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))];\n"
+    "        localPos = skin * localPos;\n"
+    "    }\n"
+    "    gl_Position = uLightVP * model * localPos;\n"
     "}\n";
 
 static const char k_shadow_frag[] = "out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n";
 
-static const char k_point_shadow_vert[] = "layout(location = 0) in vec3 aPos;\n"
-                                          "uniform mat4 model;\n"
-                                          "uniform mat4 lightVP;\n"
-                                          "out vec3 vWorldPos;\n"
-                                          "void main() {\n"
-                                          "    vec4 wp = model * vec4(aPos, 1.0);\n"
-                                          "    vWorldPos = wp.xyz;\n"
-                                          "    gl_Position = lightVP * wp;\n"
-                                          "}\n";
+static const char k_point_shadow_vert[] =
+    "layout(location = 0) in vec3 aPos;\n"
+    "layout(location = 12) in vec4 aJointIndices;\n"
+    "layout(location = 13) in vec4 aJointWeights;\n"
+    "#define MAX_SKIN_JOINTS 64\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 lightVP;\n"
+    "uniform int uUseSkinning;\n"
+    "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
+    "out vec3 vWorldPos;\n"
+    "void main() {\n"
+    "    vec4 localPos = vec4(aPos, 1.0);\n"
+    "    if (uUseSkinning != 0) {\n"
+    "        mat4 skin = aJointWeights.x * uJointMatrices[int(clamp(aJointIndices.x, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))]\n"
+    "                  + aJointWeights.y * uJointMatrices[int(clamp(aJointIndices.y, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))]\n"
+    "                  + aJointWeights.z * uJointMatrices[int(clamp(aJointIndices.z, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))]\n"
+    "                  + aJointWeights.w * uJointMatrices[int(clamp(aJointIndices.w, 0.0, "
+    "float(MAX_SKIN_JOINTS - 1)))];\n"
+    "        localPos = skin * localPos;\n"
+    "    }\n"
+    "    vec4 wp = model * localPos;\n"
+    "    vWorldPos = wp.xyz;\n"
+    "    gl_Position = lightVP * wp;\n"
+    "}\n";
 
 static const char k_point_shadow_frag[] = "in vec3 vWorldPos;\n"
                                           "uniform vec3 lightPos;\n"
@@ -1545,6 +1617,7 @@ static void free_draw_list(slayer3d_gl_context *ctx)
             SDL_free((void *)e->colors);
             SDL_free((void *)e->indices);
         }
+        SDL_free(e->joint_matrices);
     }
     ctx->draw_count = 0;
 }
@@ -1857,12 +1930,15 @@ static unsigned int *copy_indices(const unsigned int *src, size_t count)
 static bool mesh_cache_matches(const slayer3d_gl_mesh_cache_entry *entry, bool lit, GLenum primitive_mode,
                                const float *positions, const float *normals, const float *uvs,
                                const float *lightmap_uvs, const float *colors, const unsigned int *indices,
-                               int vertex_count, int index_count, bool has_lightmap_uvs)
+                               const unsigned short *joint_indices, const float *joint_weights, int vertex_count,
+                               int index_count, bool has_lightmap_uvs, bool gpu_skinned)
 {
     return entry->lit == lit && entry->primitive_mode == primitive_mode && entry->positions == positions &&
            entry->normals == normals && entry->uvs == uvs && entry->lightmap_uvs == lightmap_uvs &&
-           entry->colors == colors && entry->indices == indices && entry->vertex_count == vertex_count &&
-           entry->index_count == index_count && entry->has_lightmap_uvs == has_lightmap_uvs;
+           entry->colors == colors && entry->indices == indices && entry->joint_indices == joint_indices &&
+           entry->joint_weights == joint_weights && entry->vertex_count == vertex_count &&
+           entry->index_count == index_count && entry->has_lightmap_uvs == has_lightmap_uvs &&
+           entry->gpu_skinned == gpu_skinned;
 }
 
 static void mesh_cache_bind_float_attrib(slayer3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
@@ -1875,17 +1951,26 @@ static void mesh_cache_bind_float_attrib(slayer3d_gl_funcs *gl, GLuint *buffer, 
     gl->VertexAttribPointer(attrib, components, GL_FLOAT, GL_FALSE, 0, NULL);
 }
 
-static slayer3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(slayer3d_gl_context *ctx, bool lit,
-                                                                 GLenum primitive_mode, const float *positions,
-                                                                 const float *normals, const float *uvs,
-                                                                 const float *lightmap_uvs, const float *colors,
-                                                                 const unsigned int *indices, int vertex_count,
-                                                                 int index_count, bool has_lightmap_uvs)
+static void mesh_cache_bind_ushort_attrib(slayer3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
+                                          const unsigned short *data, size_t count)
+{
+    gl->GenBuffers(1, buffer);
+    gl->BindBuffer(GL_ARRAY_BUFFER, *buffer);
+    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(count * sizeof(unsigned short)), data, GL_STATIC_DRAW);
+    gl->EnableVertexAttribArray(attrib);
+    gl->VertexAttribPointer(attrib, components, GL_UNSIGNED_SHORT, GL_FALSE, 0, NULL);
+}
+
+static slayer3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(
+    slayer3d_gl_context *ctx, bool lit, GLenum primitive_mode, const float *positions, const float *normals,
+    const float *uvs, const float *lightmap_uvs, const float *colors, const unsigned int *indices,
+    const unsigned short *joint_indices, const float *joint_weights, int vertex_count, int index_count,
+    bool has_lightmap_uvs, bool gpu_skinned)
 {
     for (slayer3d_gl_mesh_cache_entry *entry = ctx->mesh_cache; entry != NULL; entry = entry->next)
     {
         if (mesh_cache_matches(entry, lit, primitive_mode, positions, normals, uvs, lightmap_uvs, colors, indices,
-                               vertex_count, index_count, has_lightmap_uvs))
+                               joint_indices, joint_weights, vertex_count, index_count, has_lightmap_uvs, gpu_skinned))
         {
             return entry;
         }
@@ -1907,9 +1992,12 @@ static slayer3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(slayer3d_gl_con
     entry->lightmap_uvs = lightmap_uvs;
     entry->colors = colors;
     entry->indices = indices;
+    entry->joint_indices = joint_indices;
+    entry->joint_weights = joint_weights;
     entry->vertex_count = vertex_count;
     entry->index_count = index_count;
     entry->has_lightmap_uvs = has_lightmap_uvs;
+    entry->gpu_skinned = gpu_skinned;
 
     gl->GenVertexArrays(1, &entry->vao);
     gl->BindVertexArray(entry->vao);
@@ -1921,6 +2009,11 @@ static slayer3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(slayer3d_gl_con
         mesh_cache_bind_float_attrib(gl, &entry->lightmap_uv_vbo, 4, 2, has_lightmap_uvs ? lightmap_uvs : uvs,
                                      (size_t)vertex_count * 2);
         mesh_cache_bind_float_attrib(gl, &entry->color_vbo, 3, 4, colors, (size_t)vertex_count * 4);
+        if (gpu_skinned)
+        {
+            mesh_cache_bind_ushort_attrib(gl, &entry->joint_index_vbo, 12, 4, joint_indices, (size_t)vertex_count * 4);
+            mesh_cache_bind_float_attrib(gl, &entry->joint_weight_vbo, 13, 4, joint_weights, (size_t)vertex_count * 4);
+        }
     }
     else
     {
@@ -1938,6 +2031,13 @@ static slayer3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(slayer3d_gl_con
     gl->GenVertexArrays(1, &entry->shadow_vao);
     gl->BindVertexArray(entry->shadow_vao);
     mesh_cache_bind_float_attrib(gl, &entry->shadow_position_vbo, 0, 3, positions, (size_t)vertex_count * 3);
+    if (gpu_skinned)
+    {
+        mesh_cache_bind_ushort_attrib(gl, &entry->shadow_joint_index_vbo, 12, 4, joint_indices,
+                                      (size_t)vertex_count * 4);
+        mesh_cache_bind_float_attrib(gl, &entry->shadow_joint_weight_vbo, 13, 4, joint_weights,
+                                     (size_t)vertex_count * 4);
+    }
     if (indices != NULL && index_count > 0)
     {
         gl->GenBuffers(1, &entry->shadow_ebo);
@@ -1959,10 +2059,19 @@ static void mesh_cache_free(slayer3d_gl_context *ctx)
     while (entry != NULL)
     {
         slayer3d_gl_mesh_cache_entry *next = entry->next;
-        GLuint buffers[] = {entry->position_vbo,        entry->normal_vbo, entry->uv_vbo,
-                            entry->lightmap_uv_vbo,     entry->color_vbo,  entry->ebo,
-                            entry->shadow_position_vbo, entry->shadow_ebo};
-        gl->DeleteBuffers(8, buffers);
+        GLuint buffers[] = {entry->position_vbo,
+                            entry->normal_vbo,
+                            entry->uv_vbo,
+                            entry->lightmap_uv_vbo,
+                            entry->color_vbo,
+                            entry->joint_index_vbo,
+                            entry->joint_weight_vbo,
+                            entry->ebo,
+                            entry->shadow_position_vbo,
+                            entry->shadow_joint_index_vbo,
+                            entry->shadow_joint_weight_vbo,
+                            entry->shadow_ebo};
+        gl->DeleteBuffers(12, buffers);
         if (entry->vao)
             gl->DeleteVertexArrays(1, &entry->vao);
         if (entry->shadow_vao)
@@ -2337,6 +2446,8 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
     /* lightVP uniform is set by the caller per cascade. */
     if (ctx->shadow_use_instancing_loc >= 0)
         gl->Uniform1i(ctx->shadow_use_instancing_loc, 0);
+    if (ctx->shadow_use_skinning_loc >= 0)
+        gl->Uniform1i(ctx->shadow_use_skinning_loc, 0);
 
     for (int i = 0; i < ctx->draw_count; i++)
     {
@@ -2345,6 +2456,10 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
             continue;
 
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+        if (ctx->shadow_use_skinning_loc >= 0)
+            gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
+        if (e->gpu_skinned && ctx->shadow_joint_matrices_loc >= 0)
+            gl->UniformMatrix4fv(ctx->shadow_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
 
         gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
         if (e->mesh_cache == NULL)
@@ -2468,6 +2583,8 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
             gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
             if (ctx->shadow_use_instancing_loc >= 0)
                 gl->Uniform1i(ctx->shadow_use_instancing_loc, 1);
+            if (ctx->shadow_use_skinning_loc >= 0)
+                gl->Uniform1i(ctx->shadow_use_skinning_loc, 0);
             gl->BindVertexArray(e->mesh_cache->shadow_vao);
             if (upload_instance_model_attributes(ctx, e, instance_batch_count))
             {
@@ -2487,6 +2604,10 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
 
         if (ctx->shadow_use_instancing_loc >= 0)
             gl->Uniform1i(ctx->shadow_use_instancing_loc, 0);
+        if (ctx->shadow_use_skinning_loc >= 0)
+            gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
+        if (e->gpu_skinned && ctx->shadow_joint_matrices_loc >= 0)
+            gl->UniformMatrix4fv(ctx->shadow_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
         gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, e->view_projection);
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
 
@@ -2714,6 +2835,10 @@ static void bind_builtin_pbr_entry(slayer3d_gl_context *ctx, const slayer3d_draw
     gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
     if (ctx->pbr_use_instancing_loc >= 0)
         gl->Uniform1i(ctx->pbr_use_instancing_loc, use_instancing ? 1 : 0);
+    if (ctx->pbr_use_skinning_loc >= 0)
+        gl->Uniform1i(ctx->pbr_use_skinning_loc, (!use_instancing && e->gpu_skinned) ? 1 : 0);
+    if (!use_instancing && e->gpu_skinned && ctx->pbr_joint_matrices_loc >= 0)
+        gl->UniformMatrix4fv(ctx->pbr_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
     gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
     gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
     gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
@@ -2854,10 +2979,10 @@ static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slay
         return false;
     if (!draw_entry_instancing_light_safe(ctx))
         return false;
-    if (!a->lit || !b->lit || a->mesh_cache == NULL || a->mesh_cache != b->mesh_cache ||
-        a->primitive_mode != GL_TRIANGLES || b->primitive_mode != GL_TRIANGLES || a->tint[3] < 0.999f ||
-        b->tint[3] < 0.999f || a->shader_vertex_source != NULL || a->shader_fragment_source != NULL ||
-        b->shader_vertex_source != NULL || b->shader_fragment_source != NULL)
+    if (!a->lit || !b->lit || a->gpu_skinned || b->gpu_skinned || a->mesh_cache == NULL ||
+        a->mesh_cache != b->mesh_cache || a->primitive_mode != GL_TRIANGLES || b->primitive_mode != GL_TRIANGLES ||
+        a->tint[3] < 0.999f || b->tint[3] < 0.999f || a->shader_vertex_source != NULL ||
+        a->shader_fragment_source != NULL || b->shader_vertex_source != NULL || b->shader_fragment_source != NULL)
         return false;
     return a->texture == b->texture && a->lightmap_texture == b->lightmap_texture &&
            a->has_lightmap == b->has_lightmap && a->baked_light_mode == b->baked_light_mode &&
@@ -3126,6 +3251,10 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                 gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
                 if (ctx->pbr_use_instancing_loc >= 0)
                     gl->Uniform1i(ctx->pbr_use_instancing_loc, 0);
+                if (ctx->pbr_use_skinning_loc >= 0)
+                    gl->Uniform1i(ctx->pbr_use_skinning_loc, e->gpu_skinned ? 1 : 0);
+                if (e->gpu_skinned && ctx->pbr_joint_matrices_loc >= 0)
+                    gl->UniformMatrix4fv(ctx->pbr_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
                 gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
                 gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
                 gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
@@ -3765,6 +3894,8 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     ctx->pbr_model_loc = gl->GetUniformLocation(ctx->pbr_program, "uModel");
     ctx->pbr_normal_matrix_loc = gl->GetUniformLocation(ctx->pbr_program, "uNormalMatrix");
     ctx->pbr_use_instancing_loc = gl->GetUniformLocation(ctx->pbr_program, "uUseInstancing");
+    ctx->pbr_use_skinning_loc = gl->GetUniformLocation(ctx->pbr_program, "uUseSkinning");
+    ctx->pbr_joint_matrices_loc = gl->GetUniformLocation(ctx->pbr_program, "uJointMatrices[0]");
     ctx->pbr_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uTexture");
     ctx->pbr_has_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uHasTexture");
     ctx->pbr_lightmap_loc = gl->GetUniformLocation(ctx->pbr_program, "uLightmap");
@@ -3954,6 +4085,8 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         ctx->shadow_light_vp_loc = gl->GetUniformLocation(ctx->shadow_program, "uLightVP");
         ctx->shadow_model_loc = gl->GetUniformLocation(ctx->shadow_program, "uModel");
         ctx->shadow_use_instancing_loc = gl->GetUniformLocation(ctx->shadow_program, "uUseInstancing");
+        ctx->shadow_use_skinning_loc = gl->GetUniformLocation(ctx->shadow_program, "uUseSkinning");
+        ctx->shadow_joint_matrices_loc = gl->GetUniformLocation(ctx->shadow_program, "uJointMatrices[0]");
     }
 
     /* Point light shadow: 1024x1024 depth cubemaps. */
@@ -3983,6 +4116,8 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         ctx->point_shadow_light_vp_loc = gl->GetUniformLocation(ctx->point_shadow_program, "lightVP");
         ctx->point_shadow_light_pos_loc = gl->GetUniformLocation(ctx->point_shadow_program, "lightPos");
         ctx->point_shadow_far_loc = gl->GetUniformLocation(ctx->point_shadow_program, "farPlane");
+        ctx->point_shadow_use_skinning_loc = gl->GetUniformLocation(ctx->point_shadow_program, "uUseSkinning");
+        ctx->point_shadow_joint_matrices_loc = gl->GetUniformLocation(ctx->point_shadow_program, "uJointMatrices[0]");
     }
 
     gl->BindVertexArray(0);
@@ -4312,8 +4447,9 @@ static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_
         e->uvs = params->uvs;
         e->colors = colors;
         e->indices = params->indices;
-        e->mesh_cache = mesh_cache_lookup_or_create(ctx, false, e->primitive_mode, e->positions, NULL, e->uvs, NULL,
-                                                    e->colors, e->indices, e->vertex_count, e->index_count, false);
+        e->mesh_cache =
+            mesh_cache_lookup_or_create(ctx, false, e->primitive_mode, e->positions, NULL, e->uvs, NULL, e->colors,
+                                        e->indices, NULL, NULL, e->vertex_count, e->index_count, false, false);
         return e->mesh_cache != NULL;
     }
 
@@ -4355,6 +4491,22 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     e->has_lightmap = params->lightmap_uvs != NULL && params->lightmap != NULL;
     e->owns_arrays = !params->static_geometry;
     e->depth_prepass_eligible = params->depth_prepass_eligible;
+    e->gpu_skinned = params->static_geometry && params->joint_matrices != NULL && params->joint_indices != NULL &&
+                     params->joint_weights != NULL && params->joint_count > 0 &&
+                     params->joint_count <= SLAYER3D_GPU_SKINNING_MAX_JOINTS;
+    if (e->gpu_skinned)
+    {
+        e->joint_indices = params->joint_indices;
+        e->joint_weights = params->joint_weights;
+        e->joint_count = params->joint_count;
+        e->joint_matrices = (float *)SDL_malloc((size_t)e->joint_count * 16u * sizeof(float));
+        if (e->joint_matrices == NULL)
+            return SDL_OutOfMemory();
+        for (int joint = 0; joint < e->joint_count; ++joint)
+            SDL_memcpy(&e->joint_matrices[joint * 16], params->joint_matrices[joint].m, 16u * sizeof(float));
+        context->stats.gpu_skinned_draws += 1u;
+        context->stats.gpu_skinned_vertices += (Uint64)params->vertex_count;
+    }
 
     if (params->static_geometry)
     {
@@ -4365,9 +4517,9 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
         e->colors = colors;
         e->indices = params->indices;
         draw_entry_compute_bounds(e);
-        e->mesh_cache =
-            mesh_cache_lookup_or_create(ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs, e->lightmap_uvs,
-                                        e->colors, e->indices, e->vertex_count, e->index_count, e->has_lightmap);
+        e->mesh_cache = mesh_cache_lookup_or_create(
+            ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs, e->lightmap_uvs, e->colors, e->indices,
+            e->joint_indices, e->joint_weights, e->vertex_count, e->index_count, e->has_lightmap, e->gpu_skinned);
         return e->mesh_cache != NULL;
     }
 
@@ -4672,6 +4824,11 @@ static bool gl_present(slayer3d_render_context *context)
                     if (!e->lit)
                         continue;
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+                    if (ctx->point_shadow_use_skinning_loc >= 0)
+                        gl->Uniform1i(ctx->point_shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
+                    if (e->gpu_skinned && ctx->point_shadow_joint_matrices_loc >= 0)
+                        gl->UniformMatrix4fv(ctx->point_shadow_joint_matrices_loc, e->joint_count, GL_FALSE,
+                                             e->joint_matrices);
                     gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
                     if (e->mesh_cache == NULL)
                     {
@@ -4961,6 +5118,11 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
                             e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
                             continue;
                         gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
+                        if (ctx->point_shadow_use_skinning_loc >= 0)
+                            gl->Uniform1i(ctx->point_shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
+                        if (e->gpu_skinned && ctx->point_shadow_joint_matrices_loc >= 0)
+                            gl->UniformMatrix4fv(ctx->point_shadow_joint_matrices_loc, e->joint_count, GL_FALSE,
+                                                 e->joint_matrices);
                         gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
                         if (e->mesh_cache == NULL)
                         {

@@ -9,6 +9,7 @@
 
 #include "gl_renderer.h"
 #include "lighting_internal.h"
+#include "slayer3d/animation.h"
 #include "slayer3d/level.h"
 
 static const int SLAYER3D_MODEL_STACK_INITIAL_CAPACITY = 8;
@@ -736,7 +737,7 @@ static slayer3d_vec4 slayer3d_shade_point_retro(const slayer3d_lighting_params *
 static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const slayer3d_mesh *mesh,
                                         const slayer3d_texture2d *texture, const slayer3d_texture2d *lightmap_texture,
                                         slayer3d_vec4 base_modulate, const slayer3d_lighting_params *lighting,
-                                        const slayer3d_mat4 *joint_matrices, bool static_geometry,
+                                        const slayer3d_mat4 *joint_matrices, int joint_count, bool static_geometry,
                                         const char *shader_vertex_source, const char *shader_fragment_source)
 {
     bool indexed;
@@ -744,6 +745,8 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
     bool software_baked_static;
     bool lit;
     bool skinned;
+    bool gpu_skinning;
+    bool cpu_skinning;
     slayer3d_framebuffer framebuffer;
     float *skinned_positions = NULL;
     float *skinned_normals = NULL;
@@ -776,7 +779,11 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
                             lighting->fog.mode == SLAYER3D_FOG_NONE;
     lit = lighting != NULL && !software_baked_static &&
           (context->shading_mode == SLAYER3D_SHADING_FLAT || mesh->normals != NULL);
-    skinned = joint_matrices != NULL && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
+    skinned = joint_matrices != NULL && joint_count > 0 && mesh->joint_indices != NULL && mesh->joint_weights != NULL;
+    gpu_skinning = skinned && static_geometry && !mesh->dynamic_geometry &&
+                   context->backend == SLAYER3D_BACKEND_OPENGL && lighting != NULL && shader_vertex_source == NULL &&
+                   shader_fragment_source == NULL && joint_count <= SLAYER3D_GPU_SKINNING_MAX_JOINTS;
+    cpu_skinning = skinned && !gpu_skinning;
 
     if (!slayer3d_validate_texture_for_draw(texture))
     {
@@ -798,7 +805,7 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
         return SDL_SetError("Non-indexed mesh draw requires vertex_count divisible by 3.");
     }
 
-    if (skinned)
+    if (cpu_skinning)
     {
         skinned_positions = (float *)SDL_malloc((size_t)mesh->vertex_count * 3 * sizeof(float));
         if (skinned_positions == NULL)
@@ -832,6 +839,7 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
                 skinned_normals[i * 3 + 2] = n.z;
             }
         }
+        context->stats.cpu_skinned_vertices += (Uint64)mesh->vertex_count;
     }
 
     /* Backend dispatch: try the vtable first. Software returns false to
@@ -927,8 +935,15 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
         lp.vertex_snap = context->vertex_snap;
         lp.vertex_snap_precision = context->vertex_snap_precision;
         lp.texture_filter = (int)context->texture_filter;
-        lp.static_geometry = static_geometry && !skinned && !mesh->dynamic_geometry;
+        lp.static_geometry = static_geometry && !cpu_skinning && !mesh->dynamic_geometry;
         lp.depth_prepass_eligible = context->depth_prepass_scope_enabled && lp.static_geometry;
+        if (gpu_skinning)
+        {
+            lp.joint_indices = mesh->joint_indices;
+            lp.joint_weights = mesh->joint_weights;
+            lp.joint_matrices = joint_matrices;
+            lp.joint_count = joint_count;
+        }
 
         if (lighting->shadow_enabled[0] && lighting->shadow_depth[0] != NULL)
         {
@@ -1511,10 +1526,10 @@ bool slayer3d_draw_billboard_ex(slayer3d_render_context *context, const slayer3d
         slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
         return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
-                                           false, NULL, NULL);
+                                           0, false, NULL, NULL);
     }
 
-    return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL,
+    return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL, 0,
                                        false, NULL, NULL);
 }
 
@@ -1613,10 +1628,10 @@ bool slayer3d_draw_billboard_shader_ex(slayer3d_render_context *context, const s
         slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
         return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
-                                           false, shader_vertex_source, shader_fragment_source);
+                                           0, false, shader_vertex_source, shader_fragment_source);
     }
 
-    return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL,
+    return slayer3d_draw_mesh_internal(context, &mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL, 0,
                                        false, shader_vertex_source, shader_fragment_source);
 }
 
@@ -1635,10 +1650,10 @@ bool slayer3d_draw_mesh(slayer3d_render_context *context, const slayer3d_mesh *m
         slayer3d_lighting_params lp;
         slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
+        return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL, 0,
                                            false, NULL, NULL);
     }
-    return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL,
+    return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL, 0,
                                        false, NULL, NULL);
 }
 
@@ -1650,11 +1665,11 @@ bool slayer3d_draw_static_mesh(slayer3d_render_context *context, const slayer3d_
         slayer3d_lighting_params lp;
         slayer3d_build_lighting_params(context, &lp);
         lp.roughness = 1.0f;
-        return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL,
+        return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), &lp, NULL, 0,
                                            true, NULL, NULL);
     }
-    return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL, true,
-                                       NULL, NULL);
+    return slayer3d_draw_mesh_internal(context, mesh, texture, NULL, slayer3d_color_to_modulate(tint), NULL, NULL, 0,
+                                       true, NULL, NULL);
 }
 
 /* ------------------------------------------------------------------ */
@@ -1697,7 +1712,7 @@ static char *slayer3d_embedded_texture_cache_key(const slayer3d_model *model, co
 static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
                                      const slayer3d_model *model, int mesh_index,
                                      const slayer3d_texture2d *lightmap_texture, slayer3d_vec4 tint_modulate,
-                                     const slayer3d_mat4 *joint_matrices)
+                                     const slayer3d_mat4 *joint_matrices, int joint_count)
 {
     const slayer3d_mesh *mesh = &model->meshes[mesh_index];
     const slayer3d_texture2d *texture = NULL;
@@ -1815,7 +1830,7 @@ static bool slayer3d_draw_model_mesh(slayer3d_render_context *context, const sla
         }
 
         ok = slayer3d_draw_mesh_internal(context, mesh, texture, lightmap_texture, mesh_modulate, lp_ptr,
-                                         joint_matrices, true, NULL, NULL);
+                                         joint_matrices, joint_count, true, NULL, NULL);
     }
     if (ok)
     {
@@ -1851,7 +1866,7 @@ static char *slayer3d_embedded_texture_cache_key(const slayer3d_model *model, co
  */
 static bool slayer3d_draw_model_node(slayer3d_render_context *context, const slayer3d_asset_resolver *assets,
                                      const slayer3d_model *model, int node_index, slayer3d_vec4 tint_modulate,
-                                     const slayer3d_mat4 *joint_matrices)
+                                     const slayer3d_mat4 *joint_matrices, int joint_count)
 {
     if (node_index < 0 || node_index >= model->node_count)
     {
@@ -1884,13 +1899,15 @@ static bool slayer3d_draw_model_node(slayer3d_render_context *context, const sla
     /* Draw this node's mesh if it has one. */
     if (node->mesh_index >= 0 && node->mesh_index < model->mesh_count)
     {
-        ok = slayer3d_draw_model_mesh(context, assets, model, node->mesh_index, NULL, tint_modulate, joint_matrices);
+        ok = slayer3d_draw_model_mesh(context, assets, model, node->mesh_index, NULL, tint_modulate, joint_matrices,
+                                      joint_count);
     }
 
     /* Recurse into children. */
     for (int c = 0; ok && c < node->child_count; ++c)
     {
-        ok = slayer3d_draw_model_node(context, assets, model, node->children[c], tint_modulate, joint_matrices);
+        ok = slayer3d_draw_model_node(context, assets, model, node->children[c], tint_modulate, joint_matrices,
+                                      joint_count);
     }
 
     if (!slayer3d_pop_matrix(context))
@@ -1936,7 +1953,6 @@ bool slayer3d_draw_model_ex_with_assets(slayer3d_render_context *context, const 
     {
         return SDL_SetError("Model draw requires at least one mesh.");
     }
-
     if (!slayer3d_push_matrix(context))
     {
         return false;
@@ -1956,14 +1972,14 @@ bool slayer3d_draw_model_ex_with_assets(slayer3d_render_context *context, const 
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL);
+            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL, 0);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL);
+            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL, 0);
         }
     }
 
@@ -2005,12 +2021,12 @@ bool slayer3d_draw_model_euler_with_assets(slayer3d_render_context *context, con
     if (ok && model->nodes != NULL && model->root_count > 0)
     {
         for (int r = 0; ok && r < model->root_count; ++r)
-            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL);
+            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL, 0);
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
-            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL);
+            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, NULL, 0);
     }
 
     if (!slayer3d_pop_matrix(context))
@@ -2053,6 +2069,7 @@ bool slayer3d_draw_model_skinned_with_assets(slayer3d_render_context *context, c
     {
         return SDL_SetError("Model draw requires at least one mesh.");
     }
+    const int joint_count = (joint_matrices != NULL && model->skeleton != NULL) ? model->skeleton->joint_count : 0;
 
     if (!slayer3d_push_matrix(context))
     {
@@ -2073,14 +2090,16 @@ bool slayer3d_draw_model_skinned_with_assets(slayer3d_render_context *context, c
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
-            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, joint_matrices);
+            ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, joint_matrices,
+                                          joint_count);
         }
     }
     else
     {
         for (int mesh_index = 0; ok && mesh_index < model->mesh_count; ++mesh_index)
         {
-            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, joint_matrices);
+            ok = slayer3d_draw_model_mesh(context, assets, model, mesh_index, NULL, tint_modulate, joint_matrices,
+                                          joint_count);
         }
     }
 
@@ -2412,7 +2431,7 @@ bool slayer3d_draw_level_with_assets(slayer3d_render_context *context, const sla
         }
         ok = slayer3d_draw_model_mesh(context, assets, model, i,
                                       level->lightmap_texture.pixels != NULL ? &level->lightmap_texture : NULL,
-                                      tint_modulate, NULL);
+                                      tint_modulate, NULL, 0);
     }
 
     return ok;

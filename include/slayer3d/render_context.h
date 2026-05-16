@@ -74,6 +74,12 @@ extern "C"
         Uint64 static_mesh_instances_batched;
         /** @brief Backend draw calls avoided by static mesh instancing. */
         Uint64 static_mesh_draw_calls_saved;
+        /** @brief Lit mesh draws skinned on the GPU by capable renderers. */
+        Uint64 gpu_skinned_draws;
+        /** @brief Vertices skinned on the GPU by capable renderers. */
+        Uint64 gpu_skinned_vertices;
+        /** @brief Vertices skinned on the CPU fallback path. */
+        Uint64 cpu_skinned_vertices;
     } slayer3d_render_stats;
 
     /**
