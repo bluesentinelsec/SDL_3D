@@ -14120,6 +14120,9 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
     EXPECT_EQ(world.brush_count, 1);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    const Uint64 initial_compile_hash = world.compile_artifact_hash;
     slayer3d_game_data_brush_world_editor_state editor_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
     EXPECT_FALSE(editor_state.dirty);
@@ -14138,6 +14141,10 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
 
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
     ASSERT_EQ(world.brush_count, 2);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    EXPECT_NE(world.compile_artifact_hash, initial_compile_hash);
+    const Uint64 signal_create_compile_hash = world.compile_artifact_hash;
     const slayer3d_game_data_brush &created = world.brushes[1];
     EXPECT_STREQ(created.name, "brush.created.wall");
     EXPECT_TRUE(created.has_bounds);
@@ -14161,6 +14168,11 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     EXPECT_TRUE(editor_state.dirty);
     EXPECT_EQ(editor_state.revision, 2U);
     EXPECT_EQ(editor_state.saved_revision, 0U);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    EXPECT_NE(world.compile_artifact_hash, signal_create_compile_hash);
+    const Uint64 direct_create_compile_hash = world.compile_artifact_hash;
 
     slayer3d_game_data_resize_brush_face_desc resize_desc{};
     resize_desc.world_name = "brush.editor.level";
@@ -14170,6 +14182,10 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize_desc, error, sizeof(error))) << error;
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
     ASSERT_EQ(world.brush_count, 3);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    EXPECT_NE(world.compile_artifact_hash, direct_create_compile_hash);
+    const Uint64 resized_compile_hash = world.compile_artifact_hash;
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
     EXPECT_EQ(editor_state.revision, 3U);
@@ -14178,6 +14194,7 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     resize_desc.distance = -3.0f;
     EXPECT_FALSE(slayer3d_game_data_resize_brush_face(runtime, &resize_desc, error, sizeof(error)));
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_EQ(world.compile_artifact_hash, resized_compile_hash);
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 2.0f, 0.001f);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
@@ -14210,6 +14227,8 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     slayer3d_game_data_brush_world roundtrip_world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor.level", &roundtrip_world));
     ASSERT_EQ(roundtrip_world.brush_count, 3);
+    ASSERT_NE(roundtrip_world.render_model, nullptr);
+    EXPECT_EQ(roundtrip_world.compile_artifact_hash, resized_compile_hash);
     EXPECT_STREQ(roundtrip_world.brushes[1].name, "brush.created.wall");
     EXPECT_NEAR(roundtrip_world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     EXPECT_STREQ(roundtrip_world.brushes[2].name, "brush.editor.level.box.1");

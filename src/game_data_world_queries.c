@@ -852,6 +852,107 @@ static bool compile_brush_world_chunk_models(brush_world_runtime *world_runtime,
     return true;
 }
 
+static void free_brush_world_model_array(slayer3d_model *models, int model_count)
+{
+    if (models == NULL)
+        return;
+    for (int i = 0; i < model_count; ++i)
+        slayer3d_free_model(&models[i]);
+    SDL_free(models);
+}
+
+bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
+                                           int error_buffer_size)
+{
+    if (world_runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "missing brush world runtime");
+        return false;
+    }
+
+    slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    char compile_error[256] = {0};
+    if (!slayer3d_game_data_brush_world_build_acceleration_checked(world, compile_error, sizeof(compile_error)))
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' acceleration data: %s",
+                   world->name != NULL ? world->name : "<unnamed>",
+                   compile_error[0] != '\0' ? compile_error : "unknown compile error");
+        return false;
+    }
+
+    slayer3d_model render_model;
+    slayer3d_model *brush_render_models = NULL;
+    slayer3d_model *chunk_render_models = NULL;
+    int brush_render_model_count = 0;
+    int chunk_render_model_count = 0;
+    SDL_zero(render_model);
+
+    brush_world_runtime staged_grid;
+    SDL_zero(staged_grid);
+    staged_grid.desc = *world;
+
+    bool ok = slayer3d_game_data_brush_world_compile_render_model(world, &render_model);
+    if (!ok)
+        set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' render mesh",
+                   world->name != NULL ? world->name : "<unnamed>");
+    if (ok && !compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count))
+    {
+        ok = false;
+        set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' visibility meshes",
+                   world->name != NULL ? world->name : "<unnamed>");
+    }
+    if (ok && !compile_brush_world_visibility_grid(&staged_grid))
+    {
+        ok = false;
+        set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' visibility grid",
+                   world->name != NULL ? world->name : "<unnamed>");
+    }
+    if (ok && !slayer3d_game_data_brush_world_build_compile_chunks(world))
+    {
+        ok = false;
+        set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' spatial chunks",
+                   world->name != NULL ? world->name : "<unnamed>");
+    }
+    if (ok && !compile_brush_world_chunk_models(world_runtime, &chunk_render_models, &chunk_render_model_count))
+    {
+        ok = false;
+        set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' chunk meshes",
+                   world->name != NULL ? world->name : "<unnamed>");
+    }
+
+    if (!ok)
+    {
+        slayer3d_free_model(&render_model);
+        free_brush_world_model_array(brush_render_models, brush_render_model_count);
+        free_brush_world_model_array(chunk_render_models, chunk_render_model_count);
+        free_brush_world_visibility_grid(&staged_grid);
+        return false;
+    }
+
+    slayer3d_free_model(&world_runtime->render_model);
+    free_brush_world_visibility_models(world_runtime);
+    free_brush_world_visibility_grid(world_runtime);
+
+    world_runtime->render_model = render_model;
+    world_runtime->brush_render_models = brush_render_models;
+    world_runtime->brush_render_model_count = brush_render_model_count;
+    world_runtime->chunk_render_models = chunk_render_models;
+    world_runtime->chunk_render_model_count = chunk_render_model_count;
+    world_runtime->visibility_grid_bounds = staged_grid.visibility_grid_bounds;
+    world_runtime->visibility_cell_size = staged_grid.visibility_cell_size;
+    world_runtime->visibility_grid_dim_x = staged_grid.visibility_grid_dim_x;
+    world_runtime->visibility_grid_dim_y = staged_grid.visibility_grid_dim_y;
+    world_runtime->visibility_grid_dim_z = staged_grid.visibility_grid_dim_z;
+    world_runtime->visibility_grid_cell_count = staged_grid.visibility_grid_cell_count;
+    world_runtime->visibility_grid_solid = staged_grid.visibility_grid_solid;
+    for (int i = 0; i < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++i)
+        world_runtime->visibility_grid_visible_cache_start[i] = -1;
+
+    world->render_model = &world_runtime->render_model;
+    world->compile_artifact_hash = slayer3d_game_data_brush_world_compute_compile_artifact_hash(world);
+    return true;
+}
+
 static bool editor_brush_world_name_exists(const brush_world_runtime *world_runtime, const char *brush_name)
 {
     if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
@@ -1021,50 +1122,20 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     world->brushes = brushes;
     world->brush_count = old_count + 1;
 
-    slayer3d_model render_model;
-    slayer3d_model *brush_render_models = NULL;
-    slayer3d_model *chunk_render_models = NULL;
-    int brush_render_model_count = 0;
-    int chunk_render_model_count = 0;
-    char compile_error[256] = {0};
-    SDL_zero(render_model);
-    const bool rebuilt =
-        slayer3d_game_data_brush_world_build_acceleration_checked(world, compile_error, sizeof(compile_error)) &&
-        slayer3d_game_data_brush_world_compile_render_model(world, &render_model) &&
-        compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count) &&
-        compile_brush_world_visibility_grid(world_runtime) &&
-        slayer3d_game_data_brush_world_build_compile_chunks(world) &&
-        compile_brush_world_chunk_models(world_runtime, &chunk_render_models, &chunk_render_model_count);
-    if (!rebuilt)
+    char rebuild_error[256] = {0};
+    if (!rebuild_brush_world_runtime_artifacts(world_runtime, rebuild_error, sizeof(rebuild_error)))
     {
-        slayer3d_free_model(&render_model);
-        for (int i = 0; i < brush_render_model_count; ++i)
-            slayer3d_free_model(&brush_render_models[i]);
-        SDL_free(brush_render_models);
-        for (int i = 0; i < chunk_render_model_count; ++i)
-            slayer3d_free_model(&chunk_render_models[i]);
-        SDL_free(chunk_render_models);
         world->brushes = old_brushes;
         world->brush_count = old_count;
         free_editor_runtime_brush(&brushes[old_count]);
         SDL_free(brushes);
-        (void)slayer3d_game_data_brush_world_build_acceleration_checked(world, NULL, 0);
-        (void)slayer3d_game_data_brush_world_build_compile_chunks(world);
+        (void)rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0);
         set_errorf(error_buffer, error_buffer_size, "failed to rebuild brush world after box creation%s%s",
-                   compile_error[0] != '\0' ? ": " : "", compile_error[0] != '\0' ? compile_error : "");
+                   rebuild_error[0] != '\0' ? ": " : "", rebuild_error[0] != '\0' ? rebuild_error : "");
         return false;
     }
 
     SDL_free(old_brushes);
-    slayer3d_free_model(&world_runtime->render_model);
-    free_brush_world_visibility_models(world_runtime);
-    world_runtime->render_model = render_model;
-    world_runtime->brush_render_models = brush_render_models;
-    world_runtime->brush_render_model_count = brush_render_model_count;
-    world_runtime->chunk_render_models = chunk_render_models;
-    world_runtime->chunk_render_model_count = chunk_render_model_count;
-    world->render_model = &world_runtime->render_model;
-    world->compile_artifact_hash = slayer3d_game_data_brush_world_compute_compile_artifact_hash(world);
     editor_brush_world_mark_dirty(world_runtime);
     if (out_brush_name != NULL && out_brush_name_size > 0u)
         SDL_strlcpy(out_brush_name, brushes[old_count].name != NULL ? brushes[old_count].name : "",
@@ -4769,44 +4840,7 @@ static int find_editor_brush_material_index(const brush_world_runtime *world_run
 
 static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
 {
-    if (world_runtime == NULL)
-        return false;
-    slayer3d_game_data_brush_world *world = &world_runtime->desc;
-    if (!slayer3d_game_data_brush_world_build_acceleration_checked(world, NULL, 0))
-        return false;
-
-    slayer3d_model render_model;
-    slayer3d_model *brush_render_models = NULL;
-    slayer3d_model *chunk_render_models = NULL;
-    int brush_render_model_count = 0;
-    int chunk_render_model_count = 0;
-    SDL_zero(render_model);
-    if (!slayer3d_game_data_brush_world_compile_render_model(world, &render_model) ||
-        !compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count) ||
-        !compile_brush_world_visibility_grid(world_runtime) ||
-        !slayer3d_game_data_brush_world_build_compile_chunks(world) ||
-        !compile_brush_world_chunk_models(world_runtime, &chunk_render_models, &chunk_render_model_count))
-    {
-        slayer3d_free_model(&render_model);
-        for (int i = 0; i < brush_render_model_count; ++i)
-            slayer3d_free_model(&brush_render_models[i]);
-        SDL_free(brush_render_models);
-        for (int i = 0; i < chunk_render_model_count; ++i)
-            slayer3d_free_model(&chunk_render_models[i]);
-        SDL_free(chunk_render_models);
-        return false;
-    }
-
-    slayer3d_free_model(&world_runtime->render_model);
-    free_brush_world_visibility_models(world_runtime);
-    world_runtime->render_model = render_model;
-    world_runtime->brush_render_models = brush_render_models;
-    world_runtime->brush_render_model_count = brush_render_model_count;
-    world_runtime->chunk_render_models = chunk_render_models;
-    world_runtime->chunk_render_model_count = chunk_render_model_count;
-    world->render_model = &world_runtime->render_model;
-    world->compile_artifact_hash = slayer3d_game_data_brush_world_compute_compile_artifact_hash(world);
-    return true;
+    return rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0);
 }
 
 static bool editor_brush_bounds_valid(const slayer3d_game_data_brush *brush)
