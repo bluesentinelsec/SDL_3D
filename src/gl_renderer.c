@@ -2438,6 +2438,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx);
 static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slayer3d_draw_entry *a,
                                       const slayer3d_draw_entry *b);
 static bool upload_instance_model_attributes(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entries, int count);
+static void upload_joint_palette_uniform(slayer3d_gl_context *ctx, GLint location, const slayer3d_draw_entry *entry);
 
 static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
 {
@@ -2458,8 +2459,7 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
         if (ctx->shadow_use_skinning_loc >= 0)
             gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-        if (e->gpu_skinned && ctx->shadow_joint_matrices_loc >= 0)
-            gl->UniformMatrix4fv(ctx->shadow_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
+        upload_joint_palette_uniform(ctx, ctx->shadow_joint_matrices_loc, e);
 
         gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
         if (e->mesh_cache == NULL)
@@ -2517,6 +2517,20 @@ static Uint64 draw_entry_triangle_count(const slayer3d_draw_entry *entry)
     if (entry->indices != NULL && entry->index_count > 0)
         return (Uint64)(entry->index_count / 3);
     return (Uint64)(entry->vertex_count / 3);
+}
+
+static void upload_joint_palette_uniform(slayer3d_gl_context *ctx, GLint location, const slayer3d_draw_entry *entry)
+{
+    if (ctx == NULL || entry == NULL || location < 0 || !entry->gpu_skinned || entry->joint_count <= 0 ||
+        entry->joint_matrices == NULL)
+        return;
+
+    ctx->gl.UniformMatrix4fv(location, entry->joint_count, GL_FALSE, entry->joint_matrices);
+    if (ctx->current_ctx != NULL)
+    {
+        ctx->current_ctx->stats.gpu_skinning_palette_uploads += 1u;
+        ctx->current_ctx->stats.gpu_skinning_palette_matrices_uploaded += (Uint64)entry->joint_count;
+    }
 }
 
 static bool gl_sample_queries_enabled(const slayer3d_gl_context *ctx)
@@ -2584,7 +2598,8 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
             if (ctx->shadow_use_instancing_loc >= 0)
                 gl->Uniform1i(ctx->shadow_use_instancing_loc, 1);
             if (ctx->shadow_use_skinning_loc >= 0)
-                gl->Uniform1i(ctx->shadow_use_skinning_loc, 0);
+                gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
+            upload_joint_palette_uniform(ctx, ctx->shadow_joint_matrices_loc, e);
             gl->BindVertexArray(e->mesh_cache->shadow_vao);
             if (upload_instance_model_attributes(ctx, e, instance_batch_count))
             {
@@ -2606,8 +2621,7 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
             gl->Uniform1i(ctx->shadow_use_instancing_loc, 0);
         if (ctx->shadow_use_skinning_loc >= 0)
             gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-        if (e->gpu_skinned && ctx->shadow_joint_matrices_loc >= 0)
-            gl->UniformMatrix4fv(ctx->shadow_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
+        upload_joint_palette_uniform(ctx, ctx->shadow_joint_matrices_loc, e);
         gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, e->view_projection);
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
 
@@ -2836,9 +2850,8 @@ static void bind_builtin_pbr_entry(slayer3d_gl_context *ctx, const slayer3d_draw
     if (ctx->pbr_use_instancing_loc >= 0)
         gl->Uniform1i(ctx->pbr_use_instancing_loc, use_instancing ? 1 : 0);
     if (ctx->pbr_use_skinning_loc >= 0)
-        gl->Uniform1i(ctx->pbr_use_skinning_loc, (!use_instancing && e->gpu_skinned) ? 1 : 0);
-    if (!use_instancing && e->gpu_skinned && ctx->pbr_joint_matrices_loc >= 0)
-        gl->UniformMatrix4fv(ctx->pbr_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
+        gl->Uniform1i(ctx->pbr_use_skinning_loc, e->gpu_skinned ? 1 : 0);
+    upload_joint_palette_uniform(ctx, ctx->pbr_joint_matrices_loc, e);
     gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
     gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
     gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
@@ -2962,6 +2975,17 @@ static bool draw_entry_matrix_equal(const float *a, const float *b, int count)
     return true;
 }
 
+static bool draw_entry_skinning_equal(const slayer3d_draw_entry *a, const slayer3d_draw_entry *b)
+{
+    if (a->gpu_skinned != b->gpu_skinned)
+        return false;
+    if (!a->gpu_skinned)
+        return true;
+    return a->joint_count == b->joint_count && a->joint_count > 0 && a->joint_matrices != NULL &&
+           b->joint_matrices != NULL &&
+           draw_entry_matrix_equal(a->joint_matrices, b->joint_matrices, a->joint_count * 16);
+}
+
 static bool draw_entry_instancing_light_safe(const slayer3d_gl_context *ctx)
 {
     const slayer3d_render_context *rc = ctx != NULL ? ctx->current_ctx : NULL;
@@ -2979,10 +3003,10 @@ static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slay
         return false;
     if (!draw_entry_instancing_light_safe(ctx))
         return false;
-    if (!a->lit || !b->lit || a->gpu_skinned || b->gpu_skinned || a->mesh_cache == NULL ||
-        a->mesh_cache != b->mesh_cache || a->primitive_mode != GL_TRIANGLES || b->primitive_mode != GL_TRIANGLES ||
-        a->tint[3] < 0.999f || b->tint[3] < 0.999f || a->shader_vertex_source != NULL ||
-        a->shader_fragment_source != NULL || b->shader_vertex_source != NULL || b->shader_fragment_source != NULL)
+    if (!a->lit || !b->lit || a->mesh_cache == NULL || a->mesh_cache != b->mesh_cache ||
+        a->primitive_mode != GL_TRIANGLES || b->primitive_mode != GL_TRIANGLES || a->tint[3] < 0.999f ||
+        b->tint[3] < 0.999f || a->shader_vertex_source != NULL || a->shader_fragment_source != NULL ||
+        b->shader_vertex_source != NULL || b->shader_fragment_source != NULL)
         return false;
     return a->texture == b->texture && a->lightmap_texture == b->lightmap_texture &&
            a->has_lightmap == b->has_lightmap && a->baked_light_mode == b->baked_light_mode &&
@@ -2992,7 +3016,7 @@ static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slay
            SDL_fabsf(a->metallic - b->metallic) <= 0.000001f && SDL_fabsf(a->roughness - b->roughness) <= 0.000001f &&
            draw_entry_float3_equal(a->emissive, b->emissive) &&
            draw_entry_matrix_equal(a->view_projection, b->view_projection, 16) &&
-           draw_entry_float3_equal(a->camera_pos, b->camera_pos);
+           draw_entry_float3_equal(a->camera_pos, b->camera_pos) && draw_entry_skinning_equal(a, b);
 }
 
 static int draw_entry_instance_batch_count(const slayer3d_gl_context *ctx, int start)
@@ -3253,8 +3277,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                     gl->Uniform1i(ctx->pbr_use_instancing_loc, 0);
                 if (ctx->pbr_use_skinning_loc >= 0)
                     gl->Uniform1i(ctx->pbr_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-                if (e->gpu_skinned && ctx->pbr_joint_matrices_loc >= 0)
-                    gl->UniformMatrix4fv(ctx->pbr_joint_matrices_loc, e->joint_count, GL_FALSE, e->joint_matrices);
+                upload_joint_palette_uniform(ctx, ctx->pbr_joint_matrices_loc, e);
                 gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
                 gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
                 gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
@@ -4826,9 +4849,7 @@ static bool gl_present(slayer3d_render_context *context)
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
                     if (ctx->point_shadow_use_skinning_loc >= 0)
                         gl->Uniform1i(ctx->point_shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-                    if (e->gpu_skinned && ctx->point_shadow_joint_matrices_loc >= 0)
-                        gl->UniformMatrix4fv(ctx->point_shadow_joint_matrices_loc, e->joint_count, GL_FALSE,
-                                             e->joint_matrices);
+                    upload_joint_palette_uniform(ctx, ctx->point_shadow_joint_matrices_loc, e);
                     gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
                     if (e->mesh_cache == NULL)
                     {
@@ -5120,9 +5141,7 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
                         gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
                         if (ctx->point_shadow_use_skinning_loc >= 0)
                             gl->Uniform1i(ctx->point_shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-                        if (e->gpu_skinned && ctx->point_shadow_joint_matrices_loc >= 0)
-                            gl->UniformMatrix4fv(ctx->point_shadow_joint_matrices_loc, e->joint_count, GL_FALSE,
-                                                 e->joint_matrices);
+                        upload_joint_palette_uniform(ctx, ctx->point_shadow_joint_matrices_loc, e);
                         gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
                         if (e->mesh_cache == NULL)
                         {

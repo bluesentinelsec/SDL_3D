@@ -78,6 +78,10 @@ extern "C"
         Uint64 gpu_skinned_draws;
         /** @brief Vertices skinned on the GPU by capable renderers. */
         Uint64 gpu_skinned_vertices;
+        /** @brief GPU skinning joint palette uniform uploads issued by capable renderers. */
+        Uint64 gpu_skinning_palette_uploads;
+        /** @brief Joint matrices uploaded for GPU skinning palettes. */
+        Uint64 gpu_skinning_palette_matrices_uploaded;
         /** @brief Vertices skinned on the CPU fallback path. */
         Uint64 cpu_skinned_vertices;
         /** @brief Authored model animation poses evaluated by the presentation layer. */
