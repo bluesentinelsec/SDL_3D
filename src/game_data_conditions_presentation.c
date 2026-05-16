@@ -684,6 +684,14 @@ static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runti
         value = diagnostics.render_mesh_draws;
     else if (SDL_strcmp(name, "render_triangles_submitted") == 0)
         value = diagnostics.render_triangles_submitted;
+    else if (SDL_strcmp(name, "compile_face_count") == 0)
+        value = diagnostics.compile_face_count;
+    else if (SDL_strcmp(name, "compile_rendered_face_count") == 0)
+        value = diagnostics.compile_rendered_face_count;
+    else if (SDL_strcmp(name, "compile_culled_face_count") == 0)
+        value = diagnostics.compile_culled_face_count;
+    else if (SDL_strcmp(name, "compile_triangle_count") == 0)
+        value = diagnostics.compile_triangle_count;
     else if (SDL_strcmp(name, "visibility_brush_candidates") == 0)
         value = diagnostics.visibility_brush_candidates;
     else if (SDL_strcmp(name, "visibility_brush_visible") == 0)

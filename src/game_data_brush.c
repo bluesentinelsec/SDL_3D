@@ -388,12 +388,135 @@ static bool brush_index_in_render_filter(int brush_index, int only_brush_index)
     return only_brush_index < 0 || brush_index == only_brush_index;
 }
 
+static bool brush_polygon_point_inside_convex_2d(const slayer3d_vec3 *polygon, int count, float u, float v,
+                                                 slayer3d_vec3 basis_u, slayer3d_vec3 basis_v)
+{
+    const float epsilon = 0.001f;
+    float expected_sign = 0.0f;
+    for (int i = 0; i < count; ++i)
+    {
+        const slayer3d_vec3 a3 = polygon[i];
+        const slayer3d_vec3 b3 = polygon[(i + 1) % count];
+        const float ax = slayer3d_vec3_dot(a3, basis_u);
+        const float ay = slayer3d_vec3_dot(a3, basis_v);
+        const float bx = slayer3d_vec3_dot(b3, basis_u);
+        const float by = slayer3d_vec3_dot(b3, basis_v);
+        const float cross = (bx - ax) * (v - ay) - (by - ay) * (u - ax);
+        if (SDL_fabsf(cross) <= epsilon)
+            continue;
+        const float sign = cross < 0.0f ? -1.0f : 1.0f;
+        if (expected_sign == 0.0f)
+        {
+            expected_sign = sign;
+        }
+        else if (sign != expected_sign)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool brush_polygon_covers_polygon(const slayer3d_vec3 *covering, int covering_count,
+                                         const slayer3d_vec3 *subject, int subject_count, slayer3d_vec3 basis_u,
+                                         slayer3d_vec3 basis_v)
+{
+    if (covering == NULL || subject == NULL || covering_count < 3 || subject_count < 3)
+        return false;
+
+    for (int i = 0; i < subject_count; ++i)
+    {
+        const float u = slayer3d_vec3_dot(subject[i], basis_u);
+        const float v = slayer3d_vec3_dot(subject[i], basis_v);
+        if (!brush_polygon_point_inside_convex_2d(covering, covering_count, u, v, basis_u, basis_v))
+            return false;
+    }
+    return true;
+}
+
+static bool brush_material_is_opaque(const slayer3d_game_data_brush_world *world, int material_index)
+{
+    if (world == NULL || material_index < 0 || material_index >= world->material_count)
+        return false;
+    return world->materials[material_index].albedo.w >= 0.999f;
+}
+
+static bool brush_face_can_be_compile_culled(const slayer3d_game_data_brush_world *world,
+                                             const slayer3d_game_data_brush *brush,
+                                             const slayer3d_game_data_brush_face *face)
+{
+    if (world == NULL || brush == NULL || face == NULL)
+        return false;
+    return (brush->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID) != 0u &&
+           brush_material_is_opaque(world, face->material_index);
+}
+
+static bool brush_face_hidden_by_neighbor(const slayer3d_game_data_brush_world *world, int brush_index, int face_index,
+                                          const slayer3d_vec3 *polygon, int polygon_count, slayer3d_vec3 normal,
+                                          slayer3d_vec3 basis_u, slayer3d_vec3 basis_v, float distance,
+                                          slayer3d_vec3 *scratch, int scratch_capacity)
+{
+    if (world == NULL || polygon == NULL || polygon_count < 3 || scratch == NULL || brush_index < 0 ||
+        brush_index >= world->brush_count)
+    {
+        return false;
+    }
+
+    const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+    const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+    if (!brush_face_can_be_compile_culled(world, brush, face))
+        return false;
+
+    const float normal_epsilon = 0.001f;
+    const float distance_epsilon = 0.001f;
+    for (int other_brush_index = 0; other_brush_index < world->brush_count; ++other_brush_index)
+    {
+        if (other_brush_index == brush_index)
+            continue;
+        const slayer3d_game_data_brush *other = &world->brushes[other_brush_index];
+        if ((other->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID) == 0u)
+            continue;
+
+        for (int other_face_index = 0; other_face_index < other->face_count; ++other_face_index)
+        {
+            const slayer3d_game_data_brush_face *other_face = &other->faces[other_face_index];
+            if (!brush_material_is_opaque(world, other_face->material_index))
+                continue;
+
+            slayer3d_vec3 other_normal;
+            float other_distance = 0.0f;
+            if (!brush_plane_normalized(other_face, &other_normal, &other_distance))
+                continue;
+            if (slayer3d_vec3_dot(normal, other_normal) > -1.0f + normal_epsilon)
+                continue;
+            if (SDL_fabsf(distance + other_distance) > distance_epsilon)
+                continue;
+
+            const int other_count =
+                brush_build_face_polygon(other, other_face_index, scratch, scratch_capacity, NULL, NULL, NULL);
+            if (other_count >= 3 &&
+                brush_polygon_covers_polygon(scratch, other_count, polygon, polygon_count, basis_u, basis_v))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_world *world, slayer3d_model *model,
                                                       int only_brush_index)
 {
     if (world == NULL || model == NULL)
         return false;
     SDL_zero(*model);
+    if (only_brush_index < 0)
+    {
+        world->compile_face_count = 0;
+        world->compile_rendered_face_count = 0;
+        world->compile_culled_face_count = 0;
+        world->compile_triangle_count = 0;
+    }
     if (!brush_model_copy_materials(world, model))
         return false;
 
@@ -419,8 +542,11 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
         max_face_count = SDL_max(max_face_count, world->brushes[brush_index].face_count);
     const int polygon_capacity = SDL_max(16, max_face_count * 2 + 8);
     slayer3d_vec3 *polygon = (slayer3d_vec3 *)SDL_malloc((size_t)polygon_capacity * sizeof(*polygon));
-    if (polygon == NULL)
+    slayer3d_vec3 *neighbor_polygon = (slayer3d_vec3 *)SDL_malloc((size_t)polygon_capacity * sizeof(*neighbor_polygon));
+    if (polygon == NULL || neighbor_polygon == NULL)
     {
+        SDL_free(polygon);
+        SDL_free(neighbor_polygon);
         SDL_free(material_to_batch);
         SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
@@ -439,9 +565,31 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             const int material_index = brush->faces[face_index].material_index;
             if (material_index < 0 || material_index >= world->material_count)
                 continue;
-            const int count = brush_build_face_polygon(brush, face_index, polygon, polygon_capacity, NULL, NULL, NULL);
+            slayer3d_vec3 normal;
+            slayer3d_vec3 u;
+            slayer3d_vec3 v;
+            float distance = 0.0f;
+            if (!brush_plane_normalized(&brush->faces[face_index], &normal, &distance))
+                continue;
+            const int count = brush_build_face_polygon(brush, face_index, polygon, polygon_capacity, &normal, &u, &v);
             if (count >= 3)
+            {
+                if (only_brush_index < 0)
+                    ++world->compile_face_count;
+                if (brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
+                                                  distance, neighbor_polygon, polygon_capacity))
+                {
+                    if (only_brush_index < 0)
+                        ++world->compile_culled_face_count;
+                    continue;
+                }
+                if (only_brush_index < 0)
+                {
+                    ++world->compile_rendered_face_count;
+                    world->compile_triangle_count += count - 2;
+                }
                 triangle_counts[material_to_batch[material_index]] += count - 2;
+            }
         }
     }
 
@@ -454,6 +602,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
     if (mesh_count <= 0)
     {
         SDL_free(polygon);
+        SDL_free(neighbor_polygon);
         SDL_free(material_to_batch);
         SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
@@ -464,6 +613,9 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
     if (model->meshes == NULL)
     {
         SDL_free(polygon);
+        SDL_free(neighbor_polygon);
+        SDL_free(material_to_batch);
+        SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
         return false;
     }
@@ -477,6 +629,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
         SDL_free(batch_to_mesh);
         SDL_free(vertex_offsets);
         SDL_free(polygon);
+        SDL_free(neighbor_polygon);
         SDL_free(material_to_batch);
         SDL_free(batch_material_indices);
         SDL_free(triangle_counts);
@@ -504,9 +657,11 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
         if (mesh->name == NULL || mesh->positions == NULL || mesh->normals == NULL || mesh->uvs == NULL ||
             mesh->colors == NULL || mesh->indices == NULL)
         {
+            slayer3d_free_model(model);
             SDL_free(batch_to_mesh);
             SDL_free(vertex_offsets);
             SDL_free(polygon);
+            SDL_free(neighbor_polygon);
             SDL_free(material_to_batch);
             SDL_free(batch_material_indices);
             SDL_free(triangle_counts);
@@ -538,6 +693,13 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             const int count = brush_build_face_polygon(brush, face_index, polygon, polygon_capacity, &normal, &u, &v);
             if (count < 3 || mesh_for_material < 0)
                 continue;
+            float distance = 0.0f;
+            if (!brush_plane_normalized(face, &normal, &distance) ||
+                brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v, distance,
+                                              neighbor_polygon, polygon_capacity))
+            {
+                continue;
+            }
             slayer3d_mesh *mesh = &model->meshes[mesh_for_material];
             const slayer3d_game_data_brush_material *material = &world->materials[face->material_index];
             const float tex_scale = SDL_max(material->tex_scale, 0.0001f);
@@ -584,6 +746,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
     SDL_free(batch_to_mesh);
     SDL_free(vertex_offsets);
     SDL_free(polygon);
+    SDL_free(neighbor_polygon);
     SDL_free(material_to_batch);
     SDL_free(batch_material_indices);
     SDL_free(triangle_counts);

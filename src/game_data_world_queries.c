@@ -2207,6 +2207,14 @@ bool slayer3d_game_data_get_brush_diagnostics(const slayer3d_game_data_runtime *
     if (runtime == NULL || out_diagnostics == NULL)
         return false;
     *out_diagnostics = runtime->brush_diagnostics;
+    for (int i = 0; i < runtime->brush_world_count; ++i)
+    {
+        const slayer3d_game_data_brush_world *world = &runtime->brush_worlds[i].desc;
+        out_diagnostics->compile_face_count += (Uint64)SDL_max(world->compile_face_count, 0);
+        out_diagnostics->compile_rendered_face_count += (Uint64)SDL_max(world->compile_rendered_face_count, 0);
+        out_diagnostics->compile_culled_face_count += (Uint64)SDL_max(world->compile_culled_face_count, 0);
+        out_diagnostics->compile_triangle_count += (Uint64)SDL_max(world->compile_triangle_count, 0);
+    }
     return true;
 }
 

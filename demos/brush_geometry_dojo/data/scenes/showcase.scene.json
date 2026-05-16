@@ -540,6 +540,23 @@
         "scale": 0.48
       },
       {
+        "name": "ui.brush_geometry.brush_compile",
+        "font": "font.brush_geometry.hud",
+        "format": "COMPILE %llu/%llu CULL %llu TRI %llu",
+        "bindings": [
+          { "type": "metric", "metric": "brush.compile_rendered_face_count" },
+          { "type": "metric", "metric": "brush.compile_face_count" },
+          { "type": "metric", "metric": "brush.compile_culled_face_count" },
+          { "type": "metric", "metric": "brush.compile_triangle_count" }
+        ],
+        "x": 0.985,
+        "y": 0.368,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
         "name": "ui.brush_geometry.trigger_state",
         "font": "font.brush_geometry.hud",
         "format": "TRIGGER %d",

@@ -13577,6 +13577,90 @@ TEST(GameDataRuntime, BrushRenderModelBatchesEquivalentMaterialsAndPreservesEdit
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, BrushRenderCompileCullsFullyHiddenAdjacentSolidFaces)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_hidden_faces");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [{ "world": "brush.hidden_faces", "position": [0.0, 0.0, 0.0] }]
+  }
+})json");
+    write_text(dir / "hidden_faces.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Hidden Brush Face Compile Test" },
+  "world": { "name": "world.hidden_faces", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.hidden_faces",
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.left",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.right",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": -1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "hidden_faces.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.hidden_faces", &world));
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_EQ(world.render_model->mesh_count, 1);
+    EXPECT_EQ(world.compile_face_count, 12);
+    EXPECT_EQ(world.compile_culled_face_count, 2);
+    EXPECT_EQ(world.compile_rendered_face_count, 10);
+    EXPECT_EQ(world.compile_triangle_count, 20);
+    EXPECT_EQ(world.render_model->meshes[0].vertex_count, 60);
+    EXPECT_EQ(world.render_model->meshes[0].index_count, 60);
+
+    slayer3d_game_data_brush_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.compile_face_count, 12u);
+    EXPECT_EQ(diagnostics.compile_culled_face_count, 2u);
+    EXPECT_EQ(diagnostics.compile_rendered_face_count, 10u);
+    EXPECT_EQ(diagnostics.compile_triangle_count, 20u);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
 {
     const std::filesystem::path dir = unique_test_dir("editor_create_box_brush");

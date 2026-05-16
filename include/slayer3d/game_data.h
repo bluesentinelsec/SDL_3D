@@ -515,6 +515,14 @@ extern "C"
         int brush_count;
         /** @brief Runtime-compiled static render mesh for visible brush faces, or NULL when empty. */
         const slayer3d_model *render_model;
+        /** @brief Renderable brush faces considered by the compile step. */
+        int compile_face_count;
+        /** @brief Renderable brush faces emitted to the compiled render model. */
+        int compile_rendered_face_count;
+        /** @brief Renderable brush faces hidden by adjacent solid brushes during compile. */
+        int compile_culled_face_count;
+        /** @brief Triangles emitted to the compiled render model after compile-time face culling. */
+        int compile_triangle_count;
         /** @brief Precomputed local-space bounds spanning all bounded brushes. */
         slayer3d_bounding_box bounds;
         /** @brief True when @p bounds is valid. */
@@ -630,6 +638,14 @@ extern "C"
         Uint64 render_mesh_draws;
         /** @brief Approximate brush-world triangles submitted after renderer culling. */
         Uint64 render_triangles_submitted;
+        /** @brief Renderable brush faces considered by brush-world compile steps. */
+        Uint64 compile_face_count;
+        /** @brief Renderable brush faces emitted by brush-world compile steps. */
+        Uint64 compile_rendered_face_count;
+        /** @brief Renderable brush faces hidden by adjacent solid brushes during compile. */
+        Uint64 compile_culled_face_count;
+        /** @brief Triangles emitted by brush-world compile steps after compile-time face culling. */
+        Uint64 compile_triangle_count;
         /** @brief Renderable brushes tested by brush-world visibility culling. */
         Uint64 visibility_brush_candidates;
         /** @brief Renderable brushes accepted by brush-world visibility culling. */

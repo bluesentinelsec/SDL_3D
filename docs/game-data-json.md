@@ -665,8 +665,14 @@ batch render-equivalent authored materials into shared static meshes. Materials
 remain distinct for editor picking, exports, and face metadata, but materials
 with the same texture, color, metallic/roughness, and emissive response can be
 submitted as one mesh; per-face UVs still honor each material's `tex_scale` and
-face UV overrides. During load, brush worlds also precompute local AABBs for
-each brush and for the whole world. When
+face UV overrides. The compile step also conservatively removes fully hidden
+contact faces between adjacent opaque solid brushes: a face is culled only when
+an opposite coplanar neighboring face fully covers it, so partial overlaps and
+ambiguous cases fail open. Runtime descriptors expose
+`compile_face_count`, `compile_rendered_face_count`,
+`compile_culled_face_count`, and `compile_triangle_count` for tests, editor
+diagnostics, and performance audits. During load, brush worlds also precompute
+local AABBs for each brush and for the whole world. When
 `acceleration` is enabled on a scene instance, active-scene trace queries use
 those bounds as a broad phase before exact plane clipping.
 
@@ -687,6 +693,10 @@ instrumentation; reset them with
 derived from the generic render-context stats exposed by
 `slayer3d_get_render_stats()`, because brush worlds compile to static model
 meshes that use the same frustum culling path as other models.
+Compile-time brush diagnostics are also exposed as `brush.compile_face_count`,
+`brush.compile_rendered_face_count`, `brush.compile_culled_face_count`, and
+`brush.compile_triangle_count` so profiling overlays can verify how much
+hidden interior surface area was removed before runtime rendering.
 Visibility-grid diagnostics also expose cache hit/miss counters so scenes can
 confirm automatic occlusion is reusing the visible-cell set while the camera
 remains in the same coarse grid cell.
