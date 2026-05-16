@@ -1053,6 +1053,12 @@ extern "C"
         float render_procedural_lod_resolved_triangles_per_frame;
         /** @brief Sampled procedural triangles avoided by LOD per frame. */
         float render_procedural_lod_triangles_saved_per_frame;
+        /** @brief Sampled model LOD candidates per frame. */
+        float render_model_lod_candidates_per_frame;
+        /** @brief Sampled model primitives culled by screen-space LOD per frame. */
+        float render_model_lod_culled_per_frame;
+        /** @brief Sampled model triangles avoided by screen-space LOD culling per frame. */
+        float render_model_lod_triangles_saved_per_frame;
         /** @brief Sampled depth-prepass draw calls per frame. */
         float render_depth_prepass_draws_per_frame;
         /** @brief Sampled depth-prepass triangles per frame. */
@@ -1230,6 +1236,8 @@ extern "C"
         bool lod_enabled;
         /** @brief Multiplicative bias applied to projected size for procedural LOD selection. */
         float lod_bias;
+        /** @brief Optional per-model projected-pixel cull threshold; negative uses render settings. */
+        float lod_cull_pixels;
         /** @brief Authored tint color. */
         slayer3d_color color;
         /** @brief Optional wire overlay color for mesh primitive wire draw modes. */
@@ -1299,6 +1307,10 @@ extern "C"
         float procedural_lod_far_pixels;
         /** @brief Minimum generated segment/ring count for procedural LOD. */
         int procedural_lod_min_segments;
+        /** @brief Whether tiny model primitives may be culled by projected screen size. */
+        bool model_lod_culling_enabled;
+        /** @brief Projected model diameter at or below which model LOD culling skips the draw. */
+        float model_lod_cull_pixels;
         /** @brief Whether capable backends should collect GPU sample-count diagnostics. */
         bool performance_queries_enabled;
         /** @brief Internal 3D/world render scale; UI and logical presentation remain full resolution. */

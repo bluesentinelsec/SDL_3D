@@ -6020,6 +6020,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
                 yyjson_val *lod_bias = obj_get(component, "lod_bias");
                 if (lod_bias != NULL && (!yyjson_is_num(lod_bias) || yyjson_get_num(lod_bias) <= 0.0))
                     return validation_error(ctx, path, "render primitive lod_bias must be a positive number");
+                yyjson_val *lod_cull_pixels = obj_get(component, "lod_cull_pixels");
+                if (lod_cull_pixels != NULL &&
+                    (!yyjson_is_num(lod_cull_pixels) || yyjson_get_num(lod_cull_pixels) < 0.0))
+                    return validation_error(ctx, path,
+                                            "render primitive lod_cull_pixels must be a non-negative number");
                 const char *offset_properties[] = {"offset_x_property",     "offset_y_property",
                                                    "offset_z_property",     "offset_x_add_property",
                                                    "offset_y_add_property", "offset_z_add_property"};
@@ -6665,6 +6670,11 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
                 yyjson_val *rotation = obj_get(component, "rotation");
                 if (rotation != NULL && !is_vec_array(rotation, 3))
                     return validation_error(ctx, component_path, "render.model rotation must be a vec3");
+                yyjson_val *lod_cull_pixels = obj_get(component, "lod_cull_pixels");
+                if (lod_cull_pixels != NULL &&
+                    (!yyjson_is_num(lod_cull_pixels) || yyjson_get_num(lod_cull_pixels) < 0.0))
+                    return validation_error(ctx, component_path,
+                                            "render.model lod_cull_pixels must be a non-negative number");
                 const char *property_fields[] = {
                     "scale_property",       "pitch_property",    "yaw_property",          "roll_property",
                     "pitch_add_property",   "yaw_add_property",  "roll_add_property",     "offset_x_property",
@@ -10263,6 +10273,9 @@ static bool ui_metric_name_valid(const char *metric)
         "render.procedural_lod_authored_triangles_per_frame",
         "render.procedural_lod_resolved_triangles_per_frame",
         "render.procedural_lod_triangles_saved_per_frame",
+        "render.model_lod_candidates_per_frame",
+        "render.model_lod_culled_per_frame",
+        "render.model_lod_triangles_saved_per_frame",
         "render.depth_prepass_draws_per_frame",
         "render.depth_prepass_triangles_per_frame",
         "render.depth_prepass_samples_per_frame",
@@ -12205,15 +12218,17 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
     yyjson_val *depth_prepass = obj_get(render, "depth_prepass");
     yyjson_val *per_object_light_selection = obj_get(render, "per_object_light_selection");
     yyjson_val *procedural_lod = obj_get(render, "procedural_lod");
+    yyjson_val *model_lod_culling = obj_get(render, "model_lod_culling");
     yyjson_val *performance_queries = obj_get(render, "performance_queries");
     if ((lighting != NULL && !yyjson_is_bool(lighting)) || (bloom != NULL && !yyjson_is_bool(bloom)) ||
         (ssao != NULL && !yyjson_is_bool(ssao)) || (depth_prepass != NULL && !yyjson_is_bool(depth_prepass)) ||
         (per_object_light_selection != NULL && !yyjson_is_bool(per_object_light_selection)) ||
         (procedural_lod != NULL && !yyjson_is_bool(procedural_lod)) ||
+        (model_lod_culling != NULL && !yyjson_is_bool(model_lod_culling)) ||
         (performance_queries != NULL && !yyjson_is_bool(performance_queries)))
         return validation_error(ctx, "$.render",
                                 "render lighting, bloom, ssao, depth_prepass, per_object_light_selection, "
-                                "procedural_lod, and performance_queries must be booleans");
+                                "procedural_lod, model_lod_culling, and performance_queries must be booleans");
     yyjson_val *per_object_light_limit = obj_get(render, "per_object_light_limit");
     if (per_object_light_limit != NULL &&
         (!yyjson_is_int(per_object_light_limit) || yyjson_get_int(per_object_light_limit) < 0 ||
@@ -12253,6 +12268,13 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
         return validation_error(ctx, "$.render.procedural_lod_min_segments",
                                 "render procedural_lod_min_segments must be an integer from 3 to 64");
     }
+    yyjson_val *model_lod_cull_pixels = obj_get(render, "model_lod_cull_pixels");
+    if (model_lod_cull_pixels != NULL &&
+        (!yyjson_is_num(model_lod_cull_pixels) || yyjson_get_num(model_lod_cull_pixels) < 0.0))
+    {
+        return validation_error(ctx, "$.render.model_lod_cull_pixels",
+                                "render model_lod_cull_pixels must be a non-negative number");
+    }
     if (obj_get(render, "clear_color") != NULL && !is_vec_array(obj_get(render, "clear_color"), 3))
         return validation_error(ctx, "$.render.clear_color", "render clear_color must be a vec3 or vec4 color");
     const char *tonemap = json_string(render, "tonemap");
@@ -12275,7 +12297,9 @@ static bool validate_render_settings(validation_context *ctx, yyjson_val *root)
                                 "procedural_lod_key",
                                 "procedural_lod_near_pixels_key",
                                 "procedural_lod_far_pixels_key",
-                                "procedural_lod_min_segments_key"};
+                                "procedural_lod_min_segments_key",
+                                "model_lod_culling_key",
+                                "model_lod_cull_pixels_key"};
     for (size_t i = 0; i < SDL_arraysize(key_fields); ++i)
     {
         if (obj_get(render, key_fields[i]) != NULL && !is_non_empty_string(render, key_fields[i]))

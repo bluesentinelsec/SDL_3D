@@ -21,6 +21,7 @@ extern "C"
 #include "gl_renderer.h"
 #include "render_context_internal.h"
 #include "slayer3d/animation.h"
+#include "slayer3d/asset.h"
 #include "slayer3d/effects.h"
 #include "slayer3d/game.h"
 #include "slayer3d/game_data.h"
@@ -1207,6 +1208,115 @@ TEST_F(GLRendererTest, ProceduralLodDoesNotCreateUnusedCubeVariants)
     slayer3d_game_data_mesh_primitive_cache_free(&cache);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
+    std::filesystem::remove_all(dir);
+}
+
+TEST_F(GLRendererTest, ModelLodCullsTinyDistantModel)
+{
+    const std::filesystem::path dir = UniqueTempDir("model_lod");
+    WriteText(dir / "models" / "quad.obj",
+              R"obj(v -1 -1 0
+v 1 -1 0
+v 1 1 0
+v -1 1 0
+vn 0 0 1
+f 1//1 2//1 3//1
+f 1//1 3//1 4//1
+)obj");
+    WriteText(dir / "scenes" / "play.scene.json",
+              R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "renders_world": true
+})json");
+    WriteText(dir / "model_lod.game.json",
+              R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Model LOD Test" },
+  "world": { "name": "world.model_lod", "kind": "fixed_screen" },
+  "assets": {
+    "models": [{ "id": "model.test.quad", "path": "asset://models/quad.obj" }]
+  },
+  "render": {
+    "lighting": false,
+    "model_lod_culling": false,
+    "model_lod_culling_key": "debug.model_lod",
+    "model_lod_cull_pixels": 64.0,
+    "clear_color": [0, 0, 0, 255]
+  },
+  "entities": [
+    {
+      "name": "entity.lod.model",
+      "active": true,
+      "transform": { "position": [0.0, 1.0, -160.0] },
+      "components": [
+        {
+          "type": "render.model",
+          "model": "model.test.quad",
+          "scale": [1.0, 1.0, 1.0],
+          "color": [255, 255, 255, 255],
+          "lighting": false
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    char asset_error[256]{};
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), asset_error, sizeof(asset_error)))
+        << asset_error;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    char error[512]{};
+    ASSERT_TRUE(
+        slayer3d_game_data_load_asset(assets, "asset://model_lod.game.json", session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_camera3d cam{};
+    cam.position = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.target = slayer3d_vec3_make(0.0f, 1.0f, -1.0f);
+    cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 70.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    slayer3d_game_data_model_cache model_cache{};
+    slayer3d_game_data_model_cache_init(&model_cache, assets);
+    slayer3d_game_data_frame_desc frame{};
+    frame.runtime = runtime;
+    frame.renderer = ctx;
+    frame.model_cache = &model_cache;
+    frame.fallback_camera = &cam;
+
+    slayer3d_reset_render_stats(ctx);
+    ASSERT_TRUE(slayer3d_game_data_draw_frame(&frame));
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.model_lod_candidates, 0u);
+    EXPECT_EQ(stats.model_lod_culled, 0u);
+    EXPECT_EQ(stats.model_lod_triangles_saved, 0u);
+    EXPECT_EQ(stats.model_mesh_draws, 1u);
+    EXPECT_EQ(stats.model_triangles_submitted, 2u);
+
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "debug.model_lod", true);
+    slayer3d_reset_render_stats(ctx);
+    ASSERT_TRUE(slayer3d_game_data_draw_frame(&frame));
+    SDL_zero(stats);
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.model_lod_candidates, 1u);
+    EXPECT_EQ(stats.model_lod_culled, 1u);
+    EXPECT_EQ(stats.model_lod_triangles_saved, 2u);
+    EXPECT_EQ(stats.model_mesh_draws, 0u);
+    EXPECT_EQ(stats.model_triangles_submitted, 0u);
+
+    slayer3d_game_data_model_cache_free(&model_cache);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    slayer3d_asset_resolver_destroy(assets);
     std::filesystem::remove_all(dir);
 }
 

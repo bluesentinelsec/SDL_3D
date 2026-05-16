@@ -1298,6 +1298,7 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         primitive.tube_segments = primitive.rings;
         primitive.lod_enabled = json_bool(component, "lod", true);
         primitive.lod_bias = SDL_max(json_float(component, "lod_bias", 1.0f), 0.001f);
+        primitive.lod_cull_pixels = json_float(component, "lod_cull_pixels", -1.0f);
 
         if (SDL_strcmp(type, "render.cube") == 0)
         {
@@ -1793,6 +1794,8 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
         out_settings->procedural_lod_near_pixels = 128.0f;
         out_settings->procedural_lod_far_pixels = 24.0f;
         out_settings->procedural_lod_min_segments = 8;
+        out_settings->model_lod_culling_enabled = false;
+        out_settings->model_lod_cull_pixels = 4.0f;
         out_settings->performance_queries_enabled = false;
         out_settings->world_render_scale = 1.0f;
         out_settings->tonemap = SLAYER3D_TONEMAP_ACES;
@@ -1838,6 +1841,13 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
     out_settings->procedural_lod_far_pixels =
         SDL_clamp(out_settings->procedural_lod_far_pixels, 1.0f, out_settings->procedural_lod_near_pixels);
     out_settings->procedural_lod_min_segments = SDL_clamp(out_settings->procedural_lod_min_segments, 3, 64);
+    out_settings->model_lod_culling_enabled =
+        scene_state_bool(runtime, json_string(render, "model_lod_culling_key", NULL),
+                         json_bool(render, "model_lod_culling", out_settings->model_lod_culling_enabled));
+    out_settings->model_lod_cull_pixels =
+        scene_state_float(runtime, json_string(render, "model_lod_cull_pixels_key", NULL),
+                          json_float(render, "model_lod_cull_pixels", out_settings->model_lod_cull_pixels));
+    out_settings->model_lod_cull_pixels = SDL_max(out_settings->model_lod_cull_pixels, 0.0f);
     out_settings->performance_queries_enabled =
         scene_state_bool(runtime, json_string(render, "performance_queries_key", NULL),
                          json_bool(render, "performance_queries", out_settings->performance_queries_enabled));

@@ -103,6 +103,8 @@ The root `render` object configures frame-level presentation defaults:
     "procedural_lod_near_pixels": 128.0,
     "procedural_lod_far_pixels": 24.0,
     "procedural_lod_min_segments": 8,
+    "model_lod_culling": true,
+    "model_lod_cull_pixels": 4.0,
     "performance_queries": false,
     "performance_queries_key": "render_performance_queries_enabled",
     "world_render_scale": 1.0,
@@ -156,6 +158,15 @@ and tuning scenes toggle the feature or tune thresholds from scene state.
 Renderer stats expose candidate, reduced, authored-triangle,
 resolved-triangle, and saved-triangle counts so performance dojos can prove the
 effect quantitatively instead of relying on visual inspection.
+`model_lod_culling` applies the same screen-space policy to authored
+`render.model` components by skipping world-space model draws that project below
+`model_lod_cull_pixels`. This is a zero-detail LOD level intended for tiny
+distant props, pickups, and repeated decorations; leave `lod` disabled on hero
+actors, enemies that must remain visible, and inspection objects. Camera-space
+viewmodels are never culled by model LOD. Individual `render.model` components
+can override the global threshold with `lod_cull_pixels`, and `lod_bias` affects
+their projected size. Renderer stats expose model LOD candidate, culled, and
+saved-triangle counts.
 `performance_queries` enables optional backend sample-count queries for
 diagnostic overlays. Capable OpenGL backends expose depth-passing sample counts
 for the depth pre-pass and main geometry pass through UI metrics. These queries
@@ -2529,6 +2540,11 @@ Reusable components include:
   `pitch_add_properties`, `yaw_add_properties`, `roll_add_properties`) sum
   multiple additive properties, which lets authored effects such as recoil,
   pickup easing, and walk bob compose without mutating the base placement.
+  `lod` defaults to `true` for world-space model props and lets root
+  `render.model_lod_culling` skip tiny distant models. Set `lod` to `false` for
+  enemies, important pickups, hero props, and other content that must remain
+  visible regardless of projected size. `lod_bias` and `lod_cull_pixels` tune
+  per-model behavior without host code.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets
@@ -2657,6 +2673,9 @@ averages: `render.model_mesh_submissions_per_frame`,
 `render.procedural_lod_authored_triangles_per_frame`,
 `render.procedural_lod_resolved_triangles_per_frame`,
 `render.procedural_lod_triangles_saved_per_frame`,
+`render.model_lod_candidates_per_frame`,
+`render.model_lod_culled_per_frame`,
+`render.model_lod_triangles_saved_per_frame`,
 `render.depth_prepass_draws_per_frame`, and
 `render.depth_prepass_triangles_per_frame`. The current world render target is
 available as `render.world_scale`, `render.world_width`, and

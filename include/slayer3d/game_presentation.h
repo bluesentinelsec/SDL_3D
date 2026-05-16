@@ -298,6 +298,9 @@ extern "C"
         float procedural_lod_authored_triangles_sum; /**< Accumulated authored procedural LOD triangle deltas. */
         float procedural_lod_resolved_triangles_sum; /**< Accumulated resolved procedural LOD triangle deltas. */
         float procedural_lod_triangles_saved_sum;    /**< Accumulated procedural LOD saved triangle deltas. */
+        float model_lod_candidates_sample_sum;       /**< Accumulated model LOD candidate deltas. */
+        float model_lod_culled_sample_sum;           /**< Accumulated model LOD cull deltas. */
+        float model_lod_triangles_saved_sum;         /**< Accumulated model LOD saved triangle deltas. */
         float depth_prepass_draws_sample_sum;        /**< Accumulated depth-prepass draw deltas. */
         float depth_prepass_triangles_sample_sum;    /**< Accumulated depth-prepass triangle deltas. */
         float depth_prepass_samples_sample_sum;      /**< Accumulated depth-prepass sample-query deltas. */

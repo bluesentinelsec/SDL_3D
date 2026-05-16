@@ -1102,6 +1102,122 @@ static Uint64 procedural_lod_triangle_count(const slayer3d_game_data_render_prim
     }
 }
 
+static bool model_lod_accumulate_bounds(const slayer3d_mesh *mesh, slayer3d_vec3 scale, float *radius,
+                                        Uint64 *triangles)
+{
+    if (mesh == NULL || radius == NULL || triangles == NULL)
+        return false;
+
+    *triangles += (Uint64)((mesh->index_count > 0 ? mesh->index_count : mesh->vertex_count) / 3);
+
+    if (mesh->has_local_bounds)
+    {
+        const slayer3d_vec3 corners[] = {
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.min.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.min.y, mesh->local_bounds.max.z),
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.max.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.max.y, mesh->local_bounds.max.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.min.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.min.y, mesh->local_bounds.max.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.max.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.max.y, mesh->local_bounds.max.z),
+        };
+        for (size_t i = 0; i < SDL_arraysize(corners); ++i)
+        {
+            const slayer3d_vec3 scaled =
+                slayer3d_vec3_make(corners[i].x * scale.x, corners[i].y * scale.y, corners[i].z * scale.z);
+            *radius = SDL_max(*radius, slayer3d_vec3_length(scaled));
+        }
+        return true;
+    }
+
+    if (mesh->positions == NULL || mesh->vertex_count <= 0)
+        return true;
+
+    for (int i = 0; i < mesh->vertex_count; ++i)
+    {
+        const slayer3d_vec3 scaled =
+            slayer3d_vec3_make(mesh->positions[i * 3 + 0] * scale.x, mesh->positions[i * 3 + 1] * scale.y,
+                               mesh->positions[i * 3 + 2] * scale.z);
+        *radius = SDL_max(*radius, slayer3d_vec3_length(scaled));
+    }
+    return true;
+}
+
+static bool model_lod_projected_pixels(const primitive_draw_context *context, const slayer3d_model *model,
+                                       const slayer3d_game_data_render_primitive *primitive,
+                                       float *out_projected_pixels, Uint64 *out_triangles)
+{
+    if (context == NULL || context->camera == NULL || model == NULL || primitive == NULL ||
+        out_projected_pixels == NULL || out_triangles == NULL || model->meshes == NULL || model->mesh_count <= 0)
+    {
+        return false;
+    }
+
+    float radius = 0.0f;
+    Uint64 triangles = 0u;
+    const slayer3d_vec3 scale = slayer3d_vec3_make(
+        SDL_fabsf(primitive->model_scale.x), SDL_fabsf(primitive->model_scale.y), SDL_fabsf(primitive->model_scale.z));
+    for (int i = 0; i < model->mesh_count; ++i)
+    {
+        if (!model_lod_accumulate_bounds(&model->meshes[i], scale, &radius, &triangles))
+            return false;
+    }
+    if (radius <= 0.0f || triangles == 0u)
+        return false;
+
+    const slayer3d_vec3 forward =
+        slayer3d_vec3_normalize(slayer3d_vec3_sub(context->camera->target, context->camera->position));
+    if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
+        return false;
+    const float distance =
+        slayer3d_vec3_dot(slayer3d_vec3_sub(primitive->position, context->camera->position), forward);
+    if (distance <= 0.01f)
+    {
+        *out_projected_pixels = context->render_settings.procedural_lod_near_pixels;
+        *out_triangles = triangles;
+        return true;
+    }
+
+    const int axis_pixels = context->camera->fov_axis == SLAYER3D_CAMERA_FOV_HORIZONTAL
+                                ? slayer3d_get_render_context_width(context->renderer)
+                                : slayer3d_get_render_context_height(context->renderer);
+    const float fov = SDL_clamp(context->camera->fovy, 1.0f, 175.0f) * SLAYER3D_GAME_PRESENTATION_PI / 180.0f;
+    const float denominator = 2.0f * distance * SDL_tanf(fov * 0.5f);
+    if (axis_pixels <= 0 || denominator <= 0.0001f)
+        return false;
+
+    *out_projected_pixels = ((radius * 2.0f) * (float)axis_pixels / denominator) * SDL_max(primitive->lod_bias, 0.001f);
+    *out_triangles = triangles;
+    return true;
+}
+
+static bool model_lod_should_cull(primitive_draw_context *context, const slayer3d_model *model,
+                                  const slayer3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || context->renderer == NULL || model == NULL || primitive == NULL ||
+        !context->render_settings.model_lod_culling_enabled || !primitive->lod_enabled || primitive->view_space)
+    {
+        return false;
+    }
+
+    float projected_pixels = 0.0f;
+    Uint64 triangles = 0u;
+    if (!model_lod_projected_pixels(context, model, primitive, &projected_pixels, &triangles))
+        return false;
+
+    ++context->renderer->stats.model_lod_candidates;
+    const float cull_pixels = primitive->lod_cull_pixels >= 0.0f ? primitive->lod_cull_pixels
+                                                                 : context->render_settings.model_lod_cull_pixels;
+    if (cull_pixels > 0.0f && projected_pixels <= cull_pixels)
+    {
+        ++context->renderer->stats.model_lod_culled;
+        context->renderer->stats.model_lod_triangles_saved += triangles;
+        return true;
+    }
+    return false;
+}
+
 static void record_procedural_lod_stats(primitive_draw_context *context,
                                         const slayer3d_game_data_render_primitive *authored,
                                         const slayer3d_game_data_render_primitive *resolved)
@@ -2227,6 +2343,13 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
             find_or_load_model_entry(context->runtime, context->model_cache, primitive->model_asset);
         if (entry == NULL)
             return false;
+        if (model_lod_should_cull(context, &entry->model, primitive))
+        {
+            slayer3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
+            if (!primitive->lighting_enabled)
+                slayer3d_set_lighting_enabled(context->renderer, restore_lighting);
+            return true;
+        }
         slayer3d_vec3 model_position = primitive->position;
         slayer3d_vec3 model_rotation = primitive->euler_rotation;
         slayer3d_mat4 model_matrix = slayer3d_mat4_identity();
@@ -4055,6 +4178,12 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                         state->procedural_lod_triangles_saved_sum +=
                             render_stat_delta_u64(state->last_render_stats.procedural_lod_triangles_saved,
                                                   stats.procedural_lod_triangles_saved);
+                        state->model_lod_candidates_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.model_lod_candidates, stats.model_lod_candidates);
+                        state->model_lod_culled_sample_sum +=
+                            render_stat_delta_u64(state->last_render_stats.model_lod_culled, stats.model_lod_culled);
+                        state->model_lod_triangles_saved_sum += render_stat_delta_u64(
+                            state->last_render_stats.model_lod_triangles_saved, stats.model_lod_triangles_saved);
                         state->depth_prepass_draws_sample_sum += render_stat_delta_u64(
                             state->last_render_stats.depth_prepass_draws, stats.depth_prepass_draws);
                         state->depth_prepass_triangles_sample_sum += render_stat_delta_u64(
@@ -4104,6 +4233,11 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                     state->procedural_lod_resolved_triangles_sum / sample_frames;
                 state->metrics.render_procedural_lod_triangles_saved_per_frame =
                     state->procedural_lod_triangles_saved_sum / sample_frames;
+                state->metrics.render_model_lod_candidates_per_frame =
+                    state->model_lod_candidates_sample_sum / sample_frames;
+                state->metrics.render_model_lod_culled_per_frame = state->model_lod_culled_sample_sum / sample_frames;
+                state->metrics.render_model_lod_triangles_saved_per_frame =
+                    state->model_lod_triangles_saved_sum / sample_frames;
                 state->metrics.render_depth_prepass_draws_per_frame =
                     state->depth_prepass_draws_sample_sum / sample_frames;
                 state->metrics.render_depth_prepass_triangles_per_frame =
@@ -4135,6 +4269,9 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                 state->procedural_lod_authored_triangles_sum = 0.0f;
                 state->procedural_lod_resolved_triangles_sum = 0.0f;
                 state->procedural_lod_triangles_saved_sum = 0.0f;
+                state->model_lod_candidates_sample_sum = 0.0f;
+                state->model_lod_culled_sample_sum = 0.0f;
+                state->model_lod_triangles_saved_sum = 0.0f;
                 state->depth_prepass_draws_sample_sum = 0.0f;
                 state->depth_prepass_triangles_sample_sum = 0.0f;
                 state->depth_prepass_samples_sample_sum = 0.0f;

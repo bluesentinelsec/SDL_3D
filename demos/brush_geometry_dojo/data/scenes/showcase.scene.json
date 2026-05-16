@@ -542,7 +542,7 @@
       {
         "name": "ui.brush_geometry.procedural_lod_perf",
         "font": "font.brush_geometry.hud",
-        "format": "LOD %.0f/%.0f SAVE %.0f",
+        "format": "PLOD %.0f/%.0f SAVE %.0f",
         "bindings": [
           { "type": "metric", "metric": "render.procedural_lod_reduced_per_frame" },
           { "type": "metric", "metric": "render.procedural_lod_candidates_per_frame" },
@@ -550,6 +550,22 @@
         ],
         "x": 0.985,
         "y": 0.368,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.model_lod_perf",
+        "font": "font.brush_geometry.hud",
+        "format": "MLOD %.0f/%.0f SAVE %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "render.model_lod_culled_per_frame" },
+          { "type": "metric", "metric": "render.model_lod_candidates_per_frame" },
+          { "type": "metric", "metric": "render.model_lod_triangles_saved_per_frame" }
+        ],
+        "x": 0.985,
+        "y": 0.396,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],
@@ -567,7 +583,7 @@
           { "type": "metric", "metric": "brush.compile_chunk_count" }
         ],
         "x": 0.985,
-        "y": 0.396,
+        "y": 0.424,
         "normalized": true,
         "align": "right",
         "color": [175, 220, 255, 220],

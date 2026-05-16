@@ -5180,6 +5180,34 @@ TEST(GameDataValidation, RejectsInvalidProceduralLodSettings)
     remove_test_dir(dir);
 }
 
+TEST(GameDataValidation, RejectsInvalidModelLodSettings)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_model_lod");
+    write_text(dir / "bad_model_lod.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Model LOD", "id": "test.bad_model_lod", "version": "0.1.0" },
+  "world": { "name": "world.bad_model_lod", "kind": "fixed_screen" },
+  "render": {
+    "model_lod_culling": true,
+    "model_lod_cull_pixels": -1.0
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_model_lod.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("model_lod_cull_pixels"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataValidation, RejectsInvalidUiTooling)
 {
     const std::filesystem::path dir = unique_test_dir("ui_tooling_validation");

@@ -1418,6 +1418,22 @@ static bool ui_tool_metric_to_string(const slayer3d_game_data_ui_metrics *metric
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_static_mesh_instances_batched_per_frame);
     else if (SDL_strcmp(metric, "render.static_mesh_draw_calls_saved_per_frame") == 0)
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_static_mesh_draw_calls_saved_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_candidates_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_candidates_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_reduced_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_reduced_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_authored_triangles_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_authored_triangles_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_resolved_triangles_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_resolved_triangles_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_triangles_saved_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_triangles_saved_per_frame);
+    else if (SDL_strcmp(metric, "render.model_lod_candidates_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_candidates_per_frame);
+    else if (SDL_strcmp(metric, "render.model_lod_culled_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_culled_per_frame);
+    else if (SDL_strcmp(metric, "render.model_lod_triangles_saved_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_triangles_saved_per_frame);
     else if (SDL_strcmp(metric, "render.depth_prepass_draws_per_frame") == 0)
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_draws_per_frame);
     else if (SDL_strcmp(metric, "render.depth_prepass_triangles_per_frame") == 0)

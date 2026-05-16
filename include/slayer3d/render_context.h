@@ -84,6 +84,12 @@ extern "C"
         Uint64 procedural_lod_resolved_triangles;
         /** @brief Approximate procedural triangles avoided by screen-space LOD. */
         Uint64 procedural_lod_triangles_saved;
+        /** @brief Model primitives eligible for screen-space LOD culling. */
+        Uint64 model_lod_candidates;
+        /** @brief Model primitives culled because they project below the authored LOD threshold. */
+        Uint64 model_lod_culled;
+        /** @brief Approximate model triangles avoided by screen-space LOD culling. */
+        Uint64 model_lod_triangles_saved;
         /** @brief Lit mesh draws skinned on the GPU by capable renderers. */
         Uint64 gpu_skinned_draws;
         /** @brief Vertices skinned on the GPU by capable renderers. */
