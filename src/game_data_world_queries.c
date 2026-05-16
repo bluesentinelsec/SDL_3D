@@ -655,38 +655,38 @@ static void free_brush_world_visibility_models(brush_world_runtime *world_runtim
 {
     if (world_runtime == NULL)
         return;
-    for (int i = 0; i < world_runtime->brush_render_model_count; ++i)
-        slayer3d_free_model(&world_runtime->brush_render_models[i]);
-    SDL_free(world_runtime->brush_render_models);
-    world_runtime->brush_render_models = NULL;
-    world_runtime->brush_render_model_count = 0;
-    for (int i = 0; i < world_runtime->chunk_render_model_count; ++i)
-        slayer3d_free_model(&world_runtime->chunk_render_models[i]);
-    SDL_free(world_runtime->chunk_render_models);
-    world_runtime->chunk_render_models = NULL;
-    world_runtime->chunk_render_model_count = 0;
+    for (int i = 0; i < world_runtime->artifacts.brush_render_model_count; ++i)
+        slayer3d_free_model(&world_runtime->artifacts.brush_render_models[i]);
+    SDL_free(world_runtime->artifacts.brush_render_models);
+    world_runtime->artifacts.brush_render_models = NULL;
+    world_runtime->artifacts.brush_render_model_count = 0;
+    for (int i = 0; i < world_runtime->artifacts.chunk_render_model_count; ++i)
+        slayer3d_free_model(&world_runtime->artifacts.chunk_render_models[i]);
+    SDL_free(world_runtime->artifacts.chunk_render_models);
+    world_runtime->artifacts.chunk_render_models = NULL;
+    world_runtime->artifacts.chunk_render_model_count = 0;
 }
 
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime)
 {
     if (world_runtime == NULL)
         return;
-    SDL_free(world_runtime->visibility_grid_solid);
+    SDL_free(world_runtime->artifacts.visibility_grid_solid);
     for (int i = 0; i < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++i)
     {
-        SDL_free(world_runtime->visibility_grid_visible_cache[i]);
-        world_runtime->visibility_grid_visible_cache[i] = NULL;
-        world_runtime->visibility_grid_visible_cache_start[i] = -1;
-        world_runtime->visibility_grid_visible_cache_tick[i] = 0u;
+        SDL_free(world_runtime->artifacts.visibility_grid_visible_cache[i]);
+        world_runtime->artifacts.visibility_grid_visible_cache[i] = NULL;
+        world_runtime->artifacts.visibility_grid_visible_cache_start[i] = -1;
+        world_runtime->artifacts.visibility_grid_visible_cache_tick[i] = 0u;
     }
-    world_runtime->visibility_grid_solid = NULL;
-    world_runtime->visibility_grid_visible_cache_clock = 0u;
-    world_runtime->visibility_cell_size = 0.0f;
-    world_runtime->visibility_grid_dim_x = 0;
-    world_runtime->visibility_grid_dim_y = 0;
-    world_runtime->visibility_grid_dim_z = 0;
-    world_runtime->visibility_grid_cell_count = 0;
-    SDL_zero(world_runtime->visibility_grid_bounds);
+    world_runtime->artifacts.visibility_grid_solid = NULL;
+    world_runtime->artifacts.visibility_grid_visible_cache_clock = 0u;
+    world_runtime->artifacts.visibility_cell_size = 0.0f;
+    world_runtime->artifacts.visibility_grid_dim_x = 0;
+    world_runtime->artifacts.visibility_grid_dim_y = 0;
+    world_runtime->artifacts.visibility_grid_dim_z = 0;
+    world_runtime->artifacts.visibility_grid_cell_count = 0;
+    SDL_zero(world_runtime->artifacts.visibility_grid_bounds);
 }
 
 static bool brush_point_inside_contents(const slayer3d_game_data_brush *brush, slayer3d_vec3 point,
@@ -788,15 +788,15 @@ bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime)
         }
     }
 
-    world_runtime->visibility_grid_bounds = bounds;
-    world_runtime->visibility_cell_size = cell_size;
-    world_runtime->visibility_grid_dim_x = dim_x;
-    world_runtime->visibility_grid_dim_y = dim_y;
-    world_runtime->visibility_grid_dim_z = dim_z;
-    world_runtime->visibility_grid_cell_count = cell_count;
-    world_runtime->visibility_grid_solid = solid;
+    world_runtime->artifacts.visibility_grid_bounds = bounds;
+    world_runtime->artifacts.visibility_cell_size = cell_size;
+    world_runtime->artifacts.visibility_grid_dim_x = dim_x;
+    world_runtime->artifacts.visibility_grid_dim_y = dim_y;
+    world_runtime->artifacts.visibility_grid_dim_z = dim_z;
+    world_runtime->artifacts.visibility_grid_cell_count = cell_count;
+    world_runtime->artifacts.visibility_grid_solid = solid;
     for (int i = 0; i < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++i)
-        world_runtime->visibility_grid_visible_cache_start[i] = -1;
+        world_runtime->artifacts.visibility_grid_visible_cache_start[i] = -1;
     return true;
 }
 
@@ -871,6 +871,7 @@ bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, c
     }
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    const slayer3d_model *old_render_model = world->render_model;
     char compile_error[256] = {0};
     if (!slayer3d_game_data_brush_world_build_acceleration_checked(world, compile_error, sizeof(compile_error)))
     {
@@ -926,29 +927,30 @@ bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, c
         free_brush_world_model_array(brush_render_models, brush_render_model_count);
         free_brush_world_model_array(chunk_render_models, chunk_render_model_count);
         free_brush_world_visibility_grid(&staged_grid);
+        world->render_model = old_render_model;
         return false;
     }
 
-    slayer3d_free_model(&world_runtime->render_model);
+    slayer3d_free_model(&world_runtime->artifacts.render_model);
     free_brush_world_visibility_models(world_runtime);
     free_brush_world_visibility_grid(world_runtime);
 
-    world_runtime->render_model = render_model;
-    world_runtime->brush_render_models = brush_render_models;
-    world_runtime->brush_render_model_count = brush_render_model_count;
-    world_runtime->chunk_render_models = chunk_render_models;
-    world_runtime->chunk_render_model_count = chunk_render_model_count;
-    world_runtime->visibility_grid_bounds = staged_grid.visibility_grid_bounds;
-    world_runtime->visibility_cell_size = staged_grid.visibility_cell_size;
-    world_runtime->visibility_grid_dim_x = staged_grid.visibility_grid_dim_x;
-    world_runtime->visibility_grid_dim_y = staged_grid.visibility_grid_dim_y;
-    world_runtime->visibility_grid_dim_z = staged_grid.visibility_grid_dim_z;
-    world_runtime->visibility_grid_cell_count = staged_grid.visibility_grid_cell_count;
-    world_runtime->visibility_grid_solid = staged_grid.visibility_grid_solid;
+    world_runtime->artifacts.render_model = render_model;
+    world_runtime->artifacts.brush_render_models = brush_render_models;
+    world_runtime->artifacts.brush_render_model_count = brush_render_model_count;
+    world_runtime->artifacts.chunk_render_models = chunk_render_models;
+    world_runtime->artifacts.chunk_render_model_count = chunk_render_model_count;
+    world_runtime->artifacts.visibility_grid_bounds = staged_grid.artifacts.visibility_grid_bounds;
+    world_runtime->artifacts.visibility_cell_size = staged_grid.artifacts.visibility_cell_size;
+    world_runtime->artifacts.visibility_grid_dim_x = staged_grid.artifacts.visibility_grid_dim_x;
+    world_runtime->artifacts.visibility_grid_dim_y = staged_grid.artifacts.visibility_grid_dim_y;
+    world_runtime->artifacts.visibility_grid_dim_z = staged_grid.artifacts.visibility_grid_dim_z;
+    world_runtime->artifacts.visibility_grid_cell_count = staged_grid.artifacts.visibility_grid_cell_count;
+    world_runtime->artifacts.visibility_grid_solid = staged_grid.artifacts.visibility_grid_solid;
     for (int i = 0; i < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++i)
-        world_runtime->visibility_grid_visible_cache_start[i] = -1;
+        world_runtime->artifacts.visibility_grid_visible_cache_start[i] = -1;
 
-    world->render_model = &world_runtime->render_model;
+    world->render_model = &world_runtime->artifacts.render_model;
     world->compile_artifact_hash = slayer3d_game_data_brush_world_compute_compile_artifact_hash(world);
     return true;
 }
