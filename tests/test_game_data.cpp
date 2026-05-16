@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -13655,6 +13656,100 @@ TEST(GameDataRuntime, BrushRenderCompileCullsFullyHiddenAdjacentSolidFaces)
     EXPECT_EQ(diagnostics.compile_culled_face_count, 2u);
     EXPECT_EQ(diagnostics.compile_rendered_face_count, 10u);
     EXPECT_EQ(diagnostics.compile_triangle_count, 20u);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, BrushCompileChunksCullCollisionBroadPhase)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_chunks");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [{ "world": "brush.chunked", "position": [0.0, 0.0, 0.0], "acceleration": true }]
+  }
+})json");
+
+    std::ostringstream brushes;
+    for (int i = 0; i < 16; ++i)
+    {
+        const int min_x = i * 4;
+        const int max_x = min_x + 1;
+        if (i > 0)
+            brushes << ",\n";
+        brushes << R"json(        {
+          "name": "brush.box.)json"
+                << i << R"json(",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance": )json"
+                << max_x << R"json( }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": )json"
+                << -min_x << R"json( }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance": 1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance": 0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance": 1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance": 0 }, "material": "mat.wall" }
+          ]
+        })json";
+    }
+
+    const std::string game_json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Compile Chunk Test" },
+  "world": { "name": "world.chunked", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.chunked",
+      "visibility_cell_size": 1.0,
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+)json") + brushes.str() + R"json(
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+    write_text(dir / "chunked.game.json", game_json.c_str());
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "chunked.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.chunked", &world));
+    EXPECT_EQ(world.brush_count, 16);
+    EXPECT_GT(world.compile_chunk_count, 1);
+    EXPECT_EQ(world.compile_chunk_brush_index_count, 16);
+
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
+    slayer3d_game_data_brush_trace_desc trace{};
+    trace.start = slayer3d_vec3_make(-1.0f, 0.5f, 0.5f);
+    trace.end = slayer3d_vec3_make(0.5f, 0.5f, 0.5f);
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    slayer3d_game_data_brush_trace_result result{};
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.chunked", &trace, &result));
+    ASSERT_TRUE(result.hit);
+    EXPECT_EQ(result.brush_index, 0);
+
+    slayer3d_game_data_brush_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.compile_chunk_count, static_cast<Uint64>(world.compile_chunk_count));
+    EXPECT_EQ(diagnostics.collision_chunk_count, static_cast<Uint64>(world.compile_chunk_count));
+    EXPECT_GT(diagnostics.collision_chunk_reject_count, 0u);
+    EXPECT_LT(diagnostics.brush_count, static_cast<Uint64>(world.brush_count));
+    EXPECT_EQ(diagnostics.collision_candidate_count, 1u);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

@@ -307,6 +307,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         }
         SDL_free(runtime->brush_worlds[i].brush_render_models);
         free_brush_world_visibility_grid(&runtime->brush_worlds[i]);
+        slayer3d_game_data_brush_world_free_compile_chunks(world);
         SDL_free(runtime->brush_worlds[i].editor_source_path);
         free_editor_metadata(&world->editor);
         SDL_free((void *)world->name);

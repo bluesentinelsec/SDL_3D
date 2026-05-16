@@ -542,12 +542,13 @@
       {
         "name": "ui.brush_geometry.brush_compile",
         "font": "font.brush_geometry.hud",
-        "format": "COMPILE %llu/%llu CULL %llu TRI %llu",
+        "format": "COMPILE %llu/%llu CULL %llu TRI %llu CHUNK %llu",
         "bindings": [
           { "type": "metric", "metric": "brush.compile_rendered_face_count" },
           { "type": "metric", "metric": "brush.compile_face_count" },
           { "type": "metric", "metric": "brush.compile_culled_face_count" },
-          { "type": "metric", "metric": "brush.compile_triangle_count" }
+          { "type": "metric", "metric": "brush.compile_triangle_count" },
+          { "type": "metric", "metric": "brush.compile_chunk_count" }
         ],
         "x": 0.985,
         "y": 0.368,

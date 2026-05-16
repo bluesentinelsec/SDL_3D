@@ -672,9 +672,13 @@ ambiguous cases fail open. Runtime descriptors expose
 `compile_face_count`, `compile_rendered_face_count`,
 `compile_culled_face_count`, and `compile_triangle_count` for tests, editor
 diagnostics, and performance audits. During load, brush worlds also precompute
-local AABBs for each brush and for the whole world. When
+local AABBs for each brush and for the whole world, then build spatial compile
+chunks from those bounds. Compile chunks preserve authored brushes as the source
+of truth while grouping them into optimized runtime broad-phase artifacts for
+collision traces, editor diagnostics, and future render/collision chunk
+generation. When
 `acceleration` is enabled on a scene instance, active-scene trace queries use
-those bounds as a broad phase before exact plane clipping.
+those chunks and bounds as a broad phase before exact plane clipping.
 
 Collision, weapon, sensor, and editor systems can query brush worlds through
 the generic trace helpers. `slayer3d_game_data_trace_brush_world()` traces in a
@@ -696,7 +700,11 @@ meshes that use the same frustum culling path as other models.
 Compile-time brush diagnostics are also exposed as `brush.compile_face_count`,
 `brush.compile_rendered_face_count`, `brush.compile_culled_face_count`, and
 `brush.compile_triangle_count` so profiling overlays can verify how much
-hidden interior surface area was removed before runtime rendering.
+hidden interior surface area was removed before runtime rendering. The compile
+pipeline also exposes `brush.compile_chunk_count`,
+`brush.collision_chunk_count`, and `brush.collision_chunk_reject_count` so tests
+and profiling overlays can confirm trace broad-phase chunking is active and
+rejecting irrelevant spatial groups before exact brush collision.
 Visibility-grid diagnostics also expose cache hit/miss counters so scenes can
 confirm automatic occlusion is reusing the visible-cell set while the camera
 remains in the same coarse grid cell.
@@ -2665,7 +2673,11 @@ Supported brush metrics are `brush.trace_count`,
 `brush.bounds_reject_count`, `brush.collision_candidate_count`,
 `brush.hit_count`, `brush.render_mesh_submissions`,
 `brush.render_mesh_culled`, `brush.render_mesh_draws`, and
-`brush.render_triangles_submitted`, plus visibility counters
+`brush.render_triangles_submitted`, compile counters
+`brush.compile_face_count`, `brush.compile_rendered_face_count`,
+`brush.compile_culled_face_count`, `brush.compile_triangle_count`,
+`brush.compile_chunk_count`, `brush.collision_chunk_count`, and
+`brush.collision_chunk_reject_count`, plus visibility counters
 `brush.visibility_brush_candidates`, `brush.visibility_brush_visible`,
 `brush.visibility_brush_occluded`, `brush.visibility_triangles_culled`,
 `brush.visibility_grid_cache_hits`, and

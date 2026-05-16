@@ -790,6 +790,12 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
                        world->name != NULL ? world->name : "<unnamed>");
             return false;
         }
+        if (!slayer3d_game_data_brush_world_build_compile_chunks(world))
+        {
+            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' spatial chunks",
+                       world->name != NULL ? world->name : "<unnamed>");
+            return false;
+        }
     }
     return true;
 }

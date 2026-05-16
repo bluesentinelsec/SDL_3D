@@ -353,6 +353,187 @@ bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_
     return true;
 }
 
+void slayer3d_game_data_brush_world_free_compile_chunks(slayer3d_game_data_brush_world *world)
+{
+    if (world == NULL)
+        return;
+    SDL_free((void *)world->compile_chunks);
+    SDL_free((void *)world->compile_chunk_brush_indices);
+    world->compile_chunks = NULL;
+    world->compile_chunk_count = 0;
+    world->compile_chunk_brush_indices = NULL;
+    world->compile_chunk_brush_index_count = 0;
+    world->compile_chunk_cell_size = 0.0f;
+}
+
+static int brush_chunk_coord(float value, float min_value, float cell_size, int dim)
+{
+    if (cell_size <= 0.0f || dim <= 0)
+        return 0;
+    return SDL_clamp((int)SDL_floorf((value - min_value) / cell_size), 0, dim - 1);
+}
+
+static int brush_chunk_index_for_bounds(const slayer3d_bounding_box *world_bounds,
+                                        const slayer3d_bounding_box *brush_bounds, float cell_size, int dim_x,
+                                        int dim_y, int dim_z)
+{
+    if (world_bounds == NULL || brush_bounds == NULL)
+        return 0;
+    const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(brush_bounds->min, brush_bounds->max), 0.5f);
+    const int x = brush_chunk_coord(center.x, world_bounds->min.x, cell_size, dim_x);
+    const int y = brush_chunk_coord(center.y, world_bounds->min.y, cell_size, dim_y);
+    const int z = brush_chunk_coord(center.z, world_bounds->min.z, cell_size, dim_z);
+    return x + y * dim_x + z * dim_x * dim_y;
+}
+
+static void brush_chunk_add_bounds(slayer3d_game_data_brush_compile_chunk *chunk, slayer3d_bounding_box bounds)
+{
+    if (chunk == NULL)
+        return;
+    if (!chunk->has_bounds)
+    {
+        chunk->bounds = bounds;
+        chunk->has_bounds = true;
+        return;
+    }
+    chunk->bounds.min.x = SDL_min(chunk->bounds.min.x, bounds.min.x);
+    chunk->bounds.min.y = SDL_min(chunk->bounds.min.y, bounds.min.y);
+    chunk->bounds.min.z = SDL_min(chunk->bounds.min.z, bounds.min.z);
+    chunk->bounds.max.x = SDL_max(chunk->bounds.max.x, bounds.max.x);
+    chunk->bounds.max.y = SDL_max(chunk->bounds.max.y, bounds.max.y);
+    chunk->bounds.max.z = SDL_max(chunk->bounds.max.z, bounds.max.z);
+}
+
+bool slayer3d_game_data_brush_world_build_compile_chunks(slayer3d_game_data_brush_world *world)
+{
+    static const int max_chunk_cells = 4096;
+    static const float min_chunk_cell_size = 1.0f;
+    if (world == NULL)
+        return false;
+    if (!world->has_bounds || world->brush_count <= 0)
+    {
+        slayer3d_game_data_brush_world_free_compile_chunks(world);
+        return true;
+    }
+
+    const float largest_extent =
+        SDL_max(world->bounds.max.x - world->bounds.min.x,
+                SDL_max(world->bounds.max.y - world->bounds.min.y, world->bounds.max.z - world->bounds.min.z));
+    float cell_size = SDL_max(min_chunk_cell_size, SDL_max(world->visibility_cell_size * 4.0f, largest_extent / 16.0f));
+    int dim_x = 1;
+    int dim_y = 1;
+    int dim_z = 1;
+    int cell_count = 1;
+    for (;;)
+    {
+        dim_x = SDL_max(1, (int)SDL_ceilf((world->bounds.max.x - world->bounds.min.x) / cell_size));
+        dim_y = SDL_max(1, (int)SDL_ceilf((world->bounds.max.y - world->bounds.min.y) / cell_size));
+        dim_z = SDL_max(1, (int)SDL_ceilf((world->bounds.max.z - world->bounds.min.z) / cell_size));
+        if (dim_x <= 0 || dim_y <= 0 || dim_z <= 0)
+            return false;
+        if (dim_x <= max_chunk_cells / SDL_max(dim_y, 1) / SDL_max(dim_z, 1))
+        {
+            cell_count = dim_x * dim_y * dim_z;
+            if (cell_count > 0 && cell_count <= max_chunk_cells)
+                break;
+        }
+        cell_size *= 2.0f;
+        if (cell_size > largest_extent + min_chunk_cell_size + 1.0f)
+        {
+            dim_x = dim_y = dim_z = 1;
+            cell_count = 1;
+            break;
+        }
+    }
+
+    int *cell_counts = (int *)SDL_calloc((size_t)cell_count, sizeof(*cell_counts));
+    int *cell_write_offsets = (int *)SDL_calloc((size_t)cell_count, sizeof(*cell_write_offsets));
+    int *cell_to_chunk = (int *)SDL_malloc((size_t)cell_count * sizeof(*cell_to_chunk));
+    if (cell_counts == NULL || cell_write_offsets == NULL || cell_to_chunk == NULL)
+    {
+        SDL_free(cell_counts);
+        SDL_free(cell_write_offsets);
+        SDL_free(cell_to_chunk);
+        return false;
+    }
+    for (int i = 0; i < cell_count; ++i)
+        cell_to_chunk[i] = -1;
+
+    int chunk_brush_count = 0;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if (!brush->has_bounds)
+            continue;
+        const int cell = brush_chunk_index_for_bounds(&world->bounds, &brush->bounds, cell_size, dim_x, dim_y, dim_z);
+        if (cell < 0 || cell >= cell_count)
+            continue;
+        ++cell_counts[cell];
+        ++chunk_brush_count;
+    }
+
+    int chunk_count = 0;
+    for (int cell = 0; cell < cell_count; ++cell)
+    {
+        if (cell_counts[cell] > 0)
+            cell_to_chunk[cell] = chunk_count++;
+    }
+
+    slayer3d_game_data_brush_compile_chunk *chunks =
+        chunk_count > 0 ? (slayer3d_game_data_brush_compile_chunk *)SDL_calloc((size_t)chunk_count, sizeof(*chunks))
+                        : NULL;
+    int *chunk_indices =
+        chunk_brush_count > 0 ? (int *)SDL_malloc((size_t)chunk_brush_count * sizeof(*chunk_indices)) : NULL;
+    if ((chunks == NULL && chunk_count > 0) || (chunk_indices == NULL && chunk_brush_count > 0))
+    {
+        SDL_free(cell_counts);
+        SDL_free(cell_write_offsets);
+        SDL_free(cell_to_chunk);
+        SDL_free(chunks);
+        SDL_free(chunk_indices);
+        return false;
+    }
+
+    int offset = 0;
+    for (int cell = 0; cell < cell_count; ++cell)
+    {
+        const int chunk_index = cell_to_chunk[cell];
+        if (chunk_index < 0)
+            continue;
+        chunks[chunk_index].brush_indices = &chunk_indices[offset];
+        chunks[chunk_index].brush_count = cell_counts[cell];
+        cell_write_offsets[cell] = offset;
+        offset += cell_counts[cell];
+    }
+
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if (!brush->has_bounds)
+            continue;
+        const int cell = brush_chunk_index_for_bounds(&world->bounds, &brush->bounds, cell_size, dim_x, dim_y, dim_z);
+        if (cell < 0 || cell >= cell_count || cell_to_chunk[cell] < 0)
+            continue;
+        const int write = cell_write_offsets[cell]++;
+        chunk_indices[write] = brush_index;
+        slayer3d_game_data_brush_compile_chunk *chunk = &chunks[cell_to_chunk[cell]];
+        chunk->contents_mask |= brush->contents;
+        brush_chunk_add_bounds(chunk, brush->bounds);
+    }
+
+    slayer3d_game_data_brush_world_free_compile_chunks(world);
+    world->compile_chunks = chunks;
+    world->compile_chunk_count = chunk_count;
+    world->compile_chunk_brush_indices = chunk_indices;
+    world->compile_chunk_brush_index_count = chunk_brush_count;
+    world->compile_chunk_cell_size = cell_size;
+
+    SDL_free(cell_counts);
+    SDL_free(cell_write_offsets);
+    SDL_free(cell_to_chunk);
+    return true;
+}
+
 static bool brush_model_copy_materials(const slayer3d_game_data_brush_world *world, slayer3d_model *model)
 {
     if (world == NULL || model == NULL || world->material_count <= 0)
@@ -919,6 +1100,86 @@ static bool brush_trace_one_brush(const slayer3d_game_data_brush *brush,
     return false;
 }
 
+static void brush_trace_consider_brush(const slayer3d_game_data_brush_world *world,
+                                       const slayer3d_game_data_brush_trace_desc *desc, int brush_index,
+                                       const slayer3d_bounding_box *trace_bounds, bool acceleration_enabled,
+                                       slayer3d_game_data_brush_trace_result *closest,
+                                       slayer3d_game_data_brush_diagnostics *diagnostics)
+{
+    if (world == NULL || desc == NULL || closest == NULL || brush_index < 0 || brush_index >= world->brush_count)
+        return;
+
+    const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+    if (diagnostics != NULL)
+        ++diagnostics->brush_count;
+    if ((brush->contents & desc->contents_mask) == 0u)
+    {
+        if (diagnostics != NULL)
+            ++diagnostics->contents_reject_count;
+        return;
+    }
+    if (acceleration_enabled && trace_bounds != NULL && brush->has_bounds &&
+        !slayer3d_check_aabb_aabb(*trace_bounds, brush->bounds))
+    {
+        if (diagnostics != NULL)
+            ++diagnostics->bounds_reject_count;
+        return;
+    }
+    if (diagnostics != NULL)
+        ++diagnostics->collision_candidate_count;
+    slayer3d_game_data_brush_trace_result candidate = slayer3d_game_data_brush_trace_default_result(desc);
+    if (!brush_trace_one_brush(brush, desc, &candidate))
+        return;
+    if (!closest->hit || candidate.fraction < closest->fraction || (candidate.start_solid && !closest->start_solid))
+    {
+        *closest = candidate;
+        closest->world_name = world->name;
+        closest->brush_name = brush->name;
+        closest->brush_index = brush_index;
+        closest->contents = brush->contents;
+        if (closest->face_index >= 0 && closest->face_index < brush->face_count)
+        {
+            closest->material_name = brush->faces[closest->face_index].material_name;
+            closest->surface_flags = brush->faces[closest->face_index].surface_flags;
+        }
+        else
+        {
+            closest->material_name = NULL;
+            closest->surface_flags = 0u;
+        }
+    }
+}
+
+static bool brush_world_trace_chunks(const slayer3d_game_data_brush_world *world,
+                                     const slayer3d_game_data_brush_trace_desc *desc,
+                                     const slayer3d_bounding_box *trace_bounds,
+                                     slayer3d_game_data_brush_trace_result *closest,
+                                     slayer3d_game_data_brush_diagnostics *diagnostics)
+{
+    if (world == NULL || desc == NULL || trace_bounds == NULL || closest == NULL || world->compile_chunks == NULL ||
+        world->compile_chunk_count <= 0)
+    {
+        return false;
+    }
+
+    for (int chunk_index = 0; chunk_index < world->compile_chunk_count; ++chunk_index)
+    {
+        const slayer3d_game_data_brush_compile_chunk *chunk = &world->compile_chunks[chunk_index];
+        if (diagnostics != NULL)
+            ++diagnostics->collision_chunk_count;
+        if ((chunk->contents_mask & desc->contents_mask) == 0u ||
+            (chunk->has_bounds && !slayer3d_check_aabb_aabb(*trace_bounds, chunk->bounds)))
+        {
+            if (diagnostics != NULL)
+                ++diagnostics->collision_chunk_reject_count;
+            continue;
+        }
+        for (int i = 0; i < chunk->brush_count; ++i)
+            brush_trace_consider_brush(world, desc, chunk->brush_indices[i], trace_bounds, true, closest, diagnostics);
+    }
+    return true;
+}
+
 bool slayer3d_game_data_brush_world_trace_local(const slayer3d_game_data_brush_world *world,
                                                 const slayer3d_game_data_brush_trace_desc *desc,
                                                 slayer3d_game_data_brush_trace_result *out_result)
@@ -939,47 +1200,12 @@ bool slayer3d_game_data_brush_world_trace_local_with_diagnostics(const slayer3d_
         ++diagnostics->trace_count;
 
     const slayer3d_bounding_box trace_bounds = slayer3d_game_data_brush_trace_bounds(desc);
-
-    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    const bool used_chunks =
+        acceleration_enabled && brush_world_trace_chunks(world, desc, &trace_bounds, &closest, diagnostics);
+    for (int brush_index = 0; !used_chunks && brush_index < world->brush_count; ++brush_index)
     {
-        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
-        if (diagnostics != NULL)
-            ++diagnostics->brush_count;
-        if ((brush->contents & desc->contents_mask) == 0u)
-        {
-            if (diagnostics != NULL)
-                ++diagnostics->contents_reject_count;
-            continue;
-        }
-        if (acceleration_enabled && brush->has_bounds && !slayer3d_check_aabb_aabb(trace_bounds, brush->bounds))
-        {
-            if (diagnostics != NULL)
-                ++diagnostics->bounds_reject_count;
-            continue;
-        }
-        if (diagnostics != NULL)
-            ++diagnostics->collision_candidate_count;
-        slayer3d_game_data_brush_trace_result candidate = slayer3d_game_data_brush_trace_default_result(desc);
-        if (!brush_trace_one_brush(brush, desc, &candidate))
-            continue;
-        if (!closest.hit || candidate.fraction < closest.fraction || (candidate.start_solid && !closest.start_solid))
-        {
-            closest = candidate;
-            closest.world_name = world->name;
-            closest.brush_name = brush->name;
-            closest.brush_index = brush_index;
-            closest.contents = brush->contents;
-            if (closest.face_index >= 0 && closest.face_index < brush->face_count)
-            {
-                closest.material_name = brush->faces[closest.face_index].material_name;
-                closest.surface_flags = brush->faces[closest.face_index].surface_flags;
-            }
-            else
-            {
-                closest.material_name = NULL;
-                closest.surface_flags = 0u;
-            }
-        }
+        brush_trace_consider_brush(world, desc, brush_index, &trace_bounds, acceleration_enabled, &closest,
+                                   diagnostics);
     }
 
     *out_result = closest;

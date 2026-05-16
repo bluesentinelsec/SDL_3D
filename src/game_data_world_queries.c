@@ -992,7 +992,8 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
         slayer3d_game_data_brush_world_build_acceleration(world) &&
         slayer3d_game_data_brush_world_compile_render_model(world, &render_model) &&
         compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count) &&
-        compile_brush_world_visibility_grid(world_runtime);
+        compile_brush_world_visibility_grid(world_runtime) &&
+        slayer3d_game_data_brush_world_build_compile_chunks(world);
     if (!rebuilt)
     {
         slayer3d_free_model(&render_model);
@@ -2214,6 +2215,7 @@ bool slayer3d_game_data_get_brush_diagnostics(const slayer3d_game_data_runtime *
         out_diagnostics->compile_rendered_face_count += (Uint64)SDL_max(world->compile_rendered_face_count, 0);
         out_diagnostics->compile_culled_face_count += (Uint64)SDL_max(world->compile_culled_face_count, 0);
         out_diagnostics->compile_triangle_count += (Uint64)SDL_max(world->compile_triangle_count, 0);
+        out_diagnostics->compile_chunk_count += (Uint64)SDL_max(world->compile_chunk_count, 0);
     }
     return true;
 }
@@ -4716,7 +4718,8 @@ static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
     SDL_zero(render_model);
     if (!slayer3d_game_data_brush_world_compile_render_model(world, &render_model) ||
         !compile_brush_world_visibility_models(world_runtime, &brush_render_models, &brush_render_model_count) ||
-        !compile_brush_world_visibility_grid(world_runtime))
+        !compile_brush_world_visibility_grid(world_runtime) ||
+        !slayer3d_game_data_brush_world_build_compile_chunks(world))
     {
         slayer3d_free_model(&render_model);
         for (int i = 0; i < brush_render_model_count; ++i)

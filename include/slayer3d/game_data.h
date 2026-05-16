@@ -494,6 +494,21 @@ extern "C"
         slayer3d_game_data_editor_metadata editor;
     } slayer3d_game_data_brush;
 
+    /** @brief Runtime-compiled brush-world chunk for broad-phase collision/render tooling. */
+    typedef struct slayer3d_game_data_brush_compile_chunk
+    {
+        /** @brief Local-space bounds spanning all brushes assigned to this chunk. */
+        slayer3d_bounding_box bounds;
+        /** @brief True when @p bounds is valid. */
+        bool has_bounds;
+        /** @brief Union of contents bits from brushes assigned to this chunk. */
+        unsigned int contents_mask;
+        /** @brief Indices into the owning brush world's authored brush array. */
+        const int *brush_indices;
+        /** @brief Number of entries in @p brush_indices. */
+        int brush_count;
+    } slayer3d_game_data_brush_compile_chunk;
+
     /** @brief Runtime-owned native brush world. */
     typedef struct slayer3d_game_data_brush_world
     {
@@ -523,6 +538,16 @@ extern "C"
         int compile_culled_face_count;
         /** @brief Triangles emitted to the compiled render model after compile-time face culling. */
         int compile_triangle_count;
+        /** @brief Spatial compile chunks used by broad-phase collision/tooling queries. */
+        const slayer3d_game_data_brush_compile_chunk *compile_chunks;
+        /** @brief Number of entries in @p compile_chunks. */
+        int compile_chunk_count;
+        /** @brief Contiguous storage backing each chunk's brush_indices pointer. */
+        const int *compile_chunk_brush_indices;
+        /** @brief Number of entries in @p compile_chunk_brush_indices. */
+        int compile_chunk_brush_index_count;
+        /** @brief Local-space cell size used to build the compile chunks. */
+        float compile_chunk_cell_size;
         /** @brief Precomputed local-space bounds spanning all bounded brushes. */
         slayer3d_bounding_box bounds;
         /** @brief True when @p bounds is valid. */
@@ -646,6 +671,12 @@ extern "C"
         Uint64 compile_culled_face_count;
         /** @brief Triangles emitted by brush-world compile steps after compile-time face culling. */
         Uint64 compile_triangle_count;
+        /** @brief Spatial chunks emitted by brush-world compile steps. */
+        Uint64 compile_chunk_count;
+        /** @brief Collision chunks tested by brush-world trace broad-phase. */
+        Uint64 collision_chunk_count;
+        /** @brief Collision chunks rejected by bounds or contents masks. */
+        Uint64 collision_chunk_reject_count;
         /** @brief Renderable brushes tested by brush-world visibility culling. */
         Uint64 visibility_brush_candidates;
         /** @brief Renderable brushes accepted by brush-world visibility culling. */
