@@ -25,6 +25,8 @@
 /* ------------------------------------------------------------------ */
 
 #define SLAYER3D_MAX_POINT_SHADOWS 2
+#define SLAYER3D_SKIN_PALETTE_BINDING 1
+#define SLAYER3D_GPU_SKINNING_PALETTE_MATRICES 256
 
 typedef struct slayer3d_gl_tex_entry
 {
@@ -143,6 +145,8 @@ typedef struct slayer3d_draw_entry
     const float *joint_weights;
     float *joint_matrices;
     int joint_count;
+    int joint_palette_offset;
+    bool use_joint_palette_buffer;
     bool gpu_skinned;
 } slayer3d_draw_entry;
 
@@ -252,6 +256,8 @@ struct slayer3d_gl_context
     GLint pbr_normal_matrix_loc;
     GLint pbr_use_instancing_loc;
     GLint pbr_use_skinning_loc;
+    GLint pbr_use_skin_palette_loc;
+    GLint pbr_joint_palette_offset_loc;
     GLint pbr_joint_matrices_loc;
     GLint pbr_texture_loc;
     GLint pbr_has_texture_loc;
@@ -291,6 +297,9 @@ struct slayer3d_gl_context
 
     /* Scene UBO */
     GLuint scene_ubo;
+    GLuint skin_palette_ubo;
+    float skin_palette_matrices[SLAYER3D_GPU_SKINNING_PALETTE_MATRICES * 16];
+    int skin_palette_matrix_count;
 
     /* Lit streaming buffers */
     GLuint lit_vao;
@@ -320,6 +329,8 @@ struct slayer3d_gl_context
     GLint shadow_model_loc;
     GLint shadow_use_instancing_loc;
     GLint shadow_use_skinning_loc;
+    GLint shadow_use_skin_palette_loc;
+    GLint shadow_joint_palette_offset_loc;
     GLint shadow_joint_matrices_loc;
     GLuint shadow_vao;
     GLuint shadow_position_vbo;
@@ -354,6 +365,8 @@ struct slayer3d_gl_context
     GLint point_shadow_light_pos_loc;
     GLint point_shadow_far_loc;
     GLint point_shadow_use_skinning_loc;
+    GLint point_shadow_use_skin_palette_loc;
+    GLint point_shadow_joint_palette_offset_loc;
     GLint point_shadow_joint_matrices_loc;
     int point_shadow_light_index[SLAYER3D_MAX_POINT_SHADOWS];
     float point_shadow_far_plane[SLAYER3D_MAX_POINT_SHADOWS];
@@ -466,6 +479,7 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "\n"
                                  "#define MAX_LIGHTS 8\n"
                                  "#define MAX_SKIN_JOINTS 64\n"
+                                 "#define MAX_SKIN_PALETTE_MATRICES 256\n"
                                  "struct Light {\n"
                                  "    int type;\n"
                                  "    vec3 position;\n"
@@ -495,13 +509,26 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "uniform mat3 uNormalMatrix;\n"
                                  "uniform int uUseInstancing;\n"
                                  "uniform int uUseSkinning;\n"
+                                 "uniform int uUseSkinPalette;\n"
+                                 "uniform int uJointPaletteOffset;\n"
                                  "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
+                                 "layout(std140) uniform SkinPaletteUBO {\n"
+                                 "    mat4 uSkinPalette[MAX_SKIN_PALETTE_MATRICES];\n"
+                                 "};\n"
                                  "\n"
                                  "out vec3 vWorldPos;\n"
                                  "out vec3 vWorldNormal;\n"
                                  "out vec2 vTexCoord;\n"
                                  "out vec2 vLightmapUV;\n"
                                  "out vec4 vColor;\n"
+                                 "\n"
+                                 "mat4 skinJointMatrix(float jointIndex) {\n"
+                                 "    int uniformJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_JOINTS - 1)));\n"
+                                 "    int paletteJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_PALETTE_MATRICES - "
+                                 "1)));\n"
+                                 "    return (uUseSkinPalette != 0) ? uSkinPalette[uJointPaletteOffset + "
+                                 "paletteJoint] : uJointMatrices[uniformJoint];\n"
+                                 "}\n"
                                  "\n"
                                  "void main() {\n"
                                  "    mat4 model = (uUseInstancing != 0) ? mat4(aInstanceModel0, aInstanceModel1, "
@@ -511,14 +538,10 @@ static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
                                  "    vec4 localPos = vec4(aPosition, 1.0);\n"
                                  "    vec3 localNormal = aNormal;\n"
                                  "    if (uUseSkinning != 0) {\n"
-                                 "        mat4 skin = aJointWeights.x * uJointMatrices[int(clamp(aJointIndices.x, "
-                                 "0.0, float(MAX_SKIN_JOINTS - 1)))]\n"
-                                 "                  + aJointWeights.y * uJointMatrices[int(clamp(aJointIndices.y, "
-                                 "0.0, float(MAX_SKIN_JOINTS - 1)))]\n"
-                                 "                  + aJointWeights.z * uJointMatrices[int(clamp(aJointIndices.z, "
-                                 "0.0, float(MAX_SKIN_JOINTS - 1)))]\n"
-                                 "                  + aJointWeights.w * uJointMatrices[int(clamp(aJointIndices.w, "
-                                 "0.0, float(MAX_SKIN_JOINTS - 1)))];\n"
+                                 "        mat4 skin = aJointWeights.x * skinJointMatrix(aJointIndices.x)\n"
+                                 "                  + aJointWeights.y * skinJointMatrix(aJointIndices.y)\n"
+                                 "                  + aJointWeights.z * skinJointMatrix(aJointIndices.z)\n"
+                                 "                  + aJointWeights.w * skinJointMatrix(aJointIndices.w);\n"
                                  "        localPos = skin * localPos;\n"
                                  "        localNormal = mat3(skin) * localNormal;\n"
                                  "    }\n"
@@ -905,23 +928,31 @@ static const char k_shadow_vert[] =
     "layout(location = 12) in vec4 aJointIndices;\n"
     "layout(location = 13) in vec4 aJointWeights;\n"
     "#define MAX_SKIN_JOINTS 64\n"
+    "#define MAX_SKIN_PALETTE_MATRICES 256\n"
     "uniform mat4 uLightVP;\n"
     "uniform mat4 uModel;\n"
     "uniform int uUseInstancing;\n"
     "uniform int uUseSkinning;\n"
+    "uniform int uUseSkinPalette;\n"
+    "uniform int uJointPaletteOffset;\n"
     "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
+    "layout(std140) uniform SkinPaletteUBO {\n"
+    "    mat4 uSkinPalette[MAX_SKIN_PALETTE_MATRICES];\n"
+    "};\n"
+    "mat4 skinJointMatrix(float jointIndex) {\n"
+    "    int uniformJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_JOINTS - 1)));\n"
+    "    int paletteJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_PALETTE_MATRICES - 1)));\n"
+    "    return (uUseSkinPalette != 0) ? uSkinPalette[uJointPaletteOffset + paletteJoint] : "
+    "uJointMatrices[uniformJoint];\n"
+    "}\n"
     "void main() {\n"
     "    mat4 model = (uUseInstancing != 0) ? mat4(iModel0, iModel1, iModel2, iModel3) : uModel;\n"
     "    vec4 localPos = vec4(aPosition, 1.0);\n"
     "    if (uUseSkinning != 0) {\n"
-    "        mat4 skin = aJointWeights.x * uJointMatrices[int(clamp(aJointIndices.x, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))]\n"
-    "                  + aJointWeights.y * uJointMatrices[int(clamp(aJointIndices.y, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))]\n"
-    "                  + aJointWeights.z * uJointMatrices[int(clamp(aJointIndices.z, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))]\n"
-    "                  + aJointWeights.w * uJointMatrices[int(clamp(aJointIndices.w, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))];\n"
+    "        mat4 skin = aJointWeights.x * skinJointMatrix(aJointIndices.x)\n"
+    "                  + aJointWeights.y * skinJointMatrix(aJointIndices.y)\n"
+    "                  + aJointWeights.z * skinJointMatrix(aJointIndices.z)\n"
+    "                  + aJointWeights.w * skinJointMatrix(aJointIndices.w);\n"
     "        localPos = skin * localPos;\n"
     "    }\n"
     "    gl_Position = uLightVP * model * localPos;\n"
@@ -934,22 +965,30 @@ static const char k_point_shadow_vert[] =
     "layout(location = 12) in vec4 aJointIndices;\n"
     "layout(location = 13) in vec4 aJointWeights;\n"
     "#define MAX_SKIN_JOINTS 64\n"
+    "#define MAX_SKIN_PALETTE_MATRICES 256\n"
     "uniform mat4 model;\n"
     "uniform mat4 lightVP;\n"
     "uniform int uUseSkinning;\n"
+    "uniform int uUseSkinPalette;\n"
+    "uniform int uJointPaletteOffset;\n"
     "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
+    "layout(std140) uniform SkinPaletteUBO {\n"
+    "    mat4 uSkinPalette[MAX_SKIN_PALETTE_MATRICES];\n"
+    "};\n"
     "out vec3 vWorldPos;\n"
+    "mat4 skinJointMatrix(float jointIndex) {\n"
+    "    int uniformJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_JOINTS - 1)));\n"
+    "    int paletteJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_PALETTE_MATRICES - 1)));\n"
+    "    return (uUseSkinPalette != 0) ? uSkinPalette[uJointPaletteOffset + paletteJoint] : "
+    "uJointMatrices[uniformJoint];\n"
+    "}\n"
     "void main() {\n"
     "    vec4 localPos = vec4(aPos, 1.0);\n"
     "    if (uUseSkinning != 0) {\n"
-    "        mat4 skin = aJointWeights.x * uJointMatrices[int(clamp(aJointIndices.x, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))]\n"
-    "                  + aJointWeights.y * uJointMatrices[int(clamp(aJointIndices.y, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))]\n"
-    "                  + aJointWeights.z * uJointMatrices[int(clamp(aJointIndices.z, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))]\n"
-    "                  + aJointWeights.w * uJointMatrices[int(clamp(aJointIndices.w, 0.0, "
-    "float(MAX_SKIN_JOINTS - 1)))];\n"
+    "        mat4 skin = aJointWeights.x * skinJointMatrix(aJointIndices.x)\n"
+    "                  + aJointWeights.y * skinJointMatrix(aJointIndices.y)\n"
+    "                  + aJointWeights.z * skinJointMatrix(aJointIndices.z)\n"
+    "                  + aJointWeights.w * skinJointMatrix(aJointIndices.w);\n"
     "        localPos = skin * localPos;\n"
     "    }\n"
     "    vec4 wp = model * localPos;\n"
@@ -2439,6 +2478,9 @@ static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slay
                                       const slayer3d_draw_entry *b);
 static bool upload_instance_model_attributes(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entries, int count);
 static void upload_joint_palette_uniform(slayer3d_gl_context *ctx, GLint location, const slayer3d_draw_entry *entry);
+static void bind_skinning_state(slayer3d_gl_context *ctx, GLint use_skinning_loc, GLint use_palette_loc,
+                                GLint palette_offset_loc, GLint joint_matrices_loc, const slayer3d_draw_entry *entry);
+static bool draw_entry_matrix_equal(const float *a, const float *b, int count);
 
 static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
 {
@@ -2447,8 +2489,6 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
     /* lightVP uniform is set by the caller per cascade. */
     if (ctx->shadow_use_instancing_loc >= 0)
         gl->Uniform1i(ctx->shadow_use_instancing_loc, 0);
-    if (ctx->shadow_use_skinning_loc >= 0)
-        gl->Uniform1i(ctx->shadow_use_skinning_loc, 0);
 
     for (int i = 0; i < ctx->draw_count; i++)
     {
@@ -2457,9 +2497,8 @@ static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
             continue;
 
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
-        if (ctx->shadow_use_skinning_loc >= 0)
-            gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-        upload_joint_palette_uniform(ctx, ctx->shadow_joint_matrices_loc, e);
+        bind_skinning_state(ctx, ctx->shadow_use_skinning_loc, ctx->shadow_use_skin_palette_loc,
+                            ctx->shadow_joint_palette_offset_loc, ctx->shadow_joint_matrices_loc, e);
 
         gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
         if (e->mesh_cache == NULL)
@@ -2522,7 +2561,7 @@ static Uint64 draw_entry_triangle_count(const slayer3d_draw_entry *entry)
 static void upload_joint_palette_uniform(slayer3d_gl_context *ctx, GLint location, const slayer3d_draw_entry *entry)
 {
     if (ctx == NULL || entry == NULL || location < 0 || !entry->gpu_skinned || entry->joint_count <= 0 ||
-        entry->joint_matrices == NULL)
+        entry->joint_matrices == NULL || entry->use_joint_palette_buffer)
         return;
 
     ctx->gl.UniformMatrix4fv(location, entry->joint_count, GL_FALSE, entry->joint_matrices);
@@ -2530,6 +2569,87 @@ static void upload_joint_palette_uniform(slayer3d_gl_context *ctx, GLint locatio
     {
         ctx->current_ctx->stats.gpu_skinning_palette_uploads += 1u;
         ctx->current_ctx->stats.gpu_skinning_palette_matrices_uploaded += (Uint64)entry->joint_count;
+    }
+}
+
+static void bind_skinning_state(slayer3d_gl_context *ctx, GLint use_skinning_loc, GLint use_palette_loc,
+                                GLint palette_offset_loc, GLint joint_matrices_loc, const slayer3d_draw_entry *entry)
+{
+    const bool use_skinning = entry != NULL && entry->gpu_skinned;
+    const bool use_palette = use_skinning && entry->use_joint_palette_buffer;
+    slayer3d_gl_funcs *gl = &ctx->gl;
+
+    if (use_skinning_loc >= 0)
+        gl->Uniform1i(use_skinning_loc, use_skinning ? 1 : 0);
+    if (use_palette_loc >= 0)
+        gl->Uniform1i(use_palette_loc, use_palette ? 1 : 0);
+    if (palette_offset_loc >= 0)
+        gl->Uniform1i(palette_offset_loc, use_palette ? entry->joint_palette_offset : 0);
+    upload_joint_palette_uniform(ctx, joint_matrices_loc, entry);
+
+    if (use_palette && ctx->current_ctx != NULL)
+        ctx->current_ctx->stats.gpu_skinning_palette_buffer_draws += 1u;
+}
+
+static int find_matching_skin_palette_offset(const slayer3d_gl_context *ctx, const slayer3d_draw_entry *entry)
+{
+    if (ctx == NULL || entry == NULL || entry->joint_matrices == NULL || entry->joint_count <= 0)
+        return -1;
+
+    for (int offset = 0; offset + entry->joint_count <= ctx->skin_palette_matrix_count; ++offset)
+    {
+        if (draw_entry_matrix_equal(&ctx->skin_palette_matrices[offset * 16], entry->joint_matrices,
+                                    entry->joint_count * 16))
+            return offset;
+    }
+    return -1;
+}
+
+static void prepare_skin_palette_buffer(slayer3d_gl_context *ctx)
+{
+    if (ctx == NULL || ctx->skin_palette_ubo == 0)
+        return;
+
+    ctx->skin_palette_matrix_count = 0;
+    for (int i = 0; i < ctx->draw_count; ++i)
+    {
+        slayer3d_draw_entry *entry = &ctx->draw_list[i];
+        entry->use_joint_palette_buffer = false;
+        entry->joint_palette_offset = 0;
+        if (!entry->gpu_skinned || entry->joint_matrices == NULL || entry->joint_count <= 0)
+            continue;
+
+        const int existing_offset = find_matching_skin_palette_offset(ctx, entry);
+        if (existing_offset >= 0)
+        {
+            entry->use_joint_palette_buffer = true;
+            entry->joint_palette_offset = existing_offset;
+            continue;
+        }
+
+        if (ctx->skin_palette_matrix_count + entry->joint_count > SLAYER3D_GPU_SKINNING_PALETTE_MATRICES)
+            continue;
+
+        entry->joint_palette_offset = ctx->skin_palette_matrix_count;
+        entry->use_joint_palette_buffer = true;
+        SDL_memcpy(&ctx->skin_palette_matrices[ctx->skin_palette_matrix_count * 16], entry->joint_matrices,
+                   (size_t)entry->joint_count * 16u * sizeof(float));
+        ctx->skin_palette_matrix_count += entry->joint_count;
+    }
+
+    if (ctx->skin_palette_matrix_count <= 0)
+        return;
+
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    gl->BindBuffer(GL_UNIFORM_BUFFER, ctx->skin_palette_ubo);
+    gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)(SLAYER3D_GPU_SKINNING_PALETTE_MATRICES * 16u * sizeof(float)),
+                   ctx->skin_palette_matrices, GL_DYNAMIC_DRAW);
+    gl->BindBufferBase(GL_UNIFORM_BUFFER, SLAYER3D_SKIN_PALETTE_BINDING, ctx->skin_palette_ubo);
+
+    if (ctx->current_ctx != NULL)
+    {
+        ctx->current_ctx->stats.gpu_skinning_palette_buffer_uploads += 1u;
+        ctx->current_ctx->stats.gpu_skinning_palette_buffer_matrices_uploaded += (Uint64)ctx->skin_palette_matrix_count;
     }
 }
 
@@ -2597,9 +2717,8 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
             gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
             if (ctx->shadow_use_instancing_loc >= 0)
                 gl->Uniform1i(ctx->shadow_use_instancing_loc, 1);
-            if (ctx->shadow_use_skinning_loc >= 0)
-                gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-            upload_joint_palette_uniform(ctx, ctx->shadow_joint_matrices_loc, e);
+            bind_skinning_state(ctx, ctx->shadow_use_skinning_loc, ctx->shadow_use_skin_palette_loc,
+                                ctx->shadow_joint_palette_offset_loc, ctx->shadow_joint_matrices_loc, e);
             gl->BindVertexArray(e->mesh_cache->shadow_vao);
             if (upload_instance_model_attributes(ctx, e, instance_batch_count))
             {
@@ -2619,9 +2738,8 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
 
         if (ctx->shadow_use_instancing_loc >= 0)
             gl->Uniform1i(ctx->shadow_use_instancing_loc, 0);
-        if (ctx->shadow_use_skinning_loc >= 0)
-            gl->Uniform1i(ctx->shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-        upload_joint_palette_uniform(ctx, ctx->shadow_joint_matrices_loc, e);
+        bind_skinning_state(ctx, ctx->shadow_use_skinning_loc, ctx->shadow_use_skin_palette_loc,
+                            ctx->shadow_joint_palette_offset_loc, ctx->shadow_joint_matrices_loc, e);
         gl->UniformMatrix4fv(ctx->shadow_light_vp_loc, 1, GL_FALSE, e->view_projection);
         gl->UniformMatrix4fv(ctx->shadow_model_loc, 1, GL_FALSE, e->model_matrix);
 
@@ -2849,9 +2967,8 @@ static void bind_builtin_pbr_entry(slayer3d_gl_context *ctx, const slayer3d_draw
     gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
     if (ctx->pbr_use_instancing_loc >= 0)
         gl->Uniform1i(ctx->pbr_use_instancing_loc, use_instancing ? 1 : 0);
-    if (ctx->pbr_use_skinning_loc >= 0)
-        gl->Uniform1i(ctx->pbr_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-    upload_joint_palette_uniform(ctx, ctx->pbr_joint_matrices_loc, e);
+    bind_skinning_state(ctx, ctx->pbr_use_skinning_loc, ctx->pbr_use_skin_palette_loc,
+                        ctx->pbr_joint_palette_offset_loc, ctx->pbr_joint_matrices_loc, e);
     gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
     gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
     gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
@@ -3275,9 +3392,8 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                 gl->UniformMatrix3fv(ctx->pbr_normal_matrix_loc, 1, GL_FALSE, e->normal_matrix);
                 if (ctx->pbr_use_instancing_loc >= 0)
                     gl->Uniform1i(ctx->pbr_use_instancing_loc, 0);
-                if (ctx->pbr_use_skinning_loc >= 0)
-                    gl->Uniform1i(ctx->pbr_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-                upload_joint_palette_uniform(ctx, ctx->pbr_joint_matrices_loc, e);
+                bind_skinning_state(ctx, ctx->pbr_use_skinning_loc, ctx->pbr_use_skin_palette_loc,
+                                    ctx->pbr_joint_palette_offset_loc, ctx->pbr_joint_matrices_loc, e);
                 gl->Uniform4f(ctx->pbr_tint_loc, e->tint[0], e->tint[1], e->tint[2], e->tint[3]);
                 gl->Uniform1f(ctx->pbr_metallic_loc, e->metallic);
                 gl->Uniform1f(ctx->pbr_roughness_loc, e->roughness);
@@ -3918,6 +4034,8 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     ctx->pbr_normal_matrix_loc = gl->GetUniformLocation(ctx->pbr_program, "uNormalMatrix");
     ctx->pbr_use_instancing_loc = gl->GetUniformLocation(ctx->pbr_program, "uUseInstancing");
     ctx->pbr_use_skinning_loc = gl->GetUniformLocation(ctx->pbr_program, "uUseSkinning");
+    ctx->pbr_use_skin_palette_loc = gl->GetUniformLocation(ctx->pbr_program, "uUseSkinPalette");
+    ctx->pbr_joint_palette_offset_loc = gl->GetUniformLocation(ctx->pbr_program, "uJointPaletteOffset");
     ctx->pbr_joint_matrices_loc = gl->GetUniformLocation(ctx->pbr_program, "uJointMatrices[0]");
     ctx->pbr_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uTexture");
     ctx->pbr_has_texture_loc = gl->GetUniformLocation(ctx->pbr_program, "uHasTexture");
@@ -4007,11 +4125,22 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)sizeof(slayer3d_scene_ubo_data), NULL, GL_DYNAMIC_DRAW);
     gl->BindBufferBase(GL_UNIFORM_BUFFER, 0, ctx->scene_ubo);
 
+    gl->GenBuffers(1, &ctx->skin_palette_ubo);
+    gl->BindBuffer(GL_UNIFORM_BUFFER, ctx->skin_palette_ubo);
+    gl->BufferData(GL_UNIFORM_BUFFER, (GLsizeiptr)(SLAYER3D_GPU_SKINNING_PALETTE_MATRICES * 16u * sizeof(float)), NULL,
+                   GL_DYNAMIC_DRAW);
+    gl->BindBufferBase(GL_UNIFORM_BUFFER, SLAYER3D_SKIN_PALETTE_BINDING, ctx->skin_palette_ubo);
+
     /* Bind SceneUBO block in PBR program to binding point 0. */
     GLuint block_idx = gl->GetUniformBlockIndex(ctx->pbr_program, "SceneUBO");
     if (block_idx != 0xFFFFFFFFu)
     {
         gl->UniformBlockBinding(ctx->pbr_program, block_idx, 0);
+    }
+    block_idx = gl->GetUniformBlockIndex(ctx->pbr_program, "SkinPaletteUBO");
+    if (block_idx != 0xFFFFFFFFu)
+    {
+        gl->UniformBlockBinding(ctx->pbr_program, block_idx, SLAYER3D_SKIN_PALETTE_BINDING);
     }
 
     /* ---- Lit streaming VAO/VBOs ---- */
@@ -4109,7 +4238,14 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         ctx->shadow_model_loc = gl->GetUniformLocation(ctx->shadow_program, "uModel");
         ctx->shadow_use_instancing_loc = gl->GetUniformLocation(ctx->shadow_program, "uUseInstancing");
         ctx->shadow_use_skinning_loc = gl->GetUniformLocation(ctx->shadow_program, "uUseSkinning");
+        ctx->shadow_use_skin_palette_loc = gl->GetUniformLocation(ctx->shadow_program, "uUseSkinPalette");
+        ctx->shadow_joint_palette_offset_loc = gl->GetUniformLocation(ctx->shadow_program, "uJointPaletteOffset");
         ctx->shadow_joint_matrices_loc = gl->GetUniformLocation(ctx->shadow_program, "uJointMatrices[0]");
+        GLuint shadow_skin_block_idx = gl->GetUniformBlockIndex(ctx->shadow_program, "SkinPaletteUBO");
+        if (shadow_skin_block_idx != 0xFFFFFFFFu)
+        {
+            gl->UniformBlockBinding(ctx->shadow_program, shadow_skin_block_idx, SLAYER3D_SKIN_PALETTE_BINDING);
+        }
     }
 
     /* Point light shadow: 1024x1024 depth cubemaps. */
@@ -4140,7 +4276,16 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         ctx->point_shadow_light_pos_loc = gl->GetUniformLocation(ctx->point_shadow_program, "lightPos");
         ctx->point_shadow_far_loc = gl->GetUniformLocation(ctx->point_shadow_program, "farPlane");
         ctx->point_shadow_use_skinning_loc = gl->GetUniformLocation(ctx->point_shadow_program, "uUseSkinning");
+        ctx->point_shadow_use_skin_palette_loc = gl->GetUniformLocation(ctx->point_shadow_program, "uUseSkinPalette");
+        ctx->point_shadow_joint_palette_offset_loc =
+            gl->GetUniformLocation(ctx->point_shadow_program, "uJointPaletteOffset");
         ctx->point_shadow_joint_matrices_loc = gl->GetUniformLocation(ctx->point_shadow_program, "uJointMatrices[0]");
+        GLuint point_shadow_skin_block_idx = gl->GetUniformBlockIndex(ctx->point_shadow_program, "SkinPaletteUBO");
+        if (point_shadow_skin_block_idx != 0xFFFFFFFFu)
+        {
+            gl->UniformBlockBinding(ctx->point_shadow_program, point_shadow_skin_block_idx,
+                                    SLAYER3D_SKIN_PALETTE_BINDING);
+        }
     }
 
     gl->BindVertexArray(0);
@@ -4322,6 +4467,8 @@ void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
 
     if (ctx->scene_ubo)
         gl->DeleteBuffers(1, &ctx->scene_ubo);
+    if (ctx->skin_palette_ubo)
+        gl->DeleteBuffers(1, &ctx->skin_palette_ubo);
     if (gl->DeleteQueries != NULL)
     {
         if (ctx->depth_prepass_query)
@@ -4790,6 +4937,7 @@ static bool gl_present(slayer3d_render_context *context)
 
     /* Flush UBO before any replay. */
     flush_scene_ubo(ctx);
+    prepare_skin_palette_buffer(ctx);
 
     /* Shadow pass: render original VP into layer 0 (backward compatible),
      * then CSM cascades 1-3 into layers 1-3 for Slice 3. */
@@ -4847,9 +4995,9 @@ static bool gl_present(slayer3d_render_context *context)
                     if (!e->lit)
                         continue;
                     gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
-                    if (ctx->point_shadow_use_skinning_loc >= 0)
-                        gl->Uniform1i(ctx->point_shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-                    upload_joint_palette_uniform(ctx, ctx->point_shadow_joint_matrices_loc, e);
+                    bind_skinning_state(ctx, ctx->point_shadow_use_skinning_loc, ctx->point_shadow_use_skin_palette_loc,
+                                        ctx->point_shadow_joint_palette_offset_loc,
+                                        ctx->point_shadow_joint_matrices_loc, e);
                     gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
                     if (e->mesh_cache == NULL)
                     {
@@ -5086,6 +5234,7 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
     {
         slayer3d_gl_funcs *gl = &ctx->gl;
         flush_scene_ubo(ctx);
+        prepare_skin_palette_buffer(ctx);
         if (0 && ctx->shadow_program)
         {
             compute_csm_matrices(ctx, ctx->current_ctx);
@@ -5139,9 +5288,9 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
                             e->model_matrix[0] == 1.0f && e->model_matrix[5] == 1.0f && e->model_matrix[10] == 1.0f)
                             continue;
                         gl->UniformMatrix4fv(ctx->point_shadow_model_loc, 1, GL_FALSE, e->model_matrix);
-                        if (ctx->point_shadow_use_skinning_loc >= 0)
-                            gl->Uniform1i(ctx->point_shadow_use_skinning_loc, e->gpu_skinned ? 1 : 0);
-                        upload_joint_palette_uniform(ctx, ctx->point_shadow_joint_matrices_loc, e);
+                        bind_skinning_state(
+                            ctx, ctx->point_shadow_use_skinning_loc, ctx->point_shadow_use_skin_palette_loc,
+                            ctx->point_shadow_joint_palette_offset_loc, ctx->point_shadow_joint_matrices_loc, e);
                         gl->BindVertexArray(e->mesh_cache ? e->mesh_cache->shadow_vao : ctx->shadow_vao);
                         if (e->mesh_cache == NULL)
                         {
