@@ -422,6 +422,94 @@ TEST_F(GLRendererTest, SkinnedLitModelsUseGpuSkinningWhenJointBudgetAllows)
     EXPECT_EQ(stats.depth_prepass_draws, 1u);
 }
 
+TEST_F(GLRendererTest, SkinnedLitModelsWithSharedPoseUseInstancedBackendDraw)
+{
+    ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
+    ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.8f, 0.8f, 0.8f));
+    ASSERT_TRUE(slayer3d_set_per_object_light_selection_enabled(ctx, false));
+    ASSERT_TRUE(slayer3d_set_depth_prepass_enabled(ctx, true));
+    ctx->depth_prepass_scope_enabled = true;
+
+    float positions[] = {
+        -0.25f, -0.25f, 0.0f, 0.25f, -0.25f, 0.0f, 0.0f, 0.25f, 0.0f,
+    };
+    float normals[] = {
+        0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+    };
+    float uvs[] = {
+        0.0f, 0.0f, 1.0f, 0.0f, 0.5f, 1.0f,
+    };
+    float colors[] = {
+        1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
+    };
+    unsigned short joint_indices[] = {
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    };
+    float joint_weights[] = {
+        1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f,
+    };
+    unsigned int indices[] = {0, 1, 2};
+    slayer3d_mesh mesh = {};
+    mesh.positions = positions;
+    mesh.normals = normals;
+    mesh.uvs = uvs;
+    mesh.colors = colors;
+    mesh.joint_indices = joint_indices;
+    mesh.joint_weights = joint_weights;
+    mesh.vertex_count = 3;
+    mesh.indices = indices;
+    mesh.index_count = 3;
+    mesh.material_index = -1;
+    mesh.has_local_bounds = true;
+    mesh.local_bounds.min = slayer3d_vec3_make(-0.25f, -0.25f, 0.0f);
+    mesh.local_bounds.max = slayer3d_vec3_make(0.25f, 0.25f, 0.0f);
+
+    slayer3d_skeleton skeleton = {};
+    skeleton.joint_count = 1;
+    slayer3d_model model = {};
+    model.meshes = &mesh;
+    model.mesh_count = 1;
+    model.skeleton = &skeleton;
+    slayer3d_mat4 joints[1] = {slayer3d_mat4_identity()};
+
+    slayer3d_camera3d cam;
+    cam.position = slayer3d_vec3_make(0, 0, 5);
+    cam.target = slayer3d_vec3_make(0, 0, 0);
+    cam.up = slayer3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    constexpr int instance_count = 5;
+    slayer3d_reset_render_stats(ctx);
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    for (int i = 0; i < instance_count; ++i)
+    {
+        ASSERT_TRUE(slayer3d_draw_model_skinned(ctx, &model, slayer3d_vec3_make(-1.0f + 0.5f * (float)i, 0, 0),
+                                                slayer3d_vec3_make(0, 1, 0), 0.0f, slayer3d_vec3_make(1, 1, 1),
+                                                (slayer3d_color){255, 255, 255, 255}, joints));
+    }
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    unsigned char px[4];
+    readPixel(160, 120, px);
+    EXPECT_GT(px[0] + px[1] + px[2], 20);
+
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.gpu_skinned_draws, (Uint64)instance_count);
+    EXPECT_EQ(stats.gpu_skinned_vertices, (Uint64)instance_count * 3u);
+    EXPECT_EQ(stats.cpu_skinned_vertices, 0u);
+    EXPECT_EQ(stats.depth_prepass_draws, 1u);
+    EXPECT_EQ(stats.depth_prepass_triangles, (Uint64)instance_count);
+    EXPECT_EQ(stats.geometry_draw_calls, 1u);
+    EXPECT_EQ(stats.static_mesh_instanced_draw_calls, 1u);
+    EXPECT_EQ(stats.static_mesh_instances_batched, (Uint64)instance_count);
+    EXPECT_EQ(stats.static_mesh_draw_calls_saved, (Uint64)(instance_count - 1));
+    EXPECT_EQ(stats.gpu_skinning_palette_uploads, 2u);
+    EXPECT_EQ(stats.gpu_skinning_palette_matrices_uploaded, 2u);
+}
+
 TEST_F(GLRendererTest, SkinnedLitModelsFallBackToCpuWhenJointBudgetIsExceeded)
 {
     ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
