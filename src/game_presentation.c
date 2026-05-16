@@ -10,6 +10,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "slayer3d/animation.h"
+#include "slayer3d/collision.h"
 #include "slayer3d/drawing3d.h"
 #include "slayer3d/image.h"
 #include "slayer3d/lighting.h"
@@ -3344,6 +3345,8 @@ static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
             continue;
+        if (!brush_visible[brush_index])
+            continue;
         if (brush_visibility_forced_visible(brush))
             continue;
 
@@ -3364,6 +3367,55 @@ static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
     if (out_occluded_count != NULL)
         *out_occluded_count = occluded_count;
     return true;
+}
+
+static slayer3d_sphere brush_world_bounds_sphere(slayer3d_bounding_box bounds, slayer3d_vec3 world_offset)
+{
+    const slayer3d_vec3 center = slayer3d_vec3_make((bounds.min.x + bounds.max.x) * 0.5f + world_offset.x,
+                                                    (bounds.min.y + bounds.max.y) * 0.5f + world_offset.y,
+                                                    (bounds.min.z + bounds.max.z) * 0.5f + world_offset.z);
+    const slayer3d_vec3 extents =
+        slayer3d_vec3_make((bounds.max.x - bounds.min.x) * 0.5f, (bounds.max.y - bounds.min.y) * 0.5f,
+                           (bounds.max.z - bounds.min.z) * 0.5f);
+    slayer3d_sphere sphere;
+    sphere.center = center;
+    sphere.radius = slayer3d_vec3_length(extents);
+    return sphere;
+}
+
+static int apply_brush_frustum_culling(brush_world_draw_context *context, brush_world_runtime *world_runtime,
+                                       const slayer3d_game_data_brush_world_instance *instance, bool *brush_visible,
+                                       int brush_count, slayer3d_game_data_runtime *mutable_runtime)
+{
+    if (context == NULL || context->renderer == NULL || !context->renderer->frustum_planes_valid ||
+        world_runtime == NULL || instance == NULL || instance->world == NULL || brush_visible == NULL ||
+        mutable_runtime == NULL)
+    {
+        return 0;
+    }
+
+    int culled_count = 0;
+    for (int brush_index = 0; brush_index < brush_count; ++brush_index)
+    {
+        if (!brush_visible[brush_index])
+            continue;
+        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];
+        const Uint64 triangles = brush_model_triangle_count(brush_model);
+        if (brush == NULL || !brush->has_bounds || triangles == 0u)
+            continue;
+
+        ++mutable_runtime->brush_diagnostics.frustum_brush_candidates;
+        const slayer3d_sphere sphere = brush_world_bounds_sphere(brush->bounds, instance->position);
+        if (!slayer3d_sphere_intersects_frustum(sphere, context->renderer->frustum_planes))
+        {
+            brush_visible[brush_index] = false;
+            ++mutable_runtime->brush_diagnostics.frustum_brush_culled;
+            mutable_runtime->brush_diagnostics.frustum_triangles_culled += triangles;
+            ++culled_count;
+        }
+    }
+    return culled_count;
 }
 
 static bool brush_render_chunk_all_visible(const slayer3d_game_data_brush_compile_chunk *chunk,
@@ -3453,6 +3505,8 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
         brush_visible[brush_index] = true;
 
+    const int frustum_culled_count =
+        apply_brush_frustum_culling(context, world_runtime, instance, brush_visible, brush_count, mutable_runtime);
     int occluded_count = 0;
     const bool used_visibility_grid = apply_brush_visibility_grid(
         world_runtime, instance, context->camera, brush_visible, brush_count, &occluded_count, mutable_runtime);
@@ -3479,7 +3533,7 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
             ++mutable_runtime->brush_diagnostics.visibility_brush_visible;
         }
     }
-    if (occluded_count <= 0)
+    if (occluded_count <= 0 && frustum_culled_count <= 0)
     {
         SDL_free(brush_visible);
         return draw_brush_world_instance(userdata, instance);

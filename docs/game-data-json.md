@@ -740,6 +740,11 @@ instrumentation; reset them with
 derived from the generic render-context stats exposed by
 `slayer3d_get_render_stats()`, because brush worlds compile to static model
 meshes that use the same frustum culling path as other models.
+When `visibility_occlusion` is enabled and a camera is available, brush bounds
+are also checked against the active frustum before model submission. This
+fail-open coarse pass rejects off-camera brush submodels before draw calls are
+issued and reports `brush.frustum_brush_candidates`,
+`brush.frustum_brush_culled`, and `brush.frustum_triangles_culled`.
 Compile-time brush diagnostics are also exposed as `brush.compile_face_count`,
 `brush.compile_rendered_face_count`, `brush.compile_culled_face_count`, and
 `brush.compile_triangle_count`, plus geometry-health metrics
@@ -2740,7 +2745,9 @@ Supported brush metrics are `brush.trace_count`,
 `brush.compile_invalid_brush_count`, `brush.compile_degenerate_face_count`,
 `brush.compile_chunk_count`, `brush.collision_chunk_count`, and
 `brush.collision_chunk_reject_count`, chunk render counters
-`brush.render_chunk_draws` and `brush.render_chunk_brushes_drawn`, plus
+`brush.render_chunk_draws` and `brush.render_chunk_brushes_drawn`, frustum
+counters `brush.frustum_brush_candidates`, `brush.frustum_brush_culled`, and
+`brush.frustum_triangles_culled`, plus
 visibility counters
 `brush.visibility_brush_candidates`, `brush.visibility_brush_visible`,
 `brush.visibility_brush_occluded`, `brush.visibility_triangles_culled`,

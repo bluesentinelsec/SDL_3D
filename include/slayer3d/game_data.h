@@ -689,6 +689,12 @@ extern "C"
         Uint64 render_chunk_draws;
         /** @brief Visible brushes covered by chunk-level draw submissions. */
         Uint64 render_chunk_brushes_drawn;
+        /** @brief Renderable brushes tested by brush-level frustum culling before draw submission. */
+        Uint64 frustum_brush_candidates;
+        /** @brief Renderable brushes rejected by brush-level frustum culling before draw submission. */
+        Uint64 frustum_brush_culled;
+        /** @brief Approximate triangles skipped by brush-level frustum culling before draw submission. */
+        Uint64 frustum_triangles_culled;
         /** @brief Renderable brushes tested by brush-world visibility culling. */
         Uint64 visibility_brush_candidates;
         /** @brief Renderable brushes accepted by brush-world visibility culling. */

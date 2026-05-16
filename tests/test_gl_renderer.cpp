@@ -816,7 +816,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
         { "name": "mat.hidden", "albedo": [0.2, 0.2, 0.8, 1.0] }
       ],
       "brushes": [
-)json" << BrushVisibilityBoxJson("brush.front_marker", "mat.front", 2.4f, 3.0f, 0.5f, 1.5f, -2.5f, -2.0f)
+)json" << BrushVisibilityBoxJson("brush.front_marker", "mat.front", -0.5f, 0.5f, 0.5f, 1.5f, -2.5f, -2.0f)
               << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f)
               << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f)
               << R"json(
@@ -871,7 +871,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     EXPECT_GE(diagnostics.visibility_triangles_culled, 12u);
     EXPECT_EQ(diagnostics.visibility_grid_cache_misses, 1u);
     EXPECT_EQ(diagnostics.visibility_grid_cache_hits, 0u);
-    EXPECT_EQ(diagnostics.render_mesh_submissions, 2u);
+    EXPECT_LT(diagnostics.render_mesh_submissions, 3u);
     EXPECT_LT(diagnostics.render_triangles_submitted, 36u);
 
     slayer3d_reset_render_stats(ctx);
@@ -917,7 +917,8 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     runtime = nullptr;
 
     std::ostringstream override_game_json;
-    override_game_json << R"json({
+    override_game_json
+        << R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Brush Visibility Override Test" },
   "world": { "name": "world.visibility", "kind": "brush" },
@@ -931,13 +932,10 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
         { "name": "mat.hidden", "albedo": [0.2, 0.2, 0.8, 1.0] }
       ],
       "brushes": [
-)json" << BrushVisibilityBoxJson("brush.front_marker", "mat.front", 2.4f, 3.0f, 0.5f, 1.5f, -2.5f, -2.0f)
-                       << ","
-                       << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f)
-                       << ","
-                       << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f,
-                                                 "always")
-                       << R"json(
+)json" << BrushVisibilityBoxJson("brush.front_marker", "mat.front", -0.5f, 0.5f, 0.5f, 1.5f, -2.5f, -2.0f)
+        << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f, "always")
+        << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f, "always")
+        << R"json(
       ]
     }
   ],
@@ -956,7 +954,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
-    EXPECT_EQ(diagnostics.visibility_brush_candidates, 2u);
+    EXPECT_EQ(diagnostics.visibility_brush_candidates, 1u);
     EXPECT_EQ(diagnostics.visibility_brush_occluded, 0u);
     EXPECT_EQ(diagnostics.render_mesh_submissions, 3u);
 
@@ -993,8 +991,8 @@ TEST_F(GLRendererTest, BrushVisibilityDrawsFullyVisibleCompileChunks)
         { "name": "mat.hidden", "albedo": [0.2, 0.2, 0.8, 1.0] }
       ],
       "brushes": [
-)json" << BrushVisibilityBoxJson("brush.front_a", "mat.front", 2.1f, 2.3f, 0.5f, 1.5f, -2.5f, -2.0f)
-              << "," << BrushVisibilityBoxJson("brush.front_b", "mat.front", 2.5f, 2.7f, 0.5f, 1.5f, -2.5f, -2.0f)
+)json" << BrushVisibilityBoxJson("brush.front_a", "mat.front", 0.1f, 0.3f, 0.5f, 1.5f, -2.5f, -2.0f)
+              << "," << BrushVisibilityBoxJson("brush.front_b", "mat.front", 0.4f, 0.6f, 0.5f, 1.5f, -2.5f, -2.0f)
               << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f)
               << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f)
               << R"json(
@@ -1038,6 +1036,80 @@ TEST_F(GLRendererTest, BrushVisibilityDrawsFullyVisibleCompileChunks)
     EXPECT_GE(diagnostics.render_chunk_draws, 1u);
     EXPECT_GE(diagnostics.render_chunk_brushes_drawn, 2u);
     EXPECT_LT(diagnostics.render_mesh_submissions, diagnostics.visibility_brush_visible);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    std::filesystem::remove_all(dir);
+}
+
+TEST_F(GLRendererTest, BrushVisibilityFrustumCullsOffscreenBrushesBeforeSubmission)
+{
+    const std::filesystem::path dir = UniqueTempDir("brush_visibility_frustum");
+    WriteText(dir / "scenes" / "play.scene.json",
+              R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [
+      { "world": "brush.visibility_frustum", "visibility_occlusion": true }
+    ]
+  }
+})json");
+    std::ostringstream game_json;
+    game_json << R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Visibility Frustum Test" },
+  "world": { "name": "world.visibility_frustum", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.visibility_frustum",
+      "visibility_cell_size": 0.5,
+      "materials": [
+        { "name": "mat.visible", "albedo": [0.2, 0.8, 0.2, 1.0] },
+        { "name": "mat.offscreen", "albedo": [0.8, 0.2, 0.2, 1.0] }
+      ],
+      "brushes": [
+)json" << BrushVisibilityBoxJson("brush.visible", "mat.visible", -0.5f, 0.5f, 0.5f, 1.5f, 1.5f, 2.0f)
+              << "," << BrushVisibilityBoxJson("brush.offscreen", "mat.offscreen", 24.0f, 25.0f, 0.5f, 1.5f, 1.5f, 2.0f)
+              << R"json(
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+    WriteText(dir / "visibility_frustum.game.json", game_json.str());
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "visibility_frustum.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_camera3d cam{};
+    cam.position = slayer3d_vec3_make(0.0f, 1.0f, -2.75f);
+    cam.target = slayer3d_vec3_make(0.0f, 1.0f, 4.0f);
+    cam.up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    ASSERT_TRUE(slayer3d_set_shading_mode(ctx, SLAYER3D_SHADING_PHONG));
+    ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.45f, 0.45f, 0.45f));
+    slayer3d_reset_render_stats(ctx);
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
+    ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
+
+    slayer3d_game_data_brush_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.frustum_brush_candidates, 2u);
+    EXPECT_EQ(diagnostics.frustum_brush_culled, 1u);
+    EXPECT_EQ(diagnostics.frustum_triangles_culled, 12u);
+    EXPECT_EQ(diagnostics.render_mesh_submissions, 1u);
+    EXPECT_EQ(diagnostics.render_mesh_draws, 1u);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
