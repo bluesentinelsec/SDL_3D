@@ -34,6 +34,7 @@ typedef struct slayer3d_replication_field_descriptor slayer3d_replication_field_
 #define SLAYER3D_GAME_DATA_NETWORK_INPUT_VERSION 1u
 #define SLAYER3D_GAME_DATA_NETWORK_CONTROL_MAGIC 0x43335253u /* "S3RC" */
 #define SLAYER3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
+#define SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS 4
 
 typedef enum game_data_sensor_type
 {
@@ -447,6 +448,8 @@ typedef struct brush_world_runtime
     slayer3d_model render_model;
     slayer3d_model *brush_render_models;
     int brush_render_model_count;
+    slayer3d_model *chunk_render_models;
+    int chunk_render_model_count;
     slayer3d_bounding_box visibility_grid_bounds;
     float visibility_cell_size;
     int visibility_grid_dim_x;
@@ -454,8 +457,10 @@ typedef struct brush_world_runtime
     int visibility_grid_dim_z;
     int visibility_grid_cell_count;
     Uint8 *visibility_grid_solid;
-    Uint8 *visibility_grid_visible_cache;
-    int visibility_grid_visible_cache_start;
+    Uint8 *visibility_grid_visible_cache[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
+    int visibility_grid_visible_cache_start[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
+    Uint64 visibility_grid_visible_cache_tick[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
+    Uint64 visibility_grid_visible_cache_clock;
     char *editor_source_path;
     Uint64 editor_revision;
     Uint64 editor_saved_revision;

@@ -8,6 +8,7 @@
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <tuple>
@@ -3110,6 +3111,7 @@ TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
     EXPECT_TRUE(render.bloom_enabled);
     EXPECT_TRUE(render.ssao_enabled);
     EXPECT_FALSE(render.depth_prepass_enabled);
+    EXPECT_FLOAT_EQ(render.world_render_scale, 1.0f);
     EXPECT_EQ(render.tonemap, SLAYER3D_TONEMAP_ACES);
 
     slayer3d_game_data_transition_desc transition{};
@@ -5122,6 +5124,64 @@ TEST(GameDataValidation, RejectsInvalidRenderLightSelectionSettings)
     remove_test_dir(dir);
 }
 
+TEST(GameDataValidation, RejectsInvalidWorldRenderScale)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_world_render_scale");
+    write_text(dir / "bad_render_scale.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Render Scale", "id": "test.bad_world_render_scale", "version": "0.1.0" },
+  "world": { "name": "world.bad_world_render_scale", "kind": "fixed_screen" },
+  "render": {
+    "world_render_scale": 1.5
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_render_scale.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("world_render_scale"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataValidation, RejectsInvalidRenderQualityPresets)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_render_quality_presets");
+    write_text(dir / "bad_render_quality.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Render Quality", "id": "test.bad_render_quality", "version": "0.1.0" },
+  "world": { "name": "world.bad_render_quality", "kind": "fixed_screen" },
+  "render": {
+    "quality": "performance",
+    "quality_presets": [
+      { "name": "quality", "world_render_scale": 1.0 },
+      { "name": "quality", "world_render_scale": 0.1 }
+    ]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_render_quality.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("render quality preset"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
 TEST(GameDataValidation, RejectsInvalidProceduralLodSettings)
 {
     const std::filesystem::path dir = unique_test_dir("bad_procedural_lod");
@@ -5148,6 +5208,34 @@ TEST(GameDataValidation, RejectsInvalidProceduralLodSettings)
     EXPECT_FALSE(
         slayer3d_game_data_validate_file((dir / "bad_lod.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("procedural_lod_far_pixels"), std::string::npos) << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataValidation, RejectsInvalidModelLodSettings)
+{
+    const std::filesystem::path dir = unique_test_dir("bad_model_lod");
+    write_text(dir / "bad_model_lod.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Model LOD", "id": "test.bad_model_lod", "version": "0.1.0" },
+  "world": { "name": "world.bad_model_lod", "kind": "fixed_screen" },
+  "render": {
+    "model_lod_culling": true,
+    "model_lod_cull_pixels": -1.0
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_model_lod.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("model_lod_cull_pixels"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -7912,6 +8000,7 @@ TEST(GameDataRuntime, BrushGeometryDojoLoadsCompiledBrushShowcase)
     EXPECT_TRUE(render_settings.depth_prepass_enabled);
     EXPECT_TRUE(render_settings.per_object_light_selection_enabled);
     EXPECT_EQ(render_settings.per_object_light_limit, 4);
+    EXPECT_FLOAT_EQ(render_settings.world_render_scale, 1.0f);
 
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.brush_geometry.showcase"));
     slayer3d_game_data_scene_skybox skybox{};
@@ -13020,8 +13109,10 @@ TEST(GameDataRuntime, TracesAuthoredBrushWorldsWithContentsAndSweptHulls)
     slayer3d_game_data_brush_diagnostics diagnostics{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
     EXPECT_EQ(diagnostics.trace_count, 1u);
-    EXPECT_EQ(diagnostics.brush_count, 3u);
-    EXPECT_EQ(diagnostics.contents_reject_count, 1u);
+    EXPECT_GT(diagnostics.collision_chunk_count, 0u);
+    EXPECT_GT(diagnostics.collision_chunk_reject_count, 0u);
+    EXPECT_EQ(diagnostics.brush_count, 2u);
+    EXPECT_EQ(diagnostics.contents_reject_count, 0u);
     EXPECT_EQ(diagnostics.bounds_reject_count, 1u);
     EXPECT_EQ(diagnostics.collision_candidate_count, 1u);
     EXPECT_EQ(diagnostics.hit_count, 1u);
@@ -13542,6 +13633,239 @@ TEST(GameDataRuntime, BrushRenderModelBatchesEquivalentMaterialsAndPreservesEdit
     ASSERT_NE(selection.material_editor, nullptr);
     EXPECT_STREQ(selection.material_editor->stable_id, "editor.material.semantic.trim");
     EXPECT_EQ(selection.face_index, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, BrushRenderCompileCullsFullyHiddenAdjacentSolidFaces)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_hidden_faces");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [{ "world": "brush.hidden_faces", "position": [0.0, 0.0, 0.0] }]
+  }
+})json");
+    write_text(dir / "hidden_faces.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Hidden Brush Face Compile Test" },
+  "world": { "name": "world.hidden_faces", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.hidden_faces",
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.left",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.right",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": -1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "hidden_faces.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.hidden_faces", &world));
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_EQ(world.render_model->mesh_count, 1);
+    EXPECT_EQ(world.compile_face_count, 12);
+    EXPECT_EQ(world.compile_culled_face_count, 2);
+    EXPECT_EQ(world.compile_rendered_face_count, 10);
+    EXPECT_EQ(world.compile_triangle_count, 20);
+    EXPECT_EQ(world.compile_invalid_brush_count, 0);
+    EXPECT_EQ(world.compile_degenerate_face_count, 0);
+    EXPECT_EQ(world.render_model->meshes[0].vertex_count, 60);
+    EXPECT_EQ(world.render_model->meshes[0].index_count, 60);
+
+    slayer3d_game_data_brush_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.compile_face_count, 12u);
+    EXPECT_EQ(diagnostics.compile_culled_face_count, 2u);
+    EXPECT_EQ(diagnostics.compile_rendered_face_count, 10u);
+    EXPECT_EQ(diagnostics.compile_triangle_count, 20u);
+    EXPECT_EQ(diagnostics.compile_invalid_brush_count, 0u);
+    EXPECT_EQ(diagnostics.compile_degenerate_face_count, 0u);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, BrushCompileRejectsUnboundedInvalidGeometry)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_invalid_geometry");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "invalid.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Invalid Geometry Test" },
+  "world": { "name": "world.invalid", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.invalid",
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.contradictory",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": -1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    EXPECT_FALSE(slayer3d_game_data_load_file((dir / "invalid.game.json").string().c_str(), session, &runtime, error,
+                                              sizeof(error)));
+    EXPECT_EQ(runtime, nullptr);
+    const std::string error_message(error);
+    EXPECT_NE(error_message.find("invalid brush geometry"), std::string::npos);
+    EXPECT_NE(error_message.find("brush.contradictory"), std::string::npos);
+    EXPECT_NE(error_message.find("degenerate faces 6"), std::string::npos);
+
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, BrushCompileChunksCullCollisionBroadPhase)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_chunks");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": {
+    "brush_worlds": [{ "world": "brush.chunked", "position": [0.0, 0.0, 0.0], "acceleration": true }]
+  }
+})json");
+
+    std::ostringstream brushes;
+    for (int i = 0; i < 16; ++i)
+    {
+        const int min_x = i * 4;
+        const int max_x = min_x + 1;
+        if (i > 0)
+            brushes << ",\n";
+        brushes << R"json(        {
+          "name": "brush.box.)json"
+                << i << R"json(",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance": )json"
+                << max_x << R"json( }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": )json"
+                << -min_x << R"json( }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance": 1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance": 0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance": 1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance": 0 }, "material": "mat.wall" }
+          ]
+        })json";
+    }
+
+    const std::string game_json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Compile Chunk Test" },
+  "world": { "name": "world.chunked", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.chunked",
+      "visibility_cell_size": 1.0,
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+)json") + brushes.str() + R"json(
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+    write_text(dir / "chunked.game.json", game_json.c_str());
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "chunked.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.chunked", &world));
+    EXPECT_EQ(world.brush_count, 16);
+    EXPECT_GT(world.compile_chunk_count, 1);
+    EXPECT_EQ(world.compile_chunk_brush_index_count, 16);
+
+    slayer3d_game_data_reset_brush_diagnostics(runtime);
+    slayer3d_game_data_brush_trace_desc trace{};
+    trace.start = slayer3d_vec3_make(-1.0f, 0.5f, 0.5f);
+    trace.end = slayer3d_vec3_make(0.5f, 0.5f, 0.5f);
+    trace.shape = SLAYER3D_GAME_DATA_BRUSH_TRACE_POINT;
+    trace.contents_mask = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    slayer3d_game_data_brush_trace_result result{};
+    ASSERT_TRUE(slayer3d_game_data_trace_brush_world(runtime, "brush.chunked", &trace, &result));
+    ASSERT_TRUE(result.hit);
+    EXPECT_EQ(result.brush_index, 0);
+
+    slayer3d_game_data_brush_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_diagnostics(runtime, &diagnostics));
+    EXPECT_EQ(diagnostics.compile_chunk_count, static_cast<Uint64>(world.compile_chunk_count));
+    EXPECT_EQ(diagnostics.collision_chunk_count, static_cast<Uint64>(world.compile_chunk_count));
+    EXPECT_GT(diagnostics.collision_chunk_reject_count, 0u);
+    EXPECT_LT(diagnostics.brush_count, static_cast<Uint64>(world.brush_count));
+    EXPECT_EQ(diagnostics.collision_candidate_count, 1u);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -20490,6 +20814,35 @@ TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
     EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(item.input_binding_count, 2);
 
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.display");
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
+    EXPECT_STREQ(item.label, "Render Quality");
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE);
+    EXPECT_STREQ(item.control_target, "scene_state");
+    EXPECT_STREQ(item.control_key, "render_quality");
+    EXPECT_EQ(item.choice_count, 2);
+    ASSERT_TRUE(slayer3d_game_data_adjust_menu_item_control(runtime, &item, -1));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "render_quality", ""),
+                 "performance");
+    slayer3d_game_data_render_settings render_settings{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_FLOAT_EQ(render_settings.world_render_scale, 0.5f);
+    EXPECT_TRUE(render_settings.procedural_lod_enabled);
+    EXPECT_TRUE(render_settings.model_lod_culling_enabled);
+
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 4, &item));
+    EXPECT_STREQ(item.label, "World Render Scale");
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_RANGE);
+    EXPECT_STREQ(item.control_target, "scene_state");
+    EXPECT_STREQ(item.control_key, "render_world_scale");
+    ASSERT_TRUE(slayer3d_game_data_adjust_menu_item_control(runtime, &item, -1));
+    EXPECT_NEAR(slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), "render_world_scale", 0.0f),
+                0.95f, 0.0001f);
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render_settings));
+    EXPECT_NEAR(render_settings.world_render_scale, 0.95f, 0.0001f);
+
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.audio"));
     ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.audio");
@@ -20507,6 +20860,48 @@ TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, LoadsAuthoredHighPixelDensityWindowFlag)
+{
+    const std::filesystem::path dir = unique_test_dir("high_pixel_density_app_config");
+    write_text(dir / "high_dpi.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "High DPI App Config", "id": "test.high_dpi", "version": "0.1.0" },
+  "app": {
+    "window": {
+      "high_pixel_density": false
+    }
+  },
+  "world": { "name": "world.high_dpi", "kind": "fixed_screen" },
+  "entities": []
+})json");
+
+    slayer3d_game_config config{};
+    char title[128]{};
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file((dir / "high_dpi.game.json").string().c_str(), &config, title,
+                                                        sizeof(title), error, sizeof(error)))
+        << error;
+    EXPECT_LT(config.high_pixel_density, 0);
+
+    write_text(dir / "bad_high_dpi.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad High DPI App Config", "id": "test.bad_high_dpi", "version": "0.1.0" },
+  "app": {
+    "window": {
+      "high_pixel_density": "yes"
+    }
+  },
+  "world": { "name": "world.bad_high_dpi", "kind": "fixed_screen" },
+  "entities": []
+})json");
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_high_dpi.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("high_pixel_density"), std::string::npos) << error;
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ValidationReportsJsonPathAndMissingReference)

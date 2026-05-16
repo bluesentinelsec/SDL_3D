@@ -37,6 +37,7 @@ typedef struct standard_options_layout
 typedef struct standard_options_config
 {
     yyjson_val *root;
+    yyjson_val *render;
     yyjson_val *theme;
     yyjson_val *bindings;
     standard_options_layout layout;
@@ -80,6 +81,11 @@ typedef struct standard_options_config
     yyjson_val *background;
     const char *background_camera;
     bool background_renders_world;
+    const char *quality_key;
+    const char *quality_default;
+    yyjson_val *quality_presets;
+    const char *world_render_scale_key;
+    double world_render_scale_default;
     const char *menu_state_key;
     bool single_scene;
 } standard_options_config;
@@ -390,6 +396,41 @@ static bool add_renderer_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const 
            add_choice(doc, choices, "OpenGL", "opengl");
 }
 
+static const char *first_quality_preset_name(yyjson_val *presets)
+{
+    yyjson_val *first = yyjson_is_arr(presets) && yyjson_arr_size(presets) > 0 ? yyjson_arr_get(presets, 0) : NULL;
+    return json_string(first, "name", NULL);
+}
+
+static bool add_render_quality_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const standard_options_config *config)
+{
+    if (config->quality_key == NULL || !yyjson_is_arr(config->quality_presets) ||
+        yyjson_arr_size(config->quality_presets) == 0)
+    {
+        return true;
+    }
+
+    yyjson_mut_val *item = add_menu_item(doc, items, "Render Quality");
+    yyjson_mut_val *control = item != NULL ? add_control(doc, item, "choice") : NULL;
+    yyjson_mut_val *choices = control != NULL ? add_arr(doc, control, "choices") : NULL;
+    const char *default_quality =
+        config->quality_default != NULL ? config->quality_default : first_quality_preset_name(config->quality_presets);
+    if (item == NULL || control == NULL || choices == NULL || !add_str(doc, control, "target", "scene_state") ||
+        !add_str(doc, control, "key", config->quality_key) || !add_str(doc, control, "default", default_quality))
+    {
+        return false;
+    }
+    for (size_t i = 0; i < yyjson_arr_size(config->quality_presets); ++i)
+    {
+        yyjson_val *preset = yyjson_arr_get(config->quality_presets, i);
+        const char *name = json_string(preset, "name", NULL);
+        const char *label = json_string(preset, "label", name);
+        if (!add_choice(doc, choices, label, name))
+            return false;
+    }
+    return true;
+}
+
 static bool add_reset_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const char *signal)
 {
     yyjson_mut_val *item = add_menu_item(doc, items, "Reset Settings");
@@ -412,6 +453,25 @@ static bool add_range_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const sta
            yyjson_mut_obj_add_int(doc, control, "min", 0) && yyjson_mut_obj_add_int(doc, control, "max", 10) &&
            yyjson_mut_obj_add_int(doc, control, "step", 1) &&
            yyjson_mut_obj_add_int(doc, control, "default", default_value);
+}
+
+static bool add_float_range_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const standard_options_config *config,
+                                 const char *label, const char *signal, const char *target, const char *key,
+                                 double min_value, double max_value, double step, double default_value)
+{
+    yyjson_mut_val *item = add_menu_item(doc, items, label);
+    yyjson_mut_val *control = item != NULL ? add_control(doc, item, "range") : NULL;
+    return item != NULL && (signal == NULL || add_str(doc, item, "signal", signal)) && control != NULL &&
+           add_str(doc, control, "target", target) && add_str(doc, control, "key", key) &&
+           add_str(doc, control, "value_type", "float") && add_str(doc, control, "display", "slider") &&
+           add_str(doc, control, "slider_fill", json_string(config->theme, "slider_fill", "#")) &&
+           add_str(doc, control, "slider_empty", json_string(config->theme, "slider_empty", "-")) &&
+           add_str(doc, control, "slider_left", json_string(config->theme, "slider_left", "[")) &&
+           add_str(doc, control, "slider_right", json_string(config->theme, "slider_right", "]")) &&
+           yyjson_mut_obj_add_real(doc, control, "min", min_value) &&
+           yyjson_mut_obj_add_real(doc, control, "max", max_value) &&
+           yyjson_mut_obj_add_real(doc, control, "step", step) &&
+           yyjson_mut_obj_add_real(doc, control, "default", default_value);
 }
 
 static bool add_gamepad_icons_item(yyjson_mut_doc *doc, yyjson_mut_val *items, const standard_options_config *config)
@@ -563,7 +623,12 @@ static bool add_display_content(yyjson_mut_doc *doc, yyjson_mut_val *scene, cons
     yyjson_mut_val *items = add_menu(doc, scene, config, config->display_menu, false, active_state, false);
     return items != NULL && add_display_mode_item(doc, items, config) &&
            add_toggle_item(doc, items, "Vsync", config->apply_signal, config->settings_actor, "vsync") &&
-           add_renderer_item(doc, items, config) && add_reset_item(doc, items, config->reset_display_signal) &&
+           add_renderer_item(doc, items, config) && add_render_quality_item(doc, items, config) &&
+           (config->world_render_scale_key == NULL ||
+            add_float_range_item(doc, items, config, "World Render Scale", NULL, "scene_state",
+                                 config->world_render_scale_key, 0.25, 1.0, 0.05,
+                                 config->world_render_scale_default)) &&
+           add_reset_item(doc, items, config->reset_display_signal) &&
            (active_state != NULL ? add_menu_state_item(doc, items, config, "Back", "root")
                                  : add_back_item(doc, items, config, config->root_scene)) &&
            add_basic_ui(doc, scene, config, "ui.options.display.title", "DISPLAY", config->layout.display.title_y,
@@ -701,7 +766,11 @@ static yyjson_doc *build_display_scene(const standard_options_config *config)
         scene != NULL ? add_menu(doc, scene, config, config->display_menu, true, NULL, false) : NULL;
     if (items == NULL || !add_display_mode_item(doc, items, config) ||
         !add_toggle_item(doc, items, "Vsync", config->apply_signal, config->settings_actor, "vsync") ||
-        !add_renderer_item(doc, items, config) || !add_reset_item(doc, items, config->reset_display_signal) ||
+        !add_renderer_item(doc, items, config) || !add_render_quality_item(doc, items, config) ||
+        (config->world_render_scale_key != NULL &&
+         !add_float_range_item(doc, items, config, "World Render Scale", NULL, "scene_state",
+                               config->world_render_scale_key, 0.25, 1.0, 0.05, config->world_render_scale_default)) ||
+        !add_reset_item(doc, items, config->reset_display_signal) ||
         !add_back_item(doc, items, config, config->root_scene) ||
         !add_basic_ui(doc, scene, config, "ui.options.display.title", "DISPLAY", config->layout.display.title_y,
                       "ui.options.display.menu", config->display_menu, config->layout.display.menu_x,
@@ -847,12 +916,18 @@ static bool load_config(yyjson_val *game_root, const char *package_name, standar
 
     SDL_zero(*config);
     config->root = root;
+    config->render = obj_get(game_root, "render");
     config->theme = obj_get(root, "theme");
     config->bindings = obj_get(root, "bindings");
     config->background = obj_get(root, "background");
     config->background_camera = json_string(config->background, "camera", NULL);
     config->background_renders_world =
         yyjson_is_obj(config->background) ? json_bool(config->background, "renders_world", true) : false;
+    config->quality_key = json_string(config->render, "quality_key", NULL);
+    config->quality_default = json_string(config->render, "quality", NULL);
+    config->quality_presets = obj_get(config->render, "quality_presets");
+    config->world_render_scale_key = json_string(config->render, "world_render_scale_key", NULL);
+    config->world_render_scale_default = json_double(config->render, "world_render_scale", 1.0);
     config->single_scene = json_bool(root, "single_scene", false);
     config->menu_state_key = json_string(root, "menu_state_key", "standard_options_menu");
     config->settings_actor = json_string(root, "settings", "entity.settings");

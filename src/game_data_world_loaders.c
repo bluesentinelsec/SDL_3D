@@ -753,10 +753,12 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             }
         }
 
-        if (!slayer3d_game_data_brush_world_build_acceleration(world))
+        char compile_error[256] = {0};
+        if (!slayer3d_game_data_brush_world_build_acceleration_checked(world, compile_error, sizeof(compile_error)))
         {
-            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' acceleration data",
-                       world->name != NULL ? world->name : "<unnamed>");
+            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' acceleration data: %s",
+                       world->name != NULL ? world->name : "<unnamed>",
+                       compile_error[0] != '\0' ? compile_error : "unknown compile error");
             return false;
         }
 
@@ -789,6 +791,29 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' visibility grid",
                        world->name != NULL ? world->name : "<unnamed>");
             return false;
+        }
+        if (!slayer3d_game_data_brush_world_build_compile_chunks(world))
+        {
+            set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' spatial chunks",
+                       world->name != NULL ? world->name : "<unnamed>");
+            return false;
+        }
+        if (world->compile_chunk_count > 0)
+        {
+            runtime->brush_worlds[world_index].chunk_render_models =
+                (slayer3d_model *)SDL_calloc((size_t)world->compile_chunk_count, sizeof(slayer3d_model));
+            runtime->brush_worlds[world_index].chunk_render_model_count = world->compile_chunk_count;
+            if (runtime->brush_worlds[world_index].chunk_render_models == NULL ||
+                !slayer3d_game_data_brush_world_compile_chunk_render_models(
+                    world, runtime->brush_worlds[world_index].chunk_render_models, world->compile_chunk_count))
+            {
+                SDL_free(runtime->brush_worlds[world_index].chunk_render_models);
+                runtime->brush_worlds[world_index].chunk_render_models = NULL;
+                runtime->brush_worlds[world_index].chunk_render_model_count = 0;
+                set_errorf(error_buffer, error_buffer_size, "failed to compile brush world '%s' chunk meshes",
+                           world->name != NULL ? world->name : "<unnamed>");
+                return false;
+            }
         }
     }
     return true;

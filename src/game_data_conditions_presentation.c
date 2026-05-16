@@ -684,6 +684,34 @@ static bool read_brush_diagnostic_metric(const slayer3d_game_data_runtime *runti
         value = diagnostics.render_mesh_draws;
     else if (SDL_strcmp(name, "render_triangles_submitted") == 0)
         value = diagnostics.render_triangles_submitted;
+    else if (SDL_strcmp(name, "compile_face_count") == 0)
+        value = diagnostics.compile_face_count;
+    else if (SDL_strcmp(name, "compile_rendered_face_count") == 0)
+        value = diagnostics.compile_rendered_face_count;
+    else if (SDL_strcmp(name, "compile_culled_face_count") == 0)
+        value = diagnostics.compile_culled_face_count;
+    else if (SDL_strcmp(name, "compile_triangle_count") == 0)
+        value = diagnostics.compile_triangle_count;
+    else if (SDL_strcmp(name, "compile_invalid_brush_count") == 0)
+        value = diagnostics.compile_invalid_brush_count;
+    else if (SDL_strcmp(name, "compile_degenerate_face_count") == 0)
+        value = diagnostics.compile_degenerate_face_count;
+    else if (SDL_strcmp(name, "compile_chunk_count") == 0)
+        value = diagnostics.compile_chunk_count;
+    else if (SDL_strcmp(name, "collision_chunk_count") == 0)
+        value = diagnostics.collision_chunk_count;
+    else if (SDL_strcmp(name, "collision_chunk_reject_count") == 0)
+        value = diagnostics.collision_chunk_reject_count;
+    else if (SDL_strcmp(name, "render_chunk_draws") == 0)
+        value = diagnostics.render_chunk_draws;
+    else if (SDL_strcmp(name, "render_chunk_brushes_drawn") == 0)
+        value = diagnostics.render_chunk_brushes_drawn;
+    else if (SDL_strcmp(name, "frustum_brush_candidates") == 0)
+        value = diagnostics.frustum_brush_candidates;
+    else if (SDL_strcmp(name, "frustum_brush_culled") == 0)
+        value = diagnostics.frustum_brush_culled;
+    else if (SDL_strcmp(name, "frustum_triangles_culled") == 0)
+        value = diagnostics.frustum_triangles_culled;
     else if (SDL_strcmp(name, "visibility_brush_candidates") == 0)
         value = diagnostics.visibility_brush_candidates;
     else if (SDL_strcmp(name, "visibility_brush_visible") == 0)
@@ -730,6 +758,22 @@ static bool read_performance_metric(const char *metric, const slayer3d_game_data
         out_value->as_float = metrics != NULL ? metrics->render_static_mesh_instances_batched_per_frame : 0.0f;
     else if (SDL_strcmp(metric, "render.static_mesh_draw_calls_saved_per_frame") == 0)
         out_value->as_float = metrics != NULL ? metrics->render_static_mesh_draw_calls_saved_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.procedural_lod_candidates_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_procedural_lod_candidates_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.procedural_lod_reduced_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_procedural_lod_reduced_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.procedural_lod_authored_triangles_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_procedural_lod_authored_triangles_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.procedural_lod_resolved_triangles_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_procedural_lod_resolved_triangles_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.procedural_lod_triangles_saved_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_procedural_lod_triangles_saved_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.model_lod_candidates_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_model_lod_candidates_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.model_lod_culled_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_model_lod_culled_per_frame : 0.0f;
+    else if (SDL_strcmp(metric, "render.model_lod_triangles_saved_per_frame") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_model_lod_triangles_saved_per_frame : 0.0f;
     else if (SDL_strcmp(metric, "render.depth_prepass_draws_per_frame") == 0)
         out_value->as_float = metrics != NULL ? metrics->render_depth_prepass_draws_per_frame : 0.0f;
     else if (SDL_strcmp(metric, "render.depth_prepass_triangles_per_frame") == 0)
@@ -746,6 +790,18 @@ static bool read_performance_metric(const char *metric, const slayer3d_game_data
         out_value->as_float = metrics != NULL ? metrics->render_light_selection_draws_per_frame : 0.0f;
     else if (SDL_strcmp(metric, "render.light_selection_ratio") == 0)
         out_value->as_float = metrics != NULL ? metrics->render_light_selection_ratio : 0.0f;
+    else if (SDL_strcmp(metric, "render.world_scale") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_world_scale : 1.0f;
+    else if (SDL_strcmp(metric, "render.world_width") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_world_width : 0.0f;
+    else if (SDL_strcmp(metric, "render.world_height") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_world_height : 0.0f;
+    else if (SDL_strcmp(metric, "render.window_pixel_width") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_window_pixel_width : 0.0f;
+    else if (SDL_strcmp(metric, "render.window_pixel_height") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_window_pixel_height : 0.0f;
+    else if (SDL_strcmp(metric, "render.window_pixel_density") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_window_pixel_density : 1.0f;
     else
         return false;
 

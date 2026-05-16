@@ -884,6 +884,24 @@ static const char *menu_control_string_value(const slayer3d_game_data_runtime *r
     return props != NULL && key != NULL ? slayer3d_properties_get_string(props, key, fallback) : fallback;
 }
 
+static const slayer3d_value *menu_control_value_or_default(const slayer3d_properties *props, const char *key,
+                                                           yyjson_val *control, slayer3d_value *default_value)
+{
+    const slayer3d_value *value = props != NULL && key != NULL ? slayer3d_properties_get_value(props, key) : NULL;
+    if (value == NULL && default_value != NULL)
+    {
+        yyjson_val *fallback = obj_get(control, "default");
+        if (yyjson_is_str(fallback))
+        {
+            SDL_zero(*default_value);
+            default_value->type = SLAYER3D_VALUE_STRING;
+            default_value->as_string = (char *)yyjson_get_str(fallback);
+            value = default_value;
+        }
+    }
+    return value;
+}
+
 static bool menu_control_set_string_value(slayer3d_game_data_runtime *runtime, yyjson_val *control, const char *value)
 {
     const char *key = json_string(control, "key", NULL);
@@ -1178,25 +1196,26 @@ bool slayer3d_game_data_adjust_menu_item_control(slayer3d_game_data_runtime *run
         item->control_target == NULL || item->control_key == NULL)
         return false;
 
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, item->control_target);
-    if (actor == NULL)
-        return false;
-
     yyjson_val *control = find_menu_item_control_json(runtime, item);
+    slayer3d_properties *props = menu_control_properties(runtime, control);
+    if (props == NULL)
+        return false;
     const int step_direction = direction < 0 ? -1 : 1;
     switch (item->control_type)
     {
     case SLAYER3D_GAME_DATA_MENU_CONTROL_TOGGLE: {
         const bool current =
-            slayer3d_properties_get_bool(actor->props, item->control_key, json_bool(control, "default", false));
-        slayer3d_properties_set_bool(actor->props, item->control_key, !current);
+            slayer3d_properties_get_bool(props, item->control_key, json_bool(control, "default", false));
+        slayer3d_properties_set_bool(props, item->control_key, !current);
         return true;
     }
     case SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE: {
         yyjson_val *choices = obj_get(control, "choices");
         if (!yyjson_is_arr(choices) || yyjson_arr_size(choices) == 0)
             return false;
-        const slayer3d_value *current = slayer3d_properties_get_value(actor->props, item->control_key);
+        slayer3d_value default_value;
+        const slayer3d_value *current =
+            menu_control_value_or_default(props, item->control_key, control, &default_value);
         int current_index = -1;
         for (size_t i = 0; i < yyjson_arr_size(choices); ++i)
         {
@@ -1215,20 +1234,19 @@ bool slayer3d_game_data_adjust_menu_item_control(slayer3d_game_data_runtime *run
         if (next_index < 0)
             next_index += choice_count;
         yyjson_val *next = yyjson_arr_get(choices, (size_t)next_index);
-        return set_property_from_json(actor->props, item->control_key,
-                                      yyjson_is_obj(next) ? obj_get(next, "value") : next);
+        return set_property_from_json(props, item->control_key, yyjson_is_obj(next) ? obj_get(next, "value") : next);
     }
     case SLAYER3D_GAME_DATA_MENU_CONTROL_RANGE: {
         const float min_value = json_float(control, "min", 0.0f);
         const float max_value = json_float(control, "max", 1.0f);
         const float step = json_float(control, "step", 1.0f);
-        const slayer3d_value *current = slayer3d_properties_get_value(actor->props, item->control_key);
+        const slayer3d_value *current = slayer3d_properties_get_value(props, item->control_key);
         float value = menu_control_numeric_value(current, control, min_value);
         value = SDL_clamp(value + step * (float)step_direction, min_value, max_value);
         if (menu_range_is_integer(control))
-            slayer3d_properties_set_int(actor->props, item->control_key, (int)SDL_lroundf(value));
+            slayer3d_properties_set_int(props, item->control_key, (int)SDL_lroundf(value));
         else
-            slayer3d_properties_set_float(actor->props, item->control_key, value);
+            slayer3d_properties_set_float(props, item->control_key, value);
         return true;
     }
     case SLAYER3D_GAME_DATA_MENU_CONTROL_NONE:
@@ -1418,6 +1436,22 @@ static bool ui_tool_metric_to_string(const slayer3d_game_data_ui_metrics *metric
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_static_mesh_instances_batched_per_frame);
     else if (SDL_strcmp(metric, "render.static_mesh_draw_calls_saved_per_frame") == 0)
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_static_mesh_draw_calls_saved_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_candidates_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_candidates_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_reduced_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_reduced_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_authored_triangles_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_authored_triangles_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_resolved_triangles_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_resolved_triangles_per_frame);
+    else if (SDL_strcmp(metric, "render.procedural_lod_triangles_saved_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_triangles_saved_per_frame);
+    else if (SDL_strcmp(metric, "render.model_lod_candidates_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_candidates_per_frame);
+    else if (SDL_strcmp(metric, "render.model_lod_culled_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_culled_per_frame);
+    else if (SDL_strcmp(metric, "render.model_lod_triangles_saved_per_frame") == 0)
+        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_triangles_saved_per_frame);
     else if (SDL_strcmp(metric, "render.depth_prepass_draws_per_frame") == 0)
         SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_draws_per_frame);
     else if (SDL_strcmp(metric, "render.depth_prepass_triangles_per_frame") == 0)
@@ -1587,10 +1621,10 @@ static bool emit_ui_menu_cursor(yyjson_val *presenter, float row_y, slayer3d_gam
 
 static const char *choice_label_for_property(const slayer3d_game_data_runtime *runtime, yyjson_val *control)
 {
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, json_string(control, "target", NULL));
+    const slayer3d_properties *props = menu_control_properties_const(runtime, control);
     const char *key = json_string(control, "key", NULL);
-    const slayer3d_value *value =
-        actor != NULL && key != NULL ? slayer3d_properties_get_value(actor->props, key) : NULL;
+    slayer3d_value default_value;
+    const slayer3d_value *value = menu_control_value_or_default(props, key, control, &default_value);
     yyjson_val *choices = obj_get(control, "choices");
     for (size_t i = 0; yyjson_is_arr(choices) && i < yyjson_arr_size(choices); ++i)
     {
@@ -1661,10 +1695,10 @@ static void format_menu_item_label(const slayer3d_game_data_runtime *runtime, yy
         return;
     }
 
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, json_string(control, "target", NULL));
+    const slayer3d_properties *props = menu_control_properties_const(runtime, control);
     const char *key = json_string(control, "key", NULL);
-    const slayer3d_value *value =
-        actor != NULL && key != NULL ? slayer3d_properties_get_value(actor->props, key) : NULL;
+    slayer3d_value default_value;
+    const slayer3d_value *value = menu_control_value_or_default(props, key, control, &default_value);
     if (type == SLAYER3D_GAME_DATA_MENU_CONTROL_TOGGLE)
     {
         const bool enabled =

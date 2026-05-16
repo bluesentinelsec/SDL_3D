@@ -309,6 +309,9 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
 
     context->width = render_width;
     context->height = render_height;
+    context->world_render_scale = 1.0f;
+    context->world_render_width = render_width;
+    context->world_render_height = render_height;
     context->near_plane = SLAYER3D_DEFAULT_NEAR_PLANE;
     context->far_plane = SLAYER3D_DEFAULT_FAR_PLANE;
     context->in_mode_3d = false;
@@ -414,6 +417,56 @@ int slayer3d_get_render_context_height(const slayer3d_render_context *context)
     }
 
     return context->height;
+}
+
+bool slayer3d_set_world_render_scale(slayer3d_render_context *context, float scale)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (!(scale >= 0.25f && scale <= 1.0f))
+    {
+        return SDL_SetError("World render scale must be between 0.25 and 1.0.");
+    }
+
+    int world_width = context->width;
+    int world_height = context->height;
+    if (context->backend == SLAYER3D_BACKEND_OPENGL)
+    {
+        if (!slayer3d_gl_set_world_render_scale(context->gl, context->width, context->height, scale, &world_width,
+                                                &world_height))
+        {
+            return false;
+        }
+    }
+
+    context->world_render_scale = scale;
+    context->world_render_width = world_width;
+    context->world_render_height = world_height;
+    return true;
+}
+
+float slayer3d_get_world_render_scale(const slayer3d_render_context *context)
+{
+    return context != NULL ? context->world_render_scale : 1.0f;
+}
+
+bool slayer3d_get_world_render_size(const slayer3d_render_context *context, int *out_width, int *out_height)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (out_width != NULL)
+    {
+        *out_width = context->world_render_width;
+    }
+    if (out_height != NULL)
+    {
+        *out_height = context->world_render_height;
+    }
+    return true;
 }
 
 bool slayer3d_get_render_stats(const slayer3d_render_context *context, slayer3d_render_stats *out_stats)
@@ -660,6 +713,7 @@ void slayer3d_init_window_config(slayer3d_window_config *config)
     config->vsync = true;
     config->maximized = false;
     config->resizable = true;
+    config->high_pixel_density = true;
 }
 
 static void slayer3d_apply_window_icon(SDL_Window *window, const char *icon_path)
@@ -816,6 +870,8 @@ bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **o
         flags |= SDL_WINDOW_RESIZABLE;
     if (local.maximized)
         flags |= SDL_WINDOW_MAXIMIZED;
+    if (local.high_pixel_density)
+        flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
     if (resolved == SLAYER3D_BACKEND_OPENGL)
     {
@@ -886,10 +942,15 @@ bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **o
 
     *out_window = window;
     *out_context = context;
+    int pixel_width = 0;
+    int pixel_height = 0;
+    (void)SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d",
+                "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d "
+                "pixels=%dx%d density=%.2f high_dpi=%s",
                 slayer3d_window_mode_name(local.display_mode), slayer3d_get_backend_name(resolved),
-                local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height);
+                local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height,
+                pixel_width, pixel_height, SDL_GetWindowPixelDensity(window), local.high_pixel_density ? "on" : "off");
     return true;
 }
 

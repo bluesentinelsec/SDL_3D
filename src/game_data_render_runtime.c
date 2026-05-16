@@ -1298,6 +1298,7 @@ static bool emit_actor_render_primitives(const slayer3d_game_data_runtime *runti
         primitive.tube_segments = primitive.rings;
         primitive.lod_enabled = json_bool(component, "lod", true);
         primitive.lod_bias = SDL_max(json_float(component, "lod_bias", 1.0f), 0.001f);
+        primitive.lod_cull_pixels = json_float(component, "lod_cull_pixels", -1.0f);
 
         if (SDL_strcmp(type, "render.cube") == 0)
         {
@@ -1776,6 +1777,57 @@ bool slayer3d_game_data_for_each_particle_emitter(const slayer3d_game_data_runti
     return true;
 }
 
+static const char *first_render_quality_preset_name(yyjson_val *render)
+{
+    yyjson_val *presets = obj_get(render, "quality_presets");
+    yyjson_val *first = yyjson_is_arr(presets) && yyjson_arr_size(presets) > 0 ? yyjson_arr_get(presets, 0) : NULL;
+    return json_string(first, "name", NULL);
+}
+
+static yyjson_val *find_render_quality_preset(yyjson_val *render, const slayer3d_game_data_runtime *runtime)
+{
+    yyjson_val *presets = obj_get(render, "quality_presets");
+    if (!yyjson_is_arr(presets) || yyjson_arr_size(presets) == 0)
+        return NULL;
+
+    const char *fallback = json_string(render, "quality", first_render_quality_preset_name(render));
+    const char *selected = scene_state_string(runtime, json_string(render, "quality_key", NULL), fallback);
+    if (selected == NULL || selected[0] == '\0')
+        return NULL;
+
+    for (size_t i = 0; i < yyjson_arr_size(presets); ++i)
+    {
+        yyjson_val *preset = yyjson_arr_get(presets, i);
+        if (SDL_strcmp(json_string(preset, "name", ""), selected) == 0)
+            return preset;
+    }
+    return NULL;
+}
+
+static bool render_bool_setting(const slayer3d_game_data_runtime *runtime, yyjson_val *render, yyjson_val *preset,
+                                const char *name, const char *key_name, bool fallback)
+{
+    bool value = json_bool(render, name, fallback);
+    value = json_bool(preset, name, value);
+    return scene_state_bool(runtime, json_string(render, key_name, NULL), value);
+}
+
+static int render_int_setting(const slayer3d_game_data_runtime *runtime, yyjson_val *render, yyjson_val *preset,
+                              const char *name, const char *key_name, int fallback)
+{
+    int value = json_int(render, name, fallback);
+    value = json_int(preset, name, value);
+    return scene_state_int(runtime, json_string(render, key_name, NULL), value);
+}
+
+static float render_float_setting(const slayer3d_game_data_runtime *runtime, yyjson_val *render, yyjson_val *preset,
+                                  const char *name, const char *key_name, float fallback)
+{
+    float value = json_float(render, name, fallback);
+    value = json_float(preset, name, value);
+    return scene_state_float(runtime, json_string(render, key_name, NULL), value);
+}
+
 bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *runtime,
                                             slayer3d_game_data_render_settings *out_settings)
 {
@@ -1793,7 +1845,10 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
         out_settings->procedural_lod_near_pixels = 128.0f;
         out_settings->procedural_lod_far_pixels = 24.0f;
         out_settings->procedural_lod_min_segments = 8;
+        out_settings->model_lod_culling_enabled = false;
+        out_settings->model_lod_cull_pixels = 4.0f;
         out_settings->performance_queries_enabled = false;
+        out_settings->world_render_scale = 1.0f;
         out_settings->tonemap = SLAYER3D_TONEMAP_ACES;
     }
     if (runtime == NULL || out_settings == NULL)
@@ -1803,43 +1858,52 @@ bool slayer3d_game_data_get_render_settings(const slayer3d_game_data_runtime *ru
     if (!yyjson_is_obj(render))
         return true;
 
+    yyjson_val *quality_preset = find_render_quality_preset(render, runtime);
     out_settings->clear_color = json_color(render, "clear_color", out_settings->clear_color);
-    out_settings->lighting_enabled = scene_state_bool(runtime, json_string(render, "lighting_key", NULL),
-                                                      json_bool(render, "lighting", out_settings->lighting_enabled));
-    out_settings->bloom_enabled = scene_state_bool(runtime, json_string(render, "bloom_key", NULL),
-                                                   json_bool(render, "bloom", out_settings->bloom_enabled));
-    out_settings->ssao_enabled = scene_state_bool(runtime, json_string(render, "ssao_key", NULL),
-                                                  json_bool(render, "ssao", out_settings->ssao_enabled));
-    out_settings->depth_prepass_enabled =
-        scene_state_bool(runtime, json_string(render, "depth_prepass_key", NULL),
-                         json_bool(render, "depth_prepass", out_settings->depth_prepass_enabled));
-    out_settings->per_object_light_selection_enabled = scene_state_bool(
-        runtime, json_string(render, "per_object_light_selection_key", NULL),
-        json_bool(render, "per_object_light_selection", out_settings->per_object_light_selection_enabled));
+    out_settings->lighting_enabled = render_bool_setting(runtime, render, quality_preset, "lighting", "lighting_key",
+                                                         out_settings->lighting_enabled);
+    out_settings->bloom_enabled =
+        render_bool_setting(runtime, render, quality_preset, "bloom", "bloom_key", out_settings->bloom_enabled);
+    out_settings->ssao_enabled =
+        render_bool_setting(runtime, render, quality_preset, "ssao", "ssao_key", out_settings->ssao_enabled);
+    out_settings->depth_prepass_enabled = render_bool_setting(runtime, render, quality_preset, "depth_prepass",
+                                                              "depth_prepass_key", out_settings->depth_prepass_enabled);
+    out_settings->per_object_light_selection_enabled =
+        render_bool_setting(runtime, render, quality_preset, "per_object_light_selection",
+                            "per_object_light_selection_key", out_settings->per_object_light_selection_enabled);
     out_settings->per_object_light_limit =
-        scene_state_int(runtime, json_string(render, "per_object_light_limit_key", NULL),
-                        json_int(render, "per_object_light_limit", out_settings->per_object_light_limit));
+        render_int_setting(runtime, render, quality_preset, "per_object_light_limit", "per_object_light_limit_key",
+                           out_settings->per_object_light_limit);
     out_settings->per_object_light_limit =
         SDL_clamp(out_settings->per_object_light_limit, 0, SLAYER3D_MAX_SHADER_LIGHTS);
-    out_settings->procedural_lod_enabled =
-        scene_state_bool(runtime, json_string(render, "procedural_lod_key", NULL),
-                         json_bool(render, "procedural_lod", out_settings->procedural_lod_enabled));
+    out_settings->procedural_lod_enabled = render_bool_setting(
+        runtime, render, quality_preset, "procedural_lod", "procedural_lod_key", out_settings->procedural_lod_enabled);
     out_settings->procedural_lod_near_pixels =
-        scene_state_float(runtime, json_string(render, "procedural_lod_near_pixels_key", NULL),
-                          json_float(render, "procedural_lod_near_pixels", out_settings->procedural_lod_near_pixels));
+        render_float_setting(runtime, render, quality_preset, "procedural_lod_near_pixels",
+                             "procedural_lod_near_pixels_key", out_settings->procedural_lod_near_pixels);
     out_settings->procedural_lod_far_pixels =
-        scene_state_float(runtime, json_string(render, "procedural_lod_far_pixels_key", NULL),
-                          json_float(render, "procedural_lod_far_pixels", out_settings->procedural_lod_far_pixels));
+        render_float_setting(runtime, render, quality_preset, "procedural_lod_far_pixels",
+                             "procedural_lod_far_pixels_key", out_settings->procedural_lod_far_pixels);
     out_settings->procedural_lod_min_segments =
-        scene_state_int(runtime, json_string(render, "procedural_lod_min_segments_key", NULL),
-                        json_int(render, "procedural_lod_min_segments", out_settings->procedural_lod_min_segments));
+        render_int_setting(runtime, render, quality_preset, "procedural_lod_min_segments",
+                           "procedural_lod_min_segments_key", out_settings->procedural_lod_min_segments);
     out_settings->procedural_lod_near_pixels = SDL_max(out_settings->procedural_lod_near_pixels, 1.0f);
     out_settings->procedural_lod_far_pixels =
         SDL_clamp(out_settings->procedural_lod_far_pixels, 1.0f, out_settings->procedural_lod_near_pixels);
     out_settings->procedural_lod_min_segments = SDL_clamp(out_settings->procedural_lod_min_segments, 3, 64);
+    out_settings->model_lod_culling_enabled =
+        render_bool_setting(runtime, render, quality_preset, "model_lod_culling", "model_lod_culling_key",
+                            out_settings->model_lod_culling_enabled);
+    out_settings->model_lod_cull_pixels =
+        render_float_setting(runtime, render, quality_preset, "model_lod_cull_pixels", "model_lod_cull_pixels_key",
+                             out_settings->model_lod_cull_pixels);
+    out_settings->model_lod_cull_pixels = SDL_max(out_settings->model_lod_cull_pixels, 0.0f);
     out_settings->performance_queries_enabled =
-        scene_state_bool(runtime, json_string(render, "performance_queries_key", NULL),
-                         json_bool(render, "performance_queries", out_settings->performance_queries_enabled));
+        render_bool_setting(runtime, render, quality_preset, "performance_queries", "performance_queries_key",
+                            out_settings->performance_queries_enabled);
+    out_settings->world_render_scale = render_float_setting(runtime, render, quality_preset, "world_render_scale",
+                                                            "world_render_scale_key", out_settings->world_render_scale);
+    out_settings->world_render_scale = SDL_clamp(out_settings->world_render_scale, 0.25f, 1.0f);
     const char *tonemap_name =
         scene_state_string(runtime, json_string(render, "tonemap_key", NULL), json_string(render, "tonemap", NULL));
     out_settings->tonemap = parse_tonemap(tonemap_name, out_settings->tonemap);

@@ -210,6 +210,9 @@ static bool apply_app_config_from_root(yyjson_val *root, slayer3d_game_config *o
         yyjson_val *maximized = obj_get(window, "maximized");
         if (yyjson_is_bool(maximized))
             out_config->maximized = yyjson_get_bool(maximized) ? 1 : -1;
+        yyjson_val *high_pixel_density = obj_get(window, "high_pixel_density");
+        if (yyjson_is_bool(high_pixel_density))
+            out_config->high_pixel_density = yyjson_get_bool(high_pixel_density) ? 1 : -1;
         out_config->backend = parse_backend(json_string(window, "renderer", NULL), out_config->backend);
         out_config->icon_path = json_string(window, "icon_path", json_string(window, "icon", out_config->icon_path));
     }

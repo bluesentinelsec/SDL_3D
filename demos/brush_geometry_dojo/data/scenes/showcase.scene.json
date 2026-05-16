@@ -524,6 +524,75 @@
         "scale": 0.48
       },
       {
+        "name": "ui.brush_geometry.world_render_scale",
+        "font": "font.brush_geometry.hud",
+        "format": "WORLD %.2fx %.0fx%.0f PIX %.0fx%.0f %.2fx",
+        "bindings": [
+          { "type": "metric", "metric": "render.world_scale" },
+          { "type": "metric", "metric": "render.world_width" },
+          { "type": "metric", "metric": "render.world_height" },
+          { "type": "metric", "metric": "render.window_pixel_width" },
+          { "type": "metric", "metric": "render.window_pixel_height" },
+          { "type": "metric", "metric": "render.window_pixel_density" }
+        ],
+        "x": 0.985,
+        "y": 0.340,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.procedural_lod_perf",
+        "font": "font.brush_geometry.hud",
+        "format": "PLOD %.0f/%.0f SAVE %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "render.procedural_lod_reduced_per_frame" },
+          { "type": "metric", "metric": "render.procedural_lod_candidates_per_frame" },
+          { "type": "metric", "metric": "render.procedural_lod_triangles_saved_per_frame" }
+        ],
+        "x": 0.985,
+        "y": 0.368,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.model_lod_perf",
+        "font": "font.brush_geometry.hud",
+        "format": "MLOD %.0f/%.0f SAVE %.0f",
+        "bindings": [
+          { "type": "metric", "metric": "render.model_lod_culled_per_frame" },
+          { "type": "metric", "metric": "render.model_lod_candidates_per_frame" },
+          { "type": "metric", "metric": "render.model_lod_triangles_saved_per_frame" }
+        ],
+        "x": 0.985,
+        "y": 0.396,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
+        "name": "ui.brush_geometry.brush_compile",
+        "font": "font.brush_geometry.hud",
+        "format": "COMPILE %llu/%llu CULL %llu TRI %llu CHUNK %llu",
+        "bindings": [
+          { "type": "metric", "metric": "brush.compile_rendered_face_count" },
+          { "type": "metric", "metric": "brush.compile_face_count" },
+          { "type": "metric", "metric": "brush.compile_culled_face_count" },
+          { "type": "metric", "metric": "brush.compile_triangle_count" },
+          { "type": "metric", "metric": "brush.compile_chunk_count" }
+        ],
+        "x": 0.985,
+        "y": 0.424,
+        "normalized": true,
+        "align": "right",
+        "color": [175, 220, 255, 220],
+        "scale": 0.48
+      },
+      {
         "name": "ui.brush_geometry.trigger_state",
         "font": "font.brush_geometry.hud",
         "format": "TRIGGER %d",

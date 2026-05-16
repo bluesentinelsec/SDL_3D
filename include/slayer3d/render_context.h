@@ -74,6 +74,22 @@ extern "C"
         Uint64 static_mesh_instances_batched;
         /** @brief Backend draw calls avoided by static mesh instancing. */
         Uint64 static_mesh_draw_calls_saved;
+        /** @brief Procedural primitives eligible for screen-space LOD selection. */
+        Uint64 procedural_lod_candidates;
+        /** @brief Procedural primitives whose tessellation was reduced by screen-space LOD. */
+        Uint64 procedural_lod_reduced;
+        /** @brief Approximate authored triangle budget for procedural LOD candidates. */
+        Uint64 procedural_lod_authored_triangles;
+        /** @brief Approximate resolved triangle budget after procedural LOD selection. */
+        Uint64 procedural_lod_resolved_triangles;
+        /** @brief Approximate procedural triangles avoided by screen-space LOD. */
+        Uint64 procedural_lod_triangles_saved;
+        /** @brief Model primitives eligible for screen-space LOD culling. */
+        Uint64 model_lod_candidates;
+        /** @brief Model primitives culled because they project below the authored LOD threshold. */
+        Uint64 model_lod_culled;
+        /** @brief Approximate model triangles avoided by screen-space LOD culling. */
+        Uint64 model_lod_triangles_saved;
         /** @brief Lit mesh draws skinned on the GPU by capable renderers. */
         Uint64 gpu_skinned_draws;
         /** @brief Vertices skinned on the GPU by capable renderers. */
@@ -118,6 +134,7 @@ extern "C"
         bool vsync;                        /**< Request synchronized presentation where supported. */
         bool maximized;                    /**< Create the desktop window maximized. */
         bool resizable;                    /**< Allow the user to resize desktop windowed mode. */
+        bool high_pixel_density;           /**< Request a high-DPI backing framebuffer where supported. */
     } slayer3d_window_config;
 
     /*
@@ -153,7 +170,8 @@ extern "C"
      * Defaults are width=1280, height=720, logical_width=1280,
      * logical_height=720, title="SLAYER3D", backend=AUTO,
      * display_mode=WINDOWED, vsync=true, maximized=false,
-     * allow_backend_fallback=true, and resizable=true.
+     * allow_backend_fallback=true, resizable=true, and
+     * high_pixel_density=true.
      */
     void slayer3d_init_window_config(slayer3d_window_config *config);
 
@@ -225,6 +243,19 @@ extern "C"
     slayer3d_backend slayer3d_get_render_context_backend(const slayer3d_render_context *context);
     int slayer3d_get_render_context_width(const slayer3d_render_context *context);
     int slayer3d_get_render_context_height(const slayer3d_render_context *context);
+    /**
+     * @brief Set the internal 3D/world render scale for capable backends.
+     *
+     * The logical presentation size, UI coordinates, input mapping, and camera
+     * aspect ratio are unchanged. Capable backends render the world layer to a
+     * smaller framebuffer and upscale it before drawing the UI overlay at full
+     * logical resolution. Valid scales are 0.25 through 1.0.
+     */
+    bool slayer3d_set_world_render_scale(slayer3d_render_context *context, float scale);
+    /** @brief Return the requested 3D/world render scale. */
+    float slayer3d_get_world_render_scale(const slayer3d_render_context *context);
+    /** @brief Return the active 3D/world framebuffer size. */
+    bool slayer3d_get_world_render_size(const slayer3d_render_context *context, int *out_width, int *out_height);
     bool slayer3d_get_render_stats(const slayer3d_render_context *context, slayer3d_render_stats *out_stats);
     void slayer3d_reset_render_stats(slayer3d_render_context *context);
     /**

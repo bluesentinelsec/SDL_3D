@@ -27,9 +27,19 @@ bool slayer3d_game_data_brush_world_trace_local_with_diagnostics(const slayer3d_
 
 bool slayer3d_game_data_brush_world_build_acceleration(slayer3d_game_data_brush_world *world);
 
+bool slayer3d_game_data_brush_world_build_acceleration_checked(slayer3d_game_data_brush_world *world,
+                                                               char *error_buffer, int error_buffer_size);
+
+bool slayer3d_game_data_brush_world_build_compile_chunks(slayer3d_game_data_brush_world *world);
+
+void slayer3d_game_data_brush_world_free_compile_chunks(slayer3d_game_data_brush_world *world);
+
 bool slayer3d_game_data_brush_world_compile_render_model(slayer3d_game_data_brush_world *world, slayer3d_model *model);
 
 bool slayer3d_game_data_brush_world_compile_brush_render_models(slayer3d_game_data_brush_world *world,
+                                                                slayer3d_model *models, int model_count);
+
+bool slayer3d_game_data_brush_world_compile_chunk_render_models(slayer3d_game_data_brush_world *world,
                                                                 slayer3d_model *models, int model_count);
 
 bool slayer3d_game_data_brush_slide_with_trace(slayer3d_game_data_brush_trace_fn trace_fn, void *trace_userdata,

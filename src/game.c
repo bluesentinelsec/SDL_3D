@@ -408,6 +408,8 @@ static bool slayer3d_game_create_context(const slayer3d_game_config *config, sla
         window_config.maximized = config->maximized > 0;
     else
         window_config.maximized = true;
+    if (config != NULL && config->high_pixel_density != 0)
+        window_config.high_pixel_density = config->high_pixel_density > 0;
 
     if (!slayer3d_create_window(&window_config, &ctx->window, &ctx->renderer))
     {

@@ -10,6 +10,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "slayer3d/animation.h"
+#include "slayer3d/collision.h"
 #include "slayer3d/drawing3d.h"
 #include "slayer3d/image.h"
 #include "slayer3d/lighting.h"
@@ -207,6 +208,7 @@ static bool apply_render_settings(const slayer3d_game_data_runtime *runtime, sla
     ok = slayer3d_set_per_object_light_selection_enabled(renderer, settings.per_object_light_selection_enabled) && ok;
     ok = slayer3d_set_per_object_light_limit(renderer, settings.per_object_light_limit) && ok;
     ok = slayer3d_set_render_sample_queries_enabled(renderer, settings.performance_queries_enabled) && ok;
+    ok = slayer3d_set_world_render_scale(renderer, settings.world_render_scale) && ok;
     ok = slayer3d_set_tonemap_mode(renderer, settings.tonemap) && ok;
     ok = slayer3d_clear_render_context(renderer, settings.clear_color) && ok;
     return ok;
@@ -1050,7 +1052,193 @@ static int lod_segment_count(int authored, int minimum, float projected_pixels, 
     return SDL_clamp(resolved, minimum, authored);
 }
 
-static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_game_data_render_primitive *primitive)
+static Uint64 procedural_lod_triangle_count(const slayer3d_game_data_render_primitive *primitive)
+{
+    if (primitive == NULL)
+        return 0u;
+
+    const int slices = SDL_max(primitive->slices, 3);
+    const int rings = SDL_max(primitive->rings, 3);
+    const int tube_segments = SDL_max(primitive->tube_segments, 3);
+    const int instance_count = SDL_max(primitive->instance_count, 1);
+    Uint64 triangles = 0u;
+
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE ||
+        primitive->type == SLAYER3D_GAME_DATA_RENDER_SPHERE_BATCH)
+    {
+        triangles = (Uint64)rings * (Uint64)slices * 2u;
+        return triangles * (Uint64)instance_count;
+    }
+
+    if (primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+        return 0u;
+
+    switch (primitive->mesh_primitive)
+    {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+        return (Uint64)rings * (Uint64)slices * 2u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+        return (Uint64)slices * (Uint64)(SDL_max(rings, 1) * 2 + 1) * 2u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+        return (Uint64)slices * 4u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+        return (Uint64)slices * (Uint64)tube_segments * 2u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+        return (Uint64)slices;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+        return (Uint64)rings * (Uint64)slices * 2u + (Uint64)slices;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+        return (Uint64)SDL_max(rings, 1) * 72u;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        return 0u;
+    }
+}
+
+static bool model_lod_accumulate_bounds(const slayer3d_mesh *mesh, slayer3d_vec3 scale, float *radius,
+                                        Uint64 *triangles)
+{
+    if (mesh == NULL || radius == NULL || triangles == NULL)
+        return false;
+
+    *triangles += (Uint64)((mesh->index_count > 0 ? mesh->index_count : mesh->vertex_count) / 3);
+
+    if (mesh->has_local_bounds)
+    {
+        const slayer3d_vec3 corners[] = {
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.min.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.min.y, mesh->local_bounds.max.z),
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.max.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.min.x, mesh->local_bounds.max.y, mesh->local_bounds.max.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.min.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.min.y, mesh->local_bounds.max.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.max.y, mesh->local_bounds.min.z),
+            slayer3d_vec3_make(mesh->local_bounds.max.x, mesh->local_bounds.max.y, mesh->local_bounds.max.z),
+        };
+        for (size_t i = 0; i < SDL_arraysize(corners); ++i)
+        {
+            const slayer3d_vec3 scaled =
+                slayer3d_vec3_make(corners[i].x * scale.x, corners[i].y * scale.y, corners[i].z * scale.z);
+            *radius = SDL_max(*radius, slayer3d_vec3_length(scaled));
+        }
+        return true;
+    }
+
+    if (mesh->positions == NULL || mesh->vertex_count <= 0)
+        return true;
+
+    for (int i = 0; i < mesh->vertex_count; ++i)
+    {
+        const slayer3d_vec3 scaled =
+            slayer3d_vec3_make(mesh->positions[i * 3 + 0] * scale.x, mesh->positions[i * 3 + 1] * scale.y,
+                               mesh->positions[i * 3 + 2] * scale.z);
+        *radius = SDL_max(*radius, slayer3d_vec3_length(scaled));
+    }
+    return true;
+}
+
+static bool model_lod_projected_pixels(const primitive_draw_context *context, const slayer3d_model *model,
+                                       const slayer3d_game_data_render_primitive *primitive,
+                                       float *out_projected_pixels, Uint64 *out_triangles)
+{
+    if (context == NULL || context->camera == NULL || model == NULL || primitive == NULL ||
+        out_projected_pixels == NULL || out_triangles == NULL || model->meshes == NULL || model->mesh_count <= 0)
+    {
+        return false;
+    }
+
+    float radius = 0.0f;
+    Uint64 triangles = 0u;
+    const slayer3d_vec3 scale = slayer3d_vec3_make(
+        SDL_fabsf(primitive->model_scale.x), SDL_fabsf(primitive->model_scale.y), SDL_fabsf(primitive->model_scale.z));
+    for (int i = 0; i < model->mesh_count; ++i)
+    {
+        if (!model_lod_accumulate_bounds(&model->meshes[i], scale, &radius, &triangles))
+            return false;
+    }
+    if (radius <= 0.0f || triangles == 0u)
+        return false;
+
+    const slayer3d_vec3 forward =
+        slayer3d_vec3_normalize(slayer3d_vec3_sub(context->camera->target, context->camera->position));
+    if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
+        return false;
+    const float distance =
+        slayer3d_vec3_dot(slayer3d_vec3_sub(primitive->position, context->camera->position), forward);
+    if (distance <= 0.01f)
+    {
+        *out_projected_pixels = context->render_settings.procedural_lod_near_pixels;
+        *out_triangles = triangles;
+        return true;
+    }
+
+    const int axis_pixels = context->camera->fov_axis == SLAYER3D_CAMERA_FOV_HORIZONTAL
+                                ? slayer3d_get_render_context_width(context->renderer)
+                                : slayer3d_get_render_context_height(context->renderer);
+    const float fov = SDL_clamp(context->camera->fovy, 1.0f, 175.0f) * SLAYER3D_GAME_PRESENTATION_PI / 180.0f;
+    const float denominator = 2.0f * distance * SDL_tanf(fov * 0.5f);
+    if (axis_pixels <= 0 || denominator <= 0.0001f)
+        return false;
+
+    *out_projected_pixels = ((radius * 2.0f) * (float)axis_pixels / denominator) * SDL_max(primitive->lod_bias, 0.001f);
+    *out_triangles = triangles;
+    return true;
+}
+
+static bool model_lod_should_cull(primitive_draw_context *context, const slayer3d_model *model,
+                                  const slayer3d_game_data_render_primitive *primitive)
+{
+    if (context == NULL || context->renderer == NULL || model == NULL || primitive == NULL ||
+        !context->render_settings.model_lod_culling_enabled || !primitive->lod_enabled || primitive->view_space)
+    {
+        return false;
+    }
+
+    float projected_pixels = 0.0f;
+    Uint64 triangles = 0u;
+    if (!model_lod_projected_pixels(context, model, primitive, &projected_pixels, &triangles))
+        return false;
+
+    ++context->renderer->stats.model_lod_candidates;
+    const float cull_pixels = primitive->lod_cull_pixels >= 0.0f ? primitive->lod_cull_pixels
+                                                                 : context->render_settings.model_lod_cull_pixels;
+    if (cull_pixels > 0.0f && projected_pixels <= cull_pixels)
+    {
+        ++context->renderer->stats.model_lod_culled;
+        context->renderer->stats.model_lod_triangles_saved += triangles;
+        return true;
+    }
+    return false;
+}
+
+static void record_procedural_lod_stats(primitive_draw_context *context,
+                                        const slayer3d_game_data_render_primitive *authored,
+                                        const slayer3d_game_data_render_primitive *resolved)
+{
+    if (context == NULL || context->renderer == NULL || authored == NULL || resolved == NULL)
+        return;
+
+    const Uint64 authored_triangles = procedural_lod_triangle_count(authored);
+    const Uint64 resolved_triangles = procedural_lod_triangle_count(resolved);
+    ++context->renderer->stats.procedural_lod_candidates;
+    context->renderer->stats.procedural_lod_authored_triangles += authored_triangles;
+    context->renderer->stats.procedural_lod_resolved_triangles += resolved_triangles;
+    if (authored_triangles > resolved_triangles)
+    {
+        ++context->renderer->stats.procedural_lod_reduced;
+        context->renderer->stats.procedural_lod_triangles_saved += authored_triangles - resolved_triangles;
+    }
+}
+
+static void apply_primitive_lod(primitive_draw_context *context, slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL || !context->render_settings.procedural_lod_enabled ||
         !primitive->lod_enabled || primitive->view_space)
@@ -1068,6 +1256,7 @@ static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_
     const float projected = projected_primitive_pixels(context, primitive);
     if (projected <= 0.0f)
         return;
+    const slayer3d_game_data_render_primitive authored = *primitive;
     const int minimum = context->render_settings.procedural_lod_min_segments;
     const float near_pixels = context->render_settings.procedural_lod_near_pixels;
     const float far_pixels = context->render_settings.procedural_lod_far_pixels;
@@ -1076,6 +1265,7 @@ static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_
     {
         primitive->slices = lod_segment_count(primitive->slices, minimum, projected, near_pixels, far_pixels);
         primitive->rings = lod_segment_count(primitive->rings, minimum, projected, near_pixels, far_pixels);
+        record_procedural_lod_stats(context, &authored, primitive);
         return;
     }
 
@@ -1111,6 +1301,7 @@ static void apply_primitive_lod(const primitive_draw_context *context, slayer3d_
     default:
         break;
     }
+    record_procedural_lod_stats(context, &authored, primitive);
 }
 
 static bool primitive_sphere_batch_matches(const slayer3d_game_data_render_primitive *batch,
@@ -2074,10 +2265,10 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
     if (context == NULL || context->renderer == NULL || primitive == NULL)
         return false;
     slayer3d_game_data_render_primitive resolved = *primitive;
-    apply_primitive_lod(context, &resolved);
-    primitive = &resolved;
     if ((primitive->view_space && !context->draw_view_space) || (!primitive->view_space && !context->draw_world_space))
         return true;
+    apply_primitive_lod(context, &resolved);
+    primitive = &resolved;
     if (primitive_sphere_can_batch(primitive))
         return append_sphere_draw_batch(context, primitive);
     if (!flush_sphere_draw_batch(context))
@@ -2153,6 +2344,13 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
             find_or_load_model_entry(context->runtime, context->model_cache, primitive->model_asset);
         if (entry == NULL)
             return false;
+        if (model_lod_should_cull(context, &entry->model, primitive))
+        {
+            slayer3d_set_emissive(context->renderer, 0.0f, 0.0f, 0.0f);
+            if (!primitive->lighting_enabled)
+                slayer3d_set_lighting_enabled(context->renderer, restore_lighting);
+            return true;
+        }
         slayer3d_vec3 model_position = primitive->position;
         slayer3d_vec3 model_rotation = primitive->euler_rotation;
         slayer3d_mat4 model_matrix = slayer3d_mat4_identity();
@@ -2982,6 +3180,40 @@ static bool brush_visibility_grid_mark_visible(const brush_world_runtime *world_
     return brush_visibility_grid_mark_visible_los(world_runtime, local_camera, visible_cells);
 }
 
+static int brush_visibility_grid_cache_slot_for_start(brush_world_runtime *world_runtime, int start)
+{
+    if (world_runtime == NULL)
+        return -1;
+    for (int slot = 0; slot < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++slot)
+    {
+        if (world_runtime->visibility_grid_visible_cache[slot] != NULL &&
+            world_runtime->visibility_grid_visible_cache_start[slot] == start)
+        {
+            return slot;
+        }
+    }
+    return -1;
+}
+
+static int brush_visibility_grid_cache_slot_for_write(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return -1;
+    int oldest_slot = 0;
+    Uint64 oldest_tick = ~(Uint64)0;
+    for (int slot = 0; slot < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++slot)
+    {
+        if (world_runtime->visibility_grid_visible_cache[slot] == NULL)
+            return slot;
+        if (world_runtime->visibility_grid_visible_cache_tick[slot] < oldest_tick)
+        {
+            oldest_tick = world_runtime->visibility_grid_visible_cache_tick[slot];
+            oldest_slot = slot;
+        }
+    }
+    return oldest_slot;
+}
+
 static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *world_runtime, slayer3d_vec3 local_camera,
                                                         slayer3d_game_data_brush_diagnostics *diagnostics)
 {
@@ -2994,31 +3226,40 @@ static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *wor
         return NULL;
     }
 
-    if (world_runtime->visibility_grid_visible_cache != NULL &&
-        world_runtime->visibility_grid_visible_cache_start == start)
+    int cache_slot = brush_visibility_grid_cache_slot_for_start(world_runtime, start);
+    if (cache_slot >= 0)
     {
         if (diagnostics != NULL)
             ++diagnostics->visibility_grid_cache_hits;
-        return world_runtime->visibility_grid_visible_cache;
+        world_runtime->visibility_grid_visible_cache_tick[cache_slot] =
+            ++world_runtime->visibility_grid_visible_cache_clock;
+        return world_runtime->visibility_grid_visible_cache[cache_slot];
     }
 
     if (diagnostics != NULL)
         ++diagnostics->visibility_grid_cache_misses;
-    if (world_runtime->visibility_grid_visible_cache == NULL)
+    cache_slot = brush_visibility_grid_cache_slot_for_write(world_runtime);
+    if (cache_slot < 0)
+        return NULL;
+    if (world_runtime->visibility_grid_visible_cache[cache_slot] == NULL)
     {
-        world_runtime->visibility_grid_visible_cache = (Uint8 *)SDL_calloc(
-            (size_t)world_runtime->visibility_grid_cell_count, sizeof(*world_runtime->visibility_grid_visible_cache));
-        if (world_runtime->visibility_grid_visible_cache == NULL)
+        world_runtime->visibility_grid_visible_cache[cache_slot] =
+            (Uint8 *)SDL_calloc((size_t)world_runtime->visibility_grid_cell_count,
+                                sizeof(*world_runtime->visibility_grid_visible_cache[cache_slot]));
+        if (world_runtime->visibility_grid_visible_cache[cache_slot] == NULL)
             return NULL;
     }
-    SDL_memset(world_runtime->visibility_grid_visible_cache, 0,
+    SDL_memset(world_runtime->visibility_grid_visible_cache[cache_slot], 0,
                (size_t)world_runtime->visibility_grid_cell_count *
-                   sizeof(*world_runtime->visibility_grid_visible_cache));
-    world_runtime->visibility_grid_visible_cache_start = -1;
-    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera, world_runtime->visibility_grid_visible_cache))
+                   sizeof(*world_runtime->visibility_grid_visible_cache[cache_slot]));
+    world_runtime->visibility_grid_visible_cache_start[cache_slot] = -1;
+    if (!brush_visibility_grid_mark_visible(world_runtime, local_camera,
+                                            world_runtime->visibility_grid_visible_cache[cache_slot]))
         return NULL;
-    world_runtime->visibility_grid_visible_cache_start = start;
-    return world_runtime->visibility_grid_visible_cache;
+    world_runtime->visibility_grid_visible_cache_start[cache_slot] = start;
+    world_runtime->visibility_grid_visible_cache_tick[cache_slot] =
+        ++world_runtime->visibility_grid_visible_cache_clock;
+    return world_runtime->visibility_grid_visible_cache[cache_slot];
 }
 
 static bool brush_visibility_forced_visible(const slayer3d_game_data_brush *brush)
@@ -3104,6 +3345,8 @@ static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
             continue;
+        if (!brush_visible[brush_index])
+            continue;
         if (brush_visibility_forced_visible(brush))
             continue;
 
@@ -3123,6 +3366,115 @@ static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
     }
     if (out_occluded_count != NULL)
         *out_occluded_count = occluded_count;
+    return true;
+}
+
+static slayer3d_sphere brush_world_bounds_sphere(slayer3d_bounding_box bounds, slayer3d_vec3 world_offset)
+{
+    const slayer3d_vec3 center = slayer3d_vec3_make((bounds.min.x + bounds.max.x) * 0.5f + world_offset.x,
+                                                    (bounds.min.y + bounds.max.y) * 0.5f + world_offset.y,
+                                                    (bounds.min.z + bounds.max.z) * 0.5f + world_offset.z);
+    const slayer3d_vec3 extents =
+        slayer3d_vec3_make((bounds.max.x - bounds.min.x) * 0.5f, (bounds.max.y - bounds.min.y) * 0.5f,
+                           (bounds.max.z - bounds.min.z) * 0.5f);
+    slayer3d_sphere sphere;
+    sphere.center = center;
+    sphere.radius = slayer3d_vec3_length(extents);
+    return sphere;
+}
+
+static int apply_brush_frustum_culling(brush_world_draw_context *context, brush_world_runtime *world_runtime,
+                                       const slayer3d_game_data_brush_world_instance *instance, bool *brush_visible,
+                                       int brush_count, slayer3d_game_data_runtime *mutable_runtime)
+{
+    if (context == NULL || context->renderer == NULL || !context->renderer->frustum_planes_valid ||
+        world_runtime == NULL || instance == NULL || instance->world == NULL || brush_visible == NULL ||
+        mutable_runtime == NULL)
+    {
+        return 0;
+    }
+
+    int culled_count = 0;
+    for (int brush_index = 0; brush_index < brush_count; ++brush_index)
+    {
+        if (!brush_visible[brush_index])
+            continue;
+        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];
+        const Uint64 triangles = brush_model_triangle_count(brush_model);
+        if (brush == NULL || !brush->has_bounds || triangles == 0u)
+            continue;
+
+        ++mutable_runtime->brush_diagnostics.frustum_brush_candidates;
+        const slayer3d_sphere sphere = brush_world_bounds_sphere(brush->bounds, instance->position);
+        if (!slayer3d_sphere_intersects_frustum(sphere, context->renderer->frustum_planes))
+        {
+            brush_visible[brush_index] = false;
+            ++mutable_runtime->brush_diagnostics.frustum_brush_culled;
+            mutable_runtime->brush_diagnostics.frustum_triangles_culled += triangles;
+            ++culled_count;
+        }
+    }
+    return culled_count;
+}
+
+static bool brush_render_chunk_all_visible(const slayer3d_game_data_brush_compile_chunk *chunk,
+                                           const bool *brush_visible, int brush_count)
+{
+    if (chunk == NULL || brush_visible == NULL || chunk->brush_count <= 1)
+        return false;
+    for (int i = 0; i < chunk->brush_count; ++i)
+    {
+        const int brush_index = chunk->brush_indices[i];
+        if (brush_index < 0 || brush_index >= brush_count || !brush_visible[brush_index])
+            return false;
+    }
+    return true;
+}
+
+static void brush_render_chunk_mark_drawn(const slayer3d_game_data_brush_compile_chunk *chunk, bool *brush_visible,
+                                          int brush_count)
+{
+    if (chunk == NULL || brush_visible == NULL)
+        return;
+    for (int i = 0; i < chunk->brush_count; ++i)
+    {
+        const int brush_index = chunk->brush_indices[i];
+        if (brush_index >= 0 && brush_index < brush_count)
+            brush_visible[brush_index] = false;
+    }
+}
+
+static bool draw_visible_brush_chunks(brush_world_draw_context *context, brush_world_runtime *world_runtime,
+                                      bool *brush_visible, int brush_count)
+{
+    if (context == NULL || context->renderer == NULL || context->runtime == NULL || world_runtime == NULL ||
+        world_runtime->chunk_render_models == NULL || world_runtime->desc.compile_chunks == NULL)
+    {
+        return true;
+    }
+
+    slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
+    const int chunk_count = SDL_min(world_runtime->desc.compile_chunk_count, world_runtime->chunk_render_model_count);
+    for (int chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
+    {
+        const slayer3d_game_data_brush_compile_chunk *chunk = &world_runtime->desc.compile_chunks[chunk_index];
+        if (!brush_render_chunk_all_visible(chunk, brush_visible, brush_count))
+            continue;
+        const slayer3d_model *chunk_model = &world_runtime->chunk_render_models[chunk_index];
+        if (brush_model_triangle_count(chunk_model) == 0u)
+            continue;
+        if (!slayer3d_draw_model_ex_with_assets(
+                context->renderer, context->assets, chunk_model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f, slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                (slayer3d_color){255, 255, 255, 255}))
+        {
+            return false;
+        }
+        ++mutable_runtime->brush_diagnostics.render_chunk_draws;
+        mutable_runtime->brush_diagnostics.render_chunk_brushes_drawn += (Uint64)chunk->brush_count;
+        brush_render_chunk_mark_drawn(chunk, brush_visible, brush_count);
+    }
     return true;
 }
 
@@ -3153,6 +3505,8 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
         brush_visible[brush_index] = true;
 
+    const int frustum_culled_count =
+        apply_brush_frustum_culling(context, world_runtime, instance, brush_visible, brush_count, mutable_runtime);
     int occluded_count = 0;
     const bool used_visibility_grid = apply_brush_visibility_grid(
         world_runtime, instance, context->camera, brush_visible, brush_count, &occluded_count, mutable_runtime);
@@ -3179,7 +3533,7 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
             ++mutable_runtime->brush_diagnostics.visibility_brush_visible;
         }
     }
-    if (occluded_count <= 0)
+    if (occluded_count <= 0 && frustum_culled_count <= 0)
     {
         SDL_free(brush_visible);
         return draw_brush_world_instance(userdata, instance);
@@ -3202,6 +3556,7 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     if (!instance->lighting_enabled)
         slayer3d_set_lighting_enabled(context->renderer, false);
 
+    ok = draw_visible_brush_chunks(context, world_runtime, brush_visible, brush_count);
     for (int brush_index = 0; ok && brush_index < brush_count; ++brush_index)
     {
         if (!brush_visible[brush_index])
@@ -3907,6 +4262,25 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                                                   stats.static_mesh_instances_batched);
                         state->static_mesh_draw_calls_saved_sum += render_stat_delta_u64(
                             state->last_render_stats.static_mesh_draw_calls_saved, stats.static_mesh_draw_calls_saved);
+                        state->procedural_lod_candidates_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.procedural_lod_candidates, stats.procedural_lod_candidates);
+                        state->procedural_lod_reduced_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.procedural_lod_reduced, stats.procedural_lod_reduced);
+                        state->procedural_lod_authored_triangles_sum +=
+                            render_stat_delta_u64(state->last_render_stats.procedural_lod_authored_triangles,
+                                                  stats.procedural_lod_authored_triangles);
+                        state->procedural_lod_resolved_triangles_sum +=
+                            render_stat_delta_u64(state->last_render_stats.procedural_lod_resolved_triangles,
+                                                  stats.procedural_lod_resolved_triangles);
+                        state->procedural_lod_triangles_saved_sum +=
+                            render_stat_delta_u64(state->last_render_stats.procedural_lod_triangles_saved,
+                                                  stats.procedural_lod_triangles_saved);
+                        state->model_lod_candidates_sample_sum += render_stat_delta_u64(
+                            state->last_render_stats.model_lod_candidates, stats.model_lod_candidates);
+                        state->model_lod_culled_sample_sum +=
+                            render_stat_delta_u64(state->last_render_stats.model_lod_culled, stats.model_lod_culled);
+                        state->model_lod_triangles_saved_sum += render_stat_delta_u64(
+                            state->last_render_stats.model_lod_triangles_saved, stats.model_lod_triangles_saved);
                         state->depth_prepass_draws_sample_sum += render_stat_delta_u64(
                             state->last_render_stats.depth_prepass_draws, stats.depth_prepass_draws);
                         state->depth_prepass_triangles_sample_sum += render_stat_delta_u64(
@@ -3946,6 +4320,21 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                     state->static_mesh_instances_batched_sum / sample_frames;
                 state->metrics.render_static_mesh_draw_calls_saved_per_frame =
                     state->static_mesh_draw_calls_saved_sum / sample_frames;
+                state->metrics.render_procedural_lod_candidates_per_frame =
+                    state->procedural_lod_candidates_sample_sum / sample_frames;
+                state->metrics.render_procedural_lod_reduced_per_frame =
+                    state->procedural_lod_reduced_sample_sum / sample_frames;
+                state->metrics.render_procedural_lod_authored_triangles_per_frame =
+                    state->procedural_lod_authored_triangles_sum / sample_frames;
+                state->metrics.render_procedural_lod_resolved_triangles_per_frame =
+                    state->procedural_lod_resolved_triangles_sum / sample_frames;
+                state->metrics.render_procedural_lod_triangles_saved_per_frame =
+                    state->procedural_lod_triangles_saved_sum / sample_frames;
+                state->metrics.render_model_lod_candidates_per_frame =
+                    state->model_lod_candidates_sample_sum / sample_frames;
+                state->metrics.render_model_lod_culled_per_frame = state->model_lod_culled_sample_sum / sample_frames;
+                state->metrics.render_model_lod_triangles_saved_per_frame =
+                    state->model_lod_triangles_saved_sum / sample_frames;
                 state->metrics.render_depth_prepass_draws_per_frame =
                     state->depth_prepass_draws_sample_sum / sample_frames;
                 state->metrics.render_depth_prepass_triangles_per_frame =
@@ -3972,6 +4361,14 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                 state->static_mesh_instanced_draw_sample_sum = 0.0f;
                 state->static_mesh_instances_batched_sum = 0.0f;
                 state->static_mesh_draw_calls_saved_sum = 0.0f;
+                state->procedural_lod_candidates_sample_sum = 0.0f;
+                state->procedural_lod_reduced_sample_sum = 0.0f;
+                state->procedural_lod_authored_triangles_sum = 0.0f;
+                state->procedural_lod_resolved_triangles_sum = 0.0f;
+                state->procedural_lod_triangles_saved_sum = 0.0f;
+                state->model_lod_candidates_sample_sum = 0.0f;
+                state->model_lod_culled_sample_sum = 0.0f;
+                state->model_lod_triangles_saved_sum = 0.0f;
                 state->depth_prepass_draws_sample_sum = 0.0f;
                 state->depth_prepass_triangles_sample_sum = 0.0f;
                 state->depth_prepass_samples_sample_sum = 0.0f;
@@ -3982,6 +4379,28 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
                 state->fps_sample_frames = 0;
             }
         }
+    }
+    if (ctx->renderer != NULL)
+    {
+        int world_width = 0;
+        int world_height = 0;
+        if (slayer3d_get_world_render_size(ctx->renderer, &world_width, &world_height))
+        {
+            state->metrics.render_world_scale = slayer3d_get_world_render_scale(ctx->renderer);
+            state->metrics.render_world_width = (float)world_width;
+            state->metrics.render_world_height = (float)world_height;
+        }
+    }
+    if (ctx->window != NULL)
+    {
+        int pixel_width = 0;
+        int pixel_height = 0;
+        if (SDL_GetWindowSizeInPixels(ctx->window, &pixel_width, &pixel_height))
+        {
+            state->metrics.render_window_pixel_width = (float)pixel_width;
+            state->metrics.render_window_pixel_height = (float)pixel_height;
+        }
+        state->metrics.render_window_pixel_density = SDL_GetWindowPixelDensity(ctx->window);
     }
     state->last_render_time = ctx->real_time;
     ++state->rendered_frames;

@@ -494,6 +494,21 @@ extern "C"
         slayer3d_game_data_editor_metadata editor;
     } slayer3d_game_data_brush;
 
+    /** @brief Runtime-compiled brush-world chunk for broad-phase collision/render tooling. */
+    typedef struct slayer3d_game_data_brush_compile_chunk
+    {
+        /** @brief Local-space bounds spanning all brushes assigned to this chunk. */
+        slayer3d_bounding_box bounds;
+        /** @brief True when @p bounds is valid. */
+        bool has_bounds;
+        /** @brief Union of contents bits from brushes assigned to this chunk. */
+        unsigned int contents_mask;
+        /** @brief Indices into the owning brush world's authored brush array. */
+        const int *brush_indices;
+        /** @brief Number of entries in @p brush_indices. */
+        int brush_count;
+    } slayer3d_game_data_brush_compile_chunk;
+
     /** @brief Runtime-owned native brush world. */
     typedef struct slayer3d_game_data_brush_world
     {
@@ -515,6 +530,28 @@ extern "C"
         int brush_count;
         /** @brief Runtime-compiled static render mesh for visible brush faces, or NULL when empty. */
         const slayer3d_model *render_model;
+        /** @brief Renderable brush faces considered by the compile step. */
+        int compile_face_count;
+        /** @brief Renderable brush faces emitted to the compiled render model. */
+        int compile_rendered_face_count;
+        /** @brief Renderable brush faces hidden by adjacent solid brushes during compile. */
+        int compile_culled_face_count;
+        /** @brief Triangles emitted to the compiled render model after compile-time face culling. */
+        int compile_triangle_count;
+        /** @brief Authored brushes that failed to produce bounded geometry during compile. */
+        int compile_invalid_brush_count;
+        /** @brief Authored brush faces that produced fewer than three clipped vertices during compile. */
+        int compile_degenerate_face_count;
+        /** @brief Spatial compile chunks used by broad-phase collision/tooling queries. */
+        const slayer3d_game_data_brush_compile_chunk *compile_chunks;
+        /** @brief Number of entries in @p compile_chunks. */
+        int compile_chunk_count;
+        /** @brief Contiguous storage backing each chunk's brush_indices pointer. */
+        const int *compile_chunk_brush_indices;
+        /** @brief Number of entries in @p compile_chunk_brush_indices. */
+        int compile_chunk_brush_index_count;
+        /** @brief Local-space cell size used to build the compile chunks. */
+        float compile_chunk_cell_size;
         /** @brief Precomputed local-space bounds spanning all bounded brushes. */
         slayer3d_bounding_box bounds;
         /** @brief True when @p bounds is valid. */
@@ -614,7 +651,7 @@ extern "C"
         Uint64 world_bounds_reject_count;
         /** @brief Authored brushes considered by local trace loops. */
         Uint64 brush_count;
-        /** @brief Brushes rejected because contents did not overlap the trace mask. */
+        /** @brief Visited brushes rejected because contents did not overlap the trace mask. */
         Uint64 contents_reject_count;
         /** @brief Brushes rejected by precomputed brush bounds. */
         Uint64 bounds_reject_count;
@@ -630,6 +667,34 @@ extern "C"
         Uint64 render_mesh_draws;
         /** @brief Approximate brush-world triangles submitted after renderer culling. */
         Uint64 render_triangles_submitted;
+        /** @brief Renderable brush faces considered by brush-world compile steps. */
+        Uint64 compile_face_count;
+        /** @brief Renderable brush faces emitted by brush-world compile steps. */
+        Uint64 compile_rendered_face_count;
+        /** @brief Renderable brush faces hidden by adjacent solid brushes during compile. */
+        Uint64 compile_culled_face_count;
+        /** @brief Triangles emitted by brush-world compile steps after compile-time face culling. */
+        Uint64 compile_triangle_count;
+        /** @brief Authored brushes that failed to produce bounded geometry during compile. */
+        Uint64 compile_invalid_brush_count;
+        /** @brief Authored brush faces that produced fewer than three clipped vertices during compile. */
+        Uint64 compile_degenerate_face_count;
+        /** @brief Spatial chunks emitted by brush-world compile steps. */
+        Uint64 compile_chunk_count;
+        /** @brief Collision chunks tested by brush-world trace broad-phase. */
+        Uint64 collision_chunk_count;
+        /** @brief Collision chunks rejected by bounds or contents masks. */
+        Uint64 collision_chunk_reject_count;
+        /** @brief Brush-world compile chunk models drawn instead of per-brush visibility models. */
+        Uint64 render_chunk_draws;
+        /** @brief Visible brushes covered by chunk-level draw submissions. */
+        Uint64 render_chunk_brushes_drawn;
+        /** @brief Renderable brushes tested by brush-level frustum culling before draw submission. */
+        Uint64 frustum_brush_candidates;
+        /** @brief Renderable brushes rejected by brush-level frustum culling before draw submission. */
+        Uint64 frustum_brush_culled;
+        /** @brief Approximate triangles skipped by brush-level frustum culling before draw submission. */
+        Uint64 frustum_triangles_culled;
         /** @brief Renderable brushes tested by brush-world visibility culling. */
         Uint64 visibility_brush_candidates;
         /** @brief Renderable brushes accepted by brush-world visibility culling. */
@@ -984,6 +1049,22 @@ extern "C"
         float render_static_mesh_instances_batched_per_frame;
         /** @brief Sampled backend draw calls avoided by static mesh instancing per frame. */
         float render_static_mesh_draw_calls_saved_per_frame;
+        /** @brief Sampled procedural LOD candidates per frame. */
+        float render_procedural_lod_candidates_per_frame;
+        /** @brief Sampled procedural primitives reduced by LOD per frame. */
+        float render_procedural_lod_reduced_per_frame;
+        /** @brief Sampled authored procedural triangle budget before LOD per frame. */
+        float render_procedural_lod_authored_triangles_per_frame;
+        /** @brief Sampled resolved procedural triangle budget after LOD per frame. */
+        float render_procedural_lod_resolved_triangles_per_frame;
+        /** @brief Sampled procedural triangles avoided by LOD per frame. */
+        float render_procedural_lod_triangles_saved_per_frame;
+        /** @brief Sampled model LOD candidates per frame. */
+        float render_model_lod_candidates_per_frame;
+        /** @brief Sampled model primitives culled by screen-space LOD per frame. */
+        float render_model_lod_culled_per_frame;
+        /** @brief Sampled model triangles avoided by screen-space LOD culling per frame. */
+        float render_model_lod_triangles_saved_per_frame;
         /** @brief Sampled depth-prepass draw calls per frame. */
         float render_depth_prepass_draws_per_frame;
         /** @brief Sampled depth-prepass triangles per frame. */
@@ -1000,6 +1081,18 @@ extern "C"
         float render_light_selection_draws_per_frame;
         /** @brief Ratio of selected lights to candidate lights in the current metrics window. */
         float render_light_selection_ratio;
+        /** @brief Current 3D/world render scale. */
+        float render_world_scale;
+        /** @brief Current 3D/world framebuffer width. */
+        float render_world_width;
+        /** @brief Current 3D/world framebuffer height. */
+        float render_world_height;
+        /** @brief Current desktop window backing pixel width. */
+        float render_window_pixel_width;
+        /** @brief Current desktop window backing pixel height. */
+        float render_window_pixel_height;
+        /** @brief Current SDL window pixel-density ratio. */
+        float render_window_pixel_density;
     } slayer3d_game_data_ui_metrics;
 
     /** @brief Optional render evaluation inputs for dynamic visual effects. */
@@ -1155,6 +1248,8 @@ extern "C"
         bool lod_enabled;
         /** @brief Multiplicative bias applied to projected size for procedural LOD selection. */
         float lod_bias;
+        /** @brief Optional per-model projected-pixel cull threshold; negative uses render settings. */
+        float lod_cull_pixels;
         /** @brief Authored tint color. */
         slayer3d_color color;
         /** @brief Optional wire overlay color for mesh primitive wire draw modes. */
@@ -1224,8 +1319,14 @@ extern "C"
         float procedural_lod_far_pixels;
         /** @brief Minimum generated segment/ring count for procedural LOD. */
         int procedural_lod_min_segments;
+        /** @brief Whether tiny model primitives may be culled by projected screen size. */
+        bool model_lod_culling_enabled;
+        /** @brief Projected model diameter at or below which model LOD culling skips the draw. */
+        float model_lod_cull_pixels;
         /** @brief Whether capable backends should collect GPU sample-count diagnostics. */
         bool performance_queries_enabled;
+        /** @brief Internal 3D/world render scale; UI and logical presentation remain full resolution. */
+        float world_render_scale;
         /** @brief Tonemap operator for lit rendering. */
         slayer3d_tonemap_mode tonemap;
     } slayer3d_game_data_render_settings;

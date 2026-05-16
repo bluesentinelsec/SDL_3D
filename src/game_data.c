@@ -305,8 +305,15 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         {
             slayer3d_free_model(&runtime->brush_worlds[i].brush_render_models[brush_model_index]);
         }
+        for (int chunk_model_index = 0; chunk_model_index < runtime->brush_worlds[i].chunk_render_model_count;
+             ++chunk_model_index)
+        {
+            slayer3d_free_model(&runtime->brush_worlds[i].chunk_render_models[chunk_model_index]);
+        }
         SDL_free(runtime->brush_worlds[i].brush_render_models);
+        SDL_free(runtime->brush_worlds[i].chunk_render_models);
         free_brush_world_visibility_grid(&runtime->brush_worlds[i]);
+        slayer3d_game_data_brush_world_free_compile_chunks(world);
         SDL_free(runtime->brush_worlds[i].editor_source_path);
         free_editor_metadata(&world->editor);
         SDL_free((void *)world->name);

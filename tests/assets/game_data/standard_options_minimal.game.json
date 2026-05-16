@@ -25,6 +25,16 @@
       }
     }
   },
+  "render": {
+    "world_render_scale": 1.0,
+    "world_render_scale_key": "render_world_scale",
+    "quality": "quality",
+    "quality_key": "render_quality",
+    "quality_presets": [
+      { "name": "performance", "label": "Performance", "world_render_scale": 0.5, "procedural_lod": true, "model_lod_culling": true },
+      { "name": "quality", "label": "Quality", "world_render_scale": 1.0, "procedural_lod": false, "model_lod_culling": false }
+    ]
+  },
   "scenes": {
     "initial": "scene.title",
     "files": [
@@ -210,7 +220,8 @@
       {
         "signal": "signal.settings.reset_display",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] },
+          { "type": "scene_state.set", "key": "render_world_scale", "value": 1.0 }
         ]
       },
       {

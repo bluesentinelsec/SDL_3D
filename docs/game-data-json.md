@@ -103,8 +103,18 @@ The root `render` object configures frame-level presentation defaults:
     "procedural_lod_near_pixels": 128.0,
     "procedural_lod_far_pixels": 24.0,
     "procedural_lod_min_segments": 8,
+    "model_lod_culling": true,
+    "model_lod_cull_pixels": 4.0,
     "performance_queries": false,
     "performance_queries_key": "render_performance_queries_enabled",
+    "world_render_scale": 1.0,
+    "world_render_scale_key": "render_world_scale",
+    "quality": "quality",
+    "quality_key": "render_quality",
+    "quality_presets": [
+      { "name": "performance", "label": "Performance", "world_render_scale": 0.5, "procedural_lod": true },
+      { "name": "quality", "label": "Quality", "world_render_scale": 1.0, "procedural_lod": false }
+    ],
     "profile": "modern",
     "profile_key": "render_profile"
   }
@@ -151,11 +161,41 @@ far threshold must be less than or equal to the near threshold. LOD is skipped
 for camera-space viewmodels/effects so first-person weapons and HUD-adjacent
 geometry keep stable authored detail. Optional `*_key` fields let debug menus
 and tuning scenes toggle the feature or tune thresholds from scene state.
+Renderer stats expose candidate, reduced, authored-triangle,
+resolved-triangle, and saved-triangle counts so performance dojos can prove the
+effect quantitatively instead of relying on visual inspection.
+`model_lod_culling` applies the same screen-space policy to authored
+`render.model` components by skipping world-space model draws that project below
+`model_lod_cull_pixels`. This is a zero-detail LOD level intended for tiny
+distant props, pickups, and repeated decorations; leave `lod` disabled on hero
+actors, enemies that must remain visible, and inspection objects. Camera-space
+viewmodels are never culled by model LOD. Individual `render.model` components
+can override the global threshold with `lod_cull_pixels`, and `lod_bias` affects
+their projected size. Renderer stats expose model LOD candidate, culled, and
+saved-triangle counts.
 `performance_queries` enables optional backend sample-count queries for
 diagnostic overlays. Capable OpenGL backends expose depth-passing sample counts
 for the depth pre-pass and main geometry pass through UI metrics. These queries
 can block while reading GPU results, so use them for profiling and do not leave
 them enabled in production scenes by default.
+`world_render_scale` renders only the 3D/world layer at a lower internal
+resolution on capable backends, then upscales it into the normal logical
+viewport before drawing UI. Valid values are `0.25` through `1.0`; `1.0`
+preserves full logical resolution. UI overlays, menu text, mouse/input mapping,
+and camera aspect ratio remain tied to the authored logical resolution, so HUDs
+stay sharp even when the world layer is scaled down. Use
+`world_render_scale_key` for options menus or profiling scenes that need a
+runtime quality slider without host C. The UI metrics namespace exposes
+`render.window_pixel_width`, `render.window_pixel_height`, and
+`render.window_pixel_density` so profiling screens can verify the actual
+platform backing size independently from the authored logical size.
+`quality_presets` are named render-setting bundles selected by `quality` or the
+scene-state value at `quality_key`. Presets may author the same performance
+knobs as the root `render` object, including world scale, depth pre-pass,
+per-object light selection, procedural LOD, model LOD culling, and performance
+queries. Root settings provide defaults, the selected quality preset overrides
+those defaults, and individual `*_key` scene-state values still win last for
+fine tuning and debug sliders.
 
 ## Structured Imports
 
@@ -325,6 +365,10 @@ root-level `logical_width` and `logical_height` for this virtual canvas. The
 optional `app.window.width` and `app.window.height` fields describe an initial
 desktop window size; they do not change the authored layout scale unless
 `app.window.logical_width` and `app.window.logical_height` are also set.
+Managed windows request high-DPI backing framebuffers by default when SDL and
+the platform support them. Author `"high_pixel_density": false` under
+`app.window` only when testing low-DPI presentation behavior or working around a
+platform issue. Mouse coordinates and UI layout remain in logical pixels.
 
 `pause.action` toggles the managed runtime pause state when the active scene
 allows the action and `pause.allowed_if` is absent or true. `quit.action`
@@ -642,6 +686,9 @@ the grid, or a brush is ambiguous, the brush remains visible. Use
 be culled. Smaller
 `visibility_cell_size` values improve blocker precision and doorway behavior at
 higher memory/compile cost; larger values are cheaper but more conservative.
+Visibility results are cached for a small set of recently visited camera cells,
+so normal player movement and debug camera toggles do not force a full visible
+cell rebuild every time the view returns to a nearby cell.
 Brushes authored with `visibility: "trace"` or legacy
 `visibility_cullable: true` still participate in the older trace-based fallback
 when no visibility grid is available. `acceleration_key`, `lighting_key`,
@@ -655,10 +702,26 @@ batch render-equivalent authored materials into shared static meshes. Materials
 remain distinct for editor picking, exports, and face metadata, but materials
 with the same texture, color, metallic/roughness, and emissive response can be
 submitted as one mesh; per-face UVs still honor each material's `tex_scale` and
-face UV overrides. During load, brush worlds also precompute local AABBs for
-each brush and for the whole world. When
+face UV overrides. The compile step also conservatively removes fully hidden
+contact faces between adjacent opaque solid brushes: a face is culled only when
+an opposite coplanar neighboring face fully covers it, so partial overlaps and
+ambiguous cases fail open. Runtime descriptors expose
+`compile_face_count`, `compile_rendered_face_count`,
+`compile_culled_face_count`, `compile_triangle_count`,
+`compile_invalid_brush_count`, and `compile_degenerate_face_count` for tests,
+editor diagnostics, and performance audits. Brush worlds fail to load when an
+authored brush cannot produce bounded geometry; degenerate faces are counted so
+tooling can surface geometry-health issues. During load, brush worlds also precompute
+local AABBs for each brush and for the whole world, then build spatial compile
+chunks from those bounds. Compile chunks preserve authored brushes as the source
+of truth while grouping them into optimized runtime broad-phase artifacts for
+collision traces, editor diagnostics, and future render/collision chunk
+generation. When visibility culling leaves every brush in a compile chunk
+visible, the renderer can draw that chunk as one optimized model instead of
+submitting each brush model separately; partially visible chunks still fall back
+to per-brush models so occlusion correctness is preserved. When
 `acceleration` is enabled on a scene instance, active-scene trace queries use
-those bounds as a broad phase before exact plane clipping.
+those chunks and bounds as a broad phase before exact plane clipping.
 
 Collision, weapon, sensor, and editor systems can query brush worlds through
 the generic trace helpers. `slayer3d_game_data_trace_brush_world()` traces in a
@@ -677,6 +740,24 @@ instrumentation; reset them with
 derived from the generic render-context stats exposed by
 `slayer3d_get_render_stats()`, because brush worlds compile to static model
 meshes that use the same frustum culling path as other models.
+When `visibility_occlusion` is enabled and a camera is available, brush bounds
+are also checked against the active frustum before model submission. This
+fail-open coarse pass rejects off-camera brush submodels before draw calls are
+issued and reports `brush.frustum_brush_candidates`,
+`brush.frustum_brush_culled`, and `brush.frustum_triangles_culled`.
+Compile-time brush diagnostics are also exposed as `brush.compile_face_count`,
+`brush.compile_rendered_face_count`, `brush.compile_culled_face_count`, and
+`brush.compile_triangle_count`, plus geometry-health metrics
+`brush.compile_invalid_brush_count` and
+`brush.compile_degenerate_face_count`, so profiling overlays can verify how much
+hidden interior surface area was removed before runtime rendering and whether
+authored brush volumes compiled cleanly. The compile pipeline also exposes `brush.compile_chunk_count`,
+`brush.collision_chunk_count`, and `brush.collision_chunk_reject_count` so tests
+and profiling overlays can confirm trace broad-phase chunking is active and
+rejecting irrelevant spatial groups before exact brush collision. Chunk render
+diagnostics `brush.render_chunk_draws` and
+`brush.render_chunk_brushes_drawn` confirm when visibility rendering uses
+compiled chunk models rather than per-brush models.
 Visibility-grid diagnostics also expose cache hit/miss counters so scenes can
 confirm automatic occlusion is reusing the visible-cell set while the camera
 remains in the same coarse grid cell.
@@ -2487,6 +2568,11 @@ Reusable components include:
   `pitch_add_properties`, `yaw_add_properties`, `roll_add_properties`) sum
   multiple additive properties, which lets authored effects such as recoil,
   pickup easing, and walk bob compose without mutating the base placement.
+  `lod` defaults to `true` for world-space model props and lets root
+  `render.model_lod_culling` skip tiny distant models. Set `lod` to `false` for
+  enemies, important pickups, hero props, and other content that must remain
+  visible regardless of projected size. `lod_bias` and `lod_cull_pixels` tune
+  per-model behavior without host code.
 - `render.sprite`: renders an upright billboard using an authored sprite asset.
   Use `size` for world-space width/height and optional `facing_yaw` or
   `facing_yaw_property` for directional sprite frame selection. Sprite assets
@@ -2610,8 +2696,19 @@ averages: `render.model_mesh_submissions_per_frame`,
 `render.static_mesh_instanced_draw_calls_per_frame`,
 `render.static_mesh_instances_batched_per_frame`,
 `render.static_mesh_draw_calls_saved_per_frame`,
+`render.procedural_lod_candidates_per_frame`,
+`render.procedural_lod_reduced_per_frame`,
+`render.procedural_lod_authored_triangles_per_frame`,
+`render.procedural_lod_resolved_triangles_per_frame`,
+`render.procedural_lod_triangles_saved_per_frame`,
+`render.model_lod_candidates_per_frame`,
+`render.model_lod_culled_per_frame`,
+`render.model_lod_triangles_saved_per_frame`,
 `render.depth_prepass_draws_per_frame`, and
-`render.depth_prepass_triangles_per_frame`. Per-object light selection exposes
+`render.depth_prepass_triangles_per_frame`. The current world render target is
+available as `render.world_scale`, `render.world_width`, and
+`render.world_height`, which is useful when testing dynamic render scale while
+keeping UI sharp. Per-object light selection exposes
 `render.light_candidates_per_frame`, `render.lights_selected_per_frame`,
 `render.light_selection_draws_per_frame`, and `render.light_selection_ratio` so
 debug overlays can prove that lit draws are selecting a bounded subset of the
@@ -2642,7 +2739,16 @@ Supported brush metrics are `brush.trace_count`,
 `brush.bounds_reject_count`, `brush.collision_candidate_count`,
 `brush.hit_count`, `brush.render_mesh_submissions`,
 `brush.render_mesh_culled`, `brush.render_mesh_draws`, and
-`brush.render_triangles_submitted`, plus visibility counters
+`brush.render_triangles_submitted`, compile counters
+`brush.compile_face_count`, `brush.compile_rendered_face_count`,
+`brush.compile_culled_face_count`, `brush.compile_triangle_count`,
+`brush.compile_invalid_brush_count`, `brush.compile_degenerate_face_count`,
+`brush.compile_chunk_count`, `brush.collision_chunk_count`, and
+`brush.collision_chunk_reject_count`, chunk render counters
+`brush.render_chunk_draws` and `brush.render_chunk_brushes_drawn`, frustum
+counters `brush.frustum_brush_candidates`, `brush.frustum_brush_culled`, and
+`brush.frustum_triangles_culled`, plus
+visibility counters
 `brush.visibility_brush_candidates`, `brush.visibility_brush_visible`,
 `brush.visibility_brush_occluded`, `brush.visibility_triangles_culled`,
 `brush.visibility_grid_cache_hits`, and
