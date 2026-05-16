@@ -344,23 +344,39 @@ TEST(NetworkSession, HostRejectsSecondClient)
     second_desc.role = SLAYER3D_NETWORK_ROLE_CLIENT;
     second_desc.host = "127.0.0.1";
     second_desc.port = pair.port;
-    second_desc.handshake_timeout = 1.0f;
+    second_desc.handshake_timeout = kConnectTimeoutSeconds;
     second_desc.idle_timeout = 1.0f;
 
     slayer3d_network_session *second_client = nullptr;
     ASSERT_TRUE(slayer3d_network_session_create(&second_desc, &second_client));
 
     bool rejected = false;
-    for (int i = 0; i < kPumpLimit; ++i)
+    const Uint64 start = SDL_GetTicks();
+    Uint64 last = start;
+    while ((SDL_GetTicks() - start) < (Uint64)(kConnectTimeoutSeconds * 1000.0f))
     {
-        EXPECT_TRUE(slayer3d_network_session_update(pair.host, 0.016f));
-        EXPECT_TRUE(slayer3d_network_session_update(pair.client, 0.016f));
-        EXPECT_TRUE(slayer3d_network_session_update(second_client, 0.016f));
+        const Uint64 now = SDL_GetTicks();
+        float dt = (float)(now - last) / 1000.0f;
+        if (dt <= 0.0f)
+        {
+            dt = 0.001f;
+        }
+        last = now;
+
+        EXPECT_TRUE(slayer3d_network_session_update(pair.host, dt));
+        EXPECT_TRUE(slayer3d_network_session_update(pair.client, dt));
+        EXPECT_TRUE(slayer3d_network_session_update(second_client, dt));
         if (slayer3d_network_session_state(second_client) == SLAYER3D_NETWORK_STATE_REJECTED)
         {
             rejected = true;
             break;
         }
+        if (slayer3d_network_session_state(second_client) == SLAYER3D_NETWORK_STATE_TIMED_OUT ||
+            slayer3d_network_session_state(second_client) == SLAYER3D_NETWORK_STATE_ERROR)
+        {
+            break;
+        }
+        SDL_Delay(kPumpSleepMs);
     }
 
     EXPECT_TRUE(rejected);
