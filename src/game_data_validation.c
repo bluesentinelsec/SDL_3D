@@ -9937,6 +9937,9 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
             return validation_error(ctx, path, "app window dimensions must be positive integers");
         }
     }
+    yyjson_val *high_pixel_density = obj_get(window, "high_pixel_density");
+    if (high_pixel_density != NULL && !yyjson_is_bool(high_pixel_density))
+        return validation_error(ctx, "$.app.window.high_pixel_density", "high_pixel_density must be a boolean");
     const char *window_apply_signal = json_string(window, "apply_signal");
     if (window_apply_signal != NULL &&
         !require_ref(ctx, &names->signals, "signal", window_apply_signal, "$.app.window.apply_signal"))
@@ -10287,6 +10290,9 @@ static bool ui_metric_name_valid(const char *metric)
         "render.world_scale",
         "render.world_width",
         "render.world_height",
+        "render.window_pixel_width",
+        "render.window_pixel_height",
+        "render.window_pixel_density",
         "brush.trace_count",
         "brush.world_instance_count",
         "brush.world_bounds_reject_count",

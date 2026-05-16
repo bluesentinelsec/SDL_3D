@@ -25,6 +25,10 @@
       }
     }
   },
+  "render": {
+    "world_render_scale": 1.0,
+    "world_render_scale_key": "render_world_scale"
+  },
   "scenes": {
     "initial": "scene.title",
     "files": [
@@ -210,7 +214,8 @@
       {
         "signal": "signal.settings.reset_display",
         "actions": [
-          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] }
+          { "type": "property.reset_defaults", "target": "entity.settings", "keys": ["display_mode", "vsync", "renderer"] },
+          { "type": "scene_state.set", "key": "render_world_scale", "value": 1.0 }
         ]
       },
       {

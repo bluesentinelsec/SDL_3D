@@ -713,6 +713,7 @@ void slayer3d_init_window_config(slayer3d_window_config *config)
     config->vsync = true;
     config->maximized = false;
     config->resizable = true;
+    config->high_pixel_density = true;
 }
 
 static void slayer3d_apply_window_icon(SDL_Window *window, const char *icon_path)
@@ -869,6 +870,8 @@ bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **o
         flags |= SDL_WINDOW_RESIZABLE;
     if (local.maximized)
         flags |= SDL_WINDOW_MAXIMIZED;
+    if (local.high_pixel_density)
+        flags |= SDL_WINDOW_HIGH_PIXEL_DENSITY;
 
     if (resolved == SLAYER3D_BACKEND_OPENGL)
     {
@@ -939,10 +942,15 @@ bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **o
 
     *out_window = window;
     *out_context = context;
+    int pixel_width = 0;
+    int pixel_height = 0;
+    (void)SDL_GetWindowSizeInPixels(window, &pixel_width, &pixel_height);
     SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION,
-                "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d",
+                "SLAYER3D window created: mode=%s backend=%s requested_vsync=%s actual_vsync=%d size=%dx%d "
+                "pixels=%dx%d density=%.2f high_dpi=%s",
                 slayer3d_window_mode_name(local.display_mode), slayer3d_get_backend_name(resolved),
-                local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height);
+                local.vsync ? "on" : "off", have_actual_vsync ? actual_vsync : -999, local.width, local.height,
+                pixel_width, pixel_height, SDL_GetWindowPixelDensity(window), local.high_pixel_density ? "on" : "off");
     return true;
 }
 

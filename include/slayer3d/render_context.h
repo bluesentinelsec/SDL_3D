@@ -134,6 +134,7 @@ extern "C"
         bool vsync;                        /**< Request synchronized presentation where supported. */
         bool maximized;                    /**< Create the desktop window maximized. */
         bool resizable;                    /**< Allow the user to resize desktop windowed mode. */
+        bool high_pixel_density;           /**< Request a high-DPI backing framebuffer where supported. */
     } slayer3d_window_config;
 
     /*
@@ -169,7 +170,8 @@ extern "C"
      * Defaults are width=1280, height=720, logical_width=1280,
      * logical_height=720, title="SLAYER3D", backend=AUTO,
      * display_mode=WINDOWED, vsync=true, maximized=false,
-     * allow_backend_fallback=true, and resizable=true.
+     * allow_backend_fallback=true, resizable=true, and
+     * high_pixel_density=true.
      */
     void slayer3d_init_window_config(slayer3d_window_config *config);
 

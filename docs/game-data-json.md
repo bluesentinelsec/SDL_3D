@@ -179,7 +179,10 @@ preserves full logical resolution. UI overlays, menu text, mouse/input mapping,
 and camera aspect ratio remain tied to the authored logical resolution, so HUDs
 stay sharp even when the world layer is scaled down. Use
 `world_render_scale_key` for options menus or profiling scenes that need a
-runtime quality slider without host C.
+runtime quality slider without host C. The UI metrics namespace exposes
+`render.window_pixel_width`, `render.window_pixel_height`, and
+`render.window_pixel_density` so profiling screens can verify the actual
+platform backing size independently from the authored logical size.
 
 ## Structured Imports
 
@@ -349,6 +352,10 @@ root-level `logical_width` and `logical_height` for this virtual canvas. The
 optional `app.window.width` and `app.window.height` fields describe an initial
 desktop window size; they do not change the authored layout scale unless
 `app.window.logical_width` and `app.window.logical_height` are also set.
+Managed windows request high-DPI backing framebuffers by default when SDL and
+the platform support them. Author `"high_pixel_density": false` under
+`app.window` only when testing low-DPI presentation behavior or working around a
+platform issue. Mouse coordinates and UI layout remain in logical pixels.
 
 `pause.action` toggles the managed runtime pause state when the active scene
 allows the action and `pause.allowed_if` is absent or true. `quit.action`

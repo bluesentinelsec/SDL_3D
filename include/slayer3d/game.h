@@ -352,6 +352,7 @@ extern "C"
         slayer3d_window_mode display_mode; /**< Window presentation mode, or SLAYER3D default when zero. */
         int vsync;                         /**< >0 enables vsync, <0 disables vsync, 0 uses the SLAYER3D default. */
         int maximized;                     /**< >0 maximizes, <0 keeps window normal, 0 uses the SLAYER3D default. */
+        int high_pixel_density;            /**< >0 requests high-DPI backing, <0 disables it, 0 uses default. */
         float tick_rate;                   /**< Fixed timestep in seconds, or 1/60 when <= 0. */
         int max_ticks_per_frame;           /**< Catch-up tick cap per rendered frame, or 8 when <= 0. */
         bool enable_audio;                 /**< When true, create session audio before init when available. */

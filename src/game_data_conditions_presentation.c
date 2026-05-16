@@ -790,6 +790,12 @@ static bool read_performance_metric(const char *metric, const slayer3d_game_data
         out_value->as_float = metrics != NULL ? metrics->render_world_width : 0.0f;
     else if (SDL_strcmp(metric, "render.world_height") == 0)
         out_value->as_float = metrics != NULL ? metrics->render_world_height : 0.0f;
+    else if (SDL_strcmp(metric, "render.window_pixel_width") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_window_pixel_width : 0.0f;
+    else if (SDL_strcmp(metric, "render.window_pixel_height") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_window_pixel_height : 0.0f;
+    else if (SDL_strcmp(metric, "render.window_pixel_density") == 0)
+        out_value->as_float = metrics != NULL ? metrics->render_window_pixel_density : 1.0f;
     else
         return false;
 

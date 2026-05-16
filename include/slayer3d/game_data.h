@@ -1081,6 +1081,12 @@ extern "C"
         float render_world_width;
         /** @brief Current 3D/world framebuffer height. */
         float render_world_height;
+        /** @brief Current desktop window backing pixel width. */
+        float render_window_pixel_width;
+        /** @brief Current desktop window backing pixel height. */
+        float render_window_pixel_height;
+        /** @brief Current SDL window pixel-density ratio. */
+        float render_window_pixel_density;
     } slayer3d_game_data_ui_metrics;
 
     /** @brief Optional render evaluation inputs for dynamic visual effects. */

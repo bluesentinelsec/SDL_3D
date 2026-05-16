@@ -4294,6 +4294,17 @@ void slayer3d_game_data_frame_state_record_render(slayer3d_game_data_frame_state
             state->metrics.render_world_height = (float)world_height;
         }
     }
+    if (ctx->window != NULL)
+    {
+        int pixel_width = 0;
+        int pixel_height = 0;
+        if (SDL_GetWindowSizeInPixels(ctx->window, &pixel_width, &pixel_height))
+        {
+            state->metrics.render_window_pixel_width = (float)pixel_width;
+            state->metrics.render_window_pixel_height = (float)pixel_height;
+        }
+        state->metrics.render_window_pixel_density = SDL_GetWindowPixelDensity(ctx->window);
+    }
     state->last_render_time = ctx->real_time;
     ++state->rendered_frames;
     state->metrics.paused = ctx->paused;

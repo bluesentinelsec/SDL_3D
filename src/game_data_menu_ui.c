@@ -1178,25 +1178,24 @@ bool slayer3d_game_data_adjust_menu_item_control(slayer3d_game_data_runtime *run
         item->control_target == NULL || item->control_key == NULL)
         return false;
 
-    slayer3d_registered_actor *actor = slayer3d_game_data_find_actor(runtime, item->control_target);
-    if (actor == NULL)
-        return false;
-
     yyjson_val *control = find_menu_item_control_json(runtime, item);
+    slayer3d_properties *props = menu_control_properties(runtime, control);
+    if (props == NULL)
+        return false;
     const int step_direction = direction < 0 ? -1 : 1;
     switch (item->control_type)
     {
     case SLAYER3D_GAME_DATA_MENU_CONTROL_TOGGLE: {
         const bool current =
-            slayer3d_properties_get_bool(actor->props, item->control_key, json_bool(control, "default", false));
-        slayer3d_properties_set_bool(actor->props, item->control_key, !current);
+            slayer3d_properties_get_bool(props, item->control_key, json_bool(control, "default", false));
+        slayer3d_properties_set_bool(props, item->control_key, !current);
         return true;
     }
     case SLAYER3D_GAME_DATA_MENU_CONTROL_CHOICE: {
         yyjson_val *choices = obj_get(control, "choices");
         if (!yyjson_is_arr(choices) || yyjson_arr_size(choices) == 0)
             return false;
-        const slayer3d_value *current = slayer3d_properties_get_value(actor->props, item->control_key);
+        const slayer3d_value *current = slayer3d_properties_get_value(props, item->control_key);
         int current_index = -1;
         for (size_t i = 0; i < yyjson_arr_size(choices); ++i)
         {
@@ -1215,20 +1214,19 @@ bool slayer3d_game_data_adjust_menu_item_control(slayer3d_game_data_runtime *run
         if (next_index < 0)
             next_index += choice_count;
         yyjson_val *next = yyjson_arr_get(choices, (size_t)next_index);
-        return set_property_from_json(actor->props, item->control_key,
-                                      yyjson_is_obj(next) ? obj_get(next, "value") : next);
+        return set_property_from_json(props, item->control_key, yyjson_is_obj(next) ? obj_get(next, "value") : next);
     }
     case SLAYER3D_GAME_DATA_MENU_CONTROL_RANGE: {
         const float min_value = json_float(control, "min", 0.0f);
         const float max_value = json_float(control, "max", 1.0f);
         const float step = json_float(control, "step", 1.0f);
-        const slayer3d_value *current = slayer3d_properties_get_value(actor->props, item->control_key);
+        const slayer3d_value *current = slayer3d_properties_get_value(props, item->control_key);
         float value = menu_control_numeric_value(current, control, min_value);
         value = SDL_clamp(value + step * (float)step_direction, min_value, max_value);
         if (menu_range_is_integer(control))
-            slayer3d_properties_set_int(actor->props, item->control_key, (int)SDL_lroundf(value));
+            slayer3d_properties_set_int(props, item->control_key, (int)SDL_lroundf(value));
         else
-            slayer3d_properties_set_float(actor->props, item->control_key, value);
+            slayer3d_properties_set_float(props, item->control_key, value);
         return true;
     }
     case SLAYER3D_GAME_DATA_MENU_CONTROL_NONE:

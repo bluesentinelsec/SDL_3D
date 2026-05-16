@@ -20781,6 +20781,18 @@ TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
     EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_INPUT_BINDING);
     EXPECT_EQ(item.input_binding_count, 2);
 
+    ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.display"));
+    ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
+    EXPECT_STREQ(menu.name, "menu.options.display");
+    ASSERT_TRUE(slayer3d_game_data_get_menu_item(runtime, menu.name, 3, &item));
+    EXPECT_STREQ(item.label, "World Render Scale");
+    EXPECT_EQ(item.control_type, SLAYER3D_GAME_DATA_MENU_CONTROL_RANGE);
+    EXPECT_STREQ(item.control_target, "scene_state");
+    EXPECT_STREQ(item.control_key, "render_world_scale");
+    ASSERT_TRUE(slayer3d_game_data_adjust_menu_item_control(runtime, &item, -1));
+    EXPECT_NEAR(slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), "render_world_scale", 0.0f),
+                0.95f, 0.0001f);
+
     ASSERT_TRUE(slayer3d_game_data_set_active_scene(runtime, "scene.options.audio"));
     ASSERT_TRUE(slayer3d_game_data_get_active_menu(runtime, &menu));
     EXPECT_STREQ(menu.name, "menu.options.audio");
@@ -20798,6 +20810,48 @@ TEST(GameDataRuntime, StandardOptionsAdoptionFixtureLoadsReusablePackage)
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, LoadsAuthoredHighPixelDensityWindowFlag)
+{
+    const std::filesystem::path dir = unique_test_dir("high_pixel_density_app_config");
+    write_text(dir / "high_dpi.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "High DPI App Config", "id": "test.high_dpi", "version": "0.1.0" },
+  "app": {
+    "window": {
+      "high_pixel_density": false
+    }
+  },
+  "world": { "name": "world.high_dpi", "kind": "fixed_screen" },
+  "entities": []
+})json");
+
+    slayer3d_game_config config{};
+    char title[128]{};
+    char error[512]{};
+    ASSERT_TRUE(slayer3d_game_data_load_app_config_file((dir / "high_dpi.game.json").string().c_str(), &config, title,
+                                                        sizeof(title), error, sizeof(error)))
+        << error;
+    EXPECT_LT(config.high_pixel_density, 0);
+
+    write_text(dir / "bad_high_dpi.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad High DPI App Config", "id": "test.bad_high_dpi", "version": "0.1.0" },
+  "app": {
+    "window": {
+      "high_pixel_density": "yes"
+    }
+  },
+  "world": { "name": "world.bad_high_dpi", "kind": "fixed_screen" },
+  "entities": []
+})json");
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_high_dpi.game.json").string().c_str(), nullptr, error,
+                                                  sizeof(error)));
+    EXPECT_NE(std::string(error).find("high_pixel_density"), std::string::npos) << error;
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ValidationReportsJsonPathAndMissingReference)

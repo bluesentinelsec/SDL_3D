@@ -78,6 +78,20 @@ TEST(SLAYER3DRenderContextConfig, InitRenderContextConfigSetsDocumentedDefaults)
     EXPECT_EQ(SDL_LOGICAL_PRESENTATION_STRETCH, config.logical_presentation);
 }
 
+TEST(SLAYER3DWindowConfig, InitWindowConfigSetsHighDpiDefault)
+{
+    slayer3d_window_config config{};
+    config.high_pixel_density = false;
+
+    slayer3d_init_window_config(&config);
+
+    EXPECT_EQ(config.width, 1280);
+    EXPECT_EQ(config.height, 720);
+    EXPECT_EQ(config.logical_width, 1280);
+    EXPECT_EQ(config.logical_height, 720);
+    EXPECT_TRUE(config.high_pixel_density);
+}
+
 TEST(SLAYER3DRenderContextConfig, InitRenderContextConfigRejectsNull)
 {
     SDL_ClearError();
