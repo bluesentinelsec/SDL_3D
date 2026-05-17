@@ -1041,6 +1041,8 @@ sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runti
 const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
 const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
+brush_world_runtime *find_brush_world_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
+void editor_brush_world_mark_dirty(brush_world_runtime *world_runtime);
 bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,

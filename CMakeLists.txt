@@ -147,6 +147,7 @@ target_sources(
         src/game.c
         src/game_data_brush_artifacts.c
         src/game_data_brush_editor_export.c
+        src/game_data_brush_editor_mutation.c
         src/game_data_brush.c
         src/game_data.c
         src/game_data_actions.c
