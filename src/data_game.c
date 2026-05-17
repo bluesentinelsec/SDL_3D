@@ -1387,6 +1387,7 @@ bool slayer3d_data_game_runtime_update_frame(slayer3d_data_game_runtime *runtime
     if (!refresh_active_input_profile_if_available(runtime))
         return false;
 
+    data_game_apply_scene_mouse_capture(runtime, ctx);
     managed_network_update_before_frame(runtime, ctx, dt);
 
     const slayer3d_game_data_update_frame_desc frame = {.ctx = ctx,

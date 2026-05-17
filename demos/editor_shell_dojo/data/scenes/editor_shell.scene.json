@@ -15,6 +15,8 @@
     { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
   ],
   "input": {
+    "mouse_capture": "unpaused",
+    "mouse_capture_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
     "actions": [
       "action.exit",
       "action.editor.tool.cycle",
@@ -24,6 +26,7 @@
       "action.editor.command.commit",
       "action.editor.command.undo",
       "action.editor.command.redo",
+      "action.editor.delete_selected",
       "action.editor.export",
       "action.editor.test_run.prepare",
       "action.editor.test_run.enter",

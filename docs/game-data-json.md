@@ -2093,6 +2093,12 @@ defaults to `never`. FPS-style scenes should normally use `unpaused` so the
 generic runtime captures relative mouse motion during play and releases it
 while authored pause/menu overlays are active.
 
+Scenes may also author `input.mouse_capture_if` with any normal data condition.
+When present, the scene only captures relative mouse motion while that condition
+is true. This is useful for editor shells that use normal hardware cursor
+selection in orthographic views but switch to captured mouse-look in a 3D flyby
+viewport.
+
 ## Actors
 
 Actors describe runtime objects:

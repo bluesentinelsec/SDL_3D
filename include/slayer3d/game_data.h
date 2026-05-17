@@ -3867,9 +3867,9 @@ extern "C"
      * @brief Return whether the active scene requests relative mouse capture.
      *
      * Scenes may author `input.mouse_capture` as `never`, `unpaused`, or
-     * `always`. Missing policy defaults to `never`. The @p paused argument lets
-     * generic hosts release the cursor while an authored pause/menu overlay is
-     * active.
+     * `always`, plus an optional `input.mouse_capture_if` condition. Missing
+     * policy defaults to `never`. The @p paused argument lets generic hosts
+     * release the cursor while an authored pause/menu overlay is active.
      */
     bool slayer3d_game_data_active_scene_mouse_capture(const slayer3d_game_data_runtime *runtime, bool paused);
 

@@ -31,6 +31,10 @@ Press `Q` to enter the full-screen 3D flyby viewport. Press `Q` again to return
 to the four-viewport editor layout. `Tab` is also bound to the same toggle while
 we evaluate the workflow.
 
+The editor uses normal hardware cursor positioning in the four-viewport layout.
+In full-screen 3D flyby mode the runtime captures relative mouse motion for
+mouse-look, then releases it again when returning to orthographic editing.
+
 ## Controls
 
 - `1`, `2`, `3`, `4`: select floor, wall, ceiling, or player-start prefab

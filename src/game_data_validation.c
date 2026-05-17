@@ -10353,6 +10353,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     if (mouse_capture != NULL && SDL_strcmp(mouse_capture, "never") != 0 &&
         SDL_strcmp(mouse_capture, "unpaused") != 0 && SDL_strcmp(mouse_capture, "always") != 0)
         return validation_error(ctx, json_path, "scene input.mouse_capture must be never, unpaused, or always");
+    char mouse_capture_if_path[PATH_BUFFER_SIZE];
+    format_path(mouse_capture_if_path, sizeof(mouse_capture_if_path), "%s.input.mouse_capture_if", json_path);
+    if (!validate_data_condition(ctx, obj_get(scene_input, "mouse_capture_if"), mouse_capture_if_path, names))
+        return false;
     yyjson_val *scene_actions = obj_get(scene_input, "actions");
     if (scene_actions != NULL && !yyjson_is_arr(scene_actions))
         return validation_error(ctx, json_path, "scene input.actions must be an array");

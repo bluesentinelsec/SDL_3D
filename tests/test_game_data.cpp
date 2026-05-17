@@ -15737,6 +15737,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "orthographic_top");
+    EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     const slayer3d_value *work_plane_normal =
         slayer3d_properties_get_value(slayer3d_game_data_scene_state(runtime), "editor.work_plane.normal");
     ASSERT_NE(work_plane_normal, nullptr);
@@ -15769,6 +15770,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "flyby_3d");
+    EXPECT_TRUE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, true));
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
@@ -19506,6 +19509,33 @@ TEST(GameDataRuntime, RejectsInvalidSceneMouseCapturePolicy)
     EXPECT_NE(std::string(error).find("scene input.mouse_capture must be never, unpaused, or always"),
               std::string::npos)
         << error;
+
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidSceneMouseCaptureCondition)
+{
+    const std::filesystem::path dir = unique_test_dir("scene_mouse_capture_if_invalid");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "input": {
+    "mouse_capture": "unpaused",
+    "mouse_capture_if": { "type": "action_pressed", "action": "action.missing" }
+  }
+})json");
+    write_text(dir / "game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Invalid Scene Mouse Capture Condition" },
+  "input": { "contexts": [{ "name": "input.test", "actions": [] }] },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unsupported condition type 'action_pressed'"), std::string::npos) << error;
 
     remove_test_dir(dir);
 }
