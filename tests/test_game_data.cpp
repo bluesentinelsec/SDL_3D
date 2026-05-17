@@ -13932,6 +13932,43 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
         << error;
     EXPECT_TRUE(artifact_status.fresh);
 
+    const std::filesystem::path artifact_root_dir = dir / "compile_cache";
+    slayer3d_game_data_brush_compile_artifact_layout culled_layout{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", artifact_root_dir.string().c_str(), &culled_layout, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(culled_layout.source_hash, source_hash);
+    EXPECT_EQ(culled_layout.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    EXPECT_NE(std::string(culled_layout.world_key).find("brush.compile_options-"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.directory).find("/brush/v0/"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.directory).find(culled_layout.world_key), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.manifest_path).find("/manifest.json"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.render_payload_path).find("/render.payload.bin"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.collision_payload_path).find("/collision.payload.bin"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.visibility_payload_path).find("/visibility.payload.bin"), std::string::npos);
+
+    slayer3d_game_data_brush_compile_artifact_layout repeated_layout{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", artifact_root_dir.string().c_str(), &repeated_layout, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(repeated_layout.directory, culled_layout.directory);
+    EXPECT_STREQ(repeated_layout.manifest_path, culled_layout.manifest_path);
+
+    slayer3d_game_data_brush_compile_artifact_layout saved_layout{};
+    ASSERT_TRUE(slayer3d_game_data_save_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", artifact_root_dir.string().c_str(), &saved_layout, &artifact_size, error,
+        sizeof(error)))
+        << error;
+    EXPECT_STREQ(saved_layout.manifest_path, culled_layout.manifest_path);
+    EXPECT_TRUE(std::filesystem::exists(saved_layout.manifest_path));
+    EXPECT_GT(artifact_size, 0u);
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        culled_a, "brush.compile_options", saved_layout.manifest_path, &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.fresh);
+    EXPECT_FALSE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", "asset://cache", &repeated_layout, error, sizeof(error)));
+
     slayer3d_game_data_runtime *culled_b = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_culled.game.json").string().c_str(), session, &culled_b,
                                              error, sizeof(error)))
@@ -13982,6 +14019,14 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     EXPECT_EQ(unculled_world.compile_rendered_face_count, 12);
     EXPECT_EQ(unculled_world.compile_triangle_count, 24);
     EXPECT_NE(unculled_world.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    slayer3d_game_data_brush_compile_artifact_layout unculled_layout{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        unculled, "brush.compile_options", artifact_root_dir.string().c_str(), &unculled_layout, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(unculled_layout.source_hash, culled_layout.source_hash);
+    EXPECT_NE(unculled_layout.compile_artifact_hash, culled_layout.compile_artifact_hash);
+    EXPECT_STREQ(unculled_layout.world_key, culled_layout.world_key);
+    EXPECT_STRNE(unculled_layout.manifest_path, culled_layout.manifest_path);
     ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
         unculled, "brush.compile_options", &artifact_json, &artifact_size, error, sizeof(error)))
         << error;

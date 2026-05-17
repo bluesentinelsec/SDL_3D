@@ -591,6 +591,30 @@ extern "C"
         Uint64 artifact_compile_artifact_hash;
     } slayer3d_game_data_brush_compile_artifact_status;
 
+    /** @brief Maximum bytes, including the NUL terminator, for brush compile artifact layout paths. */
+#define SLAYER3D_GAME_DATA_BRUSH_COMPILE_ARTIFACT_LAYOUT_PATH_MAX 1024
+
+    /** @brief Canonical filesystem layout for one offline brush compile artifact. */
+    typedef struct slayer3d_game_data_brush_compile_artifact_layout
+    {
+        /** @brief Stable filesystem-safe key derived from the brush world name. */
+        char world_key[128];
+        /** @brief Directory containing this exact source/policy artifact. */
+        char directory[SLAYER3D_GAME_DATA_BRUSH_COMPILE_ARTIFACT_LAYOUT_PATH_MAX];
+        /** @brief JSON descriptor path produced by the current manifest exporter. */
+        char manifest_path[SLAYER3D_GAME_DATA_BRUSH_COMPILE_ARTIFACT_LAYOUT_PATH_MAX];
+        /** @brief Reserved path for future compiled render-mesh payload data. */
+        char render_payload_path[SLAYER3D_GAME_DATA_BRUSH_COMPILE_ARTIFACT_LAYOUT_PATH_MAX];
+        /** @brief Reserved path for future compiled collision payload data. */
+        char collision_payload_path[SLAYER3D_GAME_DATA_BRUSH_COMPILE_ARTIFACT_LAYOUT_PATH_MAX];
+        /** @brief Reserved path for future compiled visibility-grid payload data. */
+        char visibility_payload_path[SLAYER3D_GAME_DATA_BRUSH_COMPILE_ARTIFACT_LAYOUT_PATH_MAX];
+        /** @brief Current runtime source hash for authored brush inputs. */
+        Uint64 source_hash;
+        /** @brief Current runtime compiled artifact hash for source plus compile policy. */
+        Uint64 compile_artifact_hash;
+    } slayer3d_game_data_brush_compile_artifact_layout;
+
     /** @brief Active-scene instance of an authored brush world. */
     typedef struct slayer3d_game_data_brush_world_instance
     {
@@ -2415,6 +2439,34 @@ extern "C"
                                                                    const char *world_name, const char *path,
                                                                    size_t *out_size, char *error_buffer,
                                                                    int error_buffer_size);
+
+    /**
+     * @brief Resolve the canonical offline artifact layout for one brush world.
+     *
+     * @p artifact_root must be a native filesystem directory path, not an
+     * `asset://` or other virtual URI. The resolved layout is versioned as
+     * `brush/v0/<world-key>/<source-hash>/<compile-artifact-hash>/...`.
+     * The manifest path is usable with
+     * @ref slayer3d_game_data_save_brush_world_compile_artifact_file. Binary
+     * payload paths are reserved for future offline mesh/collision cache data;
+     * the runtime still rebuilds brush artifacts from authored source.
+     */
+    bool slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, const char *artifact_root,
+        slayer3d_game_data_brush_compile_artifact_layout *out_layout, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Atomically save one brush compile artifact manifest using the canonical layout.
+     *
+     * This resolves the layout with
+     * @ref slayer3d_game_data_get_brush_world_compile_artifact_layout and writes
+     * the JSON manifest to `out_layout->manifest_path`. Parent directories are
+     * created automatically. Passing NULL for @p out_layout is allowed.
+     */
+    bool slayer3d_game_data_save_brush_world_compile_artifact_layout(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, const char *artifact_root,
+        slayer3d_game_data_brush_compile_artifact_layout *out_layout, size_t *out_size, char *error_buffer,
+        int error_buffer_size);
 
     /**
      * @brief Atomically save one runtime brush world as a JSON fragment file.

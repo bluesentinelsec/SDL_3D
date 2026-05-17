@@ -750,6 +750,26 @@ valid-but-stale descriptor is not a load failure: verification returns status
 flags so tooling can ignore stale artifacts and let the runtime rebuild from
 source. When binary cache payloads are added later, this status check should be
 the gate before any cached mesh/collision data is trusted.
+Tools that need a stable cache location can call
+`slayer3d_game_data_get_brush_world_compile_artifact_layout()` or
+`slayer3d_game_data_save_brush_world_compile_artifact_layout()`. The canonical
+layout is:
+
+```text
+<artifact-root>/brush/v0/<world-key>/<source-hash>/<compile-artifact-hash>/
+  manifest.json
+  render.payload.bin       (reserved)
+  collision.payload.bin    (reserved)
+  visibility.payload.bin   (reserved)
+```
+
+`<world-key>` is a filesystem-safe key derived from the brush world name with a
+hash suffix to avoid collisions. `<source-hash>` changes when authored brush
+source changes; `<compile-artifact-hash>` changes when the compile policy or the
+compiled artifact metadata changes. The reserved payload names are intentional
+contract boundaries for future binary mesh, collision, and visibility cache
+files. Current runtime loading remains source-first and does not trust or load
+those payload files.
 When visibility culling leaves every brush in a compile chunk visible, the
 renderer can draw that chunk as one optimized model instead of submitting each
 brush model separately; partially visible chunks still fall back to per-brush

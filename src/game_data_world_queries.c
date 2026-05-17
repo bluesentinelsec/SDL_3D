@@ -15,6 +15,7 @@
 #include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_timer.h>
+#include <stdarg.h>
 #include <stdlib.h>
 
 static bool editor_save_bytes_atomic(const char *path, const void *data, size_t size, const char *kind,
@@ -1870,6 +1871,149 @@ bool slayer3d_game_data_export_brush_world_fragment_json(const slayer3d_game_dat
     return true;
 }
 
+static Uint64 brush_artifact_hash_string(const char *value)
+{
+    Uint64 hash = 1469598103934665603ull;
+    if (value == NULL)
+        return hash;
+    while (*value != '\0')
+    {
+        hash ^= (Uint8)*value;
+        hash *= 1099511628211ull;
+        ++value;
+    }
+    return hash;
+}
+
+static bool brush_artifact_safe_char(char c)
+{
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+           c == '.';
+}
+
+static bool brush_artifact_make_world_key(const char *world_name, char *buffer, size_t buffer_size)
+{
+    if (world_name == NULL || world_name[0] == '\0' || buffer == NULL || buffer_size == 0u)
+        return false;
+
+    const Uint64 name_hash = brush_artifact_hash_string(world_name);
+    char suffix[24];
+    const int suffix_len = SDL_snprintf(suffix, sizeof(suffix), "-%016llx", (unsigned long long)name_hash);
+    if (suffix_len < 0 || (size_t)suffix_len >= sizeof(suffix) || (size_t)suffix_len + 1u >= buffer_size)
+        return false;
+
+    const size_t max_prefix = buffer_size - (size_t)suffix_len - 1u;
+    size_t offset = 0u;
+    bool last_was_separator = false;
+    for (const char *cursor = world_name; *cursor != '\0' && offset < max_prefix; ++cursor)
+    {
+        const char out = brush_artifact_safe_char(*cursor) ? *cursor : '_';
+        if (out == '_' && last_was_separator)
+            continue;
+        buffer[offset++] = out;
+        last_was_separator = out == '_';
+    }
+    while (offset > 0u && buffer[offset - 1u] == '_')
+        --offset;
+    if (offset == 0u)
+        buffer[offset++] = 'w';
+    if (offset + (size_t)suffix_len >= buffer_size)
+        return false;
+    SDL_memcpy(buffer + offset, suffix, (size_t)suffix_len + 1u);
+    return true;
+}
+
+static bool brush_artifact_copy_trimmed_root(const char *artifact_root, char *buffer, size_t buffer_size,
+                                             char *error_buffer, int error_buffer_size)
+{
+    if (artifact_root == NULL || artifact_root[0] == '\0' || SDL_strstr(artifact_root, "://") != NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush compile artifact layout requires a filesystem root path");
+        return false;
+    }
+
+    size_t len = SDL_strlen(artifact_root);
+    while (len > 1u && (artifact_root[len - 1u] == '/' || artifact_root[len - 1u] == '\\'))
+        --len;
+    if (len + 1u > buffer_size)
+    {
+        set_error(error_buffer, error_buffer_size, "brush compile artifact root path is too long");
+        return false;
+    }
+    SDL_memcpy(buffer, artifact_root, len);
+    buffer[len] = '\0';
+    return true;
+}
+
+static bool brush_artifact_snprintf_path(char *buffer, size_t buffer_size, char *error_buffer, int error_buffer_size,
+                                         const char *format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    const int written = SDL_vsnprintf(buffer, buffer_size, format, args);
+    va_end(args);
+    if (written < 0 || (size_t)written >= buffer_size)
+    {
+        set_error(error_buffer, error_buffer_size, "brush compile artifact layout path is too long");
+        return false;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_get_brush_world_compile_artifact_layout(
+    const slayer3d_game_data_runtime *runtime, const char *world_name, const char *artifact_root,
+    slayer3d_game_data_brush_compile_artifact_layout *out_layout, char *error_buffer, int error_buffer_size)
+{
+    if (out_layout != NULL)
+        SDL_zero(*out_layout);
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || out_layout == NULL)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "brush compile artifact layout requires runtime, world name, and output");
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "brush world '%s' not found", world_name);
+        return false;
+    }
+
+    char root[SLAYER3D_GAME_DATA_BRUSH_COMPILE_ARTIFACT_LAYOUT_PATH_MAX];
+    if (!brush_artifact_copy_trimmed_root(artifact_root, root, sizeof(root), error_buffer, error_buffer_size) ||
+        !brush_artifact_make_world_key(world_name, out_layout->world_key, sizeof(out_layout->world_key)))
+    {
+        if (error_buffer != NULL && error_buffer_size > 0 && error_buffer[0] == '\0')
+            set_error(error_buffer, error_buffer_size, "failed to build brush compile artifact layout key");
+        return false;
+    }
+
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    out_layout->source_hash = slayer3d_game_data_brush_world_compute_source_hash(world);
+    out_layout->compile_artifact_hash = world->compile_artifact_hash;
+    char source_hash[24];
+    char artifact_hash[24];
+    SDL_snprintf(source_hash, sizeof(source_hash), "%016llx", (unsigned long long)out_layout->source_hash);
+    SDL_snprintf(artifact_hash, sizeof(artifact_hash), "%016llx",
+                 (unsigned long long)out_layout->compile_artifact_hash);
+
+    return brush_artifact_snprintf_path(out_layout->directory, sizeof(out_layout->directory), error_buffer,
+                                        error_buffer_size, "%s/brush/v0/%s/%s/%s", root, out_layout->world_key,
+                                        source_hash, artifact_hash) &&
+           brush_artifact_snprintf_path(out_layout->manifest_path, sizeof(out_layout->manifest_path), error_buffer,
+                                        error_buffer_size, "%s/manifest.json", out_layout->directory) &&
+           brush_artifact_snprintf_path(out_layout->render_payload_path, sizeof(out_layout->render_payload_path),
+                                        error_buffer, error_buffer_size, "%s/render.payload.bin",
+                                        out_layout->directory) &&
+           brush_artifact_snprintf_path(out_layout->collision_payload_path, sizeof(out_layout->collision_payload_path),
+                                        error_buffer, error_buffer_size, "%s/collision.payload.bin",
+                                        out_layout->directory) &&
+           brush_artifact_snprintf_path(out_layout->visibility_payload_path,
+                                        sizeof(out_layout->visibility_payload_path), error_buffer, error_buffer_size,
+                                        "%s/visibility.payload.bin", out_layout->directory);
+}
+
 bool slayer3d_game_data_export_brush_world_compile_artifact_json(const slayer3d_game_data_runtime *runtime,
                                                                  const char *world_name, char **out_json,
                                                                  size_t *out_size, char *error_buffer,
@@ -2053,6 +2197,29 @@ bool slayer3d_game_data_save_brush_world_compile_artifact_file(const slayer3d_ga
     if (out_size != NULL)
         *out_size = size;
     return true;
+}
+
+bool slayer3d_game_data_save_brush_world_compile_artifact_layout(
+    const slayer3d_game_data_runtime *runtime, const char *world_name, const char *artifact_root,
+    slayer3d_game_data_brush_compile_artifact_layout *out_layout, size_t *out_size, char *error_buffer,
+    int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0u;
+
+    slayer3d_game_data_brush_compile_artifact_layout layout;
+    if (!slayer3d_game_data_get_brush_world_compile_artifact_layout(runtime, world_name, artifact_root, &layout,
+                                                                    error_buffer, error_buffer_size))
+    {
+        if (out_layout != NULL)
+            SDL_zero(*out_layout);
+        return false;
+    }
+
+    if (out_layout != NULL)
+        *out_layout = layout;
+    return slayer3d_game_data_save_brush_world_compile_artifact_file(runtime, world_name, layout.manifest_path,
+                                                                     out_size, error_buffer, error_buffer_size);
 }
 
 static bool export_add_player_start(yyjson_mut_doc *doc, yyjson_mut_val *starts,
