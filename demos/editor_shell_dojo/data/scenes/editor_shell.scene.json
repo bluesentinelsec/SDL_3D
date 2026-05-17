@@ -200,8 +200,8 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.floor",
-          "grid_min": [-0.5, -0.025, -0.5],
-          "grid_max": [0.5, 0.0, 0.5],
+          "grid_min": [0.0, -0.025, 0.0],
+          "grid_max": [1.0, 0.0, 1.0],
           "message": "floor prefab preview"
         },
         {
@@ -211,8 +211,8 @@
           "material": "mat.editor.wall",
           "axis_key": "editor.placement.wall_axis",
           "axis": "z",
-          "grid_min": [-0.03125, 0.0, -0.5],
-          "grid_max": [0.03125, 1.0, 0.5],
+          "grid_min": [0.0, 0.0, 0.0],
+          "grid_max": [0.0625, 1.0, 1.0],
           "message": "wall prefab preview"
         },
         {
@@ -220,8 +220,8 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.ceiling",
-          "grid_min": [-0.5, 1.0, -0.5],
-          "grid_max": [0.5, 1.025, 0.5],
+          "grid_min": [0.0, 1.0, 0.0],
+          "grid_max": [1.0, 1.025, 1.0],
           "message": "ceiling prefab preview"
         },
         {

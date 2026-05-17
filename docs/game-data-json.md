@@ -1041,14 +1041,17 @@ property that selects the active tool. `snap_key` can point at a runtime
 scene-state float so UI or keyboard shortcuts can change grid size without
 reloading data. `grid_size_key` can point at the same scene-state float when box
 previews use `grid_min` and `grid_max` instead of fixed `min` and `max` bounds.
-Those grid bounds are multipliers, so a floor authored from `[-0.5, 0, -0.5]`
-to `[0.5, 0.025, 0.5]` becomes one active grid cell wide at any configured grid
-size. Each preview entry maps a tool `mode` to either a `box` ghost or a
-`player_start` marker. Box previews can use `axis_key` with `axis` `x` or `z` to
-rotate wall-like prefabs between horizontal grid axes. A box preview must author
-exactly one bounds source: fixed `min`/`max`, or grid-scaled `grid_min`/
-`grid_max`. The preview reuses the editor debug overlay's `command_preview`
-flag and color, so editor hosts do not need a second rendering path.
+Those grid bounds are multipliers from the snapped grid anchor, so a floor
+authored from `[0, 0, 0]` to `[1, 0.025, 1]` becomes one active grid cell wide
+at any configured grid size. For tile-like blockout tools, author floors,
+walls, and ceilings from grid-boundary anchors instead of centering them around
+the snap point; this keeps adjacent faces aligned without gaps. Each preview
+entry maps a tool `mode` to either a `box` ghost or a `player_start` marker. Box
+previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
+between horizontal grid axes. A box preview must author exactly one bounds
+source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. The preview
+reuses the editor debug overlay's `command_preview` flag and color, so editor
+hosts do not need a second rendering path.
 
 ```json
 {
@@ -1071,8 +1074,8 @@ flag and color, so editor hosts do not need a second rendering path.
           "kind": "box",
           "world": "brush.level.blockout",
           "material": "mat.stone_floor",
-          "grid_min": [-0.5, -0.025, -0.5],
-          "grid_max": [0.5, 0.0, 0.5]
+          "grid_min": [0.0, -0.025, 0.0],
+          "grid_max": [1.0, 0.0, 1.0]
         },
         {
           "mode": "wall",
@@ -1081,8 +1084,8 @@ flag and color, so editor hosts do not need a second rendering path.
           "material": "mat.stone_wall",
           "axis_key": "editor.wall_axis",
           "axis": "z",
-          "grid_min": [-0.03125, 0.0, -0.5],
-          "grid_max": [0.03125, 1.0, 0.5]
+          "grid_min": [0.0, 0.0, 0.0],
+          "grid_max": [0.0625, 1.0, 1.0]
         },
         {
           "mode": "player_start",
