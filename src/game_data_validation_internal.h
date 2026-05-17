@@ -118,5 +118,19 @@ bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *
 bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
                                    validation_names *names);
+bool validate_render_mesh_primitive_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                              const validation_names *names);
+bool validate_render_composite_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                         const validation_names *names);
+bool validate_render_camera_visibility_field(validation_context *ctx, yyjson_val *component, const char *path,
+                                             const validation_names *names, const char *field);
+bool validate_property_name_array_field(validation_context *ctx, yyjson_val *component, const char *path,
+                                        const char *field, const char *label);
+bool validate_fps_sector_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                   validation_names *names);
+bool validate_fps_brush_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                  validation_names *names);
+bool validate_editor_camera_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                      validation_names *names);
 
 #endif /* SLAYER3D_GAME_DATA_VALIDATION_INTERNAL_H */
