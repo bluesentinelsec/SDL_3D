@@ -9341,6 +9341,38 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
         (dir / "bad_test_run_save_manifest_action.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("requires exactly one of path or path_from_state"), std::string::npos) << error;
 
+    write_text(dir / "bad_test_run_mount_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Test Run Mount Action" },
+  "world": { "name": "world.bad_editor_test_run_mount_action", "kind": "fixed_screen" },
+  "editor_player_starts": [{ "name": "player_start.test", "scene": "scene.play", "target": "entity.player", "position": [0, 1, 0] }],
+  "entities": [{ "name": "entity.player" }],
+  "signals": ["signal.editor.test_run"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.test_run",
+        "actions": [
+          {
+            "type": "editor.test_run.save_manifest",
+            "data_asset": "asset://bad.game.json",
+            "player_start": "player_start.test",
+            "path": "/tmp/test-run.json",
+            "root": "game/data",
+            "pack": "game.slayer3dpak"
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_test_run_mount_action.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("accepts at most one of root, pack, or embedded"), std::string::npos) << error;
+
     write_text(dir / "bad_status_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -15569,6 +15601,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                  "player_start.editor_shell");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.target", ""),
                  "entity.editor_shell.player");
+    const char *test_run_command = slayer3d_properties_get_string(scene_state, "editor.test_run.command", "");
+    ASSERT_NE(test_run_command, nullptr);
+    EXPECT_NE(std::string(test_run_command).find("./build/debug/slayer3d_runner"), std::string::npos);
+    EXPECT_NE(std::string(test_run_command).find("--root \"demos/editor_shell_dojo/data\""), std::string::npos);
+    EXPECT_NE(std::string(test_run_command).find("--test-run-manifest"), std::string::npos);
+    EXPECT_NE(std::string(test_run_command).find(manifest_path.string()), std::string::npos);
     const char *manifest_json = slayer3d_properties_get_string(scene_state, "editor.test_run.manifest_json", "");
     ASSERT_NE(manifest_json, nullptr);
     EXPECT_NE(std::string(manifest_json).find("\"schema\": \"slayer3d.editor_test_run.v0\""), std::string::npos);

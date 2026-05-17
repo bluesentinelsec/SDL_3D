@@ -302,6 +302,10 @@
             "binding": { "type": "scene_state", "key": "editor.test_run.message", "default": "none" }
           },
           {
+            "label": "Cmd",
+            "binding": { "type": "scene_state", "key": "editor.test_run.command", "default": "none" }
+          },
+          {
             "label": "Saved",
             "binding": { "type": "scene_state", "key": "editor.save.path", "default": "none" }
           },

@@ -7631,6 +7631,22 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     {
         if (!is_non_empty_string(action, "data_asset"))
             return validation_error(ctx, json_path, "editor.test_run.prepare requires a non-empty data_asset");
+        static const char *const string_fields[] = {"runner", "root", "pack", "media"};
+        for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+        {
+            yyjson_val *field = obj_get(action, string_fields[i]);
+            if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.test_run.prepare command fields must be non-empty strings");
+        }
+        yyjson_val *embedded = obj_get(action, "embedded");
+        if (embedded != NULL && !yyjson_is_bool(embedded))
+            return validation_error(ctx, json_path, "editor.test_run.prepare embedded must be a boolean");
+        const int mount_count = (obj_get(action, "root") != NULL ? 1 : 0) + (obj_get(action, "pack") != NULL ? 1 : 0) +
+                                (embedded != NULL && yyjson_get_bool(embedded) ? 1 : 0);
+        if (mount_count > 1)
+            return validation_error(ctx, json_path,
+                                    "editor.test_run.prepare accepts at most one of root, pack, or embedded");
         const char *scene = json_string(action, "scene");
         if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
             return false;
@@ -7647,8 +7663,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.test_run.prepare outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",      "message_key", "manifest_json_key", "size_key",
-                                                  "data_asset_key", "scene_key",   "player_start_key",  "target_key"};
+        static const char *const output_keys[] = {"valid_key",        "message_key",    "manifest_json_key",
+                                                  "size_key",         "data_asset_key", "scene_key",
+                                                  "player_start_key", "target_key",     "command_key"};
         for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
         {
             yyjson_val *output = obj_get(outputs, output_keys[i]);
@@ -7662,6 +7679,22 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     {
         if (!is_non_empty_string(action, "data_asset"))
             return validation_error(ctx, json_path, "editor.test_run.save_manifest requires a non-empty data_asset");
+        static const char *const string_fields[] = {"runner", "root", "pack", "media"};
+        for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+        {
+            yyjson_val *field = obj_get(action, string_fields[i]);
+            if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.test_run.save_manifest command fields must be non-empty strings");
+        }
+        yyjson_val *embedded = obj_get(action, "embedded");
+        if (embedded != NULL && !yyjson_is_bool(embedded))
+            return validation_error(ctx, json_path, "editor.test_run.save_manifest embedded must be a boolean");
+        const int mount_count = (obj_get(action, "root") != NULL ? 1 : 0) + (obj_get(action, "pack") != NULL ? 1 : 0) +
+                                (embedded != NULL && yyjson_get_bool(embedded) ? 1 : 0);
+        if (mount_count > 1)
+            return validation_error(ctx, json_path,
+                                    "editor.test_run.save_manifest accepts at most one of root, pack, or embedded");
         yyjson_val *path = obj_get(action, "path");
         yyjson_val *path_from_state = obj_get(action, "path_from_state");
         if ((path == NULL && path_from_state == NULL) || (path != NULL && path_from_state != NULL))
@@ -7689,9 +7722,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.test_run.save_manifest outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",         "message_key",      "path_key",
-                                                  "manifest_json_key", "size_key",         "data_asset_key",
-                                                  "scene_key",         "player_start_key", "target_key"};
+        static const char *const output_keys[] = {"valid_key",  "message_key",    "path_key",  "manifest_json_key",
+                                                  "size_key",   "data_asset_key", "scene_key", "player_start_key",
+                                                  "target_key", "command_key"};
         for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
         {
             yyjson_val *output = obj_get(outputs, output_keys[i]);

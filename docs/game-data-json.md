@@ -1322,6 +1322,10 @@ scene, player start, target actor, and runner argument array excluding mount
 flags. Editor hosts combine those arguments with their current `--root`,
 `--pack`, embedded, or fused launch context. The generic runner can consume the
 manifest directly with `--test-run-manifest <path-or-asset>`.
+For UI copy/paste affordances, `editor.test_run.prepare` and
+`editor.test_run.save_manifest` can also author `runner`, one mount option
+(`root`, `pack`, or `embedded`), and optional `media`. When `command_key` is
+present in `outputs`, the action publishes a quoted runner command string.
 
 ```json
 {
@@ -1333,7 +1337,8 @@ manifest directly with `--test-run-manifest <path-or-asset>`.
     "message_key": "editor.test_run.message",
     "manifest_json_key": "editor.test_run.manifest_json",
     "scene_key": "editor.test_run.scene",
-    "player_start_key": "editor.test_run.player_start"
+    "player_start_key": "editor.test_run.player_start",
+    "command_key": "editor.test_run.command"
   }
 }
 ```
@@ -1349,10 +1354,13 @@ the same `data_asset`, `scene`, and `player_start` fields as
   "data_asset": "asset://game.game.json",
   "player_start": "player_start.level_01",
   "path_from_state": "editor.test_run.path",
+  "runner": "./build/debug/slayer3d_runner",
+  "root": "path/to/game/data",
   "outputs": {
     "valid_key": "editor.test_run.saved",
     "message_key": "editor.test_run.save_message",
-    "path_key": "editor.test_run.path"
+    "path_key": "editor.test_run.path",
+    "command_key": "editor.test_run.command"
   }
 }
 ```

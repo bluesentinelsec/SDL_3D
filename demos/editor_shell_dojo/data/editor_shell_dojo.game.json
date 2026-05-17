@@ -841,6 +841,8 @@
             "type": "editor.test_run.prepare",
             "data_asset": "asset://editor_shell_dojo.game.json",
             "player_start": "player_start.editor_shell",
+            "runner": "./build/debug/slayer3d_runner",
+            "root": "demos/editor_shell_dojo/data",
             "message": "test run handoff prepared",
             "outputs": {
               "valid_key": "editor.test_run.valid",
@@ -850,7 +852,8 @@
               "data_asset_key": "editor.test_run.data_asset",
               "scene_key": "editor.test_run.scene",
               "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target"
+              "target_key": "editor.test_run.target",
+              "command_key": "editor.test_run.command"
             }
           },
           {
@@ -858,6 +861,8 @@
             "data_asset": "asset://editor_shell_dojo.game.json",
             "player_start": "player_start.editor_shell",
             "path_from_state": "editor.test_run.path",
+            "runner": "./build/debug/slayer3d_runner",
+            "root": "demos/editor_shell_dojo/data",
             "message": "test run manifest saved",
             "outputs": {
               "valid_key": "editor.test_run.saved",
@@ -868,7 +873,8 @@
               "data_asset_key": "editor.test_run.data_asset",
               "scene_key": "editor.test_run.scene",
               "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target"
+              "target_key": "editor.test_run.target",
+              "command_key": "editor.test_run.command"
             }
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "test run handoff prepared" }

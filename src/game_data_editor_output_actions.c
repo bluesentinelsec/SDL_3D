@@ -52,6 +52,108 @@ static const char *editor_action_path(slayer3d_game_data_runtime *runtime, yyjso
     return json_string(action, "path", fallback);
 }
 
+static bool append_command_text(char *buffer, size_t buffer_size, size_t *offset, const char *text)
+{
+    if (buffer == NULL || buffer_size == 0u || offset == NULL || text == NULL)
+        return false;
+    if (*offset >= buffer_size)
+    {
+        buffer[buffer_size - 1u] = '\0';
+        return false;
+    }
+    const int written = SDL_snprintf(buffer + *offset, buffer_size - *offset, "%s", text);
+    if (written < 0 || (size_t)written >= buffer_size - *offset)
+    {
+        buffer[buffer_size - 1u] = '\0';
+        return false;
+    }
+    *offset += (size_t)written;
+    return true;
+}
+
+static bool append_command_arg(char *buffer, size_t buffer_size, size_t *offset, const char *arg)
+{
+    if (arg == NULL || arg[0] == '\0')
+        return true;
+    if (!append_command_text(buffer, buffer_size, offset, " \""))
+        return false;
+    for (const char *cursor = arg; *cursor != '\0'; ++cursor)
+    {
+        char escaped[3] = {*cursor, '\0', '\0'};
+        if (*cursor == '"' || *cursor == '\\')
+        {
+            escaped[0] = '\\';
+            escaped[1] = *cursor;
+        }
+        if (!append_command_text(buffer, buffer_size, offset, escaped))
+            return false;
+    }
+    return append_command_text(buffer, buffer_size, offset, "\"");
+}
+
+static bool append_test_run_mount_args(char *buffer, size_t buffer_size, size_t *offset, yyjson_val *action)
+{
+    const char *root = json_string(action, "root", NULL);
+    const char *pack = json_string(action, "pack", NULL);
+    if (root != NULL && (!append_command_text(buffer, buffer_size, offset, " --root") ||
+                         !append_command_arg(buffer, buffer_size, offset, root)))
+    {
+        return false;
+    }
+    if (pack != NULL && (!append_command_text(buffer, buffer_size, offset, " --pack") ||
+                         !append_command_arg(buffer, buffer_size, offset, pack)))
+    {
+        return false;
+    }
+    if (json_bool(action, "embedded", false) && !append_command_text(buffer, buffer_size, offset, " --embedded"))
+        return false;
+    const char *media = json_string(action, "media", NULL);
+    if (media != NULL && (!append_command_text(buffer, buffer_size, offset, " --media") ||
+                          !append_command_arg(buffer, buffer_size, offset, media)))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool format_test_run_direct_command(char *buffer, size_t buffer_size, yyjson_val *action,
+                                           const slayer3d_game_data_editor_test_run_desc *desc,
+                                           const char *resolved_scene)
+{
+    size_t offset = 0u;
+    const char *runner = json_string(action, "runner", "slayer3d_runner");
+    if (!append_command_text(buffer, buffer_size, &offset, runner) ||
+        !append_test_run_mount_args(buffer, buffer_size, &offset, action) ||
+        !append_command_text(buffer, buffer_size, &offset, " --data") ||
+        !append_command_arg(buffer, buffer_size, &offset, desc != NULL ? desc->data_asset_path : NULL))
+    {
+        return false;
+    }
+    if (resolved_scene != NULL && resolved_scene[0] != '\0' &&
+        (!append_command_text(buffer, buffer_size, &offset, " --scene") ||
+         !append_command_arg(buffer, buffer_size, &offset, resolved_scene)))
+    {
+        return false;
+    }
+    if (desc != NULL && desc->player_start != NULL && desc->player_start[0] != '\0' &&
+        (!append_command_text(buffer, buffer_size, &offset, " --player-start") ||
+         !append_command_arg(buffer, buffer_size, &offset, desc->player_start)))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool format_test_run_manifest_command(char *buffer, size_t buffer_size, yyjson_val *action, const char *path)
+{
+    size_t offset = 0u;
+    const char *runner = json_string(action, "runner", "slayer3d_runner");
+    return append_command_text(buffer, buffer_size, &offset, runner) &&
+           append_test_run_mount_args(buffer, buffer_size, &offset, action) &&
+           append_command_text(buffer, buffer_size, &offset, " --test-run-manifest") &&
+           append_command_arg(buffer, buffer_size, &offset, path);
+}
+
 bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, const char *world_name,
                                        const char *message, bool publish_result)
 {
@@ -219,6 +321,10 @@ bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtim
     const char *resolved_scene = desc.scene != NULL && desc.scene[0] != '\0'
                                      ? desc.scene
                                      : (has_start && start.scene != NULL ? start.scene : "");
+    char command[1024];
+    command[0] = '\0';
+    const bool command_ok =
+        ok && format_test_run_direct_command(command, sizeof(command), action, &desc, resolved_scene);
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
@@ -232,6 +338,7 @@ bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtim
     editor_set_string_output(scene_state, outputs, "player_start_key",
                              ok && desc.player_start != NULL ? desc.player_start : "");
     editor_set_string_output(scene_state, outputs, "target_key", has_start && start.target != NULL ? start.target : "");
+    editor_set_string_output(scene_state, outputs, "command_key", command_ok ? command : "");
     SDL_free(json);
     return true;
 }
@@ -262,6 +369,9 @@ bool slayer3d_game_data_save_editor_test_run_manifest_action(slayer3d_game_data_
     const char *resolved_scene = desc.scene != NULL && desc.scene[0] != '\0'
                                      ? desc.scene
                                      : (has_start && start.scene != NULL ? start.scene : "");
+    char command[1024];
+    command[0] = '\0';
+    const bool command_ok = ok && format_test_run_manifest_command(command, sizeof(command), action, path);
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
@@ -276,6 +386,7 @@ bool slayer3d_game_data_save_editor_test_run_manifest_action(slayer3d_game_data_
     editor_set_string_output(scene_state, outputs, "player_start_key",
                              ok && desc.player_start != NULL ? desc.player_start : "");
     editor_set_string_output(scene_state, outputs, "target_key", has_start && start.target != NULL ? start.target : "");
+    editor_set_string_output(scene_state, outputs, "command_key", command_ok ? command : "");
     SDL_free(json);
     return true;
 }
