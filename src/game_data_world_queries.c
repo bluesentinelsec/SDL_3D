@@ -1441,6 +1441,20 @@ static bool export_add_vec3(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char
            yyjson_mut_arr_add_real(doc, arr, value.z) && yyjson_mut_obj_add_val(doc, obj, key, arr);
 }
 
+static bool export_add_int3_values(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, int x, int y, int z)
+{
+    yyjson_mut_val *arr = yyjson_mut_arr(doc);
+    return arr != NULL && yyjson_mut_arr_add_int(doc, arr, x) && yyjson_mut_arr_add_int(doc, arr, y) &&
+           yyjson_mut_arr_add_int(doc, arr, z) && yyjson_mut_obj_add_val(doc, obj, key, arr);
+}
+
+static bool export_add_bounds(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_bounding_box bounds)
+{
+    yyjson_mut_val *bounds_obj = yyjson_mut_obj(doc);
+    return bounds_obj != NULL && yyjson_mut_obj_add_val(doc, obj, key, bounds_obj) &&
+           export_add_vec3(doc, bounds_obj, "min", bounds.min) && export_add_vec3(doc, bounds_obj, "max", bounds.max);
+}
+
 static bool export_add_vec4(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, slayer3d_vec4 value)
 {
     yyjson_mut_val *arr = yyjson_mut_arr(doc);
@@ -1692,6 +1706,108 @@ static bool export_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *worlds,
     return true;
 }
 
+static bool export_add_brush_compile_policy(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                            const slayer3d_game_data_brush_world *world)
+{
+    yyjson_mut_val *policy = yyjson_mut_obj(doc);
+    return policy != NULL && yyjson_mut_obj_add_val(doc, root, "policy", policy) &&
+           yyjson_mut_obj_add_bool(doc, policy, "hidden_face_culling", world->compile_hidden_face_culling) &&
+           yyjson_mut_obj_add_real(doc, policy, "chunk_cell_size_hint", world->compile_chunk_cell_size_hint) &&
+           yyjson_mut_obj_add_real(doc, policy, "chunk_cell_size", world->compile_chunk_cell_size) &&
+           yyjson_mut_obj_add_real(doc, policy, "visibility_cell_size", world->visibility_cell_size);
+}
+
+static bool export_add_brush_compile_source_summary(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                                    const slayer3d_game_data_brush_world *world)
+{
+    yyjson_mut_val *source = yyjson_mut_obj(doc);
+    const char *units = world->units != NULL ? world->units : "meters";
+    return source != NULL && yyjson_mut_obj_add_val(doc, root, "source", source) &&
+           yyjson_mut_obj_add_strcpy(doc, source, "units", units) &&
+           yyjson_mut_obj_add_real(doc, source, "meters_per_unit", world->meters_per_unit) &&
+           yyjson_mut_obj_add_int(doc, source, "material_count", world->material_count) &&
+           yyjson_mut_obj_add_int(doc, source, "brush_count", world->brush_count) &&
+           yyjson_mut_obj_add_bool(doc, source, "has_bounds", world->has_bounds) &&
+           (!world->has_bounds || export_add_bounds(doc, source, "bounds", world->bounds));
+}
+
+static bool export_add_brush_compile_render_summary(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                                    const slayer3d_game_data_brush_world *world)
+{
+    yyjson_mut_val *render = yyjson_mut_obj(doc);
+    if (render == NULL || !yyjson_mut_obj_add_val(doc, root, "render", render) ||
+        !yyjson_mut_obj_add_int(doc, render, "face_count", world->compile_face_count) ||
+        !yyjson_mut_obj_add_int(doc, render, "rendered_face_count", world->compile_rendered_face_count) ||
+        !yyjson_mut_obj_add_int(doc, render, "culled_face_count", world->compile_culled_face_count) ||
+        !yyjson_mut_obj_add_int(doc, render, "triangle_count", world->compile_triangle_count) ||
+        !yyjson_mut_obj_add_int(doc, render, "invalid_brush_count", world->compile_invalid_brush_count) ||
+        !yyjson_mut_obj_add_int(doc, render, "degenerate_face_count", world->compile_degenerate_face_count))
+    {
+        return false;
+    }
+
+    const slayer3d_model *model = world->render_model;
+    int vertex_count = 0;
+    int index_count = 0;
+    for (int mesh_index = 0; model != NULL && mesh_index < model->mesh_count; ++mesh_index)
+    {
+        vertex_count += model->meshes[mesh_index].vertex_count;
+        index_count += model->meshes[mesh_index].index_count;
+    }
+
+    return yyjson_mut_obj_add_int(doc, render, "material_count", model != NULL ? model->material_count : 0) &&
+           yyjson_mut_obj_add_int(doc, render, "mesh_count", model != NULL ? model->mesh_count : 0) &&
+           yyjson_mut_obj_add_int(doc, render, "vertex_count", vertex_count) &&
+           yyjson_mut_obj_add_int(doc, render, "index_count", index_count);
+}
+
+static bool export_add_brush_compile_chunks(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                            const slayer3d_game_data_brush_world *world)
+{
+    yyjson_mut_val *chunks = yyjson_mut_obj(doc);
+    yyjson_mut_val *items = yyjson_mut_arr(doc);
+    if (chunks == NULL || items == NULL || !yyjson_mut_obj_add_val(doc, root, "chunks", chunks) ||
+        !yyjson_mut_obj_add_real(doc, chunks, "cell_size", world->compile_chunk_cell_size) ||
+        !yyjson_mut_obj_add_int(doc, chunks, "count", world->compile_chunk_count) ||
+        !yyjson_mut_obj_add_int(doc, chunks, "brush_index_count", world->compile_chunk_brush_index_count) ||
+        !yyjson_mut_obj_add_val(doc, chunks, "items", items))
+    {
+        return false;
+    }
+
+    for (int chunk_index = 0; chunk_index < world->compile_chunk_count; ++chunk_index)
+    {
+        const slayer3d_game_data_brush_compile_chunk *chunk = &world->compile_chunks[chunk_index];
+        yyjson_mut_val *item = yyjson_mut_obj(doc);
+        if (item == NULL || !yyjson_mut_arr_add_val(items, item) ||
+            !yyjson_mut_obj_add_int(doc, item, "index", chunk_index) ||
+            !yyjson_mut_obj_add_int(doc, item, "brush_count", chunk->brush_count) ||
+            !yyjson_mut_obj_add_uint(doc, item, "contents_mask", chunk->contents_mask) ||
+            !yyjson_mut_obj_add_bool(doc, item, "has_bounds", chunk->has_bounds) ||
+            (chunk->has_bounds && !export_add_bounds(doc, item, "bounds", chunk->bounds)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool export_add_brush_compile_visibility_grid(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                                     const brush_world_compile_artifacts *artifacts)
+{
+    yyjson_mut_val *grid = yyjson_mut_obj(doc);
+    const bool has_grid = artifacts != NULL && artifacts->visibility_grid_solid != NULL &&
+                          artifacts->visibility_grid_cell_count > 0 && artifacts->visibility_cell_size > 0.0f;
+    return grid != NULL && yyjson_mut_obj_add_val(doc, root, "visibility_grid", grid) &&
+           yyjson_mut_obj_add_bool(doc, grid, "present", has_grid) &&
+           yyjson_mut_obj_add_real(doc, grid, "cell_size", has_grid ? artifacts->visibility_cell_size : 0.0f) &&
+           export_add_int3_values(doc, grid, "dimensions", has_grid ? artifacts->visibility_grid_dim_x : 0,
+                                  has_grid ? artifacts->visibility_grid_dim_y : 0,
+                                  has_grid ? artifacts->visibility_grid_dim_z : 0) &&
+           yyjson_mut_obj_add_int(doc, grid, "cell_count", has_grid ? artifacts->visibility_grid_cell_count : 0) &&
+           (!has_grid || export_add_bounds(doc, grid, "bounds", artifacts->visibility_grid_bounds));
+}
+
 bool slayer3d_game_data_export_brush_world_fragment_json(const slayer3d_game_data_runtime *runtime,
                                                          const char *world_name, char **out_json, size_t *out_size,
                                                          char *error_buffer, int error_buffer_size)
@@ -1741,6 +1857,74 @@ bool slayer3d_game_data_export_brush_world_fragment_json(const slayer3d_game_dat
     {
         free(json);
         set_error(error_buffer, error_buffer_size, "failed to allocate brush world export JSON");
+        return false;
+    }
+    SDL_memcpy(copy, json, size + 1u);
+    free(json);
+    *out_json = copy;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
+bool slayer3d_game_data_export_brush_world_compile_artifact_json(const slayer3d_game_data_runtime *runtime,
+                                                                 const char *world_name, char **out_json,
+                                                                 size_t *out_size, char *error_buffer,
+                                                                 int error_buffer_size)
+{
+    if (out_json != NULL)
+        *out_json = NULL;
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || out_json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "brush compile artifact export requires runtime, world name, and output");
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "brush world '%s' not found", world_name);
+        return false;
+    }
+
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
+    yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
+    if (doc == NULL || root == NULL)
+    {
+        yyjson_mut_doc_free(doc);
+        set_error(error_buffer, error_buffer_size, "failed to allocate brush compile artifact document");
+        return false;
+    }
+
+    yyjson_mut_doc_set_root(doc, root);
+    const Uint64 source_hash = slayer3d_game_data_brush_world_compute_source_hash(world);
+    bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.brush_compile_artifact.v0") &&
+              yyjson_mut_obj_add_strcpy(doc, root, "world", world->name != NULL ? world->name : "") &&
+              yyjson_mut_obj_add_uint(doc, root, "source_hash", source_hash) &&
+              yyjson_mut_obj_add_uint(doc, root, "compile_artifact_hash", world->compile_artifact_hash) &&
+              export_add_brush_compile_policy(doc, root, world) &&
+              export_add_brush_compile_source_summary(doc, root, world) &&
+              export_add_brush_compile_render_summary(doc, root, world) &&
+              export_add_brush_compile_chunks(doc, root, world) &&
+              export_add_brush_compile_visibility_grid(doc, root, &world_runtime->artifacts);
+    size_t size = 0u;
+    char *json = ok ? yyjson_mut_write(doc, YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END, &size) : NULL;
+    yyjson_mut_doc_free(doc);
+    if (json == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to write brush compile artifact JSON");
+        return false;
+    }
+
+    char *copy = (char *)SDL_malloc(size + 1u);
+    if (copy == NULL)
+    {
+        free(json);
+        set_error(error_buffer, error_buffer_size, "failed to allocate brush compile artifact JSON");
         return false;
     }
     SDL_memcpy(copy, json, size + 1u);

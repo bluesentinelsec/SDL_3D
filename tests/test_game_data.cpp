@@ -21,6 +21,7 @@ extern "C"
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "../vendor/yyjson/yyjson.h"
 #include "slayer3d/asset.h"
 #include "slayer3d/data_game.h"
 #include "slayer3d/game.h"
@@ -13857,6 +13858,55 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     EXPECT_EQ(culled_world_a.compile_triangle_count, 20);
     EXPECT_NE(culled_world_a.compile_artifact_hash, 0u);
 
+    char *artifact_json = nullptr;
+    size_t artifact_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        culled_a, "brush.compile_options", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(artifact_json, nullptr);
+    EXPECT_GT(artifact_size, 0u);
+    yyjson_doc *artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    yyjson_val *artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(artifact_root, "schema")), "slayer3d.brush_compile_artifact.v0");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(artifact_root, "world")), "brush.compile_options");
+    const Uint64 source_hash = yyjson_get_uint(yyjson_obj_get(artifact_root, "source_hash"));
+    EXPECT_NE(source_hash, 0u);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "compile_artifact_hash")),
+              culled_world_a.compile_artifact_hash);
+    yyjson_val *policy = yyjson_obj_get(artifact_root, "policy");
+    ASSERT_NE(policy, nullptr);
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(policy, "hidden_face_culling")));
+    EXPECT_DOUBLE_EQ(yyjson_get_real(yyjson_obj_get(policy, "chunk_cell_size_hint")), 1.0);
+    EXPECT_DOUBLE_EQ(yyjson_get_real(yyjson_obj_get(policy, "chunk_cell_size")), 1.0);
+    yyjson_val *source = yyjson_obj_get(artifact_root, "source");
+    ASSERT_NE(source, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "brush_count")), 2);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "material_count")), 1);
+    yyjson_val *render = yyjson_obj_get(artifact_root, "render");
+    ASSERT_NE(render, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "face_count")), culled_world_a.compile_face_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "rendered_face_count")),
+              culled_world_a.compile_rendered_face_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "culled_face_count")), culled_world_a.compile_culled_face_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "triangle_count")), culled_world_a.compile_triangle_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "mesh_count")), culled_world_a.render_model->mesh_count);
+    yyjson_val *chunks = yyjson_obj_get(artifact_root, "chunks");
+    ASSERT_NE(chunks, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(chunks, "count")), culled_world_a.compile_chunk_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(chunks, "brush_index_count")),
+              culled_world_a.compile_chunk_brush_index_count);
+    yyjson_val *chunk_items = yyjson_obj_get(chunks, "items");
+    ASSERT_TRUE(yyjson_is_arr(chunk_items));
+    EXPECT_EQ(yyjson_arr_size(chunk_items), static_cast<size_t>(culled_world_a.compile_chunk_count));
+    yyjson_val *grid = yyjson_obj_get(artifact_root, "visibility_grid");
+    ASSERT_NE(grid, nullptr);
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(grid, "present")));
+    EXPECT_GT(yyjson_get_int(yyjson_obj_get(grid, "cell_count")), 0);
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
+
     slayer3d_game_data_runtime *culled_b = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_culled.game.json").string().c_str(), session, &culled_b,
                                              error, sizeof(error)))
@@ -13864,6 +13914,18 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     slayer3d_game_data_brush_world culled_world_b{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(culled_b, "brush.compile_options", &culled_world_b));
     EXPECT_EQ(culled_world_b.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        culled_b, "brush.compile_options", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "source_hash")), source_hash);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "compile_artifact_hash")),
+              culled_world_a.compile_artifact_hash);
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
 
     slayer3d_game_data_runtime *unculled = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_unculled.game.json").string().c_str(), session, &unculled,
@@ -13879,6 +13941,25 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     EXPECT_EQ(unculled_world.compile_rendered_face_count, 12);
     EXPECT_EQ(unculled_world.compile_triangle_count, 24);
     EXPECT_NE(unculled_world.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        unculled, "brush.compile_options", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "source_hash")), source_hash);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "compile_artifact_hash")),
+              unculled_world.compile_artifact_hash);
+    render = yyjson_obj_get(artifact_root, "render");
+    ASSERT_NE(render, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "culled_face_count")), 0);
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
+
+    EXPECT_FALSE(slayer3d_game_data_export_brush_world_compile_artifact_json(unculled, "brush.missing", &artifact_json,
+                                                                             &artifact_size, error, sizeof(error)));
+    EXPECT_EQ(artifact_json, nullptr);
 
     char *exported_json = nullptr;
     size_t exported_size = 0u;

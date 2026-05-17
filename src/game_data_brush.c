@@ -1166,6 +1166,58 @@ Uint64 slayer3d_game_data_brush_world_compute_compile_artifact_hash(const slayer
     return hash;
 }
 
+Uint64 slayer3d_game_data_brush_world_compute_source_hash(const slayer3d_game_data_brush_world *world)
+{
+    Uint64 hash = 1469598103934665603ull;
+    brush_compile_hash_string(&hash, "slayer3d.brush_source.v1");
+    if (world == NULL)
+        return hash;
+
+    brush_compile_hash_string(&hash, world->name);
+    brush_compile_hash_string(&hash, world->units);
+    brush_compile_hash_float(&hash, world->meters_per_unit);
+    brush_compile_hash_float(&hash, world->visibility_cell_size);
+
+    brush_compile_hash_int(&hash, world->material_count);
+    for (int material_index = 0; material_index < world->material_count; ++material_index)
+    {
+        const slayer3d_game_data_brush_material *material = &world->materials[material_index];
+        brush_compile_hash_string(&hash, material->name);
+        brush_compile_hash_string(&hash, material->texture);
+        brush_compile_hash_bytes(&hash, &material->albedo, sizeof(material->albedo));
+        brush_compile_hash_float(&hash, material->metallic);
+        brush_compile_hash_float(&hash, material->roughness);
+        brush_compile_hash_bytes(&hash, &material->emissive, sizeof(material->emissive));
+        brush_compile_hash_float(&hash, material->tex_scale);
+    }
+
+    brush_compile_hash_int(&hash, world->brush_count);
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        brush_compile_hash_string(&hash, brush->name);
+        brush_compile_hash_uint(&hash, brush->contents);
+        brush_compile_hash_int(&hash, (int)brush->visibility);
+        brush_compile_hash_int(&hash, brush->tag_count);
+        for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
+            brush_compile_hash_string(&hash, brush->tags[tag_index]);
+        brush_compile_hash_int(&hash, brush->face_count);
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+            brush_compile_hash_bytes(&hash, &face->normal, sizeof(face->normal));
+            brush_compile_hash_float(&hash, face->distance);
+            brush_compile_hash_int(&hash, face->material_index);
+            brush_compile_hash_string(&hash, face->material_name);
+            brush_compile_hash_bytes(&hash, face->uv_scale, sizeof(face->uv_scale));
+            brush_compile_hash_bytes(&hash, face->uv_offset, sizeof(face->uv_offset));
+            brush_compile_hash_float(&hash, face->uv_rotation_degrees);
+            brush_compile_hash_uint(&hash, face->surface_flags);
+        }
+    }
+    return hash;
+}
+
 slayer3d_game_data_brush_trace_result slayer3d_game_data_brush_trace_default_result(
     const slayer3d_game_data_brush_trace_desc *desc)
 {

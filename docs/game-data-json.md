@@ -732,10 +732,18 @@ while grouping them into optimized runtime broad-phase artifacts for collision
 traces, editor diagnostics, and future render/collision chunk generation. The
 runtime descriptor's `compile_artifact_hash` is a deterministic hash of the
 compiled mesh/chunk metadata and can be used by tests, tools, and future offline
-cache invalidation. When visibility culling leaves every brush in a compile chunk
-visible, the renderer can draw that chunk as one optimized model instead of
-submitting each brush model separately; partially visible chunks still fall back
-to per-brush models so occlusion correctness is preserved. When
+cache invalidation. Tools can also call
+`slayer3d_game_data_export_brush_world_compile_artifact_json()` to write an
+inspection manifest using `schema: "slayer3d.brush_compile_artifact.v0"`. The
+manifest records a deterministic source hash for authored brush inputs, the
+compile policy, render mesh totals, spatial chunk summaries, and visibility-grid
+metadata. It is intentionally a descriptor rather than a binary cache payload:
+use the source hash, policy, and compile artifact hash together to inspect,
+compare, and invalidate compiled artifacts before adding cache storage/loading.
+When visibility culling leaves every brush in a compile chunk visible, the
+renderer can draw that chunk as one optimized model instead of submitting each
+brush model separately; partially visible chunks still fall back to per-brush
+models so occlusion correctness is preserved. When
 `acceleration` is enabled on a scene instance, active-scene trace queries use
 those chunks and bounds as a broad phase before exact plane clipping.
 

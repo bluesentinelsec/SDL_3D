@@ -2335,6 +2335,23 @@ extern "C"
                                                              char *error_buffer, int error_buffer_size);
 
     /**
+     * @brief Export a JSON manifest describing one compiled brush-world artifact.
+     *
+     * The exported document uses `schema:
+     * "slayer3d.brush_compile_artifact.v0"` and records a deterministic source
+     * hash for authored brush inputs, the compile policy, the compiled-artifact
+     * hash, render mesh totals, spatial chunk metadata, and visibility-grid
+     * metadata. This is an inspection and cache-invalidation descriptor; it does
+     * not contain the binary mesh or collision payloads needed to load a compiled
+     * artifact directly. The returned string is allocated with SDL_malloc and
+     * must be released with SDL_free().
+     */
+    bool slayer3d_game_data_export_brush_world_compile_artifact_json(const slayer3d_game_data_runtime *runtime,
+                                                                     const char *world_name, char **out_json,
+                                                                     size_t *out_size, char *error_buffer,
+                                                                     int error_buffer_size);
+
+    /**
      * @brief Atomically save one runtime brush world as a JSON fragment file.
      *
      * This is the filesystem-facing companion to
