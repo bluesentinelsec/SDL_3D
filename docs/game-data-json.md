@@ -1044,9 +1044,10 @@ previews use `grid_min` and `grid_max` instead of fixed `min` and `max` bounds.
 Those grid bounds are multipliers from the snapped grid anchor, so a floor
 authored from `[0, 0, 0]` to `[1, 0.025, 1]` becomes one active grid cell wide
 at any configured grid size. For tile-like blockout tools, author floors,
-walls, and ceilings from grid-boundary anchors instead of centering them around
-the snap point; this keeps adjacent faces aligned without gaps. Each preview
-entry maps a tool `mode` to either a `box` ghost or a `player_start` marker. Box
+walls, and ceilings from grid-boundary anchors with matching horizontal
+footprints instead of centering them around the snap point; this keeps adjacent
+tiles aligned without gaps. Each preview entry maps a tool `mode` to either a
+`box` ghost or a `player_start` marker. Box
 previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
 between horizontal grid axes. A box preview must author exactly one bounds
 source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. The preview
@@ -1085,7 +1086,7 @@ hosts do not need a second rendering path.
           "axis_key": "editor.wall_axis",
           "axis": "z",
           "grid_min": [0.0, 0.0, 0.0],
-          "grid_max": [0.0625, 1.0, 1.0]
+          "grid_max": [1.0, 1.0, 1.0]
         },
         {
           "mode": "player_start",

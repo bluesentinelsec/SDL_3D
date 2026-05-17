@@ -74,8 +74,9 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed.
-- Floor, wall, and ceiling prefabs are anchored to grid-cell boundaries, so
-  floor tops, wall bases/tops, and ceiling bottoms meet without visible gaps.
+- Floor, wall, and ceiling prefabs share the same grid-cell footprint and are
+  anchored to grid-cell boundaries, so simple blockout maps can be tiled without
+  visible gaps.
 - Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
 - The four-view layout appears on launch, and `Q` toggles into and out of the
   full-screen 3D flyby camera.

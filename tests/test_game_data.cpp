@@ -15627,7 +15627,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z, 0.001f);
     EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 8.0f, 0.001f);
     EXPECT_NEAR(placement_max->as_vec3.y, placement_origin.y + 8.0f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 0.5f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 8.0f, 0.001f);
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "wall prefab created");
@@ -15641,7 +15641,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(brush->bounds.min.y, placement_origin.y, 0.001f);
     EXPECT_NEAR(brush->bounds.min.z, placement_origin.z, 0.001f);
     EXPECT_NEAR(brush->bounds.max.x, placement_origin.x + 8.0f, 0.001f);
-    EXPECT_NEAR(brush->bounds.max.z, placement_origin.z + 0.5f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.z, placement_origin.z + 8.0f, 0.001f);
     EXPECT_NEAR(brush->bounds.max.y, placement_origin.y + 8.0f, 0.001f);
 
     slayer3d_signal_emit(bus, ceiling_signal, nullptr);
