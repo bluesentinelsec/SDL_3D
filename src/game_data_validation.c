@@ -3,7 +3,7 @@
  * @brief Validation for JSON-authored game data.
  */
 
-#include "game_data_validation.h"
+#include "game_data_validation_internal.h"
 
 #include <float.h>
 #include <stdarg.h>
@@ -21,40 +21,8 @@
 #include "slayer3d/sprite_actor.h"
 #include "slayer3d_crypto.h"
 
-#define PATH_BUFFER_SIZE 256
 #define GAME_DATA_MENU_TEXT_MAX_BYTES 255
 #define GAME_DATA_IMPORT_MAX_DEPTH 16
-
-typedef struct name_table
-{
-    const char **names;
-    const char **paths;
-    int count;
-} name_table;
-
-typedef struct script_manifest
-{
-    const char *id;
-    const char *path;
-    const char *module;
-    const char *json_path;
-    const char **dependencies;
-    int dependency_count;
-    bool visiting;
-    bool visited;
-} script_manifest;
-
-typedef struct validation_context
-{
-    const slayer3d_game_data_validation_options *options;
-    const char *source_path;
-    const char *base_dir;
-    const slayer3d_asset_resolver *assets;
-    const slayer3d_game_data_source_map *source_map;
-    char *error_buffer;
-    int error_buffer_size;
-    bool failed;
-} validation_context;
 
 typedef struct game_data_source_map_entry
 {
@@ -70,46 +38,6 @@ struct slayer3d_game_data_source_map
     int capacity;
 };
 
-typedef struct validation_names
-{
-    name_table entities;
-    name_table actor_archetypes;
-    name_table actor_pools;
-    name_table actor_pool_actors;
-    name_table grid_maps;
-    name_table grid_pickup_layers;
-    name_table sector_levels;
-    name_table brush_worlds;
-    name_table sector_navigation;
-    name_table sector_doors;
-    name_table sector_platforms;
-    name_table editor_player_starts;
-    name_table signals;
-    name_table scripts;
-    name_table script_modules;
-    name_table adapters;
-    name_table actions;
-    name_table input_assignment_sets;
-    name_table input_profiles;
-    name_table network_input_channels;
-    name_table timers;
-    name_table cameras;
-    name_table fonts;
-    name_table images;
-    name_table models;
-    name_table sprites;
-    name_table sounds;
-    name_table music;
-    name_table ambient;
-    name_table scenes;
-    name_table sensors;
-    name_table persistence;
-    name_table used_adapters;
-    name_table used_scripts;
-    script_manifest *script_manifests;
-    int script_count;
-} validation_names;
-
 typedef struct import_validation_stack
 {
     const char *paths[GAME_DATA_IMPORT_MAX_DEPTH];
@@ -119,37 +47,35 @@ typedef struct import_validation_stack
 static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                     validation_names *names);
 static bool validate_storage(validation_context *ctx, yyjson_val *root);
-static bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
-                                const char *json_path);
-static bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
-                        const char *json_path);
 static bool require_network_string_entry(validation_context *ctx, yyjson_val *map, const char *path, const char *label,
                                          const char *name);
-static bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path,
-                              const char *asset_kind);
-static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
-static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
 static bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path,
                                           const char *type);
-static bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, const char *json_path,
-                                     validation_names *names, bool allow_templates);
-static bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
-                                            const char *json_path);
 static bool validate_imports_with_stack(validation_context *ctx, yyjson_val *root, import_validation_stack *stack);
 static bool validate_imports(validation_context *ctx, yyjson_val *root);
 static bool compose_document_into(validation_context *ctx, yyjson_val *root, yyjson_val *sections,
                                   const char *json_path, import_validation_stack *stack, yyjson_mut_doc *doc,
                                   yyjson_mut_val *target, bool is_root);
 
-static yyjson_val *obj_get(yyjson_val *object, const char *key)
+yyjson_val *validation_obj_get(yyjson_val *object, const char *key)
 {
     return yyjson_is_obj(object) ? yyjson_obj_get(object, key) : NULL;
 }
 
+const char *validation_json_string(yyjson_val *object, const char *key)
+{
+    yyjson_val *value = validation_obj_get(object, key);
+    return yyjson_is_str(value) ? yyjson_get_str(value) : NULL;
+}
+
+static yyjson_val *obj_get(yyjson_val *object, const char *key)
+{
+    return validation_obj_get(object, key);
+}
+
 static const char *json_string(yyjson_val *object, const char *key)
 {
-    yyjson_val *value = obj_get(object, key);
-    return yyjson_is_str(value) ? yyjson_get_str(value) : NULL;
+    return validation_json_string(object, key);
 }
 
 static bool is_non_empty_string(yyjson_val *object, const char *key)
@@ -206,7 +132,7 @@ static bool validation_key_name_valid(const char *name)
     return SDL_GetScancodeFromName(name) != SDL_SCANCODE_UNKNOWN;
 }
 
-static bool validation_mouse_button_name_valid(const char *name)
+bool validation_mouse_button_name_valid(const char *name)
 {
     return name != NULL &&
            (SDL_strcmp(name, "LEFT") == 0 || SDL_strcmp(name, "MIDDLE") == 0 || SDL_strcmp(name, "RIGHT") == 0 ||
@@ -339,7 +265,7 @@ static bool emit_diagnostic(validation_context *ctx, slayer3d_game_data_diagnost
     return true;
 }
 
-static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...)
+bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...)
 {
     char message[384];
     va_list args;
@@ -457,7 +383,7 @@ static bool validate_persistence(validation_context *ctx, yyjson_val *root, vali
     return true;
 }
 
-static void format_path(char *buffer, size_t buffer_size, const char *format, ...)
+void format_path(char *buffer, size_t buffer_size, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -465,7 +391,7 @@ static void format_path(char *buffer, size_t buffer_size, const char *format, ..
     va_end(args);
 }
 
-static void name_table_destroy(name_table *table)
+void name_table_destroy(name_table *table)
 {
     if (table == NULL)
         return;
@@ -480,7 +406,7 @@ static void name_table_destroy(name_table *table)
     table->count = 0;
 }
 
-static bool name_table_contains(const name_table *table, const char *name)
+bool name_table_contains(const name_table *table, const char *name)
 {
     if (table == NULL || name == NULL)
         return false;
@@ -540,8 +466,8 @@ static bool name_table_add(name_table *table, const char *name, const char *json
     return true;
 }
 
-static bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
-                                const char *json_path)
+bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
+                         const char *json_path)
 {
     if (name == NULL || name[0] == '\0')
     {
@@ -559,8 +485,8 @@ static bool require_unique_name(validation_context *ctx, name_table *table, cons
     return true;
 }
 
-static bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
-                        const char *json_path)
+bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
+                 const char *json_path)
 {
     if (name == NULL || name[0] == '\0')
     {
@@ -573,8 +499,7 @@ static bool require_ref(validation_context *ctx, const name_table *table, const 
     return true;
 }
 
-static bool require_actor_ref(validation_context *ctx, const validation_names *names, const char *name,
-                              const char *json_path)
+bool require_actor_ref(validation_context *ctx, const validation_names *names, const char *name, const char *json_path)
 {
     if (name == NULL || name[0] == '\0')
         return validation_error(ctx, json_path, "missing actor reference");
@@ -2802,7 +2727,7 @@ static bool is_compare_op(const char *op)
                           SDL_strcmp(op, "<") == 0 || SDL_strcmp(op, "==") == 0);
 }
 
-static bool is_vec_array(yyjson_val *value, size_t min_count)
+bool is_vec_array(yyjson_val *value, size_t min_count)
 {
     if (!yyjson_is_arr(value) || yyjson_arr_size(value) < min_count)
         return false;
@@ -2814,17 +2739,17 @@ static bool is_vec_array(yyjson_val *value, size_t min_count)
     return true;
 }
 
-static bool is_exact_vec_array(yyjson_val *value, size_t count)
+bool is_exact_vec_array(yyjson_val *value, size_t count)
 {
     return yyjson_is_arr(value) && yyjson_arr_size(value) == count && is_vec_array(value, count);
 }
 
-static bool is_exact_vec3_or_vec4_array(yyjson_val *value)
+bool is_exact_vec3_or_vec4_array(yyjson_val *value)
 {
     return is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
 }
 
-static bool numeric_array_values_positive(yyjson_val *value)
+bool numeric_array_values_positive(yyjson_val *value)
 {
     if (!yyjson_is_arr(value))
         return false;
@@ -2837,7 +2762,7 @@ static bool numeric_array_values_positive(yyjson_val *value)
     return true;
 }
 
-static bool numeric_array_values_in_range(yyjson_val *value, double min_value, double max_value)
+bool numeric_array_values_in_range(yyjson_val *value, double min_value, double max_value)
 {
     if (!yyjson_is_arr(value))
         return false;
@@ -2909,337 +2834,10 @@ static bool is_supported_component_type(const char *type)
     return false;
 }
 
-static bool render_mesh_primitive_kind_valid(const char *primitive)
-{
-    const char *known[] = {"cube",        "sphere",       "capsule", "cylinder", "cone",           "torus",
-                           "pyramid",     "wedge",        "plane",   "quad",     "disc",           "hemisphere",
-                           "rounded_box", "tube_segment", "pipe",    "arrow",    "billboard_plane"};
-    for (size_t i = 0; primitive != NULL && i < SDL_arraysize(known); ++i)
-    {
-        if (SDL_strcmp(primitive, known[i]) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool render_draw_mode_valid(const char *draw_mode)
-{
-    return draw_mode != NULL && (SDL_strcmp(draw_mode, "solid") == 0 || SDL_strcmp(draw_mode, "wire") == 0 ||
-                                 SDL_strcmp(draw_mode, "solid_wire") == 0);
-}
-
-static bool validate_render_mesh_primitive_component(validation_context *ctx, yyjson_val *component, const char *path,
-                                                     const validation_names *names)
-{
-    const char *primitive = json_string(component, "primitive");
-    if (!render_mesh_primitive_kind_valid(primitive))
-        return validation_error(ctx, path, "render.mesh_primitive primitive is unknown");
-    yyjson_val *draw_mode = obj_get(component, "draw_mode");
-    if (draw_mode != NULL && (!yyjson_is_str(draw_mode) || !render_draw_mode_valid(yyjson_get_str(draw_mode))))
-        return validation_error(ctx, path, "render.mesh_primitive draw_mode is unknown");
-    yyjson_val *texture_value = obj_get(component, "texture");
-    if (texture_value != NULL && !is_non_empty_string(component, "texture"))
-        return validation_error(ctx, path, "render.mesh_primitive texture must be a non-empty image asset id");
-    const char *texture = json_string(component, "texture");
-    if (texture != NULL && !require_ref(ctx, &names->images, "image asset", texture, path))
-        return false;
-    yyjson_val *wire_color = obj_get(component, "wire_color");
-    if (wire_color != NULL && !is_vec_array(wire_color, 3))
-        return validation_error(ctx, path, "render.mesh_primitive wire_color must be a vec3 or vec4");
-    yyjson_val *lighting = obj_get(component, "lighting");
-    if (lighting != NULL && !yyjson_is_bool(lighting))
-        return validation_error(ctx, path, "render.mesh_primitive lighting must be a boolean");
-    yyjson_val *lighting_key = obj_get(component, "lighting_key");
-    if (lighting_key != NULL && !is_non_empty_string(component, "lighting_key"))
-        return validation_error(ctx, path, "render.mesh_primitive lighting_key must be non-empty");
-    yyjson_val *lod = obj_get(component, "lod");
-    if (lod != NULL && !yyjson_is_bool(lod))
-        return validation_error(ctx, path, "render.mesh_primitive lod must be a boolean");
-    yyjson_val *lod_bias = obj_get(component, "lod_bias");
-    if (lod_bias != NULL && (!yyjson_is_num(lod_bias) || yyjson_get_num(lod_bias) <= 0.0))
-        return validation_error(ctx, path, "render.mesh_primitive lod_bias must be a positive number");
-    yyjson_val *space = obj_get(component, "space");
-    if (space != NULL && (!yyjson_is_str(space) || (SDL_strcmp(yyjson_get_str(space), "world") != 0 &&
-                                                    SDL_strcmp(yyjson_get_str(space), "camera") != 0)))
-        return validation_error(ctx, path, "render.mesh_primitive space must be 'world' or 'camera'");
-    yyjson_val *size = obj_get(component, "size");
-    if (size != NULL && !is_vec_array(size, 3))
-        return validation_error(ctx, path, "render.mesh_primitive size must be a vec3");
-    const char *property_fields[] = {
-        "size_property",          "radius_property",     "height_property",      "radius_top_property",
-        "radius_bottom_property", "size_scale_property", "alpha_scale_property", "emissive_intensity_property"};
-    for (size_t property_index = 0; property_index < SDL_arraysize(property_fields); ++property_index)
-    {
-        yyjson_val *property = obj_get(component, property_fields[property_index]);
-        if (property != NULL && !is_non_empty_string(component, property_fields[property_index]))
-            return validation_error(ctx, path, "render.mesh_primitive property fields must be non-empty");
-    }
-    yyjson_val *emissive_color = obj_get(component, "emissive_color");
-    if (emissive_color != NULL && !is_vec_array(emissive_color, 3))
-        return validation_error(ctx, path, "render.mesh_primitive emissive_color must be a vec3 or vec4");
-    yyjson_val *emissive_intensity = obj_get(component, "emissive_intensity");
-    if (emissive_intensity != NULL && (!yyjson_is_num(emissive_intensity) || yyjson_get_num(emissive_intensity) < 0.0))
-        return validation_error(ctx, path, "render.mesh_primitive emissive_intensity must be non-negative");
-    const char *positive_numbers[] = {"radius", "height", "major_radius", "minor_radius"};
-    for (size_t i = 0; i < SDL_arraysize(positive_numbers); ++i)
-    {
-        yyjson_val *value = obj_get(component, positive_numbers[i]);
-        if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0))
-            return validation_error(ctx, path, "render.mesh_primitive dimensions must be positive numbers");
-    }
-    const char *non_negative_numbers[] = {"radius_top", "radius_bottom"};
-    for (size_t i = 0; i < SDL_arraysize(non_negative_numbers); ++i)
-    {
-        yyjson_val *value = obj_get(component, non_negative_numbers[i]);
-        if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
-            return validation_error(ctx, path, "render.mesh_primitive radii must be non-negative numbers");
-    }
-    const char *positive_ints[] = {"segments", "slices", "rings", "tube_segments"};
-    for (size_t i = 0; i < SDL_arraysize(positive_ints); ++i)
-    {
-        yyjson_val *value = obj_get(component, positive_ints[i]);
-        if (value != NULL && (!yyjson_is_int(value) || yyjson_get_int(value) < 3))
-            return validation_error(ctx, path, "render.mesh_primitive tessellation values must be integers >= 3");
-    }
-    yyjson_val *rotation_axis = obj_get(component, "rotation_axis");
-    if (rotation_axis != NULL && !is_vec_array(rotation_axis, 3))
-        return validation_error(ctx, path, "render.mesh_primitive rotation_axis must be a vec3");
-    yyjson_val *rotation_angle = obj_get(component, "rotation_angle");
-    if (rotation_angle != NULL && !yyjson_is_num(rotation_angle))
-        return validation_error(ctx, path, "render.mesh_primitive rotation_angle must be a number");
-    yyjson_val *rotation_property = obj_get(component, "rotation_property");
-    if (rotation_property != NULL && !is_non_empty_string(component, "rotation_property"))
-        return validation_error(ctx, path, "render.mesh_primitive rotation_property must be non-empty");
-    yyjson_val *bevel_radius = obj_get(component, "bevel_radius");
-    if (bevel_radius != NULL && (!yyjson_is_num(bevel_radius) || yyjson_get_num(bevel_radius) < 0.0))
-        return validation_error(ctx, path, "render.mesh_primitive bevel_radius must be a non-negative number");
-    yyjson_val *arc_angle = obj_get(component, "arc_angle");
-    if (arc_angle != NULL && (!yyjson_is_num(arc_angle) || yyjson_get_num(arc_angle) <= 0.0))
-        return validation_error(ctx, path, "render.mesh_primitive arc_angle must be a positive number");
-    return true;
-}
-
-static bool validate_render_composite_component(validation_context *ctx, yyjson_val *component, const char *path,
-                                                const validation_names *names)
-{
-    yyjson_val *parts = obj_get(component, "parts");
-    if (!yyjson_is_arr(parts) || yyjson_arr_size(parts) == 0)
-        return validation_error(ctx, path, "render.composite parts must be a non-empty array");
-    for (size_t i = 0; i < yyjson_arr_size(parts); ++i)
-    {
-        yyjson_val *part = yyjson_arr_get(parts, i);
-        if (!yyjson_is_obj(part))
-            return validation_error(ctx, path, "render.composite parts must be objects");
-        const char *type = json_string(part, "type");
-        if (type == NULL)
-            type = "render.mesh_primitive";
-        if (SDL_strcmp(type, "render.mesh_primitive") != 0)
-            return validation_error(ctx, path, "render.composite parts must be render.mesh_primitive descriptors");
-        if (!validate_render_mesh_primitive_component(ctx, part, path, names))
-            return false;
-    }
-    return true;
-}
-
-static bool validate_render_camera_visibility_field(validation_context *ctx, yyjson_val *component, const char *path,
-                                                    const validation_names *names, const char *field)
-{
-    yyjson_val *value = obj_get(component, field);
-    if (value == NULL)
-        return true;
-    if (yyjson_is_str(value))
-        return require_ref(ctx, &names->cameras, "camera", yyjson_get_str(value), path);
-    if (!yyjson_is_arr(value) || yyjson_arr_size(value) == 0)
-        return validation_error(ctx, path, "camera visibility must be a string or non-empty array");
-    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
-    {
-        yyjson_val *entry = yyjson_arr_get(value, i);
-        if (!yyjson_is_str(entry) || yyjson_get_str(entry)[0] == '\0')
-            return validation_error(ctx, path, "camera visibility must contain camera names");
-        if (!require_ref(ctx, &names->cameras, "camera", yyjson_get_str(entry), path))
-            return false;
-    }
-    return true;
-}
-
-static bool validate_property_name_array_field(validation_context *ctx, yyjson_val *component, const char *path,
-                                               const char *field, const char *label)
-{
-    yyjson_val *value = obj_get(component, field);
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_arr(value) || yyjson_arr_size(value) == 0)
-        return validation_error(ctx, path, "%s must be a non-empty string array", label);
-    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
-    {
-        yyjson_val *entry = yyjson_arr_get(value, i);
-        if (!yyjson_is_str(entry) || yyjson_get_str(entry)[0] == '\0')
-            return validation_error(ctx, path, "%s arrays must contain non-empty strings", label);
-    }
-    return true;
-}
-
 static bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path,
                                             const char *type, const char *field);
 static bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
                                            validation_names *names, const char *field);
-static bool brush_content_name_valid(const char *name);
-static bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *value, const char *path,
-                                                  const char *label, bool (*name_valid)(const char *name),
-                                                  bool allow_empty);
-
-static bool validate_fps_controller_common(validation_context *ctx, yyjson_val *component, const char *path,
-                                           validation_names *names, const char *type_name)
-{
-    yyjson_val *actions = obj_get(component, "actions");
-    if (!yyjson_is_obj(actions))
-        return validation_error(ctx, path, "%s requires an actions object", type_name);
-    const char *action_keys[] = {"forward", "back", "left", "right"};
-    for (size_t i = 0; i < SDL_arraysize(action_keys); ++i)
-    {
-        const char *action = json_string(actions, action_keys[i]);
-        if (!require_ref(ctx, &names->actions, "input action", action, path))
-            return false;
-    }
-    const char *jump = json_string(actions, "jump");
-    if (jump != NULL && !require_ref(ctx, &names->actions, "input action", jump, path))
-        return false;
-
-    const char *property_keys[] = {"yaw_property",
-                                   "pitch_property",
-                                   "forward_property",
-                                   "view_smooth_property",
-                                   "vertical_velocity_property",
-                                   "on_ground_property",
-                                   "sector_property"};
-    for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
-    {
-        yyjson_val *value = obj_get(component, property_keys[i]);
-        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
-            return validation_error(ctx, path, "%s property names must be non-empty strings", type_name);
-    }
-
-    const char *non_negative[] = {"move_speed",    "jump_velocity", "gravity",           "player_height",
-                                  "player_radius", "step_height",   "ceiling_clearance", "mouse_sensitivity"};
-    for (size_t i = 0; i < SDL_arraysize(non_negative); ++i)
-    {
-        yyjson_val *value = obj_get(component, non_negative[i]);
-        if (value != NULL && (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0))
-            return validation_error(ctx, path, "%s numeric tuning values must be non-negative", type_name);
-    }
-    yyjson_val *mouse_look = obj_get(component, "mouse_look");
-    if (mouse_look != NULL && !yyjson_is_bool(mouse_look))
-        return validation_error(ctx, path, "%s mouse_look must be a boolean", type_name);
-    yyjson_val *spawn_yaw = obj_get(component, "spawn_yaw");
-    yyjson_val *spawn_pitch = obj_get(component, "spawn_pitch");
-    if ((spawn_yaw != NULL && !yyjson_is_num(spawn_yaw)) || (spawn_pitch != NULL && !yyjson_is_num(spawn_pitch)))
-    {
-        return validation_error(ctx, path, "%s spawn yaw and pitch values must be numbers", type_name);
-    }
-    return true;
-}
-
-static bool validate_fps_sector_component(validation_context *ctx, yyjson_val *component, const char *path,
-                                          validation_names *names)
-{
-    const char *level = json_string(component, "sector_level");
-    return require_ref(ctx, &names->sector_levels, "sector level", level, path) &&
-           validate_fps_controller_common(ctx, component, path, names, "controller.fps_sector");
-}
-
-static bool validate_fps_brush_component(validation_context *ctx, yyjson_val *component, const char *path,
-                                         validation_names *names)
-{
-    const char *world = json_string(component, "brush_world");
-    if (!require_ref(ctx, &names->brush_worlds, "brush world", world, path))
-        return false;
-    char contents_path[PATH_BUFFER_SIZE];
-    format_path(contents_path, sizeof(contents_path), "%s.contents_mask", path);
-    if (!validate_brush_string_or_string_array(ctx, obj_get(component, "contents_mask"), contents_path, "brush content",
-                                               brush_content_name_valid, false) ||
-        !validate_fps_controller_common(ctx, component, path, names, "controller.fps_brush"))
-    {
-        return false;
-    }
-    yyjson_val *walkable = obj_get(component, "walkable_normal_y");
-    if (walkable != NULL &&
-        (!yyjson_is_num(walkable) || yyjson_get_num(walkable) < 0.0 || yyjson_get_num(walkable) > 1.0))
-    {
-        return validation_error(ctx, path, "controller.fps_brush walkable_normal_y must be in [0, 1]");
-    }
-    const char *property_keys[] = {"brush_collision_kind_property",
-                                   "brush_collision_normal_property",
-                                   "brush_collision_brush_property",
-                                   "brush_collision_material_property",
-                                   "brush_collision_contents_property",
-                                   "brush_collision_surface_flags_property",
-                                   "brush_floor_normal_property",
-                                   "brush_floor_brush_property",
-                                   "brush_step_up_property"};
-    for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
-    {
-        yyjson_val *value = obj_get(component, property_keys[i]);
-        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
-            return validation_error(ctx, path,
-                                    "controller.fps_brush diagnostic property names must be non-empty strings");
-    }
-    return true;
-}
-
-static bool validate_editor_camera_component(validation_context *ctx, yyjson_val *component, const char *path,
-                                             validation_names *names)
-{
-    yyjson_val *actions = obj_get(component, "actions");
-    if (!yyjson_is_obj(actions))
-        return validation_error(ctx, path, "controller.editor_camera requires an actions object");
-
-    const char *action_keys[] = {"forward", "back", "left", "right", "up", "down", "look", "fast"};
-    bool has_action = false;
-    for (size_t i = 0; i < SDL_arraysize(action_keys); ++i)
-    {
-        const char *action = json_string(actions, action_keys[i]);
-        if (action == NULL)
-            continue;
-        has_action = true;
-        if (!require_ref(ctx, &names->actions, "input action", action, path))
-            return false;
-    }
-    if (!has_action)
-        return validation_error(ctx, path, "controller.editor_camera actions must reference at least one input action");
-
-    const char *property_keys[] = {"yaw_property", "pitch_property", "forward_property"};
-    for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
-    {
-        yyjson_val *value = obj_get(component, property_keys[i]);
-        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
-            return validation_error(ctx, path, "controller.editor_camera property names must be non-empty strings");
-    }
-
-    const char *numeric_keys[] = {"move_speed",  "fast_speed", "mouse_sensitivity", "spawn_yaw",
-                                  "spawn_pitch", "pitch_min",  "pitch_max"};
-    for (size_t i = 0; i < SDL_arraysize(numeric_keys); ++i)
-    {
-        yyjson_val *value = obj_get(component, numeric_keys[i]);
-        if (value != NULL && !yyjson_is_num(value))
-            return validation_error(ctx, path, "controller.editor_camera numeric tuning values must be numbers");
-    }
-    const char *non_negative[] = {"move_speed", "fast_speed", "mouse_sensitivity"};
-    for (size_t i = 0; i < SDL_arraysize(non_negative); ++i)
-    {
-        yyjson_val *value = obj_get(component, non_negative[i]);
-        if (value != NULL && yyjson_get_num(value) < 0.0)
-            return validation_error(ctx, path,
-                                    "controller.editor_camera speed and sensitivity values must be non-negative");
-    }
-    yyjson_val *pitch_min = obj_get(component, "pitch_min");
-    yyjson_val *pitch_max = obj_get(component, "pitch_max");
-    if (pitch_min != NULL && pitch_max != NULL && yyjson_get_num(pitch_min) >= yyjson_get_num(pitch_max))
-        return validation_error(ctx, path, "controller.editor_camera pitch_min must be less than pitch_max");
-    yyjson_val *mouse_look = obj_get(component, "mouse_look");
-    if (mouse_look != NULL && !yyjson_is_bool(mouse_look))
-        return validation_error(ctx, path, "controller.editor_camera mouse_look must be a boolean");
-    return true;
-}
 
 static bool brush_velocity_shape_valid(const char *shape)
 {
@@ -4149,8 +3747,7 @@ static bool is_audio_bus_name(const char *bus)
            SDL_strcmp(bus, "ambience") == 0 || SDL_strcmp(bus, "ambiance") == 0 || SDL_strcmp(bus, "ambient") == 0;
 }
 
-static bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path,
-                              const char *asset_kind)
+bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path, const char *asset_kind)
 {
     if (ctx->assets == NULL)
         return true;
@@ -5030,97 +4627,6 @@ static bool sector_level_material_ref_valid(yyjson_val *materials, const name_ta
     return false;
 }
 
-static bool brush_content_name_valid(const char *name)
-{
-    static const char *const names[] = {"solid", "player_clip", "projectile_clip", "trigger", "water", "lava", "sky"};
-    for (size_t i = 0; name != NULL && i < SDL_arraysize(names); ++i)
-    {
-        if (SDL_strcmp(name, names[i]) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool brush_surface_flag_name_valid(const char *name)
-{
-    static const char *const names[] = {"nocollide", "slick", "ladder", "emissive", "portal_candidate"};
-    for (size_t i = 0; name != NULL && i < SDL_arraysize(names); ++i)
-    {
-        if (SDL_strcmp(name, names[i]) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *value, const char *path,
-                                                  const char *label, bool (*name_valid)(const char *name),
-                                                  bool allow_empty)
-{
-    if (value == NULL)
-        return true;
-    if (yyjson_is_str(value))
-    {
-        const char *name = yyjson_get_str(value);
-        if (name == NULL || name[0] == '\0' || (name_valid != NULL && !name_valid(name)))
-            return validation_error(ctx, path, "%s value is unknown", label);
-        return true;
-    }
-    if (!yyjson_is_arr(value))
-        return validation_error(ctx, path, "%s must be a string or string array", label);
-    if (!allow_empty && yyjson_arr_size(value) <= 0)
-        return validation_error(ctx, path, "%s array must be non-empty", label);
-
-    name_table names;
-    SDL_zero(names);
-    bool ok = true;
-    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
-    {
-        char entry_path[PATH_BUFFER_SIZE];
-        format_path(entry_path, sizeof(entry_path), "%s[%zu]", path, i);
-        yyjson_val *entry = yyjson_arr_get(value, i);
-        if (!yyjson_is_str(entry) || yyjson_get_str(entry) == NULL || yyjson_get_str(entry)[0] == '\0')
-        {
-            ok = validation_error(ctx, entry_path, "%s entries must be non-empty strings", label);
-            break;
-        }
-        const char *name = yyjson_get_str(entry);
-        if (name_valid != NULL && !name_valid(name))
-        {
-            ok = validation_error(ctx, entry_path, "%s value is unknown", label);
-            break;
-        }
-        if (!require_unique_name(ctx, &names, label, name, entry_path))
-        {
-            ok = false;
-            break;
-        }
-    }
-    name_table_destroy(&names);
-    return ok;
-}
-
-static bool brush_material_ref_valid(yyjson_val *materials, const name_table *material_names, yyjson_val *ref)
-{
-    if (yyjson_is_int(ref))
-    {
-        const int index = (int)yyjson_get_int(ref);
-        return index >= 0 && index < (int)yyjson_arr_size(materials);
-    }
-    if (yyjson_is_str(ref))
-        return name_table_contains(material_names, yyjson_get_str(ref));
-    return false;
-}
-
-static bool vec3_nonzero(yyjson_val *value)
-{
-    if (!is_exact_vec_array(value, 3))
-        return false;
-    const double x = yyjson_get_num(yyjson_arr_get(value, 0));
-    const double y = yyjson_get_num(yyjson_arr_get(value, 1));
-    const double z = yyjson_get_num(yyjson_arr_get(value, 2));
-    return x * x + y * y + z * z > 0.000001;
-}
-
 static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
 {
     yyjson_val *levels = obj_get(root, "sector_levels");
@@ -5348,332 +4854,6 @@ static bool validate_sector_levels(validation_context *ctx, yyjson_val *root)
     done:
         name_table_destroy(&material_names);
         name_table_destroy(&sector_names);
-        if (!ok)
-            return false;
-    }
-    return true;
-}
-
-static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, validation_names *names)
-{
-    yyjson_val *worlds = obj_get(root, "brush_worlds");
-    if (worlds == NULL)
-        return true;
-    if (!yyjson_is_arr(worlds))
-        return validation_error(ctx, "$.brush_worlds", "brush_worlds must be an array");
-
-    for (size_t world_index = 0; world_index < yyjson_arr_size(worlds); ++world_index)
-    {
-        char world_path[PATH_BUFFER_SIZE];
-        format_path(world_path, sizeof(world_path), "$.brush_worlds[%zu]", world_index);
-        yyjson_val *world = yyjson_arr_get(worlds, world_index);
-        yyjson_val *materials = obj_get(world, "materials");
-        yyjson_val *brushes = obj_get(world, "brushes");
-        name_table material_names;
-        name_table brush_names;
-        name_table editor_stable_ids;
-        SDL_zero(material_names);
-        SDL_zero(brush_names);
-        SDL_zero(editor_stable_ids);
-        bool ok = true;
-
-        if (!yyjson_is_obj(world))
-        {
-            ok = validation_error(ctx, world_path, "brush world entries must be objects");
-            goto done;
-        }
-
-        const char *units = json_string(world, "units");
-        if (units != NULL && SDL_strcmp(units, "meters") != 0)
-        {
-            ok = validation_error(ctx, world_path, "brush world units must be meters");
-            goto done;
-        }
-        yyjson_val *meters_per_unit = obj_get(world, "meters_per_unit");
-        if (meters_per_unit != NULL && (!yyjson_is_num(meters_per_unit) || yyjson_get_num(meters_per_unit) <= 0.0))
-        {
-            ok = validation_error(ctx, world_path, "brush world meters_per_unit must be positive");
-            goto done;
-        }
-        yyjson_val *visibility_cell_size = obj_get(world, "visibility_cell_size");
-        if (visibility_cell_size != NULL &&
-            (!yyjson_is_num(visibility_cell_size) || yyjson_get_num(visibility_cell_size) <= 0.0))
-        {
-            ok = validation_error(ctx, world_path, "brush world visibility_cell_size must be positive");
-            goto done;
-        }
-        yyjson_val *compile = obj_get(world, "compile");
-        if (compile != NULL)
-        {
-            char compile_path[PATH_BUFFER_SIZE];
-            format_path(compile_path, sizeof(compile_path), "%s.compile", world_path);
-            if (!yyjson_is_obj(compile))
-            {
-                ok = validation_error(ctx, compile_path, "brush world compile must be an object");
-                goto done;
-            }
-            yyjson_val *hidden_face_culling = obj_get(compile, "hidden_face_culling");
-            if (hidden_face_culling != NULL && !yyjson_is_bool(hidden_face_culling))
-            {
-                ok = validation_error(ctx, compile_path, "brush world compile hidden_face_culling must be a boolean");
-                goto done;
-            }
-            yyjson_val *chunk_cell_size = obj_get(compile, "chunk_cell_size");
-            if (chunk_cell_size != NULL && (!yyjson_is_num(chunk_cell_size) || yyjson_get_num(chunk_cell_size) <= 0.0))
-            {
-                ok = validation_error(ctx, compile_path, "brush world compile chunk_cell_size must be positive");
-                goto done;
-            }
-        }
-        {
-            char editor_path[PATH_BUFFER_SIZE];
-            format_path(editor_path, sizeof(editor_path), "%s.editor", world_path);
-            if (!validate_editor_metadata(ctx, obj_get(world, "editor"), editor_path, names, false) ||
-                !require_unique_editor_stable_id(ctx, &editor_stable_ids, world, world_path))
-            {
-                ok = false;
-                goto done;
-            }
-        }
-        if (!yyjson_is_arr(materials) || yyjson_arr_size(materials) <= 0)
-        {
-            ok = validation_error(ctx, world_path, "brush world materials must be a non-empty array");
-            goto done;
-        }
-        if (!yyjson_is_arr(brushes) || yyjson_arr_size(brushes) <= 0)
-        {
-            ok = validation_error(ctx, world_path, "brush world brushes must be a non-empty array");
-            goto done;
-        }
-
-        for (size_t material_index = 0; ok && material_index < yyjson_arr_size(materials); ++material_index)
-        {
-            char material_path[PATH_BUFFER_SIZE];
-            format_path(material_path, sizeof(material_path), "%s.materials[%zu]", world_path, material_index);
-            yyjson_val *material = yyjson_arr_get(materials, material_index);
-            if (!yyjson_is_obj(material))
-            {
-                ok = validation_error(ctx, material_path, "brush material entries must be objects");
-                break;
-            }
-            if (!require_unique_name(ctx, &material_names, "brush material", json_string(material, "name"),
-                                     material_path))
-            {
-                ok = false;
-                break;
-            }
-            {
-                char editor_path[PATH_BUFFER_SIZE];
-                format_path(editor_path, sizeof(editor_path), "%s.editor", material_path);
-                if (!validate_editor_metadata(ctx, obj_get(material, "editor"), editor_path, names, false) ||
-                    !require_unique_editor_stable_id(ctx, &editor_stable_ids, material, material_path))
-                {
-                    ok = false;
-                    break;
-                }
-            }
-            yyjson_val *albedo = obj_get(material, "albedo");
-            if (albedo != NULL &&
-                (!is_exact_vec3_or_vec4_array(albedo) || !numeric_array_values_in_range(albedo, 0.0, 1.0)))
-            {
-                ok = validation_error(ctx, material_path,
-                                      "brush material albedo must be a vec3 or vec4 with values in [0, 1]");
-                break;
-            }
-            yyjson_val *metallic = obj_get(material, "metallic");
-            yyjson_val *roughness = obj_get(material, "roughness");
-            yyjson_val *emissive = obj_get(material, "emissive");
-            yyjson_val *tex_scale = obj_get(material, "tex_scale");
-            if ((metallic != NULL && (!yyjson_is_num(metallic) || yyjson_get_num(metallic) < 0.0)) ||
-                (roughness != NULL && (!yyjson_is_num(roughness) || yyjson_get_num(roughness) < 0.0)))
-            {
-                ok = validation_error(ctx, material_path, "brush material metallic and roughness must be non-negative");
-                break;
-            }
-            if (emissive != NULL &&
-                (!is_exact_vec_array(emissive, 3) || !numeric_array_values_in_range(emissive, 0.0, DBL_MAX)))
-            {
-                ok = validation_error(ctx, material_path, "brush material emissive must be a non-negative vec3");
-                break;
-            }
-            if (tex_scale != NULL && (!yyjson_is_num(tex_scale) || yyjson_get_num(tex_scale) <= 0.0))
-            {
-                ok = validation_error(ctx, material_path, "brush material tex_scale must be positive");
-                break;
-            }
-            const char *texture = json_string(material, "texture");
-            if (texture != NULL && texture[0] == '\0')
-            {
-                ok = validation_error(ctx, material_path, "brush material texture must be non-empty when present");
-                break;
-            }
-            if (texture != NULL && !asset_path_exists(ctx, texture, material_path, "brush material texture"))
-            {
-                ok = false;
-                break;
-            }
-        }
-
-        for (size_t brush_index = 0; ok && brush_index < yyjson_arr_size(brushes); ++brush_index)
-        {
-            char brush_path[PATH_BUFFER_SIZE];
-            format_path(brush_path, sizeof(brush_path), "%s.brushes[%zu]", world_path, brush_index);
-            yyjson_val *brush = yyjson_arr_get(brushes, brush_index);
-            yyjson_val *faces = obj_get(brush, "faces");
-            if (!yyjson_is_obj(brush))
-            {
-                ok = validation_error(ctx, brush_path, "brush entries must be objects");
-                break;
-            }
-            if (!require_unique_name(ctx, &brush_names, "brush", json_string(brush, "name"), brush_path))
-            {
-                ok = false;
-                break;
-            }
-            {
-                char editor_path[PATH_BUFFER_SIZE];
-                format_path(editor_path, sizeof(editor_path), "%s.editor", brush_path);
-                if (!validate_editor_metadata(ctx, obj_get(brush, "editor"), editor_path, names, false) ||
-                    !require_unique_editor_stable_id(ctx, &editor_stable_ids, brush, brush_path))
-                {
-                    ok = false;
-                    break;
-                }
-            }
-
-            yyjson_val *tags = obj_get(brush, "tags");
-            if (tags != NULL)
-            {
-                if (!yyjson_is_arr(tags))
-                {
-                    ok = validation_error(ctx, brush_path, "brush tags must be an array");
-                    break;
-                }
-                name_table tag_names;
-                SDL_zero(tag_names);
-                for (size_t tag_index = 0; ok && tag_index < yyjson_arr_size(tags); ++tag_index)
-                {
-                    char tag_path[PATH_BUFFER_SIZE];
-                    format_path(tag_path, sizeof(tag_path), "%s.tags[%zu]", brush_path, tag_index);
-                    yyjson_val *tag = yyjson_arr_get(tags, tag_index);
-                    if (!yyjson_is_str(tag) || yyjson_get_str(tag) == NULL || yyjson_get_str(tag)[0] == '\0')
-                    {
-                        ok = validation_error(ctx, tag_path, "brush tags must be non-empty strings");
-                        break;
-                    }
-                    if (!require_unique_name(ctx, &tag_names, "brush tag", yyjson_get_str(tag), tag_path))
-                        ok = false;
-                }
-                name_table_destroy(&tag_names);
-                if (!ok)
-                    break;
-            }
-
-            char contents_path[PATH_BUFFER_SIZE];
-            format_path(contents_path, sizeof(contents_path), "%s.contents", brush_path);
-            if (!validate_brush_string_or_string_array(ctx, obj_get(brush, "contents"), contents_path, "brush content",
-                                                       brush_content_name_valid, false))
-            {
-                ok = false;
-                break;
-            }
-            yyjson_val *visibility_cullable = obj_get(brush, "visibility_cullable");
-            if (visibility_cullable != NULL && !yyjson_is_bool(visibility_cullable))
-            {
-                ok = validation_error(ctx, brush_path, "brush visibility_cullable must be a boolean");
-                break;
-            }
-            yyjson_val *visibility = obj_get(brush, "visibility");
-            if (visibility != NULL &&
-                (!yyjson_is_str(visibility) || (SDL_strcmp(yyjson_get_str(visibility), "auto") != 0 &&
-                                                SDL_strcmp(yyjson_get_str(visibility), "always") != 0 &&
-                                                SDL_strcmp(yyjson_get_str(visibility), "trace") != 0)))
-            {
-                ok = validation_error(ctx, brush_path, "brush visibility must be 'auto', 'always', or 'trace'");
-                break;
-            }
-            if (!yyjson_is_arr(faces) || yyjson_arr_size(faces) < 4)
-            {
-                ok = validation_error(ctx, brush_path, "brush faces must contain at least 4 entries");
-                break;
-            }
-            for (size_t face_index = 0; ok && face_index < yyjson_arr_size(faces); ++face_index)
-            {
-                char face_path[PATH_BUFFER_SIZE];
-                char plane_path[PATH_BUFFER_SIZE];
-                char flags_path[PATH_BUFFER_SIZE];
-                format_path(face_path, sizeof(face_path), "%s.faces[%zu]", brush_path, face_index);
-                format_path(plane_path, sizeof(plane_path), "%s.plane", face_path);
-                format_path(flags_path, sizeof(flags_path), "%s.surface_flags", face_path);
-                yyjson_val *face = yyjson_arr_get(faces, face_index);
-                yyjson_val *plane = obj_get(face, "plane");
-                yyjson_val *uv = obj_get(face, "uv");
-                if (!yyjson_is_obj(face))
-                {
-                    ok = validation_error(ctx, face_path, "brush face entries must be objects");
-                    break;
-                }
-                if (!yyjson_is_obj(plane) || !vec3_nonzero(obj_get(plane, "normal")) ||
-                    !yyjson_is_num(obj_get(plane, "distance")))
-                {
-                    ok = validation_error(ctx, plane_path,
-                                          "brush face plane requires non-zero normal vec3 and numeric distance");
-                    break;
-                }
-                if (!brush_material_ref_valid(materials, &material_names, obj_get(face, "material")))
-                {
-                    ok = validation_error(ctx, face_path, "brush face material must reference a declared material");
-                    break;
-                }
-                {
-                    char editor_path[PATH_BUFFER_SIZE];
-                    format_path(editor_path, sizeof(editor_path), "%s.editor", face_path);
-                    if (!validate_editor_metadata(ctx, obj_get(face, "editor"), editor_path, names, false) ||
-                        !require_unique_editor_stable_id(ctx, &editor_stable_ids, face, face_path))
-                    {
-                        ok = false;
-                        break;
-                    }
-                }
-                if (!validate_brush_string_or_string_array(ctx, obj_get(face, "surface_flags"), flags_path,
-                                                           "brush surface flag", brush_surface_flag_name_valid, true))
-                {
-                    ok = false;
-                    break;
-                }
-                if (uv != NULL)
-                {
-                    if (!yyjson_is_obj(uv))
-                    {
-                        ok = validation_error(ctx, face_path, "brush face uv must be an object");
-                        break;
-                    }
-                    yyjson_val *scale = obj_get(uv, "scale");
-                    yyjson_val *offset = obj_get(uv, "offset");
-                    yyjson_val *rotation = obj_get(uv, "rotation_degrees");
-                    if (scale != NULL && (!is_exact_vec_array(scale, 2) || !numeric_array_values_positive(scale)))
-                    {
-                        ok = validation_error(ctx, face_path, "brush face uv scale must be a positive vec2");
-                        break;
-                    }
-                    if (offset != NULL && !is_exact_vec_array(offset, 2))
-                    {
-                        ok = validation_error(ctx, face_path, "brush face uv offset must be a vec2");
-                        break;
-                    }
-                    if (rotation != NULL && !yyjson_is_num(rotation))
-                    {
-                        ok = validation_error(ctx, face_path, "brush face uv rotation_degrees must be a number");
-                        break;
-                    }
-                }
-            }
-        }
-
-    done:
-        name_table_destroy(&material_names);
-        name_table_destroy(&brush_names);
-        name_table_destroy(&editor_stable_ids);
         if (!ok)
             return false;
     }
@@ -6813,355 +5993,6 @@ static bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_
         }
     }
     return true;
-}
-
-static bool editor_string_field_valid(validation_context *ctx, yyjson_val *metadata, const char *key,
-                                      const char *json_path)
-{
-    yyjson_val *value = obj_get(metadata, key);
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
-        return validation_error(ctx, json_path, "editor %s must be a non-empty string", key);
-    return true;
-}
-
-static bool editor_tags_valid(validation_context *ctx, yyjson_val *tags, const char *json_path)
-{
-    if (tags == NULL)
-        return true;
-    if (!yyjson_is_arr(tags))
-        return validation_error(ctx, json_path, "editor tags must be an array");
-    for (size_t i = 0; i < yyjson_arr_size(tags); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "%s[%zu]", json_path, i);
-        yyjson_val *tag = yyjson_arr_get(tags, i);
-        if (!yyjson_is_str(tag) || yyjson_get_str(tag)[0] == '\0')
-            return validation_error(ctx, path, "editor tag entries must be non-empty strings");
-    }
-    return true;
-}
-
-static bool editor_vec_positive(yyjson_val *value)
-{
-    if (!is_vec_array(value, 3))
-        return false;
-    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
-    {
-        if (yyjson_get_num(yyjson_arr_get(value, i)) <= 0.0)
-            return false;
-    }
-    return true;
-}
-
-static bool editor_preview_primitive_valid(const char *primitive)
-{
-    static const char *const valid[] = {"none",  "cube",  "sphere", "capsule", "sprite",
-                                        "model", "light", "volume", "sector"};
-    for (size_t i = 0; primitive != NULL && i < SDL_arraysize(valid); ++i)
-    {
-        if (SDL_strcmp(primitive, valid[i]) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool editor_exposed_property_type_valid(const char *type)
-{
-    static const char *const valid[] = {"bool", "int", "float", "string", "vec2", "vec3", "color", "enum"};
-    for (size_t i = 0; type != NULL && i < SDL_arraysize(valid); ++i)
-    {
-        if (SDL_strcmp(type, valid[i]) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool editor_exposed_property_default_valid(yyjson_val *value, const char *type)
-{
-    if (value == NULL)
-        return true;
-    if (type == NULL)
-    {
-        return yyjson_is_str(value) || yyjson_is_int(value) || yyjson_is_real(value) || yyjson_is_bool(value) ||
-               is_exact_vec_array(value, 2) || is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
-    }
-    if (SDL_strcmp(type, "bool") == 0)
-        return yyjson_is_bool(value);
-    if (SDL_strcmp(type, "int") == 0)
-        return yyjson_is_int(value);
-    if (SDL_strcmp(type, "float") == 0)
-        return yyjson_is_num(value);
-    if (SDL_strcmp(type, "string") == 0 || SDL_strcmp(type, "enum") == 0)
-        return yyjson_is_str(value);
-    if (SDL_strcmp(type, "vec2") == 0)
-        return is_exact_vec_array(value, 2);
-    if (SDL_strcmp(type, "vec3") == 0)
-        return is_exact_vec_array(value, 3);
-    if (SDL_strcmp(type, "color") == 0)
-        return is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
-    return false;
-}
-
-static bool validate_editor_preview(validation_context *ctx, yyjson_val *preview, const char *json_path)
-{
-    if (preview == NULL)
-        return true;
-    if (!yyjson_is_obj(preview))
-        return validation_error(ctx, json_path, "editor preview must be an object");
-
-    const char *primitive = json_string(preview, "primitive");
-    if (primitive != NULL && !editor_preview_primitive_valid(primitive))
-        return validation_error(ctx, json_path, "editor preview primitive is unknown");
-    yyjson_val *asset = obj_get(preview, "asset");
-    if (asset != NULL && (!yyjson_is_str(asset) || yyjson_get_str(asset)[0] == '\0'))
-        return validation_error(ctx, json_path, "editor preview asset must be a non-empty string");
-    yyjson_val *color = obj_get(preview, "color");
-    if (color != NULL && !is_vec_array(color, 3))
-        return validation_error(ctx, json_path, "editor preview color must be a vec3 or vec4");
-    return true;
-}
-
-static bool validate_editor_bounds(validation_context *ctx, yyjson_val *bounds, const char *json_path)
-{
-    if (bounds == NULL)
-        return true;
-    if (!yyjson_is_obj(bounds))
-        return validation_error(ctx, json_path, "editor bounds must be an object");
-    yyjson_val *center = obj_get(bounds, "center");
-    if (center != NULL && !is_vec_array(center, 3))
-        return validation_error(ctx, json_path, "editor bounds center must be a vec3");
-    yyjson_val *size = obj_get(bounds, "size");
-    if (size != NULL && !editor_vec_positive(size))
-        return validation_error(ctx, json_path, "editor bounds size must be a positive vec3");
-    yyjson_val *half_extents = obj_get(bounds, "half_extents");
-    if (half_extents != NULL && !editor_vec_positive(half_extents))
-        return validation_error(ctx, json_path, "editor bounds half_extents must be a positive vec3");
-    yyjson_val *radius = obj_get(bounds, "radius");
-    if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) <= 0.0))
-        return validation_error(ctx, json_path, "editor bounds radius must be positive");
-    return true;
-}
-
-static bool validate_editor_snap(validation_context *ctx, yyjson_val *snap, const char *json_path)
-{
-    if (snap == NULL)
-        return true;
-    if (!yyjson_is_obj(snap))
-        return validation_error(ctx, json_path, "editor snap must be an object");
-    yyjson_val *grid = obj_get(snap, "grid");
-    if (grid != NULL)
-    {
-        if (yyjson_is_num(grid))
-        {
-            if (yyjson_get_num(grid) <= 0.0)
-                return validation_error(ctx, json_path, "editor snap grid must be positive");
-        }
-        else if (!editor_vec_positive(grid))
-        {
-            return validation_error(ctx, json_path, "editor snap grid must be a positive number or vec3");
-        }
-    }
-    yyjson_val *rotation = obj_get(snap, "rotation_degrees");
-    if (rotation != NULL && (!yyjson_is_num(rotation) || yyjson_get_num(rotation) <= 0.0))
-        return validation_error(ctx, json_path, "editor snap rotation_degrees must be positive");
-    yyjson_val *align = obj_get(snap, "align_to_floor");
-    if (align != NULL && !yyjson_is_bool(align))
-        return validation_error(ctx, json_path, "editor snap align_to_floor must be a boolean");
-    return true;
-}
-
-static bool validate_editor_exposed_properties(validation_context *ctx, yyjson_val *properties, const char *json_path)
-{
-    if (properties == NULL)
-        return true;
-    if (!yyjson_is_arr(properties))
-        return validation_error(ctx, json_path, "editor exposed_properties must be an array");
-    name_table names;
-    SDL_zero(names);
-    bool ok = true;
-    for (size_t i = 0; ok && i < yyjson_arr_size(properties); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "%s[%zu]", json_path, i);
-        yyjson_val *property = yyjson_arr_get(properties, i);
-        if (!yyjson_is_obj(property))
-        {
-            ok = validation_error(ctx, path, "editor exposed property entries must be objects");
-            break;
-        }
-        ok = require_unique_name(ctx, &names, "editor exposed property", json_string(property, "name"), path) &&
-             editor_string_field_valid(ctx, property, "display_name", path) &&
-             editor_string_field_valid(ctx, property, "description", path);
-        const char *type = json_string(property, "type");
-        if (ok && type != NULL && !editor_exposed_property_type_valid(type))
-            ok = validation_error(ctx, path, "editor exposed property type is unknown");
-        yyjson_val *min_value = obj_get(property, "min");
-        yyjson_val *max_value = obj_get(property, "max");
-        if (ok &&
-            ((min_value != NULL && !yyjson_is_num(min_value)) || (max_value != NULL && !yyjson_is_num(max_value))))
-            ok = validation_error(ctx, path, "editor exposed property min and max must be numbers");
-        yyjson_val *default_value = obj_get(property, "default");
-        if (ok && !editor_exposed_property_default_valid(default_value, type))
-            ok = validation_error(ctx, path, "editor exposed property default does not match its type");
-    }
-    name_table_destroy(&names);
-    return ok;
-}
-
-static bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, const char *json_path,
-                                     validation_names *names, bool allow_templates)
-{
-    if (metadata == NULL)
-        return true;
-    if (!yyjson_is_obj(metadata))
-        return validation_error(ctx, json_path, "editor metadata must be an object");
-
-    if (!editor_string_field_valid(ctx, metadata, "display_name", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "stable_id", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "description", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "category", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "group", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "prefab", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "archetype", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "icon", json_path) ||
-        !editor_string_field_valid(ctx, metadata, "preview_asset", json_path) ||
-        !editor_tags_valid(ctx, obj_get(metadata, "tags"), json_path) ||
-        !validate_editor_preview(ctx, obj_get(metadata, "preview"), json_path) ||
-        !validate_editor_bounds(ctx, obj_get(metadata, "bounds"), json_path) ||
-        !validate_editor_snap(ctx, obj_get(metadata, "snap"), json_path) ||
-        !validate_editor_exposed_properties(ctx, obj_get(metadata, "exposed_properties"), json_path))
-    {
-        return false;
-    }
-
-    const char *test_scene = json_string(metadata, "test_scene");
-    if (test_scene != NULL && !require_ref(ctx, &names->scenes, "scene", test_scene, json_path))
-        return false;
-
-    yyjson_val *templates = obj_get(metadata, "templates");
-    if (templates == NULL)
-        return true;
-    if (!allow_templates)
-        return validation_error(ctx, json_path, "editor templates are only allowed on root editor metadata");
-    if (!yyjson_is_arr(templates))
-        return validation_error(ctx, json_path, "editor templates must be an array");
-
-    name_table template_names;
-    SDL_zero(template_names);
-    bool ok = true;
-    for (size_t i = 0; ok && i < yyjson_arr_size(templates); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "%s.templates[%zu]", json_path, i);
-        yyjson_val *entry = yyjson_arr_get(templates, i);
-        if (!yyjson_is_obj(entry))
-        {
-            ok = validation_error(ctx, path, "editor template entries must be objects");
-            break;
-        }
-        ok = require_unique_name(ctx, &template_names, "editor template", json_string(entry, "name"), path) &&
-             editor_string_field_valid(ctx, entry, "source", path) &&
-             editor_string_field_valid(ctx, entry, "source_kind", path) &&
-             validate_editor_metadata(ctx, entry, path, names, false);
-    }
-    name_table_destroy(&template_names);
-    return ok;
-}
-
-static bool validate_editor_metadata_tree(validation_context *ctx, yyjson_val *root, validation_names *names)
-{
-    if (!validate_editor_metadata(ctx, obj_get(root, "editor"), "$.editor", names, true))
-        return false;
-
-    yyjson_val *entities = obj_get(root, "entities");
-    for (size_t i = 0; yyjson_is_arr(entities) && i < yyjson_arr_size(entities); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "$.entities[%zu].editor", i);
-        if (!validate_editor_metadata(ctx, obj_get(yyjson_arr_get(entities, i), "editor"), path, names, false))
-            return false;
-    }
-
-    yyjson_val *archetypes = obj_get(root, "actor_archetypes");
-    for (size_t i = 0; yyjson_is_arr(archetypes) && i < yyjson_arr_size(archetypes); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "$.actor_archetypes[%zu].editor", i);
-        if (!validate_editor_metadata(ctx, obj_get(yyjson_arr_get(archetypes, i), "editor"), path, names, false))
-            return false;
-    }
-
-    yyjson_val *instances = obj_get(root, "actor_instances");
-    for (size_t i = 0; yyjson_is_arr(instances) && i < yyjson_arr_size(instances); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "$.actor_instances[%zu].editor", i);
-        if (!validate_editor_metadata(ctx, obj_get(yyjson_arr_get(instances, i), "editor"), path, names, false))
-            return false;
-    }
-
-    yyjson_val *pools = obj_get(root, "actor_pools");
-    for (size_t i = 0; yyjson_is_arr(pools) && i < yyjson_arr_size(pools); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "$.actor_pools[%zu].editor", i);
-        if (!validate_editor_metadata(ctx, obj_get(yyjson_arr_get(pools, i), "editor"), path, names, false))
-            return false;
-    }
-    return true;
-}
-
-static bool validate_editor_player_starts(validation_context *ctx, yyjson_val *root, validation_names *names)
-{
-    yyjson_val *starts = obj_get(root, "editor_player_starts");
-    if (starts == NULL)
-        return true;
-    if (!yyjson_is_arr(starts))
-        return validation_error(ctx, "$.editor_player_starts", "editor_player_starts must be an array");
-
-    name_table start_names;
-    SDL_zero(start_names);
-    bool ok = true;
-    for (size_t i = 0; ok && i < yyjson_arr_size(starts); ++i)
-    {
-        char path[PATH_BUFFER_SIZE];
-        format_path(path, sizeof(path), "$.editor_player_starts[%zu]", i);
-        yyjson_val *start = yyjson_arr_get(starts, i);
-        if (!yyjson_is_obj(start))
-        {
-            ok = validation_error(ctx, path, "editor player start entries must be objects");
-            break;
-        }
-        const char *scene = json_string(start, "scene");
-        const char *target = json_string(start, "target");
-        yyjson_val *yaw = obj_get(start, "yaw");
-        yyjson_val *pitch = obj_get(start, "pitch");
-        ok = require_unique_name(ctx, &start_names, "editor player start", json_string(start, "name"), path) &&
-             (scene == NULL || require_ref(ctx, &names->scenes, "scene", scene, path)) &&
-             (target == NULL || require_actor_ref(ctx, names, target, path)) &&
-             is_exact_vec_array(obj_get(start, "position"), 3) && (yaw == NULL || yyjson_is_num(yaw)) &&
-             (pitch == NULL || yyjson_is_num(pitch));
-        if (ok)
-            continue;
-        if (!ctx->failed)
-            ok = validation_error(ctx, path, "editor player start requires position vec3 and numeric yaw/pitch");
-    }
-    name_table_destroy(&start_names);
-    return ok;
-}
-
-static bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
-                                            const char *json_path)
-{
-    yyjson_val *editor = obj_get(json, "editor");
-    const char *stable_id = json_string(editor, "stable_id");
-    if (stable_id == NULL)
-        return true;
-    char path[PATH_BUFFER_SIZE];
-    format_path(path, sizeof(path), "%s.editor", json_path);
-    return require_unique_name(ctx, stable_ids, "editor stable id", stable_id, path);
 }
 
 static bool is_tween_easing(const char *easing)
@@ -11299,22 +10130,6 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
     return true;
 }
 
-static bool editor_model_filter_name_valid(const char *value)
-{
-    return value != NULL && (SDL_strcmp(value, "all") == 0 || SDL_strcmp(value, "sector_levels") == 0 ||
-                             SDL_strcmp(value, "sector") == 0 || SDL_strcmp(value, "brush_worlds") == 0 ||
-                             SDL_strcmp(value, "brush") == 0);
-}
-
-static bool editor_debug_flag_name_valid(const char *value)
-{
-    return value != NULL && (SDL_strcmp(value, "all") == 0 || SDL_strcmp(value, "world_bounds") == 0 ||
-                             SDL_strcmp(value, "selection_bounds") == 0 || SDL_strcmp(value, "trace_ray") == 0 ||
-                             SDL_strcmp(value, "face_normal") == 0 || SDL_strcmp(value, "hit_marker") == 0 ||
-                             SDL_strcmp(value, "command_preview") == 0 || SDL_strcmp(value, "work_plane_grid") == 0 ||
-                             SDL_strcmp(value, "grid") == 0);
-}
-
 static bool editor_command_name_valid(const char *value)
 {
     return value != NULL &&
@@ -11327,426 +10142,6 @@ static bool editor_command_target_name_valid(const char *value)
     return value != NULL &&
            (SDL_strcmp(value, "selection") == 0 || SDL_strcmp(value, "world") == 0 ||
             SDL_strcmp(value, "element") == 0 || SDL_strcmp(value, "face") == 0 || SDL_strcmp(value, "material") == 0);
-}
-
-static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,
-                                                  const char *label, bool (*name_valid)(const char *name))
-{
-    if (value == NULL)
-        return true;
-    if (yyjson_is_str(value))
-        return name_valid(yyjson_get_str(value))
-                   ? true
-                   : validation_error(ctx, path, "unsupported %s '%s'", label, yyjson_get_str(value));
-    if (!yyjson_is_arr(value))
-        return validation_error(ctx, path, "%s must be a string or string array", label);
-    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
-    {
-        char entry_path[PATH_BUFFER_SIZE];
-        format_path(entry_path, sizeof(entry_path), "%s[%zu]", path, i);
-        yyjson_val *entry = yyjson_arr_get(value, i);
-        if (!yyjson_is_str(entry) || !name_valid(yyjson_get_str(entry)))
-            return validation_error(ctx, entry_path, "unsupported %s '%s'", label,
-                                    yyjson_is_str(entry) ? yyjson_get_str(entry) : "<non-string>");
-    }
-    return true;
-}
-
-static bool validate_scene_editor_outputs(validation_context *ctx, yyjson_val *outputs, const char *json_path)
-{
-    if (outputs == NULL)
-        return true;
-    if (!yyjson_is_obj(outputs))
-        return validation_error(ctx, json_path, "scene editor selection outputs must be an object");
-
-    yyjson_val *key;
-    yyjson_obj_iter iter;
-    yyjson_obj_iter_init(outputs, &iter);
-    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
-    {
-        yyjson_val *value = yyjson_obj_iter_get_val(key);
-        if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
-            return validation_error(ctx, json_path, "scene editor selection output values must be non-empty strings");
-    }
-    return true;
-}
-
-static bool validate_optional_non_empty_string(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                               const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
-        return validation_error(ctx, json_path, "%s must be a non-empty string", description);
-    return true;
-}
-
-static bool validate_optional_number(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                     const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_num(value))
-        return validation_error(ctx, json_path, "%s must be a number", description);
-    return true;
-}
-
-static bool validate_optional_positive_number(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                              const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0)
-        return validation_error(ctx, json_path, "%s must be positive", description);
-    return true;
-}
-
-static bool validate_optional_non_negative_number(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                                  const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0)
-        return validation_error(ctx, json_path, "%s must be non-negative", description);
-    return true;
-}
-
-static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, yyjson_val *trace,
-                                                      const char *trace_path, validation_names *names)
-{
-    yyjson_val *camera_value = obj_get(trace, "camera");
-    if (!validate_optional_non_empty_string(ctx, camera_value, trace_path, "scene editor camera_screen trace camera"))
-        return false;
-    const char *camera = json_string(trace, "camera");
-    if (camera != NULL && !require_ref(ctx, &names->cameras, "camera", camera, trace_path))
-        return false;
-
-    yyjson_val *screen = obj_get(trace, "screen");
-    if (screen != NULL && !is_exact_vec_array(screen, 2))
-        return validation_error(ctx, trace_path, "scene editor camera_screen trace screen must be a vec2");
-    yyjson_val *viewport = obj_get(trace, "viewport");
-    if (viewport != NULL &&
-        (!is_exact_vec_array(viewport, 2) || !numeric_array_values_in_range(viewport, 0.000001, DBL_MAX)))
-        return validation_error(ctx, trace_path, "scene editor camera_screen trace viewport must be a positive vec2");
-
-    char field_path[PATH_BUFFER_SIZE];
-    static const char *const numeric_keys[] = {"screen_x", "screen_y"};
-    for (size_t i = 0; i < SDL_arraysize(numeric_keys); ++i)
-    {
-        format_path(field_path, sizeof(field_path), "%s.%s", trace_path, numeric_keys[i]);
-        if (!validate_optional_number(ctx, obj_get(trace, numeric_keys[i]), field_path,
-                                      "scene editor camera_screen trace coordinate"))
-            return false;
-    }
-
-    static const char *const positive_keys[] = {"viewport_width", "viewport_height", "far"};
-    for (size_t i = 0; i < SDL_arraysize(positive_keys); ++i)
-    {
-        format_path(field_path, sizeof(field_path), "%s.%s", trace_path, positive_keys[i]);
-        if (!validate_optional_positive_number(ctx, obj_get(trace, positive_keys[i]), field_path,
-                                               "scene editor camera_screen trace value"))
-            return false;
-    }
-    format_path(field_path, sizeof(field_path), "%s.near", trace_path);
-    if (!validate_optional_non_negative_number(ctx, obj_get(trace, "near"), field_path,
-                                               "scene editor camera_screen trace near"))
-        return false;
-
-    static const char *const string_keys[] = {"screen_x_key", "screen_y_key", "viewport_width_key",
-                                              "viewport_height_key"};
-    for (size_t i = 0; i < SDL_arraysize(string_keys); ++i)
-    {
-        format_path(field_path, sizeof(field_path), "%s.%s", trace_path, string_keys[i]);
-        if (!validate_optional_non_empty_string(ctx, obj_get(trace, string_keys[i]), field_path,
-                                                "scene editor camera_screen trace key"))
-            return false;
-    }
-
-    yyjson_val *near_value = obj_get(trace, "near");
-    yyjson_val *far_value = obj_get(trace, "far");
-    if (near_value != NULL && far_value != NULL && yyjson_get_num(far_value) <= yyjson_get_num(near_value))
-        return validation_error(ctx, trace_path, "scene editor camera_screen trace far must be greater than near");
-    return true;
-}
-
-static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val *trace, const char *trace_path)
-{
-    yyjson_val *work_plane = obj_get(trace, "work_plane");
-    if (work_plane == NULL)
-        return true;
-    char work_plane_path[PATH_BUFFER_SIZE];
-    format_path(work_plane_path, sizeof(work_plane_path), "%s.work_plane", trace_path);
-    if (!yyjson_is_obj(work_plane))
-        return validation_error(ctx, work_plane_path, "scene editor selection work_plane must be an object");
-
-    yyjson_val *enabled = obj_get(work_plane, "enabled");
-    if (enabled != NULL && !yyjson_is_bool(enabled))
-        return validation_error(ctx, work_plane_path, "scene editor selection work_plane enabled must be a boolean");
-
-    yyjson_val *normal = obj_get(work_plane, "normal");
-    if (normal != NULL)
-    {
-        if (!is_exact_vec_array(normal, 3))
-            return validation_error(ctx, work_plane_path, "scene editor selection work_plane normal must be a vec3");
-        const double x = yyjson_get_num(yyjson_arr_get(normal, 0));
-        const double y = yyjson_get_num(yyjson_arr_get(normal, 1));
-        const double z = yyjson_get_num(yyjson_arr_get(normal, 2));
-        if ((x * x + y * y + z * z) <= 0.000001)
-            return validation_error(ctx, work_plane_path, "scene editor selection work_plane normal must be non-zero");
-    }
-
-    char distance_path[PATH_BUFFER_SIZE];
-    format_path(distance_path, sizeof(distance_path), "%s.distance", work_plane_path);
-    if (!validate_optional_number(ctx, obj_get(work_plane, "distance"), distance_path,
-                                  "scene editor selection work_plane distance"))
-    {
-        return false;
-    }
-    return true;
-}
-
-static bool validate_scene_editor_trace(validation_context *ctx, yyjson_val *trace, const char *trace_path,
-                                        validation_names *names)
-{
-    yyjson_val *source_value = obj_get(trace, "source");
-    if (!validate_optional_non_empty_string(ctx, source_value, trace_path, "scene editor selection trace source"))
-        return false;
-    const char *source = source_value != NULL ? yyjson_get_str(source_value) : "world";
-    if (SDL_strcmp(source, "world") == 0)
-    {
-        if (!is_exact_vec_array(obj_get(trace, "start"), 3))
-            return validation_error(ctx, trace_path, "scene editor selection trace requires a start vec3");
-        if (!is_exact_vec_array(obj_get(trace, "end"), 3))
-            return validation_error(ctx, trace_path, "scene editor selection trace requires an end vec3");
-    }
-    else if (SDL_strcmp(source, "camera_screen") == 0)
-    {
-        if (!validate_scene_editor_camera_screen_trace(ctx, trace, trace_path, names))
-            return false;
-    }
-    else
-    {
-        return validation_error(ctx, trace_path,
-                                "scene editor selection trace source must be 'world' or 'camera_screen'");
-    }
-
-    char contents_path[PATH_BUFFER_SIZE];
-    format_path(contents_path, sizeof(contents_path), "%s.contents_mask", trace_path);
-    if (!validate_brush_string_or_string_array(ctx, obj_get(trace, "contents_mask"), contents_path, "brush content",
-                                               brush_content_name_valid, false))
-        return false;
-    char filter_path[PATH_BUFFER_SIZE];
-    format_path(filter_path, sizeof(filter_path), "%s.model_filter", trace_path);
-    if (!validate_string_or_string_array_names(ctx, obj_get(trace, "model_filter"), filter_path, "world model filter",
-                                               editor_model_filter_name_valid))
-        return false;
-    if (!validate_scene_editor_work_plane(ctx, trace, trace_path))
-        return false;
-    return true;
-}
-
-static bool validate_scene_editor_selection_options(validation_context *ctx, yyjson_val *selection,
-                                                    const char *selection_path)
-{
-    yyjson_val *mode = obj_get(selection, "mode");
-    if (mode != NULL)
-    {
-        if (!yyjson_is_str(mode) || yyjson_get_str(mode)[0] == '\0')
-            return validation_error(ctx, selection_path, "scene editor selection mode must be a non-empty string");
-        const char *mode_name = yyjson_get_str(mode);
-        if (SDL_strcmp(mode_name, "hover") != 0 && SDL_strcmp(mode_name, "click") != 0)
-            return validation_error(ctx, selection_path, "scene editor selection mode must be 'hover' or 'click'");
-    }
-
-    yyjson_val *select_button = obj_get(selection, "select_button");
-    if (select_button != NULL)
-    {
-        if (!yyjson_is_str(select_button) || !validation_mouse_button_name_valid(yyjson_get_str(select_button)))
-            return validation_error(ctx, selection_path, "scene editor selection select_button must be a mouse button");
-    }
-
-    yyjson_val *clear_on_miss = obj_get(selection, "clear_on_miss");
-    if (clear_on_miss != NULL && !yyjson_is_bool(clear_on_miss))
-        return validation_error(ctx, selection_path, "scene editor selection clear_on_miss must be a boolean");
-    return true;
-}
-
-static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val *placement, const char *placement_path,
-                                            validation_names *names)
-{
-    if (placement == NULL)
-        return true;
-    if (!yyjson_is_obj(placement))
-        return validation_error(ctx, placement_path, "scene editor placement must be an object");
-
-    const char *string_fields[] = {"tool_key", "snap_key", "default_tool"};
-    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
-    {
-        char field_path[PATH_BUFFER_SIZE];
-        format_path(field_path, sizeof(field_path), "%s.%s", placement_path, string_fields[i]);
-        if (!validate_optional_non_empty_string(ctx, obj_get(placement, string_fields[i]), field_path,
-                                                "scene editor placement field"))
-            return false;
-    }
-    yyjson_val *default_snap = obj_get(placement, "default_snap");
-    if (default_snap != NULL && (!yyjson_is_num(default_snap) || yyjson_get_num(default_snap) <= 0.0))
-        return validation_error(ctx, placement_path, "scene editor placement default_snap must be positive");
-
-    yyjson_val *outputs = obj_get(placement, "outputs");
-    if (outputs != NULL && !yyjson_is_obj(outputs))
-        return validation_error(ctx, placement_path, "scene editor placement outputs must be an object");
-    static const char *const output_keys[] = {"active_key", "valid_key", "mode_key",       "kind_key",
-                                              "axis_key",   "world_key", "material_key",   "message_key",
-                                              "anchor_key", "snap_key",  "bounds_min_key", "bounds_max_key"};
-    for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-    {
-        yyjson_val *output = obj_get(outputs, output_keys[i]);
-        if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-            return validation_error(ctx, placement_path,
-                                    "scene editor placement output keys must be non-empty strings");
-    }
-
-    yyjson_val *previews = obj_get(placement, "previews");
-    if (!yyjson_is_arr(previews) || yyjson_arr_size(previews) == 0)
-        return validation_error(ctx, placement_path, "scene editor placement previews must be a non-empty array");
-    for (size_t i = 0; i < yyjson_arr_size(previews); ++i)
-    {
-        char preview_path[PATH_BUFFER_SIZE];
-        format_path(preview_path, sizeof(preview_path), "%s.previews[%zu]", placement_path, i);
-        yyjson_val *preview = yyjson_arr_get(previews, i);
-        if (!yyjson_is_obj(preview))
-            return validation_error(ctx, preview_path, "scene editor placement preview must be an object");
-        if (!is_non_empty_string(preview, "mode"))
-            return validation_error(ctx, preview_path, "scene editor placement preview requires a non-empty mode");
-        const char *kind = json_string(preview, "kind");
-        if (kind == NULL)
-            kind = "box";
-        if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0)
-            return validation_error(ctx, preview_path,
-                                    "scene editor placement preview kind must be box or player_start");
-        yyjson_val *axis_key = obj_get(preview, "axis_key");
-        if (axis_key != NULL && (!yyjson_is_str(axis_key) || yyjson_get_str(axis_key)[0] == '\0'))
-            return validation_error(ctx, preview_path, "scene editor placement preview axis_key must be non-empty");
-        const char *axis = json_string(preview, "axis");
-        if (axis != NULL && SDL_strcmp(axis, "x") != 0 && SDL_strcmp(axis, "z") != 0)
-            return validation_error(ctx, preview_path, "scene editor placement preview axis must be x or z");
-        yyjson_val *offset = obj_get(preview, "position_offset");
-        if (offset != NULL && !is_exact_vec_array(offset, 3))
-            return validation_error(ctx, preview_path, "scene editor placement preview position_offset must be a vec3");
-        yyjson_val *snap = obj_get(preview, "snap");
-        if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
-            return validation_error(ctx, preview_path, "scene editor placement preview snap must be positive");
-        if (SDL_strcmp(kind, "player_start") == 0)
-        {
-            yyjson_val *size = obj_get(preview, "size");
-            if (size != NULL &&
-                (!is_exact_vec_array(size, 3) || yyjson_get_num(yyjson_arr_get(size, 0)) <= 0.0 ||
-                 yyjson_get_num(yyjson_arr_get(size, 1)) <= 0.0 || yyjson_get_num(yyjson_arr_get(size, 2)) <= 0.0))
-            {
-                return validation_error(ctx, preview_path,
-                                        "scene editor placement player_start size must be a positive vec3");
-            }
-            continue;
-        }
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(preview, "world"), preview_path))
-            return false;
-        if (!is_non_empty_string(preview, "material"))
-            return validation_error(ctx, preview_path, "scene editor placement box preview requires a material");
-        yyjson_val *min = obj_get(preview, "min");
-        yyjson_val *max = obj_get(preview, "max");
-        if (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3))
-            return validation_error(ctx, preview_path, "scene editor placement box preview requires min and max vec3");
-        if (!(yyjson_get_num(yyjson_arr_get(min, 0)) < yyjson_get_num(yyjson_arr_get(max, 0)) &&
-              yyjson_get_num(yyjson_arr_get(min, 1)) < yyjson_get_num(yyjson_arr_get(max, 1)) &&
-              yyjson_get_num(yyjson_arr_get(min, 2)) < yyjson_get_num(yyjson_arr_get(max, 2))))
-        {
-            return validation_error(ctx, preview_path, "scene editor placement box preview bounds require min < max");
-        }
-    }
-    return true;
-}
-
-static bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
-                                          validation_names *names)
-{
-    yyjson_val *editor = obj_get(scene_root, "editor");
-    if (editor == NULL)
-        return true;
-    if (!yyjson_is_obj(editor))
-        return validation_error(ctx, json_path, "scene editor must be an object");
-
-    yyjson_val *selection = obj_get(editor, "selection");
-    if (selection != NULL)
-    {
-        char selection_path[PATH_BUFFER_SIZE];
-        format_path(selection_path, sizeof(selection_path), "%s.editor.selection", json_path);
-        if (!yyjson_is_obj(selection))
-            return validation_error(ctx, selection_path, "scene editor selection must be an object");
-        if (!validate_scene_editor_selection_options(ctx, selection, selection_path))
-            return false;
-        yyjson_val *trace = obj_get(selection, "trace");
-        if (!yyjson_is_obj(trace))
-            return validation_error(ctx, selection_path, "scene editor selection requires a trace object");
-        char trace_path[PATH_BUFFER_SIZE];
-        format_path(trace_path, sizeof(trace_path), "%s.trace", selection_path);
-        if (!validate_scene_editor_trace(ctx, trace, trace_path, names))
-            return false;
-        char outputs_path[PATH_BUFFER_SIZE];
-        format_path(outputs_path, sizeof(outputs_path), "%s.outputs", selection_path);
-        if (!validate_scene_editor_outputs(ctx, obj_get(selection, "outputs"), outputs_path))
-            return false;
-        char hover_outputs_path[PATH_BUFFER_SIZE];
-        format_path(hover_outputs_path, sizeof(hover_outputs_path), "%s.hover_outputs", selection_path);
-        if (!validate_scene_editor_outputs(ctx, obj_get(selection, "hover_outputs"), hover_outputs_path))
-            return false;
-    }
-
-    char placement_path[PATH_BUFFER_SIZE];
-    format_path(placement_path, sizeof(placement_path), "%s.editor.placement", json_path);
-    if (!validate_scene_editor_placement(ctx, obj_get(editor, "placement"), placement_path, names))
-        return false;
-
-    yyjson_val *overlay = obj_get(editor, "debug_overlay");
-    if (overlay != NULL)
-    {
-        char overlay_path[PATH_BUFFER_SIZE];
-        format_path(overlay_path, sizeof(overlay_path), "%s.editor.debug_overlay", json_path);
-        if (!yyjson_is_obj(overlay))
-            return validation_error(ctx, overlay_path, "scene editor debug_overlay must be an object");
-        yyjson_val *enabled = obj_get(overlay, "enabled");
-        if (enabled != NULL && !yyjson_is_bool(enabled))
-            return validation_error(ctx, overlay_path, "scene editor debug_overlay enabled must be a boolean");
-        char flags_path[PATH_BUFFER_SIZE];
-        format_path(flags_path, sizeof(flags_path), "%s.flags", overlay_path);
-        if (!validate_string_or_string_array_names(ctx, obj_get(overlay, "flags"), flags_path, "editor debug flag",
-                                                   editor_debug_flag_name_valid))
-            return false;
-        static const char *const color_keys[] = {
-            "world_bounds_color", "selection_bounds_color", "trace_color",          "face_normal_color",
-            "hit_marker_color",   "command_preview_color",  "work_plane_grid_color"};
-        for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
-        {
-            yyjson_val *color = obj_get(overlay, color_keys[i]);
-            if (color != NULL && !is_exact_vec3_or_vec4_array(color))
-                return validation_error(ctx, overlay_path, "scene editor debug_overlay %s must be a vec3 or vec4 color",
-                                        color_keys[i]);
-        }
-        yyjson_val *normal_length = obj_get(overlay, "normal_length");
-        if (normal_length != NULL && (!yyjson_is_num(normal_length) || yyjson_get_num(normal_length) <= 0.0))
-            return validation_error(ctx, overlay_path, "scene editor debug_overlay normal_length must be positive");
-        yyjson_val *hit_marker_size = obj_get(overlay, "hit_marker_size");
-        if (hit_marker_size != NULL && (!yyjson_is_num(hit_marker_size) || yyjson_get_num(hit_marker_size) <= 0.0))
-            return validation_error(ctx, overlay_path, "scene editor debug_overlay hit_marker_size must be positive");
-        yyjson_val *grid_size = obj_get(overlay, "work_plane_grid_size");
-        if (grid_size != NULL && (!yyjson_is_num(grid_size) || yyjson_get_num(grid_size) <= 0.0))
-            return validation_error(ctx, overlay_path,
-                                    "scene editor debug_overlay work_plane_grid_size must be positive");
-        yyjson_val *grid_spacing = obj_get(overlay, "work_plane_grid_spacing");
-        if (grid_spacing != NULL && (!yyjson_is_num(grid_spacing) || yyjson_get_num(grid_spacing) <= 0.0))
-            return validation_error(ctx, overlay_path,
-                                    "scene editor debug_overlay work_plane_grid_spacing must be positive");
-    }
-    return true;
 }
 
 static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yyjson_val *game_root,

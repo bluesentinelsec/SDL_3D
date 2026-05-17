@@ -743,6 +743,8 @@ typedef struct slayer3d_game_data_runtime
 void set_error(char *buffer, int buffer_size, const char *message);
 void set_errorf(char *buffer, int buffer_size, const char *format, ...);
 bool append_format(char *buffer, size_t buffer_size, size_t *offset, const char *format, ...);
+bool editor_save_bytes_atomic(const char *path, const void *data, size_t size, const char *kind, char *error_buffer,
+                              int error_buffer_size);
 char *path_join(const char *base_dir, const char *path);
 char *path_dirname(const char *path);
 
@@ -1039,6 +1041,46 @@ sector_level_runtime *find_sector_level_runtime_mutable(slayer3d_game_data_runti
 const sector_level_runtime *find_sector_level_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 int sector_level_find_sector_name(const sector_level_runtime *level, const char *sector_name);
 const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
+brush_world_runtime *find_brush_world_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
+void editor_brush_world_mark_dirty(brush_world_runtime *world_runtime);
+const editor_player_start_runtime *find_editor_player_start(const slayer3d_game_data_runtime *runtime,
+                                                            const char *name);
+slayer3d_game_data_sector_level_variant sector_level_variant_from_string(const char *variant,
+                                                                         const slayer3d_level **out_level,
+                                                                         const sector_level_runtime *level,
+                                                                         bool sector_lighting_enabled);
+slayer3d_bounding_box translated_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 position);
+bool model_bounds(const slayer3d_model *model, slayer3d_bounding_box *out_bounds);
+yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
+void init_editor_selection(slayer3d_game_data_editor_selection *selection);
+bool editor_selection_active_for_scene(const slayer3d_game_data_runtime *runtime);
+bool editor_command_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
+bool editor_placement_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
+bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
+                                 slayer3d_game_data_world_trace_desc *out_trace);
+bool editor_work_plane_desc_from_trace_json(yyjson_val *trace, slayer3d_vec3 *out_normal, float *out_distance);
+bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
+                                     const slayer3d_game_data_world_trace_desc *trace,
+                                     slayer3d_game_data_editor_selection *out_selection);
+bool editor_selection_mode_is_click(yyjson_val *selection);
+void clear_editor_command_preview(slayer3d_game_data_runtime *runtime);
+void clear_editor_placement_preview(slayer3d_game_data_runtime *runtime);
+void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
+                                     const slayer3d_game_data_editor_selection *hover_selection);
+void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
+                              const slayer3d_game_data_editor_selection *selection);
+void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
+void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
+void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);
+void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, float value);
+void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, slayer3d_vec3 value);
+bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, const char *world_name,
+                                       const char *message, bool publish_result);
+slayer3d_bounding_box editor_resized_preview_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 normal, float distance);
+void publish_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool valid,
+                                    const char *command, const char *target, const char *message,
+                                    const slayer3d_game_data_editor_selection *selection,
+                                    const slayer3d_bounding_box *bounds);
 bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,

@@ -145,6 +145,11 @@ target_sources(
         src/effects.c
         src/fbx_loader.c
         src/game.c
+        src/game_data_brush_artifacts.c
+        src/game_data_brush_editor_export.c
+        src/game_data_brush_editor_mutation.c
+        src/game_data_brush_trace_queries.c
+        src/game_data_brush_visibility_runtime.c
         src/game_data_brush.c
         src/game_data.c
         src/game_data_actions.c
@@ -156,8 +161,19 @@ target_sources(
         src/game_data_conditions_presentation.c
         src/game_data_controller_runtime.c
         src/game_data_controller_binding_helpers.c
+        src/game_data_editor_active_selection.c
+        src/game_data_editor_create_box_actions.c
+        src/game_data_editor_command_preview.c
+        src/game_data_editor_command_transactions.c
+        src/game_data_editor_output_actions.c
+        src/game_data_editor_placement_preview.c
+        src/game_data_editor_player_start.c
+        src/game_data_editor_selection_queries.c
+        src/game_data_editor_debug_primitives.c
         src/game_data_grid_actions.c
         src/game_data_grid_runtime.c
+        src/game_data_world_model_instances.c
+        src/game_data_world_diagnostics.c
         src/game_data_input_device_helpers.c
         src/game_data_interaction_effect_actions.c
         src/game_data_json_helpers.c
@@ -181,9 +197,18 @@ target_sources(
         src/game_data_update_runtime.c
         src/game_data_ui_animation_runtime.c
         src/game_data_world_loaders.c
+        src/game_data_world_lighting.c
+        src/game_data_world_model_queries.c
+        src/game_data_world_navigation.c
         src/game_data_world_queries.c
         src/game_data_standard_options.c
         src/game_presentation.c
+        src/game_data_validation_brush_common.c
+        src/game_data_validation_controller_components.c
+        src/game_data_validation_brush_worlds.c
+        src/game_data_validation_editor_metadata.c
+        src/game_data_validation_render_components.c
+        src/game_data_validation_scene_editor.c
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c
