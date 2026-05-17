@@ -1374,6 +1374,14 @@ is omitted, mouse-look is active whenever `mouse_look` is true. The controller
 writes `yaw`, `pitch`, and `camera_forward` by default; override those names
 with `yaw_property`, `pitch_property`, and `forward_property`.
 
+Editor scenes can pair one free-flight camera actor with multiple authored
+cameras. A typical graybox editor uses an `fps` or perspective camera for 3D
+inspection and orthographic cameras for top/front/side plotting. Bind UI or
+keyboard shortcuts to `camera.set` plus a scene-state `editor.view.mode` value
+so the active view is explicit and visible in inspector widgets. Selection
+traces that omit their `camera` field automatically use the active camera, so
+the same placement path works from perspective and orthographic views.
+
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
 

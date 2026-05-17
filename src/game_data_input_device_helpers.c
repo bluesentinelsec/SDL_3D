@@ -39,6 +39,14 @@ SDL_Scancode scancode_from_json(const char *name)
         return SDL_SCANCODE_KP_MINUS;
     if (SDL_strcmp(name, "KP_PLUS") == 0)
         return SDL_SCANCODE_KP_PLUS;
+    if (SDL_strcmp(name, "F1") == 0)
+        return SDL_SCANCODE_F1;
+    if (SDL_strcmp(name, "F2") == 0)
+        return SDL_SCANCODE_F2;
+    if (SDL_strcmp(name, "F3") == 0)
+        return SDL_SCANCODE_F3;
+    if (SDL_strcmp(name, "F4") == 0)
+        return SDL_SCANCODE_F4;
     if (SDL_strlen(name) == 1)
         return SDL_GetScancodeFromKey(SDL_GetKeyFromName(name), NULL);
     return SDL_GetScancodeFromName(name);

@@ -12,6 +12,7 @@
     },
     { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
     { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
+    { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
     { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
   ],
   "input": {
@@ -30,6 +31,11 @@
       "action.editor.tool.wall",
       "action.editor.tool.ceiling",
       "action.editor.tool.player_start",
+      "action.editor.view.toggle",
+      "action.editor.view.perspective",
+      "action.editor.view.top",
+      "action.editor.view.front",
+      "action.editor.view.side",
       "action.editor.grid.decrease",
       "action.editor.grid.increase",
       "action.editor.wall_axis.toggle",
@@ -56,7 +62,6 @@
       "clear_on_miss": true,
       "trace": {
         "source": "camera_screen",
-        "camera": "camera.editor_shell.viewport",
         "viewport": [1280.0, 720.0],
         "near": 0.05,
         "far": 100.0,
@@ -230,6 +235,10 @@
             "binding": { "type": "scene_state", "key": "editor.tool.mode", "default": "select" }
           },
           {
+            "label": "View",
+            "binding": { "type": "scene_state", "key": "editor.view.mode", "default": "perspective_3d" }
+          },
+          {
             "label": "Action",
             "binding": { "type": "scene_state", "key": "editor.tool.last_action", "default": "none" }
           },
@@ -286,7 +295,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. Arrows move, Q/E down/up, RMB look. 1 floor 2 wall 3 ceiling 4 start. +/- grid, R axis. Enter commit. S save.",
+        "text": "Click select. Arrows move, Q/E down/up, RMB look. Tab view, F1-F4 cameras. 1 floor 2 wall 3 ceiling 4 start. +/- grid, R axis. Enter commit. S save.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

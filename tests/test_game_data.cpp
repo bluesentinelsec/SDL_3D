@@ -14939,7 +14939,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
                  "inspect brush.target.cube face editor.face.target_cube.left");
 
-    press_key(SDL_SCANCODE_TAB, 5);
+    press_key(SDL_SCANCODE_C, 5);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "move");
 
@@ -15062,7 +15062,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_NEAR(target_cube_min_y(), 0.35f, 0.001f);
 
-    press_key(SDL_SCANCODE_TAB, 10);
+    press_key(SDL_SCANCODE_C, 10);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
 
@@ -15542,12 +15542,54 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 
     slayer3d_camera3d before{};
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.viewport", &before));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int view_top_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.top");
+    const int view_front_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.front");
+    const int view_side_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.side");
+    const int view_perspective_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.perspective");
+    ASSERT_GE(view_top_signal, 0);
+    ASSERT_GE(view_front_signal, 0);
+    ASSERT_GE(view_side_signal, 0);
+    ASSERT_GE(view_perspective_signal, 0);
+    slayer3d_signal_emit(bus, view_top_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
+                 "orthographic_top");
+    slayer3d_camera3d ortho{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
+    EXPECT_EQ(ortho.projection, SLAYER3D_CAMERA_ORTHOGRAPHIC);
+    EXPECT_NEAR(ortho.fovy, 48.0f, 0.001f);
+    EXPECT_NEAR(ortho.position.y, camera_actor->position.y + 40.0f, 0.001f);
+    EXPECT_NEAR(ortho.target.x, camera_actor->position.x, 0.001f);
+    slayer3d_signal_emit(bus, view_front_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_front");
+    slayer3d_signal_emit(bus, view_side_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_side");
+    slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
+
+    SDL_Event tab{};
+    tab.type = SDL_EVENT_KEY_DOWN;
+    tab.key.scancode = SDL_SCANCODE_TAB;
+    slayer3d_input_process_event(input, &tab);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
+    tab.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &tab);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_UP;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 1);
+    slayer3d_input_update(input, 5);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, start_position)), 0.1f);
 
@@ -15563,7 +15605,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     motion.motion.xrel = 60.0f;
     motion.motion.yrel = -15.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 2);
+    slayer3d_input_update(input, 6);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     const float yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);

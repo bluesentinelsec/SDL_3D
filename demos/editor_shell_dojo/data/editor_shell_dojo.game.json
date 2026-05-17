@@ -26,7 +26,7 @@
           },
           {
             "name": "action.editor.tool.cycle",
-            "bindings": [{ "device": "keyboard", "key": "TAB" }]
+            "bindings": [{ "device": "keyboard", "key": "C" }]
           },
           {
             "name": "action.editor.selection.clear",
@@ -75,6 +75,26 @@
           {
             "name": "action.editor.tool.player_start",
             "bindings": [{ "device": "keyboard", "key": "4" }]
+          },
+          {
+            "name": "action.editor.view.toggle",
+            "bindings": [{ "device": "keyboard", "key": "TAB" }]
+          },
+          {
+            "name": "action.editor.view.perspective",
+            "bindings": [{ "device": "keyboard", "key": "F1" }]
+          },
+          {
+            "name": "action.editor.view.top",
+            "bindings": [{ "device": "keyboard", "key": "F2" }]
+          },
+          {
+            "name": "action.editor.view.front",
+            "bindings": [{ "device": "keyboard", "key": "F3" }]
+          },
+          {
+            "name": "action.editor.view.side",
+            "bindings": [{ "device": "keyboard", "key": "F4" }]
           },
           {
             "name": "action.editor.grid.decrease",
@@ -162,6 +182,11 @@
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
     "signal.editor.tool.player_start",
+    "signal.editor.view.toggle",
+    "signal.editor.view.perspective",
+    "signal.editor.view.top",
+    "signal.editor.view.front",
+    "signal.editor.view.side",
     "signal.editor.grid.decrease",
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
@@ -237,6 +262,31 @@
       },
       {
         "type": "sensor.input_pressed",
+        "action": "action.editor.view.toggle",
+        "on_pressed": "signal.editor.view.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.perspective",
+        "on_pressed": "signal.editor.view.perspective"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.top",
+        "on_pressed": "signal.editor.view.top"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.front",
+        "on_pressed": "signal.editor.view.front"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.side",
+        "on_pressed": "signal.editor.view.side"
+      },
+      {
+        "type": "sensor.input_pressed",
         "action": "action.editor.grid.decrease",
         "on_pressed": "signal.editor.grid.decrease"
       },
@@ -289,6 +339,61 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start tool selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.toggle",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.view.mode",
+            "default": "perspective_3d",
+            "values": ["perspective_3d", "orthographic_top"]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
+            "then": [
+              { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
+            ],
+            "else": [
+              { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.perspective",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
+          { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.top",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_top" },
+          { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.front",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_front" },
+          { "type": "camera.set", "camera": "camera.editor_shell.ortho_front" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "front orthographic view" }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.side",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_side" },
+          { "type": "camera.set", "camera": "camera.editor_shell.ortho_side" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "side orthographic view" }
         ]
       },
       {
@@ -756,6 +861,33 @@
         "fov": 70.0,
         "fov_axis": "horizontal",
         "active": true
+      },
+      {
+        "name": "camera.editor_shell.ortho_top",
+        "type": "orthographic",
+        "position_entity": "entity.editor_shell.camera",
+        "position_offset": [0.0, 40.0, 0.0],
+        "target_entity": "entity.editor_shell.camera",
+        "up": [0.0, 0.0, -1.0],
+        "size": 48.0
+      },
+      {
+        "name": "camera.editor_shell.ortho_front",
+        "type": "orthographic",
+        "position_entity": "entity.editor_shell.camera",
+        "position_offset": [0.0, 0.0, 40.0],
+        "target_entity": "entity.editor_shell.camera",
+        "up": [0.0, 1.0, 0.0],
+        "size": 32.0
+      },
+      {
+        "name": "camera.editor_shell.ortho_side",
+        "type": "orthographic",
+        "position_entity": "entity.editor_shell.camera",
+        "position_offset": [40.0, 0.0, 0.0],
+        "target_entity": "entity.editor_shell.camera",
+        "up": [0.0, 1.0, 0.0],
+        "size": 32.0
       },
       {
         "name": "camera.editor_shell.player",
