@@ -11,7 +11,7 @@
       "value": "demos/editor_shell_dojo/data/generated/editable_level.fragment.json"
     },
     { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
-    { "type": "scene_state.set", "key": "editor.placement.snap", "value": 0.5 },
+    { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
     { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
   ],
   "input": {
@@ -30,8 +30,8 @@
       "action.editor.tool.wall",
       "action.editor.tool.ceiling",
       "action.editor.tool.player_start",
-      "action.editor.snap.finer",
-      "action.editor.snap.coarser",
+      "action.editor.grid.decrease",
+      "action.editor.grid.increase",
       "action.editor.wall_axis.toggle",
       "action.editor.camera.forward",
       "action.editor.camera.back",
@@ -92,8 +92,10 @@
     },
     "placement": {
       "tool_key": "editor.tool.mode",
-      "snap_key": "editor.placement.snap",
-      "default_snap": 0.5,
+      "snap_key": "editor.grid.size",
+      "grid_size_key": "editor.grid.size",
+      "default_snap": 8.0,
+      "default_grid_size": 8.0,
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "valid_key": "editor.placement_preview.valid",
@@ -114,9 +116,8 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.floor",
-          "snap": 0.5,
-          "min": [-3.0, -0.2, -3.0],
-          "max": [3.0, 0.0, 3.0],
+          "grid_min": [-0.5, -0.025, -0.5],
+          "grid_max": [0.5, 0.0, 0.5],
           "message": "floor prefab preview"
         },
         {
@@ -126,9 +127,8 @@
           "material": "mat.editor.wall",
           "axis_key": "editor.placement.wall_axis",
           "axis": "z",
-          "snap": 0.5,
-          "min": [-0.125, 0.0, -3.0],
-          "max": [0.125, 2.5, 3.0],
+          "grid_min": [-0.03125, 0.0, -0.5],
+          "grid_max": [0.03125, 1.0, 0.5],
           "message": "wall prefab preview"
         },
         {
@@ -136,15 +136,13 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.ceiling",
-          "snap": 0.5,
-          "min": [-3.0, 2.5, -3.0],
-          "max": [3.0, 2.7, 3.0],
+          "grid_min": [-0.5, 1.0, -0.5],
+          "grid_max": [0.5, 1.025, 0.5],
           "message": "ceiling prefab preview"
         },
         {
           "mode": "player_start",
           "kind": "player_start",
-          "snap": 0.5,
           "size": [0.5, 1.8, 0.5],
           "message": "player start preview"
         }
@@ -260,8 +258,8 @@
             "binding": { "type": "scene_state", "key": "editor.placement_preview.message", "default": "none" }
           },
           {
-            "label": "Snap",
-            "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 0.5 }
+            "label": "Grid",
+            "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 8.0 }
           },
           {
             "label": "Axis",
@@ -288,7 +286,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. Arrows move, Q/E down/up, RMB look. 1 floor 2 wall 3 ceiling 4 start. [/] snap, R axis. Enter commit. S save.",
+        "text": "Click select. Arrows move, Q/E down/up, RMB look. 1 floor 2 wall 3 ceiling 4 start. +/- grid, R axis. Enter commit. S save.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

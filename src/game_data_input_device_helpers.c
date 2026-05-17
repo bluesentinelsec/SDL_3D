@@ -31,6 +31,14 @@ SDL_Scancode scancode_from_json(const char *name)
         return SDL_SCANCODE_COMMA;
     if (SDL_strcmp(name, "PERIOD") == 0)
         return SDL_SCANCODE_PERIOD;
+    if (SDL_strcmp(name, "MINUS") == 0)
+        return SDL_SCANCODE_MINUS;
+    if (SDL_strcmp(name, "EQUALS") == 0)
+        return SDL_SCANCODE_EQUALS;
+    if (SDL_strcmp(name, "KP_MINUS") == 0)
+        return SDL_SCANCODE_KP_MINUS;
+    if (SDL_strcmp(name, "KP_PLUS") == 0)
+        return SDL_SCANCODE_KP_PLUS;
     if (SDL_strlen(name) == 1)
         return SDL_GetScancodeFromKey(SDL_GetKeyFromName(name), NULL);
     return SDL_GetScancodeFromName(name);

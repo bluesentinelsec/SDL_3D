@@ -77,12 +77,18 @@
             "bindings": [{ "device": "keyboard", "key": "4" }]
           },
           {
-            "name": "action.editor.snap.finer",
-            "bindings": [{ "device": "keyboard", "key": "LEFTBRACKET" }]
+            "name": "action.editor.grid.decrease",
+            "bindings": [
+              { "device": "keyboard", "key": "MINUS" },
+              { "device": "keyboard", "key": "KP_MINUS" }
+            ]
           },
           {
-            "name": "action.editor.snap.coarser",
-            "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
+            "name": "action.editor.grid.increase",
+            "bindings": [
+              { "device": "keyboard", "key": "EQUALS" },
+              { "device": "keyboard", "key": "KP_PLUS" }
+            ]
           },
           {
             "name": "action.editor.wall_axis.toggle",
@@ -156,8 +162,8 @@
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
     "signal.editor.tool.player_start",
-    "signal.editor.snap.finer",
-    "signal.editor.snap.coarser",
+    "signal.editor.grid.decrease",
+    "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
     "signal.editor.export",
     "signal.editor.test_run.prepare"
@@ -231,13 +237,13 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.snap.finer",
-        "on_pressed": "signal.editor.snap.finer"
+        "action": "action.editor.grid.decrease",
+        "on_pressed": "signal.editor.grid.decrease"
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.snap.coarser",
-        "on_pressed": "signal.editor.snap.coarser"
+        "action": "action.editor.grid.increase",
+        "on_pressed": "signal.editor.grid.increase"
       },
       {
         "type": "sensor.input_pressed",
@@ -286,29 +292,29 @@
         ]
       },
       {
-        "signal": "signal.editor.snap.finer",
+        "signal": "signal.editor.grid.decrease",
         "actions": [
           {
             "type": "scene_state.cycle",
-            "key": "editor.placement.snap",
-            "default": 0.5,
+            "key": "editor.grid.size",
+            "default": 8.0,
             "direction": -1,
-            "values": [0.25, 0.5, 1.0, 2.0]
+            "values": [2.0, 4.0, 8.0, 16.0]
           },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "placement snap decreased" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size decreased" }
         ]
       },
       {
-        "signal": "signal.editor.snap.coarser",
+        "signal": "signal.editor.grid.increase",
         "actions": [
           {
             "type": "scene_state.cycle",
-            "key": "editor.placement.snap",
-            "default": 0.5,
+            "key": "editor.grid.size",
+            "default": 8.0,
             "direction": 1,
-            "values": [0.25, 0.5, 1.0, 2.0]
+            "values": [2.0, 4.0, 8.0, 16.0]
           },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "placement snap increased" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size increased" }
         ]
       },
       {

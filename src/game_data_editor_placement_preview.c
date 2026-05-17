@@ -67,6 +67,20 @@ static float editor_placement_snap(slayer3d_game_data_runtime *runtime, yyjson_v
     return authored_snap;
 }
 
+static float editor_placement_grid_size(slayer3d_game_data_runtime *runtime, yyjson_val *placement, yyjson_val *preview,
+                                        float fallback)
+{
+    const float authored_grid_size =
+        json_float(preview, "grid_size", json_float(placement, "default_grid_size", fallback));
+    const char *grid_size_key = json_string(preview, "grid_size_key", json_string(placement, "grid_size_key", NULL));
+    if (runtime != NULL && grid_size_key != NULL && grid_size_key[0] != '\0')
+    {
+        return slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), grid_size_key,
+                                             authored_grid_size);
+    }
+    return authored_grid_size;
+}
+
 static const char *editor_placement_axis(slayer3d_game_data_runtime *runtime, yyjson_val *preview)
 {
     const char *authored_axis = json_string(preview, "axis", "z");
@@ -76,11 +90,24 @@ static const char *editor_placement_axis(slayer3d_game_data_runtime *runtime, yy
     return authored_axis;
 }
 
-static slayer3d_bounding_box editor_placement_oriented_box_bounds(yyjson_val *preview_json, slayer3d_vec3 anchor,
-                                                                  const char *axis)
+static slayer3d_vec3 editor_grid_scaled_vec3(yyjson_val *obj, const char *key, float grid_size)
 {
-    const slayer3d_vec3 source_min = json_vec3(preview_json, "min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    const slayer3d_vec3 source_max = json_vec3(preview_json, "max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    return slayer3d_vec3_scale(json_vec3(obj, key, slayer3d_vec3_make(0.0f, 0.0f, 0.0f)), grid_size);
+}
+
+static slayer3d_bounding_box editor_placement_oriented_box_bounds(slayer3d_game_data_runtime *runtime,
+                                                                  yyjson_val *placement, yyjson_val *preview_json,
+                                                                  slayer3d_vec3 anchor, const char *axis, float snap)
+{
+    const bool uses_grid_bounds =
+        obj_get(preview_json, "grid_min") != NULL || obj_get(preview_json, "grid_max") != NULL;
+    const float grid_size = editor_placement_grid_size(runtime, placement, preview_json, snap);
+    const slayer3d_vec3 source_min = uses_grid_bounds
+                                         ? editor_grid_scaled_vec3(preview_json, "grid_min", grid_size)
+                                         : json_vec3(preview_json, "min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 source_max = uses_grid_bounds
+                                         ? editor_grid_scaled_vec3(preview_json, "grid_max", grid_size)
+                                         : json_vec3(preview_json, "max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     slayer3d_bounding_box bounds;
     if (axis != NULL && SDL_strcmp(axis, "x") == 0)
     {
@@ -157,7 +184,8 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
     }
     else
     {
-        preview->bounds = editor_placement_oriented_box_bounds(preview_json, anchor, preview->axis);
+        preview->bounds =
+            editor_placement_oriented_box_bounds(runtime, placement, preview_json, anchor, preview->axis, snap);
     }
     publish_editor_placement_preview(runtime, outputs, true, preview_json, preview,
                                      json_string(preview_json, "message", "placement preview"));

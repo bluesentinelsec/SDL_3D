@@ -1025,19 +1025,26 @@ Scenes can also author `editor.placement` to show a live placement preview while
 the mouse hovers over a brush or work plane. `tool_key` names the scene-state
 property that selects the active tool. `snap_key` can point at a runtime
 scene-state float so UI or keyboard shortcuts can change grid size without
-reloading data. Each preview entry maps a tool `mode` to either a `box` ghost or
-a `player_start` marker. Box previews can use `axis_key` with `axis` `x` or `z`
-to rotate wall-like prefabs between horizontal grid axes. The preview reuses
-the editor debug overlay's `command_preview` flag and color, so editor hosts do
-not need a second rendering path.
+reloading data. `grid_size_key` can point at the same scene-state float when box
+previews use `grid_min` and `grid_max` instead of fixed `min` and `max` bounds.
+Those grid bounds are multipliers, so a floor authored from `[-0.5, 0, -0.5]`
+to `[0.5, 0.025, 0.5]` becomes one active grid cell wide at any configured grid
+size. Each preview entry maps a tool `mode` to either a `box` ghost or a
+`player_start` marker. Box previews can use `axis_key` with `axis` `x` or `z` to
+rotate wall-like prefabs between horizontal grid axes. A box preview must author
+exactly one bounds source: fixed `min`/`max`, or grid-scaled `grid_min`/
+`grid_max`. The preview reuses the editor debug overlay's `command_preview`
+flag and color, so editor hosts do not need a second rendering path.
 
 ```json
 {
   "editor": {
     "placement": {
       "tool_key": "editor.tool.mode",
-      "snap_key": "editor.placement.snap",
-      "default_snap": 0.5,
+      "snap_key": "editor.grid.size",
+      "grid_size_key": "editor.grid.size",
+      "default_snap": 8.0,
+      "default_grid_size": 8.0,
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "mode_key": "editor.placement_preview.mode",
@@ -1050,9 +1057,8 @@ not need a second rendering path.
           "kind": "box",
           "world": "brush.level.blockout",
           "material": "mat.stone_floor",
-          "min": [-4.0, -0.25, -4.0],
-          "max": [4.0, 0.0, 4.0],
-          "snap": 0.5
+          "grid_min": [-0.5, -0.025, -0.5],
+          "grid_max": [0.5, 0.0, 0.5]
         },
         {
           "mode": "wall",
@@ -1061,8 +1067,8 @@ not need a second rendering path.
           "material": "mat.stone_wall",
           "axis_key": "editor.wall_axis",
           "axis": "z",
-          "min": [-0.125, 0.0, -3.0],
-          "max": [0.125, 2.5, 3.0]
+          "grid_min": [-0.03125, 0.0, -0.5],
+          "grid_max": [0.03125, 1.0, 0.5]
         },
         {
           "mode": "player_start",

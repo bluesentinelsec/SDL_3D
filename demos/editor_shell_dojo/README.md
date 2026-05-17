@@ -14,8 +14,8 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
   `4` player start, then click a brush face or the ground work plane and press
   `Enter` to place the selected prefab at that point
 - live snapped placement previews for floor, wall, ceiling, and player-start
-  tools using the same renderer-agnostic editor debug primitive path; `[`/`]`
-  change snap size and `R` toggles wall orientation between grid axes
+  tools using the same renderer-agnostic editor debug primitive path; `-`/`+`
+  change the active grid size and `R` toggles wall orientation between grid axes
 - unified editable-level save/export: `S` saves and publishes one fragment
   containing the brush world and player starts
 - test-run handoff manifest: `T` publishes and saves runner arguments for the
