@@ -3032,23 +3032,25 @@ static bool brush_visibility_grid_cell(const brush_world_runtime *world_runtime,
 {
     if (out_index != NULL)
         *out_index = -1;
-    if (world_runtime == NULL || world_runtime->visibility_grid_solid == NULL ||
-        world_runtime->visibility_grid_cell_count <= 0 || world_runtime->visibility_cell_size <= 0.0f)
+    if (world_runtime == NULL || world_runtime->artifacts.visibility_grid_solid == NULL ||
+        world_runtime->artifacts.visibility_grid_cell_count <= 0 ||
+        world_runtime->artifacts.visibility_cell_size <= 0.0f)
     {
         return false;
     }
-    const float cell_size = world_runtime->visibility_cell_size;
-    const int x = (int)SDL_floorf((point.x - world_runtime->visibility_grid_bounds.min.x) / cell_size);
-    const int y = (int)SDL_floorf((point.y - world_runtime->visibility_grid_bounds.min.y) / cell_size);
-    const int z = (int)SDL_floorf((point.z - world_runtime->visibility_grid_bounds.min.z) / cell_size);
-    if (x < 0 || y < 0 || z < 0 || x >= world_runtime->visibility_grid_dim_x ||
-        y >= world_runtime->visibility_grid_dim_y || z >= world_runtime->visibility_grid_dim_z)
+    const float cell_size = world_runtime->artifacts.visibility_cell_size;
+    const int x = (int)SDL_floorf((point.x - world_runtime->artifacts.visibility_grid_bounds.min.x) / cell_size);
+    const int y = (int)SDL_floorf((point.y - world_runtime->artifacts.visibility_grid_bounds.min.y) / cell_size);
+    const int z = (int)SDL_floorf((point.z - world_runtime->artifacts.visibility_grid_bounds.min.z) / cell_size);
+    if (x < 0 || y < 0 || z < 0 || x >= world_runtime->artifacts.visibility_grid_dim_x ||
+        y >= world_runtime->artifacts.visibility_grid_dim_y || z >= world_runtime->artifacts.visibility_grid_dim_z)
     {
         return false;
     }
-    const int index = x + y * world_runtime->visibility_grid_dim_x +
-                      z * world_runtime->visibility_grid_dim_x * world_runtime->visibility_grid_dim_y;
-    if (index < 0 || index >= world_runtime->visibility_grid_cell_count)
+    const int index =
+        x + y * world_runtime->artifacts.visibility_grid_dim_x +
+        z * world_runtime->artifacts.visibility_grid_dim_x * world_runtime->artifacts.visibility_grid_dim_y;
+    if (index < 0 || index >= world_runtime->artifacts.visibility_grid_cell_count)
         return false;
     if (out_index != NULL)
         *out_index = index;
@@ -3058,8 +3060,8 @@ static bool brush_visibility_grid_cell(const brush_world_runtime *world_runtime,
 static void brush_visibility_grid_cell_coords(const brush_world_runtime *world_runtime, int index, int *out_x,
                                               int *out_y, int *out_z)
 {
-    const int dim_x = world_runtime != NULL ? world_runtime->visibility_grid_dim_x : 1;
-    const int dim_y = world_runtime != NULL ? world_runtime->visibility_grid_dim_y : 1;
+    const int dim_x = world_runtime != NULL ? world_runtime->artifacts.visibility_grid_dim_x : 1;
+    const int dim_y = world_runtime != NULL ? world_runtime->artifacts.visibility_grid_dim_y : 1;
     const int z = index / (dim_x * dim_y);
     const int rem = index - z * dim_x * dim_y;
     const int y = rem / dim_x;
@@ -3074,22 +3076,22 @@ static void brush_visibility_grid_cell_coords(const brush_world_runtime *world_r
 
 static slayer3d_vec3 brush_visibility_grid_cell_center(const brush_world_runtime *world_runtime, int x, int y, int z)
 {
-    const float cell_size = world_runtime->visibility_cell_size;
-    return slayer3d_vec3_make(world_runtime->visibility_grid_bounds.min.x + ((float)x + 0.5f) * cell_size,
-                              world_runtime->visibility_grid_bounds.min.y + ((float)y + 0.5f) * cell_size,
-                              world_runtime->visibility_grid_bounds.min.z + ((float)z + 0.5f) * cell_size);
+    const float cell_size = world_runtime->artifacts.visibility_cell_size;
+    return slayer3d_vec3_make(world_runtime->artifacts.visibility_grid_bounds.min.x + ((float)x + 0.5f) * cell_size,
+                              world_runtime->artifacts.visibility_grid_bounds.min.y + ((float)y + 0.5f) * cell_size,
+                              world_runtime->artifacts.visibility_grid_bounds.min.z + ((float)z + 0.5f) * cell_size);
 }
 
 static bool brush_visibility_grid_ray_clear(const brush_world_runtime *world_runtime, int start_index,
                                             slayer3d_vec3 local_camera, slayer3d_vec3 target)
 {
-    if (world_runtime == NULL || world_runtime->visibility_grid_solid == NULL)
+    if (world_runtime == NULL || world_runtime->artifacts.visibility_grid_solid == NULL)
         return false;
     const slayer3d_vec3 delta = slayer3d_vec3_sub(target, local_camera);
     const float distance = slayer3d_vec3_length(delta);
     if (distance <= 0.0001f)
         return true;
-    const float cell_size = world_runtime->visibility_cell_size;
+    const float cell_size = world_runtime->artifacts.visibility_cell_size;
     const int steps = SDL_max(1, SDL_min(4096, (int)SDL_ceilf(distance / SDL_max(cell_size * 0.35f, 0.05f))));
     for (int step = 1; step <= steps; ++step)
     {
@@ -3100,7 +3102,7 @@ static bool brush_visibility_grid_ray_clear(const brush_world_runtime *world_run
             return false;
         if (index == start_index)
             continue;
-        if (world_runtime->visibility_grid_solid[index])
+        if (world_runtime->artifacts.visibility_grid_solid[index])
             return false;
     }
     return true;
@@ -3119,15 +3121,17 @@ static void brush_visibility_grid_mark_neighborhood_visible(const brush_world_ru
         {
             for (int x = sx - 1; x <= sx + 1; ++x)
             {
-                if (x < 0 || y < 0 || z < 0 || x >= world_runtime->visibility_grid_dim_x ||
-                    y >= world_runtime->visibility_grid_dim_y || z >= world_runtime->visibility_grid_dim_z)
+                if (x < 0 || y < 0 || z < 0 || x >= world_runtime->artifacts.visibility_grid_dim_x ||
+                    y >= world_runtime->artifacts.visibility_grid_dim_y ||
+                    z >= world_runtime->artifacts.visibility_grid_dim_z)
                 {
                     continue;
                 }
-                const int index = x + y * world_runtime->visibility_grid_dim_x +
-                                  z * world_runtime->visibility_grid_dim_x * world_runtime->visibility_grid_dim_y;
-                if (index >= 0 && index < world_runtime->visibility_grid_cell_count &&
-                    !world_runtime->visibility_grid_solid[index])
+                const int index =
+                    x + y * world_runtime->artifacts.visibility_grid_dim_x +
+                    z * world_runtime->artifacts.visibility_grid_dim_x * world_runtime->artifacts.visibility_grid_dim_y;
+                if (index >= 0 && index < world_runtime->artifacts.visibility_grid_cell_count &&
+                    !world_runtime->artifacts.visibility_grid_solid[index])
                 {
                     visible_cells[index] = 1u;
                 }
@@ -3142,20 +3146,20 @@ static bool brush_visibility_grid_mark_visible_los(const brush_world_runtime *wo
     int start = -1;
     if (world_runtime == NULL || visible_cells == NULL ||
         !brush_visibility_grid_cell(world_runtime, local_camera, &start) || start < 0 ||
-        world_runtime->visibility_grid_solid[start])
+        world_runtime->artifacts.visibility_grid_solid[start])
     {
         return false;
     }
 
     static const int max_los_cells = 131072;
-    if (world_runtime->visibility_grid_cell_count > max_los_cells)
+    if (world_runtime->artifacts.visibility_grid_cell_count > max_los_cells)
         return false;
 
     visible_cells[start] = 1u;
     brush_visibility_grid_mark_neighborhood_visible(world_runtime, start, visible_cells);
-    const int dim_x = world_runtime->visibility_grid_dim_x;
-    const int dim_y = world_runtime->visibility_grid_dim_y;
-    const int dim_z = world_runtime->visibility_grid_dim_z;
+    const int dim_x = world_runtime->artifacts.visibility_grid_dim_x;
+    const int dim_y = world_runtime->artifacts.visibility_grid_dim_y;
+    const int dim_z = world_runtime->artifacts.visibility_grid_dim_z;
     for (int z = 0; z < dim_z; ++z)
     {
         for (int y = 0; y < dim_y; ++y)
@@ -3163,7 +3167,7 @@ static bool brush_visibility_grid_mark_visible_los(const brush_world_runtime *wo
             for (int x = 0; x < dim_x; ++x)
             {
                 const int index = x + y * dim_x + z * dim_x * dim_y;
-                if (visible_cells[index] || world_runtime->visibility_grid_solid[index])
+                if (visible_cells[index] || world_runtime->artifacts.visibility_grid_solid[index])
                     continue;
                 const slayer3d_vec3 target = brush_visibility_grid_cell_center(world_runtime, x, y, z);
                 if (brush_visibility_grid_ray_clear(world_runtime, start, local_camera, target))
@@ -3186,8 +3190,8 @@ static int brush_visibility_grid_cache_slot_for_start(brush_world_runtime *world
         return -1;
     for (int slot = 0; slot < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++slot)
     {
-        if (world_runtime->visibility_grid_visible_cache[slot] != NULL &&
-            world_runtime->visibility_grid_visible_cache_start[slot] == start)
+        if (world_runtime->artifacts.visibility_grid_visible_cache[slot] != NULL &&
+            world_runtime->artifacts.visibility_grid_visible_cache_start[slot] == start)
         {
             return slot;
         }
@@ -3203,11 +3207,11 @@ static int brush_visibility_grid_cache_slot_for_write(brush_world_runtime *world
     Uint64 oldest_tick = ~(Uint64)0;
     for (int slot = 0; slot < SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS; ++slot)
     {
-        if (world_runtime->visibility_grid_visible_cache[slot] == NULL)
+        if (world_runtime->artifacts.visibility_grid_visible_cache[slot] == NULL)
             return slot;
-        if (world_runtime->visibility_grid_visible_cache_tick[slot] < oldest_tick)
+        if (world_runtime->artifacts.visibility_grid_visible_cache_tick[slot] < oldest_tick)
         {
-            oldest_tick = world_runtime->visibility_grid_visible_cache_tick[slot];
+            oldest_tick = world_runtime->artifacts.visibility_grid_visible_cache_tick[slot];
             oldest_slot = slot;
         }
     }
@@ -3218,10 +3222,10 @@ static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *wor
                                                         slayer3d_game_data_brush_diagnostics *diagnostics)
 {
     int start = -1;
-    if (world_runtime == NULL || world_runtime->visibility_grid_solid == NULL ||
-        world_runtime->visibility_grid_cell_count <= 0 ||
+    if (world_runtime == NULL || world_runtime->artifacts.visibility_grid_solid == NULL ||
+        world_runtime->artifacts.visibility_grid_cell_count <= 0 ||
         !brush_visibility_grid_cell(world_runtime, local_camera, &start) || start < 0 ||
-        world_runtime->visibility_grid_solid[start])
+        world_runtime->artifacts.visibility_grid_solid[start])
     {
         return NULL;
     }
@@ -3231,9 +3235,9 @@ static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *wor
     {
         if (diagnostics != NULL)
             ++diagnostics->visibility_grid_cache_hits;
-        world_runtime->visibility_grid_visible_cache_tick[cache_slot] =
-            ++world_runtime->visibility_grid_visible_cache_clock;
-        return world_runtime->visibility_grid_visible_cache[cache_slot];
+        world_runtime->artifacts.visibility_grid_visible_cache_tick[cache_slot] =
+            ++world_runtime->artifacts.visibility_grid_visible_cache_clock;
+        return world_runtime->artifacts.visibility_grid_visible_cache[cache_slot];
     }
 
     if (diagnostics != NULL)
@@ -3241,25 +3245,25 @@ static const Uint8 *brush_visibility_grid_visible_cells(brush_world_runtime *wor
     cache_slot = brush_visibility_grid_cache_slot_for_write(world_runtime);
     if (cache_slot < 0)
         return NULL;
-    if (world_runtime->visibility_grid_visible_cache[cache_slot] == NULL)
+    if (world_runtime->artifacts.visibility_grid_visible_cache[cache_slot] == NULL)
     {
-        world_runtime->visibility_grid_visible_cache[cache_slot] =
-            (Uint8 *)SDL_calloc((size_t)world_runtime->visibility_grid_cell_count,
-                                sizeof(*world_runtime->visibility_grid_visible_cache[cache_slot]));
-        if (world_runtime->visibility_grid_visible_cache[cache_slot] == NULL)
+        world_runtime->artifacts.visibility_grid_visible_cache[cache_slot] =
+            (Uint8 *)SDL_calloc((size_t)world_runtime->artifacts.visibility_grid_cell_count,
+                                sizeof(*world_runtime->artifacts.visibility_grid_visible_cache[cache_slot]));
+        if (world_runtime->artifacts.visibility_grid_visible_cache[cache_slot] == NULL)
             return NULL;
     }
-    SDL_memset(world_runtime->visibility_grid_visible_cache[cache_slot], 0,
-               (size_t)world_runtime->visibility_grid_cell_count *
-                   sizeof(*world_runtime->visibility_grid_visible_cache[cache_slot]));
-    world_runtime->visibility_grid_visible_cache_start[cache_slot] = -1;
+    SDL_memset(world_runtime->artifacts.visibility_grid_visible_cache[cache_slot], 0,
+               (size_t)world_runtime->artifacts.visibility_grid_cell_count *
+                   sizeof(*world_runtime->artifacts.visibility_grid_visible_cache[cache_slot]));
+    world_runtime->artifacts.visibility_grid_visible_cache_start[cache_slot] = -1;
     if (!brush_visibility_grid_mark_visible(world_runtime, local_camera,
-                                            world_runtime->visibility_grid_visible_cache[cache_slot]))
+                                            world_runtime->artifacts.visibility_grid_visible_cache[cache_slot]))
         return NULL;
-    world_runtime->visibility_grid_visible_cache_start[cache_slot] = start;
-    world_runtime->visibility_grid_visible_cache_tick[cache_slot] =
-        ++world_runtime->visibility_grid_visible_cache_clock;
-    return world_runtime->visibility_grid_visible_cache[cache_slot];
+    world_runtime->artifacts.visibility_grid_visible_cache_start[cache_slot] = start;
+    world_runtime->artifacts.visibility_grid_visible_cache_tick[cache_slot] =
+        ++world_runtime->artifacts.visibility_grid_visible_cache_clock;
+    return world_runtime->artifacts.visibility_grid_visible_cache[cache_slot];
 }
 
 static bool brush_visibility_forced_visible(const slayer3d_game_data_brush *brush)
@@ -3277,32 +3281,38 @@ static bool brush_visible_from_visibility_grid(const brush_world_runtime *world_
                                                const slayer3d_game_data_brush *brush, const Uint8 *visible_cells)
 {
     if (world_runtime == NULL || brush == NULL || visible_cells == NULL || !brush->has_bounds ||
-        world_runtime->visibility_cell_size <= 0.0f)
+        world_runtime->artifacts.visibility_cell_size <= 0.0f)
     {
         return true;
     }
-    const float cell_size = world_runtime->visibility_cell_size;
+    const float cell_size = world_runtime->artifacts.visibility_cell_size;
     const float expand = cell_size * 0.5f;
     const int min_x = SDL_max(
-        0, (int)SDL_floorf((brush->bounds.min.x - expand - world_runtime->visibility_grid_bounds.min.x) / cell_size));
+        0, (int)SDL_floorf((brush->bounds.min.x - expand - world_runtime->artifacts.visibility_grid_bounds.min.x) /
+                           cell_size));
     const int min_y = SDL_max(
-        0, (int)SDL_floorf((brush->bounds.min.y - expand - world_runtime->visibility_grid_bounds.min.y) / cell_size));
+        0, (int)SDL_floorf((brush->bounds.min.y - expand - world_runtime->artifacts.visibility_grid_bounds.min.y) /
+                           cell_size));
     const int min_z = SDL_max(
-        0, (int)SDL_floorf((brush->bounds.min.z - expand - world_runtime->visibility_grid_bounds.min.z) / cell_size));
-    const int max_x = SDL_min(
-        world_runtime->visibility_grid_dim_x - 1,
-        (int)SDL_floorf((brush->bounds.max.x + expand - world_runtime->visibility_grid_bounds.min.x) / cell_size));
-    const int max_y = SDL_min(
-        world_runtime->visibility_grid_dim_y - 1,
-        (int)SDL_floorf((brush->bounds.max.y + expand - world_runtime->visibility_grid_bounds.min.y) / cell_size));
-    const int max_z = SDL_min(
-        world_runtime->visibility_grid_dim_z - 1,
-        (int)SDL_floorf((brush->bounds.max.z + expand - world_runtime->visibility_grid_bounds.min.z) / cell_size));
+        0, (int)SDL_floorf((brush->bounds.min.z - expand - world_runtime->artifacts.visibility_grid_bounds.min.z) /
+                           cell_size));
+    const int max_x =
+        SDL_min(world_runtime->artifacts.visibility_grid_dim_x - 1,
+                (int)SDL_floorf((brush->bounds.max.x + expand - world_runtime->artifacts.visibility_grid_bounds.min.x) /
+                                cell_size));
+    const int max_y =
+        SDL_min(world_runtime->artifacts.visibility_grid_dim_y - 1,
+                (int)SDL_floorf((brush->bounds.max.y + expand - world_runtime->artifacts.visibility_grid_bounds.min.y) /
+                                cell_size));
+    const int max_z =
+        SDL_min(world_runtime->artifacts.visibility_grid_dim_z - 1,
+                (int)SDL_floorf((brush->bounds.max.z + expand - world_runtime->artifacts.visibility_grid_bounds.min.z) /
+                                cell_size));
     if (min_x > max_x || min_y > max_y || min_z > max_z)
         return true;
 
-    const int dim_x = world_runtime->visibility_grid_dim_x;
-    const int dim_y = world_runtime->visibility_grid_dim_y;
+    const int dim_x = world_runtime->artifacts.visibility_grid_dim_x;
+    const int dim_y = world_runtime->artifacts.visibility_grid_dim_y;
     for (int z = min_z; z <= max_z; ++z)
     {
         for (int y = min_y; y <= max_y; ++y)
@@ -3310,7 +3320,7 @@ static bool brush_visible_from_visibility_grid(const brush_world_runtime *world_
             for (int x = min_x; x <= max_x; ++x)
             {
                 const int index = x + y * dim_x + z * dim_x * dim_y;
-                if (index >= 0 && index < world_runtime->visibility_grid_cell_count && visible_cells[index])
+                if (index >= 0 && index < world_runtime->artifacts.visibility_grid_cell_count && visible_cells[index])
                     return true;
             }
         }
@@ -3326,8 +3336,8 @@ static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
     if (out_occluded_count != NULL)
         *out_occluded_count = 0;
     if (world_runtime == NULL || instance == NULL || camera == NULL || brush_visible == NULL ||
-        mutable_runtime == NULL || world_runtime->visibility_grid_solid == NULL ||
-        world_runtime->visibility_grid_cell_count <= 0)
+        mutable_runtime == NULL || world_runtime->artifacts.visibility_grid_solid == NULL ||
+        world_runtime->artifacts.visibility_grid_cell_count <= 0)
     {
         return false;
     }
@@ -3340,7 +3350,7 @@ static bool apply_brush_visibility_grid(brush_world_runtime *world_runtime,
     int occluded_count = 0;
     for (int brush_index = 0; brush_index < brush_count; ++brush_index)
     {
-        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_model *brush_model = &world_runtime->artifacts.brush_render_models[brush_index];
         const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
@@ -3399,7 +3409,7 @@ static int apply_brush_frustum_culling(brush_world_draw_context *context, brush_
     {
         if (!brush_visible[brush_index])
             continue;
-        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_model *brush_model = &world_runtime->artifacts.brush_render_models[brush_index];
         const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (brush == NULL || !brush->has_bounds || triangles == 0u)
@@ -3449,19 +3459,20 @@ static bool draw_visible_brush_chunks(brush_world_draw_context *context, brush_w
                                       bool *brush_visible, int brush_count)
 {
     if (context == NULL || context->renderer == NULL || context->runtime == NULL || world_runtime == NULL ||
-        world_runtime->chunk_render_models == NULL || world_runtime->desc.compile_chunks == NULL)
+        world_runtime->artifacts.chunk_render_models == NULL || world_runtime->desc.compile_chunks == NULL)
     {
         return true;
     }
 
     slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
-    const int chunk_count = SDL_min(world_runtime->desc.compile_chunk_count, world_runtime->chunk_render_model_count);
+    const int chunk_count =
+        SDL_min(world_runtime->desc.compile_chunk_count, world_runtime->artifacts.chunk_render_model_count);
     for (int chunk_index = 0; chunk_index < chunk_count; ++chunk_index)
     {
         const slayer3d_game_data_brush_compile_chunk *chunk = &world_runtime->desc.compile_chunks[chunk_index];
         if (!brush_render_chunk_all_visible(chunk, brush_visible, brush_count))
             continue;
-        const slayer3d_model *chunk_model = &world_runtime->chunk_render_models[chunk_index];
+        const slayer3d_model *chunk_model = &world_runtime->artifacts.chunk_render_models[chunk_index];
         if (brush_model_triangle_count(chunk_model) == 0u)
             continue;
         if (!slayer3d_draw_model_ex_with_assets(
@@ -3490,12 +3501,12 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     slayer3d_game_data_runtime *mutable_runtime = (slayer3d_game_data_runtime *)context->runtime;
     brush_world_runtime *world_runtime =
         (brush_world_runtime *)find_brush_world_runtime(mutable_runtime, instance->world_name);
-    if (world_runtime == NULL || world_runtime->brush_render_models == NULL || instance->world->brushes == NULL ||
-        instance->world->brush_count <= 0)
+    if (world_runtime == NULL || world_runtime->artifacts.brush_render_models == NULL ||
+        instance->world->brushes == NULL || instance->world->brush_count <= 0)
     {
         return draw_brush_world_instance(userdata, instance);
     }
-    const int brush_count = SDL_min(instance->world->brush_count, world_runtime->brush_render_model_count);
+    const int brush_count = SDL_min(instance->world->brush_count, world_runtime->artifacts.brush_render_model_count);
     bool *brush_visible = (bool *)SDL_calloc((size_t)brush_count, sizeof(*brush_visible));
     if (brush_visible == NULL)
     {
@@ -3512,7 +3523,7 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
         world_runtime, instance, context->camera, brush_visible, brush_count, &occluded_count, mutable_runtime);
     for (int brush_index = 0; !used_visibility_grid && brush_index < brush_count; ++brush_index)
     {
-        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_model *brush_model = &world_runtime->artifacts.brush_render_models[brush_index];
         const slayer3d_game_data_brush *brush = &instance->world->brushes[brush_index];
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
@@ -3561,7 +3572,7 @@ static bool draw_brush_world_instance_with_visibility(void *userdata,
     {
         if (!brush_visible[brush_index])
             continue;
-        const slayer3d_model *brush_model = &world_runtime->brush_render_models[brush_index];
+        const slayer3d_model *brush_model = &world_runtime->artifacts.brush_render_models[brush_index];
         const Uint64 triangles = brush_model_triangle_count(brush_model);
         if (triangles == 0u)
             continue;

@@ -21,6 +21,7 @@ extern "C"
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
+#include "../vendor/yyjson/yyjson.h"
 #include "slayer3d/asset.h"
 #include "slayer3d/data_game.h"
 #include "slayer3d/game.h"
@@ -12628,6 +12629,9 @@ TEST(GameDataRuntime, LoadsAuthoredBrushWorlds)
     EXPECT_STREQ(world.units, "meters");
     EXPECT_FLOAT_EQ(world.meters_per_unit, 1.0f);
     EXPECT_FLOAT_EQ(world.visibility_cell_size, 1.5f);
+    EXPECT_TRUE(world.compile_hidden_face_culling);
+    EXPECT_FLOAT_EQ(world.compile_chunk_cell_size_hint, 0.0f);
+    EXPECT_NE(world.compile_artifact_hash, 0u);
     EXPECT_STREQ(world.editor.stable_id, "brush_world.test.v1");
     EXPECT_STREQ(world.editor.display_name, "Brush Test World");
     EXPECT_STREQ(world.editor.category, "tests/brush");
@@ -12815,6 +12819,56 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
 })json",
             nullptr,
             "brush world visibility_cell_size must be positive",
+        },
+        {
+            "bad_compile",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "compile": "fast",
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush world compile must be an object",
+        },
+        {
+            "bad_compile_chunk_cell_size",
+            R"json({
+  "brush_worlds": [
+    {
+      "name": "brush.bad",
+      "compile": { "chunk_cell_size": 0.0 },
+      "materials": [{ "name": "mat.good" }],
+      "brushes": [
+        {
+          "name": "brush.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.good" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.good" }
+          ]
+        }
+      ]
+    }
+  ]
+})json",
+            nullptr,
+            "brush world compile chunk_cell_size must be positive",
         },
         {
             "bad_visibility",
@@ -13727,6 +13781,306 @@ TEST(GameDataRuntime, BrushRenderCompileCullsFullyHiddenAdjacentSolidFaces)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
+{
+    const std::filesystem::path dir = unique_test_dir("brush_compile_options");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "world": { "brush_worlds": [{ "world": "brush.compile_options" }] }
+})json");
+
+    auto write_game = [&](const char *filename, bool hidden_face_culling) {
+        std::ostringstream json;
+        json << R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Brush Compile Options Test" },
+  "world": { "name": "world.compile_options", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.compile_options",
+      "compile": { "hidden_face_culling": )json"
+             << (hidden_face_culling ? "true" : "false") << R"json(, "chunk_cell_size": 1.0 },
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.6, 0.6, 0.6, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.left",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        },
+        {
+          "name": "brush.right",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  2 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance": -1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json";
+        write_text(dir / filename, json.str().c_str());
+    };
+    write_game("compile_culled.game.json", true);
+    write_game("compile_unculled.game.json", false);
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *culled_a = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_culled.game.json").string().c_str(), session, &culled_a,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world culled_world_a{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(culled_a, "brush.compile_options", &culled_world_a));
+    EXPECT_TRUE(culled_world_a.compile_hidden_face_culling);
+    EXPECT_FLOAT_EQ(culled_world_a.compile_chunk_cell_size_hint, 1.0f);
+    EXPECT_FLOAT_EQ(culled_world_a.compile_chunk_cell_size, 1.0f);
+    EXPECT_EQ(culled_world_a.compile_face_count, 12);
+    EXPECT_EQ(culled_world_a.compile_culled_face_count, 2);
+    EXPECT_EQ(culled_world_a.compile_rendered_face_count, 10);
+    EXPECT_EQ(culled_world_a.compile_triangle_count, 20);
+    EXPECT_NE(culled_world_a.compile_artifact_hash, 0u);
+
+    char *artifact_json = nullptr;
+    size_t artifact_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        culled_a, "brush.compile_options", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(artifact_json, nullptr);
+    EXPECT_GT(artifact_size, 0u);
+    yyjson_doc *artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    yyjson_val *artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(artifact_root, "schema")), "slayer3d.brush_compile_artifact.v0");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(artifact_root, "world")), "brush.compile_options");
+    const Uint64 source_hash = yyjson_get_uint(yyjson_obj_get(artifact_root, "source_hash"));
+    EXPECT_NE(source_hash, 0u);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "compile_artifact_hash")),
+              culled_world_a.compile_artifact_hash);
+    yyjson_val *policy = yyjson_obj_get(artifact_root, "policy");
+    ASSERT_NE(policy, nullptr);
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(policy, "hidden_face_culling")));
+    EXPECT_DOUBLE_EQ(yyjson_get_real(yyjson_obj_get(policy, "chunk_cell_size_hint")), 1.0);
+    EXPECT_DOUBLE_EQ(yyjson_get_real(yyjson_obj_get(policy, "chunk_cell_size")), 1.0);
+    yyjson_val *source = yyjson_obj_get(artifact_root, "source");
+    ASSERT_NE(source, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "brush_count")), 2);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "material_count")), 1);
+    yyjson_val *render = yyjson_obj_get(artifact_root, "render");
+    ASSERT_NE(render, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "face_count")), culled_world_a.compile_face_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "rendered_face_count")),
+              culled_world_a.compile_rendered_face_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "culled_face_count")), culled_world_a.compile_culled_face_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "triangle_count")), culled_world_a.compile_triangle_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "mesh_count")), culled_world_a.render_model->mesh_count);
+    yyjson_val *chunks = yyjson_obj_get(artifact_root, "chunks");
+    ASSERT_NE(chunks, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(chunks, "count")), culled_world_a.compile_chunk_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(chunks, "brush_index_count")),
+              culled_world_a.compile_chunk_brush_index_count);
+    yyjson_val *chunk_items = yyjson_obj_get(chunks, "items");
+    ASSERT_TRUE(yyjson_is_arr(chunk_items));
+    EXPECT_EQ(yyjson_arr_size(chunk_items), static_cast<size_t>(culled_world_a.compile_chunk_count));
+    yyjson_val *grid = yyjson_obj_get(artifact_root, "visibility_grid");
+    ASSERT_NE(grid, nullptr);
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(grid, "present")));
+    EXPECT_GT(yyjson_get_int(yyjson_obj_get(grid, "cell_count")), 0);
+    slayer3d_game_data_brush_compile_artifact_status artifact_status{};
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        culled_a, "brush.compile_options", artifact_json, artifact_size, &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_TRUE(artifact_status.source_hash_matches);
+    EXPECT_TRUE(artifact_status.policy_matches);
+    EXPECT_TRUE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_TRUE(artifact_status.fresh);
+    EXPECT_EQ(artifact_status.expected_source_hash, source_hash);
+    EXPECT_EQ(artifact_status.artifact_source_hash, source_hash);
+    EXPECT_EQ(artifact_status.expected_compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    EXPECT_EQ(artifact_status.artifact_compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
+
+    const std::filesystem::path artifact_path = dir / "artifacts" / "compile.artifact.json";
+    ASSERT_TRUE(slayer3d_game_data_save_brush_world_compile_artifact_file(
+        culled_a, "brush.compile_options", artifact_path.string().c_str(), &artifact_size, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(std::filesystem::exists(artifact_path));
+    EXPECT_GT(artifact_size, 0u);
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        culled_a, "brush.compile_options", artifact_path.string().c_str(), &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.fresh);
+
+    const std::filesystem::path artifact_root_dir = dir / "compile_cache";
+    slayer3d_game_data_brush_compile_artifact_layout culled_layout{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", artifact_root_dir.string().c_str(), &culled_layout, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(culled_layout.source_hash, source_hash);
+    EXPECT_EQ(culled_layout.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    EXPECT_NE(std::string(culled_layout.world_key).find("brush.compile_options-"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.directory).find("/brush/v0/"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.directory).find(culled_layout.world_key), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.manifest_path).find("/manifest.json"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.render_payload_path).find("/render.payload.bin"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.collision_payload_path).find("/collision.payload.bin"), std::string::npos);
+    EXPECT_NE(std::string(culled_layout.visibility_payload_path).find("/visibility.payload.bin"), std::string::npos);
+
+    slayer3d_game_data_brush_compile_artifact_layout repeated_layout{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", artifact_root_dir.string().c_str(), &repeated_layout, error, sizeof(error)))
+        << error;
+    EXPECT_STREQ(repeated_layout.directory, culled_layout.directory);
+    EXPECT_STREQ(repeated_layout.manifest_path, culled_layout.manifest_path);
+
+    slayer3d_game_data_brush_compile_artifact_layout saved_layout{};
+    ASSERT_TRUE(slayer3d_game_data_save_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", artifact_root_dir.string().c_str(), &saved_layout, &artifact_size, error,
+        sizeof(error)))
+        << error;
+    EXPECT_STREQ(saved_layout.manifest_path, culled_layout.manifest_path);
+    EXPECT_TRUE(std::filesystem::exists(saved_layout.manifest_path));
+    EXPECT_GT(artifact_size, 0u);
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        culled_a, "brush.compile_options", saved_layout.manifest_path, &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.fresh);
+    EXPECT_FALSE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        culled_a, "brush.compile_options", "asset://cache", &repeated_layout, error, sizeof(error)));
+
+    slayer3d_game_data_runtime *culled_b = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_culled.game.json").string().c_str(), session, &culled_b,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world culled_world_b{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(culled_b, "brush.compile_options", &culled_world_b));
+    EXPECT_EQ(culled_world_b.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        culled_b, "brush.compile_options", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "source_hash")), source_hash);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "compile_artifact_hash")),
+              culled_world_a.compile_artifact_hash);
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
+
+    std::string tampered_artifact = read_text(artifact_path);
+    const std::string source_hash_field = "\"source_hash\": " + std::to_string(source_hash);
+    const size_t source_hash_pos = tampered_artifact.find(source_hash_field);
+    ASSERT_NE(source_hash_pos, std::string::npos);
+    tampered_artifact.replace(source_hash_pos, source_hash_field.size(), "\"source_hash\": 1");
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        culled_a, "brush.compile_options", tampered_artifact.c_str(), tampered_artifact.size(), &artifact_status, error,
+        sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_FALSE(artifact_status.source_hash_matches);
+    EXPECT_TRUE(artifact_status.policy_matches);
+    EXPECT_TRUE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_FALSE(artifact_status.fresh);
+
+    slayer3d_game_data_runtime *unculled = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_unculled.game.json").string().c_str(), session, &unculled,
+                                             error, sizeof(error)))
+        << error;
+    slayer3d_game_data_brush_world unculled_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(unculled, "brush.compile_options", &unculled_world));
+    EXPECT_FALSE(unculled_world.compile_hidden_face_culling);
+    EXPECT_FLOAT_EQ(unculled_world.compile_chunk_cell_size_hint, 1.0f);
+    EXPECT_FLOAT_EQ(unculled_world.compile_chunk_cell_size, 1.0f);
+    EXPECT_EQ(unculled_world.compile_face_count, 12);
+    EXPECT_EQ(unculled_world.compile_culled_face_count, 0);
+    EXPECT_EQ(unculled_world.compile_rendered_face_count, 12);
+    EXPECT_EQ(unculled_world.compile_triangle_count, 24);
+    EXPECT_NE(unculled_world.compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    slayer3d_game_data_brush_compile_artifact_layout unculled_layout{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_compile_artifact_layout(
+        unculled, "brush.compile_options", artifact_root_dir.string().c_str(), &unculled_layout, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(unculled_layout.source_hash, culled_layout.source_hash);
+    EXPECT_NE(unculled_layout.compile_artifact_hash, culled_layout.compile_artifact_hash);
+    EXPECT_STREQ(unculled_layout.world_key, culled_layout.world_key);
+    EXPECT_STRNE(unculled_layout.manifest_path, culled_layout.manifest_path);
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        unculled, "brush.compile_options", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "source_hash")), source_hash);
+    EXPECT_EQ(yyjson_get_uint(yyjson_obj_get(artifact_root, "compile_artifact_hash")),
+              unculled_world.compile_artifact_hash);
+    render = yyjson_obj_get(artifact_root, "render");
+    ASSERT_NE(render, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "culled_face_count")), 0);
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        unculled, "brush.compile_options", artifact_path.string().c_str(), &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_TRUE(artifact_status.source_hash_matches);
+    EXPECT_FALSE(artifact_status.policy_matches);
+    EXPECT_FALSE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_FALSE(artifact_status.fresh);
+
+    EXPECT_FALSE(slayer3d_game_data_export_brush_world_compile_artifact_json(unculled, "brush.missing", &artifact_json,
+                                                                             &artifact_size, error, sizeof(error)));
+    EXPECT_EQ(artifact_json, nullptr);
+    EXPECT_FALSE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        unculled, "brush.compile_options", (dir / "artifacts" / "missing.artifact.json").string().c_str(),
+        &artifact_status, error, sizeof(error)));
+
+    char *exported_json = nullptr;
+    size_t exported_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_fragment_json(unculled, "brush.compile_options", &exported_json,
+                                                                    &exported_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(exported_json, nullptr);
+    EXPECT_GT(exported_size, 0u);
+    const std::string export_text(exported_json);
+    EXPECT_NE(export_text.find("\"compile\""), std::string::npos);
+    EXPECT_NE(export_text.find("\"hidden_face_culling\""), std::string::npos);
+    EXPECT_NE(export_text.find("false"), std::string::npos);
+    EXPECT_NE(export_text.find("\"chunk_cell_size\""), std::string::npos);
+    EXPECT_NE(export_text.find("1.0"), std::string::npos);
+    SDL_free(exported_json);
+
+    slayer3d_game_data_destroy(unculled);
+    slayer3d_game_data_destroy(culled_b);
+    slayer3d_game_data_destroy(culled_a);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, BrushCompileRejectsUnboundedInvalidGeometry)
 {
     const std::filesystem::path dir = unique_test_dir("brush_compile_invalid_geometry");
@@ -13945,6 +14299,9 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
     EXPECT_EQ(world.brush_count, 1);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    const Uint64 initial_compile_hash = world.compile_artifact_hash;
     slayer3d_game_data_brush_world_editor_state editor_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
     EXPECT_FALSE(editor_state.dirty);
@@ -13963,6 +14320,10 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
 
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
     ASSERT_EQ(world.brush_count, 2);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    EXPECT_NE(world.compile_artifact_hash, initial_compile_hash);
+    const Uint64 signal_create_compile_hash = world.compile_artifact_hash;
     const slayer3d_game_data_brush &created = world.brushes[1];
     EXPECT_STREQ(created.name, "brush.created.wall");
     EXPECT_TRUE(created.has_bounds);
@@ -13986,6 +14347,11 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     EXPECT_TRUE(editor_state.dirty);
     EXPECT_EQ(editor_state.revision, 2U);
     EXPECT_EQ(editor_state.saved_revision, 0U);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    EXPECT_NE(world.compile_artifact_hash, signal_create_compile_hash);
+    const Uint64 direct_create_compile_hash = world.compile_artifact_hash;
 
     slayer3d_game_data_resize_brush_face_desc resize_desc{};
     resize_desc.world_name = "brush.editor.level";
@@ -13995,6 +14361,10 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize_desc, error, sizeof(error))) << error;
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
     ASSERT_EQ(world.brush_count, 3);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_artifact_hash, 0u);
+    EXPECT_NE(world.compile_artifact_hash, direct_create_compile_hash);
+    const Uint64 resized_compile_hash = world.compile_artifact_hash;
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
     EXPECT_EQ(editor_state.revision, 3U);
@@ -14003,6 +14373,7 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     resize_desc.distance = -3.0f;
     EXPECT_FALSE(slayer3d_game_data_resize_brush_face(runtime, &resize_desc, error, sizeof(error)));
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_EQ(world.compile_artifact_hash, resized_compile_hash);
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 2.0f, 0.001f);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
@@ -14035,6 +14406,8 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     slayer3d_game_data_brush_world roundtrip_world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(roundtrip_runtime, "brush.editor.level", &roundtrip_world));
     ASSERT_EQ(roundtrip_world.brush_count, 3);
+    ASSERT_NE(roundtrip_world.render_model, nullptr);
+    EXPECT_EQ(roundtrip_world.compile_artifact_hash, resized_compile_hash);
     EXPECT_STREQ(roundtrip_world.brushes[1].name, "brush.created.wall");
     EXPECT_NEAR(roundtrip_world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     EXPECT_STREQ(roundtrip_world.brushes[2].name, "brush.editor.level.box.1");

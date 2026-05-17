@@ -442,9 +442,8 @@ typedef struct sector_level_runtime
     slayer3d_level unlit_without_sector_lighting;
 } sector_level_runtime;
 
-typedef struct brush_world_runtime
+typedef struct brush_world_compile_artifacts
 {
-    slayer3d_game_data_brush_world desc;
     slayer3d_model render_model;
     slayer3d_model *brush_render_models;
     int brush_render_model_count;
@@ -461,6 +460,12 @@ typedef struct brush_world_runtime
     int visibility_grid_visible_cache_start[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
     Uint64 visibility_grid_visible_cache_tick[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
     Uint64 visibility_grid_visible_cache_clock;
+} brush_world_compile_artifacts;
+
+typedef struct brush_world_runtime
+{
+    slayer3d_game_data_brush_world desc;
+    brush_world_compile_artifacts artifacts;
     char *editor_source_path;
     Uint64 editor_revision;
     Uint64 editor_saved_revision;
@@ -1036,6 +1041,8 @@ int sector_level_find_sector_name(const sector_level_runtime *level, const char 
 const brush_world_runtime *find_brush_world_runtime(const slayer3d_game_data_runtime *runtime, const char *name);
 bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
+bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
+                                           int error_buffer_size);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);

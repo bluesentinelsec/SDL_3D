@@ -5402,6 +5402,29 @@ static bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, val
             ok = validation_error(ctx, world_path, "brush world visibility_cell_size must be positive");
             goto done;
         }
+        yyjson_val *compile = obj_get(world, "compile");
+        if (compile != NULL)
+        {
+            char compile_path[PATH_BUFFER_SIZE];
+            format_path(compile_path, sizeof(compile_path), "%s.compile", world_path);
+            if (!yyjson_is_obj(compile))
+            {
+                ok = validation_error(ctx, compile_path, "brush world compile must be an object");
+                goto done;
+            }
+            yyjson_val *hidden_face_culling = obj_get(compile, "hidden_face_culling");
+            if (hidden_face_culling != NULL && !yyjson_is_bool(hidden_face_culling))
+            {
+                ok = validation_error(ctx, compile_path, "brush world compile hidden_face_culling must be a boolean");
+                goto done;
+            }
+            yyjson_val *chunk_cell_size = obj_get(compile, "chunk_cell_size");
+            if (chunk_cell_size != NULL && (!yyjson_is_num(chunk_cell_size) || yyjson_get_num(chunk_cell_size) <= 0.0))
+            {
+                ok = validation_error(ctx, compile_path, "brush world compile chunk_cell_size must be positive");
+                goto done;
+            }
+        }
         {
             char editor_path[PATH_BUFFER_SIZE];
             format_path(editor_path, sizeof(editor_path), "%s.editor", world_path);
