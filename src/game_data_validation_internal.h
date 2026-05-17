@@ -83,14 +83,23 @@ typedef struct validation_names
     int script_count;
 } validation_names;
 
+yyjson_val *validation_obj_get(yyjson_val *object, const char *key);
+const char *validation_json_string(yyjson_val *object, const char *key);
+
 void format_path(char *buffer, size_t buffer_size, const char *format, ...);
 bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
 
 void name_table_destroy(name_table *table);
+bool name_table_contains(const name_table *table, const char *name);
 bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
                          const char *json_path);
 bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
                  const char *json_path);
+bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path, const char *asset_kind);
+bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, const char *json_path,
+                              validation_names *names, bool allow_templates);
+bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
+                                     const char *json_path);
 
 bool is_vec_array(yyjson_val *value, size_t min_count);
 bool is_exact_vec_array(yyjson_val *value, size_t count);
@@ -102,5 +111,6 @@ bool brush_content_name_valid(const char *name);
 bool brush_surface_flag_name_valid(const char *name);
 bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *value, const char *path,
                                            const char *label, bool (*name_valid)(const char *name), bool allow_empty);
+bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, validation_names *names);
 
 #endif /* SLAYER3D_GAME_DATA_VALIDATION_INTERNAL_H */
