@@ -17,6 +17,9 @@
 #include <SDL3/SDL_timer.h>
 #include <stdlib.h>
 
+static bool editor_save_bytes_atomic(const char *path, const void *data, size_t size, const char *kind,
+                                     char *error_buffer, int error_buffer_size);
+
 const char *slayer3d_game_data_active_scene(const slayer3d_game_data_runtime *runtime)
 {
     const scene_entry *scene = active_scene_entry_const(runtime);
@@ -1935,6 +1938,123 @@ bool slayer3d_game_data_export_brush_world_compile_artifact_json(const slayer3d_
     return true;
 }
 
+static bool artifact_json_real_matches(yyjson_val *obj, const char *key, float expected)
+{
+    yyjson_val *value = yyjson_obj_get(obj, key);
+    return yyjson_is_num(value) && SDL_fabsf((float)yyjson_get_num(value) - expected) <= 0.0001f;
+}
+
+bool slayer3d_game_data_verify_brush_world_compile_artifact_json(
+    const slayer3d_game_data_runtime *runtime, const char *world_name, const char *json, size_t json_size,
+    slayer3d_game_data_brush_compile_artifact_status *out_status, char *error_buffer, int error_buffer_size)
+{
+    if (out_status != NULL)
+        SDL_zero(*out_status);
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || json == NULL || out_status == NULL)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "brush compile artifact verification requires runtime, world name, JSON, and status output");
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "brush world '%s' not found", world_name);
+        return false;
+    }
+
+    const size_t parse_size = json_size > 0u ? json_size : SDL_strlen(json);
+    yyjson_doc *doc = yyjson_read(json, parse_size, YYJSON_READ_NOFLAG);
+    yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    if (doc == NULL || !yyjson_is_obj(root))
+    {
+        yyjson_doc_free(doc);
+        set_error(error_buffer, error_buffer_size, "failed to parse brush compile artifact JSON");
+        return false;
+    }
+
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    out_status->expected_source_hash = slayer3d_game_data_brush_world_compute_source_hash(world);
+    out_status->expected_compile_artifact_hash = world->compile_artifact_hash;
+    out_status->artifact_source_hash = yyjson_get_uint(yyjson_obj_get(root, "source_hash"));
+    out_status->artifact_compile_artifact_hash = yyjson_get_uint(yyjson_obj_get(root, "compile_artifact_hash"));
+    const char *schema = yyjson_get_str(yyjson_obj_get(root, "schema"));
+    const char *artifact_world = yyjson_get_str(yyjson_obj_get(root, "world"));
+    out_status->schema_matches = schema != NULL && SDL_strcmp(schema, "slayer3d.brush_compile_artifact.v0") == 0;
+    out_status->world_matches = artifact_world != NULL && SDL_strcmp(artifact_world, world_name) == 0;
+    out_status->source_hash_matches = out_status->artifact_source_hash == out_status->expected_source_hash;
+    out_status->compile_artifact_hash_matches =
+        out_status->artifact_compile_artifact_hash == out_status->expected_compile_artifact_hash;
+
+    yyjson_val *policy = yyjson_obj_get(root, "policy");
+    yyjson_val *hidden_face_culling = yyjson_is_obj(policy) ? yyjson_obj_get(policy, "hidden_face_culling") : NULL;
+    out_status->policy_matches =
+        yyjson_is_obj(policy) && yyjson_is_bool(hidden_face_culling) &&
+        yyjson_get_bool(hidden_face_culling) == world->compile_hidden_face_culling &&
+        artifact_json_real_matches(policy, "chunk_cell_size_hint", world->compile_chunk_cell_size_hint) &&
+        artifact_json_real_matches(policy, "chunk_cell_size", world->compile_chunk_cell_size) &&
+        artifact_json_real_matches(policy, "visibility_cell_size", world->visibility_cell_size);
+
+    out_status->fresh = out_status->schema_matches && out_status->world_matches && out_status->source_hash_matches &&
+                        out_status->policy_matches && out_status->compile_artifact_hash_matches;
+    yyjson_doc_free(doc);
+    return true;
+}
+
+bool slayer3d_game_data_verify_brush_world_compile_artifact_file(
+    const slayer3d_game_data_runtime *runtime, const char *world_name, const char *path,
+    slayer3d_game_data_brush_compile_artifact_status *out_status, char *error_buffer, int error_buffer_size)
+{
+    if (out_status != NULL)
+        SDL_zero(*out_status);
+    if (path == NULL || path[0] == '\0' || SDL_strstr(path, "://") != NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush compile artifact verification requires a filesystem path");
+        return false;
+    }
+
+    size_t size = 0u;
+    char *json = (char *)SDL_LoadFile(path, &size);
+    if (json == NULL || size == 0u)
+    {
+        SDL_free(json);
+        set_errorf(error_buffer, error_buffer_size, "failed to read brush compile artifact file '%s'", path);
+        return false;
+    }
+
+    const bool ok = slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        runtime, world_name, json, size, out_status, error_buffer, error_buffer_size);
+    SDL_free(json);
+    return ok;
+}
+
+bool slayer3d_game_data_save_brush_world_compile_artifact_file(const slayer3d_game_data_runtime *runtime,
+                                                               const char *world_name, const char *path,
+                                                               size_t *out_size, char *error_buffer,
+                                                               int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0u;
+
+    char *json = NULL;
+    size_t size = 0u;
+    if (!slayer3d_game_data_export_brush_world_compile_artifact_json(runtime, world_name, &json, &size, error_buffer,
+                                                                     error_buffer_size))
+    {
+        return false;
+    }
+
+    const bool ok =
+        editor_save_bytes_atomic(path, json, size, "brush compile artifact manifest", error_buffer, error_buffer_size);
+    SDL_free(json);
+    if (!ok)
+        return false;
+    if (out_size != NULL)
+        *out_size = size;
+    return true;
+}
+
 static bool export_add_player_start(yyjson_mut_doc *doc, yyjson_mut_val *starts,
                                     const editor_player_start_runtime *start)
 {
@@ -2153,23 +2273,12 @@ static char *editor_save_parent_directory(const char *path)
     return parent;
 }
 
-bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
-                                                       const char *path, size_t *out_size, char *error_buffer,
-                                                       int error_buffer_size)
+static bool editor_save_bytes_atomic(const char *path, const void *data, size_t size, const char *kind,
+                                     char *error_buffer, int error_buffer_size)
 {
-    if (out_size != NULL)
-        *out_size = 0u;
     if (path == NULL || path[0] == '\0' || SDL_strstr(path, "://") != NULL)
     {
-        set_error(error_buffer, error_buffer_size, "brush world save requires a filesystem path");
-        return false;
-    }
-
-    char *json = NULL;
-    size_t size = 0u;
-    if (!slayer3d_game_data_export_brush_world_fragment_json(runtime, world_name, &json, &size, error_buffer,
-                                                             error_buffer_size))
-    {
+        set_errorf(error_buffer, error_buffer_size, "%s save requires a filesystem path", kind != NULL ? kind : "file");
         return false;
     }
 
@@ -2177,8 +2286,7 @@ bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtim
     if (parent == NULL || !editor_save_make_directory_recursive(parent))
     {
         SDL_free(parent);
-        SDL_free(json);
-        set_error(error_buffer, error_buffer_size, "failed to create brush world save directory");
+        set_errorf(error_buffer, error_buffer_size, "failed to create %s save directory", kind != NULL ? kind : "file");
         return false;
     }
     SDL_free(parent);
@@ -2192,7 +2300,7 @@ bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtim
         SDL_IOStream *stream = SDL_IOFromFile(temp_path, "wb");
         if (stream == NULL)
             continue;
-        ok = editor_save_write_all(stream, json, size) && SDL_FlushIO(stream);
+        ok = editor_save_write_all(stream, data, size) && SDL_FlushIO(stream);
         ok = SDL_CloseIO(stream) && ok;
         if (!ok)
         {
@@ -2208,12 +2316,30 @@ bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtim
             SDL_RemovePath(temp_path);
     }
 
-    SDL_free(json);
     if (!ok)
+        set_errorf(error_buffer, error_buffer_size, "failed to save %s", kind != NULL ? kind : "file");
+    return ok;
+}
+
+bool slayer3d_game_data_save_brush_world_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                       const char *path, size_t *out_size, char *error_buffer,
+                                                       int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0u;
+
+    char *json = NULL;
+    size_t size = 0u;
+    if (!slayer3d_game_data_export_brush_world_fragment_json(runtime, world_name, &json, &size, error_buffer,
+                                                             error_buffer_size))
     {
-        set_error(error_buffer, error_buffer_size, "failed to save brush world fragment");
         return false;
     }
+
+    const bool ok = editor_save_bytes_atomic(path, json, size, "brush world fragment", error_buffer, error_buffer_size);
+    SDL_free(json);
+    if (!ok)
+        return false;
     if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size))
         return false;
     if (out_size != NULL)
@@ -2227,11 +2353,6 @@ bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_run
 {
     if (out_size != NULL)
         *out_size = 0u;
-    if (path == NULL || path[0] == '\0' || SDL_strstr(path, "://") != NULL)
-    {
-        set_error(error_buffer, error_buffer_size, "editable level save requires a filesystem path");
-        return false;
-    }
 
     char *json = NULL;
     size_t size = 0u;
@@ -2241,47 +2362,11 @@ bool slayer3d_game_data_save_editable_level_fragment_file(slayer3d_game_data_run
         return false;
     }
 
-    char *parent = editor_save_parent_directory(path);
-    if (parent == NULL || !editor_save_make_directory_recursive(parent))
-    {
-        SDL_free(parent);
-        SDL_free(json);
-        set_error(error_buffer, error_buffer_size, "failed to create editable level save directory");
-        return false;
-    }
-    SDL_free(parent);
-
-    bool ok = false;
-    char temp_path[4096];
-    for (int attempt = 0; attempt < 16 && !ok; ++attempt)
-    {
-        SDL_snprintf(temp_path, sizeof(temp_path), "%s.tmp.%llu.%d", path, (unsigned long long)SDL_GetTicksNS(),
-                     attempt);
-        SDL_IOStream *stream = SDL_IOFromFile(temp_path, "wb");
-        if (stream == NULL)
-            continue;
-        ok = editor_save_write_all(stream, json, size) && SDL_FlushIO(stream);
-        ok = SDL_CloseIO(stream) && ok;
-        if (!ok)
-        {
-            SDL_RemovePath(temp_path);
-            continue;
-        }
-        if (!SDL_RenamePath(temp_path, path))
-        {
-            SDL_RemovePath(path);
-            ok = SDL_RenamePath(temp_path, path);
-        }
-        if (!ok)
-            SDL_RemovePath(temp_path);
-    }
-
+    const bool ok =
+        editor_save_bytes_atomic(path, json, size, "editable level fragment", error_buffer, error_buffer_size);
     SDL_free(json);
     if (!ok)
-    {
-        set_error(error_buffer, error_buffer_size, "failed to save editable level fragment");
         return false;
-    }
     if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size))
         return false;
     if (!slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))

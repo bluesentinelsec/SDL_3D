@@ -13904,8 +13904,33 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     ASSERT_NE(grid, nullptr);
     EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(grid, "present")));
     EXPECT_GT(yyjson_get_int(yyjson_obj_get(grid, "cell_count")), 0);
+    slayer3d_game_data_brush_compile_artifact_status artifact_status{};
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        culled_a, "brush.compile_options", artifact_json, artifact_size, &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_TRUE(artifact_status.source_hash_matches);
+    EXPECT_TRUE(artifact_status.policy_matches);
+    EXPECT_TRUE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_TRUE(artifact_status.fresh);
+    EXPECT_EQ(artifact_status.expected_source_hash, source_hash);
+    EXPECT_EQ(artifact_status.artifact_source_hash, source_hash);
+    EXPECT_EQ(artifact_status.expected_compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    EXPECT_EQ(artifact_status.artifact_compile_artifact_hash, culled_world_a.compile_artifact_hash);
     yyjson_doc_free(artifact_doc);
     SDL_free(artifact_json);
+
+    const std::filesystem::path artifact_path = dir / "artifacts" / "compile.artifact.json";
+    ASSERT_TRUE(slayer3d_game_data_save_brush_world_compile_artifact_file(
+        culled_a, "brush.compile_options", artifact_path.string().c_str(), &artifact_size, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(std::filesystem::exists(artifact_path));
+    EXPECT_GT(artifact_size, 0u);
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        culled_a, "brush.compile_options", artifact_path.string().c_str(), &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.fresh);
 
     slayer3d_game_data_runtime *culled_b = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_culled.game.json").string().c_str(), session, &culled_b,
@@ -13926,6 +13951,22 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
               culled_world_a.compile_artifact_hash);
     yyjson_doc_free(artifact_doc);
     SDL_free(artifact_json);
+
+    std::string tampered_artifact = read_text(artifact_path);
+    const std::string source_hash_field = "\"source_hash\": " + std::to_string(source_hash);
+    const size_t source_hash_pos = tampered_artifact.find(source_hash_field);
+    ASSERT_NE(source_hash_pos, std::string::npos);
+    tampered_artifact.replace(source_hash_pos, source_hash_field.size(), "\"source_hash\": 1");
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        culled_a, "brush.compile_options", tampered_artifact.c_str(), tampered_artifact.size(), &artifact_status, error,
+        sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_FALSE(artifact_status.source_hash_matches);
+    EXPECT_TRUE(artifact_status.policy_matches);
+    EXPECT_TRUE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_FALSE(artifact_status.fresh);
 
     slayer3d_game_data_runtime *unculled = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file((dir / "compile_unculled.game.json").string().c_str(), session, &unculled,
@@ -13956,10 +13997,22 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "culled_face_count")), 0);
     yyjson_doc_free(artifact_doc);
     SDL_free(artifact_json);
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        unculled, "brush.compile_options", artifact_path.string().c_str(), &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_TRUE(artifact_status.source_hash_matches);
+    EXPECT_FALSE(artifact_status.policy_matches);
+    EXPECT_FALSE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_FALSE(artifact_status.fresh);
 
     EXPECT_FALSE(slayer3d_game_data_export_brush_world_compile_artifact_json(unculled, "brush.missing", &artifact_json,
                                                                              &artifact_size, error, sizeof(error)));
     EXPECT_EQ(artifact_json, nullptr);
+    EXPECT_FALSE(slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        unculled, "brush.compile_options", (dir / "artifacts" / "missing.artifact.json").string().c_str(),
+        &artifact_status, error, sizeof(error)));
 
     char *exported_json = nullptr;
     size_t exported_size = 0u;

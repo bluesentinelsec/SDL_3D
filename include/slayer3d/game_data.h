@@ -566,6 +566,31 @@ extern "C"
         slayer3d_game_data_editor_metadata editor;
     } slayer3d_game_data_brush_world;
 
+    /** @brief Result of comparing a brush compile artifact manifest to a runtime brush world. */
+    typedef struct slayer3d_game_data_brush_compile_artifact_status
+    {
+        /** @brief True when the JSON document has the expected artifact schema. */
+        bool schema_matches;
+        /** @brief True when the manifest names the requested brush world. */
+        bool world_matches;
+        /** @brief True when the manifest source hash matches the current authored brush source. */
+        bool source_hash_matches;
+        /** @brief True when the manifest compile policy matches the current authored compile policy. */
+        bool policy_matches;
+        /** @brief True when the manifest compiled artifact hash matches the current runtime artifact. */
+        bool compile_artifact_hash_matches;
+        /** @brief True when all fields required for artifact reuse match. */
+        bool fresh;
+        /** @brief Current runtime source hash for authored brush inputs. */
+        Uint64 expected_source_hash;
+        /** @brief Source hash stored in the manifest. */
+        Uint64 artifact_source_hash;
+        /** @brief Current runtime compiled artifact hash. */
+        Uint64 expected_compile_artifact_hash;
+        /** @brief Compiled artifact hash stored in the manifest. */
+        Uint64 artifact_compile_artifact_hash;
+    } slayer3d_game_data_brush_compile_artifact_status;
+
     /** @brief Active-scene instance of an authored brush world. */
     typedef struct slayer3d_game_data_brush_world_instance
     {
@@ -2350,6 +2375,46 @@ extern "C"
                                                                      const char *world_name, char **out_json,
                                                                      size_t *out_size, char *error_buffer,
                                                                      int error_buffer_size);
+
+    /**
+     * @brief Verify one brush compile artifact manifest against the current runtime world.
+     *
+     * This helper checks the descriptor JSON produced by
+     * @ref slayer3d_game_data_export_brush_world_compile_artifact_json without
+     * loading any binary cache payload. A return value of true means the manifest
+     * was parsed and compared; inspect @p out_status->fresh to decide whether an
+     * offline artifact is reusable. Stale manifests are reported through
+     * @p out_status rather than treated as API errors.
+     */
+    bool slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, const char *json, size_t json_size,
+        slayer3d_game_data_brush_compile_artifact_status *out_status, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Verify a brush compile artifact manifest file against the current runtime world.
+     *
+     * The file is read as JSON and compared using
+     * @ref slayer3d_game_data_verify_brush_world_compile_artifact_json. Missing,
+     * unreadable, or malformed files return false; valid-but-stale manifests
+     * return true with @p out_status->fresh set to false.
+     */
+    bool slayer3d_game_data_verify_brush_world_compile_artifact_file(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, const char *path,
+        slayer3d_game_data_brush_compile_artifact_status *out_status, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Atomically save one brush compile artifact manifest file.
+     *
+     * This writes the same descriptor JSON produced by
+     * @ref slayer3d_game_data_export_brush_world_compile_artifact_json. Parent
+     * directories are created automatically. The manifest is intended for
+     * editor/offline compiler inspection and future cache invalidation, not as a
+     * binary artifact payload.
+     */
+    bool slayer3d_game_data_save_brush_world_compile_artifact_file(const slayer3d_game_data_runtime *runtime,
+                                                                   const char *world_name, const char *path,
+                                                                   size_t *out_size, char *error_buffer,
+                                                                   int error_buffer_size);
 
     /**
      * @brief Atomically save one runtime brush world as a JSON fragment file.

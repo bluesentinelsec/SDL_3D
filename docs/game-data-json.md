@@ -740,6 +740,16 @@ compile policy, render mesh totals, spatial chunk summaries, and visibility-grid
 metadata. It is intentionally a descriptor rather than a binary cache payload:
 use the source hash, policy, and compile artifact hash together to inspect,
 compare, and invalidate compiled artifacts before adding cache storage/loading.
+Native editor/offline compiler hosts can call
+`slayer3d_game_data_save_brush_world_compile_artifact_file()` to atomically save
+that manifest beside authored brush fragments, then use
+`slayer3d_game_data_verify_brush_world_compile_artifact_json()` or
+`slayer3d_game_data_verify_brush_world_compile_artifact_file()` to decide whether
+a descriptor still matches the current authored source and compile policy. A
+valid-but-stale descriptor is not a load failure: verification returns status
+flags so tooling can ignore stale artifacts and let the runtime rebuild from
+source. When binary cache payloads are added later, this status check should be
+the gate before any cached mesh/collision data is trusted.
 When visibility culling leaves every brush in a compile chunk visible, the
 renderer can draw that chunk as one optimized model instead of submitting each
 brush model separately; partially visible chunks still fall back to per-brush
