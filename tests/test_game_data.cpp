@@ -15554,10 +15554,47 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     ASSERT_GE(view_front_signal, 0);
     ASSERT_GE(view_side_signal, 0);
     ASSERT_GE(view_perspective_signal, 0);
+    auto expect_work_plane_grid_axis = [&](char axis) {
+        struct GridCapture
+        {
+            char axis = 'y';
+            int lines = 0;
+        } capture{axis, 0};
+        auto capture_grid = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+            auto *capture = static_cast<GridCapture *>(userdata);
+            if (primitive == nullptr || primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID)
+                return true;
+            capture->lines++;
+            if (capture->axis == 'x')
+            {
+                EXPECT_NEAR(primitive->start.x, 0.0f, 0.001f);
+                EXPECT_NEAR(primitive->end.x, 0.0f, 0.001f);
+            }
+            else if (capture->axis == 'z')
+            {
+                EXPECT_NEAR(primitive->start.z, 0.0f, 0.001f);
+                EXPECT_NEAR(primitive->end.z, 0.0f, 0.001f);
+            }
+            else
+            {
+                EXPECT_NEAR(primitive->start.y, 0.0f, 0.001f);
+                EXPECT_NEAR(primitive->end.y, 0.0f, 0.001f);
+            }
+            return true;
+        };
+        ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_grid, &capture));
+        EXPECT_GT(capture.lines, 0);
+    };
     slayer3d_signal_emit(bus, view_top_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "orthographic_top");
+    const slayer3d_value *work_plane_normal =
+        slayer3d_properties_get_value(slayer3d_game_data_scene_state(runtime), "editor.work_plane.normal");
+    ASSERT_NE(work_plane_normal, nullptr);
+    ASSERT_EQ(work_plane_normal->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(work_plane_normal->as_vec3.y, 1.0f, 0.001f);
+    expect_work_plane_grid_axis('y');
     slayer3d_camera3d ortho{};
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
     EXPECT_EQ(ortho.projection, SLAYER3D_CAMERA_ORTHOGRAPHIC);
@@ -15566,8 +15603,20 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_NEAR(ortho.target.x, camera_actor->position.x, 0.001f);
     slayer3d_signal_emit(bus, view_front_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_front");
+    work_plane_normal =
+        slayer3d_properties_get_value(slayer3d_game_data_scene_state(runtime), "editor.work_plane.normal");
+    ASSERT_NE(work_plane_normal, nullptr);
+    ASSERT_EQ(work_plane_normal->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(work_plane_normal->as_vec3.z, 1.0f, 0.001f);
+    expect_work_plane_grid_axis('z');
     slayer3d_signal_emit(bus, view_side_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_side");
+    work_plane_normal =
+        slayer3d_properties_get_value(slayer3d_game_data_scene_state(runtime), "editor.work_plane.normal");
+    ASSERT_NE(work_plane_normal, nullptr);
+    ASSERT_EQ(work_plane_normal->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(work_plane_normal->as_vec3.x, 1.0f, 0.001f);
+    expect_work_plane_grid_axis('x');
     slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
 

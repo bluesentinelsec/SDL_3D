@@ -7386,8 +7386,11 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (!is_non_empty_string(action, "key"))
             return validation_error(ctx, json_path, "scene_state.set requires a non-empty key");
         yyjson_val *value = obj_get(action, "value");
-        if (value == NULL || !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
-            return validation_error(ctx, json_path, "scene_state.set requires a scalar value");
+        if (value == NULL ||
+            !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) || is_exact_vec_array(value, 3)))
+        {
+            return validation_error(ctx, json_path, "scene_state.set requires a scalar or vec3 value");
+        }
         return true;
     }
     if (SDL_strcmp(type, "scene_state.toggle") == 0)

@@ -1058,7 +1058,8 @@ bool editor_command_preview_active_for_scene(const slayer3d_game_data_runtime *r
 bool editor_placement_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                  slayer3d_game_data_world_trace_desc *out_trace);
-bool editor_work_plane_desc_from_trace_json(yyjson_val *trace, slayer3d_vec3 *out_normal, float *out_distance);
+bool editor_work_plane_desc_from_trace_json(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
+                                            slayer3d_vec3 *out_normal, float *out_distance);
 bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                      const slayer3d_game_data_world_trace_desc *trace,
                                      slayer3d_game_data_editor_selection *out_selection);

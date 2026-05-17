@@ -860,7 +860,9 @@ face normal through the normal 3D presentation path:
         "work_plane": {
           "enabled": true,
           "normal": [0, 1, 0],
-          "distance": 0.0
+          "normal_key": "editor.work_plane.normal",
+          "distance": 0.0,
+          "distance_key": "editor.work_plane.distance"
         }
       },
       "outputs": {
@@ -909,12 +911,19 @@ plane described by `dot(normal, point) = distance` and publishes that as a hit
 with `selection_type: "none"`. This is intended for blockout tools: a blank
 scene can still place the first floor on the ground plane, while later clicks on
 real brush faces keep returning normal brush-world selections.
+`normal_key` and `distance_key` may point at scene-state values, allowing a
+single editor scene to switch between top/front/side orthographic plotting
+planes with data-authored `scene_state.set` and `camera.set` actions.
 
 Add `work_plane_grid` (or `grid`) to `editor.debug_overlay.flags` to visualize
 the authored work plane with reusable debug lines. `work_plane_grid_size` is the
 grid half-extent in world units, and `work_plane_grid_spacing` controls line
 spacing. The grid uses the same `work_plane.normal` and `work_plane.distance`
 as placement, so visual feedback and picking stay aligned.
+
+`scene_state.set` accepts boolean, numeric, string, and vec3-array values. Vec3
+scene-state values are useful for editor work-plane normals, runtime placement
+offsets, and other authored tool state that should not require Lua.
 
 Selection mode defaults to `hover`, where `outputs` receives the current pick
 every frame. In `mode: "click"`, `outputs` receives the pinned selection and

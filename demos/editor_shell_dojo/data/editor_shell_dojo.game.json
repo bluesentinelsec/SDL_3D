@@ -355,10 +355,14 @@
             "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
             "then": [
               { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+              { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+              { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
             ],
             "else": [
               { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+              { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+              { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
             ]
           }
@@ -369,6 +373,8 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
           { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
         ]
       },
@@ -377,6 +383,8 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_top" },
           { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
         ]
       },
@@ -385,6 +393,8 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_front" },
           { "type": "camera.set", "camera": "camera.editor_shell.ortho_front" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 0.0, 1.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "front orthographic view" }
         ]
       },
@@ -393,6 +403,8 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_side" },
           { "type": "camera.set", "camera": "camera.editor_shell.ortho_side" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [1.0, 0.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "side orthographic view" }
         ]
       },

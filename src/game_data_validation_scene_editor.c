@@ -214,6 +214,16 @@ static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val
     {
         return false;
     }
+
+    char key_path[PATH_BUFFER_SIZE];
+    static const char *const string_keys[] = {"normal_key", "distance_key"};
+    for (size_t i = 0; i < SDL_arraysize(string_keys); ++i)
+    {
+        format_path(key_path, sizeof(key_path), "%s.%s", work_plane_path, string_keys[i]);
+        if (!validate_optional_non_empty_string(ctx, obj_get(work_plane, string_keys[i]), key_path,
+                                                "scene editor selection work_plane key"))
+            return false;
+    }
     return true;
 }
 

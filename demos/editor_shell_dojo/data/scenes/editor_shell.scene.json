@@ -13,6 +13,8 @@
     { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
     { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
     { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
+    { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+    { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
     { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
   ],
   "input": {
@@ -70,7 +72,9 @@
         "work_plane": {
           "enabled": true,
           "normal": [0.0, 1.0, 0.0],
-          "distance": 0.0
+          "normal_key": "editor.work_plane.normal",
+          "distance": 0.0,
+          "distance_key": "editor.work_plane.distance"
         }
       },
       "outputs": {
