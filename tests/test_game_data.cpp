@@ -15378,26 +15378,35 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
         return brush_world;
     };
-    struct UiCapture
-    {
-        const slayer3d_game_data_runtime *runtime = nullptr;
-        std::vector<std::string> *values = nullptr;
-    };
-    auto visible_ui_text = [&]() {
+    auto visible_ui_text = [&](const char *prefix) {
         std::vector<std::string> values;
-        auto capture = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
-            auto *capture = static_cast<UiCapture *>(userdata);
-            if (text != nullptr && text->name != nullptr &&
-                std::string(text->name).rfind("ui.editor_shell.palette.", 0) == 0 &&
-                slayer3d_game_data_ui_text_is_visible(capture->runtime, text, nullptr))
+        slayer3d_game_data_ui_metrics metrics{};
+        struct PrefixCapture
+        {
+            const slayer3d_game_data_runtime *runtime = nullptr;
+            const slayer3d_game_data_ui_metrics *metrics = nullptr;
+            std::vector<std::string> *values = nullptr;
+            const char *prefix = nullptr;
+        };
+        auto capture_with_prefix = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<PrefixCapture *>(userdata);
+            if (text == nullptr || text->name == nullptr || capture->values == nullptr || capture->prefix == nullptr ||
+                std::string(text->name).rfind(capture->prefix, 0) != 0 ||
+                !slayer3d_game_data_ui_text_is_visible(capture->runtime, text, capture->metrics))
             {
-                capture->values->emplace_back(text->text != nullptr ? text->text : "");
+                return true;
             }
+            char formatted[768]{};
+            if (slayer3d_game_data_format_ui_text(capture->runtime, text, capture->metrics, formatted,
+                                                  sizeof(formatted)))
+                capture->values->emplace_back(formatted);
+            else
+                capture->values->emplace_back(text->text != nullptr ? text->text : "");
             return true;
         };
-        UiCapture capture_state{runtime, &values};
-        slayer3d_game_data_ui_metrics metrics{};
-        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture, &capture_state));
+        PrefixCapture capture_state{runtime, &metrics, &values, prefix};
+        EXPECT_TRUE(
+            slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_with_prefix, &capture_state));
         return values;
     };
     auto contains_ui_text = [](const std::vector<std::string> &values, const char *expected) {
@@ -15414,7 +15423,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    std::vector<std::string> palette_text = visible_ui_text();
+    std::vector<std::string> palette_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(palette_text, "Blockout Prefabs"));
     EXPECT_TRUE(contains_ui_text(palette_text, "> 1 Floor"));
     EXPECT_TRUE(contains_ui_text(palette_text, "  2 Wall"));
@@ -15482,7 +15491,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    palette_text = visible_ui_text();
+    palette_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(palette_text, "> 2 Wall"));
     EXPECT_TRUE(contains_ui_text(palette_text, "  1 Floor"));
     EXPECT_FALSE(contains_ui_text(palette_text, "  2 Wall"));
@@ -15606,6 +15615,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NE(std::string(manifest_json).find("\"--player-start\""), std::string::npos);
     EXPECT_NE(std::string(manifest_json).find("\"player_start.editor_shell\""), std::string::npos);
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.test_run.size", 0), 0);
+    const std::vector<std::string> handoff_text = visible_ui_text("ui.editor_shell.handoff.");
+    EXPECT_TRUE(contains_ui_text(handoff_text, "Test Run Handoff"));
+    EXPECT_TRUE(contains_ui_text(handoff_text, ("Level: " + saved_path.string()).c_str()));
+    EXPECT_TRUE(contains_ui_text(handoff_text, ("Manifest: " + manifest_path.string()).c_str()));
+    EXPECT_TRUE(contains_ui_text(handoff_text, ("Command: " + std::string(test_run_command)).c_str()));
 
     slayer3d_signal_emit(bus, export_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.save.valid", false));

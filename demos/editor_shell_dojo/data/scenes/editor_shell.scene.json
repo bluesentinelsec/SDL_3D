@@ -235,6 +235,17 @@
         "color": [10, 14, 22, 215],
         "border_color": [80, 140, 230, 230],
         "border_thickness": 2
+      },
+      {
+        "name": "ui.editor_shell.handoff.panel",
+        "x": 18,
+        "y": 610,
+        "w": 1244,
+        "h": 92,
+        "color": [8, 10, 16, 210],
+        "border_color": [80, 170, 170, 190],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
       }
     ],
     "inspectors": [
@@ -442,6 +453,49 @@
         "align": "right",
         "color": [235, 242, 255, 230],
         "scale": 0.8
+      },
+      {
+        "name": "ui.editor_shell.handoff.title",
+        "text": "Test Run Handoff",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 620,
+        "color": [160, 230, 230, 240],
+        "scale": 0.56,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
+      },
+      {
+        "name": "ui.editor_shell.handoff.level",
+        "font": "font.editor_shell.ui",
+        "format": "Level: %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.save.path", "default": "none" }],
+        "x": 34,
+        "y": 644,
+        "color": [220, 232, 245, 225],
+        "scale": 0.46,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
+      },
+      {
+        "name": "ui.editor_shell.handoff.manifest",
+        "font": "font.editor_shell.ui",
+        "format": "Manifest: %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.test_run.path", "default": "none" }],
+        "x": 34,
+        "y": 666,
+        "color": [220, 232, 245, 225],
+        "scale": 0.46,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
+      },
+      {
+        "name": "ui.editor_shell.handoff.command",
+        "font": "font.editor_shell.ui",
+        "format": "Command: %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.test_run.command", "default": "none" }],
+        "x": 34,
+        "y": 688,
+        "color": [235, 245, 255, 235],
+        "scale": 0.42,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
       },
       {
         "name": "ui.editor_shell.help",
