@@ -1051,6 +1051,7 @@ slayer3d_game_data_sector_level_variant sector_level_variant_from_string(const c
                                                                          bool sector_lighting_enabled);
 slayer3d_bounding_box translated_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 position);
 bool model_bounds(const slayer3d_model *model, slayer3d_bounding_box *out_bounds);
+yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
 void init_editor_selection(slayer3d_game_data_editor_selection *selection);
 bool editor_selection_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_command_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
@@ -1059,6 +1060,8 @@ void clear_editor_command_preview(slayer3d_game_data_runtime *runtime);
 void clear_editor_placement_preview(slayer3d_game_data_runtime *runtime);
 void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                      const slayer3d_game_data_editor_selection *hover_selection);
+void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
+                              const slayer3d_game_data_editor_selection *selection);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
 void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
 void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);
