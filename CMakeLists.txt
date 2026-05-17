@@ -205,6 +205,8 @@ target_sources(
         src/game_presentation.c
         src/game_data_validation_brush_common.c
         src/game_data_validation_brush_worlds.c
+        src/game_data_validation_editor_metadata.c
+        src/game_data_validation_scene_editor.c
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c
