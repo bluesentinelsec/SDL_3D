@@ -203,6 +203,7 @@ target_sources(
         src/game_data_world_queries.c
         src/game_data_standard_options.c
         src/game_presentation.c
+        src/game_data_validation_brush_common.c
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c

@@ -3,7 +3,7 @@
  * @brief Validation for JSON-authored game data.
  */
 
-#include "game_data_validation.h"
+#include "game_data_validation_internal.h"
 
 #include <float.h>
 #include <stdarg.h>
@@ -21,40 +21,8 @@
 #include "slayer3d/sprite_actor.h"
 #include "slayer3d_crypto.h"
 
-#define PATH_BUFFER_SIZE 256
 #define GAME_DATA_MENU_TEXT_MAX_BYTES 255
 #define GAME_DATA_IMPORT_MAX_DEPTH 16
-
-typedef struct name_table
-{
-    const char **names;
-    const char **paths;
-    int count;
-} name_table;
-
-typedef struct script_manifest
-{
-    const char *id;
-    const char *path;
-    const char *module;
-    const char *json_path;
-    const char **dependencies;
-    int dependency_count;
-    bool visiting;
-    bool visited;
-} script_manifest;
-
-typedef struct validation_context
-{
-    const slayer3d_game_data_validation_options *options;
-    const char *source_path;
-    const char *base_dir;
-    const slayer3d_asset_resolver *assets;
-    const slayer3d_game_data_source_map *source_map;
-    char *error_buffer;
-    int error_buffer_size;
-    bool failed;
-} validation_context;
 
 typedef struct game_data_source_map_entry
 {
@@ -70,46 +38,6 @@ struct slayer3d_game_data_source_map
     int capacity;
 };
 
-typedef struct validation_names
-{
-    name_table entities;
-    name_table actor_archetypes;
-    name_table actor_pools;
-    name_table actor_pool_actors;
-    name_table grid_maps;
-    name_table grid_pickup_layers;
-    name_table sector_levels;
-    name_table brush_worlds;
-    name_table sector_navigation;
-    name_table sector_doors;
-    name_table sector_platforms;
-    name_table editor_player_starts;
-    name_table signals;
-    name_table scripts;
-    name_table script_modules;
-    name_table adapters;
-    name_table actions;
-    name_table input_assignment_sets;
-    name_table input_profiles;
-    name_table network_input_channels;
-    name_table timers;
-    name_table cameras;
-    name_table fonts;
-    name_table images;
-    name_table models;
-    name_table sprites;
-    name_table sounds;
-    name_table music;
-    name_table ambient;
-    name_table scenes;
-    name_table sensors;
-    name_table persistence;
-    name_table used_adapters;
-    name_table used_scripts;
-    script_manifest *script_manifests;
-    int script_count;
-} validation_names;
-
 typedef struct import_validation_stack
 {
     const char *paths[GAME_DATA_IMPORT_MAX_DEPTH];
@@ -119,16 +47,10 @@ typedef struct import_validation_stack
 static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
                                     validation_names *names);
 static bool validate_storage(validation_context *ctx, yyjson_val *root);
-static bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
-                                const char *json_path);
-static bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
-                        const char *json_path);
 static bool require_network_string_entry(validation_context *ctx, yyjson_val *map, const char *path, const char *label,
                                          const char *name);
 static bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path,
                               const char *asset_kind);
-static void format_path(char *buffer, size_t buffer_size, const char *format, ...);
-static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
 static bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path,
                                           const char *type);
 static bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, const char *json_path,
@@ -339,7 +261,7 @@ static bool emit_diagnostic(validation_context *ctx, slayer3d_game_data_diagnost
     return true;
 }
 
-static bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...)
+bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...)
 {
     char message[384];
     va_list args;
@@ -457,7 +379,7 @@ static bool validate_persistence(validation_context *ctx, yyjson_val *root, vali
     return true;
 }
 
-static void format_path(char *buffer, size_t buffer_size, const char *format, ...)
+void format_path(char *buffer, size_t buffer_size, const char *format, ...)
 {
     va_list args;
     va_start(args, format);
@@ -465,7 +387,7 @@ static void format_path(char *buffer, size_t buffer_size, const char *format, ..
     va_end(args);
 }
 
-static void name_table_destroy(name_table *table)
+void name_table_destroy(name_table *table)
 {
     if (table == NULL)
         return;
@@ -540,8 +462,8 @@ static bool name_table_add(name_table *table, const char *name, const char *json
     return true;
 }
 
-static bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
-                                const char *json_path)
+bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
+                         const char *json_path)
 {
     if (name == NULL || name[0] == '\0')
     {
@@ -559,8 +481,8 @@ static bool require_unique_name(validation_context *ctx, name_table *table, cons
     return true;
 }
 
-static bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
-                        const char *json_path)
+bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
+                 const char *json_path)
 {
     if (name == NULL || name[0] == '\0')
     {
@@ -2802,7 +2724,7 @@ static bool is_compare_op(const char *op)
                           SDL_strcmp(op, "<") == 0 || SDL_strcmp(op, "==") == 0);
 }
 
-static bool is_vec_array(yyjson_val *value, size_t min_count)
+bool is_vec_array(yyjson_val *value, size_t min_count)
 {
     if (!yyjson_is_arr(value) || yyjson_arr_size(value) < min_count)
         return false;
@@ -2814,17 +2736,17 @@ static bool is_vec_array(yyjson_val *value, size_t min_count)
     return true;
 }
 
-static bool is_exact_vec_array(yyjson_val *value, size_t count)
+bool is_exact_vec_array(yyjson_val *value, size_t count)
 {
     return yyjson_is_arr(value) && yyjson_arr_size(value) == count && is_vec_array(value, count);
 }
 
-static bool is_exact_vec3_or_vec4_array(yyjson_val *value)
+bool is_exact_vec3_or_vec4_array(yyjson_val *value)
 {
     return is_exact_vec_array(value, 3) || is_exact_vec_array(value, 4);
 }
 
-static bool numeric_array_values_positive(yyjson_val *value)
+bool numeric_array_values_positive(yyjson_val *value)
 {
     if (!yyjson_is_arr(value))
         return false;
@@ -2837,7 +2759,7 @@ static bool numeric_array_values_positive(yyjson_val *value)
     return true;
 }
 
-static bool numeric_array_values_in_range(yyjson_val *value, double min_value, double max_value)
+bool numeric_array_values_in_range(yyjson_val *value, double min_value, double max_value)
 {
     if (!yyjson_is_arr(value))
         return false;
@@ -3083,10 +3005,6 @@ static bool validate_non_empty_string_field(validation_context *ctx, yyjson_val 
                                             const char *type, const char *field);
 static bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
                                            validation_names *names, const char *field);
-static bool brush_content_name_valid(const char *name);
-static bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *value, const char *path,
-                                                  const char *label, bool (*name_valid)(const char *name),
-                                                  bool allow_empty);
 
 static bool validate_fps_controller_common(validation_context *ctx, yyjson_val *component, const char *path,
                                            validation_names *names, const char *type_name)
@@ -5028,75 +4946,6 @@ static bool sector_level_material_ref_valid(yyjson_val *materials, const name_ta
         return name_table_contains(material_names, name);
     }
     return false;
-}
-
-static bool brush_content_name_valid(const char *name)
-{
-    static const char *const names[] = {"solid", "player_clip", "projectile_clip", "trigger", "water", "lava", "sky"};
-    for (size_t i = 0; name != NULL && i < SDL_arraysize(names); ++i)
-    {
-        if (SDL_strcmp(name, names[i]) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool brush_surface_flag_name_valid(const char *name)
-{
-    static const char *const names[] = {"nocollide", "slick", "ladder", "emissive", "portal_candidate"};
-    for (size_t i = 0; name != NULL && i < SDL_arraysize(names); ++i)
-    {
-        if (SDL_strcmp(name, names[i]) == 0)
-            return true;
-    }
-    return false;
-}
-
-static bool validate_brush_string_or_string_array(validation_context *ctx, yyjson_val *value, const char *path,
-                                                  const char *label, bool (*name_valid)(const char *name),
-                                                  bool allow_empty)
-{
-    if (value == NULL)
-        return true;
-    if (yyjson_is_str(value))
-    {
-        const char *name = yyjson_get_str(value);
-        if (name == NULL || name[0] == '\0' || (name_valid != NULL && !name_valid(name)))
-            return validation_error(ctx, path, "%s value is unknown", label);
-        return true;
-    }
-    if (!yyjson_is_arr(value))
-        return validation_error(ctx, path, "%s must be a string or string array", label);
-    if (!allow_empty && yyjson_arr_size(value) <= 0)
-        return validation_error(ctx, path, "%s array must be non-empty", label);
-
-    name_table names;
-    SDL_zero(names);
-    bool ok = true;
-    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
-    {
-        char entry_path[PATH_BUFFER_SIZE];
-        format_path(entry_path, sizeof(entry_path), "%s[%zu]", path, i);
-        yyjson_val *entry = yyjson_arr_get(value, i);
-        if (!yyjson_is_str(entry) || yyjson_get_str(entry) == NULL || yyjson_get_str(entry)[0] == '\0')
-        {
-            ok = validation_error(ctx, entry_path, "%s entries must be non-empty strings", label);
-            break;
-        }
-        const char *name = yyjson_get_str(entry);
-        if (name_valid != NULL && !name_valid(name))
-        {
-            ok = validation_error(ctx, entry_path, "%s value is unknown", label);
-            break;
-        }
-        if (!require_unique_name(ctx, &names, label, name, entry_path))
-        {
-            ok = false;
-            break;
-        }
-    }
-    name_table_destroy(&names);
-    return ok;
 }
 
 static bool brush_material_ref_valid(yyjson_val *materials, const name_table *material_names, yyjson_val *ref)
