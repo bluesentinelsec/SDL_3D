@@ -913,6 +913,7 @@ bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_d
                                                                  yyjson_val *action);
 bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 bool eval_data_condition_with_payload(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
@@ -1058,7 +1059,8 @@ bool editor_command_preview_active_for_scene(const slayer3d_game_data_runtime *r
 bool editor_placement_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                  slayer3d_game_data_world_trace_desc *out_trace);
-bool editor_work_plane_desc_from_trace_json(yyjson_val *trace, slayer3d_vec3 *out_normal, float *out_distance);
+bool editor_work_plane_desc_from_trace_json(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
+                                            slayer3d_vec3 *out_normal, float *out_distance);
 bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                      const slayer3d_game_data_world_trace_desc *trace,
                                      slayer3d_game_data_editor_selection *out_selection);

@@ -57,6 +57,13 @@ static float editor_scene_state_float(const slayer3d_game_data_runtime *runtime,
                                           : fallback;
 }
 
+static slayer3d_vec3 editor_scene_state_vec3(const slayer3d_game_data_runtime *runtime, const char *key,
+                                             slayer3d_vec3 fallback)
+{
+    return runtime != NULL && key != NULL ? slayer3d_properties_get_vec3(runtime->scene_state, key, fallback)
+                                          : fallback;
+}
+
 static void editor_default_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height)
 {
     if (out_width == NULL || out_height == NULL)
@@ -167,29 +174,47 @@ bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjs
     return true;
 }
 
-static bool editor_work_plane_selection_from_trace(yyjson_val *selection,
-                                                   const slayer3d_game_data_world_trace_desc *trace,
-                                                   slayer3d_game_data_editor_selection *out_selection)
+static bool editor_work_plane_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *work_plane,
+                                        slayer3d_vec3 *out_normal, float *out_distance)
 {
-    init_editor_selection(out_selection);
-    yyjson_val *work_plane = obj_get(obj_get(selection, "trace"), "work_plane");
-    if (!yyjson_is_obj(work_plane) || !json_bool(work_plane, "enabled", true) || trace == NULL || out_selection == NULL)
+    if (!yyjson_is_obj(work_plane) || !json_bool(work_plane, "enabled", true) || out_normal == NULL ||
+        out_distance == NULL)
     {
         return false;
     }
 
     slayer3d_vec3 normal = json_vec3(work_plane, "normal", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
-    const float normal_length_squared = slayer3d_vec3_length_squared(normal);
-    if (normal_length_squared <= 0.000001f)
+    normal = editor_scene_state_vec3(runtime, json_string(work_plane, "normal_key", NULL), normal);
+    if (slayer3d_vec3_length_squared(normal) <= 0.000001f)
         return false;
-    normal = slayer3d_vec3_normalize(normal);
+
+    *out_normal = slayer3d_vec3_normalize(normal);
+    *out_distance = editor_scene_state_float(runtime, json_string(work_plane, "distance_key", NULL),
+                                             json_float(work_plane, "distance", 0.0f));
+    return true;
+}
+
+static bool editor_work_plane_selection_from_trace(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
+                                                   const slayer3d_game_data_world_trace_desc *trace,
+                                                   slayer3d_game_data_editor_selection *out_selection)
+{
+    init_editor_selection(out_selection);
+    yyjson_val *work_plane = obj_get(obj_get(selection, "trace"), "work_plane");
+    if (trace == NULL || out_selection == NULL)
+    {
+        return false;
+    }
+
+    slayer3d_vec3 normal;
+    float distance = 0.0f;
+    if (!editor_work_plane_from_json(runtime, work_plane, &normal, &distance))
+        return false;
 
     const slayer3d_vec3 direction = slayer3d_vec3_sub(trace->end, trace->start);
     const float denominator = slayer3d_vec3_dot(normal, direction);
     if (SDL_fabsf(denominator) <= 0.000001f)
         return false;
 
-    const float distance = json_float(work_plane, "distance", 0.0f);
     const float fraction = (distance - slayer3d_vec3_dot(normal, trace->start)) / denominator;
     if (fraction < 0.0f || fraction > 1.0f)
         return false;
@@ -204,20 +229,10 @@ static bool editor_work_plane_selection_from_trace(yyjson_val *selection,
     return true;
 }
 
-bool editor_work_plane_desc_from_trace_json(yyjson_val *trace, slayer3d_vec3 *out_normal, float *out_distance)
+bool editor_work_plane_desc_from_trace_json(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
+                                            slayer3d_vec3 *out_normal, float *out_distance)
 {
-    yyjson_val *work_plane = obj_get(trace, "work_plane");
-    if (!yyjson_is_obj(work_plane) || !json_bool(work_plane, "enabled", true) || out_normal == NULL ||
-        out_distance == NULL)
-    {
-        return false;
-    }
-    slayer3d_vec3 normal = json_vec3(work_plane, "normal", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
-    if (slayer3d_vec3_length_squared(normal) <= 0.000001f)
-        return false;
-    *out_normal = slayer3d_vec3_normalize(normal);
-    *out_distance = json_float(work_plane, "distance", 0.0f);
-    return true;
+    return editor_work_plane_from_json(runtime, obj_get(trace, "work_plane"), out_normal, out_distance);
 }
 
 bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
@@ -229,10 +244,10 @@ bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, 
         return false;
 
     if (!slayer3d_game_data_pick_editor_world_model(runtime, trace, out_selection))
-        return editor_work_plane_selection_from_trace(selection, trace, out_selection);
+        return editor_work_plane_selection_from_trace(runtime, selection, trace, out_selection);
     if (out_selection->hit)
         return true;
-    if (editor_work_plane_selection_from_trace(selection, trace, out_selection))
+    if (editor_work_plane_selection_from_trace(runtime, selection, trace, out_selection))
         return true;
     return true;
 }
@@ -270,6 +285,26 @@ static bool editor_selection_select_requested(const slayer3d_game_data_runtime *
 
     const Uint8 button = mouse_button_from_json(json_string(selection, "select_button", "LEFT"));
     return button != 0 && slayer3d_input_get_pressed_mouse_button(input) == button;
+}
+
+static bool emit_editor_selection_signal(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                         const char *signal_key, const slayer3d_game_data_editor_selection *selection)
+{
+    const char *signal = json_string(selection_json, signal_key, NULL);
+    if (signal == NULL)
+        return true;
+
+    slayer3d_signal_bus *bus = runtime_bus(runtime);
+    const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
+    if (bus == NULL || signal_id < 0)
+        return false;
+
+    slayer3d_properties *payload = slayer3d_game_data_create_editor_selection_payload(selection);
+    if (payload == NULL)
+        return false;
+    slayer3d_signal_emit(bus, signal_id, payload);
+    slayer3d_properties_destroy(payload);
+    return true;
 }
 
 static const char *editor_selection_type_name(slayer3d_game_data_world_model_type type)
@@ -350,7 +385,8 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
 
     publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
     update_editor_placement_preview(runtime, editor, &hover_selection);
-    if (editor_selection_select_requested(runtime, selection_json))
+    const bool select_requested = editor_selection_select_requested(runtime, selection_json);
+    if (select_requested)
     {
         if (hover_selection.hit)
             runtime->editor_active_selection = hover_selection;
@@ -360,6 +396,11 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+    if (select_requested &&
+        !emit_editor_selection_signal(runtime, selection_json, "on_select", &runtime->editor_active_selection))
+    {
+        return false;
+    }
     return true;
 }
 

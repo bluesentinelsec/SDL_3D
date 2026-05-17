@@ -11,7 +11,11 @@
       "value": "demos/editor_shell_dojo/data/generated/editable_level.fragment.json"
     },
     { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
-    { "type": "scene_state.set", "key": "editor.placement.snap", "value": 0.5 },
+    { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
+    { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
+    { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
+    { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+    { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
     { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
   ],
   "input": {
@@ -26,12 +30,18 @@
       "action.editor.command.redo",
       "action.editor.export",
       "action.editor.test_run.prepare",
+      "action.editor.test_run.enter",
       "action.editor.tool.floor",
       "action.editor.tool.wall",
       "action.editor.tool.ceiling",
       "action.editor.tool.player_start",
-      "action.editor.snap.finer",
-      "action.editor.snap.coarser",
+      "action.editor.view.toggle",
+      "action.editor.view.perspective",
+      "action.editor.view.top",
+      "action.editor.view.front",
+      "action.editor.view.side",
+      "action.editor.grid.decrease",
+      "action.editor.grid.increase",
       "action.editor.wall_axis.toggle",
       "action.editor.camera.forward",
       "action.editor.camera.back",
@@ -56,7 +66,6 @@
       "clear_on_miss": true,
       "trace": {
         "source": "camera_screen",
-        "camera": "camera.editor_shell.viewport",
         "viewport": [1280.0, 720.0],
         "near": 0.05,
         "far": 100.0,
@@ -65,7 +74,9 @@
         "work_plane": {
           "enabled": true,
           "normal": [0.0, 1.0, 0.0],
-          "distance": 0.0
+          "normal_key": "editor.work_plane.normal",
+          "distance": 0.0,
+          "distance_key": "editor.work_plane.distance"
         }
       },
       "outputs": {
@@ -88,12 +99,15 @@
         "hit_key": "editor.hover.hit",
         "element_key": "editor.hover.element",
         "face_stable_id_key": "editor.hover.face_stable_id"
-      }
+      },
+      "on_select": "signal.editor.pointer.primary"
     },
     "placement": {
       "tool_key": "editor.tool.mode",
-      "snap_key": "editor.placement.snap",
-      "default_snap": 0.5,
+      "snap_key": "editor.grid.size",
+      "grid_size_key": "editor.grid.size",
+      "default_snap": 8.0,
+      "default_grid_size": 8.0,
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "valid_key": "editor.placement_preview.valid",
@@ -114,9 +128,8 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.floor",
-          "snap": 0.5,
-          "min": [-3.0, -0.2, -3.0],
-          "max": [3.0, 0.0, 3.0],
+          "grid_min": [-0.5, -0.025, -0.5],
+          "grid_max": [0.5, 0.0, 0.5],
           "message": "floor prefab preview"
         },
         {
@@ -126,9 +139,8 @@
           "material": "mat.editor.wall",
           "axis_key": "editor.placement.wall_axis",
           "axis": "z",
-          "snap": 0.5,
-          "min": [-0.125, 0.0, -3.0],
-          "max": [0.125, 2.5, 3.0],
+          "grid_min": [-0.03125, 0.0, -0.5],
+          "grid_max": [0.03125, 1.0, 0.5],
           "message": "wall prefab preview"
         },
         {
@@ -136,17 +148,56 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.ceiling",
-          "snap": 0.5,
-          "min": [-3.0, 2.5, -3.0],
-          "max": [3.0, 2.7, 3.0],
+          "grid_min": [-0.5, 1.0, -0.5],
+          "grid_max": [0.5, 1.025, 0.5],
           "message": "ceiling prefab preview"
         },
         {
           "mode": "player_start",
           "kind": "player_start",
-          "snap": 0.5,
           "size": [0.5, 1.8, 0.5],
           "message": "player start preview"
+        }
+      ]
+    },
+    "palette": {
+      "selected_key": "editor.tool.mode",
+      "entries": [
+        {
+          "mode": "floor",
+          "preview": "floor",
+          "kind": "box",
+          "label": "Floor",
+          "shortcut": "1",
+          "category": "blockout",
+          "description": "8m gray floor tile"
+        },
+        {
+          "mode": "wall",
+          "preview": "wall",
+          "kind": "box",
+          "label": "Wall",
+          "shortcut": "2",
+          "category": "blockout",
+          "description": "8m gray wall tile"
+        },
+        {
+          "mode": "ceiling",
+          "preview": "ceiling",
+          "kind": "box",
+          "label": "Ceiling",
+          "shortcut": "3",
+          "category": "blockout",
+          "description": "8m gray ceiling tile"
+        },
+        {
+          "mode": "player_start",
+          "preview": "player_start",
+          "kind": "player_start",
+          "label": "Player",
+          "shortcut": "4",
+          "category": "things",
+          "description": "play-test spawn marker"
         }
       ]
     },
@@ -181,10 +232,21 @@
         "x": 18,
         "y": 18,
         "w": 340,
-        "h": 320,
+        "h": 370,
         "color": [10, 14, 22, 215],
         "border_color": [80, 140, 230, 230],
         "border_thickness": 2
+      },
+      {
+        "name": "ui.editor_shell.handoff.panel",
+        "x": 18,
+        "y": 610,
+        "w": 1244,
+        "h": 92,
+        "color": [8, 10, 16, 210],
+        "border_color": [80, 170, 170, 190],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
       }
     ],
     "inspectors": [
@@ -232,6 +294,10 @@
             "binding": { "type": "scene_state", "key": "editor.tool.mode", "default": "select" }
           },
           {
+            "label": "View",
+            "binding": { "type": "scene_state", "key": "editor.view.mode", "default": "perspective_3d" }
+          },
+          {
             "label": "Action",
             "binding": { "type": "scene_state", "key": "editor.tool.last_action", "default": "none" }
           },
@@ -248,6 +314,10 @@
             "binding": { "type": "scene_state", "key": "editor.test_run.message", "default": "none" }
           },
           {
+            "label": "Cmd",
+            "binding": { "type": "scene_state", "key": "editor.test_run.command", "default": "none" }
+          },
+          {
             "label": "Saved",
             "binding": { "type": "scene_state", "key": "editor.save.path", "default": "none" }
           },
@@ -260,8 +330,8 @@
             "binding": { "type": "scene_state", "key": "editor.placement_preview.message", "default": "none" }
           },
           {
-            "label": "Snap",
-            "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 0.5 }
+            "label": "Grid",
+            "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 8.0 }
           },
           {
             "label": "Axis",
@@ -276,6 +346,105 @@
     ],
     "text": [
       {
+        "name": "ui.editor_shell.palette.title",
+        "text": "Blockout Prefabs",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 246,
+        "color": [235, 245, 255, 255],
+        "scale": 0.64
+      },
+      {
+        "name": "ui.editor_shell.palette.floor",
+        "text": "  1 Floor",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 274,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "floor" }
+      },
+      {
+        "name": "ui.editor_shell.palette.floor.active",
+        "text": "> 1 Floor",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 274,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" }
+      },
+      {
+        "name": "ui.editor_shell.palette.wall",
+        "text": "  2 Wall",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 298,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "wall" }
+      },
+      {
+        "name": "ui.editor_shell.palette.wall.active",
+        "text": "> 2 Wall",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 298,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "wall" }
+      },
+      {
+        "name": "ui.editor_shell.palette.ceiling",
+        "text": "  3 Ceiling",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 322,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "ceiling" }
+      },
+      {
+        "name": "ui.editor_shell.palette.ceiling.active",
+        "text": "> 3 Ceiling",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 322,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" }
+      },
+      {
+        "name": "ui.editor_shell.palette.player",
+        "text": "  4 Player",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 346,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": {
+          "type": "scene_state.compare",
+          "key": "editor.tool.mode",
+          "op": "!=",
+          "value": "player_start"
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.player.active",
+        "text": "> 4 Player",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 346,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": {
+          "type": "scene_state.compare",
+          "key": "editor.tool.mode",
+          "op": "==",
+          "value": "player_start"
+        }
+      },
+      {
         "name": "ui.editor_shell.title",
         "text": "Editor Shell Dojo",
         "font": "font.editor_shell.ui",
@@ -287,8 +456,51 @@
         "scale": 0.8
       },
       {
+        "name": "ui.editor_shell.handoff.title",
+        "text": "Test Run Handoff",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 620,
+        "color": [160, 230, 230, 240],
+        "scale": 0.56,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
+      },
+      {
+        "name": "ui.editor_shell.handoff.level",
+        "font": "font.editor_shell.ui",
+        "format": "Level: %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.save.path", "default": "none" }],
+        "x": 34,
+        "y": 644,
+        "color": [220, 232, 245, 225],
+        "scale": 0.46,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
+      },
+      {
+        "name": "ui.editor_shell.handoff.manifest",
+        "font": "font.editor_shell.ui",
+        "format": "Manifest: %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.test_run.path", "default": "none" }],
+        "x": 34,
+        "y": 666,
+        "color": [220, 232, 245, 225],
+        "scale": 0.46,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
+      },
+      {
+        "name": "ui.editor_shell.handoff.command",
+        "font": "font.editor_shell.ui",
+        "format": "Command: %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.test_run.command", "default": "none" }],
+        "x": 34,
+        "y": 688,
+        "color": [235, 245, 255, 235],
+        "scale": 0.42,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
+      },
+      {
         "name": "ui.editor_shell.help",
-        "text": "Click select. Arrows move, Q/E down/up, RMB look. 1 floor 2 wall 3 ceiling 4 start. [/] snap, R axis. Enter commit. S save.",
+        "text": "Click select. Arrows move, Q/E down/up, RMB look. Tab view, F1-F4 cameras. 1 floor 2 wall 3 ceiling 4 start. +/- grid, R axis. Enter commit. S save. T handoff. F5 play.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

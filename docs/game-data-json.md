@@ -860,7 +860,9 @@ face normal through the normal 3D presentation path:
         "work_plane": {
           "enabled": true,
           "normal": [0, 1, 0],
-          "distance": 0.0
+          "normal_key": "editor.work_plane.normal",
+          "distance": 0.0,
+          "distance_key": "editor.work_plane.distance"
         }
       },
       "outputs": {
@@ -909,6 +911,9 @@ plane described by `dot(normal, point) = distance` and publishes that as a hit
 with `selection_type: "none"`. This is intended for blockout tools: a blank
 scene can still place the first floor on the ground plane, while later clicks on
 real brush faces keep returning normal brush-world selections.
+`normal_key` and `distance_key` may point at scene-state values, allowing a
+single editor scene to switch between top/front/side orthographic plotting
+planes with data-authored `scene_state.set` and `camera.set` actions.
 
 Add `work_plane_grid` (or `grid`) to `editor.debug_overlay.flags` to visualize
 the authored work plane with reusable debug lines. `work_plane_grid_size` is the
@@ -916,11 +921,20 @@ grid half-extent in world units, and `work_plane_grid_spacing` controls line
 spacing. The grid uses the same `work_plane.normal` and `work_plane.distance`
 as placement, so visual feedback and picking stay aligned.
 
+`scene_state.set` accepts boolean, numeric, string, and vec3-array values. Vec3
+scene-state values are useful for editor work-plane normals, runtime placement
+offsets, and other authored tool state that should not require Lua.
+
 Selection mode defaults to `hover`, where `outputs` receives the current pick
 every frame. In `mode: "click"`, `outputs` receives the pinned selection and
 `hover_outputs` can publish the live hover independently. `select_button`
 defaults to `LEFT`; clicking empty space clears the pinned selection unless
-`clear_on_miss` is false.
+`clear_on_miss` is false. `on_select` may reference a signal to emit after a
+click updates the active selection and placement preview. The signal receives
+the same selection payload used by `editor.selection.run`, which lets authored
+editor tools turn one pointer click into a project-specific operation such as
+"place the active prefab" while keeping selection, placement preview, and
+command commits general-purpose.
 
 Editor selections can also drive generic logic actions:
 
@@ -1025,19 +1039,26 @@ Scenes can also author `editor.placement` to show a live placement preview while
 the mouse hovers over a brush or work plane. `tool_key` names the scene-state
 property that selects the active tool. `snap_key` can point at a runtime
 scene-state float so UI or keyboard shortcuts can change grid size without
-reloading data. Each preview entry maps a tool `mode` to either a `box` ghost or
-a `player_start` marker. Box previews can use `axis_key` with `axis` `x` or `z`
-to rotate wall-like prefabs between horizontal grid axes. The preview reuses
-the editor debug overlay's `command_preview` flag and color, so editor hosts do
-not need a second rendering path.
+reloading data. `grid_size_key` can point at the same scene-state float when box
+previews use `grid_min` and `grid_max` instead of fixed `min` and `max` bounds.
+Those grid bounds are multipliers, so a floor authored from `[-0.5, 0, -0.5]`
+to `[0.5, 0.025, 0.5]` becomes one active grid cell wide at any configured grid
+size. Each preview entry maps a tool `mode` to either a `box` ghost or a
+`player_start` marker. Box previews can use `axis_key` with `axis` `x` or `z` to
+rotate wall-like prefabs between horizontal grid axes. A box preview must author
+exactly one bounds source: fixed `min`/`max`, or grid-scaled `grid_min`/
+`grid_max`. The preview reuses the editor debug overlay's `command_preview`
+flag and color, so editor hosts do not need a second rendering path.
 
 ```json
 {
   "editor": {
     "placement": {
       "tool_key": "editor.tool.mode",
-      "snap_key": "editor.placement.snap",
-      "default_snap": 0.5,
+      "snap_key": "editor.grid.size",
+      "grid_size_key": "editor.grid.size",
+      "default_snap": 8.0,
+      "default_grid_size": 8.0,
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "mode_key": "editor.placement_preview.mode",
@@ -1050,9 +1071,8 @@ not need a second rendering path.
           "kind": "box",
           "world": "brush.level.blockout",
           "material": "mat.stone_floor",
-          "min": [-4.0, -0.25, -4.0],
-          "max": [4.0, 0.0, 4.0],
-          "snap": 0.5
+          "grid_min": [-0.5, -0.025, -0.5],
+          "grid_max": [0.5, 0.0, 0.5]
         },
         {
           "mode": "wall",
@@ -1061,13 +1081,49 @@ not need a second rendering path.
           "material": "mat.stone_wall",
           "axis_key": "editor.wall_axis",
           "axis": "z",
-          "min": [-0.125, 0.0, -3.0],
-          "max": [0.125, 2.5, 3.0]
+          "grid_min": [-0.03125, 0.0, -0.5],
+          "grid_max": [0.03125, 1.0, 0.5]
         },
         {
           "mode": "player_start",
           "kind": "player_start",
           "size": [0.5, 1.8, 0.5]
+        }
+      ]
+    }
+  }
+}
+```
+
+Scenes may pair placement previews with `editor.palette` metadata. The palette
+is intentionally data-only: it gives editor hosts and authored sidebar UI a
+stable list of selectable tools without hard-coding project-specific prefab
+names in C. `selected_key` usually matches `editor.placement.tool_key`.
+Each entry has a `mode`, `label`, optional `shortcut`, optional
+`category`/`description`, and an optional `preview` reference. When omitted,
+`preview` defaults to `mode`. Validation requires every palette preview to
+match an authored placement preview, so stale sidebar entries fail at load time.
+
+```json
+{
+  "editor": {
+    "palette": {
+      "selected_key": "editor.tool.mode",
+      "entries": [
+        {
+          "mode": "floor",
+          "preview": "floor",
+          "kind": "box",
+          "label": "Floor",
+          "shortcut": "1",
+          "category": "blockout"
+        },
+        {
+          "mode": "player_start",
+          "kind": "player_start",
+          "label": "Player",
+          "shortcut": "4",
+          "category": "things"
         }
       ]
     }
@@ -1114,6 +1170,22 @@ Native editor hosts can call
 current player-start collection as a `slayer3d.fragment.v0` document containing
 `editor_player_starts`. File writing remains host-owned, matching brush-world
 exports.
+
+Use `editor.player_start.apply` to move a stored player-start target actor back
+to its marker. This is useful for in-editor playable previews: apply the marker,
+then switch to the authored play/test scene with `scene.set`.
+
+```json
+{
+  "type": "editor.player_start.apply",
+  "name": "player_start.level_01",
+  "outputs": {
+    "valid_key": "editor.test_run.enter.valid",
+    "message_key": "editor.test_run.enter.message",
+    "target_key": "editor.test_run.enter.target"
+  }
+}
+```
 
 Use `editor.command.preview` to declare a non-mutating command intent against
 the active selection. This is the safe scaffolding layer for editor tools:
@@ -1266,6 +1338,13 @@ scene, player start, target actor, and runner argument array excluding mount
 flags. Editor hosts combine those arguments with their current `--root`,
 `--pack`, embedded, or fused launch context. The generic runner can consume the
 manifest directly with `--test-run-manifest <path-or-asset>`.
+For UI copy/paste affordances, `editor.test_run.prepare` and
+`editor.test_run.save_manifest` can also author `runner`, one mount option
+(`root`, `pack`, or `embedded`), and optional `media`. When `command_key` is
+present in `outputs`, the action publishes a quoted runner command string.
+Authored editor shells should usually run `editor.level.save` immediately before
+test-run preparation so the runner sees the latest blockout fragment rather than
+the last manually saved revision.
 
 ```json
 {
@@ -1277,7 +1356,8 @@ manifest directly with `--test-run-manifest <path-or-asset>`.
     "message_key": "editor.test_run.message",
     "manifest_json_key": "editor.test_run.manifest_json",
     "scene_key": "editor.test_run.scene",
-    "player_start_key": "editor.test_run.player_start"
+    "player_start_key": "editor.test_run.player_start",
+    "command_key": "editor.test_run.command"
   }
 }
 ```
@@ -1293,10 +1373,13 @@ the same `data_asset`, `scene`, and `player_start` fields as
   "data_asset": "asset://game.game.json",
   "player_start": "player_start.level_01",
   "path_from_state": "editor.test_run.path",
+  "runner": "./build/debug/slayer3d_runner",
+  "root": "path/to/game/data",
   "outputs": {
     "valid_key": "editor.test_run.saved",
     "message_key": "editor.test_run.save_message",
-    "path_key": "editor.test_run.path"
+    "path_key": "editor.test_run.path",
+    "command_key": "editor.test_run.command"
   }
 }
 ```
@@ -1367,6 +1450,14 @@ normal mouse clicking and right-button camera look in the same scene. If `look`
 is omitted, mouse-look is active whenever `mouse_look` is true. The controller
 writes `yaw`, `pitch`, and `camera_forward` by default; override those names
 with `yaw_property`, `pitch_property`, and `forward_property`.
+
+Editor scenes can pair one free-flight camera actor with multiple authored
+cameras. A typical graybox editor uses an `fps` or perspective camera for 3D
+inspection and orthographic cameras for top/front/side plotting. Bind UI or
+keyboard shortcuts to `camera.set` plus a scene-state `editor.view.mode` value
+so the active view is explicit and visible in inspector widgets. Selection
+traces that omit their `camera` field automatically use the active camera, so
+the same placement path works from perspective and orthographic views.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
@@ -2886,8 +2977,11 @@ as a float so fractional damage, timers, and meters can accumulate correctly:
 `branch` executes `then` actions when its `if` condition passes and `else`
 actions when it does not. Either side may be omitted, which makes that branch a
 successful no-op. Conditions normally read scene state or actor properties.
-Actions that receive a runtime payload, such as `weapon.hitscan` or sensors,
-can also use `payload.compare` with the same comparison operators:
+`scene_state.compare`, `property.compare`, and `payload.compare` support
+`==`, `!=`, `<`, `<=`, `>`, and `>=` for numeric values, and `==` / `!=` for
+boolean and string values. Actions that receive a runtime payload, such as
+`weapon.hitscan` or sensors, can also use `payload.compare` with the same
+comparison operators:
 
 ```json
 {

@@ -5,6 +5,8 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
 - a normal Slayer3D runtime viewport
 - a data-authored editor camera controller: arrow keys move horizontally,
   `Q`/`E` move down/up, and right mouse button + drag looks around
+- data-authored editor view switching: `Tab` toggles between perspective and
+  top orthographic, while `F1`-`F4` select perspective/top/front/side cameras
 - authored brush-world selection trace metadata with a ground work-plane
   fallback for placing the first brush in empty space
 - data-authored world/selection/normal/hit debug overlay drawing, including a
@@ -12,10 +14,11 @@ This data-only dojo demonstrates the first reusable editor shell pieces:
 - reusable `ui.panels` and `ui.inspectors` populated from scene state
 - a first blockout tool palette: `1` floor, `2` wall, `3` ceiling,
   `4` player start, then click a brush face or the ground work plane and press
-  `Enter` to place the selected prefab at that point
+  `Enter` to place the selected prefab at that point; `C` still cycles the
+  broader tool modes used by command previews
 - live snapped placement previews for floor, wall, ceiling, and player-start
-  tools using the same renderer-agnostic editor debug primitive path; `[`/`]`
-  change snap size and `R` toggles wall orientation between grid axes
+  tools using the same renderer-agnostic editor debug primitive path; `-`/`+`
+  change the active grid size and `R` toggles wall orientation between grid axes
 - unified editable-level save/export: `S` saves and publishes one fragment
   containing the brush world and player starts
 - test-run handoff manifest: `T` publishes and saves runner arguments for the

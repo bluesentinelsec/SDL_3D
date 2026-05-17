@@ -21,29 +21,29 @@
       "materials": [
         {
           "name": "mat.editor.wall",
-          "albedo": [0.58, 0.18, 0.16, 1.0],
+          "albedo": [0.50, 0.52, 0.56, 1.0],
           "roughness": 0.8,
           "editor": {
             "stable_id": "editor.material.wall",
-            "display_name": "Red Wall Material"
+            "display_name": "Mid Gray Wall Material"
           }
         },
         {
           "name": "mat.editor.floor",
-          "albedo": [0.22, 0.24, 0.28, 1.0],
+          "albedo": [0.30, 0.31, 0.33, 1.0],
           "roughness": 0.9,
           "editor": {
             "stable_id": "editor.material.floor",
-            "display_name": "Dark Floor Material"
+            "display_name": "Dark Gray Floor Material"
           }
         },
         {
           "name": "mat.editor.ceiling",
-          "albedo": [0.42, 0.44, 0.48, 1.0],
+          "albedo": [0.68, 0.69, 0.71, 1.0],
           "roughness": 0.85,
           "editor": {
             "stable_id": "editor.material.ceiling",
-            "display_name": "Soft Ceiling Material"
+            "display_name": "Light Gray Ceiling Material"
           }
         }
       ],

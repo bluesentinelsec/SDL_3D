@@ -1127,6 +1127,12 @@ bool set_property_from_json(slayer3d_properties *props, const char *key, yyjson_
 {
     if (props == NULL || key == NULL || value == NULL)
         return false;
+    if (yyjson_is_arr(value) && yyjson_arr_size(value) == 3 && yyjson_is_num(yyjson_arr_get(value, 0)) &&
+        yyjson_is_num(yyjson_arr_get(value, 1)) && yyjson_is_num(yyjson_arr_get(value, 2)))
+    {
+        slayer3d_properties_set_vec3(props, key, json_vec3_value(value, slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
+        return true;
+    }
     if (yyjson_is_bool(value))
     {
         slayer3d_properties_set_bool(props, key, yyjson_get_bool(value));

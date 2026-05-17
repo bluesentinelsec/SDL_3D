@@ -26,7 +26,7 @@
           },
           {
             "name": "action.editor.tool.cycle",
-            "bindings": [{ "device": "keyboard", "key": "TAB" }]
+            "bindings": [{ "device": "keyboard", "key": "C" }]
           },
           {
             "name": "action.editor.selection.clear",
@@ -61,6 +61,10 @@
             "bindings": [{ "device": "keyboard", "key": "T" }]
           },
           {
+            "name": "action.editor.test_run.enter",
+            "bindings": [{ "device": "keyboard", "key": "F5" }]
+          },
+          {
             "name": "action.editor.tool.floor",
             "bindings": [{ "device": "keyboard", "key": "1" }]
           },
@@ -77,12 +81,38 @@
             "bindings": [{ "device": "keyboard", "key": "4" }]
           },
           {
-            "name": "action.editor.snap.finer",
-            "bindings": [{ "device": "keyboard", "key": "LEFTBRACKET" }]
+            "name": "action.editor.view.toggle",
+            "bindings": [{ "device": "keyboard", "key": "TAB" }]
           },
           {
-            "name": "action.editor.snap.coarser",
-            "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
+            "name": "action.editor.view.perspective",
+            "bindings": [{ "device": "keyboard", "key": "F1" }]
+          },
+          {
+            "name": "action.editor.view.top",
+            "bindings": [{ "device": "keyboard", "key": "F2" }]
+          },
+          {
+            "name": "action.editor.view.front",
+            "bindings": [{ "device": "keyboard", "key": "F3" }]
+          },
+          {
+            "name": "action.editor.view.side",
+            "bindings": [{ "device": "keyboard", "key": "F4" }]
+          },
+          {
+            "name": "action.editor.grid.decrease",
+            "bindings": [
+              { "device": "keyboard", "key": "MINUS" },
+              { "device": "keyboard", "key": "KP_MINUS" }
+            ]
+          },
+          {
+            "name": "action.editor.grid.increase",
+            "bindings": [
+              { "device": "keyboard", "key": "EQUALS" },
+              { "device": "keyboard", "key": "KP_PLUS" }
+            ]
           },
           {
             "name": "action.editor.wall_axis.toggle",
@@ -150,17 +180,24 @@
     "signal.editor.selection.inspect",
     "signal.editor.command.preview",
     "signal.editor.command.commit",
+    "signal.editor.pointer.primary",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
     "signal.editor.tool.floor",
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
     "signal.editor.tool.player_start",
-    "signal.editor.snap.finer",
-    "signal.editor.snap.coarser",
+    "signal.editor.view.toggle",
+    "signal.editor.view.perspective",
+    "signal.editor.view.top",
+    "signal.editor.view.front",
+    "signal.editor.view.side",
+    "signal.editor.grid.decrease",
+    "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
     "signal.editor.export",
-    "signal.editor.test_run.prepare"
+    "signal.editor.test_run.prepare",
+    "signal.editor.test_run.enter"
   ],
   "logic": {
     "sensors": [
@@ -211,6 +248,11 @@
       },
       {
         "type": "sensor.input_pressed",
+        "action": "action.editor.test_run.enter",
+        "on_pressed": "signal.editor.test_run.enter"
+      },
+      {
+        "type": "sensor.input_pressed",
         "action": "action.editor.tool.floor",
         "on_pressed": "signal.editor.tool.floor"
       },
@@ -231,13 +273,38 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.snap.finer",
-        "on_pressed": "signal.editor.snap.finer"
+        "action": "action.editor.view.toggle",
+        "on_pressed": "signal.editor.view.toggle"
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.snap.coarser",
-        "on_pressed": "signal.editor.snap.coarser"
+        "action": "action.editor.view.perspective",
+        "on_pressed": "signal.editor.view.perspective"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.top",
+        "on_pressed": "signal.editor.view.top"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.front",
+        "on_pressed": "signal.editor.view.front"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.side",
+        "on_pressed": "signal.editor.view.side"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.grid.decrease",
+        "on_pressed": "signal.editor.grid.decrease"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.grid.increase",
+        "on_pressed": "signal.editor.grid.increase"
       },
       {
         "type": "sensor.input_pressed",
@@ -286,29 +353,96 @@
         ]
       },
       {
-        "signal": "signal.editor.snap.finer",
+        "signal": "signal.editor.view.toggle",
         "actions": [
           {
             "type": "scene_state.cycle",
-            "key": "editor.placement.snap",
-            "default": 0.5,
-            "direction": -1,
-            "values": [0.25, 0.5, 1.0, 2.0]
+            "key": "editor.view.mode",
+            "default": "perspective_3d",
+            "values": ["perspective_3d", "orthographic_top"]
           },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "placement snap decreased" }
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
+            "then": [
+              { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+              { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+              { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
+            ],
+            "else": [
+              { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+              { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+              { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
+            ]
+          }
         ]
       },
       {
-        "signal": "signal.editor.snap.coarser",
+        "signal": "signal.editor.view.perspective",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
+          { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.top",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_top" },
+          { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.front",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_front" },
+          { "type": "camera.set", "camera": "camera.editor_shell.ortho_front" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 0.0, 1.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "front orthographic view" }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.side",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_side" },
+          { "type": "camera.set", "camera": "camera.editor_shell.ortho_side" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [1.0, 0.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "side orthographic view" }
+        ]
+      },
+      {
+        "signal": "signal.editor.grid.decrease",
         "actions": [
           {
             "type": "scene_state.cycle",
-            "key": "editor.placement.snap",
-            "default": 0.5,
-            "direction": 1,
-            "values": [0.25, 0.5, 1.0, 2.0]
+            "key": "editor.grid.size",
+            "default": 8.0,
+            "direction": -1,
+            "values": [2.0, 4.0, 8.0, 16.0]
           },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "placement snap increased" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size decreased" }
+        ]
+      },
+      {
+        "signal": "signal.editor.grid.increase",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.grid.size",
+            "default": 8.0,
+            "direction": 1,
+            "values": [2.0, 4.0, 8.0, 16.0]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size increased" }
         ]
       },
       {
@@ -405,6 +539,22 @@
                 }
               }
             ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.pointer.primary",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "scene_state.compare",
+              "key": "editor.tool.mode",
+              "op": "!=",
+              "value": "select",
+              "default": "select"
+            },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
           }
         ]
       },
@@ -698,9 +848,33 @@
         "signal": "signal.editor.test_run.prepare",
         "actions": [
           {
+            "type": "editor.level.save",
+            "world": "brush.editor_shell.target",
+            "path_from_state": "editor.save.path",
+            "message": "editable level saved for test run",
+            "outputs": {
+              "valid_key": "editor.save.valid",
+              "message_key": "editor.save.message",
+              "path_key": "editor.save.path",
+              "size_key": "editor.save.size",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          {
             "type": "editor.test_run.prepare",
             "data_asset": "asset://editor_shell_dojo.game.json",
             "player_start": "player_start.editor_shell",
+            "runner": "./build/debug/slayer3d_runner",
+            "root": "demos/editor_shell_dojo/data",
             "message": "test run handoff prepared",
             "outputs": {
               "valid_key": "editor.test_run.valid",
@@ -710,7 +884,8 @@
               "data_asset_key": "editor.test_run.data_asset",
               "scene_key": "editor.test_run.scene",
               "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target"
+              "target_key": "editor.test_run.target",
+              "command_key": "editor.test_run.command"
             }
           },
           {
@@ -718,6 +893,8 @@
             "data_asset": "asset://editor_shell_dojo.game.json",
             "player_start": "player_start.editor_shell",
             "path_from_state": "editor.test_run.path",
+            "runner": "./build/debug/slayer3d_runner",
+            "root": "demos/editor_shell_dojo/data",
             "message": "test run manifest saved",
             "outputs": {
               "valid_key": "editor.test_run.saved",
@@ -728,10 +905,46 @@
               "data_asset_key": "editor.test_run.data_asset",
               "scene_key": "editor.test_run.scene",
               "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target"
+              "target_key": "editor.test_run.target",
+              "command_key": "editor.test_run.command"
             }
           },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "test run handoff prepared" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "test run saved and prepared" }
+        ]
+      },
+      {
+        "signal": "signal.editor.test_run.enter",
+        "actions": [
+          {
+            "type": "editor.player_start.apply",
+            "name": "player_start.editor_shell",
+            "message": "test run player start applied",
+            "outputs": {
+              "valid_key": "editor.test_run.enter.valid",
+              "message_key": "editor.test_run.enter.message",
+              "player_start_key": "editor.test_run.enter.player_start",
+              "scene_key": "editor.test_run.enter.scene",
+              "target_key": "editor.test_run.enter.target",
+              "position_key": "editor.test_run.enter.position",
+              "yaw_key": "editor.test_run.enter.yaw",
+              "pitch_key": "editor.test_run.enter.pitch"
+            }
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
+              { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+            ],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "player start required before playable test run"
+              }
+            ]
+          }
         ]
       }
     ]
@@ -750,6 +963,33 @@
         "fov": 70.0,
         "fov_axis": "horizontal",
         "active": true
+      },
+      {
+        "name": "camera.editor_shell.ortho_top",
+        "type": "orthographic",
+        "position_entity": "entity.editor_shell.camera",
+        "position_offset": [0.0, 40.0, 0.0],
+        "target_entity": "entity.editor_shell.camera",
+        "up": [0.0, 0.0, -1.0],
+        "size": 48.0
+      },
+      {
+        "name": "camera.editor_shell.ortho_front",
+        "type": "orthographic",
+        "position_entity": "entity.editor_shell.camera",
+        "position_offset": [0.0, 0.0, 40.0],
+        "target_entity": "entity.editor_shell.camera",
+        "up": [0.0, 1.0, 0.0],
+        "size": 32.0
+      },
+      {
+        "name": "camera.editor_shell.ortho_side",
+        "type": "orthographic",
+        "position_entity": "entity.editor_shell.camera",
+        "position_offset": [40.0, 0.0, 0.0],
+        "target_entity": "entity.editor_shell.camera",
+        "up": [0.0, 1.0, 0.0],
+        "size": 32.0
       },
       {
         "name": "camera.editor_shell.player",
