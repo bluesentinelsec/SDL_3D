@@ -1171,6 +1171,22 @@ current player-start collection as a `slayer3d.fragment.v0` document containing
 `editor_player_starts`. File writing remains host-owned, matching brush-world
 exports.
 
+Use `editor.player_start.apply` to move a stored player-start target actor back
+to its marker. This is useful for in-editor playable previews: apply the marker,
+then switch to the authored play/test scene with `scene.set`.
+
+```json
+{
+  "type": "editor.player_start.apply",
+  "name": "player_start.level_01",
+  "outputs": {
+    "valid_key": "editor.test_run.enter.valid",
+    "message_key": "editor.test_run.enter.message",
+    "target_key": "editor.test_run.enter.target"
+  }
+}
+```
+
 Use `editor.command.preview` to declare a non-mutating command intent against
 the active selection. This is the safe scaffolding layer for editor tools:
 commands can publish UI state and draw preview bounds without modifying the

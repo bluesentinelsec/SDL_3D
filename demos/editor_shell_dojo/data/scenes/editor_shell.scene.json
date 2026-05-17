@@ -30,6 +30,7 @@
       "action.editor.command.redo",
       "action.editor.export",
       "action.editor.test_run.prepare",
+      "action.editor.test_run.enter",
       "action.editor.tool.floor",
       "action.editor.tool.wall",
       "action.editor.tool.ceiling",
@@ -499,7 +500,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. Arrows move, Q/E down/up, RMB look. Tab view, F1-F4 cameras. 1 floor 2 wall 3 ceiling 4 start. +/- grid, R axis. Enter commit. S save.",
+        "text": "Click select. Arrows move, Q/E down/up, RMB look. Tab view, F1-F4 cameras. 1 floor 2 wall 3 ceiling 4 start. +/- grid, R axis. Enter commit. S save. T handoff. F5 play.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

@@ -61,6 +61,10 @@
             "bindings": [{ "device": "keyboard", "key": "T" }]
           },
           {
+            "name": "action.editor.test_run.enter",
+            "bindings": [{ "device": "keyboard", "key": "F5" }]
+          },
+          {
             "name": "action.editor.tool.floor",
             "bindings": [{ "device": "keyboard", "key": "1" }]
           },
@@ -192,7 +196,8 @@
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
     "signal.editor.export",
-    "signal.editor.test_run.prepare"
+    "signal.editor.test_run.prepare",
+    "signal.editor.test_run.enter"
   ],
   "logic": {
     "sensors": [
@@ -240,6 +245,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.test_run.prepare",
         "on_pressed": "signal.editor.test_run.prepare"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.test_run.enter",
+        "on_pressed": "signal.editor.test_run.enter"
       },
       {
         "type": "sensor.input_pressed",
@@ -900,6 +910,41 @@
             }
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "test run saved and prepared" }
+        ]
+      },
+      {
+        "signal": "signal.editor.test_run.enter",
+        "actions": [
+          {
+            "type": "editor.player_start.apply",
+            "name": "player_start.editor_shell",
+            "message": "test run player start applied",
+            "outputs": {
+              "valid_key": "editor.test_run.enter.valid",
+              "message_key": "editor.test_run.enter.message",
+              "player_start_key": "editor.test_run.enter.player_start",
+              "scene_key": "editor.test_run.enter.scene",
+              "target_key": "editor.test_run.enter.target",
+              "position_key": "editor.test_run.enter.position",
+              "yaw_key": "editor.test_run.enter.yaw",
+              "pitch_key": "editor.test_run.enter.pitch"
+            }
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
+              { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+            ],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "player start required before playable test run"
+              }
+            ]
+          }
         ]
       }
     ]

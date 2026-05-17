@@ -913,6 +913,7 @@ bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_d
                                                                  yyjson_val *action);
 bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 bool eval_data_condition_with_payload(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,

@@ -449,3 +449,19 @@ bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runt
     publish_editor_player_start_state(runtime, outputs, ok ? find_editor_player_start(runtime, desc.name) : NULL);
     return true;
 }
+
+bool slayer3d_game_data_apply_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *name = json_string(action, "name", NULL);
+    char error[256];
+    error[0] = '\0';
+    const bool ok = slayer3d_game_data_apply_editor_player_start(runtime, name, error, (int)sizeof(error));
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "player start applied")
+                                : (error[0] != '\0' ? error : "player start apply failed"));
+    publish_editor_player_start_state(runtime, outputs, ok ? find_editor_player_start(runtime, name) : NULL);
+    return true;
+}

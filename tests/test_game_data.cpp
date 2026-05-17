@@ -9455,6 +9455,32 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("unknown scene reference"), std::string::npos) << error;
 
+    write_text(dir / "bad_player_start_apply_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Player Start Apply Action" },
+  "world": { "name": "world.bad_editor_player_start_apply_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.apply_player_start"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.apply_player_start",
+        "actions": [
+          {
+            "type": "editor.player_start.apply",
+            "name": "player_start.missing"
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_player_start_apply_action.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unknown editor player start reference"), std::string::npos) << error;
+
     write_text(dir / "bad_player_start_section.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -15324,6 +15350,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
     const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
     const int test_run_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.prepare");
+    const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
     ASSERT_GE(floor_signal, 0);
     ASSERT_GE(wall_signal, 0);
     ASSERT_GE(ceiling_signal, 0);
@@ -15334,6 +15361,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(commit_signal, 0);
     ASSERT_GE(export_signal, 0);
     ASSERT_GE(test_run_signal, 0);
+    ASSERT_GE(test_run_enter_signal, 0);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -15683,6 +15711,22 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     slayer3d_game_data_destroy(roundtrip_runtime);
     slayer3d_game_session_destroy(roundtrip_session);
+
+    slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
+                 "test run player start applied");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.test_run");
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.player");
+    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.editor_shell.player"));
+    slayer3d_registered_actor *test_player = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.player");
+    ASSERT_NE(test_player, nullptr);
+    EXPECT_NEAR(test_player->position.x, placement_origin.x, 0.001f);
+    EXPECT_NEAR(test_player->position.y, placement_origin.y, 0.001f);
+    EXPECT_NEAR(test_player->position.z, placement_origin.z, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(test_player->props, "yaw", 0.0f), 3.14159f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(test_player->props, "pitch", 1.0f), 0.0f, 0.001f);
+
     remove_test_dir(save_dir);
 
     slayer3d_game_data_destroy(runtime);

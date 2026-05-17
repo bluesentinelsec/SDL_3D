@@ -426,6 +426,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.player_start.place") == 0)
         return slayer3d_game_data_place_editor_player_start_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.player_start.apply") == 0)
+        return slayer3d_game_data_apply_editor_player_start_action(runtime, action);
+
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         const char *name = json_string(action, "name", NULL);
