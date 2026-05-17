@@ -161,6 +161,8 @@ target_sources(
         src/game_data_controller_runtime.c
         src/game_data_controller_binding_helpers.c
         src/game_data_editor_player_start.c
+        src/game_data_editor_selection_queries.c
+        src/game_data_editor_debug_primitives.c
         src/game_data_grid_actions.c
         src/game_data_grid_runtime.c
         src/game_data_world_model_instances.c
