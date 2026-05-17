@@ -196,6 +196,7 @@ target_sources(
         src/game_data_update_runtime.c
         src/game_data_ui_animation_runtime.c
         src/game_data_world_loaders.c
+        src/game_data_world_lighting.c
         src/game_data_world_queries.c
         src/game_data_standard_options.c
         src/game_presentation.c
