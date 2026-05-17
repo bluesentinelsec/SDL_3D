@@ -287,6 +287,26 @@ static bool editor_selection_select_requested(const slayer3d_game_data_runtime *
     return button != 0 && slayer3d_input_get_pressed_mouse_button(input) == button;
 }
 
+static bool emit_editor_selection_signal(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                         const char *signal_key, const slayer3d_game_data_editor_selection *selection)
+{
+    const char *signal = json_string(selection_json, signal_key, NULL);
+    if (signal == NULL)
+        return true;
+
+    slayer3d_signal_bus *bus = runtime_bus(runtime);
+    const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
+    if (bus == NULL || signal_id < 0)
+        return false;
+
+    slayer3d_properties *payload = slayer3d_game_data_create_editor_selection_payload(selection);
+    if (payload == NULL)
+        return false;
+    slayer3d_signal_emit(bus, signal_id, payload);
+    slayer3d_properties_destroy(payload);
+    return true;
+}
+
 static const char *editor_selection_type_name(slayer3d_game_data_world_model_type type)
 {
     if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL)
@@ -365,7 +385,8 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
 
     publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
     update_editor_placement_preview(runtime, editor, &hover_selection);
-    if (editor_selection_select_requested(runtime, selection_json))
+    const bool select_requested = editor_selection_select_requested(runtime, selection_json);
+    if (select_requested)
     {
         if (hover_selection.hit)
             runtime->editor_active_selection = hover_selection;
@@ -375,6 +396,11 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+    if (select_requested &&
+        !emit_editor_selection_signal(runtime, selection_json, "on_select", &runtime->editor_active_selection))
+    {
+        return false;
+    }
     return true;
 }
 

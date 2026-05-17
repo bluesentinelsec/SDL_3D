@@ -8894,6 +8894,11 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
             R"json({ "select_button": "PRIMARY", "trace": { "source": "camera_screen", "camera": "camera.valid" }, "outputs": { "hit_key": "editor.hit" } })json",
             "scene editor selection select_button must be a mouse button",
         },
+        {
+            "bad_on_select",
+            R"json({ "trace": { "source": "camera_screen", "camera": "camera.valid" }, "outputs": { "hit_key": "editor.hit" }, "on_select": "signal.editor.missing" })json",
+            "unknown signal",
+        },
     };
 
     const std::filesystem::path dir = unique_test_dir("scene_editor_tooling");
@@ -15422,7 +15427,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(
         slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_placement_preview, &placement_debug));
     EXPECT_EQ(placement_debug.edges, 12);
-    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    release.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &release);
+    slayer3d_input_update(input, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "floor prefab created");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.brush", ""),

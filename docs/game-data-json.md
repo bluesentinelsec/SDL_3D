@@ -929,7 +929,12 @@ Selection mode defaults to `hover`, where `outputs` receives the current pick
 every frame. In `mode: "click"`, `outputs` receives the pinned selection and
 `hover_outputs` can publish the live hover independently. `select_button`
 defaults to `LEFT`; clicking empty space clears the pinned selection unless
-`clear_on_miss` is false.
+`clear_on_miss` is false. `on_select` may reference a signal to emit after a
+click updates the active selection and placement preview. The signal receives
+the same selection payload used by `editor.selection.run`, which lets authored
+editor tools turn one pointer click into a project-specific operation such as
+"place the active prefab" while keeping selection, placement preview, and
+command commits general-purpose.
 
 Editor selections can also drive generic logic actions:
 

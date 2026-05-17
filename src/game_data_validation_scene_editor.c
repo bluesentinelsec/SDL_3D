@@ -517,6 +517,16 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
         format_path(hover_outputs_path, sizeof(hover_outputs_path), "%s.hover_outputs", selection_path);
         if (!validate_scene_editor_outputs(ctx, obj_get(selection, "hover_outputs"), hover_outputs_path))
             return false;
+        yyjson_val *on_select = obj_get(selection, "on_select");
+        if (on_select != NULL)
+        {
+            char on_select_path[PATH_BUFFER_SIZE];
+            format_path(on_select_path, sizeof(on_select_path), "%s.on_select", selection_path);
+            if (!yyjson_is_str(on_select) || yyjson_get_str(on_select)[0] == '\0')
+                return validation_error(ctx, on_select_path, "scene editor selection on_select must be a signal");
+            if (!require_ref(ctx, &names->signals, "signal", yyjson_get_str(on_select), on_select_path))
+                return false;
+        }
     }
 
     char placement_path[PATH_BUFFER_SIZE];

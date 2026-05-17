@@ -98,7 +98,8 @@
         "hit_key": "editor.hover.hit",
         "element_key": "editor.hover.element",
         "face_stable_id_key": "editor.hover.face_stable_id"
-      }
+      },
+      "on_select": "signal.editor.pointer.primary"
     },
     "placement": {
       "tool_key": "editor.tool.mode",

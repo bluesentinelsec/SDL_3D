@@ -176,6 +176,7 @@
     "signal.editor.selection.inspect",
     "signal.editor.command.preview",
     "signal.editor.command.commit",
+    "signal.editor.pointer.primary",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
     "signal.editor.tool.floor",
@@ -528,6 +529,22 @@
                 }
               }
             ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.pointer.primary",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "scene_state.compare",
+              "key": "editor.tool.mode",
+              "op": "!=",
+              "value": "select",
+              "default": "select"
+            },
+            "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
           }
         ]
       },
