@@ -1055,6 +1055,13 @@ void init_editor_selection(slayer3d_game_data_editor_selection *selection);
 bool editor_selection_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_command_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_placement_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
+void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
+void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
+void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);
+void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, float value);
+void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, slayer3d_vec3 value);
+bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, const char *world_name,
+                                       const char *message, bool publish_result);
 bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
