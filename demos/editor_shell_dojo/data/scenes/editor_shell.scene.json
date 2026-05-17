@@ -12,6 +12,7 @@
     },
     { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
     { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
+    { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
     { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
     { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
     { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
@@ -157,6 +158,47 @@
         }
       ]
     },
+    "palette": {
+      "selected_key": "editor.tool.mode",
+      "entries": [
+        {
+          "mode": "floor",
+          "preview": "floor",
+          "kind": "box",
+          "label": "Floor",
+          "shortcut": "1",
+          "category": "blockout",
+          "description": "8m gray floor tile"
+        },
+        {
+          "mode": "wall",
+          "preview": "wall",
+          "kind": "box",
+          "label": "Wall",
+          "shortcut": "2",
+          "category": "blockout",
+          "description": "8m gray wall tile"
+        },
+        {
+          "mode": "ceiling",
+          "preview": "ceiling",
+          "kind": "box",
+          "label": "Ceiling",
+          "shortcut": "3",
+          "category": "blockout",
+          "description": "8m gray ceiling tile"
+        },
+        {
+          "mode": "player_start",
+          "preview": "player_start",
+          "kind": "player_start",
+          "label": "Player",
+          "shortcut": "4",
+          "category": "things",
+          "description": "play-test spawn marker"
+        }
+      ]
+    },
     "debug_overlay": {
       "enabled": true,
       "flags": [
@@ -188,7 +230,7 @@
         "x": 18,
         "y": 18,
         "w": 340,
-        "h": 320,
+        "h": 370,
         "color": [10, 14, 22, 215],
         "border_color": [80, 140, 230, 230],
         "border_thickness": 2
@@ -286,6 +328,105 @@
       }
     ],
     "text": [
+      {
+        "name": "ui.editor_shell.palette.title",
+        "text": "Blockout Prefabs",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 246,
+        "color": [235, 245, 255, 255],
+        "scale": 0.64
+      },
+      {
+        "name": "ui.editor_shell.palette.floor",
+        "text": "  1 Floor",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 274,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "floor" }
+      },
+      {
+        "name": "ui.editor_shell.palette.floor.active",
+        "text": "> 1 Floor",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 274,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" }
+      },
+      {
+        "name": "ui.editor_shell.palette.wall",
+        "text": "  2 Wall",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 298,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "wall" }
+      },
+      {
+        "name": "ui.editor_shell.palette.wall.active",
+        "text": "> 2 Wall",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 298,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "wall" }
+      },
+      {
+        "name": "ui.editor_shell.palette.ceiling",
+        "text": "  3 Ceiling",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 322,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "ceiling" }
+      },
+      {
+        "name": "ui.editor_shell.palette.ceiling.active",
+        "text": "> 3 Ceiling",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 322,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" }
+      },
+      {
+        "name": "ui.editor_shell.palette.player",
+        "text": "  4 Player",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 346,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": {
+          "type": "scene_state.compare",
+          "key": "editor.tool.mode",
+          "op": "!=",
+          "value": "player_start"
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.player.active",
+        "text": "> 4 Player",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 346,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": {
+          "type": "scene_state.compare",
+          "key": "editor.tool.mode",
+          "op": "==",
+          "value": "player_start"
+        }
+      },
       {
         "name": "ui.editor_shell.title",
         "text": "Editor Shell Dojo",

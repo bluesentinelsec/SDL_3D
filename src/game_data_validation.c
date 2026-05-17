@@ -2724,7 +2724,7 @@ static bool is_side_name(const char *side)
 static bool is_compare_op(const char *op)
 {
     return op != NULL && (SDL_strcmp(op, ">=") == 0 || SDL_strcmp(op, ">") == 0 || SDL_strcmp(op, "<=") == 0 ||
-                          SDL_strcmp(op, "<") == 0 || SDL_strcmp(op, "==") == 0);
+                          SDL_strcmp(op, "<") == 0 || SDL_strcmp(op, "==") == 0 || SDL_strcmp(op, "!=") == 0);
 }
 
 bool is_vec_array(yyjson_val *value, size_t min_count)

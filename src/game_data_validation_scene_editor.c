@@ -19,6 +19,12 @@ static const char *json_string(yyjson_val *object, const char *key)
     return validation_json_string(object, key);
 }
 
+static const char *json_string_default(yyjson_val *object, const char *key, const char *default_value)
+{
+    const char *value = validation_json_string(object, key);
+    return value != NULL ? value : default_value;
+}
+
 static bool is_non_empty_string(yyjson_val *object, const char *key)
 {
     const char *value = json_string(object, key);
@@ -415,6 +421,69 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
     return true;
 }
 
+static bool scene_editor_placement_has_preview_mode(yyjson_val *placement, const char *mode)
+{
+    yyjson_val *previews = obj_get(placement, "previews");
+    for (size_t i = 0; yyjson_is_arr(previews) && i < yyjson_arr_size(previews); ++i)
+    {
+        yyjson_val *preview = yyjson_arr_get(previews, i);
+        if (SDL_strcmp(json_string_default(preview, "mode", ""), mode != NULL ? mode : "") == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool validate_scene_editor_palette(validation_context *ctx, yyjson_val *palette, yyjson_val *placement,
+                                          const char *palette_path)
+{
+    if (palette == NULL)
+        return true;
+    if (!yyjson_is_obj(palette))
+        return validation_error(ctx, palette_path, "scene editor palette must be an object");
+
+    char field_path[PATH_BUFFER_SIZE];
+    format_path(field_path, sizeof(field_path), "%s.selected_key", palette_path);
+    if (!validate_optional_non_empty_string(ctx, obj_get(palette, "selected_key"), field_path,
+                                            "scene editor palette selected_key"))
+        return false;
+
+    yyjson_val *entries = obj_get(palette, "entries");
+    if (!yyjson_is_arr(entries) || yyjson_arr_size(entries) == 0)
+        return validation_error(ctx, palette_path, "scene editor palette entries must be a non-empty array");
+
+    for (size_t i = 0; i < yyjson_arr_size(entries); ++i)
+    {
+        char entry_path[PATH_BUFFER_SIZE];
+        format_path(entry_path, sizeof(entry_path), "%s.entries[%zu]", palette_path, i);
+        yyjson_val *entry = yyjson_arr_get(entries, i);
+        if (!yyjson_is_obj(entry))
+            return validation_error(ctx, entry_path, "scene editor palette entry must be an object");
+        if (!is_non_empty_string(entry, "mode"))
+            return validation_error(ctx, entry_path, "scene editor palette entry requires a non-empty mode");
+        if (!is_non_empty_string(entry, "label"))
+            return validation_error(ctx, entry_path, "scene editor palette entry requires a non-empty label");
+
+        static const char *const optional_string_fields[] = {"shortcut", "category", "description"};
+        for (size_t field_index = 0; field_index < SDL_arraysize(optional_string_fields); ++field_index)
+        {
+            format_path(field_path, sizeof(field_path), "%s.%s", entry_path, optional_string_fields[field_index]);
+            if (!validate_optional_non_empty_string(ctx, obj_get(entry, optional_string_fields[field_index]),
+                                                    field_path, "scene editor palette entry field"))
+                return false;
+        }
+
+        const char *kind = json_string_default(entry, "kind", "box");
+        if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0 && SDL_strcmp(kind, "thing") != 0)
+            return validation_error(ctx, entry_path,
+                                    "scene editor palette entry kind must be box, player_start, or thing");
+
+        const char *preview = json_string_default(entry, "preview", json_string(entry, "mode"));
+        if (!scene_editor_placement_has_preview_mode(placement, preview))
+            return validation_error(ctx, entry_path, "scene editor palette entry references unknown placement preview");
+    }
+    return true;
+}
+
 bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
                                    validation_names *names)
 {
@@ -452,7 +521,13 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
 
     char placement_path[PATH_BUFFER_SIZE];
     format_path(placement_path, sizeof(placement_path), "%s.editor.placement", json_path);
-    if (!validate_scene_editor_placement(ctx, obj_get(editor, "placement"), placement_path, names))
+    yyjson_val *placement = obj_get(editor, "placement");
+    if (!validate_scene_editor_placement(ctx, placement, placement_path, names))
+        return false;
+
+    char palette_path[PATH_BUFFER_SIZE];
+    format_path(palette_path, sizeof(palette_path), "%s.editor.palette", json_path);
+    if (!validate_scene_editor_palette(ctx, obj_get(editor, "palette"), placement, palette_path))
         return false;
 
     yyjson_val *overlay = obj_get(editor, "debug_overlay");

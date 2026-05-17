@@ -1090,6 +1090,42 @@ flag and color, so editor hosts do not need a second rendering path.
 }
 ```
 
+Scenes may pair placement previews with `editor.palette` metadata. The palette
+is intentionally data-only: it gives editor hosts and authored sidebar UI a
+stable list of selectable tools without hard-coding project-specific prefab
+names in C. `selected_key` usually matches `editor.placement.tool_key`.
+Each entry has a `mode`, `label`, optional `shortcut`, optional
+`category`/`description`, and an optional `preview` reference. When omitted,
+`preview` defaults to `mode`. Validation requires every palette preview to
+match an authored placement preview, so stale sidebar entries fail at load time.
+
+```json
+{
+  "editor": {
+    "palette": {
+      "selected_key": "editor.tool.mode",
+      "entries": [
+        {
+          "mode": "floor",
+          "preview": "floor",
+          "kind": "box",
+          "label": "Floor",
+          "shortcut": "1",
+          "category": "blockout"
+        },
+        {
+          "mode": "player_start",
+          "kind": "player_start",
+          "label": "Player",
+          "shortcut": "4",
+          "category": "things"
+        }
+      ]
+    }
+  }
+}
+```
+
 `editor.brush_world.create_box` and `editor.player_start.place` may use
 `"position_from": "placement_preview"` to commit exactly the active preview.
 Set `preview_mode` on the action to fail closed if the active preview belongs
@@ -2909,8 +2945,11 @@ as a float so fractional damage, timers, and meters can accumulate correctly:
 `branch` executes `then` actions when its `if` condition passes and `else`
 actions when it does not. Either side may be omitted, which makes that branch a
 successful no-op. Conditions normally read scene state or actor properties.
-Actions that receive a runtime payload, such as `weapon.hitscan` or sensors,
-can also use `payload.compare` with the same comparison operators:
+`scene_state.compare`, `property.compare`, and `payload.compare` support
+`==`, `!=`, `<`, `<=`, `>`, and `>=` for numeric values, and `==` / `!=` for
+boolean and string values. Actions that receive a runtime payload, such as
+`weapon.hitscan` or sensors, can also use `payload.compare` with the same
+comparison operators:
 
 ```json
 {

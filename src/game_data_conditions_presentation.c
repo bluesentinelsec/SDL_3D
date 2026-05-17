@@ -28,6 +28,8 @@ static bool compare_value(const slayer3d_value *left, const char *op, yyjson_val
             return left->as_int < value;
         if (SDL_strcmp(op, "==") == 0)
             return left->as_int == value;
+        if (SDL_strcmp(op, "!=") == 0)
+            return left->as_int != value;
     }
     if (left->type == SLAYER3D_VALUE_FLOAT && yyjson_is_num(right))
     {
@@ -42,11 +44,24 @@ static bool compare_value(const slayer3d_value *left, const char *op, yyjson_val
             return left->as_float < value;
         if (SDL_strcmp(op, "==") == 0)
             return left->as_float == value;
+        if (SDL_strcmp(op, "!=") == 0)
+            return left->as_float != value;
     }
-    if (left->type == SLAYER3D_VALUE_BOOL && yyjson_is_bool(right) && SDL_strcmp(op, "==") == 0)
-        return left->as_bool == yyjson_get_bool(right);
-    if (left->type == SLAYER3D_VALUE_STRING && yyjson_is_str(right) && SDL_strcmp(op, "==") == 0)
-        return SDL_strcmp(left->as_string, yyjson_get_str(right)) == 0;
+    if (left->type == SLAYER3D_VALUE_BOOL && yyjson_is_bool(right))
+    {
+        if (SDL_strcmp(op, "==") == 0)
+            return left->as_bool == yyjson_get_bool(right);
+        if (SDL_strcmp(op, "!=") == 0)
+            return left->as_bool != yyjson_get_bool(right);
+    }
+    if (left->type == SLAYER3D_VALUE_STRING && yyjson_is_str(right))
+    {
+        const bool equal = SDL_strcmp(left->as_string, yyjson_get_str(right)) == 0;
+        if (SDL_strcmp(op, "==") == 0)
+            return equal;
+        if (SDL_strcmp(op, "!=") == 0)
+            return !equal;
+    }
     return false;
 }
 

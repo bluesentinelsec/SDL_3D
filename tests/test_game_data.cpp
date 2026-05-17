@@ -9054,6 +9054,67 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
                                                   grid_placement_error, sizeof(grid_placement_error)));
     EXPECT_NE(std::string(grid_placement_error).find("exactly one of min/max or grid_min/grid_max"), std::string::npos)
         << grid_placement_error;
+
+    write_text(dir / "bad_palette.game.json", R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Scene Editor Palette" },
+  "world": {
+    "name": "world.bad_scene_editor_palette",
+    "kind": "brush",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "brush_worlds": [
+    {
+      "name": "brush.editor.target",
+      "materials": [{ "name": "mat.gray", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.valid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 0 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.gray" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "placement": {
+      "previews": [
+        {
+          "mode": "floor",
+          "kind": "box",
+          "world": "brush.editor.target",
+          "material": "mat.gray",
+          "grid_min": [-0.5, -0.025, -0.5],
+          "grid_max": [0.5, 0.0, 0.5]
+        }
+      ]
+    },
+    "palette": {
+      "entries": [
+        { "mode": "wall", "preview": "wall", "kind": "box", "label": "Wall" }
+      ]
+    }
+  }
+})json");
+    char palette_error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_palette.game.json").string().c_str(), nullptr,
+                                                  palette_error, sizeof(palette_error)));
+    EXPECT_NE(std::string(palette_error).find("palette entry references unknown placement preview"), std::string::npos)
+        << palette_error;
     remove_test_dir(dir);
 }
 
@@ -15280,12 +15341,47 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
         return brush_world;
     };
+    struct UiCapture
+    {
+        const slayer3d_game_data_runtime *runtime = nullptr;
+        std::vector<std::string> *values = nullptr;
+    };
+    auto visible_ui_text = [&]() {
+        std::vector<std::string> values;
+        auto capture = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<UiCapture *>(userdata);
+            if (text != nullptr && text->name != nullptr &&
+                std::string(text->name).rfind("ui.editor_shell.palette.", 0) == 0 &&
+                slayer3d_game_data_ui_text_is_visible(capture->runtime, text, nullptr))
+            {
+                capture->values->emplace_back(text->text != nullptr ? text->text : "");
+            }
+            return true;
+        };
+        UiCapture capture_state{runtime, &values};
+        slayer3d_game_data_ui_metrics metrics{};
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture, &capture_state));
+        return values;
+    };
+    auto contains_ui_text = [](const std::vector<std::string> &values, const char *expected) {
+        for (const std::string &value : values)
+        {
+            if (value == expected)
+                return true;
+        }
+        return false;
+    };
     EXPECT_EQ(world().brush_count, 1);
 
     slayer3d_signal_emit(bus, floor_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    std::vector<std::string> palette_text = visible_ui_text();
+    EXPECT_TRUE(contains_ui_text(palette_text, "Blockout Prefabs"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "> 1 Floor"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "  2 Wall"));
+    EXPECT_FALSE(contains_ui_text(palette_text, "  1 Floor"));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.material", ""),
@@ -15343,6 +15439,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    palette_text = visible_ui_text();
+    EXPECT_TRUE(contains_ui_text(palette_text, "> 2 Wall"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "  1 Floor"));
+    EXPECT_FALSE(contains_ui_text(palette_text, "  2 Wall"));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
     slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
