@@ -1045,6 +1045,12 @@ brush_world_runtime *find_brush_world_runtime_mutable(slayer3d_game_data_runtime
 void editor_brush_world_mark_dirty(brush_world_runtime *world_runtime);
 const editor_player_start_runtime *find_editor_player_start(const slayer3d_game_data_runtime *runtime,
                                                             const char *name);
+slayer3d_game_data_sector_level_variant sector_level_variant_from_string(const char *variant,
+                                                                         const slayer3d_level **out_level,
+                                                                         const sector_level_runtime *level,
+                                                                         bool sector_lighting_enabled);
+slayer3d_bounding_box translated_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 position);
+bool model_bounds(const slayer3d_model *model, slayer3d_bounding_box *out_bounds);
 bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
