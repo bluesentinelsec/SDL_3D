@@ -223,7 +223,9 @@ bool slayer3d_begin_mode_3d(slayer3d_render_context *context, slayer3d_camera3d 
         return SDL_SetError("slayer3d_begin_mode_3d called while already in 3D mode.");
     }
 
-    if (!slayer3d_camera3d_compute_matrices(&camera, context->width, context->height, context->near_plane,
+    const int viewport_width = context->viewport_enabled ? context->viewport_rect.w : context->width;
+    const int viewport_height = context->viewport_enabled ? context->viewport_rect.h : context->height;
+    if (!slayer3d_camera3d_compute_matrices(&camera, viewport_width, viewport_height, context->near_plane,
                                             context->far_plane, &context->view, &context->projection))
     {
         return false;

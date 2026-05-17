@@ -1453,11 +1453,31 @@ with `yaw_property`, `pitch_property`, and `forward_property`.
 
 Editor scenes can pair one free-flight camera actor with multiple authored
 cameras. A typical graybox editor uses an `fps` or perspective camera for 3D
-inspection and orthographic cameras for top/front/side plotting. Bind UI or
-keyboard shortcuts to `camera.set` plus a scene-state `editor.view.mode` value
-so the active view is explicit and visible in inspector widgets. Selection
-traces that omit their `camera` field automatically use the active camera, so
-the same placement path works from perspective and orthographic views.
+inspection and orthographic cameras for top/front/side plotting. For a classic
+multi-viewport editor, author `world_viewports` on the scene:
+
+```json
+{
+  "world_viewports": [
+    { "name": "perspective", "camera": "camera.editor.perspective", "rect": [0, 0, 640, 360] },
+    { "name": "top", "camera": "camera.editor.top", "rect": [640, 0, 640, 360] },
+    { "name": "front", "camera": "camera.editor.front", "rect": [0, 360, 640, 360] },
+    { "name": "side", "camera": "camera.editor.side", "rect": [640, 360, 640, 360] }
+  ]
+}
+```
+
+Each rect is `[x, y, width, height]` in logical pixels. Optional `active_if`
+conditions let the same scene switch between a four-viewport layout and a
+single full-screen flyby camera. World viewports affect only 3D/world drawing;
+UI remains rendered at the normal logical resolution.
+
+Selection traces may also declare matching `viewports` entries. When the mouse
+falls inside a viewport rect, the trace uses that viewport's camera, local
+screen coordinates, dimensions, and optional viewport-specific `work_plane`.
+This keeps floor/wall/ceiling placement correct in orthographic quadrants while
+still allowing a perspective preview in the same scene. Traces that omit
+`viewports` fall back to the trace camera or active camera.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:

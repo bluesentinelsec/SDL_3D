@@ -320,6 +320,8 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
     context->model_stack_capacity = 0;
     context->backface_culling_enabled = false;
     context->wireframe_enabled = false;
+    context->viewport_enabled = false;
+    context->viewport_rect = (SDL_Rect){0, 0, render_width, render_height};
     context->scissor_enabled = false;
     context->scissor_rect = (SDL_Rect){0, 0, render_width, render_height};
     context->model = slayer3d_mat4_identity();
@@ -580,6 +582,82 @@ bool slayer3d_clear_render_context_rect(slayer3d_render_context *context, const 
 
     slayer3d_framebuffer framebuffer = slayer3d_framebuffer_from_context(context);
     slayer3d_framebuffer_clear_rect(&framebuffer, rect, color, 1.0f);
+    return true;
+}
+
+bool slayer3d_set_render_viewport(slayer3d_render_context *context, const SDL_Rect *rect)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+
+    if (rect == NULL)
+    {
+        context->viewport_enabled = false;
+        context->viewport_rect = (SDL_Rect){0, 0, context->width, context->height};
+        return true;
+    }
+
+    if (rect->w <= 0 || rect->h <= 0)
+    {
+        return SDL_SetError("Render viewport dimensions must be positive.");
+    }
+
+    Sint64 x = rect->x;
+    Sint64 y = rect->y;
+    Sint64 w = rect->w;
+    Sint64 h = rect->h;
+
+    if (x < 0)
+    {
+        w += x;
+        x = 0;
+    }
+    if (y < 0)
+    {
+        h += y;
+        y = 0;
+    }
+    if (x > context->width)
+        x = context->width;
+    if (y > context->height)
+        y = context->height;
+    if (w > context->width - x)
+        w = context->width - x;
+    if (h > context->height - y)
+        h = context->height - y;
+    if (w <= 0 || h <= 0)
+    {
+        return SDL_SetError("Render viewport lies outside the logical render area.");
+    }
+
+    context->viewport_enabled = true;
+    context->viewport_rect = (SDL_Rect){(int)x, (int)y, (int)w, (int)h};
+    return true;
+}
+
+bool slayer3d_is_render_viewport_enabled(const slayer3d_render_context *context)
+{
+    if (context == NULL)
+    {
+        SDL_InvalidParamError("context");
+        return false;
+    }
+    return context->viewport_enabled;
+}
+
+bool slayer3d_get_render_viewport(const slayer3d_render_context *context, SDL_Rect *out_rect)
+{
+    if (context == NULL)
+    {
+        return SDL_InvalidParamError("context");
+    }
+    if (out_rect == NULL)
+    {
+        return SDL_InvalidParamError("out_rect");
+    }
+    *out_rect = context->viewport_enabled ? context->viewport_rect : (SDL_Rect){0, 0, context->width, context->height};
     return true;
 }
 

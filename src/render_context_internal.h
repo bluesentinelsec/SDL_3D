@@ -47,6 +47,8 @@ struct slayer3d_render_context
     int model_stack_capacity;
     bool backface_culling_enabled;
     bool wireframe_enabled;
+    bool viewport_enabled;
+    SDL_Rect viewport_rect;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
     bool color_buffer_blend; /* software overlay: enable alpha compositing */
@@ -122,6 +124,8 @@ static inline slayer3d_framebuffer slayer3d_framebuffer_from_context(slayer3d_re
     framebuffer.width = context->width;
     framebuffer.height = context->height;
     framebuffer.parallel_rasterizer = context->parallel_rasterizer;
+    framebuffer.viewport_enabled = context->viewport_enabled;
+    framebuffer.viewport_rect = context->viewport_rect;
     framebuffer.scissor_enabled = context->scissor_enabled;
     framebuffer.scissor_rect = context->scissor_rect;
     framebuffer.blend_enabled = context->color_buffer_blend;

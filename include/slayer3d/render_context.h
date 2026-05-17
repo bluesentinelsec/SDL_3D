@@ -289,6 +289,19 @@ extern "C"
     bool slayer3d_clear_render_context(slayer3d_render_context *context, slayer3d_color color);
     bool slayer3d_clear_render_context_rect(slayer3d_render_context *context, const SDL_Rect *rect,
                                             slayer3d_color color);
+    /**
+     * @brief Restrict subsequent 3D projection and rasterization to a logical viewport.
+     *
+     * Passing NULL restores the full logical render area. The viewport affects
+     * 3D camera aspect ratio, software viewport transforms, and capable
+     * backends' GPU viewport/scissor state. UI rendering is intentionally
+     * unaffected.
+     */
+    bool slayer3d_set_render_viewport(slayer3d_render_context *context, const SDL_Rect *rect);
+    /** @brief Return whether a custom logical 3D render viewport is active. */
+    bool slayer3d_is_render_viewport_enabled(const slayer3d_render_context *context);
+    /** @brief Return the active logical 3D render viewport, or the full render area when disabled. */
+    bool slayer3d_get_render_viewport(const slayer3d_render_context *context, SDL_Rect *out_rect);
     bool slayer3d_set_scissor_rect(slayer3d_render_context *context, const SDL_Rect *rect);
     bool slayer3d_is_scissor_enabled(const slayer3d_render_context *context);
     bool slayer3d_get_scissor_rect(const slayer3d_render_context *context, SDL_Rect *out_rect);

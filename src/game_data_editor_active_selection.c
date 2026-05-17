@@ -64,6 +64,18 @@ static slayer3d_vec3 editor_scene_state_vec3(const slayer3d_game_data_runtime *r
                                           : fallback;
 }
 
+typedef struct editor_trace_viewport_config
+{
+    const char *camera;
+    float x;
+    float y;
+    float width;
+    float height;
+    float screen_x;
+    float screen_y;
+    yyjson_val *work_plane;
+} editor_trace_viewport_config;
+
 static void editor_default_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height)
 {
     if (out_width == NULL || out_height == NULL)
@@ -122,10 +134,77 @@ static bool editor_trace_viewport(const slayer3d_game_data_runtime *runtime, yyj
     return *out_width > 0.0f && *out_height > 0.0f;
 }
 
+static bool editor_trace_viewport_rect(yyjson_val *viewport, float *out_x, float *out_y, float *out_w, float *out_h)
+{
+    yyjson_val *rect = obj_get(viewport, "rect");
+    if (!yyjson_is_arr(rect) || yyjson_arr_size(rect) != 4 || out_x == NULL || out_y == NULL || out_w == NULL ||
+        out_h == NULL)
+    {
+        return false;
+    }
+    *out_x = (float)yyjson_get_num(yyjson_arr_get(rect, 0));
+    *out_y = (float)yyjson_get_num(yyjson_arr_get(rect, 1));
+    *out_w = (float)yyjson_get_num(yyjson_arr_get(rect, 2));
+    *out_h = (float)yyjson_get_num(yyjson_arr_get(rect, 3));
+    return *out_w > 0.0f && *out_h > 0.0f;
+}
+
+static bool editor_trace_select_viewport(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
+                                         editor_trace_viewport_config *out_viewport)
+{
+    if (runtime == NULL || trace == NULL || out_viewport == NULL)
+        return false;
+    yyjson_val *viewports = obj_get(trace, "viewports");
+    if (!yyjson_is_arr(viewports))
+        return false;
+
+    float full_width = 0.0f;
+    float full_height = 0.0f;
+    if (!editor_trace_viewport(runtime, trace, &full_width, &full_height))
+        return false;
+    float screen_x = 0.0f;
+    float screen_y = 0.0f;
+    if (!editor_trace_screen_point(runtime, trace, full_width, full_height, &screen_x, &screen_y))
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+    {
+        yyjson_val *viewport = yyjson_arr_get(viewports, i);
+        yyjson_val *active_if = obj_get(viewport, "active_if");
+        if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+            continue;
+
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        if (!editor_trace_viewport_rect(viewport, &x, &y, &width, &height))
+            continue;
+        if (screen_x < x || screen_y < y || screen_x >= x + width || screen_y >= y + height)
+            continue;
+
+        SDL_zero(*out_viewport);
+        out_viewport->camera = json_string(viewport, "camera", NULL);
+        out_viewport->x = x;
+        out_viewport->y = y;
+        out_viewport->width = width;
+        out_viewport->height = height;
+        out_viewport->screen_x = screen_x - x;
+        out_viewport->screen_y = screen_y - y;
+        out_viewport->work_plane = obj_get(viewport, "work_plane");
+        return out_viewport->camera != NULL;
+    }
+    return false;
+}
+
 static bool editor_camera_screen_trace_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
                                                  slayer3d_game_data_world_trace_desc *out_trace)
 {
-    const char *camera_name = json_string(trace, "camera", slayer3d_game_data_active_camera(runtime));
+    editor_trace_viewport_config selected_viewport;
+    const bool has_selected_viewport = editor_trace_select_viewport(runtime, trace, &selected_viewport);
+    const char *camera_name = has_selected_viewport
+                                  ? selected_viewport.camera
+                                  : json_string(trace, "camera", slayer3d_game_data_active_camera(runtime));
     slayer3d_camera3d camera;
     if (!slayer3d_game_data_get_camera(runtime, camera_name, &camera))
         return false;
@@ -134,11 +213,21 @@ static bool editor_camera_screen_trace_from_json(const slayer3d_game_data_runtim
     float viewport_height = 0.0f;
     if (!editor_trace_viewport(runtime, trace, &viewport_width, &viewport_height))
         return false;
+    if (has_selected_viewport)
+    {
+        viewport_width = selected_viewport.width;
+        viewport_height = selected_viewport.height;
+    }
 
     float screen_x = 0.0f;
     float screen_y = 0.0f;
     if (!editor_trace_screen_point(runtime, trace, viewport_width, viewport_height, &screen_x, &screen_y))
         return false;
+    if (has_selected_viewport)
+    {
+        screen_x = selected_viewport.screen_x;
+        screen_y = selected_viewport.screen_y;
+    }
 
     const float near_distance = SDL_max(json_float(trace, "near", 0.05f), 0.0f);
     const float far_distance = SDL_max(json_float(trace, "far", 1000.0f), near_distance + 0.001f);
@@ -199,7 +288,12 @@ static bool editor_work_plane_selection_from_trace(const slayer3d_game_data_runt
                                                    slayer3d_game_data_editor_selection *out_selection)
 {
     init_editor_selection(out_selection);
-    yyjson_val *work_plane = obj_get(obj_get(selection, "trace"), "work_plane");
+    yyjson_val *trace_json = obj_get(selection, "trace");
+    editor_trace_viewport_config selected_viewport;
+    const bool has_selected_viewport = editor_trace_select_viewport(runtime, trace_json, &selected_viewport);
+    yyjson_val *work_plane = has_selected_viewport && yyjson_is_obj(selected_viewport.work_plane)
+                                 ? selected_viewport.work_plane
+                                 : obj_get(trace_json, "work_plane");
     if (trace == NULL || out_selection == NULL)
     {
         return false;
@@ -232,7 +326,13 @@ static bool editor_work_plane_selection_from_trace(const slayer3d_game_data_runt
 bool editor_work_plane_desc_from_trace_json(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
                                             slayer3d_vec3 *out_normal, float *out_distance)
 {
-    return editor_work_plane_from_json(runtime, obj_get(trace, "work_plane"), out_normal, out_distance);
+    editor_trace_viewport_config selected_viewport;
+    const bool has_selected_viewport = editor_trace_select_viewport(runtime, trace, &selected_viewport);
+    return editor_work_plane_from_json(runtime,
+                                       has_selected_viewport && yyjson_is_obj(selected_viewport.work_plane)
+                                           ? selected_viewport.work_plane
+                                           : obj_get(trace, "work_plane"),
+                                       out_normal, out_distance);
 }
 
 bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,

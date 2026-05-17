@@ -441,17 +441,29 @@ typedef struct slayer3d_parallel_triangle_job
 static void slayer3d_rasterize_screen_line(slayer3d_framebuffer *framebuffer, slayer3d_screen_vertex start,
                                            slayer3d_screen_vertex end, slayer3d_color color);
 
-static slayer3d_screen_vertex slayer3d_viewport_transform(slayer3d_vec4 clip, int width, int height)
+static SDL_Rect slayer3d_framebuffer_viewport_rect(const slayer3d_framebuffer *framebuffer)
+{
+    if (framebuffer != NULL && framebuffer->viewport_enabled && framebuffer->viewport_rect.w > 0 &&
+        framebuffer->viewport_rect.h > 0)
+    {
+        return framebuffer->viewport_rect;
+    }
+    return (SDL_Rect){0, 0, framebuffer != NULL ? framebuffer->width : 0,
+                      framebuffer != NULL ? framebuffer->height : 0};
+}
+
+static slayer3d_screen_vertex slayer3d_viewport_transform(slayer3d_vec4 clip, const slayer3d_framebuffer *framebuffer)
 {
     slayer3d_screen_vertex out;
+    const SDL_Rect viewport = slayer3d_framebuffer_viewport_rect(framebuffer);
     const float inverse_w = 1.0f / clip.w;
     const float ndc_x = clip.x * inverse_w;
     const float ndc_y = clip.y * inverse_w;
     const float ndc_z = clip.z * inverse_w;
 
     /* y axis flips so that NDC +Y becomes "up" on screen (pixel rows grow down). */
-    const float screen_x = (ndc_x + 1.0f) * 0.5f * (float)width;
-    const float screen_y = (1.0f - ndc_y) * 0.5f * (float)height;
+    const float screen_x = (float)viewport.x + (ndc_x + 1.0f) * 0.5f * (float)viewport.w;
+    const float screen_y = (float)viewport.y + (1.0f - ndc_y) * 0.5f * (float)viewport.h;
 
     out.x_fx = slayer3d_round_subpixel(screen_x);
     out.y_fx = slayer3d_round_subpixel(screen_y);
@@ -711,7 +723,7 @@ void slayer3d_rasterize_triangle(slayer3d_framebuffer *framebuffer, slayer3d_mat
     slayer3d_screen_vertex screen[SLAYER3D_CLIP_MAX_VERTICES];
     for (int i = 0; i < clipped_count; ++i)
     {
-        screen[i] = slayer3d_viewport_transform(clipped[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform(clipped[i], framebuffer);
     }
 
     const Sint64 polygon_area = slayer3d_screen_polygon_signed_area(screen, clipped_count);
@@ -865,11 +877,11 @@ typedef struct slayer3d_screen_vertex_colored
     float a_over_w;
 } slayer3d_screen_vertex_colored;
 
-static slayer3d_screen_vertex_colored slayer3d_viewport_transform_colored(slayer3d_clip_vertex_colored v, int width,
-                                                                          int height)
+static slayer3d_screen_vertex_colored slayer3d_viewport_transform_colored(slayer3d_clip_vertex_colored v,
+                                                                          const slayer3d_framebuffer *framebuffer)
 {
     slayer3d_screen_vertex_colored out;
-    out.base = slayer3d_viewport_transform(v.position, width, height);
+    out.base = slayer3d_viewport_transform(v.position, framebuffer);
     const float inv_w = 1.0f / v.position.w;
     out.inverse_w = inv_w;
     out.r_over_w = v.r * inv_w;
@@ -1226,7 +1238,7 @@ void slayer3d_rasterize_triangle_colored(slayer3d_framebuffer *framebuffer, slay
     slayer3d_screen_vertex screen_positions[SLAYER3D_CLIP_MAX_VERTICES];
     for (int i = 0; i < clipped_count; ++i)
     {
-        screen[i] = slayer3d_viewport_transform_colored(clipped[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform_colored(clipped[i], framebuffer);
         screen_positions[i] = screen[i].base;
     }
 
@@ -1371,13 +1383,13 @@ typedef struct slayer3d_screen_vertex_textured
     float modulate_a_over_w;
 } slayer3d_screen_vertex_textured;
 
-static slayer3d_screen_vertex_textured slayer3d_viewport_transform_textured(slayer3d_clip_vertex_textured v, int width,
-                                                                            int height)
+static slayer3d_screen_vertex_textured slayer3d_viewport_transform_textured(slayer3d_clip_vertex_textured v,
+                                                                            const slayer3d_framebuffer *framebuffer)
 {
     slayer3d_screen_vertex_textured out;
     const float inverse_w = 1.0f / v.position.w;
 
-    out.base = slayer3d_viewport_transform(v.position, width, height);
+    out.base = slayer3d_viewport_transform(v.position, framebuffer);
     out.inverse_w = inverse_w;
     out.u_over_w = v.u * inverse_w;
     out.v_over_w = v.v * inverse_w;
@@ -1724,7 +1736,7 @@ void slayer3d_rasterize_triangle_textured_profiled(slayer3d_framebuffer *framebu
     slayer3d_screen_vertex screen_positions[SLAYER3D_CLIP_MAX_VERTICES];
     for (int i = 0; i < clipped_count; ++i)
     {
-        screen[i] = slayer3d_viewport_transform_textured(clipped[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform_textured(clipped[i], framebuffer);
         if (lighting_params != NULL && lighting_params->vertex_snap)
         {
             const int prec = lighting_params->vertex_snap_precision > 0 ? lighting_params->vertex_snap_precision : 1;
@@ -1961,11 +1973,12 @@ typedef struct slayer3d_screen_vertex_lit
     float fog_over_w;
 } slayer3d_screen_vertex_lit;
 
-static slayer3d_screen_vertex_lit slayer3d_viewport_transform_lit(slayer3d_clip_vertex_lit v, int width, int height)
+static slayer3d_screen_vertex_lit slayer3d_viewport_transform_lit(slayer3d_clip_vertex_lit v,
+                                                                  const slayer3d_framebuffer *framebuffer)
 {
     slayer3d_screen_vertex_lit out;
     float iw = 1.0f / v.position.w;
-    out.base = slayer3d_viewport_transform(v.position, width, height);
+    out.base = slayer3d_viewport_transform(v.position, framebuffer);
     out.inverse_w = iw;
     out.u_over_w = v.u * iw;
     out.v_over_w = v.v * iw;
@@ -2474,7 +2487,7 @@ void slayer3d_rasterize_triangle_lit(slayer3d_framebuffer *framebuffer, slayer3d
 
     for (int i = 0; i < count; ++i)
     {
-        screen[i] = slayer3d_viewport_transform_lit(clip[i], framebuffer->width, framebuffer->height);
+        screen[i] = slayer3d_viewport_transform_lit(clip[i], framebuffer);
 
         /* Vertex snap: quantize screen coordinates to a grid. */
         if (lighting_params != NULL && lighting_params->vertex_snap)
@@ -2561,10 +2574,8 @@ void slayer3d_rasterize_line(slayer3d_framebuffer *framebuffer, slayer3d_mat4 mv
         return;
     }
 
-    const slayer3d_screen_vertex screen_start =
-        slayer3d_viewport_transform(clip_start, framebuffer->width, framebuffer->height);
-    const slayer3d_screen_vertex screen_end =
-        slayer3d_viewport_transform(clip_end, framebuffer->width, framebuffer->height);
+    const slayer3d_screen_vertex screen_start = slayer3d_viewport_transform(clip_start, framebuffer);
+    const slayer3d_screen_vertex screen_end = slayer3d_viewport_transform(clip_end, framebuffer);
     slayer3d_rasterize_screen_line(framebuffer, screen_start, screen_end, color);
 }
 
@@ -2594,7 +2605,7 @@ void slayer3d_rasterize_point(slayer3d_framebuffer *framebuffer, slayer3d_mat4 m
         return;
     }
 
-    const slayer3d_screen_vertex sv = slayer3d_viewport_transform(clip, framebuffer->width, framebuffer->height);
+    const slayer3d_screen_vertex sv = slayer3d_viewport_transform(clip, framebuffer);
     const int px = (int)SDL_lroundf(sv.x_px);
     const int py = (int)SDL_lroundf(sv.y_px);
     if (px < 0 || px >= framebuffer->width || py < 0 || py >= framebuffer->height)

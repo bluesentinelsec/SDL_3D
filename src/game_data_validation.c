@@ -10188,6 +10188,48 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
     return true;
 }
 
+static bool validate_scene_ui_condition(validation_context *ctx, yyjson_val *condition, const char *path,
+                                        validation_names *names);
+
+static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
+                                           validation_names *names)
+{
+    yyjson_val *viewports = obj_get(scene_root, "world_viewports");
+    if (viewports == NULL)
+        return true;
+    if (!yyjson_is_arr(viewports))
+        return validation_error(ctx, json_path, "scene world_viewports must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.world_viewports[%zu]", json_path, i);
+        yyjson_val *viewport = yyjson_arr_get(viewports, i);
+        if (!yyjson_is_obj(viewport))
+            return validation_error(ctx, path, "scene world viewport entries must be objects");
+        const char *name = json_string(viewport, "name");
+        if (name == NULL || name[0] == '\0')
+            return validation_error(ctx, path, "scene world viewport requires a non-empty name");
+        if (!require_ref(ctx, &names->cameras, "camera", json_string(viewport, "camera"), path))
+            return false;
+        yyjson_val *rect = obj_get(viewport, "rect");
+        if (!is_exact_vec_array(rect, 4) || !numeric_array_values_in_range(rect, 0.0, DBL_MAX) ||
+            yyjson_get_num(yyjson_arr_get(rect, 2)) <= 0.0 || yyjson_get_num(yyjson_arr_get(rect, 3)) <= 0.0)
+        {
+            return validation_error(ctx, path,
+                                    "scene world viewport rect must be [x, y, width, height] with positive dimensions");
+        }
+        yyjson_val *viewmodel = obj_get(viewport, "viewmodel");
+        if (viewmodel != NULL && !yyjson_is_bool(viewmodel))
+            return validation_error(ctx, path, "scene world viewport viewmodel must be a boolean");
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
+        if (!validate_scene_ui_condition(ctx, obj_get(viewport, "active_if"), condition_path, names))
+            return false;
+    }
+    return true;
+}
+
 static bool editor_command_name_valid(const char *value)
 {
     return value != NULL &&
@@ -10232,6 +10274,8 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     if (!validate_scene_brush_worlds(ctx, root, json_path, names))
         return false;
     if (!validate_scene_skybox(ctx, root, json_path, names))
+        return false;
+    if (!validate_scene_world_viewports(ctx, root, json_path, names))
         return false;
     if (!validate_scene_editor_tooling(ctx, root, json_path, names))
         return false;

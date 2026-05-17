@@ -13,7 +13,7 @@
     { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
     { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
     { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-    { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
+    { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
     { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
     { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
     { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
@@ -59,6 +59,32 @@
       { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0] }
     ]
   },
+  "world_viewports": [
+    {
+      "name": "editor.perspective",
+      "camera": "camera.editor_shell.viewport",
+      "rect": [0, 0, 640, 360],
+      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+    },
+    {
+      "name": "editor.top_xy",
+      "camera": "camera.editor_shell.ortho_top",
+      "rect": [640, 0, 640, 360],
+      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+    },
+    {
+      "name": "editor.front_xz",
+      "camera": "camera.editor_shell.ortho_front",
+      "rect": [0, 360, 640, 360],
+      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+    },
+    {
+      "name": "editor.side_yz",
+      "camera": "camera.editor_shell.ortho_side",
+      "rect": [640, 360, 640, 360],
+      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+    }
+  ],
   "editor": {
     "selection": {
       "mode": "click",
@@ -67,6 +93,52 @@
       "trace": {
         "source": "camera_screen",
         "viewport": [1280.0, 720.0],
+        "viewports": [
+          {
+            "camera": "camera.editor_shell.viewport",
+            "rect": [0, 0, 640, 360],
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [0.0, 1.0, 0.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          },
+          {
+            "camera": "camera.editor_shell.ortho_top",
+            "rect": [640, 0, 640, 360],
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [0.0, 1.0, 0.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          },
+          {
+            "camera": "camera.editor_shell.ortho_front",
+            "rect": [0, 360, 640, 360],
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [0.0, 0.0, 1.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          },
+          {
+            "camera": "camera.editor_shell.ortho_side",
+            "rect": [640, 360, 640, 360],
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [1.0, 0.0, 0.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          }
+        ],
         "near": 0.05,
         "far": 100.0,
         "model_filter": "brush_worlds",
@@ -295,7 +367,7 @@
           },
           {
             "label": "View",
-            "binding": { "type": "scene_state", "key": "editor.view.mode", "default": "perspective_3d" }
+            "binding": { "type": "scene_state", "key": "editor.view.mode", "default": "quad_view" }
           },
           {
             "label": "Action",
@@ -500,7 +572,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click select. Arrows move, Q/E down/up, RMB look. Tab view, F1-F4 cameras. 1 floor 2 wall 3 ceiling 4 start. +/- grid, R axis. Enter commit. S save. T handoff. F5 play.",
+        "text": "Click ortho views to place. Q/Tab toggles 3D flyby. Flyby: WASD move, mouse look, Space/Ctrl up/down. 1 floor 2 wall 3 ceiling 4 start. +/- grid, Enter commit, S save, F5 play.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

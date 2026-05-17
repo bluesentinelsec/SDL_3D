@@ -19,18 +19,31 @@ The default editor project writes:
 - level fragment: `demos/editor_shell_dojo/data/generated/editable_level.fragment.json`
 - test-run manifest: `build/editor_shell_dojo/test-run.json`
 
+## Default Layout
+
+The editor now starts in a classic four-viewport layout:
+
+- Top-left: 3D perspective preview.
+- Top-right: top/plan orthographic view for floor-plane placement.
+- Bottom-left: front orthographic view.
+- Bottom-right: side orthographic view.
+
+Press `Q` to enter the full-screen 3D flyby viewport. Press `Q` again to return
+to the four-viewport editor layout. `Tab` is also bound to the same toggle while
+we evaluate the workflow.
+
 ## Controls
 
 - `1`, `2`, `3`, `4`: select floor, wall, ceiling, or player-start prefab
-- mouse click: place the selected prefab at the snapped preview position
+- mouse click in an orthographic viewport: place the selected prefab at the
+  snapped preview position
 - `Enter`: commit the current preview placement
 - `+` / `-`: increase or decrease grid size
 - `R`: toggle wall axis
-- `Tab`: toggle editor view
+- `Q` / `Tab`: toggle between four-view layout and full-screen 3D flyby
 - `F1`, `F2`, `F3`, `F4`: perspective, top, front, side views
-- arrow keys: move the editor camera
-- `Q` / `E`: move camera down/up
-- hold right mouse: look around in the perspective editor camera
+- in 3D flyby: `WASD` move, mouse look, `Space` / `Left Ctrl` move up/down,
+  `Left Shift` moves faster
 - `S`: save the editable level fragment
 - `T`: save the level, write the test-run manifest, and show the runner command
 - `F5`: enter the playable test scene in the editor from the placed player start
@@ -62,8 +75,10 @@ The following should be true during a good test drive:
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed.
 - Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
-- Top/front/side views plot on the correct work plane; perspective view uses the
-  3D editor camera.
+- The four-view layout appears on launch, and `Q` toggles into and out of the
+  full-screen 3D flyby camera.
+- Top/front/side orthographic views plot on their authored work planes;
+  perspective preview uses the 3D editor camera.
 - `S` writes a JSON fragment containing `brush_worlds` and
   `editor_player_starts`.
 - `T` saves the latest dirty level before writing the test-run manifest.

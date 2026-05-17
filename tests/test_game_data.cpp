@@ -8899,6 +8899,11 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
             R"json({ "trace": { "source": "camera_screen", "camera": "camera.valid" }, "outputs": { "hit_key": "editor.hit" }, "on_select": "signal.editor.missing" })json",
             "unknown signal",
         },
+        {
+            "bad_trace_viewport_rect",
+            R"json({ "trace": { "source": "camera_screen", "camera": "camera.valid", "viewports": [{ "camera": "camera.valid", "rect": [0, 0, 0, 360] }] }, "outputs": { "hit_key": "editor.hit" } })json",
+            "trace viewport rect must be [x, y, width, height]",
+        },
     };
 
     const std::filesystem::path dir = unique_test_dir("scene_editor_tooling");
@@ -14951,8 +14956,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
 
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
-    motion.motion.x = 564.8f;
-    motion.motion.y = 392.9f;
+    motion.motion.x = 282.4f;
+    motion.motion.y = 196.45f;
     motion.motion.xrel = 0.0f;
     motion.motion.yrel = 0.0f;
     SDL_Event click{};
@@ -15297,8 +15302,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
 
     SDL_Event miss_motion{};
     miss_motion.type = SDL_EVENT_MOUSE_MOTION;
-    miss_motion.motion.x = 20.0f;
-    miss_motion.motion.y = 700.0f;
+    miss_motion.motion.x = 660.0f;
+    miss_motion.motion.y = 20.0f;
     SDL_Event miss_click{};
     miss_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     miss_click.button.button = SDL_BUTTON_LEFT;
@@ -15376,8 +15381,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_NE(input, nullptr);
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
-    motion.motion.x = 20.0f;
-    motion.motion.y = 700.0f;
+    motion.motion.x = 660.0f;
+    motion.motion.y = 20.0f;
     SDL_Event click{};
     click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     click.button.button = SDL_BUTTON_LEFT;
@@ -15401,6 +15406,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const slayer3d_vec3 placement_origin = slayer3d_vec3_make(SDL_roundf(placement_selection.point.x / 8.0f) * 8.0f,
                                                               SDL_roundf(placement_selection.point.y / 8.0f) * 8.0f,
                                                               SDL_roundf(placement_selection.point.z / 8.0f) * 8.0f);
+    const slayer3d_vec3 player_start_origin =
+        slayer3d_vec3_make(placement_origin.x, placement_origin.y + 8.0f, placement_origin.z);
     auto world = [&]() {
         slayer3d_game_data_brush_world brush_world{};
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
@@ -15584,9 +15591,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_game_data_editor_player_start start{};
     ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.editor_shell", &start));
     EXPECT_STREQ(start.target, "entity.editor_shell.player");
-    EXPECT_NEAR(start.position.x, placement_origin.x, 0.001f);
-    EXPECT_NEAR(start.position.y, placement_origin.y, 0.001f);
-    EXPECT_NEAR(start.position.z, placement_origin.z, 0.001f);
+    EXPECT_NEAR(start.position.x, player_start_origin.x, 0.001f);
+    EXPECT_NEAR(start.position.y, player_start_origin.y, 0.001f);
+    EXPECT_NEAR(start.position.z, player_start_origin.z, 0.001f);
     EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
@@ -15704,9 +15711,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(roundtrip_runtime, "player_start.editor_shell", &start));
     EXPECT_STREQ(start.scene, "scene.editor_shell.test_run");
     EXPECT_STREQ(start.target, "entity.editor_shell.player");
-    EXPECT_NEAR(start.position.x, placement_origin.x, 0.001f);
-    EXPECT_NEAR(start.position.y, placement_origin.y, 0.001f);
-    EXPECT_NEAR(start.position.z, placement_origin.z, 0.001f);
+    EXPECT_NEAR(start.position.x, player_start_origin.x, 0.001f);
+    EXPECT_NEAR(start.position.y, player_start_origin.y, 0.001f);
+    EXPECT_NEAR(start.position.z, player_start_origin.z, 0.001f);
     EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
 
     slayer3d_game_data_destroy(roundtrip_runtime);
@@ -15721,9 +15728,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.editor_shell.player"));
     slayer3d_registered_actor *test_player = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.player");
     ASSERT_NE(test_player, nullptr);
-    EXPECT_NEAR(test_player->position.x, placement_origin.x, 0.001f);
-    EXPECT_NEAR(test_player->position.y, placement_origin.y, 0.001f);
-    EXPECT_NEAR(test_player->position.z, placement_origin.z, 0.001f);
+    EXPECT_NEAR(test_player->position.x, player_start_origin.x, 0.001f);
+    EXPECT_NEAR(test_player->position.y, player_start_origin.y, 0.001f);
+    EXPECT_NEAR(test_player->position.z, player_start_origin.z, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(test_player->props, "yaw", 0.0f), 3.14159f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(test_player->props, "pitch", 1.0f), 0.0f, 0.001f);
 
@@ -15831,42 +15838,26 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     expect_work_plane_grid_axis('x');
     slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
-
-    SDL_Event tab{};
-    tab.type = SDL_EVENT_KEY_DOWN;
-    tab.key.scancode = SDL_SCANCODE_TAB;
-    slayer3d_input_process_event(input, &tab);
-    slayer3d_input_update(input, 3);
-    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
-    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
-    tab.type = SDL_EVENT_KEY_UP;
-    slayer3d_input_process_event(input, &tab);
-    slayer3d_input_update(input, 4);
-    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
-    slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
-    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
+                 "flyby_3d");
 
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_UP;
+    key.key.scancode = SDL_SCANCODE_W;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 5);
+    slayer3d_input_update(input, 3);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, start_position)), 0.1f);
 
     key.type = SDL_EVENT_KEY_UP;
     slayer3d_input_process_event(input, &key);
 
-    SDL_Event right_down{};
-    right_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-    right_down.button.button = SDL_BUTTON_RIGHT;
-    slayer3d_input_process_event(input, &right_down);
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.xrel = 60.0f;
     motion.motion.yrel = -15.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 6);
+    slayer3d_input_update(input, 4);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     const float yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);

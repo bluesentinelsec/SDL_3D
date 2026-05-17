@@ -82,7 +82,10 @@
           },
           {
             "name": "action.editor.view.toggle",
-            "bindings": [{ "device": "keyboard", "key": "TAB" }]
+            "bindings": [
+              { "device": "keyboard", "key": "Q" },
+              { "device": "keyboard", "key": "TAB" }
+            ]
           },
           {
             "name": "action.editor.view.perspective",
@@ -120,27 +123,27 @@
           },
           {
             "name": "action.editor.camera.forward",
-            "bindings": [{ "device": "keyboard", "key": "UP" }]
+            "bindings": [{ "device": "keyboard", "key": "W" }]
           },
           {
             "name": "action.editor.camera.back",
-            "bindings": [{ "device": "keyboard", "key": "DOWN" }]
+            "bindings": [{ "device": "keyboard", "key": "S" }]
           },
           {
             "name": "action.editor.camera.left",
-            "bindings": [{ "device": "keyboard", "key": "LEFT" }]
+            "bindings": [{ "device": "keyboard", "key": "A" }]
           },
           {
             "name": "action.editor.camera.right",
-            "bindings": [{ "device": "keyboard", "key": "RIGHT" }]
+            "bindings": [{ "device": "keyboard", "key": "D" }]
           },
           {
             "name": "action.editor.camera.up",
-            "bindings": [{ "device": "keyboard", "key": "E" }]
+            "bindings": [{ "device": "keyboard", "key": "SPACE" }]
           },
           {
             "name": "action.editor.camera.down",
-            "bindings": [{ "device": "keyboard", "key": "Q" }]
+            "bindings": [{ "device": "keyboard", "key": "LCTRL" }]
           },
           {
             "name": "action.editor.camera.look",
@@ -358,23 +361,23 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.view.mode",
-            "default": "perspective_3d",
-            "values": ["perspective_3d", "orthographic_top"]
+            "default": "quad_view",
+            "values": ["quad_view", "flyby_3d"]
           },
           {
             "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
+            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
             "then": [
-              { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+              { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
               { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
               { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "four viewport editor layout" }
             ],
             "else": [
               { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
               { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
               { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "3D flyby editor view" }
             ]
           }
         ]
@@ -382,7 +385,7 @@
       {
         "signal": "signal.editor.view.perspective",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "flyby_3d" },
           { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
           { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
@@ -1030,9 +1033,9 @@
             "right": "action.editor.camera.right",
             "up": "action.editor.camera.up",
             "down": "action.editor.camera.down",
-            "look": "action.editor.camera.look",
             "fast": "action.editor.camera.fast"
           },
+          "enabled_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
           "move_speed": 8.0,
           "fast_speed": 22.0,
           "mouse_sensitivity": 0.002,

@@ -81,6 +81,14 @@ typedef struct ui_image_draw_context
     bool ok;
 } ui_image_draw_context;
 
+typedef struct scene_world_viewport
+{
+    const char *name;
+    const char *camera;
+    SDL_Rect rect;
+    bool draw_viewmodel;
+} scene_world_viewport;
+
 typedef struct ui_rect_draw_context
 {
     const slayer3d_game_data_runtime *runtime;
@@ -4957,6 +4965,132 @@ void slayer3d_game_data_app_flow_draw(const slayer3d_game_data_app_flow *flow, s
     slayer3d_transition_draw(&flow->transition, renderer);
 }
 
+static bool scene_world_viewport_rect(yyjson_val *viewport, SDL_Rect *out_rect)
+{
+    if (viewport == NULL || out_rect == NULL)
+        return false;
+    yyjson_val *rect = obj_get(viewport, "rect");
+    if (!yyjson_is_arr(rect) || yyjson_arr_size(rect) != 4)
+        return false;
+    const double x = yyjson_get_num(yyjson_arr_get(rect, 0));
+    const double y = yyjson_get_num(yyjson_arr_get(rect, 1));
+    const double w = yyjson_get_num(yyjson_arr_get(rect, 2));
+    const double h = yyjson_get_num(yyjson_arr_get(rect, 3));
+    if (!(w > 0.0) || !(h > 0.0))
+        return false;
+    *out_rect = (SDL_Rect){(int)SDL_lround(x), (int)SDL_lround(y), (int)SDL_lround(w), (int)SDL_lround(h)};
+    return true;
+}
+
+static bool scene_world_viewport_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *viewport,
+                                           scene_world_viewport *out_viewport)
+{
+    if (runtime == NULL || !yyjson_is_obj(viewport) || out_viewport == NULL)
+        return false;
+    yyjson_val *active_if = obj_get(viewport, "active_if");
+    if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+        return false;
+    SDL_zero(*out_viewport);
+    out_viewport->name = json_string(viewport, "name", NULL);
+    out_viewport->camera = json_string(viewport, "camera", NULL);
+    out_viewport->draw_viewmodel = json_bool(viewport, "viewmodel", false);
+    return out_viewport->camera != NULL && scene_world_viewport_rect(viewport, &out_viewport->rect);
+}
+
+static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, const slayer3d_camera3d *camera,
+                                  bool draw_viewmodel)
+{
+    if (frame == NULL || camera == NULL)
+        return false;
+    bool ok = true;
+    if (slayer3d_begin_mode_3d(frame->renderer, *camera))
+    {
+        ok = run_frame_hook(frame, frame->before_world_3d) && ok;
+        ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache) && ok;
+        ok = slayer3d_game_data_draw_sector_levels_with_assets(
+                 frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
+                 camera) &&
+             ok;
+        ok = slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(
+                 frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
+                 camera) &&
+             ok;
+        if (frame->particle_cache != NULL)
+            ok = draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache, true, false) && ok;
+        ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
+                                                         frame->image_cache, frame->sprite_cache, frame->model_cache,
+                                                         frame->mesh_primitive_cache, camera, true, false) &&
+             ok;
+        ok = slayer3d_game_data_draw_active_editor_debug_primitives(frame->runtime, frame->renderer) && ok;
+        ok = run_frame_hook(frame, frame->after_world_3d) && ok;
+        slayer3d_end_mode_3d(frame->renderer);
+    }
+    else
+    {
+        ok = false;
+    }
+
+    if (draw_viewmodel && ok)
+    {
+        const slayer3d_camera3d viewmodel_camera = game_data_viewmodel_camera(camera);
+        if (slayer3d_begin_mode_3d(frame->renderer, viewmodel_camera))
+        {
+            ok = draw_render_primitives_evaluated_with_cache(
+                     frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
+                     frame->model_cache, frame->mesh_primitive_cache, &viewmodel_camera, false, true) &&
+                 ok;
+            if (frame->particle_cache != NULL)
+                ok = draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache, false, true) && ok;
+            slayer3d_end_mode_3d(frame->renderer);
+        }
+        else
+        {
+            ok = false;
+        }
+    }
+    return ok;
+}
+
+static bool draw_active_scene_world_viewports(const slayer3d_game_data_frame_desc *frame, bool *out_drawn)
+{
+    if (out_drawn != NULL)
+        *out_drawn = false;
+    const scene_entry *scene = active_scene_entry_const(frame != NULL ? frame->runtime : NULL);
+    yyjson_val *viewports = obj_get(scene != NULL ? scene->root : NULL, "world_viewports");
+    if (!yyjson_is_arr(viewports))
+        return true;
+
+    bool ok = true;
+    bool drawn = false;
+    for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+    {
+        scene_world_viewport viewport;
+        if (!scene_world_viewport_from_json(frame->runtime, yyjson_arr_get(viewports, i), &viewport))
+            continue;
+
+        slayer3d_camera3d camera;
+        if (!slayer3d_game_data_get_camera(frame->runtime, viewport.camera, &camera))
+        {
+            ok = false;
+            continue;
+        }
+        if (!slayer3d_set_render_viewport(frame->renderer, &viewport.rect) ||
+            !slayer3d_set_scissor_rect(frame->renderer, &viewport.rect))
+        {
+            ok = false;
+            continue;
+        }
+        ok = draw_world_for_camera(frame, &camera, viewport.draw_viewmodel) && ok;
+        drawn = true;
+    }
+
+    (void)slayer3d_set_scissor_rect(frame->renderer, NULL);
+    (void)slayer3d_set_render_viewport(frame->renderer, NULL);
+    if (out_drawn != NULL)
+        *out_drawn = drawn;
+    return ok;
+}
+
 bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
 {
     if (frame == NULL || frame->runtime == NULL || frame->renderer == NULL)
@@ -4969,48 +5103,12 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
 
     if (slayer3d_game_data_active_scene_renders_world(frame->runtime))
     {
-        const slayer3d_camera3d camera = active_camera_or_fallback(frame->runtime, frame->fallback_camera);
-        if (slayer3d_begin_mode_3d(frame->renderer, camera))
+        bool drew_viewports = false;
+        ok = draw_active_scene_world_viewports(frame, &drew_viewports) && ok;
+        if (!drew_viewports)
         {
-            ok = run_frame_hook(frame, frame->before_world_3d) && ok;
-            ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache) && ok;
-            ok = slayer3d_game_data_draw_sector_levels_with_assets(
-                     frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
-                     &camera) &&
-                 ok;
-            ok = slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(
-                     frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
-                     &camera) &&
-                 ok;
-            if (frame->particle_cache != NULL)
-                ok = draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache, true, false) && ok;
-            ok = draw_render_primitives_evaluated_with_cache(
-                     frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
-                     frame->model_cache, frame->mesh_primitive_cache, &camera, true, false) &&
-                 ok;
-            ok = slayer3d_game_data_draw_active_editor_debug_primitives(frame->runtime, frame->renderer) && ok;
-            ok = run_frame_hook(frame, frame->after_world_3d) && ok;
-            slayer3d_end_mode_3d(frame->renderer);
-            const slayer3d_camera3d viewmodel_camera = game_data_viewmodel_camera(&camera);
-            if (slayer3d_begin_mode_3d(frame->renderer, viewmodel_camera))
-            {
-                ok = draw_render_primitives_evaluated_with_cache(
-                         frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
-                         frame->model_cache, frame->mesh_primitive_cache, &viewmodel_camera, false, true) &&
-                     ok;
-                if (frame->particle_cache != NULL)
-                    ok = draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache, false, true) &&
-                         ok;
-                slayer3d_end_mode_3d(frame->renderer);
-            }
-            else
-            {
-                ok = false;
-            }
-        }
-        else
-        {
-            ok = false;
+            const slayer3d_camera3d camera = active_camera_or_fallback(frame->runtime, frame->fallback_camera);
+            ok = draw_world_for_camera(frame, &camera, true) && ok;
         }
     }
 

@@ -129,6 +129,8 @@ static bool validate_optional_non_negative_number(validation_context *ctx, yyjso
     return true;
 }
 
+static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val *trace, const char *trace_path);
+
 static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, yyjson_val *trace,
                                                       const char *trace_path, validation_names *names)
 {
@@ -184,6 +186,34 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     yyjson_val *far_value = obj_get(trace, "far");
     if (near_value != NULL && far_value != NULL && yyjson_get_num(far_value) <= yyjson_get_num(near_value))
         return validation_error(ctx, trace_path, "scene editor camera_screen trace far must be greater than near");
+
+    yyjson_val *viewports = obj_get(trace, "viewports");
+    if (viewports != NULL)
+    {
+        if (!yyjson_is_arr(viewports))
+            return validation_error(ctx, trace_path, "scene editor camera_screen trace viewports must be an array");
+        for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+        {
+            char viewport_path[PATH_BUFFER_SIZE];
+            format_path(viewport_path, sizeof(viewport_path), "%s.viewports[%zu]", trace_path, i);
+            yyjson_val *viewport_entry = yyjson_arr_get(viewports, i);
+            if (!yyjson_is_obj(viewport_entry))
+                return validation_error(ctx, viewport_path,
+                                        "scene editor camera_screen trace viewport entries must be objects");
+            if (!require_ref(ctx, &names->cameras, "camera", json_string(viewport_entry, "camera"), viewport_path))
+                return false;
+            yyjson_val *rect = obj_get(viewport_entry, "rect");
+            if (!is_exact_vec_array(rect, 4) || !numeric_array_values_in_range(rect, 0.0, DBL_MAX) ||
+                yyjson_get_num(yyjson_arr_get(rect, 2)) <= 0.0 || yyjson_get_num(yyjson_arr_get(rect, 3)) <= 0.0)
+            {
+                return validation_error(ctx, viewport_path,
+                                        "scene editor camera_screen trace viewport rect must be [x, y, width, height] "
+                                        "with positive dimensions");
+            }
+            if (!validate_scene_editor_work_plane(ctx, viewport_entry, viewport_path))
+                return false;
+        }
+    }
     return true;
 }
 
