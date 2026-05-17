@@ -145,6 +145,7 @@ target_sources(
         src/effects.c
         src/fbx_loader.c
         src/game.c
+        src/game_data_brush_artifacts.c
         src/game_data_brush.c
         src/game_data.c
         src/game_data_actions.c

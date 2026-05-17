@@ -743,6 +743,8 @@ typedef struct slayer3d_game_data_runtime
 void set_error(char *buffer, int buffer_size, const char *message);
 void set_errorf(char *buffer, int buffer_size, const char *format, ...);
 bool append_format(char *buffer, size_t buffer_size, size_t *offset, const char *format, ...);
+bool editor_save_bytes_atomic(const char *path, const void *data, size_t size, const char *kind, char *error_buffer,
+                              int error_buffer_size);
 char *path_join(const char *base_dir, const char *path);
 char *path_dirname(const char *path);
 
