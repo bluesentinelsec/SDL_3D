@@ -172,6 +172,7 @@ target_sources(
         src/game_data_grid_actions.c
         src/game_data_grid_runtime.c
         src/game_data_world_model_instances.c
+        src/game_data_world_diagnostics.c
         src/game_data_input_device_helpers.c
         src/game_data_interaction_effect_actions.c
         src/game_data_json_helpers.c
