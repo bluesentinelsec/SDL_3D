@@ -15554,20 +15554,14 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
 
-    slayer3d_signal_emit(bus, export_signal, nullptr);
+    slayer3d_signal_emit(bus, test_run_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.save.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.message", ""), "editable level saved");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.message", ""),
+                 "editable level saved for test run");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), saved_path.string().c_str());
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.save.size", 0), 0);
     EXPECT_TRUE(std::filesystem::exists(saved_path));
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.export.valid", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.count", 0), 1);
-    const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
-    ASSERT_NE(export_json, nullptr);
-    EXPECT_NE(std::string(export_json).find("\"brush_worlds\""), std::string::npos);
-    EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
-    EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
-    EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
     slayer3d_game_data_brush_world_editor_state brush_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &brush_state));
     EXPECT_FALSE(brush_state.dirty);
@@ -15583,7 +15577,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_NE(player_start_state.source_path, nullptr);
     EXPECT_EQ(std::string(player_start_state.source_path), saved_path.string());
 
-    slayer3d_signal_emit(bus, test_run_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.valid", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.saved", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.message", ""),
@@ -15613,6 +15606,18 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NE(std::string(manifest_json).find("\"--player-start\""), std::string::npos);
     EXPECT_NE(std::string(manifest_json).find("\"player_start.editor_shell\""), std::string::npos);
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.test_run.size", 0), 0);
+
+    slayer3d_signal_emit(bus, export_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.save.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.message", ""), "editable level saved");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.save.path", ""), saved_path.string().c_str());
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.export.valid", false));
+    const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
+    ASSERT_NE(export_json, nullptr);
+    EXPECT_NE(std::string(export_json).find("\"brush_worlds\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
 
     write_text(save_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.editor_shell.dojo" })json");

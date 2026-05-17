@@ -1326,6 +1326,9 @@ For UI copy/paste affordances, `editor.test_run.prepare` and
 `editor.test_run.save_manifest` can also author `runner`, one mount option
 (`root`, `pack`, or `embedded`), and optional `media`. When `command_key` is
 present in `outputs`, the action publishes a quoted runner command string.
+Authored editor shells should usually run `editor.level.save` immediately before
+test-run preparation so the runner sees the latest blockout fragment rather than
+the last manually saved revision.
 
 ```json
 {
