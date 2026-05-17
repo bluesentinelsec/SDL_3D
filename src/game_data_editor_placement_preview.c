@@ -95,6 +95,11 @@ static slayer3d_vec3 editor_grid_scaled_vec3(yyjson_val *obj, const char *key, f
     return slayer3d_vec3_scale(json_vec3(obj, key, slayer3d_vec3_make(0.0f, 0.0f, 0.0f)), grid_size);
 }
 
+static float editor_placement_snap_floor(float value, float snap)
+{
+    return SDL_floorf(value / snap) * snap;
+}
+
 static slayer3d_bounding_box editor_placement_oriented_box_bounds(slayer3d_game_data_runtime *runtime,
                                                                   yyjson_val *placement, yyjson_val *preview_json,
                                                                   slayer3d_vec3 anchor, const char *axis, float snap)
@@ -132,9 +137,9 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
     anchor = slayer3d_vec3_add(anchor, json_vec3(preview, "position_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
     if (snap > 0.0f)
     {
-        anchor.x = SDL_roundf(anchor.x / snap) * snap;
-        anchor.y = SDL_roundf(anchor.y / snap) * snap;
-        anchor.z = SDL_roundf(anchor.z / snap) * snap;
+        anchor.x = editor_placement_snap_floor(anchor.x, snap);
+        anchor.y = editor_placement_snap_floor(anchor.y, snap);
+        anchor.z = editor_placement_snap_floor(anchor.z, snap);
     }
     return anchor;
 }

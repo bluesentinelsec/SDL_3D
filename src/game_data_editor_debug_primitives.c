@@ -384,15 +384,20 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         editor_placement_preview_active_for_scene(runtime) && runtime->editor_placement_preview.has_bounds)
     {
         const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
+        const slayer3d_color color =
+            editor_debug_color_or_default(desc->command_preview_color, (slayer3d_color){80, 255, 255, 220});
         editor_debug_iteration_context context;
         SDL_zero(context);
         context.callback = callback;
         context.userdata = userdata;
-        context.color = editor_debug_color_or_default(desc->command_preview_color, (slayer3d_color){80, 255, 255, 220});
+        context.color = (slayer3d_color){color.r, color.g, color.b, (Uint8)SDL_min((int)color.a, 170)};
         context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE;
         context.world_name = preview->world_name;
         context.element_name = preview->mode;
         context.face_index = -1;
+        if (!emit_editor_debug_bounds(&context, preview->bounds))
+            return true;
+        context.color = color;
         if (!emit_editor_debug_bounds(&context, preview->bounds))
             return true;
     }

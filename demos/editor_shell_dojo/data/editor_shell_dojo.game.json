@@ -1,6 +1,5 @@
 {
   "schema": "slayer3d.game.v0",
-  "imports": [{ "path": "generated/editable_level.fragment.json", "sections": ["brush_worlds", "editor_player_starts"] }],
   "metadata": {
     "name": "Slayer 3D Editor Shell Dojo",
     "id": "demo.editor_shell_dojo",
@@ -51,6 +50,10 @@
           {
             "name": "action.editor.command.redo",
             "bindings": [{ "device": "keyboard", "key": "Y" }]
+          },
+          {
+            "name": "action.editor.delete_selected",
+            "bindings": [{ "device": "keyboard", "key": "DELETE" }]
           },
           {
             "name": "action.editor.export",
@@ -184,6 +187,7 @@
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.pointer.primary",
+    "signal.editor.delete_selected",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
     "signal.editor.tool.floor",
@@ -238,6 +242,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.delete_selected",
+        "on_pressed": "signal.editor.delete_selected"
       },
       {
         "type": "sensor.input_pressed",
@@ -546,6 +555,61 @@
         ]
       },
       {
+        "signal": "signal.editor.delete_selected",
+        "actions": [
+          {
+            "type": "editor.command.preview",
+            "command": "delete",
+            "target": "element",
+            "message": "delete {selection_element}",
+            "outputs": {
+              "active_key": "editor.command_preview.active",
+              "valid_key": "editor.command_preview.valid",
+              "command_key": "editor.command_preview.command",
+              "target_key": "editor.command_preview.target",
+              "message_key": "editor.command_preview.message",
+              "world_key": "editor.command_preview.world",
+              "element_key": "editor.command_preview.element",
+              "face_index_key": "editor.command_preview.face_index",
+              "bounds_min_key": "editor.command_preview.bounds_min",
+              "bounds_max_key": "editor.command_preview.bounds_max"
+            }
+          },
+          {
+            "type": "editor.command.commit",
+            "message": "deleted {editor_transaction_element}",
+            "invalid_message": "nothing selected to delete",
+            "outputs": {
+              "valid_key": "editor.transaction.valid",
+              "event_key": "editor.transaction.event",
+              "message_key": "editor.transaction.message",
+              "transaction_id_key": "editor.transaction.id",
+              "undo_count_key": "editor.transaction.undo_count",
+              "redo_count_key": "editor.transaction.redo_count",
+              "command_key": "editor.transaction.command",
+              "target_key": "editor.transaction.target",
+              "world_key": "editor.transaction.world",
+              "element_key": "editor.transaction.element",
+              "face_index_key": "editor.transaction.face_index",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision",
+              "source_path_key": "editor.brush_world.source_path"
+            },
+            "actions": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "deleted {editor_transaction_element}"
+              }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing selected to delete" }
+            ]
+          }
+        ]
+      },
+      {
         "signal": "signal.editor.pointer.primary",
         "actions": [
           {
@@ -804,28 +868,6 @@
         "signal": "signal.editor.export",
         "actions": [
           {
-            "type": "editor.level.save",
-            "world": "brush.editor_shell.target",
-            "path_from_state": "editor.save.path",
-            "message": "editable level saved",
-            "outputs": {
-              "valid_key": "editor.save.valid",
-              "message_key": "editor.save.message",
-              "path_key": "editor.save.path",
-              "size_key": "editor.save.size",
-              "brush_world_key": "editor.brush_world.name",
-              "brush_dirty_key": "editor.brush_world.dirty",
-              "brush_revision_key": "editor.brush_world.revision",
-              "brush_saved_revision_key": "editor.brush_world.saved_revision",
-              "brush_source_path_key": "editor.brush_world.source_path",
-              "player_start_count_key": "editor.player_start.count",
-              "player_start_dirty_key": "editor.player_start.dirty",
-              "player_start_revision_key": "editor.player_start.revision",
-              "player_start_saved_revision_key": "editor.player_start.saved_revision",
-              "player_start_source_path_key": "editor.player_start.source_path"
-            }
-          },
-          {
             "type": "editor.level.export",
             "world": "brush.editor_shell.target",
             "outputs": {
@@ -844,75 +886,20 @@
               "player_start_saved_revision_key": "editor.player_start.saved_revision",
               "player_start_source_path_key": "editor.player_start.source_path"
             }
-          }
+          },
+          { "type": "scene_state.set", "key": "editor.save.valid", "value": false },
+          { "type": "scene_state.set", "key": "editor.save.message", "value": "disk save disabled for MVP iteration" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "exported level JSON in memory" }
         ]
       },
       {
         "signal": "signal.editor.test_run.prepare",
         "actions": [
-          {
-            "type": "editor.level.save",
-            "world": "brush.editor_shell.target",
-            "path_from_state": "editor.save.path",
-            "message": "editable level saved for test run",
-            "outputs": {
-              "valid_key": "editor.save.valid",
-              "message_key": "editor.save.message",
-              "path_key": "editor.save.path",
-              "size_key": "editor.save.size",
-              "brush_world_key": "editor.brush_world.name",
-              "brush_dirty_key": "editor.brush_world.dirty",
-              "brush_revision_key": "editor.brush_world.revision",
-              "brush_saved_revision_key": "editor.brush_world.saved_revision",
-              "brush_source_path_key": "editor.brush_world.source_path",
-              "player_start_count_key": "editor.player_start.count",
-              "player_start_dirty_key": "editor.player_start.dirty",
-              "player_start_revision_key": "editor.player_start.revision",
-              "player_start_saved_revision_key": "editor.player_start.saved_revision",
-              "player_start_source_path_key": "editor.player_start.source_path"
-            }
-          },
-          {
-            "type": "editor.test_run.prepare",
-            "data_asset": "asset://editor_shell_dojo.game.json",
-            "player_start": "player_start.editor_shell",
-            "runner": "./build/debug/slayer3d_runner",
-            "root": "demos/editor_shell_dojo/data",
-            "message": "test run handoff prepared",
-            "outputs": {
-              "valid_key": "editor.test_run.valid",
-              "message_key": "editor.test_run.message",
-              "manifest_json_key": "editor.test_run.manifest_json",
-              "size_key": "editor.test_run.size",
-              "data_asset_key": "editor.test_run.data_asset",
-              "scene_key": "editor.test_run.scene",
-              "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target",
-              "command_key": "editor.test_run.command"
-            }
-          },
-          {
-            "type": "editor.test_run.save_manifest",
-            "data_asset": "asset://editor_shell_dojo.game.json",
-            "player_start": "player_start.editor_shell",
-            "path_from_state": "editor.test_run.path",
-            "runner": "./build/debug/slayer3d_runner",
-            "root": "demos/editor_shell_dojo/data",
-            "message": "test run manifest saved",
-            "outputs": {
-              "valid_key": "editor.test_run.saved",
-              "message_key": "editor.test_run.save_message",
-              "path_key": "editor.test_run.path",
-              "manifest_json_key": "editor.test_run.manifest_json",
-              "size_key": "editor.test_run.size",
-              "data_asset_key": "editor.test_run.data_asset",
-              "scene_key": "editor.test_run.scene",
-              "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target",
-              "command_key": "editor.test_run.command"
-            }
-          },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "test run saved and prepared" }
+          { "type": "scene_state.set", "key": "editor.test_run.valid", "value": false },
+          { "type": "scene_state.set", "key": "editor.test_run.saved", "value": false },
+          { "type": "scene_state.set", "key": "editor.test_run.message", "value": "disk handoff disabled for MVP iteration" },
+          { "type": "scene_state.set", "key": "editor.test_run.save_message", "value": "test-run manifest disabled" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "disk test-run handoff disabled" }
         ]
       },
       {
@@ -952,6 +939,81 @@
       }
     ]
   },
+  "editor_player_starts": [
+    {
+      "name": "player_start.editor_shell",
+      "scene": "scene.editor_shell.test_run",
+      "target": "entity.editor_shell.player",
+      "position": [0.0, 1.6, 4.0],
+      "yaw": 3.14159,
+      "pitch": 0.0
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "editor": {
+        "stable_id": "editor.world.target",
+        "display_name": "Target Brush World",
+        "category": "editor/dojo"
+      },
+      "materials": [
+        {
+          "name": "mat.editor.wall",
+          "albedo": [0.50, 0.52, 0.56, 1.0],
+          "roughness": 0.8,
+          "editor": {
+            "stable_id": "editor.material.wall",
+            "display_name": "Mid Gray Wall Material"
+          }
+        },
+        {
+          "name": "mat.editor.floor",
+          "albedo": [0.30, 0.31, 0.33, 1.0],
+          "roughness": 0.9,
+          "editor": {
+            "stable_id": "editor.material.floor",
+            "display_name": "Dark Gray Floor Material"
+          }
+        },
+        {
+          "name": "mat.editor.ceiling",
+          "albedo": [0.68, 0.69, 0.71, 1.0],
+          "roughness": 0.85,
+          "editor": {
+            "stable_id": "editor.material.ceiling",
+            "display_name": "Light Gray Ceiling Material"
+          }
+        }
+      ],
+      "brushes": [
+        {
+          "name": "brush.target.cube",
+          "contents": ["solid", "player_clip"],
+          "editor": {
+            "stable_id": "editor.brush.target_cube",
+            "display_name": "Selectable Cube",
+            "prefab": "prefab.editor_shell.cube"
+          },
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            {
+              "plane": { "normal": [-1, 0, 0], "distance": 0 },
+              "material": "mat.editor.wall",
+              "editor": {
+                "stable_id": "editor.face.target_cube.left",
+                "display_name": "Left Face"
+              }
+            },
+            { "plane": { "normal": [0, 1, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
+          ]
+        }
+      ]
+    }
+  ],
   "world": {
     "name": "world.editor_shell_dojo",
     "kind": "brush",

@@ -379,6 +379,7 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         SDL_free(runtime->network_diagnostics[i].name);
 
     clear_menu_text_entry_capture(runtime);
+    free_editor_command_history(&runtime->editor_command_history);
     slayer3d_script_engine_destroy(runtime->scripts);
     slayer3d_properties_destroy(runtime->scene_state);
     slayer3d_storage_destroy(runtime->storage);

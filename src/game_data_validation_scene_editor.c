@@ -316,11 +316,13 @@ static bool validate_scene_editor_selection_options(validation_context *ctx, yyj
             return validation_error(ctx, selection_path, "scene editor selection mode must be 'hover' or 'click'");
     }
 
-    yyjson_val *select_button = obj_get(selection, "select_button");
-    if (select_button != NULL)
+    static const char *const button_keys[] = {"select_button", "secondary_select_button"};
+    for (size_t i = 0; i < SDL_arraysize(button_keys); ++i)
     {
-        if (!yyjson_is_str(select_button) || !validation_mouse_button_name_valid(yyjson_get_str(select_button)))
-            return validation_error(ctx, selection_path, "scene editor selection select_button must be a mouse button");
+        yyjson_val *button = obj_get(selection, button_keys[i]);
+        if (button != NULL && (!yyjson_is_str(button) || !validation_mouse_button_name_valid(yyjson_get_str(button))))
+            return validation_error(ctx, selection_path, "scene editor selection %s must be a mouse button",
+                                    button_keys[i]);
     }
 
     yyjson_val *clear_on_miss = obj_get(selection, "clear_on_miss");
@@ -547,14 +549,17 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
         format_path(hover_outputs_path, sizeof(hover_outputs_path), "%s.hover_outputs", selection_path);
         if (!validate_scene_editor_outputs(ctx, obj_get(selection, "hover_outputs"), hover_outputs_path))
             return false;
-        yyjson_val *on_select = obj_get(selection, "on_select");
-        if (on_select != NULL)
+        static const char *const signal_keys[] = {"on_select", "on_secondary_select"};
+        for (size_t i = 0; i < SDL_arraysize(signal_keys); ++i)
         {
-            char on_select_path[PATH_BUFFER_SIZE];
-            format_path(on_select_path, sizeof(on_select_path), "%s.on_select", selection_path);
-            if (!yyjson_is_str(on_select) || yyjson_get_str(on_select)[0] == '\0')
-                return validation_error(ctx, on_select_path, "scene editor selection on_select must be a signal");
-            if (!require_ref(ctx, &names->signals, "signal", yyjson_get_str(on_select), on_select_path))
+            yyjson_val *signal = obj_get(selection, signal_keys[i]);
+            if (signal == NULL)
+                continue;
+            char signal_path[PATH_BUFFER_SIZE];
+            format_path(signal_path, sizeof(signal_path), "%s.%s", selection_path, signal_keys[i]);
+            if (!yyjson_is_str(signal) || yyjson_get_str(signal)[0] == '\0')
+                return validation_error(ctx, signal_path, "scene editor selection %s must be a signal", signal_keys[i]);
+            if (!require_ref(ctx, &names->signals, "signal", yyjson_get_str(signal), signal_path))
                 return false;
         }
     }

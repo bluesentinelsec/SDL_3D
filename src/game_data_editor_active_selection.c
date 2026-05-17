@@ -377,13 +377,14 @@ static void clear_editor_active_selection(slayer3d_game_data_runtime *runtime)
     clear_editor_placement_preview(runtime);
 }
 
-static bool editor_selection_select_requested(const slayer3d_game_data_runtime *runtime, yyjson_val *selection)
+static bool editor_selection_button_requested(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
+                                              const char *key, const char *fallback)
 {
     slayer3d_input_manager *input = runtime_input(runtime);
     if (input == NULL)
         return false;
 
-    const Uint8 button = mouse_button_from_json(json_string(selection, "select_button", "LEFT"));
+    const Uint8 button = mouse_button_from_json(json_string(selection, key, fallback));
     return button != 0 && slayer3d_input_get_pressed_mouse_button(input) == button;
 }
 
@@ -485,8 +486,10 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
 
     publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
     update_editor_placement_preview(runtime, editor, &hover_selection);
-    const bool select_requested = editor_selection_select_requested(runtime, selection_json);
-    if (select_requested)
+    const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
+    const bool secondary_select_requested =
+        editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
+    if (select_requested || secondary_select_requested)
     {
         if (hover_selection.hit)
             runtime->editor_active_selection = hover_selection;
@@ -496,6 +499,11 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+    if (secondary_select_requested && !emit_editor_selection_signal(runtime, selection_json, "on_secondary_select",
+                                                                    &runtime->editor_active_selection))
+    {
+        return false;
+    }
     if (select_requested &&
         !emit_editor_selection_signal(runtime, selection_json, "on_select", &runtime->editor_active_selection))
     {

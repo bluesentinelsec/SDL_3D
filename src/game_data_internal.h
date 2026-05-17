@@ -198,6 +198,9 @@ typedef struct editor_command_transaction_entry
     slayer3d_vec3 offset;
     bool has_bounds;
     slayer3d_bounding_box bounds;
+    int brush_index;
+    bool has_brush_snapshot;
+    slayer3d_game_data_brush brush_snapshot;
     char message[128];
 } editor_command_transaction_entry;
 
@@ -1078,6 +1081,7 @@ void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, co
 void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, slayer3d_vec3 value);
 bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, const char *world_name,
                                        const char *message, bool publish_result);
+void free_editor_command_history(editor_command_history_state *history);
 slayer3d_bounding_box editor_resized_preview_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 normal, float distance);
 void publish_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool valid,
                                     const char *command, const char *target, const char *message,

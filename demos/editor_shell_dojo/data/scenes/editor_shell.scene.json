@@ -5,12 +5,8 @@
   "updates_game": true,
   "renders_world": true,
   "on_enter": [
-    {
-      "type": "scene_state.set",
-      "key": "editor.save.path",
-      "value": "demos/editor_shell_dojo/data/generated/editable_level.fragment.json"
-    },
-    { "type": "scene_state.set", "key": "editor.test_run.path", "value": "build/editor_shell_dojo/test-run.json" },
+    { "type": "scene_state.set", "key": "editor.save.path", "value": "" },
+    { "type": "scene_state.set", "key": "editor.test_run.path", "value": "" },
     { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
     { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
     { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
@@ -89,6 +85,7 @@
     "selection": {
       "mode": "click",
       "select_button": "LEFT",
+      "secondary_select_button": "RIGHT",
       "clear_on_miss": true,
       "trace": {
         "source": "camera_screen",
@@ -172,7 +169,8 @@
         "element_key": "editor.hover.element",
         "face_stable_id_key": "editor.hover.face_stable_id"
       },
-      "on_select": "signal.editor.pointer.primary"
+      "on_select": "signal.editor.pointer.primary",
+      "on_secondary_select": "signal.editor.delete_selected"
     },
     "placement": {
       "tool_key": "editor.tool.mode",
@@ -289,7 +287,7 @@
       "trace_color": [255, 255, 255, 210],
       "face_normal_color": [40, 255, 120, 255],
       "hit_marker_color": [255, 70, 70, 255],
-      "command_preview_color": [80, 255, 255, 235],
+      "command_preview_color": [80, 255, 180, 255],
       "work_plane_grid_color": [80, 140, 170, 95],
       "work_plane_grid_size": 24.0,
       "work_plane_grid_spacing": 1.0,
