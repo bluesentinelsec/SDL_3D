@@ -1218,45 +1218,6 @@ bool slayer3d_game_data_trace_world_models(const slayer3d_game_data_runtime *run
     return true;
 }
 
-static unsigned int editor_debug_flag_from_string(const char *value)
-{
-    if (SDL_strcmp(value != NULL ? value : "", "all") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
-    if (SDL_strcmp(value != NULL ? value : "", "world_bounds") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS;
-    if (SDL_strcmp(value != NULL ? value : "", "selection_bounds") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS;
-    if (SDL_strcmp(value != NULL ? value : "", "trace_ray") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY;
-    if (SDL_strcmp(value != NULL ? value : "", "face_normal") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL;
-    if (SDL_strcmp(value != NULL ? value : "", "hit_marker") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER;
-    if (SDL_strcmp(value != NULL ? value : "", "command_preview") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW;
-    if (SDL_strcmp(value != NULL ? value : "", "work_plane_grid") == 0 ||
-        SDL_strcmp(value != NULL ? value : "", "grid") == 0)
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID;
-    return 0u;
-}
-
-static unsigned int editor_debug_flags_from_json(yyjson_val *value)
-{
-    if (yyjson_is_str(value))
-        return editor_debug_flag_from_string(yyjson_get_str(value));
-    if (!yyjson_is_arr(value))
-        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
-
-    unsigned int flags = 0u;
-    for (size_t i = 0; i < yyjson_arr_size(value); ++i)
-    {
-        yyjson_val *entry = yyjson_arr_get(value, i);
-        if (yyjson_is_str(entry))
-            flags |= editor_debug_flag_from_string(yyjson_get_str(entry));
-    }
-    return flags != 0u ? flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
-}
-
 bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");
@@ -1335,68 +1296,6 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
                            ok ? desc.max : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     (void)publish_editor_brush_world_status(runtime, outputs, desc.world_name, NULL, false);
     return true;
-}
-
-static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime *runtime,
-                                               slayer3d_game_data_editor_debug_desc *out_desc,
-                                               slayer3d_game_data_world_trace_desc *out_trace,
-                                               slayer3d_game_data_editor_selection *out_selection)
-{
-    if (runtime == NULL)
-        return false;
-    yyjson_val *editor = active_editor_tooling_root(runtime);
-    yyjson_val *overlay = obj_get(editor, "debug_overlay");
-    if (!yyjson_is_obj(overlay) || !json_bool(overlay, "enabled", true) || out_desc == NULL)
-        return false;
-
-    SDL_zero(*out_desc);
-    out_desc->flags = editor_debug_flags_from_json(obj_get(overlay, "flags"));
-    out_desc->world_bounds_color = json_color(overlay, "world_bounds_color", (slayer3d_color){0, 0, 0, 0});
-    out_desc->selection_bounds_color = json_color(overlay, "selection_bounds_color", (slayer3d_color){0, 0, 0, 0});
-    out_desc->trace_color = json_color(overlay, "trace_color", (slayer3d_color){0, 0, 0, 0});
-    out_desc->face_normal_color = json_color(overlay, "face_normal_color", (slayer3d_color){0, 0, 0, 0});
-    out_desc->hit_marker_color = json_color(overlay, "hit_marker_color", (slayer3d_color){0, 0, 0, 0});
-    out_desc->command_preview_color = json_color(overlay, "command_preview_color", (slayer3d_color){0, 0, 0, 0});
-    out_desc->work_plane_grid_color = json_color(overlay, "work_plane_grid_color", (slayer3d_color){0, 0, 0, 0});
-    out_desc->normal_length = json_float(overlay, "normal_length", 0.75f);
-    out_desc->hit_marker_size = json_float(overlay, "hit_marker_size", 0.1f);
-    out_desc->work_plane_grid_size = json_float(overlay, "work_plane_grid_size", 16.0f);
-    out_desc->work_plane_grid_spacing = json_float(overlay, "work_plane_grid_spacing", 1.0f);
-
-    yyjson_val *selection_json = obj_get(editor, "selection");
-    if (editor_trace_desc_from_json(runtime, selection_json, out_trace))
-    {
-        out_desc->trace = out_trace;
-        out_desc->has_work_plane_grid = editor_work_plane_desc_from_trace_json(
-            obj_get(selection_json, "trace"), &out_desc->work_plane_normal, &out_desc->work_plane_distance);
-        if (out_selection != NULL && editor_selection_mode_is_click(selection_json) &&
-            editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit)
-        {
-            *out_selection = runtime->editor_active_selection;
-            out_desc->selection = out_selection;
-        }
-        else if (out_selection != NULL &&
-                 editor_pick_selection_from_json(runtime, selection_json, out_trace, out_selection))
-        {
-            out_desc->selection = out_selection;
-        }
-    }
-    return true;
-}
-
-bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_game_data_runtime *runtime,
-                                                               slayer3d_game_data_editor_debug_primitive_fn callback,
-                                                               void *userdata)
-{
-    if (runtime == NULL || callback == NULL)
-        return false;
-
-    slayer3d_game_data_editor_debug_desc desc;
-    slayer3d_game_data_world_trace_desc trace;
-    slayer3d_game_data_editor_selection selection;
-    if (!active_editor_debug_desc_from_json(runtime, &desc, &trace, &selection))
-        return true;
-    return slayer3d_game_data_for_each_editor_debug_primitive(runtime, &desc, callback, userdata);
 }
 
 bool slayer3d_game_data_query_world_model_point(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 point,
