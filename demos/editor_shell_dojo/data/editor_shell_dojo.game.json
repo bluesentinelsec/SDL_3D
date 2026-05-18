@@ -32,7 +32,7 @@
           },
           {
             "name": "action.editor.selection.clear",
-            "bindings": [{ "device": "keyboard", "key": "BACKSPACE" }]
+            "bindings": []
           },
           {
             "name": "action.editor.selection.inspect",
@@ -52,7 +52,10 @@
           },
           {
             "name": "action.editor.delete_selected",
-            "bindings": [{ "device": "keyboard", "key": "DELETE" }]
+            "bindings": [
+              { "device": "keyboard", "key": "DELETE" },
+              { "device": "keyboard", "key": "BACKSPACE" }
+            ]
           },
           {
             "name": "action.editor.export",
@@ -113,15 +116,7 @@
           },
           {
             "name": "action.editor.mode.select",
-            "bindings": []
-          },
-          {
-            "name": "action.editor.brush.height.decrease",
-            "bindings": [{ "device": "keyboard", "key": "LEFTBRACKET" }]
-          },
-          {
-            "name": "action.editor.brush.height.increase",
-            "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
+            "bindings": [{ "device": "keyboard", "key": "SPACE" }]
           },
           {
             "name": "action.editor.palette.brush",
@@ -268,8 +263,6 @@
     "signal.editor.mode.brush",
     "signal.editor.mode.select",
     "signal.editor.mode.texture",
-    "signal.editor.brush.height.decrease",
-    "signal.editor.brush.height.increase",
     "signal.editor.palette.brush",
     "signal.editor.palette.material",
     "signal.editor.palette.game_object",
@@ -385,13 +378,8 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.brush.height.decrease",
-        "on_pressed": "signal.editor.brush.height.decrease"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.brush.height.increase",
-        "on_pressed": "signal.editor.brush.height.increase"
+        "action": "action.editor.mode.select",
+        "on_pressed": "signal.editor.mode.select"
       },
       {
         "type": "sensor.input_pressed",
@@ -527,9 +515,15 @@
       {
         "signal": "signal.editor.mode.select",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
-          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "!=", "value": "flyby_3d", "default": "quad_view" },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
+              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
+            ]
+          }
         ]
       },
       {
@@ -658,32 +652,6 @@
         ]
       },
       {
-        "signal": "signal.editor.brush.height.decrease",
-        "actions": [
-          {
-            "type": "scene_state.cycle",
-            "key": "editor.brush.height",
-            "default": 8.0,
-            "direction": -1,
-            "values": [2.0, 4.0, 8.0, 12.0, 16.0]
-          },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush height decreased" }
-        ]
-      },
-      {
-        "signal": "signal.editor.brush.height.increase",
-        "actions": [
-          {
-            "type": "scene_state.cycle",
-            "key": "editor.brush.height",
-            "default": 8.0,
-            "direction": 1,
-            "values": [2.0, 4.0, 8.0, 12.0, 16.0]
-          },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush height increased" }
-        ]
-      },
-      {
         "signal": "signal.editor.wall_axis.toggle",
         "actions": [
           {
@@ -727,6 +695,7 @@
       {
         "signal": "signal.editor.palette.game_object",
         "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "game_object" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "game object palette opened" }
@@ -857,6 +826,7 @@
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
             "then": [
+              { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
               { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
               { "type": "scene_state.set", "key": "editor.game_object.selected", "value": "player_start" },
               { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
@@ -956,49 +926,28 @@
           {
             "type": "branch",
             "if": {
-              "type": "scene_state.compare",
-              "key": "editor.selection.type",
-              "op": "==",
-              "value": "editor_player_start"
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.mode",
+                  "op": "==",
+                  "value": "select",
+                  "default": "select"
+                },
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.selection.count",
+                  "op": ">",
+                  "value": 0,
+                  "default": 0
+                }
+              ]
             },
             "then": [
               {
-                "type": "editor.player_start.delete",
-                "name_from_selection": true,
-                "message": "player start deleted",
-                "outputs": {
-                  "valid_key": "editor.player_start.valid",
-                  "message_key": "editor.player_start.message",
-                  "player_start_key": "editor.player_start.name",
-                  "dirty_key": "editor.player_start.dirty",
-                  "revision_key": "editor.player_start.revision",
-                  "saved_revision_key": "editor.player_start.saved_revision"
-                }
-              },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start deleted" }
-            ],
-            "else": [
-              {
-                "type": "editor.command.preview",
-                "command": "delete",
-                "target": "element",
-                "message": "delete {selection_element}",
-                "outputs": {
-                  "active_key": "editor.command_preview.active",
-                  "valid_key": "editor.command_preview.valid",
-                  "command_key": "editor.command_preview.command",
-                  "target_key": "editor.command_preview.target",
-                  "message_key": "editor.command_preview.message",
-                  "world_key": "editor.command_preview.world",
-                  "element_key": "editor.command_preview.element",
-                  "face_index_key": "editor.command_preview.face_index",
-                  "bounds_min_key": "editor.command_preview.bounds_min",
-                  "bounds_max_key": "editor.command_preview.bounds_max"
-                }
-              },
-              {
-                "type": "editor.command.commit",
-                "message": "deleted {editor_transaction_element}",
+                "type": "editor.selection.delete_selected",
+                "message": "deleted selected brushes",
                 "invalid_message": "nothing selected to delete",
                 "outputs": {
                   "valid_key": "editor.transaction.valid",
@@ -1021,7 +970,7 @@
                   {
                     "type": "scene_state.set",
                     "key": "editor.tool.last_action",
-                    "value": "deleted {editor_transaction_element}"
+                    "value": "{editor_transaction_message}"
                   }
                 ],
                 "else": [
@@ -1029,6 +978,89 @@
                     "type": "scene_state.set",
                     "key": "editor.tool.last_action",
                     "value": "nothing selected to delete"
+                  }
+                ]
+              }
+            ],
+            "else": [
+              {
+                "type": "branch",
+                "if": {
+                  "type": "scene_state.compare",
+                  "key": "editor.selection.type",
+                  "op": "==",
+                  "value": "editor_player_start"
+                },
+                "then": [
+                  {
+                    "type": "editor.player_start.delete",
+                    "name_from_selection": true,
+                    "message": "player start deleted",
+                    "outputs": {
+                      "valid_key": "editor.player_start.valid",
+                      "message_key": "editor.player_start.message",
+                      "player_start_key": "editor.player_start.name",
+                      "dirty_key": "editor.player_start.dirty",
+                      "revision_key": "editor.player_start.revision",
+                      "saved_revision_key": "editor.player_start.saved_revision"
+                    }
+                  },
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start deleted" }
+                ],
+                "else": [
+                  {
+                    "type": "editor.command.preview",
+                    "command": "delete",
+                    "target": "element",
+                    "message": "delete {selection_element}",
+                    "outputs": {
+                      "active_key": "editor.command_preview.active",
+                      "valid_key": "editor.command_preview.valid",
+                      "command_key": "editor.command_preview.command",
+                      "target_key": "editor.command_preview.target",
+                      "message_key": "editor.command_preview.message",
+                      "world_key": "editor.command_preview.world",
+                      "element_key": "editor.command_preview.element",
+                      "face_index_key": "editor.command_preview.face_index",
+                      "bounds_min_key": "editor.command_preview.bounds_min",
+                      "bounds_max_key": "editor.command_preview.bounds_max"
+                    }
+                  },
+                  {
+                    "type": "editor.command.commit",
+                    "message": "deleted {editor_transaction_element}",
+                    "invalid_message": "nothing selected to delete",
+                    "outputs": {
+                      "valid_key": "editor.transaction.valid",
+                      "event_key": "editor.transaction.event",
+                      "message_key": "editor.transaction.message",
+                      "transaction_id_key": "editor.transaction.id",
+                      "undo_count_key": "editor.transaction.undo_count",
+                      "redo_count_key": "editor.transaction.redo_count",
+                      "command_key": "editor.transaction.command",
+                      "target_key": "editor.transaction.target",
+                      "world_key": "editor.transaction.world",
+                      "element_key": "editor.transaction.element",
+                      "face_index_key": "editor.transaction.face_index",
+                      "dirty_key": "editor.brush_world.dirty",
+                      "revision_key": "editor.brush_world.revision",
+                      "saved_revision_key": "editor.brush_world.saved_revision",
+                      "source_path_key": "editor.brush_world.source_path"
+                    },
+                    "actions": [
+                      {
+                        "type": "scene_state.set",
+                        "key": "editor.tool.last_action",
+                        "value": "deleted {editor_transaction_element}"
+                      }
+                    ],
+                    "else": [
+                      {
+                        "type": "scene_state.set",
+                        "key": "editor.tool.last_action",
+                        "value": "nothing selected to delete"
+                      }
+                    ]
                   }
                 ]
               }

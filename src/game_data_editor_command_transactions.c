@@ -759,6 +759,139 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
     return true;
 }
 
+typedef struct selected_editor_brush_delete_target
+{
+    char *scene;
+    char *world;
+    char *element;
+    bool has_bounds;
+    slayer3d_bounding_box bounds;
+} selected_editor_brush_delete_target;
+
+static void free_selected_editor_brush_delete_targets(selected_editor_brush_delete_target *targets, int count)
+{
+    if (targets == NULL)
+        return;
+    for (int i = 0; i < count; ++i)
+    {
+        SDL_free(targets[i].scene);
+        SDL_free(targets[i].world);
+        SDL_free(targets[i].element);
+    }
+    SDL_free(targets);
+}
+
+static bool copy_selected_editor_brush_delete_target(selected_editor_brush_delete_target *target,
+                                                     const slayer3d_game_data_editor_selection *selection,
+                                                     const char *active_scene)
+{
+    if (target == NULL || selection == NULL || !selection->hit ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->world_name == NULL ||
+        selection->element_name == NULL)
+    {
+        return false;
+    }
+    SDL_zero(*target);
+    target->scene = active_scene != NULL ? SDL_strdup(active_scene) : NULL;
+    target->world = SDL_strdup(selection->world_name);
+    target->element = SDL_strdup(selection->element_name);
+    target->has_bounds = selection->has_bounds;
+    target->bounds = selection->bounds;
+    return (active_scene == NULL || target->scene != NULL) && target->world != NULL && target->element != NULL;
+}
+
+bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                       const slayer3d_properties *payload)
+{
+    (void)payload;
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (runtime->editor_selected_brush_scene == NULL || active_scene == NULL ||
+        SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0 ||
+        runtime->editor_selected_brush_count <= 0)
+    {
+        const char *message = json_string(action, "invalid_message", "nothing selected to delete");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, message);
+    }
+
+    const int target_count = runtime->editor_selected_brush_count;
+    selected_editor_brush_delete_target *targets =
+        (selected_editor_brush_delete_target *)SDL_calloc((size_t)target_count, sizeof(*targets));
+    if (targets == NULL)
+        return false;
+
+    for (int i = 0; i < target_count; ++i)
+    {
+        if (!copy_selected_editor_brush_delete_target(&targets[i], &runtime->editor_selected_brushes[i], active_scene))
+        {
+            free_selected_editor_brush_delete_targets(targets, target_count);
+            return false;
+        }
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, targets[i].world);
+        if (find_editor_mutable_brush_index(world_runtime, targets[i].element) < 0)
+        {
+            const char *message = json_string(action, "invalid_message", "selected brush no longer exists");
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            free_selected_editor_brush_delete_targets(targets, target_count);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
+    }
+
+    editor_command_transaction_entry *last_entry = NULL;
+    int deleted_count = 0;
+    for (int i = target_count - 1; i >= 0; --i)
+    {
+        editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+        if (entry == NULL)
+        {
+            free_selected_editor_brush_delete_targets(targets, target_count);
+            return false;
+        }
+        if (!copy_editor_transaction_string(targets[i].scene, &entry->scene) ||
+            !copy_editor_transaction_string("delete", &entry->command) ||
+            !copy_editor_transaction_string("element", &entry->target) ||
+            !copy_editor_transaction_string(targets[i].world, &entry->world_name) ||
+            !copy_editor_transaction_string(targets[i].element, &entry->element_name))
+        {
+            editor_command_history_state *history = &runtime->editor_command_history;
+            free_editor_command_transaction_entry(entry);
+            history->count--;
+            history->cursor = history->count;
+            free_selected_editor_brush_delete_targets(targets, target_count);
+            return false;
+        }
+        entry->face_index = -1;
+        entry->has_bounds = targets[i].has_bounds;
+        entry->bounds = targets[i].bounds;
+        SDL_snprintf(entry->message, sizeof(entry->message), "deleted %s", targets[i].element);
+
+        if (!apply_editor_transaction_mutation(runtime, entry, true))
+        {
+            const char *message = json_string(action, "invalid_message", "selected brush delete failed");
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            free_selected_editor_brush_delete_targets(targets, target_count);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
+        last_entry = entry;
+        deleted_count++;
+    }
+
+    char message[128];
+    SDL_snprintf(message, sizeof(message),
+                 deleted_count == 1 ? "deleted 1 selected brush" : "deleted %d selected brushes", deleted_count);
+    (void)slayer3d_game_data_clear_active_editor_selection(runtime);
+    publish_editor_transaction(runtime, outputs, "commit", deleted_count > 0, last_entry, message);
+    free_selected_editor_brush_delete_targets(targets, target_count);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", deleted_count > 0,
+                                               last_entry, message);
+}
+
 bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                               const slayer3d_properties *payload)
 {

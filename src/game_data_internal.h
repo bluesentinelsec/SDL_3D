@@ -181,6 +181,7 @@ typedef struct editor_placement_preview_state
 } editor_placement_preview_state;
 
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
+#define SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY 512
 
 typedef struct editor_command_transaction_entry
 {
@@ -735,6 +736,9 @@ typedef struct slayer3d_game_data_runtime
     const char *active_camera;
     slayer3d_game_data_editor_selection editor_active_selection;
     const char *editor_selection_scene;
+    slayer3d_game_data_editor_selection editor_selected_brushes[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+    int editor_selected_brush_count;
+    const char *editor_selected_brush_scene;
     editor_command_preview_state editor_command_preview;
     editor_placement_preview_state editor_placement_preview;
     editor_command_history_state editor_command_history;
@@ -899,6 +903,8 @@ bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_v
 bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
     const slayer3d_game_data_editor_selection *selection);
+bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                       const slayer3d_properties *payload);
 bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_clear_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,

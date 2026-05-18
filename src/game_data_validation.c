@@ -122,8 +122,7 @@ static bool validation_key_name_valid(const char *name)
     if (SDL_strcmp(name, "UP") == 0 || SDL_strcmp(name, "DOWN") == 0 || SDL_strcmp(name, "LEFT") == 0 ||
         SDL_strcmp(name, "RIGHT") == 0 || SDL_strcmp(name, "RETURN") == 0 || SDL_strcmp(name, "ESCAPE") == 0 ||
         SDL_strcmp(name, "BACKSPACE") == 0 || SDL_strcmp(name, "DELETE") == 0 || SDL_strcmp(name, "COMMA") == 0 ||
-        SDL_strcmp(name, "PERIOD") == 0 || SDL_strcmp(name, "LEFTBRACKET") == 0 ||
-        SDL_strcmp(name, "RIGHTBRACKET") == 0)
+        SDL_strcmp(name, "PERIOD") == 0)
     {
         return true;
     }
@@ -7529,6 +7528,17 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return true;
+    if (SDL_strcmp(type, "editor.selection.delete_selected") == 0)
+    {
+        char actions_path[PATH_BUFFER_SIZE];
+        char else_path[PATH_BUFFER_SIZE];
+        format_path(actions_path, sizeof(actions_path), "%s.actions", json_path);
+        format_path(else_path, sizeof(else_path), "%s.else", json_path);
+        yyjson_val *actions = obj_get(action, "actions");
+        yyjson_val *else_actions = obj_get(action, "else");
+        return (actions == NULL || validate_action_array(ctx, actions, actions_path, names)) &&
+               (else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names));
+    }
     if (SDL_strcmp(type, "editor.selection.run") == 0)
     {
         char actions_path[PATH_BUFFER_SIZE];
