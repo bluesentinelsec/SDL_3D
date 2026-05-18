@@ -398,7 +398,8 @@ static bool slayer3d_game_create_context(const slayer3d_game_config *config, sla
     window_config.logical_height = logical_height;
     window_config.title = (config != NULL && config->title != NULL) ? config->title : "SLAYER3D";
     window_config.icon_path = config != NULL ? config->icon_path : NULL;
-    window_config.backend = (config != NULL) ? config->backend : SLAYER3D_BACKEND_AUTO;
+    if (config != NULL && config->backend != SLAYER3D_BACKEND_AUTO)
+        window_config.backend = config->backend;
     window_config.display_mode = (config != NULL && config->display_mode != SLAYER3D_WINDOW_MODE_DEFAULT)
                                      ? config->display_mode
                                      : SLAYER3D_GAME_DEFAULT_WINDOW_MODE;

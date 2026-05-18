@@ -270,9 +270,41 @@ static void free_editor_command_transaction_entry(editor_command_transaction_ent
 {
     if (entry == NULL)
         return;
+    SDL_free((void *)entry->scene);
+    SDL_free((void *)entry->command);
+    SDL_free((void *)entry->target);
+    SDL_free((void *)entry->world_name);
+    SDL_free((void *)entry->element_name);
+    SDL_free((void *)entry->material_name);
+    SDL_free((void *)entry->previous_material_name);
     if (entry->has_brush_snapshot)
         free_editor_runtime_brush_copy(&entry->brush_snapshot);
     SDL_zero(*entry);
+}
+
+static bool copy_editor_transaction_string(const char *source, const char **dest)
+{
+    if (dest == NULL)
+        return false;
+    *dest = NULL;
+    if (source == NULL)
+        return true;
+    *dest = SDL_strdup(source);
+    return *dest != NULL;
+}
+
+static bool copy_editor_transaction_strings(editor_command_transaction_entry *entry,
+                                            const editor_command_preview_state *preview)
+{
+    if (entry == NULL || preview == NULL)
+        return false;
+    return copy_editor_transaction_string(preview->scene, &entry->scene) &&
+           copy_editor_transaction_string(preview->command, &entry->command) &&
+           copy_editor_transaction_string(preview->target, &entry->target) &&
+           copy_editor_transaction_string(preview->world_name, &entry->world_name) &&
+           copy_editor_transaction_string(preview->element_name, &entry->element_name) &&
+           copy_editor_transaction_string(preview->material_name, &entry->material_name) &&
+           copy_editor_transaction_string(preview->previous_material_name, &entry->previous_material_name);
 }
 
 void free_editor_command_history(editor_command_history_state *history)
@@ -564,15 +596,18 @@ static bool apply_editor_brush_delete(slayer3d_game_data_runtime *runtime, edito
         entry->brush_index = brush_index;
     }
 
+    const bool clears_active_selection =
+        runtime->editor_active_selection.hit && runtime->editor_active_selection.world_name != NULL &&
+        SDL_strcmp(runtime->editor_active_selection.world_name, entry->world_name) == 0 &&
+        runtime->editor_active_selection.element_name != NULL &&
+        SDL_strcmp(runtime->editor_active_selection.element_name, entry->element_name) == 0;
+
     slayer3d_game_data_brush removed;
     if (!remove_editor_brush_at_index(world_runtime, brush_index, &removed))
         return false;
     free_editor_runtime_brush_copy(&removed);
 
-    if (runtime->editor_active_selection.hit && runtime->editor_active_selection.world_name != NULL &&
-        SDL_strcmp(runtime->editor_active_selection.world_name, entry->world_name) == 0 &&
-        runtime->editor_active_selection.element_name != NULL &&
-        SDL_strcmp(runtime->editor_active_selection.element_name, entry->element_name) == 0)
+    if (clears_active_selection)
     {
         init_editor_selection(&runtime->editor_active_selection);
         runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
@@ -744,13 +779,14 @@ bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtim
     if (entry == NULL)
         return false;
 
-    entry->scene = preview->scene;
-    entry->command = preview->command;
-    entry->target = preview->target;
-    entry->world_name = preview->world_name;
-    entry->element_name = preview->element_name;
-    entry->material_name = preview->material_name;
-    entry->previous_material_name = preview->previous_material_name;
+    if (!copy_editor_transaction_strings(entry, preview))
+    {
+        editor_command_history_state *history = &runtime->editor_command_history;
+        free_editor_command_transaction_entry(entry);
+        history->count--;
+        history->cursor = history->count;
+        return false;
+    }
     entry->face_index = preview->face_index;
     entry->material_index = preview->material_index;
     entry->previous_material_index = preview->previous_material_index;

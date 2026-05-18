@@ -158,12 +158,6 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
         return SDL_InvalidParamError("window");
     }
 
-    if (renderer == NULL &&
-        (config == NULL || config->backend == SLAYER3D_BACKEND_AUTO || config->backend == SLAYER3D_BACKEND_SOFTWARE))
-    {
-        return SDL_InvalidParamError("renderer");
-    }
-
     if (out_context == NULL)
     {
         return SDL_InvalidParamError("out_context");
@@ -198,6 +192,10 @@ bool slayer3d_create_render_context(SDL_Window *window, SDL_Renderer *renderer,
     if (!slayer3d_resolve_backend(requested_backend, local_config.allow_backend_fallback, &resolved_backend))
     {
         return false;
+    }
+    if (resolved_backend == SLAYER3D_BACKEND_SOFTWARE && renderer == NULL)
+    {
+        return SDL_InvalidParamError("renderer");
     }
 
     if (local_config.logical_width > 0)
@@ -785,7 +783,7 @@ void slayer3d_init_window_config(slayer3d_window_config *config)
     config->logical_height = 720;
     config->title = "SLAYER3D";
     config->icon_path = NULL;
-    config->backend = SLAYER3D_BACKEND_AUTO;
+    config->backend = SLAYER3D_BACKEND_OPENGL;
     config->allow_backend_fallback = true;
     config->display_mode = SLAYER3D_WINDOW_MODE_WINDOWED;
     config->vsync = true;

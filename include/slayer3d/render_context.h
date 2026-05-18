@@ -14,6 +14,7 @@ extern "C"
 
     typedef enum slayer3d_backend
     {
+        /** @brief Let the caller-facing API choose its default backend. */
         SLAYER3D_BACKEND_AUTO = 0,
         SLAYER3D_BACKEND_SOFTWARE = 1,
         SLAYER3D_BACKEND_OPENGL = 2
@@ -168,7 +169,7 @@ extern "C"
      * @brief Fill a window config with sensible defaults.
      *
      * Defaults are width=1280, height=720, logical_width=1280,
-     * logical_height=720, title="SLAYER3D", backend=AUTO,
+     * logical_height=720, title="SLAYER3D", backend=OPENGL,
      * display_mode=WINDOWED, vsync=true, maximized=false,
      * allow_backend_fallback=true, resizable=true, and
      * high_pixel_density=true.

@@ -207,9 +207,12 @@ TEST(SLAYER3DCreateRenderContext, RejectsNullWindow)
 TEST(SLAYER3DCreateRenderContext, RejectsNullRenderer)
 {
     slayer3d_render_context *context = nullptr;
+    slayer3d_render_context_config config;
+    slayer3d_init_render_context_config(&config);
+    config.backend = SLAYER3D_BACKEND_SOFTWARE;
 
     SDL_ClearError();
-    EXPECT_FALSE(slayer3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), nullptr, nullptr, &context));
+    EXPECT_FALSE(slayer3d_create_render_context(reinterpret_cast<SDL_Window *>(0x1), nullptr, &config, &context));
     EXPECT_EQ(nullptr, context);
     EXPECT_NE(std::string_view(SDL_GetError()).find("Parameter 'renderer' is invalid"), std::string_view::npos);
 }
@@ -376,7 +379,7 @@ TEST(SLAYER3DWindowConfig, DefaultsAreReasonable)
     EXPECT_EQ(cfg.logical_height, 720);
     EXPECT_NE(cfg.title, nullptr);
     EXPECT_EQ(cfg.icon_path, nullptr);
-    EXPECT_EQ(cfg.backend, SLAYER3D_BACKEND_AUTO);
+    EXPECT_EQ(cfg.backend, SLAYER3D_BACKEND_OPENGL);
     EXPECT_TRUE(cfg.allow_backend_fallback);
     EXPECT_EQ(cfg.display_mode, SLAYER3D_WINDOW_MODE_WINDOWED);
     EXPECT_TRUE(cfg.vsync);

@@ -282,6 +282,12 @@ static bool delete_editor_player_start(slayer3d_game_data_runtime *runtime, cons
         return false;
     }
 
+    const bool clears_active_selection =
+        runtime->editor_active_selection.hit &&
+        runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START &&
+        runtime->editor_active_selection.element_name != NULL &&
+        SDL_strcmp(runtime->editor_active_selection.element_name, name) == 0;
+
     SDL_free(runtime->editor_player_starts[index].name);
     SDL_free(runtime->editor_player_starts[index].scene);
     SDL_free(runtime->editor_player_starts[index].target);
@@ -292,10 +298,7 @@ static bool delete_editor_player_start(slayer3d_game_data_runtime *runtime, cons
         SDL_zero(runtime->editor_player_starts[runtime->editor_player_start_count]);
     mark_editor_player_starts_dirty(runtime);
 
-    if (runtime->editor_active_selection.hit &&
-        runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START &&
-        runtime->editor_active_selection.element_name != NULL &&
-        SDL_strcmp(runtime->editor_active_selection.element_name, name) == 0)
+    if (clears_active_selection)
     {
         init_editor_selection(&runtime->editor_active_selection);
         runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
@@ -317,13 +320,15 @@ bool slayer3d_game_data_delete_editor_player_start_action(slayer3d_game_data_run
         name = runtime->editor_active_selection.element_name;
     }
 
+    char deleted_name[128] = {0};
+    SDL_strlcpy(deleted_name, name != NULL ? name : "", sizeof(deleted_name));
     char error[160] = {0};
     const bool ok = delete_editor_player_start(runtime, name, error, sizeof(error));
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
     editor_set_string_output(scene_state, outputs, "message_key",
                              ok ? json_string(action, "message", "player start deleted") : error);
-    editor_set_string_output(scene_state, outputs, "player_start_key", ok ? name : "");
+    editor_set_string_output(scene_state, outputs, "player_start_key", ok ? deleted_name : "");
     editor_set_bool_output(scene_state, outputs, "dirty_key",
                            runtime != NULL ? runtime->editor_player_start_dirty : false);
     editor_set_int_output(scene_state, outputs, "revision_key",
