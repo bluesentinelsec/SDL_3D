@@ -350,6 +350,41 @@ TEST_F(SLAYER3DDrawingFixture, RenderStatsTrackModelMeshCulling)
     slayer3d_destroy_render_context(ctx);
 }
 
+TEST_F(SLAYER3DDrawingFixture, ModelDrawFallsBackToMeshesWhenRootNodeArrayMissing)
+{
+    WindowRenderer wr;
+    ASSERT_TRUE(wr.ok());
+    slayer3d_render_context *ctx = nullptr;
+    ASSERT_TRUE(slayer3d_create_render_context(wr.window(), wr.renderer(), nullptr, &ctx)) << SDL_GetError();
+
+    slayer3d_mesh mesh{};
+    FillTriangleMesh(mesh, 0.0f, 0.0f);
+    slayer3d_model_node node{};
+    node.mesh_index = 0;
+
+    slayer3d_model model{};
+    model.meshes = &mesh;
+    model.mesh_count = 1;
+    model.nodes = &node;
+    model.node_count = 1;
+    model.root_nodes = nullptr;
+    model.root_count = 1;
+
+    ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, MakeCamera())) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_draw_model_ex(ctx, &model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                       slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 0.0f, slayer3d_vec3_make(1.0f, 1.0f, 1.0f),
+                                       kRed))
+        << SDL_GetError();
+    ASSERT_TRUE(slayer3d_end_mode_3d(ctx)) << SDL_GetError();
+
+    slayer3d_render_stats stats{};
+    ASSERT_TRUE(slayer3d_get_render_stats(ctx, &stats));
+    EXPECT_EQ(stats.model_mesh_submissions, 1u);
+    EXPECT_EQ(stats.model_mesh_draws, 1u);
+
+    slayer3d_destroy_render_context(ctx);
+}
+
 TEST_F(SLAYER3DDrawingFixture, SetDepthPlanesRejectedWhileInMode)
 {
     WindowRenderer wr;

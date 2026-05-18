@@ -1906,7 +1906,7 @@ static bool slayer3d_draw_model_node(slayer3d_render_context *context, const sla
     }
 
     /* Recurse into children. */
-    for (int c = 0; ok && c < node->child_count; ++c)
+    for (int c = 0; ok && node->children != NULL && c < node->child_count; ++c)
     {
         ok = slayer3d_draw_model_node(context, assets, model, node->children[c], tint_modulate, joint_matrices,
                                       joint_count);
@@ -1918,6 +1918,12 @@ static bool slayer3d_draw_model_node(slayer3d_render_context *context, const sla
     }
 
     return ok;
+}
+
+static bool slayer3d_model_has_node_roots(const slayer3d_model *model)
+{
+    return model != NULL && model->nodes != NULL && model->node_count > 0 && model->root_nodes != NULL &&
+           model->root_count > 0;
 }
 
 bool slayer3d_draw_model(slayer3d_render_context *context, const slayer3d_model *model, slayer3d_vec3 position,
@@ -1970,7 +1976,7 @@ bool slayer3d_draw_model_ex_with_assets(slayer3d_render_context *context, const 
         ok = slayer3d_scale(context, scale.x, scale.y, scale.z);
     }
 
-    if (ok && model->nodes != NULL && model->root_count > 0)
+    if (ok && slayer3d_model_has_node_roots(model))
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
@@ -2020,7 +2026,7 @@ bool slayer3d_draw_model_euler_with_assets(slayer3d_render_context *context, con
     if (ok)
         ok = slayer3d_scale(context, scale.x, scale.y, scale.z);
 
-    if (ok && model->nodes != NULL && model->root_count > 0)
+    if (ok && slayer3d_model_has_node_roots(model))
     {
         for (int r = 0; ok && r < model->root_count; ++r)
             ok = slayer3d_draw_model_node(context, assets, model, model->root_nodes[r], tint_modulate, NULL, 0);
@@ -2088,7 +2094,7 @@ bool slayer3d_draw_model_skinned_with_assets(slayer3d_render_context *context, c
         ok = slayer3d_scale(context, scale.x, scale.y, scale.z);
     }
 
-    if (ok && model->nodes != NULL && model->root_count > 0)
+    if (ok && slayer3d_model_has_node_roots(model))
     {
         for (int r = 0; ok && r < model->root_count; ++r)
         {
