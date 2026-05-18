@@ -15808,6 +15808,90 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    const std::string root = dojo_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + dojo_path.filename().string();
+    const std::filesystem::path save_dir = unique_test_dir("editor_shell_open_load");
+    const std::filesystem::path save_path = save_dir / "level.fragment.json";
+    const std::string save_path_string = save_path.string();
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *source = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &source, error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_create_box_brush_desc box{};
+    box.world_name = "brush.editor_shell.target";
+    box.brush_name = "brush.editor_shell.target.open_load_probe";
+    box.material_name = "mat.editor.floor";
+    box.min = slayer3d_vec3_make(16.0f, -0.2f, 16.0f);
+    box.max = slayer3d_vec3_make(24.0f, 0.0f, 24.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(source, &box, nullptr, 0, error, sizeof(error))) << error;
+    size_t saved_size = 0;
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
+        source, "brush.editor_shell.target", save_path_string.c_str(), &saved_size, error, sizeof(error)))
+        << error;
+    slayer3d_game_data_destroy(source);
+    slayer3d_game_session_destroy(session);
+
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_properties *initial_state = slayer3d_properties_create();
+    ASSERT_NE(initial_state, nullptr);
+    slayer3d_properties_set_string(initial_state, "editor.command", "open");
+    slayer3d_properties_set_string(initial_state, "editor.input.path", save_path_string.c_str());
+    slayer3d_properties_set_string(initial_state, "editor.save.path", save_path_string.c_str());
+
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.media_dir = SLAYER3D_MEDIA_DIR;
+    desc.data_asset_path = asset_path.c_str();
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+    desc.initial_scene_state = initial_state;
+    desc.initial_scene_payload = initial_state;
+
+    slayer3d_data_game_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &runtime, error, sizeof(error))) << error;
+    slayer3d_properties_destroy(initial_state);
+    slayer3d_game_data_runtime *data = slayer3d_data_game_runtime_data(runtime);
+    ASSERT_NE(data, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(data);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.load.message", ""), "editable level loaded");
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(data, "brush.editor_shell.target", &world));
+    ASSERT_GT(world.brush_count, 1);
+    bool found_probe = false;
+    for (int i = 0; i < world.brush_count; ++i)
+    {
+        if (world.brushes[i].name != nullptr &&
+            std::string(world.brushes[i].name) == "brush.editor_shell.target.open_load_probe")
+        {
+            found_probe = true;
+            EXPECT_NEAR(world.brushes[i].bounds.min.x, 16.0f, 0.001f);
+            EXPECT_NEAR(world.brushes[i].bounds.max.z, 24.0f, 0.001f);
+        }
+    }
+    EXPECT_TRUE(found_probe);
+    slayer3d_game_data_brush_world_editor_state brush_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(data, "brush.editor_shell.target", &brush_state));
+    EXPECT_STREQ(brush_state.source_path, save_path_string.c_str());
+    EXPECT_FALSE(brush_state.dirty);
+
+    slayer3d_data_game_runtime_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(save_dir);
+}
+
 TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
