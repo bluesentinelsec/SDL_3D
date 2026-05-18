@@ -18,9 +18,9 @@ Reopen that saved level:
 ```
 
 `--project` points at a directory containing `slayer3d.project.json`; the
-manifest defines the data root and editor entry point. Press `S` in the editor
-to atomically save an editable fragment containing `brush_worlds` and
-`editor_player_starts`.
+manifest defines the data root and editor entry point. Press `Ctrl+S` or
+`Command+S` in the editor to atomically save an editable fragment containing
+`brush_worlds` and `editor_player_starts`.
 
 The equivalent raw runner command remains useful for data/runtime debugging:
 

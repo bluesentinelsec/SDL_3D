@@ -132,6 +132,98 @@ static bool validation_key_name_valid(const char *name)
     return SDL_GetScancodeFromName(name) != SDL_SCANCODE_UNKNOWN;
 }
 
+static bool validation_input_modifier_name_valid(const char *name)
+{
+    return name != NULL && (SDL_strcasecmp(name, "shift") == 0 || SDL_strcasecmp(name, "ctrl") == 0 ||
+                            SDL_strcasecmp(name, "control") == 0 || SDL_strcasecmp(name, "alt") == 0 ||
+                            SDL_strcasecmp(name, "option") == 0 || SDL_strcasecmp(name, "gui") == 0 ||
+                            SDL_strcasecmp(name, "cmd") == 0 || SDL_strcasecmp(name, "command") == 0 ||
+                            SDL_strcasecmp(name, "meta") == 0);
+}
+
+static int validation_input_modifier_mask(const char *name)
+{
+    if (name == NULL)
+        return -1;
+    if (SDL_strcasecmp(name, "shift") == 0)
+        return SLAYER3D_INPUT_MOD_SHIFT;
+    if (SDL_strcasecmp(name, "ctrl") == 0 || SDL_strcasecmp(name, "control") == 0)
+        return SLAYER3D_INPUT_MOD_CTRL;
+    if (SDL_strcasecmp(name, "alt") == 0 || SDL_strcasecmp(name, "option") == 0)
+        return SLAYER3D_INPUT_MOD_ALT;
+    if (SDL_strcasecmp(name, "gui") == 0 || SDL_strcasecmp(name, "cmd") == 0 || SDL_strcasecmp(name, "command") == 0 ||
+        SDL_strcasecmp(name, "meta") == 0)
+    {
+        return SLAYER3D_INPUT_MOD_GUI;
+    }
+    return -1;
+}
+
+static bool validate_keyboard_modifier_mask(validation_context *ctx, yyjson_val *value, const char *path,
+                                            const char *field, int *out_mask)
+{
+    int mask = SLAYER3D_INPUT_MOD_NONE;
+    if (value == NULL)
+    {
+        if (out_mask != NULL)
+            *out_mask = mask;
+        return true;
+    }
+
+    if (yyjson_is_str(value))
+    {
+        const char *modifier = yyjson_get_str(value);
+        if (!validation_input_modifier_name_valid(modifier))
+            return validation_error(ctx, path, "%s contains unsupported modifier '%s'", field,
+                                    modifier != NULL ? modifier : "<missing>");
+        mask |= validation_input_modifier_mask(modifier);
+    }
+    else if (yyjson_is_arr(value))
+    {
+        for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+        {
+            yyjson_val *entry = yyjson_arr_get(value, i);
+            if (!yyjson_is_str(entry))
+                return validation_error(ctx, path, "%s entries must be modifier strings", field);
+            const char *modifier = yyjson_get_str(entry);
+            if (!validation_input_modifier_name_valid(modifier))
+                return validation_error(ctx, path, "%s contains unsupported modifier '%s'", field,
+                                        modifier != NULL ? modifier : "<missing>");
+            mask |= validation_input_modifier_mask(modifier);
+        }
+    }
+    else
+    {
+        return validation_error(ctx, path, "%s must be a modifier string or array", field);
+    }
+
+    if (out_mask != NULL)
+        *out_mask = mask;
+    return true;
+}
+
+static bool validate_keyboard_modifiers(validation_context *ctx, yyjson_val *binding, const char *path)
+{
+    yyjson_val *modifiers = obj_get(binding, "modifiers");
+    yyjson_val *required = obj_get(binding, "required_modifiers");
+    yyjson_val *excluded = obj_get(binding, "excluded_modifiers");
+    int required_mask = SLAYER3D_INPUT_MOD_NONE;
+    int excluded_mask = SLAYER3D_INPUT_MOD_NONE;
+
+    if (modifiers != NULL && required != NULL)
+        return validation_error(ctx, path, "keyboard binding must not define both modifiers and required_modifiers");
+    if (!validate_keyboard_modifier_mask(ctx, modifiers != NULL ? modifiers : required, path,
+                                         "keyboard binding required_modifiers", &required_mask) ||
+        !validate_keyboard_modifier_mask(ctx, excluded, path, "keyboard binding excluded_modifiers", &excluded_mask))
+    {
+        return false;
+    }
+    if ((required_mask & excluded_mask) != 0)
+        return validation_error(ctx, path,
+                                "keyboard binding required_modifiers and excluded_modifiers must not overlap");
+    return true;
+}
+
 bool validation_mouse_button_name_valid(const char *name)
 {
     return name != NULL &&
@@ -4130,6 +4222,8 @@ static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
                 {
                     if (!is_non_empty_string(binding, "key"))
                         return validation_error(ctx, path, "keyboard binding requires a non-empty key");
+                    if (!validate_keyboard_modifiers(ctx, binding, path))
+                        return false;
                 }
                 else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
                 {
@@ -4171,6 +4265,8 @@ static bool validate_input_profile_binding(validation_context *ctx, yyjson_val *
         const char *key = json_string(binding, "key");
         if (!validation_key_name_valid(key))
             return validation_error(ctx, path, "keyboard input profile binding requires a valid key");
+        if (!validate_keyboard_modifiers(ctx, binding, path))
+            return false;
     }
     else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
     {
@@ -4246,6 +4342,8 @@ static bool validate_input_assignment_set_binding(validation_context *ctx, yyjso
     {
         if (!validation_key_name_valid(json_string(binding, "key")))
             return validation_error(ctx, path, "keyboard input device assignment binding requires a valid key");
+        if (!validate_keyboard_modifiers(ctx, binding, path))
+            return false;
     }
     else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
     {

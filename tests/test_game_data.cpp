@@ -15384,6 +15384,26 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_NE(scene_state, nullptr);
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
+    const int export_action_id = slayer3d_game_data_find_action(runtime, "action.editor.export");
+    ASSERT_GE(export_action_id, 0);
+    auto press_save_chord = [&](SDL_Keymod modifiers, Uint64 frame) {
+        SDL_SetModState(modifiers);
+        SDL_Event key{};
+        key.type = SDL_EVENT_KEY_DOWN;
+        key.key.scancode = SDL_SCANCODE_S;
+        key.key.mod = modifiers;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame);
+        const bool pressed = slayer3d_input_is_pressed(input, export_action_id);
+        key.type = SDL_EVENT_KEY_UP;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame + 1U);
+        SDL_SetModState(SDL_KMOD_NONE);
+        return pressed;
+    };
+    EXPECT_FALSE(press_save_chord(SDL_KMOD_NONE, 100));
+    EXPECT_TRUE(press_save_chord(SDL_KMOD_CTRL, 102));
+    EXPECT_TRUE(press_save_chord(SDL_KMOD_GUI, 104));
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.x = 660.0f;
@@ -21815,6 +21835,71 @@ TEST(GameDataRuntime, ValidatesAuthoredStorageConfig)
                                                  sizeof(error)))
         << error;
     EXPECT_EQ(error[0], '\0');
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, ValidatesKeyboardBindingModifiers)
+{
+    const std::filesystem::path dir = unique_test_dir("input_modifier_validation");
+    write_text(dir / "bad_input_modifier.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Input Modifier", "id": "test.bad_input_modifier", "version": "0.1.0" },
+  "world": { "name": "world.bad_input_modifier", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.test",
+        "actions": [
+          {
+            "name": "action.save",
+            "bindings": [{ "device": "keyboard", "key": "S", "modifiers": ["hyper"] }]
+          }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    char error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_input_modifier.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("unsupported modifier 'hyper'"), std::string::npos) << error;
+
+    write_text(dir / "overlap_input_modifier.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Overlap Input Modifier", "id": "test.overlap_input_modifier", "version": "0.1.0" },
+  "world": { "name": "world.overlap_input_modifier", "kind": "fixed_screen" },
+  "input": {
+    "contexts": [
+      {
+        "name": "input.test",
+        "actions": [
+          {
+            "name": "action.save",
+            "bindings": [
+              {
+                "device": "keyboard",
+                "key": "S",
+                "required_modifiers": ["ctrl"],
+                "excluded_modifiers": ["control"]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "entities": []
+})json");
+
+    error[0] = '\0';
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "overlap_input_modifier.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("must not overlap"), std::string::npos) << error;
+
     remove_test_dir(dir);
 }
 

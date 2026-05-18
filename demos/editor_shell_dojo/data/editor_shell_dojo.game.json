@@ -56,7 +56,10 @@
           },
           {
             "name": "action.editor.export",
-            "bindings": [{ "device": "keyboard", "key": "S" }]
+            "bindings": [
+              { "device": "keyboard", "key": "S", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "S", "modifiers": ["gui"] }
+            ]
           },
           {
             "name": "action.editor.test_run.prepare",

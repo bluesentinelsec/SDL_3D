@@ -75,7 +75,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | mouse look | 3D flyby | rotate camera |
 | `Space` / `Left Ctrl` | 3D flyby | move camera up/down |
 | `Left Shift` | 3D flyby | move faster |
-| `S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
+| `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
 | `T` | palette closed | report that disk test-run handoff is disabled for this MVP iteration |
 | `F5` | palette closed | enter the playable test scene from the placed player start |
 | `Esc` | palette closed | quit |
@@ -90,7 +90,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 4. Press `G`, press `Enter` to select Player Start, and place it on the floor.
 5. Hover a placed tile and right click, or select it and press `Delete`; the
    tile should disappear.
-6. Press `S` and confirm the inspector reports a successful save. The output
+6. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
    file should contain `brush_worlds` and `editor_player_starts`.
 7. Press `F5`; the editor should switch into the playable test scene.
 8. In the playable scene, use `WASD` and mouse look to verify the player starts
@@ -128,7 +128,7 @@ The following should be true during a good test drive:
   `X`, or the mouse wheel while keeping a visible work grid.
 - Top/front/side orthographic views plot on their authored work planes;
   perspective preview uses the 3D editor camera.
-- `S` exports JSON containing `brush_worlds` and `editor_player_starts` and
+- `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
   writes the same fragment to the CLI output path.
 - `T` does not write a manifest during this MVP iteration.
 - `F5` applies the stored player start before entering the playable scene.
