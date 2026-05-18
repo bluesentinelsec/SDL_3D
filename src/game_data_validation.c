@@ -9034,6 +9034,9 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
         yyjson_val *size = obj_get(camera, "size");
         if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 0.0))
             return validation_error(ctx, path, "camera size must be positive");
+        yyjson_val *size_key = obj_get(camera, "size_key");
+        if (size_key != NULL && (!yyjson_is_str(size_key) || yyjson_get_str(size_key)[0] == '\0'))
+            return validation_error(ctx, path, "camera size_key must be a non-empty string");
         yyjson_val *position = obj_get(camera, "position");
         if (position != NULL && !is_vec_array(position, 3))
             return validation_error(ctx, path, "camera position must be a vec3");

@@ -27,9 +27,10 @@ The editor now starts in a classic four-viewport layout:
 - Bottom-left: front orthographic view.
 - Bottom-right: side orthographic view.
 
-Press `Q` to enter the full-screen 3D flyby viewport. Press `Q` again to return
-to the four-viewport editor layout. `Tab` is also bound to the same toggle while
-we evaluate the workflow.
+Use the number keys to switch layouts: `1` returns to the four-viewport layout,
+`2` opens the full-screen 3D flyby viewport, `3` opens top orthographic, `4`
+opens front orthographic, and `5` opens side orthographic. `Tab` remains a
+quick toggle between the four-viewport layout and full-screen 3D flyby.
 
 The editor uses normal hardware cursor positioning in the four-viewport layout.
 In full-screen 3D flyby mode the runtime captures relative mouse motion for
@@ -37,16 +38,21 @@ mouse-look, then releases it again when returning to orthographic editing.
 
 ## Controls
 
-- `1`, `2`, `3`, `4`: select floor, wall, ceiling, or player-start prefab
+- `1`: four-viewport layout
+- `2`, `3`, `4`, `5`: full-screen 3D, top, front, or side view
+- `6`, `7`, `8`, `9`: select floor, wall, ceiling, or player-start prefab
+- `C`: cycle tools
 - mouse click in an orthographic viewport: place the selected prefab at the
   snapped preview position
 - right click a highlighted tile: delete it
 - `Delete`: delete the active selected tile
 - `Enter`: commit the current preview placement
 - `+` / `-`: increase or decrease grid size
+- arrow keys: pan the active full-screen orthographic canvas
+- `Z` / `X`, or mouse wheel: zoom the active full-screen orthographic canvas in
+  or out
 - `R`: toggle wall axis
-- `Q` / `Tab`: toggle between four-view layout and full-screen 3D flyby
-- `F1`, `F2`, `F3`, `F4`: perspective, top, front, side views
+- `Tab`: toggle between four-view layout and full-screen 3D flyby
 - in 3D flyby: `WASD` move, mouse look, `Space` / `Left Ctrl` move up/down,
   `Left Shift` moves faster
 - `S`: export the editable level JSON in memory without writing it to disk
@@ -56,10 +62,10 @@ mouse-look, then releases it again when returning to orthographic editing.
 
 ## Suggested Pass
 
-1. Select floor with `1` and place a floor tile.
-2. Select wall with `2`, press `R` if needed, and place at least one wall.
-3. Select ceiling with `3` and place a ceiling tile.
-4. Select player start with `4` and place it on the floor.
+1. Select floor with `6` and place a floor tile.
+2. Select wall with `7`, press `R` if needed, and place at least one wall.
+3. Select ceiling with `8` and place a ceiling tile.
+4. Select player start with `9` and place it on the floor.
 5. Hover a placed tile and right click, or select it and press `Delete`; the
    tile should disappear.
 6. Press `S` and confirm the inspector reports an in-memory JSON export and a
@@ -79,11 +85,13 @@ The following should be true during a good test drive:
 - Floor, wall, and ceiling prefabs share the same grid-cell footprint and are
   anchored to grid-cell boundaries, so simple blockout maps can be tiled without
   visible gaps.
-- Right click / `Delete` removes the highlighted brush and `Z` can undo the
+- Right click / `Delete` removes the highlighted brush and `U` can undo the
   deletion.
 - Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
-- The four-view layout appears on launch, and `Q` toggles into and out of the
-  full-screen 3D flyby camera.
+- The four-view layout appears on launch. Number keys switch between quad,
+  full-screen 3D, and full-screen orthographic views.
+- Full-screen orthographic views pan with the arrow keys and zoom with `Z`,
+  `X`, or the mouse wheel while keeping a visible work grid.
 - Top/front/side orthographic views plot on their authored work planes;
   perspective preview uses the 3D editor camera.
 - `S` exports JSON containing `brush_worlds` and `editor_player_starts` in

@@ -492,7 +492,10 @@ bool slayer3d_game_data_get_camera(const slayer3d_game_data_runtime *runtime, co
     if (SDL_strcmp(type, "orthographic") == 0)
     {
         out_camera->projection = SLAYER3D_CAMERA_ORTHOGRAPHIC;
-        out_camera->fovy = json_float(camera_json, "size", 10.0f);
+        const float authored_size = json_float(camera_json, "size", 10.0f);
+        const float runtime_size =
+            scene_state_float(runtime, json_string(camera_json, "size_key", NULL), authored_size);
+        out_camera->fovy = runtime_size > 0.0f ? runtime_size : authored_size;
     }
     else
     {

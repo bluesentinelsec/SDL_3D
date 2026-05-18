@@ -15118,7 +15118,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_debug, &debug));
-    EXPECT_EQ(debug.grid_lines, 98);
+    EXPECT_EQ(debug.grid_lines, 1026);
     EXPECT_EQ(debug.world_edges, 12);
     EXPECT_EQ(debug.selection_edges, 12);
     EXPECT_EQ(debug.command_preview_edges, 12);
@@ -15169,7 +15169,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(active_selection.has_bounds);
     EXPECT_NEAR(active_selection.bounds.min.y, 0.35f, 0.001f);
 
-    press_key(SDL_SCANCODE_Z, 8);
+    press_key(SDL_SCANCODE_U, 8);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.event", ""), "undo");
@@ -15215,7 +15215,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(active_selection.material_name, "mat.editor.floor");
 
-    press_key(SDL_SCANCODE_Z, 13);
+    press_key(SDL_SCANCODE_U, 13);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "undo paint #2");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 1);
@@ -15694,10 +15694,12 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
+    const int view_quad_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.quad");
     const int view_top_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.top");
     const int view_front_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.front");
     const int view_side_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.side");
     const int view_perspective_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.view.perspective");
+    ASSERT_GE(view_quad_signal, 0);
     ASSERT_GE(view_top_signal, 0);
     ASSERT_GE(view_front_signal, 0);
     ASSERT_GE(view_side_signal, 0);
@@ -15750,6 +15752,30 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_NEAR(ortho.fovy, 48.0f, 0.001f);
     EXPECT_NEAR(ortho.position.y, camera_actor->position.y + 40.0f, 0.001f);
     EXPECT_NEAR(ortho.target.x, camera_actor->position.x, 0.001f);
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_RIGHT;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    EXPECT_GT(camera_actor->position.x, start_position.x);
+    key.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key);
+
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
+    const float zoom_start = ortho.fovy;
+    SDL_Event zoom{};
+    zoom.type = SDL_EVENT_KEY_DOWN;
+    zoom.key.scancode = SDL_SCANCODE_Z;
+    slayer3d_input_process_event(input, &zoom);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    zoom.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &zoom);
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
+    EXPECT_LT(ortho.fovy, zoom_start);
+
     slayer3d_signal_emit(bus, view_front_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_front");
     work_plane_normal =
@@ -15766,6 +15792,11 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     ASSERT_EQ(work_plane_normal->type, SLAYER3D_VALUE_VEC3);
     EXPECT_NEAR(work_plane_normal->as_vec3.x, 1.0f, 0.001f);
     expect_work_plane_grid_axis('x');
+    slayer3d_signal_emit(bus, view_quad_signal, nullptr);
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
+                 "quad_view");
+    EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
@@ -15773,7 +15804,6 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_TRUE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, true));
 
-    SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_W;
     slayer3d_input_process_event(input, &key);

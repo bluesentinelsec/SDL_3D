@@ -432,7 +432,9 @@ camera with their `camera` field, and logic actions can switch cameras with
 
 Camera types:
 
-- `orthographic`: fixed position/target/up with `size`.
+- `orthographic`: fixed position/target/up with `size`. Optional `size_key`
+  reads a positive numeric scene-state value so editor and strategy cameras can
+  zoom at runtime without mutating authored camera data.
 - `perspective`: position/target/up with `fov` and optional `fov_axis`.
   `position` and `target` may be fixed Vec3 values, or driven by
   `position_entity` / `target_entity` plus optional `position_offset` /
@@ -472,7 +474,8 @@ Perspective, chase, and FPS cameras can be tuned at runtime with scene state:
 
 `fov_key` reads a numeric scene-state value. `fov_axis_key` reads a string scene
 state value and accepts `vertical` or `horizontal`. Invalid runtime values fall
-back to the authored camera values. Use horizontal FOV for FPS-style settings
+back to the authored camera values. Orthographic `size_key` works the same way
+for zoomable orthographic cameras. Use horizontal FOV for FPS-style settings
 when designers want values like "90 degrees" to mean the player's visible
 left-to-right angle; at 16:9, a 90-degree horizontal FOV renders with a vertical
 FOV of roughly 58.7 degrees.
@@ -1435,10 +1438,21 @@ viewport camera without collision:
         "up": "action.editor.camera.up",
         "down": "action.editor.camera.down",
         "look": "action.editor.camera.look",
-        "fast": "action.editor.camera.fast"
+        "fast": "action.editor.camera.fast",
+        "pan_left": "action.editor.ortho.pan.left",
+        "pan_right": "action.editor.ortho.pan.right",
+        "pan_up": "action.editor.ortho.pan.up",
+        "pan_down": "action.editor.ortho.pan.down",
+        "zoom_in": "action.editor.ortho.zoom.in",
+        "zoom_out": "action.editor.ortho.zoom.out",
+        "zoom_wheel": "action.editor.ortho.zoom.wheel"
       },
+      "mode_key": "editor.view.mode",
+      "orthographic_size_key": "editor.ortho.size",
       "move_speed": 8.0,
       "fast_speed": 22.0,
+      "orthographic_pan_speed": 0.85,
+      "orthographic_zoom_speed": 1.75,
       "mouse_sensitivity": 0.002,
       "pitch_min": -1.45,
       "pitch_max": 1.45
@@ -1454,6 +1468,14 @@ normal mouse clicking and right-button camera look in the same scene. If `look`
 is omitted, mouse-look is active whenever `mouse_look` is true. The controller
 writes `yaw`, `pitch`, and `camera_forward` by default; override those names
 with `yaw_property`, `pitch_property`, and `forward_property`.
+
+When `mode_key` points at scene state with `orthographic_top`,
+`orthographic_front`, or `orthographic_side`, the same controller switches to
+orthographic canvas controls instead of flyby movement. `pan_left/right/up/down`
+move the camera actor in the active orthographic plane, while
+`zoom_in/out/wheel` scales the scene-state float named by
+`orthographic_size_key`. Override `flyby_mode`, `top_mode`, `front_mode`, or
+`side_mode` if a project uses different authored mode names.
 
 Editor scenes can pair one free-flight camera actor with multiple authored
 cameras. A typical graybox editor uses an `fps` or perspective camera for 3D

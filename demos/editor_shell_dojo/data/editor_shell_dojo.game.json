@@ -45,7 +45,7 @@
           },
           {
             "name": "action.editor.command.undo",
-            "bindings": [{ "device": "keyboard", "key": "Z" }]
+            "bindings": [{ "device": "keyboard", "key": "U" }]
           },
           {
             "name": "action.editor.command.redo",
@@ -69,42 +69,43 @@
           },
           {
             "name": "action.editor.tool.floor",
-            "bindings": [{ "device": "keyboard", "key": "1" }]
+            "bindings": [{ "device": "keyboard", "key": "6" }]
           },
           {
             "name": "action.editor.tool.wall",
-            "bindings": [{ "device": "keyboard", "key": "2" }]
+            "bindings": [{ "device": "keyboard", "key": "7" }]
           },
           {
             "name": "action.editor.tool.ceiling",
-            "bindings": [{ "device": "keyboard", "key": "3" }]
+            "bindings": [{ "device": "keyboard", "key": "8" }]
           },
           {
             "name": "action.editor.tool.player_start",
-            "bindings": [{ "device": "keyboard", "key": "4" }]
+            "bindings": [{ "device": "keyboard", "key": "9" }]
           },
           {
             "name": "action.editor.view.toggle",
-            "bindings": [
-              { "device": "keyboard", "key": "Q" },
-              { "device": "keyboard", "key": "TAB" }
-            ]
+            "bindings": [{ "device": "keyboard", "key": "TAB" }]
+          },
+          {
+            "name": "action.editor.view.quad",
+            "bindings": [{ "device": "keyboard", "key": "1" }]
           },
           {
             "name": "action.editor.view.perspective",
-            "bindings": [{ "device": "keyboard", "key": "F1" }]
+            "bindings": [{ "device": "keyboard", "key": "2" }]
           },
           {
             "name": "action.editor.view.top",
-            "bindings": [{ "device": "keyboard", "key": "F2" }]
+            "bindings": [{ "device": "keyboard", "key": "3" }]
           },
           {
             "name": "action.editor.view.front",
-            "bindings": [{ "device": "keyboard", "key": "F3" }]
+            "bindings": [{ "device": "keyboard", "key": "4" }]
           },
           {
             "name": "action.editor.view.side",
-            "bindings": [{ "device": "keyboard", "key": "F4" }]
+            "bindings": [{ "device": "keyboard", "key": "5" }]
           },
           {
             "name": "action.editor.grid.decrease",
@@ -123,6 +124,34 @@
           {
             "name": "action.editor.wall_axis.toggle",
             "bindings": [{ "device": "keyboard", "key": "R" }]
+          },
+          {
+            "name": "action.editor.ortho.pan.left",
+            "bindings": [{ "device": "keyboard", "key": "LEFT" }]
+          },
+          {
+            "name": "action.editor.ortho.pan.right",
+            "bindings": [{ "device": "keyboard", "key": "RIGHT" }]
+          },
+          {
+            "name": "action.editor.ortho.pan.up",
+            "bindings": [{ "device": "keyboard", "key": "UP" }]
+          },
+          {
+            "name": "action.editor.ortho.pan.down",
+            "bindings": [{ "device": "keyboard", "key": "DOWN" }]
+          },
+          {
+            "name": "action.editor.ortho.zoom.in",
+            "bindings": [{ "device": "keyboard", "key": "Z" }]
+          },
+          {
+            "name": "action.editor.ortho.zoom.out",
+            "bindings": [{ "device": "keyboard", "key": "X" }]
+          },
+          {
+            "name": "action.editor.ortho.zoom.wheel",
+            "bindings": [{ "device": "mouse", "axis": "wheel" }]
           },
           {
             "name": "action.editor.camera.forward",
@@ -195,6 +224,7 @@
     "signal.editor.tool.ceiling",
     "signal.editor.tool.player_start",
     "signal.editor.view.toggle",
+    "signal.editor.view.quad",
     "signal.editor.view.perspective",
     "signal.editor.view.top",
     "signal.editor.view.front",
@@ -287,6 +317,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.view.toggle",
         "on_pressed": "signal.editor.view.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.quad",
+        "on_pressed": "signal.editor.view.quad"
       },
       {
         "type": "sensor.input_pressed",
@@ -389,6 +424,16 @@
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "3D flyby editor view" }
             ]
           }
+        ]
+      },
+      {
+        "signal": "signal.editor.view.quad",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
+          { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "four viewport editor layout" }
         ]
       },
       {
@@ -1036,7 +1081,8 @@
         "position_offset": [0.0, 40.0, 0.0],
         "target_entity": "entity.editor_shell.camera",
         "up": [0.0, 0.0, -1.0],
-        "size": 48.0
+        "size": 48.0,
+        "size_key": "editor.ortho.size"
       },
       {
         "name": "camera.editor_shell.ortho_front",
@@ -1045,7 +1091,8 @@
         "position_offset": [0.0, 0.0, 40.0],
         "target_entity": "entity.editor_shell.camera",
         "up": [0.0, 1.0, 0.0],
-        "size": 32.0
+        "size": 48.0,
+        "size_key": "editor.ortho.size"
       },
       {
         "name": "camera.editor_shell.ortho_side",
@@ -1054,7 +1101,8 @@
         "position_offset": [40.0, 0.0, 0.0],
         "target_entity": "entity.editor_shell.camera",
         "up": [0.0, 1.0, 0.0],
-        "size": 32.0
+        "size": 48.0,
+        "size_key": "editor.ortho.size"
       },
       {
         "name": "camera.editor_shell.player",
@@ -1095,11 +1143,24 @@
             "right": "action.editor.camera.right",
             "up": "action.editor.camera.up",
             "down": "action.editor.camera.down",
+            "pan_left": "action.editor.ortho.pan.left",
+            "pan_right": "action.editor.ortho.pan.right",
+            "pan_up": "action.editor.ortho.pan.up",
+            "pan_down": "action.editor.ortho.pan.down",
+            "zoom_in": "action.editor.ortho.zoom.in",
+            "zoom_out": "action.editor.ortho.zoom.out",
+            "zoom_wheel": "action.editor.ortho.zoom.wheel",
             "fast": "action.editor.camera.fast"
           },
-          "enabled_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
+          "mode_key": "editor.view.mode",
+          "orthographic_size_key": "editor.ortho.size",
           "move_speed": 8.0,
           "fast_speed": 22.0,
+          "orthographic_pan_speed": 0.85,
+          "orthographic_zoom_speed": 1.75,
+          "orthographic_wheel_zoom_step": 0.12,
+          "orthographic_min_size": 4.0,
+          "orthographic_max_size": 256.0,
           "mouse_sensitivity": 0.002,
           "pitch_min": -1.45,
           "pitch_max": 1.45

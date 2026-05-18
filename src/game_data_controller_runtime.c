@@ -298,10 +298,116 @@ static float editor_camera_clampf(float value, float min_value, float max_value)
     return value;
 }
 
+static bool editor_camera_mode_equals(const char *mode, const char *expected)
+{
+    return mode != NULL && expected != NULL && SDL_strcmp(mode, expected) == 0;
+}
+
+static bool editor_camera_mode_is_orthographic(const char *mode, yyjson_val *component)
+{
+    return editor_camera_mode_equals(mode, json_string(component, "top_mode", "orthographic_top")) ||
+           editor_camera_mode_equals(mode, json_string(component, "front_mode", "orthographic_front")) ||
+           editor_camera_mode_equals(mode, json_string(component, "side_mode", "orthographic_side"));
+}
+
+static void editor_camera_orthographic_basis(const char *mode, yyjson_val *component, slayer3d_vec3 *out_right,
+                                             slayer3d_vec3 *out_up)
+{
+    if (out_right == NULL || out_up == NULL)
+        return;
+
+    if (editor_camera_mode_equals(mode, json_string(component, "front_mode", "orthographic_front")))
+    {
+        *out_right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+        *out_up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+        return;
+    }
+    if (editor_camera_mode_equals(mode, json_string(component, "side_mode", "orthographic_side")))
+    {
+        *out_right = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+        *out_up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+        return;
+    }
+
+    *out_right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    *out_up = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+}
+
+static void update_editor_camera_orthographic_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
+                                                         slayer3d_registered_actor *actor,
+                                                         const slayer3d_input_manager *input, float dt,
+                                                         const char *mode)
+{
+    if (runtime == NULL || component == NULL || actor == NULL || !editor_camera_mode_is_orthographic(mode, component))
+        return;
+
+    const float pan_left =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "pan_left"));
+    const float pan_right =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "pan_right"));
+    const float pan_up =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "pan_up"));
+    const float pan_down =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "pan_down"));
+    const char *size_key = json_string(component, "orthographic_size_key", NULL);
+    const float authored_size = json_float(component, "orthographic_size", 48.0f);
+    float ortho_size = scene_state_float(runtime, size_key, authored_size);
+    if (ortho_size <= 0.0f)
+        ortho_size = authored_size > 0.0f ? authored_size : 48.0f;
+
+    float pan_x = pan_right - pan_left;
+    float pan_y = pan_up - pan_down;
+    const float pan_len_sq = pan_x * pan_x + pan_y * pan_y;
+    if (pan_len_sq > 1.0f)
+    {
+        const float inv_len = 1.0f / SDL_sqrtf(pan_len_sq);
+        pan_x *= inv_len;
+        pan_y *= inv_len;
+    }
+
+    slayer3d_vec3 right;
+    slayer3d_vec3 up;
+    editor_camera_orthographic_basis(mode, component, &right, &up);
+    const float pan_speed = json_float(component, "orthographic_pan_speed", 0.85f) * ortho_size;
+    const float seconds = SDL_max(dt, 0.0f);
+    const slayer3d_vec3 delta = slayer3d_vec3_scale(
+        slayer3d_vec3_add(slayer3d_vec3_scale(right, pan_x), slayer3d_vec3_scale(up, pan_y)), pan_speed * seconds);
+    if (slayer3d_vec3_length_squared(delta) > 0.0000001f)
+        actor_set_position(actor, slayer3d_vec3_add(actor->position, delta));
+
+    const float zoom_in =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "zoom_in"));
+    const float zoom_out =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "zoom_out"));
+    const float zoom_wheel =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "zoom_wheel"));
+    const float zoom_speed = json_float(component, "orthographic_zoom_speed", 1.75f);
+    const float wheel_step = json_float(component, "orthographic_wheel_zoom_step", 0.12f);
+    const float zoom_factor = 1.0f + (zoom_out - zoom_in) * zoom_speed * seconds - zoom_wheel * wheel_step;
+    if (zoom_factor > 0.05f && SDL_fabsf(zoom_factor - 1.0f) > 0.0001f)
+    {
+        const float min_size = json_float(component, "orthographic_min_size", 2.0f);
+        const float max_size = json_float(component, "orthographic_max_size", 512.0f);
+        ortho_size =
+            editor_camera_clampf(ortho_size * zoom_factor, SDL_min(min_size, max_size), SDL_max(min_size, max_size));
+        if (runtime->scene_state != NULL && size_key != NULL && size_key[0] != '\0')
+            slayer3d_properties_set_float(runtime->scene_state, size_key, ortho_size);
+    }
+}
+
 void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
                                      slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt)
 {
     if (runtime == NULL || component == NULL || actor == NULL)
+        return;
+
+    const char *mode = scene_state_string(runtime, json_string(component, "mode_key", "editor.view.mode"), NULL);
+    if (editor_camera_mode_is_orthographic(mode, component))
+    {
+        update_editor_camera_orthographic_controller(runtime, component, actor, input, dt, mode);
+        return;
+    }
+    if (mode != NULL && !editor_camera_mode_equals(mode, json_string(component, "flyby_mode", "flyby_3d")))
         return;
 
     const char *yaw_property = json_string(component, "yaw_property", "yaw");

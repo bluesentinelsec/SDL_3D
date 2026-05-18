@@ -8,6 +8,7 @@
     { "type": "scene_state.set", "key": "editor.save.path", "value": "" },
     { "type": "scene_state.set", "key": "editor.test_run.path", "value": "" },
     { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
+    { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
     { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
     { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
     { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
@@ -35,10 +36,18 @@
       "action.editor.tool.ceiling",
       "action.editor.tool.player_start",
       "action.editor.view.toggle",
+      "action.editor.view.quad",
       "action.editor.view.perspective",
       "action.editor.view.top",
       "action.editor.view.front",
       "action.editor.view.side",
+      "action.editor.ortho.pan.left",
+      "action.editor.ortho.pan.right",
+      "action.editor.ortho.pan.up",
+      "action.editor.ortho.pan.down",
+      "action.editor.ortho.zoom.in",
+      "action.editor.ortho.zoom.out",
+      "action.editor.ortho.zoom.wheel",
       "action.editor.grid.decrease",
       "action.editor.grid.increase",
       "action.editor.wall_axis.toggle",
@@ -131,6 +140,39 @@
             "camera": "camera.editor_shell.ortho_side",
             "rect": [640, 360, 640, 360],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [1.0, 0.0, 0.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          },
+          {
+            "camera": "camera.editor_shell.ortho_top",
+            "rect": [0, 0, 1280, 720],
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [0.0, 1.0, 0.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          },
+          {
+            "camera": "camera.editor_shell.ortho_front",
+            "rect": [0, 0, 1280, 720],
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_front" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [0.0, 0.0, 1.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          },
+          {
+            "camera": "camera.editor_shell.ortho_side",
+            "rect": [0, 0, 1280, 720],
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_side" },
             "work_plane": {
               "enabled": true,
               "normal": [1.0, 0.0, 0.0],
@@ -241,7 +283,7 @@
           "preview": "floor",
           "kind": "box",
           "label": "Floor",
-          "shortcut": "1",
+          "shortcut": "6",
           "category": "blockout",
           "description": "8m gray floor tile"
         },
@@ -250,7 +292,7 @@
           "preview": "wall",
           "kind": "box",
           "label": "Wall",
-          "shortcut": "2",
+          "shortcut": "7",
           "category": "blockout",
           "description": "8m gray wall tile"
         },
@@ -259,7 +301,7 @@
           "preview": "ceiling",
           "kind": "box",
           "label": "Ceiling",
-          "shortcut": "3",
+          "shortcut": "8",
           "category": "blockout",
           "description": "8m gray ceiling tile"
         },
@@ -268,7 +310,7 @@
           "preview": "player_start",
           "kind": "player_start",
           "label": "Player",
-          "shortcut": "4",
+          "shortcut": "9",
           "category": "things",
           "description": "play-test spawn marker"
         }
@@ -292,7 +334,7 @@
       "hit_marker_color": [255, 70, 70, 255],
       "command_preview_color": [80, 255, 180, 255],
       "work_plane_grid_color": [80, 140, 170, 95],
-      "work_plane_grid_size": 24.0,
+      "work_plane_grid_size": 256.0,
       "work_plane_grid_spacing": 1.0,
       "normal_length": 0.65,
       "hit_marker_size": 0.12
@@ -573,7 +615,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Click ortho views to place. Q/Tab toggles 3D flyby. Flyby: WASD move, mouse look, Space/Ctrl up/down. 1 floor 2 wall 3 ceiling 4 start. +/- grid, Enter commit, S save, F5 play.",
+        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Tools: C cycle, 6 floor 7 wall 8 ceiling 9 player. Enter commit, Delete remove.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,
