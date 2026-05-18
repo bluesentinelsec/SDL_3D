@@ -1185,7 +1185,7 @@ static slayer3d_bounding_box editor_floor_fill_bounds(slayer3d_bounding_box floo
 {
     slayer3d_bounding_box bounds = floor_bounds;
     bounds.min.y = low_y;
-    bounds.max.y = high_y;
+    bounds.max.y = floor_bounds.min.y > low_y + 0.001f ? floor_bounds.min.y : high_y;
     switch (side_index)
     {
     case 0:
