@@ -295,7 +295,11 @@ else()
             ${CMAKE_SOURCE_DIR}/tools/slayer3d_runner_state.c
     )
     target_link_libraries(slayer3d_tool_cli_test PRIVATE slayer3d_argtable3)
-    target_include_directories(slayer3d_tool_cli_test PRIVATE ${CMAKE_SOURCE_DIR}/tools)
+    target_include_directories(
+        slayer3d_tool_cli_test
+        PRIVATE
+            ${CMAKE_SOURCE_DIR}/tools
+    )
 
     if(NOT EMSCRIPTEN)
         slayer3d_add_test(slayer3d_asset_test test_asset.cpp unit)

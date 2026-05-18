@@ -411,6 +411,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.level.save") == 0)
         return slayer3d_game_data_save_editor_level_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.level.load") == 0)
+        return slayer3d_game_data_load_editor_level_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.test_run.prepare") == 0)
         return slayer3d_game_data_prepare_editor_test_run_action(runtime, action);
 

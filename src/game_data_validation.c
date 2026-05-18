@@ -132,6 +132,98 @@ static bool validation_key_name_valid(const char *name)
     return SDL_GetScancodeFromName(name) != SDL_SCANCODE_UNKNOWN;
 }
 
+static bool validation_input_modifier_name_valid(const char *name)
+{
+    return name != NULL && (SDL_strcasecmp(name, "shift") == 0 || SDL_strcasecmp(name, "ctrl") == 0 ||
+                            SDL_strcasecmp(name, "control") == 0 || SDL_strcasecmp(name, "alt") == 0 ||
+                            SDL_strcasecmp(name, "option") == 0 || SDL_strcasecmp(name, "gui") == 0 ||
+                            SDL_strcasecmp(name, "cmd") == 0 || SDL_strcasecmp(name, "command") == 0 ||
+                            SDL_strcasecmp(name, "meta") == 0);
+}
+
+static int validation_input_modifier_mask(const char *name)
+{
+    if (name == NULL)
+        return -1;
+    if (SDL_strcasecmp(name, "shift") == 0)
+        return SLAYER3D_INPUT_MOD_SHIFT;
+    if (SDL_strcasecmp(name, "ctrl") == 0 || SDL_strcasecmp(name, "control") == 0)
+        return SLAYER3D_INPUT_MOD_CTRL;
+    if (SDL_strcasecmp(name, "alt") == 0 || SDL_strcasecmp(name, "option") == 0)
+        return SLAYER3D_INPUT_MOD_ALT;
+    if (SDL_strcasecmp(name, "gui") == 0 || SDL_strcasecmp(name, "cmd") == 0 || SDL_strcasecmp(name, "command") == 0 ||
+        SDL_strcasecmp(name, "meta") == 0)
+    {
+        return SLAYER3D_INPUT_MOD_GUI;
+    }
+    return -1;
+}
+
+static bool validate_keyboard_modifier_mask(validation_context *ctx, yyjson_val *value, const char *path,
+                                            const char *field, int *out_mask)
+{
+    int mask = SLAYER3D_INPUT_MOD_NONE;
+    if (value == NULL)
+    {
+        if (out_mask != NULL)
+            *out_mask = mask;
+        return true;
+    }
+
+    if (yyjson_is_str(value))
+    {
+        const char *modifier = yyjson_get_str(value);
+        if (!validation_input_modifier_name_valid(modifier))
+            return validation_error(ctx, path, "%s contains unsupported modifier '%s'", field,
+                                    modifier != NULL ? modifier : "<missing>");
+        mask |= validation_input_modifier_mask(modifier);
+    }
+    else if (yyjson_is_arr(value))
+    {
+        for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+        {
+            yyjson_val *entry = yyjson_arr_get(value, i);
+            if (!yyjson_is_str(entry))
+                return validation_error(ctx, path, "%s entries must be modifier strings", field);
+            const char *modifier = yyjson_get_str(entry);
+            if (!validation_input_modifier_name_valid(modifier))
+                return validation_error(ctx, path, "%s contains unsupported modifier '%s'", field,
+                                        modifier != NULL ? modifier : "<missing>");
+            mask |= validation_input_modifier_mask(modifier);
+        }
+    }
+    else
+    {
+        return validation_error(ctx, path, "%s must be a modifier string or array", field);
+    }
+
+    if (out_mask != NULL)
+        *out_mask = mask;
+    return true;
+}
+
+static bool validate_keyboard_modifiers(validation_context *ctx, yyjson_val *binding, const char *path)
+{
+    yyjson_val *modifiers = obj_get(binding, "modifiers");
+    yyjson_val *required = obj_get(binding, "required_modifiers");
+    yyjson_val *excluded = obj_get(binding, "excluded_modifiers");
+    int required_mask = SLAYER3D_INPUT_MOD_NONE;
+    int excluded_mask = SLAYER3D_INPUT_MOD_NONE;
+
+    if (modifiers != NULL && required != NULL)
+        return validation_error(ctx, path, "keyboard binding must not define both modifiers and required_modifiers");
+    if (!validate_keyboard_modifier_mask(ctx, modifiers != NULL ? modifiers : required, path,
+                                         "keyboard binding required_modifiers", &required_mask) ||
+        !validate_keyboard_modifier_mask(ctx, excluded, path, "keyboard binding excluded_modifiers", &excluded_mask))
+    {
+        return false;
+    }
+    if ((required_mask & excluded_mask) != 0)
+        return validation_error(ctx, path,
+                                "keyboard binding required_modifiers and excluded_modifiers must not overlap");
+    return true;
+}
+
 bool validation_mouse_button_name_valid(const char *name)
 {
     return name != NULL &&
@@ -4130,6 +4222,8 @@ static bool validate_input_bindings(validation_context *ctx, yyjson_val *root)
                 {
                     if (!is_non_empty_string(binding, "key"))
                         return validation_error(ctx, path, "keyboard binding requires a non-empty key");
+                    if (!validate_keyboard_modifiers(ctx, binding, path))
+                        return false;
                 }
                 else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
                 {
@@ -4171,6 +4265,8 @@ static bool validate_input_profile_binding(validation_context *ctx, yyjson_val *
         const char *key = json_string(binding, "key");
         if (!validation_key_name_valid(key))
             return validation_error(ctx, path, "keyboard input profile binding requires a valid key");
+        if (!validate_keyboard_modifiers(ctx, binding, path))
+            return false;
     }
     else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
     {
@@ -4246,6 +4342,8 @@ static bool validate_input_assignment_set_binding(validation_context *ctx, yyjso
     {
         if (!validation_key_name_valid(json_string(binding, "key")))
             return validation_error(ctx, path, "keyboard input device assignment binding requires a valid key");
+        if (!validate_keyboard_modifiers(ctx, binding, path))
+            return false;
     }
     else if (SDL_strcmp(device != NULL ? device : "", "gamepad") == 0)
     {
@@ -7629,6 +7727,48 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             yyjson_val *output = obj_get(outputs, output_keys[i]);
             if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
                 return validation_error(ctx, json_path, "editor.level.save output keys must be non-empty strings");
+        }
+        return true;
+    }
+    if (SDL_strcmp(type, "editor.level.load") == 0)
+    {
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+            return false;
+        yyjson_val *path = obj_get(action, "path");
+        yyjson_val *path_from_state = obj_get(action, "path_from_state");
+        if ((path == NULL && path_from_state == NULL) || (path != NULL && path_from_state != NULL))
+            return validation_error(ctx, json_path,
+                                    "editor.level.load requires exactly one of path or path_from_state");
+        if (path != NULL && (!yyjson_is_str(path) || yyjson_get_str(path)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.level.load path must be a non-empty string");
+        if (path_from_state != NULL && (!yyjson_is_str(path_from_state) || yyjson_get_str(path_from_state)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.level.load path_from_state must be a non-empty string");
+        yyjson_val *optional = obj_get(action, "optional");
+        if (optional != NULL && !yyjson_is_bool(optional))
+            return validation_error(ctx, json_path, "editor.level.load optional must be a boolean");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.level.load outputs must be an object");
+        static const char *const output_keys[] = {
+            "valid_key",
+            "message_key",
+            "path_key",
+            "brush_world_key",
+            "brush_source_path_key",
+            "brush_dirty_key",
+            "brush_revision_key",
+            "brush_saved_revision_key",
+            "player_start_source_path_key",
+            "player_start_count_key",
+            "player_start_dirty_key",
+            "player_start_revision_key",
+            "player_start_saved_revision_key",
+        };
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path, "editor.level.load output keys must be non-empty strings");
         }
         return true;
     }

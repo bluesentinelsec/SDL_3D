@@ -1,0 +1,132 @@
+/**
+ * @file game_data_brush_editor_import.c
+ * @brief Editable-level JSON import helpers for editor tooling.
+ */
+
+#include "game_data_internal.h"
+
+#include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_stdinc.h>
+
+static bool editable_fragment_schema_valid(yyjson_val *root)
+{
+    const char *schema = json_string(root, "schema", NULL);
+    return yyjson_is_obj(root) && schema != NULL && SDL_strcmp(schema, "slayer3d.fragment.v0") == 0;
+}
+
+static int find_loaded_brush_world_index(const slayer3d_game_data_runtime *runtime, const char *world_name)
+{
+    if (runtime == NULL || world_name == NULL)
+        return -1;
+    for (int i = 0; i < runtime->brush_world_count; ++i)
+    {
+        const char *name = runtime->brush_worlds[i].desc.name;
+        if (name != NULL && SDL_strcmp(name, world_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static void free_staged_import_runtime(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < runtime->brush_world_count; ++i)
+        free_brush_world_runtime(&runtime->brush_worlds[i]);
+    SDL_free(runtime->brush_worlds);
+    runtime->brush_worlds = NULL;
+    runtime->brush_world_count = 0;
+    free_editor_player_starts_runtime(runtime);
+    SDL_free(runtime->editor_player_start_source_path);
+    runtime->editor_player_start_source_path = NULL;
+}
+
+bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                          const char *path, char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || path == NULL || path[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "editable level load requires runtime, world name, and non-empty file path");
+        return false;
+    }
+
+    size_t size = 0u;
+    void *bytes = SDL_LoadFile(path, &size);
+    if (bytes == NULL || size == 0u)
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to read editable level '%s'", path);
+        SDL_free(bytes);
+        return false;
+    }
+
+    yyjson_read_err read_error;
+    SDL_zero(read_error);
+    yyjson_doc *doc = yyjson_read_opts((char *)bytes, size, 0, NULL, &read_error);
+    SDL_free(bytes);
+    yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    if (!editable_fragment_schema_valid(root))
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "editable level must be a JSON object with schema 'slayer3d.fragment.v0'");
+        yyjson_doc_free(doc);
+        return false;
+    }
+    if (!yyjson_is_arr(obj_get(root, "brush_worlds")))
+    {
+        set_error(error_buffer, error_buffer_size, "editable level requires a brush_worlds array");
+        yyjson_doc_free(doc);
+        return false;
+    }
+
+    slayer3d_game_data_runtime staged;
+    SDL_zero(staged);
+    if (!load_brush_worlds(&staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_player_starts(&staged, root, error_buffer, error_buffer_size))
+    {
+        free_staged_import_runtime(&staged);
+        yyjson_doc_free(doc);
+        return false;
+    }
+
+    const int staged_index = find_loaded_brush_world_index(&staged, world_name);
+    if (staged_index < 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "editable level does not contain brush world '%s'", world_name);
+        free_staged_import_runtime(&staged);
+        yyjson_doc_free(doc);
+        return false;
+    }
+    brush_world_runtime *target = find_brush_world_runtime_mutable(runtime, world_name);
+    if (target == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "runtime brush world '%s' not found", world_name);
+        free_staged_import_runtime(&staged);
+        yyjson_doc_free(doc);
+        return false;
+    }
+
+    brush_world_runtime replacement = staged.brush_worlds[staged_index];
+    SDL_zero(staged.brush_worlds[staged_index]);
+    free_brush_world_runtime(target);
+    *target = replacement;
+    target->desc.render_model = &target->artifacts.render_model;
+
+    free_editor_player_starts_runtime(runtime);
+    runtime->editor_player_starts = staged.editor_player_starts;
+    runtime->editor_player_start_count = staged.editor_player_start_count;
+    runtime->editor_player_start_capacity = staged.editor_player_start_capacity;
+    staged.editor_player_starts = NULL;
+    staged.editor_player_start_count = 0;
+    staged.editor_player_start_capacity = 0;
+
+    free_staged_import_runtime(&staged);
+    yyjson_doc_free(doc);
+
+    if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size) ||
+        !slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    return true;
+}

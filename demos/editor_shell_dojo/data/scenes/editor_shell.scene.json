@@ -4,21 +4,7 @@
   "camera": "camera.editor_shell.viewport",
   "updates_game": true,
   "renders_world": true,
-  "on_enter": [
-    { "type": "scene_state.set", "key": "editor.save.path", "value": "" },
-    { "type": "scene_state.set", "key": "editor.test_run.path", "value": "" },
-    { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
-    { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
-    { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-    { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
-    { "type": "scene_state.set", "key": "editor.palette.brush.cursor", "value": "floor" },
-    { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
-    { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
-    { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
-    { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
-    { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-    { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
-  ],
+  "on_enter_signal": "signal.editor.scene.enter",
   "input": {
     "mouse_capture": "unpaused",
     "mouse_capture_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },

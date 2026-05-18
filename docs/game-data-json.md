@@ -1359,6 +1359,28 @@ revision state as `editor.level.export`.
 }
 ```
 
+Use `editor.level.load` to replace an editor runtime's authored starter level
+with an editable fragment from disk. This is intended for editor hosts that pass
+`editor.input.path` at launch time. The fragment must use
+`schema: "slayer3d.fragment.v0"` and contain a `brush_worlds` entry whose name
+matches `world`; its `editor_player_starts` collection replaces the runtime
+player-start collection. Set `optional: true` when the same editor scene should
+also support new/blank sessions with no input file.
+
+```json
+{
+  "type": "editor.level.load",
+  "world": "brush.level.blockout",
+  "path_from_state": "editor.input.path",
+  "optional": true,
+  "outputs": {
+    "valid_key": "editor.load.valid",
+    "message_key": "editor.load.message",
+    "path_key": "editor.load.path"
+  }
+}
+```
+
 Use `editor.test_run.prepare` to publish a game-agnostic handoff manifest for
 launching the generic runner from an editor-selected scene or player start. The
 action does not spawn a process and does not write files. It produces

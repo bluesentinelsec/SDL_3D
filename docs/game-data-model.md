@@ -137,6 +137,11 @@ Use C for:
 - asset loaders and pack primitives
 - high-performance primitives that should be available to future games
 
+Keyboard bindings may require modifier chords with `modifiers` or
+`required_modifiers`, and may reject modifier states with `excluded_modifiers`.
+Supported modifier names are `shift`, `ctrl`/`control`, `alt`/`option`, and
+`gui`/`cmd`/`command`/`meta`.
+
 ## Promotion Rule
 
 When the same Lua or host-code pattern appears in multiple games, consider

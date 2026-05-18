@@ -2524,6 +2524,19 @@ extern "C"
                                                               size_t *out_size, char *error_buffer,
                                                               int error_buffer_size);
 
+    /**
+     * @brief Load an editable level fragment file into an existing editor runtime.
+     *
+     * The input must be a `slayer3d.fragment.v0` document containing a
+     * `brush_worlds` entry whose name matches @p world_name. The matching world
+     * replaces the runtime world in place, and `editor_player_starts` from the
+     * fragment replaces the runtime player-start collection. On success both
+     * collections are marked clean and @p path becomes their editor source path.
+     */
+    bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime,
+                                                              const char *world_name, const char *path,
+                                                              char *error_buffer, int error_buffer_size);
+
     /** @brief Descriptor for creating an editor test-run handoff manifest. */
     typedef struct slayer3d_game_data_editor_test_run_desc
     {

@@ -56,7 +56,10 @@
           },
           {
             "name": "action.editor.export",
-            "bindings": [{ "device": "keyboard", "key": "S" }]
+            "bindings": [
+              { "device": "keyboard", "key": "S", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "S", "modifiers": ["gui"] }
+            ]
           },
           {
             "name": "action.editor.test_run.prepare",
@@ -227,6 +230,7 @@
     ]
   },
   "signals": [
+    "signal.editor.scene.enter",
     "signal.editor.tool.cycle",
     "signal.editor.selection.clear",
     "signal.editor.selection.inspect",
@@ -394,6 +398,43 @@
       }
     ],
     "bindings": [
+      {
+        "signal": "signal.editor.scene.enter",
+        "actions": [
+          {
+            "type": "editor.level.load",
+            "world": "brush.editor_shell.target",
+            "path_from_state": "editor.input.path",
+            "optional": true,
+            "outputs": {
+              "valid_key": "editor.load.valid",
+              "message_key": "editor.load.message",
+              "path_key": "editor.load.path",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
+          { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
+          { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.palette.brush.cursor", "value": "floor" },
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
+          { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
+        ]
+      },
       {
         "signal": "signal.editor.tool.cycle",
         "actions": [
@@ -1161,9 +1202,40 @@
               "player_start_source_path_key": "editor.player_start.source_path"
             }
           },
-          { "type": "scene_state.set", "key": "editor.save.valid", "value": false },
-          { "type": "scene_state.set", "key": "editor.save.message", "value": "disk save disabled for MVP iteration" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "exported level JSON in memory" }
+          {
+            "type": "editor.level.save",
+            "world": "brush.editor_shell.target",
+            "path_from_state": "editor.save.path",
+            "message": "editable level saved",
+            "outputs": {
+              "valid_key": "editor.save.valid",
+              "message_key": "editor.save.message",
+              "path_key": "editor.save.path",
+              "size_key": "editor.save.size",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.save.valid", "op": "==", "value": true },
+            "then": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "saved level to disk" }],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "save failed: {editor.save.message}"
+              }
+            ]
+          }
         ]
       },
       {

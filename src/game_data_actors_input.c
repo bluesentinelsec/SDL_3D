@@ -714,6 +714,113 @@ static void bind_input_spec(slayer3d_input_manager *input, const input_binding_s
     }
 }
 
+static int input_modifier_from_json_name(const char *name)
+{
+    if (name == NULL)
+        return -1;
+    if (SDL_strcasecmp(name, "shift") == 0)
+        return SLAYER3D_INPUT_MOD_SHIFT;
+    if (SDL_strcasecmp(name, "ctrl") == 0 || SDL_strcasecmp(name, "control") == 0)
+        return SLAYER3D_INPUT_MOD_CTRL;
+    if (SDL_strcasecmp(name, "alt") == 0 || SDL_strcasecmp(name, "option") == 0)
+        return SLAYER3D_INPUT_MOD_ALT;
+    if (SDL_strcasecmp(name, "gui") == 0 || SDL_strcasecmp(name, "cmd") == 0 || SDL_strcasecmp(name, "command") == 0 ||
+        SDL_strcasecmp(name, "meta") == 0)
+    {
+        return SLAYER3D_INPUT_MOD_GUI;
+    }
+    return -1;
+}
+
+static bool input_modifier_mask_from_json(yyjson_val *value, int *out_mask, const char *label, char *error_buffer,
+                                          int error_buffer_size)
+{
+    int mask = SLAYER3D_INPUT_MOD_NONE;
+    if (value == NULL)
+    {
+        if (out_mask != NULL)
+            *out_mask = mask;
+        return true;
+    }
+
+    if (yyjson_is_str(value))
+    {
+        const int modifier = input_modifier_from_json_name(yyjson_get_str(value));
+        if (modifier < 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "%s contains unsupported modifier '%s'", label,
+                       yyjson_get_str(value) != NULL ? yyjson_get_str(value) : "<missing>");
+            return false;
+        }
+        mask |= modifier;
+    }
+    else if (yyjson_is_arr(value))
+    {
+        for (size_t i = 0; i < yyjson_arr_size(value); ++i)
+        {
+            yyjson_val *entry = yyjson_arr_get(value, i);
+            if (!yyjson_is_str(entry))
+            {
+                set_errorf(error_buffer, error_buffer_size, "%s entries must be modifier strings", label);
+                return false;
+            }
+            const int modifier = input_modifier_from_json_name(yyjson_get_str(entry));
+            if (modifier < 0)
+            {
+                set_errorf(error_buffer, error_buffer_size, "%s contains unsupported modifier '%s'", label,
+                           yyjson_get_str(entry) != NULL ? yyjson_get_str(entry) : "<missing>");
+                return false;
+            }
+            mask |= modifier;
+        }
+    }
+    else
+    {
+        set_errorf(error_buffer, error_buffer_size, "%s must be a modifier string or array", label);
+        return false;
+    }
+
+    if (out_mask != NULL)
+        *out_mask = mask;
+    return true;
+}
+
+static bool keyboard_modifier_masks_from_json(yyjson_val *binding, int *required_modifiers, int *excluded_modifiers,
+                                              char *error_buffer, int error_buffer_size)
+{
+    yyjson_val *modifiers = obj_get(binding, "modifiers");
+    yyjson_val *required = obj_get(binding, "required_modifiers");
+    yyjson_val *excluded = obj_get(binding, "excluded_modifiers");
+    int required_mask = SLAYER3D_INPUT_MOD_NONE;
+    int excluded_mask = SLAYER3D_INPUT_MOD_NONE;
+
+    if (modifiers != NULL && required != NULL)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "keyboard binding must not define both modifiers and required_modifiers");
+        return false;
+    }
+    if (!input_modifier_mask_from_json(modifiers != NULL ? modifiers : required, &required_mask,
+                                       "keyboard binding required_modifiers", error_buffer, error_buffer_size) ||
+        !input_modifier_mask_from_json(excluded, &excluded_mask, "keyboard binding excluded_modifiers", error_buffer,
+                                       error_buffer_size))
+    {
+        return false;
+    }
+    if ((required_mask & excluded_mask) != 0)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "keyboard binding required_modifiers and excluded_modifiers must not overlap");
+        return false;
+    }
+
+    if (required_modifiers != NULL)
+        *required_modifiers = required_mask;
+    if (excluded_modifiers != NULL)
+        *excluded_modifiers = excluded_mask;
+    return true;
+}
+
 static void rebind_action_from_specs(slayer3d_game_data_runtime *runtime, int action_id)
 {
     slayer3d_input_manager *input = runtime_input(runtime);
@@ -877,6 +984,13 @@ bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *err
                     SDL_Scancode code = scancode_from_json(json_string(binding, "key", NULL));
                     if (code != SDL_SCANCODE_UNKNOWN)
                     {
+                        int required_modifiers = SLAYER3D_INPUT_MOD_NONE;
+                        int excluded_modifiers = SLAYER3D_INPUT_MOD_NONE;
+                        if (!keyboard_modifier_masks_from_json(binding, &required_modifiers, &excluded_modifiers,
+                                                               error_buffer, error_buffer_size))
+                        {
+                            return false;
+                        }
                         input_binding_spec spec;
                         SDL_zero(spec);
                         spec.action = name;
@@ -884,6 +998,8 @@ bool load_input(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *err
                         spec.source = SLAYER3D_INPUT_KEYBOARD;
                         spec.gamepad_index = -1;
                         spec.scancode = code;
+                        spec.required_modifiers = required_modifiers;
+                        spec.excluded_modifiers = excluded_modifiers;
                         spec.scale = 1.0f;
                         if (!append_input_binding_spec(runtime, &spec))
                             return false;
@@ -1022,6 +1138,11 @@ static bool input_profile_binding_to_spec(const slayer3d_game_data_runtime *runt
         }
         out_spec->source = SLAYER3D_INPUT_KEYBOARD;
         out_spec->scancode = code;
+        if (!keyboard_modifier_masks_from_json(binding, &out_spec->required_modifiers, &out_spec->excluded_modifiers,
+                                               error_buffer, error_buffer_size))
+        {
+            return false;
+        }
         out_spec->scale = 1.0f;
         return true;
     }
@@ -1112,6 +1233,11 @@ static bool input_assignment_binding_to_spec(const slayer3d_game_data_runtime *r
         }
         out_spec->source = SLAYER3D_INPUT_KEYBOARD;
         out_spec->scancode = code;
+        if (!keyboard_modifier_masks_from_json(binding, &out_spec->required_modifiers, &out_spec->excluded_modifiers,
+                                               error_buffer, error_buffer_size))
+        {
+            return false;
+        }
         out_spec->scale = 1.0f;
         return true;
     }

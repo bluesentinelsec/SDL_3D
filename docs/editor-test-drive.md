@@ -11,12 +11,31 @@ Build the editor and open the default editor shell dojo:
 
 ```sh
 cmake --build build/debug --target slayer3d_editor -j4
-./build/debug/slayer3d_editor
+./build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/slayer3d-test-level.fragment.json --overwrite
 ```
 
-Disk save and runner handoff are intentionally disabled while the blockout UX is
-still changing quickly. The shell can export the current level JSON into scene
-state for inspection, but it does not write generated maps to disk.
+The editor now uses explicit subcommands. `new` starts from the project
+template, and `open` loads an existing editable level fragment:
+
+```sh
+./build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/slayer3d-test-level.fragment.json
+```
+
+The project path points at a directory containing `slayer3d.project.json`.
+Saving uses an atomic same-directory temporary file and rename; `open` without
+`--output` saves back to `--input`. Use `--output` with `open` when you want to
+fork an existing editable fragment into a different file, and pass
+`--overwrite` only when replacing an existing output path is intentional.
+
+The editor host is a thin wrapper around the generic runner. For runtime/data
+debugging, the equivalent raw runner command for opening a saved level is:
+
+```sh
+./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --state editor.command=open --state editor.input.path=/tmp/slayer3d-test-level.fragment.json --state editor.save.path=/tmp/slayer3d-test-level.fragment.json
+```
+
+The raw runner path is useful for debugging state injection, but normal editing
+should use `slayer3d_editor new` or `slayer3d_editor open`.
 
 ## Default Layout
 
@@ -68,8 +87,8 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | mouse look | 3D flyby | rotate camera |
 | `Space` / `Left Ctrl` | 3D flyby | move camera up/down |
 | `Left Shift` | 3D flyby | move faster |
-| `S` | palette closed | export editable level JSON in memory without writing it to disk |
-| `T` | palette closed | report that disk test-run handoff is disabled for this MVP iteration |
+| `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
+| `T` | palette closed | report that disk test-run manifest handoff is disabled for this MVP iteration |
 | `F5` | palette closed | enter the playable test scene from the placed player start |
 | `Esc` | palette closed | quit |
 
@@ -83,9 +102,10 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 4. Press `G`, press `Enter` to select Player Start, and place it on the floor.
 5. Hover a placed tile and right click, or select it and press `Delete`; the
    tile should disappear.
-6. Press `S` and confirm the inspector reports an in-memory JSON export and a
-   disabled disk-save message.
-7. Press `F5`; the editor should switch into the playable test scene.
+6. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
+   file should contain `brush_worlds` and `editor_player_starts`.
+7. Press `F5`; the editor should switch into the playable test scene using the
+   current in-memory map and player start.
 8. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
@@ -121,11 +141,11 @@ The following should be true during a good test drive:
   `X`, or the mouse wheel while keeping a visible work grid.
 - Top/front/side orthographic views plot on their authored work planes;
   perspective preview uses the 3D editor camera.
-- `S` exports JSON containing `brush_worlds` and `editor_player_starts` in
-  memory only.
-- `T` does not write a manifest during this MVP iteration.
+- `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
+  writes the same fragment to the CLI output path.
+- `T` does not write a test-run manifest during this MVP iteration.
 - `F5` applies the stored player start before entering the playable scene.
 
 Current limitations are expected: this is not yet a polished TrenchBroom-style
-frontend, there is no file picker, disk persistence is disabled, and
-texture/face painting remains outside this first graybox milestone.
+frontend, there is no file picker, and texture/face painting remains outside
+this first graybox milestone.
