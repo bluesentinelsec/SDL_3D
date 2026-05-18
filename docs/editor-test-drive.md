@@ -90,6 +90,8 @@ The following should be true during a good test drive:
 - Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
 - The four-view layout appears on launch. Number keys switch between quad,
   full-screen 3D, and full-screen orthographic views.
+- Each viewport displays a small label identifying the active view: 3D
+  perspective, top/XY, front/XZ, or side/YZ.
 - Full-screen orthographic views pan with the arrow keys and zoom with `Z`,
   `X`, or the mouse wheel while keeping a visible work grid.
 - Top/front/side orthographic views plot on their authored work planes;

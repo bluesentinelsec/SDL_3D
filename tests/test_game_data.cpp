@@ -15455,9 +15455,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     std::vector<std::string> palette_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(palette_text, "Blockout Prefabs"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "> 1 Floor"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "  2 Wall"));
-    EXPECT_FALSE(contains_ui_text(palette_text, "  1 Floor"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "> 6 Floor"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "  7 Wall"));
+    EXPECT_FALSE(contains_ui_text(palette_text, "  6 Floor"));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.material", ""),
@@ -15527,9 +15527,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     palette_text = visible_ui_text("ui.editor_shell.palette.");
-    EXPECT_TRUE(contains_ui_text(palette_text, "> 2 Wall"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "  1 Floor"));
-    EXPECT_FALSE(contains_ui_text(palette_text, "  2 Wall"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "> 7 Wall"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "  6 Floor"));
+    EXPECT_FALSE(contains_ui_text(palette_text, "  7 Wall"));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
     slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -15735,10 +15735,32 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_grid, &capture));
         EXPECT_GT(capture.lines, 0);
     };
+    auto visible_view_label = [&](const char *expected) {
+        struct ViewLabelCapture
+        {
+            const char *expected = nullptr;
+            bool found = false;
+        } capture{expected, false};
+        auto capture_text = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<ViewLabelCapture *>(userdata);
+            if (text == nullptr || text->name == nullptr || text->text == nullptr ||
+                std::string(text->name).rfind("ui.editor_shell.view_label.", 0) != 0)
+            {
+                return true;
+            }
+            if (SDL_strcmp(text->text, capture->expected) == 0)
+                capture->found = true;
+            return true;
+        };
+        slayer3d_game_data_ui_metrics metrics{};
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_text, &capture));
+        return capture.found;
+    };
     slayer3d_signal_emit(bus, view_top_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "orthographic_top");
+    EXPECT_TRUE(visible_view_label("Top / XY Orthographic"));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     const slayer3d_value *work_plane_normal =
         slayer3d_properties_get_value(slayer3d_game_data_scene_state(runtime), "editor.work_plane.normal");
@@ -15796,11 +15818,14 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "quad_view");
+    EXPECT_TRUE(visible_view_label("Top / XY"));
+    EXPECT_TRUE(visible_view_label("Side / YZ"));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "flyby_3d");
+    EXPECT_TRUE(visible_view_label("3D Perspective / Flyby"));
     EXPECT_TRUE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, true));
 

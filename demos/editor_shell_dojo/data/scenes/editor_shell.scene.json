@@ -471,7 +471,7 @@
       },
       {
         "name": "ui.editor_shell.palette.floor",
-        "text": "  1 Floor",
+        "text": "  6 Floor",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 274,
@@ -481,7 +481,7 @@
       },
       {
         "name": "ui.editor_shell.palette.floor.active",
-        "text": "> 1 Floor",
+        "text": "> 6 Floor",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 274,
@@ -491,7 +491,7 @@
       },
       {
         "name": "ui.editor_shell.palette.wall",
-        "text": "  2 Wall",
+        "text": "  7 Wall",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 298,
@@ -501,7 +501,7 @@
       },
       {
         "name": "ui.editor_shell.palette.wall.active",
-        "text": "> 2 Wall",
+        "text": "> 7 Wall",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 298,
@@ -511,7 +511,7 @@
       },
       {
         "name": "ui.editor_shell.palette.ceiling",
-        "text": "  3 Ceiling",
+        "text": "  8 Ceiling",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 322,
@@ -521,7 +521,7 @@
       },
       {
         "name": "ui.editor_shell.palette.ceiling.active",
-        "text": "> 3 Ceiling",
+        "text": "> 8 Ceiling",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 322,
@@ -531,7 +531,7 @@
       },
       {
         "name": "ui.editor_shell.palette.player",
-        "text": "  4 Player",
+        "text": "  9 Player",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 346,
@@ -546,7 +546,7 @@
       },
       {
         "name": "ui.editor_shell.palette.player.active",
-        "text": "> 4 Player",
+        "text": "> 9 Player",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 346,
@@ -569,6 +569,102 @@
         "align": "right",
         "color": [235, 242, 255, 230],
         "scale": 0.8
+      },
+      {
+        "name": "ui.editor_shell.view_label.quad.perspective",
+        "text": "3D Perspective",
+        "font": "font.editor_shell.ui",
+        "x": 0.49,
+        "y": 0.12,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 230],
+        "scale": 0.54,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+      },
+      {
+        "name": "ui.editor_shell.view_label.quad.top",
+        "text": "Top / XY",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.12,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 230],
+        "scale": 0.54,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+      },
+      {
+        "name": "ui.editor_shell.view_label.quad.front",
+        "text": "Front / XZ",
+        "font": "font.editor_shell.ui",
+        "x": 0.49,
+        "y": 0.535,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 230],
+        "scale": 0.54,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+      },
+      {
+        "name": "ui.editor_shell.view_label.quad.side",
+        "text": "Side / YZ",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.535,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 230],
+        "scale": 0.54,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+      },
+      {
+        "name": "ui.editor_shell.view_label.full.perspective",
+        "text": "3D Perspective / Flyby",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.12,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 235],
+        "scale": 0.6,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" }
+      },
+      {
+        "name": "ui.editor_shell.view_label.full.top",
+        "text": "Top / XY Orthographic",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.12,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 235],
+        "scale": 0.6,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" }
+      },
+      {
+        "name": "ui.editor_shell.view_label.full.front",
+        "text": "Front / XZ Orthographic",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.12,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 235],
+        "scale": 0.6,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_front" }
+      },
+      {
+        "name": "ui.editor_shell.view_label.full.side",
+        "text": "Side / YZ Orthographic",
+        "font": "font.editor_shell.ui",
+        "x": 0.98,
+        "y": 0.12,
+        "normalized": true,
+        "align": "right",
+        "color": [160, 220, 255, 235],
+        "scale": 0.6,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_side" }
       },
       {
         "name": "ui.editor_shell.handoff.title",
