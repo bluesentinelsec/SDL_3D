@@ -15871,6 +15871,7 @@ TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(data, "brush.editor_shell.target", &world));
     ASSERT_GT(world.brush_count, 1);
     ASSERT_NE(world.render_model, nullptr);
+    EXPECT_GT(world.render_model->mesh_count, 0);
     if (world.render_model->root_count > 0)
     {
         EXPECT_NE(world.render_model->root_nodes, nullptr);

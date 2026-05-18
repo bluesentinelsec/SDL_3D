@@ -110,6 +110,7 @@ bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_run
     SDL_zero(staged.brush_worlds[staged_index]);
     free_brush_world_runtime(target);
     *target = replacement;
+    target->desc.render_model = &target->artifacts.render_model;
 
     free_editor_player_starts_runtime(runtime);
     runtime->editor_player_starts = staged.editor_player_starts;
