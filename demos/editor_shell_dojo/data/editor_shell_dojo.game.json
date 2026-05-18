@@ -1304,6 +1304,11 @@
                 "grid_key": "editor.grid.size",
                 "default_distance": 8.0,
                 "min_height": 0.2,
+                "min_elevation": -4096.0,
+                "max_elevation": 4096.0,
+                "floor_material": "mat.editor.floor",
+                "fill_material": "mat.editor.wall",
+                "fill_thickness": 0.2,
                 "invalid_message": "selected brush cannot be lowered",
                 "outputs": {
                   "valid_key": "editor.transaction.valid",
@@ -1381,6 +1386,11 @@
                 "grid_key": "editor.grid.size",
                 "default_distance": 8.0,
                 "min_height": 0.2,
+                "min_elevation": -4096.0,
+                "max_elevation": 4096.0,
+                "floor_material": "mat.editor.floor",
+                "fill_material": "mat.editor.wall",
+                "fill_thickness": 0.2,
                 "invalid_message": "selected brush cannot be raised",
                 "outputs": {
                   "valid_key": "editor.transaction.valid",

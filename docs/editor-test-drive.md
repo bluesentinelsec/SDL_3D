@@ -82,7 +82,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | mouse click | Select Mode | select or deselect the highlighted brush |
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
 | right click | orthographic view | delete the highlighted tile or game object |
-| `[` / `]` | Select Mode | lower or raise the selected brush top face by one active grid step |
+| `[` and `]` | Select Mode | lower or raise selected brush height/elevation by one active grid step |
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
@@ -109,9 +109,10 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    ceiling tile.
 4. Press `G`, press `Enter` to select Player Start, and place it on the floor.
 5. Press `Space`, click a tile to select it, press `]`, and confirm the brush
-   stretches upward while its bottom face stays anchored. Press `[` to lower
-   the top face again. The side faces should fill the height change, leaving no
-   empty wall gap.
+   stretches upward while its bottom face stays anchored. Press `[` on a floor
+   slab at the default floor plane and confirm the floor slab can move below
+   the plane; the editor should add side-wall fill brushes around the exposed
+   height change.
 6. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
 7. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
@@ -132,9 +133,11 @@ The following should be true during a good test drive:
 - `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
   selections update the same data-authored mode and brush-setting state.
 - `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
-  Mode owns brush selection and multi-selection. `[` / `]` resize the selected
-  brush top Y face by the active grid step while preserving the bottom face, so
-  vertical wall space is filled by the brush side faces.
+  Mode owns brush selection and multi-selection. `[` and `]` resize generic
+  selected brushes by the active grid step. Thin floor slabs can move below the
+  default plane; the editor creates deterministic side-wall fill brushes for
+  the exposed vertical space and removes the matching fill segment when raised
+  back up.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling brushes stay aligned to the larger
   blockout grid.

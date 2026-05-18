@@ -7559,6 +7559,30 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *min_height = obj_get(action, "min_height");
         if (min_height != NULL && (!yyjson_is_num(min_height) || yyjson_get_num(min_height) <= 0.0))
             return validation_error(ctx, json_path, "editor.selection.resize_y min_height must be positive");
+        yyjson_val *min_elevation = obj_get(action, "min_elevation");
+        if (min_elevation != NULL && !yyjson_is_num(min_elevation))
+            return validation_error(ctx, json_path, "editor.selection.resize_y min_elevation must be numeric");
+        yyjson_val *max_elevation = obj_get(action, "max_elevation");
+        if (max_elevation != NULL && !yyjson_is_num(max_elevation))
+            return validation_error(ctx, json_path, "editor.selection.resize_y max_elevation must be numeric");
+        if (min_elevation != NULL && max_elevation != NULL &&
+            yyjson_get_num(min_elevation) >= yyjson_get_num(max_elevation))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.selection.resize_y min_elevation must be less than max_elevation");
+        }
+        yyjson_val *slab_max_height = obj_get(action, "slab_max_height");
+        if (slab_max_height != NULL && (!yyjson_is_num(slab_max_height) || yyjson_get_num(slab_max_height) <= 0.0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y slab_max_height must be positive");
+        yyjson_val *fill_thickness = obj_get(action, "fill_thickness");
+        if (fill_thickness != NULL && (!yyjson_is_num(fill_thickness) || yyjson_get_num(fill_thickness) <= 0.0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y fill_thickness must be positive");
+        yyjson_val *floor_material = obj_get(action, "floor_material");
+        if (floor_material != NULL && (!yyjson_is_str(floor_material) || yyjson_get_str(floor_material)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.resize_y floor_material must be non-empty");
+        yyjson_val *fill_material = obj_get(action, "fill_material");
+        if (fill_material != NULL && (!yyjson_is_str(fill_material) || yyjson_get_str(fill_material)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.resize_y fill_material must be non-empty");
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.selection.resize_y outputs must be an object");
