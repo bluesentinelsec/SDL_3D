@@ -107,6 +107,18 @@
             }
           },
           {
+            "camera": "camera.editor_shell.viewport",
+            "rect": [0, 0, 1280, 720],
+            "screen": "center",
+            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
+            "work_plane": {
+              "enabled": true,
+              "normal": [0.0, 1.0, 0.0],
+              "distance": 0.0,
+              "distance_key": "editor.work_plane.distance"
+            }
+          },
+          {
             "camera": "camera.editor_shell.ortho_top",
             "rect": [640, 0, 640, 360],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
@@ -308,6 +320,12 @@
     },
     "debug_overlay": {
       "enabled": true,
+      "hover_selection_if": {
+        "type": "scene_state.compare",
+        "key": "editor.view.mode",
+        "op": "==",
+        "value": "flyby_3d"
+      },
       "flags": [
         "work_plane_grid",
         "world_bounds",

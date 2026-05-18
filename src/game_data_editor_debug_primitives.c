@@ -103,7 +103,8 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
         out_desc->trace = out_trace;
         out_desc->has_work_plane_grid = editor_work_plane_desc_from_trace_json(
             runtime, obj_get(selection_json, "trace"), &out_desc->work_plane_normal, &out_desc->work_plane_distance);
-        if (out_selection != NULL && editor_selection_mode_is_click(selection_json) &&
+        const bool prefer_hover_selection = eval_data_condition(runtime, obj_get(overlay, "hover_selection_if"), NULL);
+        if (out_selection != NULL && !prefer_hover_selection && editor_selection_mode_is_click(selection_json) &&
             editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit)
         {
             *out_selection = runtime->editor_active_selection;

@@ -886,6 +886,12 @@ face normal through the normal 3D presentation path:
     },
     "debug_overlay": {
       "enabled": true,
+      "hover_selection_if": {
+        "type": "scene_state.compare",
+        "key": "editor.view.mode",
+        "op": "==",
+        "value": "flyby_3d"
+      },
       "flags": [
         "work_plane_grid",
         "world_bounds",
@@ -906,10 +912,11 @@ Selection traces default to `source: "world"`, where `start` and `end` are
 authored world-space vec3 values. `source: "camera_screen"` derives the ray
 from a camera and screen point using the latest live mouse position by default.
 Tooling can override that point with `screen`, `screen_x`/`screen_y`, or
-`screen_x_key`/`screen_y_key`; viewport dimensions can likewise be authored
-with `viewport`, `viewport_width`/`viewport_height`, or scene-state keys. This
-lets editor dojos and future editor hosts share the same data-authored picking
-primitive.
+`screen_x_key`/`screen_y_key`; `screen` may be a vec2 or the string `"center"`
+for crosshair-style 3D editor picking. Viewport dimensions can likewise be
+authored with `viewport`, `viewport_width`/`viewport_height`, or scene-state
+keys. This lets editor dojos and future editor hosts share the same
+data-authored picking primitive.
 
 Selection traces may also author `work_plane` as a fallback placement plane.
 When the ray misses world geometry, the editor intersects the same ray with the
@@ -917,6 +924,12 @@ plane described by `dot(normal, point) = distance` and publishes that as a hit
 with `selection_type: "none"`. This is intended for blockout tools: a blank
 scene can still place the first floor on the ground plane, while later clicks on
 real brush faces keep returning normal brush-world selections.
+
+`editor.debug_overlay.hover_selection_if` can be used when the overlay should
+draw the live hover trace instead of the last clicked active selection. Full
+screen 3D flyby editors should usually enable this while flyby mode is active so
+selection bounds, hit markers, and trace feedback stay pinned to the center
+reticle.
 `normal_key` and `distance_key` may point at scene-state values, allowing a
 single editor scene to switch between top/front/side orthographic plotting
 planes with data-authored `scene_state.set` and `camera.set` actions.
@@ -1550,7 +1563,10 @@ falls inside a viewport rect, the trace uses that viewport's camera, local
 screen coordinates, dimensions, and optional viewport-specific `work_plane`.
 This keeps floor/wall/ceiling placement correct in orthographic quadrants while
 still allowing a perspective preview in the same scene. Traces that omit
-`viewports` fall back to the trace camera or active camera.
+`viewports` fall back to the trace camera or active camera. A viewport entry may
+set `"screen": "center"` to trace from the viewport center instead of the live
+mouse position, which is the expected shape for full-screen 3D editor flyby
+placement.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:

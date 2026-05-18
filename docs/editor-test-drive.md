@@ -54,6 +54,9 @@ quick toggle between the four-viewport layout and full-screen 3D flyby.
 The editor uses normal hardware cursor positioning in the four-viewport layout.
 In full-screen 3D flyby mode the runtime captures relative mouse motion for
 mouse-look, then releases it again when returning to orthographic editing.
+Flyby brush feedback is reticle-driven: the highlighted brush, hit marker, and
+placement preview should remain pinned to the screen center instead of following
+the last clicked selection.
 
 ## Keybindings
 
@@ -80,7 +83,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `Enter` | palette closed | commit the current preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size |
 | arrow keys | full-screen orthographic, palette closed | pan the active canvas |
-| `Z` / `X` or mouse wheel | full-screen orthographic | zoom the active canvas in or out |
+| `Z` / `X` or mouse wheel | orthographic view | zoom the active canvas in or out; in four-view layout, the mouse cursor must be over an orthographic pane |
 | `R` | palette closed | toggle wall axis |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
@@ -139,8 +142,16 @@ The following should be true during a good test drive:
   perspective, top/XY, front/XZ, or side/YZ.
 - Full-screen orthographic views pan with the arrow keys and zoom with `Z`,
   `X`, or the mouse wheel while keeping a visible work grid.
+- In the four-view layout, mouse wheel zoom works when the cursor is over the
+  top, front, or side orthographic pane. The 3D perspective pane does not
+  consume orthographic zoom.
 - Top/front/side orthographic views plot on their authored work planes;
   perspective preview uses the 3D editor camera.
+- In full-screen 3D flyby mode, brush picking and placement trace from the
+  screen center. The highlighted brush should be the brush under the crosshair;
+  if no brush is hit, placement falls back to the ground work plane. After
+  clicking one brush, look away and confirm the selection cursor follows the
+  reticle rather than staying offset on the previous brush.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
   writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.

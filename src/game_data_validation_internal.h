@@ -104,6 +104,7 @@ bool validate_editor_player_starts(validation_context *ctx, yyjson_val *root, va
 bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
                                      const char *json_path);
 bool validation_mouse_button_name_valid(const char *name);
+bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path, validation_names *names);
 
 bool is_vec_array(yyjson_val *value, size_t min_count);
 bool is_exact_vec_array(yyjson_val *value, size_t count);
