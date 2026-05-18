@@ -122,7 +122,9 @@ bool validate_editor_camera_component(validation_context *ctx, yyjson_val *compo
     if (!yyjson_is_obj(actions))
         return validation_error(ctx, path, "controller.editor_camera requires an actions object");
 
-    const char *action_keys[] = {"forward", "back", "left", "right", "up", "down", "look", "fast"};
+    const char *action_keys[] = {"forward", "back",     "left",    "right",    "up",
+                                 "down",    "look",     "fast",    "pan_left", "pan_right",
+                                 "pan_up",  "pan_down", "zoom_in", "zoom_out", "zoom_wheel"};
     bool has_action = false;
     for (size_t i = 0; i < SDL_arraysize(action_keys); ++i)
     {
@@ -136,7 +138,9 @@ bool validate_editor_camera_component(validation_context *ctx, yyjson_val *compo
     if (!has_action)
         return validation_error(ctx, path, "controller.editor_camera actions must reference at least one input action");
 
-    const char *property_keys[] = {"yaw_property", "pitch_property", "forward_property"};
+    const char *property_keys[] = {
+        "yaw_property", "pitch_property", "forward_property", "mode_key", "orthographic_size_key",
+        "flyby_mode",   "top_mode",       "front_mode",       "side_mode"};
     for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
     {
         yyjson_val *value = obj_get(component, property_keys[i]);
@@ -144,15 +148,34 @@ bool validate_editor_camera_component(validation_context *ctx, yyjson_val *compo
             return validation_error(ctx, path, "controller.editor_camera property names must be non-empty strings");
     }
 
-    const char *numeric_keys[] = {"move_speed",  "fast_speed", "mouse_sensitivity", "spawn_yaw",
-                                  "spawn_pitch", "pitch_min",  "pitch_max"};
+    const char *numeric_keys[] = {"move_speed",
+                                  "fast_speed",
+                                  "mouse_sensitivity",
+                                  "spawn_yaw",
+                                  "spawn_pitch",
+                                  "pitch_min",
+                                  "pitch_max",
+                                  "orthographic_size",
+                                  "orthographic_pan_speed",
+                                  "orthographic_zoom_speed",
+                                  "orthographic_wheel_zoom_step",
+                                  "orthographic_min_size",
+                                  "orthographic_max_size"};
     for (size_t i = 0; i < SDL_arraysize(numeric_keys); ++i)
     {
         yyjson_val *value = obj_get(component, numeric_keys[i]);
         if (value != NULL && !yyjson_is_num(value))
             return validation_error(ctx, path, "controller.editor_camera numeric tuning values must be numbers");
     }
-    const char *non_negative[] = {"move_speed", "fast_speed", "mouse_sensitivity"};
+    const char *non_negative[] = {"move_speed",
+                                  "fast_speed",
+                                  "mouse_sensitivity",
+                                  "orthographic_size",
+                                  "orthographic_pan_speed",
+                                  "orthographic_zoom_speed",
+                                  "orthographic_wheel_zoom_step",
+                                  "orthographic_min_size",
+                                  "orthographic_max_size"};
     for (size_t i = 0; i < SDL_arraysize(non_negative); ++i)
     {
         yyjson_val *value = obj_get(component, non_negative[i]);
@@ -164,6 +187,14 @@ bool validate_editor_camera_component(validation_context *ctx, yyjson_val *compo
     yyjson_val *pitch_max = obj_get(component, "pitch_max");
     if (pitch_min != NULL && pitch_max != NULL && yyjson_get_num(pitch_min) >= yyjson_get_num(pitch_max))
         return validation_error(ctx, path, "controller.editor_camera pitch_min must be less than pitch_max");
+    yyjson_val *orthographic_min_size = obj_get(component, "orthographic_min_size");
+    yyjson_val *orthographic_max_size = obj_get(component, "orthographic_max_size");
+    if (orthographic_min_size != NULL && orthographic_max_size != NULL &&
+        yyjson_get_num(orthographic_min_size) > yyjson_get_num(orthographic_max_size))
+    {
+        return validation_error(ctx, path,
+                                "controller.editor_camera orthographic_min_size must not exceed orthographic_max_size");
+    }
     yyjson_val *mouse_look = obj_get(component, "mouse_look");
     if (mouse_look != NULL && !yyjson_is_bool(mouse_look))
         return validation_error(ctx, path, "controller.editor_camera mouse_look must be a boolean");

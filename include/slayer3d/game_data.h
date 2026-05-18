@@ -773,6 +773,8 @@ extern "C"
         SLAYER3D_GAME_DATA_WORLD_MODEL_SECTOR_LEVEL = 1,
         /** @brief Convex brush world model built from true 3D brush planes. */
         SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD = 2,
+        /** @brief Editor-authored player-start marker selected by tooling. */
+        SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START = 3,
     } slayer3d_game_data_world_model_type;
 
     enum
@@ -955,6 +957,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE = 6,
         /** @brief Authored editor work-plane grid line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID = 7,
+        /** @brief Editor-authored player-start marker line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE = 8,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -973,12 +977,14 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW = 1u << 5,
         /** @brief Emit authored editor work-plane grid lines. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID = 1u << 6,
+        /** @brief Emit editor-authored player-start marker icons. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS = 1u << 7,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
@@ -1023,6 +1029,8 @@ extern "C"
         slayer3d_color command_preview_color;
         /** @brief Color for work-plane grid lines, or alpha 0 for default. */
         slayer3d_color work_plane_grid_color;
+        /** @brief Color for editor player-start marker lines, or alpha 0 for default. */
+        slayer3d_color player_start_color;
         /** @brief True when work-plane grid settings are valid. */
         bool has_work_plane_grid;
         /** @brief Work-plane normal. */
@@ -1037,6 +1045,10 @@ extern "C"
         float normal_length;
         /** @brief Hit-marker half-size in world units. Defaults to 0.1. */
         float hit_marker_size;
+        /** @brief Player-start marker radius in world units. Defaults to 0.35. */
+        float player_start_radius;
+        /** @brief Player-start marker height in world units. Defaults to 1.8. */
+        float player_start_height;
     } slayer3d_game_data_editor_debug_desc;
 
     /** @brief Callback for renderer-agnostic editor debug primitive iteration. */
@@ -3867,9 +3879,9 @@ extern "C"
      * @brief Return whether the active scene requests relative mouse capture.
      *
      * Scenes may author `input.mouse_capture` as `never`, `unpaused`, or
-     * `always`. Missing policy defaults to `never`. The @p paused argument lets
-     * generic hosts release the cursor while an authored pause/menu overlay is
-     * active.
+     * `always`, plus an optional `input.mouse_capture_if` condition. Missing
+     * policy defaults to `never`. The @p paused argument lets generic hosts
+     * release the cursor while an authored pause/menu overlay is active.
      */
     bool slayer3d_game_data_active_scene_mouse_capture(const slayer3d_game_data_runtime *runtime, bool paused);
 

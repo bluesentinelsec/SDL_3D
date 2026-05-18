@@ -337,6 +337,9 @@ bool slayer3d_game_data_active_scene_mouse_capture(const slayer3d_game_data_runt
     const char *policy = json_string(input, "mouse_capture", "never");
     if (policy == NULL || SDL_strcmp(policy, "never") == 0)
         return false;
+    yyjson_val *condition = obj_get(input, "mouse_capture_if");
+    if (condition != NULL && !eval_data_condition(runtime, condition, NULL))
+        return false;
     if (SDL_strcmp(policy, "always") == 0)
         return true;
     if (SDL_strcmp(policy, "unpaused") == 0)

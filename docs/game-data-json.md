@@ -372,10 +372,13 @@ platform issue. Mouse coordinates and UI layout remain in logical pixels.
 
 `pause.action` toggles the managed runtime pause state when the active scene
 allows the action and `pause.allowed_if` is absent or true. `quit.action`
-requests shutdown through the managed app flow; when `quit.transition` names an
-authored transition, shutdown is delayed until that transition finishes. Use
-`app.input_policy.global_actions` for lifecycle actions such as quit that should
-work even when a scene restricts its local `input.actions` list.
+requests shutdown through the managed app flow when `quit.enabled_if` is absent
+or true; when `quit.transition` names an authored transition, shutdown is
+delayed until that transition finishes. `quit.enabled_if` uses the same data
+condition syntax as scene logic, which lets editor shells keep `Esc` local to a
+modal palette while the palette is open. Use `app.input_policy.global_actions`
+for lifecycle actions such as quit that should work even when a scene restricts
+its local `input.actions` list.
 
 ## UI Rectangles
 
@@ -432,7 +435,9 @@ camera with their `camera` field, and logic actions can switch cameras with
 
 Camera types:
 
-- `orthographic`: fixed position/target/up with `size`.
+- `orthographic`: fixed position/target/up with `size`. Optional `size_key`
+  reads a positive numeric scene-state value so editor and strategy cameras can
+  zoom at runtime without mutating authored camera data.
 - `perspective`: position/target/up with `fov` and optional `fov_axis`.
   `position` and `target` may be fixed Vec3 values, or driven by
   `position_entity` / `target_entity` plus optional `position_offset` /
@@ -472,7 +477,8 @@ Perspective, chase, and FPS cameras can be tuned at runtime with scene state:
 
 `fov_key` reads a numeric scene-state value. `fov_axis_key` reads a string scene
 state value and accepts `vertical` or `horizontal`. Invalid runtime values fall
-back to the authored camera values. Use horizontal FOV for FPS-style settings
+back to the authored camera values. Orthographic `size_key` works the same way
+for zoomable orthographic cameras. Use horizontal FOV for FPS-style settings
 when designers want values like "90 degrees" to mean the player's visible
 left-to-right angle; at 16:9, a 90-degree horizontal FOV renders with a vertical
 FOV of roughly 58.7 degrees.
@@ -914,6 +920,8 @@ real brush faces keep returning normal brush-world selections.
 `normal_key` and `distance_key` may point at scene-state values, allowing a
 single editor scene to switch between top/front/side orthographic plotting
 planes with data-authored `scene_state.set` and `camera.set` actions.
+Editor-authored player starts participate in picking as `selection_type:
+"editor_player_start"` and publish their marker name as `selection_element`.
 
 Add `work_plane_grid` (or `grid`) to `editor.debug_overlay.flags` to visualize
 the authored work plane with reusable debug lines. `work_plane_grid_size` is the
@@ -1003,8 +1011,8 @@ validates the target world and bounds at load time, resolves the material at
 runtime, rebuilds brush collision/render data atomically, then marks the world
 dirty only after the rebuild succeeds. If `name` is omitted, the runtime
 generates a unique brush name under the target world. The editor shell dojo
-demonstrates the current blockout palette pattern: number-key tool selection is
-represented by scene-state strings, and the shared commit signal branches to
+demonstrates the current blockout palette pattern: modal palette signals write
+scene-state selection strings, and the shared commit signal branches to
 prefab-specific `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
@@ -1039,16 +1047,22 @@ Scenes can also author `editor.placement` to show a live placement preview while
 the mouse hovers over a brush or work plane. `tool_key` names the scene-state
 property that selects the active tool. `snap_key` can point at a runtime
 scene-state float so UI or keyboard shortcuts can change grid size without
-reloading data. `grid_size_key` can point at the same scene-state float when box
+reloading data. Individual previews can author `snap` to use a fixed local snap
+instead; use that for game objects that need tighter placement than wall and
+floor tiles. `grid_size_key` can point at the same scene-state float when box
 previews use `grid_min` and `grid_max` instead of fixed `min` and `max` bounds.
-Those grid bounds are multipliers, so a floor authored from `[-0.5, 0, -0.5]`
-to `[0.5, 0.025, 0.5]` becomes one active grid cell wide at any configured grid
-size. Each preview entry maps a tool `mode` to either a `box` ghost or a
-`player_start` marker. Box previews can use `axis_key` with `axis` `x` or `z` to
-rotate wall-like prefabs between horizontal grid axes. A box preview must author
-exactly one bounds source: fixed `min`/`max`, or grid-scaled `grid_min`/
-`grid_max`. The preview reuses the editor debug overlay's `command_preview`
-flag and color, so editor hosts do not need a second rendering path.
+Those grid bounds are multipliers from the snapped grid anchor, so a floor
+authored from `[0, 0, 0]` to `[1, 0.025, 1]` becomes one active grid cell wide
+at any configured grid size. For tile-like blockout tools, author floors,
+walls, and ceilings from grid-boundary anchors with matching horizontal
+footprints instead of centering them around the snap point; this keeps adjacent
+tiles aligned without gaps. Each preview entry maps a tool `mode` to either a
+`box` ghost or a `player_start` marker. Box
+previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
+between horizontal grid axes. A box preview must author exactly one bounds
+source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. The preview
+reuses the editor debug overlay's `command_preview` flag and color, so editor
+hosts do not need a second rendering path.
 
 ```json
 {
@@ -1071,8 +1085,8 @@ flag and color, so editor hosts do not need a second rendering path.
           "kind": "box",
           "world": "brush.level.blockout",
           "material": "mat.stone_floor",
-          "grid_min": [-0.5, -0.025, -0.5],
-          "grid_max": [0.5, 0.0, 0.5]
+          "grid_min": [0.0, -0.025, 0.0],
+          "grid_max": [1.0, 0.0, 1.0]
         },
         {
           "mode": "wall",
@@ -1081,8 +1095,8 @@ flag and color, so editor hosts do not need a second rendering path.
           "material": "mat.stone_wall",
           "axis_key": "editor.wall_axis",
           "axis": "z",
-          "grid_min": [-0.03125, 0.0, -0.5],
-          "grid_max": [0.03125, 1.0, 0.5]
+          "grid_min": [0.0, 0.0, 0.0],
+          "grid_max": [1.0, 1.0, 1.0]
         },
         {
           "mode": "player_start",
@@ -1103,6 +1117,12 @@ Each entry has a `mode`, `label`, optional `shortcut`, optional
 `category`/`description`, and an optional `preview` reference. When omitted,
 `preview` defaults to `mode`. Validation requires every palette preview to
 match an authored placement preview, so stale sidebar entries fail at load time.
+Editor scenes can present that metadata however they like. The editor shell dojo
+currently uses authored UI and logic signals: `B` opens the Brushes palette,
+arrow keys move a scene-state cursor, `Enter` writes `selected_key`, and `Esc`
+closes the modal. The Game Objects palette uses the same modal input shape for
+player-start placement, and the Material palette is reserved for the face
+painting workflow.
 
 ```json
 {
@@ -1170,6 +1190,15 @@ Native editor hosts can call
 current player-start collection as a `slayer3d.fragment.v0` document containing
 `editor_player_starts`. File writing remains host-owned, matching brush-world
 exports.
+
+Editor player starts are also selectable editor objects. The debug overlay flag
+`player_starts` draws them as green cylinder markers by default; override
+`player_start_color`, `player_start_radius`, or `player_start_height` under
+`editor.debug_overlay` when a project needs different marker styling.
+`editor.player_start.delete` removes a marker by explicit `name` or by the
+active editor selection with `"name_from_selection": true`, which lets
+right-click delete share the same authored secondary-select path as brush
+deletion.
 
 Use `editor.player_start.apply` to move a stored player-start target actor back
 to its marker. This is useful for in-editor playable previews: apply the marker,
@@ -1431,10 +1460,21 @@ viewport camera without collision:
         "up": "action.editor.camera.up",
         "down": "action.editor.camera.down",
         "look": "action.editor.camera.look",
-        "fast": "action.editor.camera.fast"
+        "fast": "action.editor.camera.fast",
+        "pan_left": "action.editor.ortho.pan.left",
+        "pan_right": "action.editor.ortho.pan.right",
+        "pan_up": "action.editor.ortho.pan.up",
+        "pan_down": "action.editor.ortho.pan.down",
+        "zoom_in": "action.editor.ortho.zoom.in",
+        "zoom_out": "action.editor.ortho.zoom.out",
+        "zoom_wheel": "action.editor.ortho.zoom.wheel"
       },
+      "mode_key": "editor.view.mode",
+      "orthographic_size_key": "editor.ortho.size",
       "move_speed": 8.0,
       "fast_speed": 22.0,
+      "orthographic_pan_speed": 0.85,
+      "orthographic_zoom_speed": 1.75,
       "mouse_sensitivity": 0.002,
       "pitch_min": -1.45,
       "pitch_max": 1.45
@@ -1451,13 +1491,44 @@ is omitted, mouse-look is active whenever `mouse_look` is true. The controller
 writes `yaw`, `pitch`, and `camera_forward` by default; override those names
 with `yaw_property`, `pitch_property`, and `forward_property`.
 
+When `mode_key` points at scene state with `orthographic_top`,
+`orthographic_front`, or `orthographic_side`, the same controller switches to
+orthographic canvas controls instead of flyby movement. `pan_left/right/up/down`
+move the camera actor in the active orthographic plane, while
+`zoom_in/out/wheel` scales the scene-state float named by
+`orthographic_size_key`. Optional `orthographic_controls_if` gates those pan and
+zoom controls with a data condition. This is useful for editors that reuse
+arrow keys inside a modal palette: the palette can consume selection movement
+while the orthographic camera stays still. Override `flyby_mode`, `top_mode`,
+`front_mode`, or `side_mode` if a project uses different authored mode names.
+
 Editor scenes can pair one free-flight camera actor with multiple authored
 cameras. A typical graybox editor uses an `fps` or perspective camera for 3D
-inspection and orthographic cameras for top/front/side plotting. Bind UI or
-keyboard shortcuts to `camera.set` plus a scene-state `editor.view.mode` value
-so the active view is explicit and visible in inspector widgets. Selection
-traces that omit their `camera` field automatically use the active camera, so
-the same placement path works from perspective and orthographic views.
+inspection and orthographic cameras for top/front/side plotting. For a classic
+multi-viewport editor, author `world_viewports` on the scene:
+
+```json
+{
+  "world_viewports": [
+    { "name": "perspective", "camera": "camera.editor.perspective", "rect": [0, 0, 640, 360] },
+    { "name": "top", "camera": "camera.editor.top", "rect": [640, 0, 640, 360] },
+    { "name": "front", "camera": "camera.editor.front", "rect": [0, 360, 640, 360] },
+    { "name": "side", "camera": "camera.editor.side", "rect": [640, 360, 640, 360] }
+  ]
+}
+```
+
+Each rect is `[x, y, width, height]` in logical pixels. Optional `active_if`
+conditions let the same scene switch between a four-viewport layout and a
+single full-screen flyby camera. World viewports affect only 3D/world drawing;
+UI remains rendered at the normal logical resolution.
+
+Selection traces may also declare matching `viewports` entries. When the mouse
+falls inside a viewport rect, the trace uses that viewport's camera, local
+screen coordinates, dimensions, and optional viewport-specific `work_plane`.
+This keeps floor/wall/ceiling placement correct in orthographic quadrants while
+still allowing a perspective preview in the same scene. Traces that omit
+`viewports` fall back to the trace camera or active camera.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:
@@ -2068,6 +2139,12 @@ Scene `input` can restrict allowed actions and request relative mouse capture:
 defaults to `never`. FPS-style scenes should normally use `unpaused` so the
 generic runtime captures relative mouse motion during play and releases it
 while authored pause/menu overlays are active.
+
+Scenes may also author `input.mouse_capture_if` with any normal data condition.
+When present, the scene only captures relative mouse motion while that condition
+is true. This is useful for editor shells that use normal hardware cursor
+selection in orthographic views but switch to captured mouse-look in a 3D flyby
+viewport.
 
 ## Actors
 

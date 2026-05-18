@@ -4998,6 +4998,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
             {
                 if (!validate_editor_camera_component(ctx, component, path, names))
                     return false;
+                char condition_path[PATH_BUFFER_SIZE];
+                format_path(condition_path, sizeof(condition_path), "%s.orthographic_controls_if", path);
+                if (!validate_data_condition(ctx, obj_get(component, "orthographic_controls_if"), condition_path,
+                                             names))
+                    return false;
             }
             else if (SDL_strcmp(type, "combat.health") == 0)
             {
@@ -7883,6 +7888,32 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.player_start.delete") == 0)
+    {
+        const char *name = json_string(action, "name");
+        yyjson_val *name_from_selection_value = obj_get(action, "name_from_selection");
+        if (name_from_selection_value != NULL && !yyjson_is_bool(name_from_selection_value))
+            return validation_error(ctx, json_path, "editor.player_start.delete name_from_selection must be bool");
+        const bool name_from_selection =
+            name_from_selection_value != NULL && yyjson_get_bool(name_from_selection_value);
+        if ((name == NULL || name[0] == '\0') && !name_from_selection)
+            return validation_error(ctx, json_path, "editor.player_start.delete requires name or name_from_selection");
+        if (name != NULL && !require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
+            return false;
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.player_start.delete outputs must be an object");
+        static const char *const output_keys[] = {"valid_key", "message_key",  "player_start_key",
+                                                  "dirty_key", "revision_key", "saved_revision_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.player_start.delete output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))
@@ -8880,6 +8911,8 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
     const char *action = json_string(quit, "action");
     if (action != NULL && !require_ref(ctx, &names->actions, "input action", action, "$.app.quit.action"))
         return false;
+    if (!validate_data_condition(ctx, obj_get(quit, "enabled_if"), "$.app.quit.enabled_if", names))
+        return false;
     const char *quit_signal = json_string(quit, "quit_signal");
     if (quit_signal != NULL && !require_ref(ctx, &names->signals, "signal", quit_signal, "$.app.quit.quit_signal"))
         return false;
@@ -9034,6 +9067,9 @@ static bool validate_cameras(validation_context *ctx, yyjson_val *root, validati
         yyjson_val *size = obj_get(camera, "size");
         if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 0.0))
             return validation_error(ctx, path, "camera size must be positive");
+        yyjson_val *size_key = obj_get(camera, "size_key");
+        if (size_key != NULL && (!yyjson_is_str(size_key) || yyjson_get_str(size_key)[0] == '\0'))
+            return validation_error(ctx, path, "camera size_key must be a non-empty string");
         yyjson_val *position = obj_get(camera, "position");
         if (position != NULL && !is_vec_array(position, 3))
             return validation_error(ctx, path, "camera position must be a vec3");
@@ -10188,6 +10224,48 @@ static bool validate_scene_skybox(validation_context *ctx, yyjson_val *scene_roo
     return true;
 }
 
+static bool validate_scene_ui_condition(validation_context *ctx, yyjson_val *condition, const char *path,
+                                        validation_names *names);
+
+static bool validate_scene_world_viewports(validation_context *ctx, yyjson_val *scene_root, const char *json_path,
+                                           validation_names *names)
+{
+    yyjson_val *viewports = obj_get(scene_root, "world_viewports");
+    if (viewports == NULL)
+        return true;
+    if (!yyjson_is_arr(viewports))
+        return validation_error(ctx, json_path, "scene world_viewports must be an array");
+
+    for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "%s.world_viewports[%zu]", json_path, i);
+        yyjson_val *viewport = yyjson_arr_get(viewports, i);
+        if (!yyjson_is_obj(viewport))
+            return validation_error(ctx, path, "scene world viewport entries must be objects");
+        const char *name = json_string(viewport, "name");
+        if (name == NULL || name[0] == '\0')
+            return validation_error(ctx, path, "scene world viewport requires a non-empty name");
+        if (!require_ref(ctx, &names->cameras, "camera", json_string(viewport, "camera"), path))
+            return false;
+        yyjson_val *rect = obj_get(viewport, "rect");
+        if (!is_exact_vec_array(rect, 4) || !numeric_array_values_in_range(rect, 0.0, DBL_MAX) ||
+            yyjson_get_num(yyjson_arr_get(rect, 2)) <= 0.0 || yyjson_get_num(yyjson_arr_get(rect, 3)) <= 0.0)
+        {
+            return validation_error(ctx, path,
+                                    "scene world viewport rect must be [x, y, width, height] with positive dimensions");
+        }
+        yyjson_val *viewmodel = obj_get(viewport, "viewmodel");
+        if (viewmodel != NULL && !yyjson_is_bool(viewmodel))
+            return validation_error(ctx, path, "scene world viewport viewmodel must be a boolean");
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.active_if", path);
+        if (!validate_scene_ui_condition(ctx, obj_get(viewport, "active_if"), condition_path, names))
+            return false;
+    }
+    return true;
+}
+
 static bool editor_command_name_valid(const char *value)
 {
     return value != NULL &&
@@ -10232,6 +10310,8 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     if (!validate_scene_brush_worlds(ctx, root, json_path, names))
         return false;
     if (!validate_scene_skybox(ctx, root, json_path, names))
+        return false;
+    if (!validate_scene_world_viewports(ctx, root, json_path, names))
         return false;
     if (!validate_scene_editor_tooling(ctx, root, json_path, names))
         return false;
@@ -10309,6 +10389,10 @@ static bool validate_scene_details(validation_context *ctx, yyjson_val *root, yy
     if (mouse_capture != NULL && SDL_strcmp(mouse_capture, "never") != 0 &&
         SDL_strcmp(mouse_capture, "unpaused") != 0 && SDL_strcmp(mouse_capture, "always") != 0)
         return validation_error(ctx, json_path, "scene input.mouse_capture must be never, unpaused, or always");
+    char mouse_capture_if_path[PATH_BUFFER_SIZE];
+    format_path(mouse_capture_if_path, sizeof(mouse_capture_if_path), "%s.input.mouse_capture_if", json_path);
+    if (!validate_data_condition(ctx, obj_get(scene_input, "mouse_capture_if"), mouse_capture_if_path, names))
+        return false;
     yyjson_val *scene_actions = obj_get(scene_input, "actions");
     if (scene_actions != NULL && !yyjson_is_arr(scene_actions))
         return validation_error(ctx, json_path, "scene input.actions must be an array");

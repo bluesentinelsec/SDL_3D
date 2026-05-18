@@ -101,6 +101,107 @@ static bool populate_brush_editor_selection(const slayer3d_game_data_runtime *ru
     return true;
 }
 
+static slayer3d_bounding_box editor_player_start_bounds(const editor_player_start_runtime *start)
+{
+    const float radius = 0.6f;
+    const float height = 1.8f;
+    slayer3d_bounding_box bounds;
+    bounds.min = slayer3d_vec3_make(start->position.x - radius, start->position.y, start->position.z - radius);
+    bounds.max = slayer3d_vec3_make(start->position.x + radius, start->position.y + height, start->position.z + radius);
+    return bounds;
+}
+
+static bool editor_segment_aabb_intersection(slayer3d_vec3 start, slayer3d_vec3 end, slayer3d_bounding_box bounds,
+                                             float *out_fraction)
+{
+    const slayer3d_vec3 direction = slayer3d_vec3_sub(end, start);
+    float t_min = 0.0f;
+    float t_max = 1.0f;
+
+#define TEST_AXIS(component)                                                                                           \
+    do                                                                                                                 \
+    {                                                                                                                  \
+        if (SDL_fabsf(direction.component) <= 0.000001f)                                                               \
+        {                                                                                                              \
+            if (start.component < bounds.min.component || start.component > bounds.max.component)                      \
+                return false;                                                                                          \
+        }                                                                                                              \
+        else                                                                                                           \
+        {                                                                                                              \
+            float inv = 1.0f / direction.component;                                                                    \
+            float t1 = (bounds.min.component - start.component) * inv;                                                 \
+            float t2 = (bounds.max.component - start.component) * inv;                                                 \
+            if (t1 > t2)                                                                                               \
+            {                                                                                                          \
+                const float temp = t1;                                                                                 \
+                t1 = t2;                                                                                               \
+                t2 = temp;                                                                                             \
+            }                                                                                                          \
+            t_min = SDL_max(t_min, t1);                                                                                \
+            t_max = SDL_min(t_max, t2);                                                                                \
+            if (t_min > t_max)                                                                                         \
+                return false;                                                                                          \
+        }                                                                                                              \
+    } while (0)
+
+    TEST_AXIS(x);
+    TEST_AXIS(y);
+    TEST_AXIS(z);
+#undef TEST_AXIS
+
+    if (out_fraction != NULL)
+        *out_fraction = t_min;
+    return true;
+}
+
+bool pick_editor_player_start(const slayer3d_game_data_runtime *runtime,
+                              const slayer3d_game_data_world_trace_desc *trace,
+                              slayer3d_game_data_editor_selection *out_selection)
+{
+    if (runtime == NULL || trace == NULL || out_selection == NULL)
+        return false;
+
+    float best_fraction = 1.0f;
+    const editor_player_start_runtime *best_start = NULL;
+    slayer3d_bounding_box best_bounds;
+    SDL_zero(best_bounds);
+    for (int i = 0; i < runtime->editor_player_start_count; ++i)
+    {
+        const editor_player_start_runtime *start = &runtime->editor_player_starts[i];
+        if (start->name == NULL || start->name[0] == '\0')
+            continue;
+        const slayer3d_bounding_box bounds = editor_player_start_bounds(start);
+        float fraction = 1.0f;
+        if (!editor_segment_aabb_intersection(trace->start, trace->end, bounds, &fraction))
+            continue;
+        if (best_start == NULL || fraction < best_fraction)
+        {
+            best_start = start;
+            best_fraction = fraction;
+            best_bounds = bounds;
+        }
+    }
+
+    if (best_start == NULL)
+        return false;
+
+    init_editor_selection(out_selection);
+    out_selection->hit = true;
+    out_selection->type = SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START;
+    out_selection->world_name = "editor_player_starts";
+    out_selection->world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    out_selection->element_name = best_start->name;
+    out_selection->element_index = (int)(best_start - runtime->editor_player_starts);
+    out_selection->face_index = -1;
+    out_selection->fraction = best_fraction;
+    out_selection->point = slayer3d_vec3_add(
+        trace->start, slayer3d_vec3_scale(slayer3d_vec3_sub(trace->end, trace->start), best_fraction));
+    out_selection->normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    out_selection->bounds = best_bounds;
+    out_selection->has_bounds = true;
+    return true;
+}
+
 bool slayer3d_game_data_pick_editor_world_model(const slayer3d_game_data_runtime *runtime,
                                                 const slayer3d_game_data_world_trace_desc *desc,
                                                 slayer3d_game_data_editor_selection *out_selection)

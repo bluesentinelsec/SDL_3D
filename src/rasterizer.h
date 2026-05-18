@@ -41,6 +41,8 @@ typedef struct slayer3d_framebuffer
     int width;
     int height;
     slayer3d_parallel_rasterizer *parallel_rasterizer;
+    bool viewport_enabled;
+    SDL_Rect viewport_rect;
     bool scissor_enabled;
     SDL_Rect scissor_rect;
     bool blend_enabled; /* when true, alpha-composite instead of overwrite */

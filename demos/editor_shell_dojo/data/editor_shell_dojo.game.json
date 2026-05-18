@@ -1,6 +1,5 @@
 {
   "schema": "slayer3d.game.v0",
-  "imports": [{ "path": "generated/editable_level.fragment.json", "sections": ["brush_worlds", "editor_player_starts"] }],
   "metadata": {
     "name": "Slayer 3D Editor Shell Dojo",
     "id": "demo.editor_shell_dojo",
@@ -12,7 +11,10 @@
     "logical_height": 720,
     "backend": "opengl",
     "window": { "renderer": "opengl", "vsync": true },
-    "quit": { "action": "action.exit" },
+    "quit": {
+      "action": "action.exit",
+      "enabled_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" }
+    },
     "input_policy": { "global_actions": ["action.exit"] }
   },
   "input": {
@@ -37,20 +39,20 @@
             "bindings": [{ "device": "keyboard", "key": "I" }]
           },
           {
-            "name": "action.editor.command.preview",
-            "bindings": [{ "device": "keyboard", "key": "P" }]
-          },
-          {
             "name": "action.editor.command.commit",
             "bindings": [{ "device": "keyboard", "key": "RETURN" }]
           },
           {
             "name": "action.editor.command.undo",
-            "bindings": [{ "device": "keyboard", "key": "Z" }]
+            "bindings": [{ "device": "keyboard", "key": "U" }]
           },
           {
             "name": "action.editor.command.redo",
             "bindings": [{ "device": "keyboard", "key": "Y" }]
+          },
+          {
+            "name": "action.editor.delete_selected",
+            "bindings": [{ "device": "keyboard", "key": "DELETE" }]
           },
           {
             "name": "action.editor.export",
@@ -65,40 +67,28 @@
             "bindings": [{ "device": "keyboard", "key": "F5" }]
           },
           {
-            "name": "action.editor.tool.floor",
-            "bindings": [{ "device": "keyboard", "key": "1" }]
-          },
-          {
-            "name": "action.editor.tool.wall",
-            "bindings": [{ "device": "keyboard", "key": "2" }]
-          },
-          {
-            "name": "action.editor.tool.ceiling",
-            "bindings": [{ "device": "keyboard", "key": "3" }]
-          },
-          {
-            "name": "action.editor.tool.player_start",
-            "bindings": [{ "device": "keyboard", "key": "4" }]
-          },
-          {
             "name": "action.editor.view.toggle",
             "bindings": [{ "device": "keyboard", "key": "TAB" }]
           },
           {
+            "name": "action.editor.view.quad",
+            "bindings": [{ "device": "keyboard", "key": "1" }]
+          },
+          {
             "name": "action.editor.view.perspective",
-            "bindings": [{ "device": "keyboard", "key": "F1" }]
+            "bindings": [{ "device": "keyboard", "key": "2" }]
           },
           {
             "name": "action.editor.view.top",
-            "bindings": [{ "device": "keyboard", "key": "F2" }]
+            "bindings": [{ "device": "keyboard", "key": "3" }]
           },
           {
             "name": "action.editor.view.front",
-            "bindings": [{ "device": "keyboard", "key": "F3" }]
+            "bindings": [{ "device": "keyboard", "key": "4" }]
           },
           {
             "name": "action.editor.view.side",
-            "bindings": [{ "device": "keyboard", "key": "F4" }]
+            "bindings": [{ "device": "keyboard", "key": "5" }]
           },
           {
             "name": "action.editor.grid.decrease",
@@ -119,28 +109,90 @@
             "bindings": [{ "device": "keyboard", "key": "R" }]
           },
           {
-            "name": "action.editor.camera.forward",
-            "bindings": [{ "device": "keyboard", "key": "UP" }]
+            "name": "action.editor.palette.brush",
+            "bindings": [{ "device": "keyboard", "key": "B" }]
           },
           {
-            "name": "action.editor.camera.back",
-            "bindings": [{ "device": "keyboard", "key": "DOWN" }]
+            "name": "action.editor.palette.material",
+            "bindings": [{ "device": "keyboard", "key": "M" }]
           },
           {
-            "name": "action.editor.camera.left",
+            "name": "action.editor.palette.game_object",
+            "bindings": [{ "device": "keyboard", "key": "G" }]
+          },
+          {
+            "name": "action.editor.palette.close",
+            "bindings": [{ "device": "keyboard", "key": "ESCAPE" }]
+          },
+          {
+            "name": "action.editor.palette.accept",
+            "bindings": [{ "device": "keyboard", "key": "RETURN" }]
+          },
+          {
+            "name": "action.editor.palette.previous",
+            "bindings": [
+              { "device": "keyboard", "key": "LEFT" },
+              { "device": "keyboard", "key": "UP" }
+            ]
+          },
+          {
+            "name": "action.editor.palette.next",
+            "bindings": [
+              { "device": "keyboard", "key": "RIGHT" },
+              { "device": "keyboard", "key": "DOWN" }
+            ]
+          },
+          {
+            "name": "action.editor.ortho.pan.left",
             "bindings": [{ "device": "keyboard", "key": "LEFT" }]
           },
           {
-            "name": "action.editor.camera.right",
+            "name": "action.editor.ortho.pan.right",
             "bindings": [{ "device": "keyboard", "key": "RIGHT" }]
           },
           {
+            "name": "action.editor.ortho.pan.up",
+            "bindings": [{ "device": "keyboard", "key": "UP" }]
+          },
+          {
+            "name": "action.editor.ortho.pan.down",
+            "bindings": [{ "device": "keyboard", "key": "DOWN" }]
+          },
+          {
+            "name": "action.editor.ortho.zoom.in",
+            "bindings": [{ "device": "keyboard", "key": "Z" }]
+          },
+          {
+            "name": "action.editor.ortho.zoom.out",
+            "bindings": [{ "device": "keyboard", "key": "X" }]
+          },
+          {
+            "name": "action.editor.ortho.zoom.wheel",
+            "bindings": [{ "device": "mouse", "axis": "wheel" }]
+          },
+          {
+            "name": "action.editor.camera.forward",
+            "bindings": [{ "device": "keyboard", "key": "W" }]
+          },
+          {
+            "name": "action.editor.camera.back",
+            "bindings": [{ "device": "keyboard", "key": "S" }]
+          },
+          {
+            "name": "action.editor.camera.left",
+            "bindings": [{ "device": "keyboard", "key": "A" }]
+          },
+          {
+            "name": "action.editor.camera.right",
+            "bindings": [{ "device": "keyboard", "key": "D" }]
+          },
+          {
             "name": "action.editor.camera.up",
-            "bindings": [{ "device": "keyboard", "key": "E" }]
+            "bindings": [{ "device": "keyboard", "key": "SPACE" }]
           },
           {
             "name": "action.editor.camera.down",
-            "bindings": [{ "device": "keyboard", "key": "Q" }]
+            "bindings": [{ "device": "keyboard", "key": "LCTRL" }]
           },
           {
             "name": "action.editor.camera.look",
@@ -181,6 +233,7 @@
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.pointer.primary",
+    "signal.editor.delete_selected",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
     "signal.editor.tool.floor",
@@ -188,6 +241,7 @@
     "signal.editor.tool.ceiling",
     "signal.editor.tool.player_start",
     "signal.editor.view.toggle",
+    "signal.editor.view.quad",
     "signal.editor.view.perspective",
     "signal.editor.view.top",
     "signal.editor.view.front",
@@ -195,6 +249,13 @@
     "signal.editor.grid.decrease",
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
+    "signal.editor.palette.brush",
+    "signal.editor.palette.material",
+    "signal.editor.palette.game_object",
+    "signal.editor.palette.close",
+    "signal.editor.palette.previous",
+    "signal.editor.palette.next",
+    "signal.editor.palette.accept",
     "signal.editor.export",
     "signal.editor.test_run.prepare",
     "signal.editor.test_run.enter"
@@ -218,13 +279,13 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.command.preview",
-        "on_pressed": "signal.editor.command.preview"
+        "action": "action.editor.command.commit",
+        "on_pressed": "signal.editor.command.commit"
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.command.commit",
-        "on_pressed": "signal.editor.command.commit"
+        "action": "action.editor.palette.accept",
+        "on_pressed": "signal.editor.palette.accept"
       },
       {
         "type": "sensor.input_pressed",
@@ -235,6 +296,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.command.redo",
         "on_pressed": "signal.editor.command.redo"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.delete_selected",
+        "on_pressed": "signal.editor.delete_selected"
       },
       {
         "type": "sensor.input_pressed",
@@ -253,28 +319,13 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.tool.floor",
-        "on_pressed": "signal.editor.tool.floor"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.tool.wall",
-        "on_pressed": "signal.editor.tool.wall"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.tool.ceiling",
-        "on_pressed": "signal.editor.tool.ceiling"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.tool.player_start",
-        "on_pressed": "signal.editor.tool.player_start"
-      },
-      {
-        "type": "sensor.input_pressed",
         "action": "action.editor.view.toggle",
         "on_pressed": "signal.editor.view.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.view.quad",
+        "on_pressed": "signal.editor.view.quad"
       },
       {
         "type": "sensor.input_pressed",
@@ -310,6 +361,36 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.wall_axis.toggle",
         "on_pressed": "signal.editor.wall_axis.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.brush",
+        "on_pressed": "signal.editor.palette.brush"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.material",
+        "on_pressed": "signal.editor.palette.material"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.game_object",
+        "on_pressed": "signal.editor.palette.game_object"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.close",
+        "on_pressed": "signal.editor.palette.close"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.previous",
+        "on_pressed": "signal.editor.palette.previous"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.next",
+        "on_pressed": "signal.editor.palette.next"
       }
     ],
     "bindings": [
@@ -358,31 +439,41 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.view.mode",
-            "default": "perspective_3d",
-            "values": ["perspective_3d", "orthographic_top"]
+            "default": "quad_view",
+            "values": ["quad_view", "flyby_3d"]
           },
           {
             "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
+            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
             "then": [
-              { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
+              { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
               { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
               { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "four viewport editor layout" }
             ],
             "else": [
               { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
               { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
               { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "3D flyby editor view" }
             ]
           }
         ]
       },
       {
+        "signal": "signal.editor.view.quad",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
+          { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
+          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
+          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "four viewport editor layout" }
+        ]
+      },
+      {
         "signal": "signal.editor.view.perspective",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "perspective_3d" },
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "flyby_3d" },
           { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
           { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
@@ -455,6 +546,164 @@
             "values": ["z", "x"]
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall axis toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.brush",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush palette closed" }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "brush" },
+              { "type": "scene_state.set", "key": "editor.palette.brush.cursor", "value": "floor" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush palette opened" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.material",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.active", "value": "material" },
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "material palette opened" }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.game_object",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.active", "value": "game_object" },
+          { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "game object palette opened" }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.close",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "!=", "value": "", "default": "" },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "palette closed" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.previous",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.brush.cursor",
+                "default": "floor",
+                "direction": -1,
+                "values": ["floor", "wall", "ceiling"]
+              }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.game_object.cursor",
+                "default": "player_start",
+                "direction": -1,
+                "values": ["player_start"]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.next",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.brush.cursor",
+                "default": "floor",
+                "direction": 1,
+                "values": ["floor", "wall", "ceiling"]
+              }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.game_object.cursor",
+                "default": "player_start",
+                "direction": 1,
+                "values": ["player_start"]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.accept",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              {
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "floor", "default": "floor" },
+                "then": [
+                  { "type": "scene_state.set", "key": "editor.tool.mode", "value": "floor" },
+                  { "type": "scene_state.set", "key": "editor.brush.selected", "value": "floor" },
+                  { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor brush selected" }
+                ],
+                "else": [
+                  {
+                    "type": "branch",
+                    "if": { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "wall" },
+                    "then": [
+                      { "type": "scene_state.set", "key": "editor.tool.mode", "value": "wall" },
+                      { "type": "scene_state.set", "key": "editor.brush.selected", "value": "wall" },
+                      { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall brush selected" }
+                    ],
+                    "else": [
+                      { "type": "scene_state.set", "key": "editor.tool.mode", "value": "ceiling" },
+                      { "type": "scene_state.set", "key": "editor.brush.selected", "value": "ceiling" },
+                      { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling brush selected" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
+              { "type": "scene_state.set", "key": "editor.game_object.selected", "value": "player_start" },
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start selected" }
+            ]
+          }
         ]
       },
       {
@@ -543,6 +792,92 @@
         ]
       },
       {
+        "signal": "signal.editor.delete_selected",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "scene_state.compare",
+              "key": "editor.selection.type",
+              "op": "==",
+              "value": "editor_player_start"
+            },
+            "then": [
+              {
+                "type": "editor.player_start.delete",
+                "name_from_selection": true,
+                "message": "player start deleted",
+                "outputs": {
+                  "valid_key": "editor.player_start.valid",
+                  "message_key": "editor.player_start.message",
+                  "player_start_key": "editor.player_start.name",
+                  "dirty_key": "editor.player_start.dirty",
+                  "revision_key": "editor.player_start.revision",
+                  "saved_revision_key": "editor.player_start.saved_revision"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start deleted" }
+            ],
+            "else": [
+              {
+                "type": "editor.command.preview",
+                "command": "delete",
+                "target": "element",
+                "message": "delete {selection_element}",
+                "outputs": {
+                  "active_key": "editor.command_preview.active",
+                  "valid_key": "editor.command_preview.valid",
+                  "command_key": "editor.command_preview.command",
+                  "target_key": "editor.command_preview.target",
+                  "message_key": "editor.command_preview.message",
+                  "world_key": "editor.command_preview.world",
+                  "element_key": "editor.command_preview.element",
+                  "face_index_key": "editor.command_preview.face_index",
+                  "bounds_min_key": "editor.command_preview.bounds_min",
+                  "bounds_max_key": "editor.command_preview.bounds_max"
+                }
+              },
+              {
+                "type": "editor.command.commit",
+                "message": "deleted {editor_transaction_element}",
+                "invalid_message": "nothing selected to delete",
+                "outputs": {
+                  "valid_key": "editor.transaction.valid",
+                  "event_key": "editor.transaction.event",
+                  "message_key": "editor.transaction.message",
+                  "transaction_id_key": "editor.transaction.id",
+                  "undo_count_key": "editor.transaction.undo_count",
+                  "redo_count_key": "editor.transaction.redo_count",
+                  "command_key": "editor.transaction.command",
+                  "target_key": "editor.transaction.target",
+                  "world_key": "editor.transaction.world",
+                  "element_key": "editor.transaction.element",
+                  "face_index_key": "editor.transaction.face_index",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision",
+                  "source_path_key": "editor.brush_world.source_path"
+                },
+                "actions": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "deleted {editor_transaction_element}"
+                  }
+                ],
+                "else": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "nothing selected to delete"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
         "signal": "signal.editor.pointer.primary",
         "actions": [
           {
@@ -563,6 +898,10 @@
         "actions": [
           {
             "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
+            "then": [
+              {
+                "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" },
             "then": [
               {
@@ -724,6 +1063,8 @@
                 ]
               }
             ]
+              }
+            ]
           }
         ]
       },
@@ -801,28 +1142,6 @@
         "signal": "signal.editor.export",
         "actions": [
           {
-            "type": "editor.level.save",
-            "world": "brush.editor_shell.target",
-            "path_from_state": "editor.save.path",
-            "message": "editable level saved",
-            "outputs": {
-              "valid_key": "editor.save.valid",
-              "message_key": "editor.save.message",
-              "path_key": "editor.save.path",
-              "size_key": "editor.save.size",
-              "brush_world_key": "editor.brush_world.name",
-              "brush_dirty_key": "editor.brush_world.dirty",
-              "brush_revision_key": "editor.brush_world.revision",
-              "brush_saved_revision_key": "editor.brush_world.saved_revision",
-              "brush_source_path_key": "editor.brush_world.source_path",
-              "player_start_count_key": "editor.player_start.count",
-              "player_start_dirty_key": "editor.player_start.dirty",
-              "player_start_revision_key": "editor.player_start.revision",
-              "player_start_saved_revision_key": "editor.player_start.saved_revision",
-              "player_start_source_path_key": "editor.player_start.source_path"
-            }
-          },
-          {
             "type": "editor.level.export",
             "world": "brush.editor_shell.target",
             "outputs": {
@@ -841,75 +1160,20 @@
               "player_start_saved_revision_key": "editor.player_start.saved_revision",
               "player_start_source_path_key": "editor.player_start.source_path"
             }
-          }
+          },
+          { "type": "scene_state.set", "key": "editor.save.valid", "value": false },
+          { "type": "scene_state.set", "key": "editor.save.message", "value": "disk save disabled for MVP iteration" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "exported level JSON in memory" }
         ]
       },
       {
         "signal": "signal.editor.test_run.prepare",
         "actions": [
-          {
-            "type": "editor.level.save",
-            "world": "brush.editor_shell.target",
-            "path_from_state": "editor.save.path",
-            "message": "editable level saved for test run",
-            "outputs": {
-              "valid_key": "editor.save.valid",
-              "message_key": "editor.save.message",
-              "path_key": "editor.save.path",
-              "size_key": "editor.save.size",
-              "brush_world_key": "editor.brush_world.name",
-              "brush_dirty_key": "editor.brush_world.dirty",
-              "brush_revision_key": "editor.brush_world.revision",
-              "brush_saved_revision_key": "editor.brush_world.saved_revision",
-              "brush_source_path_key": "editor.brush_world.source_path",
-              "player_start_count_key": "editor.player_start.count",
-              "player_start_dirty_key": "editor.player_start.dirty",
-              "player_start_revision_key": "editor.player_start.revision",
-              "player_start_saved_revision_key": "editor.player_start.saved_revision",
-              "player_start_source_path_key": "editor.player_start.source_path"
-            }
-          },
-          {
-            "type": "editor.test_run.prepare",
-            "data_asset": "asset://editor_shell_dojo.game.json",
-            "player_start": "player_start.editor_shell",
-            "runner": "./build/debug/slayer3d_runner",
-            "root": "demos/editor_shell_dojo/data",
-            "message": "test run handoff prepared",
-            "outputs": {
-              "valid_key": "editor.test_run.valid",
-              "message_key": "editor.test_run.message",
-              "manifest_json_key": "editor.test_run.manifest_json",
-              "size_key": "editor.test_run.size",
-              "data_asset_key": "editor.test_run.data_asset",
-              "scene_key": "editor.test_run.scene",
-              "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target",
-              "command_key": "editor.test_run.command"
-            }
-          },
-          {
-            "type": "editor.test_run.save_manifest",
-            "data_asset": "asset://editor_shell_dojo.game.json",
-            "player_start": "player_start.editor_shell",
-            "path_from_state": "editor.test_run.path",
-            "runner": "./build/debug/slayer3d_runner",
-            "root": "demos/editor_shell_dojo/data",
-            "message": "test run manifest saved",
-            "outputs": {
-              "valid_key": "editor.test_run.saved",
-              "message_key": "editor.test_run.save_message",
-              "path_key": "editor.test_run.path",
-              "manifest_json_key": "editor.test_run.manifest_json",
-              "size_key": "editor.test_run.size",
-              "data_asset_key": "editor.test_run.data_asset",
-              "scene_key": "editor.test_run.scene",
-              "player_start_key": "editor.test_run.player_start",
-              "target_key": "editor.test_run.target",
-              "command_key": "editor.test_run.command"
-            }
-          },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "test run saved and prepared" }
+          { "type": "scene_state.set", "key": "editor.test_run.valid", "value": false },
+          { "type": "scene_state.set", "key": "editor.test_run.saved", "value": false },
+          { "type": "scene_state.set", "key": "editor.test_run.message", "value": "disk handoff disabled for MVP iteration" },
+          { "type": "scene_state.set", "key": "editor.test_run.save_message", "value": "test-run manifest disabled" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "disk test-run handoff disabled" }
         ]
       },
       {
@@ -949,6 +1213,81 @@
       }
     ]
   },
+  "editor_player_starts": [
+    {
+      "name": "player_start.editor_shell",
+      "scene": "scene.editor_shell.test_run",
+      "target": "entity.editor_shell.player",
+      "position": [0.0, 1.6, 4.0],
+      "yaw": 3.14159,
+      "pitch": 0.0
+    }
+  ],
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "editor": {
+        "stable_id": "editor.world.target",
+        "display_name": "Target Brush World",
+        "category": "editor/dojo"
+      },
+      "materials": [
+        {
+          "name": "mat.editor.wall",
+          "albedo": [0.50, 0.52, 0.56, 1.0],
+          "roughness": 0.8,
+          "editor": {
+            "stable_id": "editor.material.wall",
+            "display_name": "Mid Gray Wall Material"
+          }
+        },
+        {
+          "name": "mat.editor.floor",
+          "albedo": [0.30, 0.31, 0.33, 1.0],
+          "roughness": 0.9,
+          "editor": {
+            "stable_id": "editor.material.floor",
+            "display_name": "Dark Gray Floor Material"
+          }
+        },
+        {
+          "name": "mat.editor.ceiling",
+          "albedo": [0.68, 0.69, 0.71, 1.0],
+          "roughness": 0.85,
+          "editor": {
+            "stable_id": "editor.material.ceiling",
+            "display_name": "Light Gray Ceiling Material"
+          }
+        }
+      ],
+      "brushes": [
+        {
+          "name": "brush.target.cube",
+          "contents": ["solid", "player_clip"],
+          "editor": {
+            "stable_id": "editor.brush.target_cube",
+            "display_name": "Selectable Cube",
+            "prefab": "prefab.editor_shell.cube"
+          },
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            {
+              "plane": { "normal": [-1, 0, 0], "distance": 0 },
+              "material": "mat.editor.wall",
+              "editor": {
+                "stable_id": "editor.face.target_cube.left",
+                "display_name": "Left Face"
+              }
+            },
+            { "plane": { "normal": [0, 1, 0], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
+          ]
+        }
+      ]
+    }
+  ],
   "world": {
     "name": "world.editor_shell_dojo",
     "kind": "brush",
@@ -971,7 +1310,8 @@
         "position_offset": [0.0, 40.0, 0.0],
         "target_entity": "entity.editor_shell.camera",
         "up": [0.0, 0.0, -1.0],
-        "size": 48.0
+        "size": 48.0,
+        "size_key": "editor.ortho.size"
       },
       {
         "name": "camera.editor_shell.ortho_front",
@@ -980,7 +1320,8 @@
         "position_offset": [0.0, 0.0, 40.0],
         "target_entity": "entity.editor_shell.camera",
         "up": [0.0, 1.0, 0.0],
-        "size": 32.0
+        "size": 48.0,
+        "size_key": "editor.ortho.size"
       },
       {
         "name": "camera.editor_shell.ortho_side",
@@ -989,7 +1330,8 @@
         "position_offset": [40.0, 0.0, 0.0],
         "target_entity": "entity.editor_shell.camera",
         "up": [0.0, 1.0, 0.0],
-        "size": 32.0
+        "size": 48.0,
+        "size_key": "editor.ortho.size"
       },
       {
         "name": "camera.editor_shell.player",
@@ -1030,11 +1372,25 @@
             "right": "action.editor.camera.right",
             "up": "action.editor.camera.up",
             "down": "action.editor.camera.down",
-            "look": "action.editor.camera.look",
+            "pan_left": "action.editor.ortho.pan.left",
+            "pan_right": "action.editor.ortho.pan.right",
+            "pan_up": "action.editor.ortho.pan.up",
+            "pan_down": "action.editor.ortho.pan.down",
+            "zoom_in": "action.editor.ortho.zoom.in",
+            "zoom_out": "action.editor.ortho.zoom.out",
+            "zoom_wheel": "action.editor.ortho.zoom.wheel",
             "fast": "action.editor.camera.fast"
           },
+          "mode_key": "editor.view.mode",
+          "orthographic_size_key": "editor.ortho.size",
+          "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
           "move_speed": 8.0,
           "fast_speed": 22.0,
+          "orthographic_pan_speed": 0.85,
+          "orthographic_zoom_speed": 1.75,
+          "orthographic_wheel_zoom_step": 0.12,
+          "orthographic_min_size": 4.0,
+          "orthographic_max_size": 256.0,
           "mouse_sensitivity": 0.002,
           "pitch_min": -1.45,
           "pitch_max": 1.45

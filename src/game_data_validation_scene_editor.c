@@ -44,7 +44,8 @@ static bool editor_debug_flag_name_valid(const char *value)
                              SDL_strcmp(value, "selection_bounds") == 0 || SDL_strcmp(value, "trace_ray") == 0 ||
                              SDL_strcmp(value, "face_normal") == 0 || SDL_strcmp(value, "hit_marker") == 0 ||
                              SDL_strcmp(value, "command_preview") == 0 || SDL_strcmp(value, "work_plane_grid") == 0 ||
-                             SDL_strcmp(value, "grid") == 0);
+                             SDL_strcmp(value, "grid") == 0 || SDL_strcmp(value, "player_starts") == 0 ||
+                             SDL_strcmp(value, "game_objects") == 0);
 }
 
 static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,
@@ -129,6 +130,8 @@ static bool validate_optional_non_negative_number(validation_context *ctx, yyjso
     return true;
 }
 
+static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val *trace, const char *trace_path);
+
 static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, yyjson_val *trace,
                                                       const char *trace_path, validation_names *names)
 {
@@ -184,6 +187,34 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     yyjson_val *far_value = obj_get(trace, "far");
     if (near_value != NULL && far_value != NULL && yyjson_get_num(far_value) <= yyjson_get_num(near_value))
         return validation_error(ctx, trace_path, "scene editor camera_screen trace far must be greater than near");
+
+    yyjson_val *viewports = obj_get(trace, "viewports");
+    if (viewports != NULL)
+    {
+        if (!yyjson_is_arr(viewports))
+            return validation_error(ctx, trace_path, "scene editor camera_screen trace viewports must be an array");
+        for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+        {
+            char viewport_path[PATH_BUFFER_SIZE];
+            format_path(viewport_path, sizeof(viewport_path), "%s.viewports[%zu]", trace_path, i);
+            yyjson_val *viewport_entry = yyjson_arr_get(viewports, i);
+            if (!yyjson_is_obj(viewport_entry))
+                return validation_error(ctx, viewport_path,
+                                        "scene editor camera_screen trace viewport entries must be objects");
+            if (!require_ref(ctx, &names->cameras, "camera", json_string(viewport_entry, "camera"), viewport_path))
+                return false;
+            yyjson_val *rect = obj_get(viewport_entry, "rect");
+            if (!is_exact_vec_array(rect, 4) || !numeric_array_values_in_range(rect, 0.0, DBL_MAX) ||
+                yyjson_get_num(yyjson_arr_get(rect, 2)) <= 0.0 || yyjson_get_num(yyjson_arr_get(rect, 3)) <= 0.0)
+            {
+                return validation_error(ctx, viewport_path,
+                                        "scene editor camera_screen trace viewport rect must be [x, y, width, height] "
+                                        "with positive dimensions");
+            }
+            if (!validate_scene_editor_work_plane(ctx, viewport_entry, viewport_path))
+                return false;
+        }
+    }
     return true;
 }
 
@@ -286,11 +317,13 @@ static bool validate_scene_editor_selection_options(validation_context *ctx, yyj
             return validation_error(ctx, selection_path, "scene editor selection mode must be 'hover' or 'click'");
     }
 
-    yyjson_val *select_button = obj_get(selection, "select_button");
-    if (select_button != NULL)
+    static const char *const button_keys[] = {"select_button", "secondary_select_button"};
+    for (size_t i = 0; i < SDL_arraysize(button_keys); ++i)
     {
-        if (!yyjson_is_str(select_button) || !validation_mouse_button_name_valid(yyjson_get_str(select_button)))
-            return validation_error(ctx, selection_path, "scene editor selection select_button must be a mouse button");
+        yyjson_val *button = obj_get(selection, button_keys[i]);
+        if (button != NULL && (!yyjson_is_str(button) || !validation_mouse_button_name_valid(yyjson_get_str(button))))
+            return validation_error(ctx, selection_path, "scene editor selection %s must be a mouse button",
+                                    button_keys[i]);
     }
 
     yyjson_val *clear_on_miss = obj_get(selection, "clear_on_miss");
@@ -371,6 +404,13 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         yyjson_val *snap = obj_get(preview, "snap");
         if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
             return validation_error(ctx, preview_path, "scene editor placement preview snap must be positive");
+        yyjson_val *snap_key = obj_get(preview, "snap_key");
+        if (snap_key != NULL && (!yyjson_is_str(snap_key) || yyjson_get_str(snap_key)[0] == '\0'))
+            return validation_error(ctx, preview_path, "scene editor placement preview snap_key must be non-empty");
+        const char *snap_mode = json_string(preview, "snap_mode");
+        if (snap_mode != NULL && SDL_strcmp(snap_mode, "floor") != 0 && SDL_strcmp(snap_mode, "nearest") != 0)
+            return validation_error(ctx, preview_path,
+                                    "scene editor placement preview snap_mode must be floor or nearest");
         yyjson_val *grid_size = obj_get(preview, "grid_size");
         if (grid_size != NULL && (!yyjson_is_num(grid_size) || yyjson_get_num(grid_size) <= 0.0))
             return validation_error(ctx, preview_path, "scene editor placement preview grid_size must be positive");
@@ -517,14 +557,17 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
         format_path(hover_outputs_path, sizeof(hover_outputs_path), "%s.hover_outputs", selection_path);
         if (!validate_scene_editor_outputs(ctx, obj_get(selection, "hover_outputs"), hover_outputs_path))
             return false;
-        yyjson_val *on_select = obj_get(selection, "on_select");
-        if (on_select != NULL)
+        static const char *const signal_keys[] = {"on_select", "on_secondary_select"};
+        for (size_t i = 0; i < SDL_arraysize(signal_keys); ++i)
         {
-            char on_select_path[PATH_BUFFER_SIZE];
-            format_path(on_select_path, sizeof(on_select_path), "%s.on_select", selection_path);
-            if (!yyjson_is_str(on_select) || yyjson_get_str(on_select)[0] == '\0')
-                return validation_error(ctx, on_select_path, "scene editor selection on_select must be a signal");
-            if (!require_ref(ctx, &names->signals, "signal", yyjson_get_str(on_select), on_select_path))
+            yyjson_val *signal = obj_get(selection, signal_keys[i]);
+            if (signal == NULL)
+                continue;
+            char signal_path[PATH_BUFFER_SIZE];
+            format_path(signal_path, sizeof(signal_path), "%s.%s", selection_path, signal_keys[i]);
+            if (!yyjson_is_str(signal) || yyjson_get_str(signal)[0] == '\0')
+                return validation_error(ctx, signal_path, "scene editor selection %s must be a signal", signal_keys[i]);
+            if (!require_ref(ctx, &names->signals, "signal", yyjson_get_str(signal), signal_path))
                 return false;
         }
     }
@@ -556,8 +599,8 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
                                                    editor_debug_flag_name_valid))
             return false;
         static const char *const color_keys[] = {
-            "world_bounds_color", "selection_bounds_color", "trace_color",          "face_normal_color",
-            "hit_marker_color",   "command_preview_color",  "work_plane_grid_color"};
+            "world_bounds_color", "selection_bounds_color", "trace_color",           "face_normal_color",
+            "hit_marker_color",   "command_preview_color",  "work_plane_grid_color", "player_start_color"};
         for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
         {
             yyjson_val *color = obj_get(overlay, color_keys[i]);
@@ -579,6 +622,16 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
         if (grid_spacing != NULL && (!yyjson_is_num(grid_spacing) || yyjson_get_num(grid_spacing) <= 0.0))
             return validation_error(ctx, overlay_path,
                                     "scene editor debug_overlay work_plane_grid_spacing must be positive");
+        yyjson_val *player_start_radius = obj_get(overlay, "player_start_radius");
+        if (player_start_radius != NULL &&
+            (!yyjson_is_num(player_start_radius) || yyjson_get_num(player_start_radius) <= 0.0))
+            return validation_error(ctx, overlay_path,
+                                    "scene editor debug_overlay player_start_radius must be positive");
+        yyjson_val *player_start_height = obj_get(overlay, "player_start_height");
+        if (player_start_height != NULL &&
+            (!yyjson_is_num(player_start_height) || yyjson_get_num(player_start_height) <= 0.0))
+            return validation_error(ctx, overlay_path,
+                                    "scene editor debug_overlay player_start_height must be positive");
     }
     return true;
 }

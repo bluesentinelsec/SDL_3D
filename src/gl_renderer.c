@@ -148,7 +148,13 @@ typedef struct slayer3d_draw_entry
     int joint_palette_offset;
     bool use_joint_palette_buffer;
     bool gpu_skinned;
+    bool viewport_enabled;
+    SDL_Rect viewport_rect;
+    bool scissor_enabled;
+    SDL_Rect scissor_rect;
 } slayer3d_draw_entry;
+
+static void draw_entry_capture_viewport(slayer3d_draw_entry *entry, const slayer3d_render_context *context);
 
 typedef struct slayer3d_custom_shader_cache_entry
 {
@@ -1827,6 +1833,8 @@ bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, c
     SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, k_white_tint, sizeof(k_white_tint));
     e->owns_arrays = true;
+    if (ctx->current_ctx != NULL)
+        draw_entry_capture_viewport(e, ctx->current_ctx);
     return e->positions != NULL && e->uvs != NULL && e->colors != NULL;
 }
 
@@ -2485,6 +2493,84 @@ static void bind_skinning_state(slayer3d_gl_context *ctx, GLint use_skinning_loc
                                 GLint palette_offset_loc, GLint joint_matrices_loc, const slayer3d_draw_entry *entry);
 static bool draw_entry_matrix_equal(const float *a, const float *b, int count);
 
+static void draw_entry_capture_viewport(slayer3d_draw_entry *entry, const slayer3d_render_context *context)
+{
+    if (entry == NULL || context == NULL)
+        return;
+    entry->viewport_enabled = context->viewport_enabled;
+    entry->viewport_rect = context->viewport_rect;
+    entry->scissor_enabled = context->scissor_enabled;
+    entry->scissor_rect = context->scissor_rect;
+}
+
+static SDL_Rect logical_rect_to_world_rect(const slayer3d_gl_context *ctx, SDL_Rect logical)
+{
+    const int logical_w = ctx != NULL && ctx->logical_w > 0 ? ctx->logical_w : 1;
+    const int logical_h = ctx != NULL && ctx->logical_h > 0 ? ctx->logical_h : 1;
+    const int world_w = ctx != NULL && ctx->world_w > 0 ? ctx->world_w : logical_w;
+    const int world_h = ctx != NULL && ctx->world_h > 0 ? ctx->world_h : logical_h;
+    const float sx = (float)world_w / (float)logical_w;
+    const float sy = (float)world_h / (float)logical_h;
+    SDL_Rect out;
+    out.x = (int)SDL_floorf((float)logical.x * sx);
+    out.y = (int)SDL_floorf((float)(logical_h - logical.y - logical.h) * sy);
+    out.w = SDL_max(0, (int)SDL_ceilf((float)logical.w * sx));
+    out.h = SDL_max(0, (int)SDL_ceilf((float)logical.h * sy));
+    if (out.x < 0)
+    {
+        out.w += out.x;
+        out.x = 0;
+    }
+    if (out.y < 0)
+    {
+        out.h += out.y;
+        out.y = 0;
+    }
+    if (out.x > world_w)
+        out.x = world_w;
+    if (out.y > world_h)
+        out.y = world_h;
+    if (out.w > world_w - out.x)
+        out.w = world_w - out.x;
+    if (out.h > world_h - out.y)
+        out.h = world_h - out.y;
+    if (out.w < 0)
+        out.w = 0;
+    if (out.h < 0)
+        out.h = 0;
+    return out;
+}
+
+static SDL_Rect rect_intersection(SDL_Rect a, SDL_Rect b)
+{
+    const int x0 = SDL_max(a.x, b.x);
+    const int y0 = SDL_max(a.y, b.y);
+    const int x1 = SDL_min(a.x + a.w, b.x + b.w);
+    const int y1 = SDL_min(a.y + a.h, b.y + b.h);
+    return (SDL_Rect){x0, y0, SDL_max(0, x1 - x0), SDL_max(0, y1 - y0)};
+}
+
+static void apply_draw_entry_viewport(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entry)
+{
+    if (ctx == NULL || entry == NULL)
+        return;
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    SDL_Rect viewport =
+        entry->viewport_enabled ? entry->viewport_rect : (SDL_Rect){0, 0, ctx->logical_w, ctx->logical_h};
+    SDL_Rect world_viewport = logical_rect_to_world_rect(ctx, viewport);
+    if (world_viewport.w <= 0 || world_viewport.h <= 0)
+        world_viewport = (SDL_Rect){0, 0, ctx->world_w, ctx->world_h};
+    gl->Viewport(world_viewport.x, world_viewport.y, world_viewport.w, world_viewport.h);
+
+    SDL_Rect world_scissor = world_viewport;
+    if (entry->scissor_enabled)
+    {
+        world_scissor = rect_intersection(world_scissor, logical_rect_to_world_rect(ctx, entry->scissor_rect));
+    }
+    gl->Enable(GL_SCISSOR_TEST);
+    gl->Scissor(world_scissor.x, world_scissor.y, world_scissor.w, world_scissor.h);
+}
+
 static void replay_draw_list_shadow(slayer3d_gl_context *ctx)
 {
     slayer3d_gl_funcs *gl = &ctx->gl;
@@ -2712,6 +2798,7 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
         slayer3d_draw_entry *e = &ctx->draw_list[i];
         if (!draw_entry_depth_prepass_eligible(e))
             continue;
+        apply_draw_entry_viewport(ctx, e);
 
         const int instance_batch_count = draw_entry_depth_instance_batch_count(ctx, i);
         if (instance_batch_count > 1)
@@ -2780,6 +2867,8 @@ static void replay_draw_list_depth_prepass(slayer3d_gl_context *ctx)
     }
 
     gl->BindVertexArray(0);
+    gl->Disable(GL_SCISSOR_TEST);
+    gl->Viewport(0, 0, ctx->world_w, ctx->world_h);
     gl->ColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
     gl->DepthFunc(GL_LEQUAL);
 }
@@ -3136,7 +3225,11 @@ static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slay
            SDL_fabsf(a->metallic - b->metallic) <= 0.000001f && SDL_fabsf(a->roughness - b->roughness) <= 0.000001f &&
            draw_entry_float3_equal(a->emissive, b->emissive) &&
            draw_entry_matrix_equal(a->view_projection, b->view_projection, 16) &&
-           draw_entry_float3_equal(a->camera_pos, b->camera_pos) && draw_entry_skinning_equal(a, b);
+           draw_entry_float3_equal(a->camera_pos, b->camera_pos) && a->viewport_enabled == b->viewport_enabled &&
+           a->scissor_enabled == b->scissor_enabled &&
+           (!a->viewport_enabled || SDL_memcmp(&a->viewport_rect, &b->viewport_rect, sizeof(a->viewport_rect)) == 0) &&
+           (!a->scissor_enabled || SDL_memcmp(&a->scissor_rect, &b->scissor_rect, sizeof(a->scissor_rect)) == 0) &&
+           draw_entry_skinning_equal(a, b);
 }
 
 static int draw_entry_instance_batch_count(const slayer3d_gl_context *ctx, int start)
@@ -3216,6 +3309,7 @@ static bool draw_static_mesh_instance_batch(slayer3d_gl_context *ctx, int start,
     slayer3d_draw_entry *e = &ctx->draw_list[start];
     GLuint tex = resolve_texture(ctx, e->texture);
 
+    apply_draw_entry_viewport(ctx, e);
     flush_scene_ubo_for_draw_entry(ctx, e);
     bind_builtin_pbr_entry(ctx, e, tex, true);
     gl->BindVertexArray(e->mesh_cache->vao);
@@ -3245,6 +3339,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
     {
         slayer3d_draw_entry *e = &ctx->draw_list[i];
         GLuint tex = resolve_texture(ctx, e->texture);
+        apply_draw_entry_viewport(ctx, e);
 
         if (e->lit)
         {
@@ -3600,6 +3695,8 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
             }
         }
     }
+    gl->Disable(GL_SCISSOR_TEST);
+    gl->Viewport(0, 0, ctx->world_w, ctx->world_h);
 }
 
 static void apply_geometry_cull_state(slayer3d_gl_context *ctx)
@@ -4717,6 +4814,7 @@ static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_
     SDL_memcpy(e->mvp, params->mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
     e->owns_arrays = !params->static_geometry;
+    draw_entry_capture_viewport(e, context);
 
     if (params->static_geometry)
     {
@@ -4767,6 +4865,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     e->baked_light_mode = params->baked_light_mode;
     e->has_lightmap = params->lightmap_uvs != NULL && params->lightmap != NULL;
     e->owns_arrays = !params->static_geometry;
+    draw_entry_capture_viewport(e, context);
     e->depth_prepass_eligible = params->depth_prepass_eligible;
     e->gpu_skinned = params->static_geometry && params->joint_matrices != NULL && params->joint_indices != NULL &&
                      params->joint_weights != NULL && params->joint_count > 0 &&
