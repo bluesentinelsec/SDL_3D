@@ -920,6 +920,8 @@ real brush faces keep returning normal brush-world selections.
 `normal_key` and `distance_key` may point at scene-state values, allowing a
 single editor scene to switch between top/front/side orthographic plotting
 planes with data-authored `scene_state.set` and `camera.set` actions.
+Editor-authored player starts participate in picking as `selection_type:
+"editor_player_start"` and publish their marker name as `selection_element`.
 
 Add `work_plane_grid` (or `grid`) to `editor.debug_overlay.flags` to visualize
 the authored work plane with reusable debug lines. `work_plane_grid_size` is the
@@ -1045,7 +1047,9 @@ Scenes can also author `editor.placement` to show a live placement preview while
 the mouse hovers over a brush or work plane. `tool_key` names the scene-state
 property that selects the active tool. `snap_key` can point at a runtime
 scene-state float so UI or keyboard shortcuts can change grid size without
-reloading data. `grid_size_key` can point at the same scene-state float when box
+reloading data. Individual previews can author `snap` to use a fixed local snap
+instead; use that for game objects that need tighter placement than wall and
+floor tiles. `grid_size_key` can point at the same scene-state float when box
 previews use `grid_min` and `grid_max` instead of fixed `min` and `max` bounds.
 Those grid bounds are multipliers from the snapped grid anchor, so a floor
 authored from `[0, 0, 0]` to `[1, 0.025, 1]` becomes one active grid cell wide
@@ -1186,6 +1190,15 @@ Native editor hosts can call
 current player-start collection as a `slayer3d.fragment.v0` document containing
 `editor_player_starts`. File writing remains host-owned, matching brush-world
 exports.
+
+Editor player starts are also selectable editor objects. The debug overlay flag
+`player_starts` draws them as green cylinder markers by default; override
+`player_start_color`, `player_start_radius`, or `player_start_height` under
+`editor.debug_overlay` when a project needs different marker styling.
+`editor.player_start.delete` removes a marker by explicit `name` or by the
+active editor selection with `"name_from_selection": true`, which lets
+right-click delete share the same authored secondary-select path as brush
+deletion.
 
 Use `editor.player_start.apply` to move a stored player-start target actor back
 to its marker. This is useful for in-editor playable previews: apply the marker,

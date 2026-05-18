@@ -276,6 +276,8 @@
         {
           "mode": "player_start",
           "kind": "player_start",
+          "snap": 1.0,
+          "snap_mode": "nearest",
           "size": [0.5, 1.8, 0.5],
           "message": "player start preview"
         }
@@ -289,7 +291,6 @@
           "preview": "floor",
           "kind": "box",
           "label": "Floor",
-          "shortcut": "6",
           "category": "blockout",
           "description": "8m gray floor tile"
         },
@@ -298,7 +299,6 @@
           "preview": "wall",
           "kind": "box",
           "label": "Wall",
-          "shortcut": "7",
           "category": "blockout",
           "description": "8m gray wall tile"
         },
@@ -307,7 +307,6 @@
           "preview": "ceiling",
           "kind": "box",
           "label": "Ceiling",
-          "shortcut": "8",
           "category": "blockout",
           "description": "8m gray ceiling tile"
         },
@@ -316,7 +315,6 @@
           "preview": "player_start",
           "kind": "player_start",
           "label": "Player",
-          "shortcut": "9",
           "category": "things",
           "description": "play-test spawn marker"
         }
@@ -327,6 +325,7 @@
       "flags": [
         "work_plane_grid",
         "world_bounds",
+        "player_starts",
         "selection_bounds",
         "trace_ray",
         "face_normal",
@@ -340,10 +339,13 @@
       "hit_marker_color": [255, 70, 70, 255],
       "command_preview_color": [80, 255, 180, 255],
       "work_plane_grid_color": [80, 140, 170, 95],
+      "player_start_color": [80, 255, 130, 255],
       "work_plane_grid_size": 256.0,
       "work_plane_grid_spacing": 1.0,
       "normal_length": 0.65,
-      "hit_marker_size": 0.12
+      "hit_marker_size": 0.12,
+      "player_start_radius": 0.35,
+      "player_start_height": 1.8
     }
   },
   "ui": {

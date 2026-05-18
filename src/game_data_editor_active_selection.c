@@ -343,10 +343,29 @@ bool editor_pick_selection_from_json(const slayer3d_game_data_runtime *runtime, 
     if (runtime == NULL || selection == NULL || trace == NULL || out_selection == NULL)
         return false;
 
-    if (!slayer3d_game_data_pick_editor_world_model(runtime, trace, out_selection))
+    slayer3d_game_data_editor_selection world_selection;
+    slayer3d_game_data_editor_selection player_start_selection;
+    init_editor_selection(&world_selection);
+    init_editor_selection(&player_start_selection);
+    if (!slayer3d_game_data_pick_editor_world_model(runtime, trace, &world_selection))
         return editor_work_plane_selection_from_trace(runtime, selection, trace, out_selection);
-    if (out_selection->hit)
+    const bool player_start_hit = pick_editor_player_start(runtime, trace, &player_start_selection);
+    if (world_selection.hit && player_start_hit)
+    {
+        *out_selection =
+            player_start_selection.fraction <= world_selection.fraction ? player_start_selection : world_selection;
         return true;
+    }
+    if (player_start_hit)
+    {
+        *out_selection = player_start_selection;
+        return true;
+    }
+    if (world_selection.hit)
+    {
+        *out_selection = world_selection;
+        return true;
+    }
     if (editor_work_plane_selection_from_trace(runtime, selection, trace, out_selection))
         return true;
     return true;
@@ -414,6 +433,8 @@ static const char *editor_selection_type_name(slayer3d_game_data_world_model_typ
         return "sector_level";
     if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
         return "brush_world";
+    if (type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START)
+        return "editor_player_start";
     return "none";
 }
 

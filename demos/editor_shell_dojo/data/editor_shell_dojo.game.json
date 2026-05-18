@@ -795,53 +795,84 @@
         "signal": "signal.editor.delete_selected",
         "actions": [
           {
-            "type": "editor.command.preview",
-            "command": "delete",
-            "target": "element",
-            "message": "delete {selection_element}",
-            "outputs": {
-              "active_key": "editor.command_preview.active",
-              "valid_key": "editor.command_preview.valid",
-              "command_key": "editor.command_preview.command",
-              "target_key": "editor.command_preview.target",
-              "message_key": "editor.command_preview.message",
-              "world_key": "editor.command_preview.world",
-              "element_key": "editor.command_preview.element",
-              "face_index_key": "editor.command_preview.face_index",
-              "bounds_min_key": "editor.command_preview.bounds_min",
-              "bounds_max_key": "editor.command_preview.bounds_max"
-            }
-          },
-          {
-            "type": "editor.command.commit",
-            "message": "deleted {editor_transaction_element}",
-            "invalid_message": "nothing selected to delete",
-            "outputs": {
-              "valid_key": "editor.transaction.valid",
-              "event_key": "editor.transaction.event",
-              "message_key": "editor.transaction.message",
-              "transaction_id_key": "editor.transaction.id",
-              "undo_count_key": "editor.transaction.undo_count",
-              "redo_count_key": "editor.transaction.redo_count",
-              "command_key": "editor.transaction.command",
-              "target_key": "editor.transaction.target",
-              "world_key": "editor.transaction.world",
-              "element_key": "editor.transaction.element",
-              "face_index_key": "editor.transaction.face_index",
-              "dirty_key": "editor.brush_world.dirty",
-              "revision_key": "editor.brush_world.revision",
-              "saved_revision_key": "editor.brush_world.saved_revision",
-              "source_path_key": "editor.brush_world.source_path"
+            "type": "branch",
+            "if": {
+              "type": "scene_state.compare",
+              "key": "editor.selection.type",
+              "op": "==",
+              "value": "editor_player_start"
             },
-            "actions": [
+            "then": [
               {
-                "type": "scene_state.set",
-                "key": "editor.tool.last_action",
-                "value": "deleted {editor_transaction_element}"
-              }
+                "type": "editor.player_start.delete",
+                "name_from_selection": true,
+                "message": "player start deleted",
+                "outputs": {
+                  "valid_key": "editor.player_start.valid",
+                  "message_key": "editor.player_start.message",
+                  "player_start_key": "editor.player_start.name",
+                  "dirty_key": "editor.player_start.dirty",
+                  "revision_key": "editor.player_start.revision",
+                  "saved_revision_key": "editor.player_start.saved_revision"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start deleted" }
             ],
             "else": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing selected to delete" }
+              {
+                "type": "editor.command.preview",
+                "command": "delete",
+                "target": "element",
+                "message": "delete {selection_element}",
+                "outputs": {
+                  "active_key": "editor.command_preview.active",
+                  "valid_key": "editor.command_preview.valid",
+                  "command_key": "editor.command_preview.command",
+                  "target_key": "editor.command_preview.target",
+                  "message_key": "editor.command_preview.message",
+                  "world_key": "editor.command_preview.world",
+                  "element_key": "editor.command_preview.element",
+                  "face_index_key": "editor.command_preview.face_index",
+                  "bounds_min_key": "editor.command_preview.bounds_min",
+                  "bounds_max_key": "editor.command_preview.bounds_max"
+                }
+              },
+              {
+                "type": "editor.command.commit",
+                "message": "deleted {editor_transaction_element}",
+                "invalid_message": "nothing selected to delete",
+                "outputs": {
+                  "valid_key": "editor.transaction.valid",
+                  "event_key": "editor.transaction.event",
+                  "message_key": "editor.transaction.message",
+                  "transaction_id_key": "editor.transaction.id",
+                  "undo_count_key": "editor.transaction.undo_count",
+                  "redo_count_key": "editor.transaction.redo_count",
+                  "command_key": "editor.transaction.command",
+                  "target_key": "editor.transaction.target",
+                  "world_key": "editor.transaction.world",
+                  "element_key": "editor.transaction.element",
+                  "face_index_key": "editor.transaction.face_index",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision",
+                  "source_path_key": "editor.brush_world.source_path"
+                },
+                "actions": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "deleted {editor_transaction_element}"
+                  }
+                ],
+                "else": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "nothing selected to delete"
+                  }
+                ]
+              }
             ]
           }
         ]

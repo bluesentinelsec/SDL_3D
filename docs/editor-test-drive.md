@@ -56,8 +56,8 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `Enter` | palette open | select the highlighted palette item and close the palette |
 | `Esc` | palette open | close the palette without quitting |
 | mouse click | orthographic view | place the selected prefab at the snapped preview position |
-| right click | orthographic view | delete the highlighted tile |
-| `Delete` | orthographic view | delete the active selected tile |
+| right click | orthographic view | delete the highlighted tile or game object |
+| `Delete` | orthographic view | delete the active selected tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size |
 | arrow keys | full-screen orthographic, palette closed | pan the active canvas |
@@ -95,6 +95,9 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed.
+- Game object placement uses its own tighter snap grid, so player starts can be
+  placed precisely while floor/wall/ceiling brushes stay aligned to the larger
+  blockout grid.
 - The bright green placement preview sits under the mouse in orthographic
   views, using the containing grid cell rather than the nearest grid line.
 - Floor, wall, and ceiling prefabs share the same grid-cell footprint and are
@@ -108,6 +111,8 @@ The following should be true during a good test drive:
   the modal without quitting the editor.
 - `M` opens the placeholder Material palette. `G` opens the Game Objects
   palette, and `Enter` selects Player Start for placement.
+- Placed player starts render as bright green cylinder markers in the editor
+  canvas, can be highlighted by hovering, and can be removed with right click.
 - The four-view layout appears on launch. Number keys switch between quad,
   full-screen 3D, and full-screen orthographic views.
 - Each viewport displays a small label identifying the active view: 3D

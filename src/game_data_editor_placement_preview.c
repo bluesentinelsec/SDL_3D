@@ -61,7 +61,9 @@ static void publish_editor_placement_preview(slayer3d_game_data_runtime *runtime
 static float editor_placement_snap(slayer3d_game_data_runtime *runtime, yyjson_val *placement, yyjson_val *preview)
 {
     const float authored_snap = json_float(preview, "snap", json_float(placement, "default_snap", 0.0f));
-    const char *snap_key = json_string(placement, "snap_key", NULL);
+    const char *snap_key = json_string(preview, "snap_key", NULL);
+    if (snap_key == NULL && obj_get(preview, "snap") == NULL)
+        snap_key = json_string(placement, "snap_key", NULL);
     if (runtime != NULL && snap_key != NULL && snap_key[0] != '\0')
         return slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), snap_key, authored_snap);
     return authored_snap;
@@ -98,6 +100,13 @@ static slayer3d_vec3 editor_grid_scaled_vec3(yyjson_val *obj, const char *key, f
 static float editor_placement_snap_floor(float value, float snap)
 {
     return SDL_floorf(value / snap) * snap;
+}
+
+static float editor_placement_snap_value(float value, float snap, const char *mode)
+{
+    if (mode != NULL && SDL_strcmp(mode, "nearest") == 0)
+        return SDL_roundf(value / snap) * snap;
+    return editor_placement_snap_floor(value, snap);
 }
 
 static slayer3d_bounding_box editor_placement_oriented_box_bounds(slayer3d_game_data_runtime *runtime,
@@ -137,9 +146,10 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
     anchor = slayer3d_vec3_add(anchor, json_vec3(preview, "position_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
     if (snap > 0.0f)
     {
-        anchor.x = editor_placement_snap_floor(anchor.x, snap);
-        anchor.y = editor_placement_snap_floor(anchor.y, snap);
-        anchor.z = editor_placement_snap_floor(anchor.z, snap);
+        const char *snap_mode = json_string(preview, "snap_mode", json_string(placement, "snap_mode", "floor"));
+        anchor.x = editor_placement_snap_value(anchor.x, snap, snap_mode);
+        anchor.y = editor_placement_snap_value(anchor.y, snap, snap_mode);
+        anchor.z = editor_placement_snap_value(anchor.z, snap, snap_mode);
     }
     return anchor;
 }

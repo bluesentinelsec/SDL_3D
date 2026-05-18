@@ -15618,6 +15618,20 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 3);
 
+    SDL_Event right_click{};
+    right_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    right_click.button.button = SDL_BUTTON_RIGHT;
+    right_click.button.x = click.button.x;
+    right_click.button.y = click.button.y;
+    slayer3d_input_process_event(input, &right_click);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.command", ""), "delete");
+    EXPECT_EQ(world().brush_count, initial_brush_count + 2);
+    slayer3d_signal_emit(bus, undo_signal, nullptr);
+    EXPECT_EQ(world().brush_count, initial_brush_count + 3);
+
     slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.game_object.cursor", ""), "player_start");
@@ -15637,6 +15651,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_NE(player_start_anchor, nullptr);
     ASSERT_EQ(player_start_anchor->type, SLAYER3D_VALUE_VEC3);
     player_start_origin = player_start_anchor->as_vec3;
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 1.0f, 0.001f);
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.name", ""),
@@ -15654,6 +15669,38 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(start.yaw, 3.14159f, 0.001f);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.player_start.revision", 0), 1);
+
+    struct PlayerStartDebug
+    {
+        int edges = 0;
+    } player_start_debug;
+    auto count_player_start_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
+        auto *debug = static_cast<PlayerStartDebug *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE &&
+            primitive->element_name != nullptr && std::string(primitive->element_name) == "player_start.editor_shell")
+        {
+            debug->edges++;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_player_start_debug,
+                                                                          &player_start_debug));
+    EXPECT_EQ(player_start_debug.edges, 36);
+
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    right_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &right_click);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.player_start.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.player_start.message", ""),
+                 "player start deleted");
+    EXPECT_FALSE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.editor_shell", &start));
+
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_get_editor_player_start(runtime, "player_start.editor_shell", &start));
+    player_start_origin = start.position;
 
     slayer3d_signal_emit(bus, test_run_signal, nullptr);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.test_run.valid", true));
@@ -15674,20 +15721,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
-
-    SDL_Event right_click{};
-    right_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
-    right_click.button.button = SDL_BUTTON_RIGHT;
-    right_click.button.x = click.button.x;
-    right_click.button.y = click.button.y;
-    slayer3d_input_process_event(input, &right_click);
-    slayer3d_input_update(input, 5);
-    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.command", ""), "delete");
-    EXPECT_EQ(world().brush_count, initial_brush_count + 2);
-    slayer3d_signal_emit(bus, undo_signal, nullptr);
-    EXPECT_EQ(world().brush_count, initial_brush_count + 3);
 
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", false));

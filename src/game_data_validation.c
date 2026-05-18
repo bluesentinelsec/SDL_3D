@@ -7888,6 +7888,32 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.player_start.delete") == 0)
+    {
+        const char *name = json_string(action, "name");
+        yyjson_val *name_from_selection_value = obj_get(action, "name_from_selection");
+        if (name_from_selection_value != NULL && !yyjson_is_bool(name_from_selection_value))
+            return validation_error(ctx, json_path, "editor.player_start.delete name_from_selection must be bool");
+        const bool name_from_selection =
+            name_from_selection_value != NULL && yyjson_get_bool(name_from_selection_value);
+        if ((name == NULL || name[0] == '\0') && !name_from_selection)
+            return validation_error(ctx, json_path, "editor.player_start.delete requires name or name_from_selection");
+        if (name != NULL && !require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
+            return false;
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.player_start.delete outputs must be an object");
+        static const char *const output_keys[] = {"valid_key", "message_key",  "player_start_key",
+                                                  "dirty_key", "revision_key", "saved_revision_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.player_start.delete output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "network.direct_connect.start") == 0)
     {
         if (!is_non_empty_string(action, "name"))

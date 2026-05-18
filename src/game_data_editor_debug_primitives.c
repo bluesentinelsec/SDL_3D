@@ -43,6 +43,11 @@ static unsigned int editor_debug_flag_from_string(const char *value)
     {
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID;
     }
+    if (SDL_strcmp(value != NULL ? value : "", "player_starts") == 0 ||
+        SDL_strcmp(value != NULL ? value : "", "game_objects") == 0)
+    {
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS;
+    }
     return 0u;
 }
 
@@ -84,10 +89,13 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
     out_desc->hit_marker_color = json_color(overlay, "hit_marker_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->command_preview_color = json_color(overlay, "command_preview_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->work_plane_grid_color = json_color(overlay, "work_plane_grid_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->player_start_color = json_color(overlay, "player_start_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->normal_length = json_float(overlay, "normal_length", 0.75f);
     out_desc->hit_marker_size = json_float(overlay, "hit_marker_size", 0.1f);
     out_desc->work_plane_grid_size = json_float(overlay, "work_plane_grid_size", 16.0f);
     out_desc->work_plane_grid_spacing = json_float(overlay, "work_plane_grid_spacing", 1.0f);
+    out_desc->player_start_radius = json_float(overlay, "player_start_radius", 0.35f);
+    out_desc->player_start_height = json_float(overlay, "player_start_height", 1.8f);
 
     yyjson_val *selection_json = obj_get(editor, "selection");
     if (editor_trace_desc_from_json(runtime, selection_json, out_trace))
@@ -252,6 +260,52 @@ static bool emit_editor_debug_world_bounds(void *userdata, const slayer3d_game_d
     return true;
 }
 
+static bool emit_editor_debug_player_start_marker(const slayer3d_game_data_runtime *runtime,
+                                                  const slayer3d_game_data_editor_debug_desc *desc,
+                                                  slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || desc == NULL || callback == NULL)
+        return false;
+
+    const float radius = desc->player_start_radius > 0.0f ? desc->player_start_radius : 0.35f;
+    const float height = desc->player_start_height > 0.0f ? desc->player_start_height : 1.8f;
+    const int segments = 16;
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.color = editor_debug_color_or_default(desc->player_start_color, (slayer3d_color){80, 255, 130, 255});
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE;
+    context.world_name = "editor_player_starts";
+    context.face_index = -1;
+
+    for (int start_index = 0; start_index < runtime->editor_player_start_count; ++start_index)
+    {
+        const editor_player_start_runtime *start = &runtime->editor_player_starts[start_index];
+        if (start->name == NULL || start->name[0] == '\0')
+            continue;
+        context.element_name = start->name;
+        for (int i = 0; i < segments; ++i)
+        {
+            const float a0 = ((float)i / (float)segments) * SDL_PI_F * 2.0f;
+            const float a1 = ((float)(i + 1) / (float)segments) * SDL_PI_F * 2.0f;
+            const slayer3d_vec3 bottom0 =
+                slayer3d_vec3_make(start->position.x + SDL_cosf(a0) * radius, start->position.y,
+                                   start->position.z + SDL_sinf(a0) * radius);
+            const slayer3d_vec3 bottom1 =
+                slayer3d_vec3_make(start->position.x + SDL_cosf(a1) * radius, start->position.y,
+                                   start->position.z + SDL_sinf(a1) * radius);
+            const slayer3d_vec3 top0 = slayer3d_vec3_add(bottom0, slayer3d_vec3_make(0.0f, height, 0.0f));
+            const slayer3d_vec3 top1 = slayer3d_vec3_add(bottom1, slayer3d_vec3_make(0.0f, height, 0.0f));
+            if (!emit_editor_debug_line(&context, bottom0, bottom1) || !emit_editor_debug_line(&context, top0, top1))
+                return true;
+            if ((i % 4) == 0 && !emit_editor_debug_line(&context, bottom0, top0))
+                return true;
+        }
+    }
+    return true;
+}
+
 bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data_runtime *runtime,
                                                         const slayer3d_game_data_editor_debug_desc *desc,
                                                         slayer3d_game_data_editor_debug_primitive_fn callback,
@@ -280,6 +334,12 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         }
         if (bounds_context.stopped)
             return true;
+    }
+
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS) != 0u &&
+        !emit_editor_debug_player_start_marker(runtime, desc, callback, userdata))
+    {
+        return true;
     }
 
     const slayer3d_game_data_editor_selection *selection = desc->selection;

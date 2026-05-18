@@ -257,6 +257,82 @@ bool slayer3d_game_data_apply_editor_player_start(slayer3d_game_data_runtime *ru
     return true;
 }
 
+static bool delete_editor_player_start(slayer3d_game_data_runtime *runtime, const char *name, char *error_buffer,
+                                       int error_buffer_size)
+{
+    if (runtime == NULL || name == NULL || name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "player start deletion requires a runtime and name");
+        return false;
+    }
+
+    int index = -1;
+    for (int i = 0; i < runtime->editor_player_start_count; ++i)
+    {
+        if (runtime->editor_player_starts[i].name != NULL &&
+            SDL_strcmp(runtime->editor_player_starts[i].name, name) == 0)
+        {
+            index = i;
+            break;
+        }
+    }
+    if (index < 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "player start '%s' not found", name);
+        return false;
+    }
+
+    SDL_free(runtime->editor_player_starts[index].name);
+    SDL_free(runtime->editor_player_starts[index].scene);
+    SDL_free(runtime->editor_player_starts[index].target);
+    for (int i = index + 1; i < runtime->editor_player_start_count; ++i)
+        runtime->editor_player_starts[i - 1] = runtime->editor_player_starts[i];
+    runtime->editor_player_start_count--;
+    if (runtime->editor_player_start_count >= 0)
+        SDL_zero(runtime->editor_player_starts[runtime->editor_player_start_count]);
+    mark_editor_player_starts_dirty(runtime);
+
+    if (runtime->editor_active_selection.hit &&
+        runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START &&
+        runtime->editor_active_selection.element_name != NULL &&
+        SDL_strcmp(runtime->editor_active_selection.element_name, name) == 0)
+    {
+        init_editor_selection(&runtime->editor_active_selection);
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+        yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
+        publish_editor_selection(runtime, obj_get(selection_json, "outputs"), &runtime->editor_active_selection);
+    }
+    return true;
+}
+
+bool slayer3d_game_data_delete_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const bool from_selection = json_bool(action, "name_from_selection", false);
+    const char *name = json_string(action, "name", NULL);
+    if ((name == NULL || name[0] == '\0') && from_selection && runtime != NULL &&
+        runtime->editor_active_selection.hit &&
+        runtime->editor_active_selection.type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START)
+    {
+        name = runtime->editor_active_selection.element_name;
+    }
+
+    char error[160] = {0};
+    const bool ok = delete_editor_player_start(runtime, name, error, sizeof(error));
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "player start deleted") : error);
+    editor_set_string_output(scene_state, outputs, "player_start_key", ok ? name : "");
+    editor_set_bool_output(scene_state, outputs, "dirty_key",
+                           runtime != NULL ? runtime->editor_player_start_dirty : false);
+    editor_set_int_output(scene_state, outputs, "revision_key",
+                          runtime != NULL ? (int)runtime->editor_player_start_revision : 0);
+    editor_set_int_output(scene_state, outputs, "saved_revision_key",
+                          runtime != NULL ? (int)runtime->editor_player_start_saved_revision : 0);
+    return true;
+}
+
 static bool editor_test_run_add_arg(yyjson_mut_doc *doc, yyjson_mut_val *args, const char *value)
 {
     yyjson_mut_val *arg = yyjson_mut_strcpy(doc, value != NULL ? value : "");
