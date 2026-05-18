@@ -15353,6 +15353,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int grid_decrease_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.grid.decrease");
     const int grid_increase_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.grid.increase");
     const int wall_axis_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.wall_axis.toggle");
+    const int mode_brush_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.brush");
+    const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
+    const int mode_texture_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.texture");
+    const int brush_height_decrease_signal =
+        slayer3d_game_data_find_signal(runtime, "signal.editor.brush.height.decrease");
+    const int brush_height_increase_signal =
+        slayer3d_game_data_find_signal(runtime, "signal.editor.brush.height.increase");
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
     const int undo_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.undo");
     const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
@@ -15369,6 +15376,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(grid_decrease_signal, 0);
     ASSERT_GE(grid_increase_signal, 0);
     ASSERT_GE(wall_axis_signal, 0);
+    ASSERT_GE(mode_brush_signal, 0);
+    ASSERT_GE(mode_select_signal, 0);
+    ASSERT_GE(mode_texture_signal, 0);
+    ASSERT_GE(brush_height_decrease_signal, 0);
+    ASSERT_GE(brush_height_increase_signal, 0);
     ASSERT_GE(commit_signal, 0);
     ASSERT_GE(undo_signal, 0);
     ASSERT_GE(export_signal, 0);
@@ -15478,9 +15490,33 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     };
     const int initial_brush_count = world().brush_count;
     EXPECT_EQ(initial_brush_count, 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.floor");
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 8.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.height", 0.0f), 8.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.elevation", 1.0f), 0.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.thickness", 0.0f), 0.2f, 0.001f);
+
+    slayer3d_signal_emit(bus, mode_brush_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush paint mode");
+    slayer3d_signal_emit(bus, mode_texture_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "texture");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
+    slayer3d_signal_emit(bus, mode_select_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    slayer3d_signal_emit(bus, brush_height_increase_signal, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.height", 0.0f), 12.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush height increased");
+    slayer3d_signal_emit(bus, brush_height_decrease_signal, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.height", 0.0f), 8.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush height decreased");
 
     slayer3d_signal_emit(bus, palette_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "floor");
     std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(modal_text, "Brushes"));
@@ -15493,6 +15529,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.wall");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.selected", ""), "wall");
     slayer3d_signal_emit(bus, palette_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "brush");
@@ -15501,6 +15540,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     slayer3d_signal_emit(bus, floor_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     std::vector<std::string> palette_text = visible_ui_text("ui.editor_shell.palette.");
@@ -15516,10 +15558,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 4.0f, 0.001f);
     slayer3d_signal_emit(bus, grid_increase_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 8.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 8.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 8.0f, 0.001f);
     const slayer3d_value *placement_min =
         slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
@@ -15575,6 +15619,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.wall");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     palette_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(palette_text, "> Wall"));

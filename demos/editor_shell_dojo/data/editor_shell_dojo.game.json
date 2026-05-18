@@ -112,6 +112,18 @@
             "bindings": [{ "device": "keyboard", "key": "R" }]
           },
           {
+            "name": "action.editor.mode.select",
+            "bindings": []
+          },
+          {
+            "name": "action.editor.brush.height.decrease",
+            "bindings": [{ "device": "keyboard", "key": "LEFTBRACKET" }]
+          },
+          {
+            "name": "action.editor.brush.height.increase",
+            "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
+          },
+          {
             "name": "action.editor.palette.brush",
             "bindings": [{ "device": "keyboard", "key": "B" }]
           },
@@ -253,6 +265,11 @@
     "signal.editor.grid.decrease",
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
+    "signal.editor.mode.brush",
+    "signal.editor.mode.select",
+    "signal.editor.mode.texture",
+    "signal.editor.brush.height.decrease",
+    "signal.editor.brush.height.increase",
     "signal.editor.palette.brush",
     "signal.editor.palette.material",
     "signal.editor.palette.game_object",
@@ -368,6 +385,16 @@
       },
       {
         "type": "sensor.input_pressed",
+        "action": "action.editor.brush.height.decrease",
+        "on_pressed": "signal.editor.brush.height.decrease"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.brush.height.increase",
+        "on_pressed": "signal.editor.brush.height.increase"
+      },
+      {
+        "type": "sensor.input_pressed",
         "action": "action.editor.palette.brush",
         "on_pressed": "signal.editor.palette.brush"
       },
@@ -424,7 +451,14 @@
           },
           { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
           { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
+          { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
+          { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "floor" },
+          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 8.0 },
+          { "type": "scene_state.set", "key": "editor.brush.height", "value": 8.0 },
+          { "type": "scene_state.set", "key": "editor.brush.elevation", "value": 0.0 },
+          { "type": "scene_state.set", "key": "editor.brush.thickness", "value": 0.2 },
+          { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.floor" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.brush.cursor", "value": "floor" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
@@ -449,21 +483,30 @@
       {
         "signal": "signal.editor.tool.floor",
         "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "floor" },
+          { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "floor" },
+          { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.floor" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor prefab selected" }
         ]
       },
       {
         "signal": "signal.editor.tool.wall",
         "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "wall" },
+          { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "wall" },
+          { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.wall" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall prefab selected" }
         ]
       },
       {
         "signal": "signal.editor.tool.ceiling",
         "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "ceiling" },
+          { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "ceiling" },
+          { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.ceiling" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling prefab selected" }
         ]
       },
@@ -472,6 +515,29 @@
         "actions": [
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start tool selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.mode.brush",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush paint mode" }
+        ]
+      },
+      {
+        "signal": "signal.editor.mode.select",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
+        ]
+      },
+      {
+        "signal": "signal.editor.mode.texture",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "texture" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture mode" }
         ]
       },
       {
@@ -561,6 +627,13 @@
             "direction": -1,
             "values": [2.0, 4.0, 8.0, 16.0]
           },
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.brush.grid_size",
+            "default": 8.0,
+            "direction": -1,
+            "values": [2.0, 4.0, 8.0, 16.0]
+          },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size decreased" }
         ]
       },
@@ -574,7 +647,40 @@
             "direction": 1,
             "values": [2.0, 4.0, 8.0, 16.0]
           },
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.brush.grid_size",
+            "default": 8.0,
+            "direction": 1,
+            "values": [2.0, 4.0, 8.0, 16.0]
+          },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size increased" }
+        ]
+      },
+      {
+        "signal": "signal.editor.brush.height.decrease",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.brush.height",
+            "default": 8.0,
+            "direction": -1,
+            "values": [2.0, 4.0, 8.0, 12.0, 16.0]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush height decreased" }
+        ]
+      },
+      {
+        "signal": "signal.editor.brush.height.increase",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.brush.height",
+            "default": 8.0,
+            "direction": 1,
+            "values": [2.0, 4.0, 8.0, 12.0, 16.0]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush height increased" }
         ]
       },
       {
@@ -592,6 +698,7 @@
       {
         "signal": "signal.editor.palette.brush",
         "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
           {
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
@@ -610,6 +717,8 @@
       {
         "signal": "signal.editor.palette.material",
         "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "texture" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "material" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "material palette opened" }
@@ -710,6 +819,9 @@
                 "if": { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "floor", "default": "floor" },
                 "then": [
                   { "type": "scene_state.set", "key": "editor.tool.mode", "value": "floor" },
+                  { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
+                  { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "floor" },
+                  { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.floor" },
                   { "type": "scene_state.set", "key": "editor.brush.selected", "value": "floor" },
                   { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
                   { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor brush selected" }
@@ -720,12 +832,18 @@
                     "if": { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "wall" },
                     "then": [
                       { "type": "scene_state.set", "key": "editor.tool.mode", "value": "wall" },
+                      { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
+                      { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "wall" },
+                      { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.wall" },
                       { "type": "scene_state.set", "key": "editor.brush.selected", "value": "wall" },
                       { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
                       { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall brush selected" }
                     ],
                     "else": [
                       { "type": "scene_state.set", "key": "editor.tool.mode", "value": "ceiling" },
+                      { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
+                      { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "ceiling" },
+                      { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.ceiling" },
                       { "type": "scene_state.set", "key": "editor.brush.selected", "value": "ceiling" },
                       { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
                       { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling brush selected" }

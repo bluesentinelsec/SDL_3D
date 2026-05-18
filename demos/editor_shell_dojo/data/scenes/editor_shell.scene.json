@@ -35,6 +35,8 @@
       "action.editor.ortho.zoom.wheel",
       "action.editor.grid.decrease",
       "action.editor.grid.increase",
+      "action.editor.brush.height.decrease",
+      "action.editor.brush.height.increase",
       "action.editor.wall_axis.toggle",
       "action.editor.palette.brush",
       "action.editor.palette.material",
@@ -595,6 +597,14 @@
             "binding": { "type": "scene_state", "key": "editor.selection.face_stable_id", "default": "none" }
           },
           {
+            "label": "Mode",
+            "binding": { "type": "scene_state", "key": "editor.mode", "default": "select" }
+          },
+          {
+            "label": "Prefab",
+            "binding": { "type": "scene_state", "key": "editor.brush.prefab", "default": "floor" }
+          },
+          {
             "label": "Tool",
             "binding": { "type": "scene_state", "key": "editor.tool.mode", "default": "select" }
           },
@@ -636,7 +646,23 @@
           },
           {
             "label": "Grid",
-            "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 8.0 }
+            "binding": { "type": "scene_state", "key": "editor.brush.grid_size", "default": 8.0 }
+          },
+          {
+            "label": "Height",
+            "binding": { "type": "scene_state", "key": "editor.brush.height", "default": 8.0 }
+          },
+          {
+            "label": "Elev",
+            "binding": { "type": "scene_state", "key": "editor.brush.elevation", "default": 0.0 }
+          },
+          {
+            "label": "Thick",
+            "binding": { "type": "scene_state", "key": "editor.brush.thickness", "default": 0.2 }
+          },
+          {
+            "label": "Brush Mat",
+            "binding": { "type": "scene_state", "key": "editor.brush.material", "default": "mat.editor.floor" }
           },
           {
             "label": "Axis",
@@ -1007,7 +1033,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Tools: C cycle, 6 floor 7 wall 8 ceiling 9 player. Enter commit, Delete remove.",
+        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Modes: B brush, M texture, C debug cycle. Brush: +/- grid, [/] height, Enter commit, Delete remove.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

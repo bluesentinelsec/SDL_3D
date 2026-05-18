@@ -71,8 +71,8 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `4` | global editor | full-screen front orthographic view |
 | `5` | global editor | full-screen side orthographic view |
 | `Tab` | global editor | quick toggle between four-view layout and full-screen 3D flyby |
-| `B` | global editor | open or close the Brushes palette |
-| `M` | global editor | open the Materials palette placeholder |
+| `B` | global editor | enter Brush Paint Mode and open or close the Brushes palette |
+| `M` | global editor | enter Texture Mode and open the Materials palette placeholder |
 | `G` | global editor | open the Game Objects palette |
 | arrow keys | palette open | move the active palette cursor |
 | `Enter` | palette open | select the highlighted palette item and close the palette |
@@ -82,6 +82,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `Delete` | orthographic view | delete the active selected tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size |
+| `[` / `]` | palette closed | decrease or increase the default brush height |
 | arrow keys | full-screen orthographic, palette closed | pan the active canvas |
 | `Z` / `X` or mouse wheel | orthographic view | zoom the active canvas in or out; in four-view layout, the mouse cursor must be over an orthographic pane |
 | `R` | palette closed | toggle wall axis |
@@ -118,6 +119,12 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed.
+- The inspector reports explicit editor mode and brush settings: active prefab,
+  grid size, height, elevation, thickness, and material.
+- `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
+  selections update the same data-authored mode and brush-setting state.
+- `[` / `]` updates the default brush height for future wall-like dimension
+  editing; selected-brush resizing lands in a follow-up slice.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling brushes stay aligned to the larger
   blockout grid.

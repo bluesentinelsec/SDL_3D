@@ -122,7 +122,8 @@ static bool validation_key_name_valid(const char *name)
     if (SDL_strcmp(name, "UP") == 0 || SDL_strcmp(name, "DOWN") == 0 || SDL_strcmp(name, "LEFT") == 0 ||
         SDL_strcmp(name, "RIGHT") == 0 || SDL_strcmp(name, "RETURN") == 0 || SDL_strcmp(name, "ESCAPE") == 0 ||
         SDL_strcmp(name, "BACKSPACE") == 0 || SDL_strcmp(name, "DELETE") == 0 || SDL_strcmp(name, "COMMA") == 0 ||
-        SDL_strcmp(name, "PERIOD") == 0)
+        SDL_strcmp(name, "PERIOD") == 0 || SDL_strcmp(name, "LEFTBRACKET") == 0 ||
+        SDL_strcmp(name, "RIGHTBRACKET") == 0)
     {
         return true;
     }
