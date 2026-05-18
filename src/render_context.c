@@ -940,6 +940,11 @@ bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **o
         return false;
     }
 
+retry_backend:
+    window = NULL;
+    renderer = NULL;
+    context = NULL;
+
     /* Set up window flags and GL attributes based on resolved backend. */
     SDL_WindowFlags flags = 0;
     if (local.resizable)
@@ -962,6 +967,15 @@ bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **o
     window = SDL_CreateWindow(local.title, local.width, local.height, flags);
     if (window == NULL)
     {
+        if (resolved == SLAYER3D_BACKEND_OPENGL && local.allow_backend_fallback)
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "SLAYER3D OpenGL window creation failed, falling back to software: %s", SDL_GetError());
+            SDL_ClearError();
+            resolved = SLAYER3D_BACKEND_SOFTWARE;
+            local.allow_backend_fallback = false;
+            goto retry_backend;
+        }
         return false;
     }
     slayer3d_apply_window_icon(window, local.icon_path);
@@ -996,6 +1010,18 @@ bool slayer3d_create_window(const slayer3d_window_config *config, SDL_Window **o
 
     if (!slayer3d_create_render_context(window, renderer, &rcfg, &context))
     {
+        if (resolved == SLAYER3D_BACKEND_OPENGL && local.allow_backend_fallback)
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION,
+                        "SLAYER3D OpenGL context creation failed, falling back to software: %s", SDL_GetError());
+            SDL_ClearError();
+            if (renderer != NULL)
+                SDL_DestroyRenderer(renderer);
+            SDL_DestroyWindow(window);
+            resolved = SLAYER3D_BACKEND_SOFTWARE;
+            local.allow_backend_fallback = false;
+            goto retry_backend;
+        }
         if (renderer != NULL)
             SDL_DestroyRenderer(renderer);
         SDL_DestroyWindow(window);
