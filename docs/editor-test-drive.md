@@ -54,6 +54,9 @@ quick toggle between the four-viewport layout and full-screen 3D flyby.
 The editor uses normal hardware cursor positioning in the four-viewport layout.
 In full-screen 3D flyby mode the runtime captures relative mouse motion for
 mouse-look, then releases it again when returning to orthographic editing.
+Flyby brush feedback is reticle-driven: the highlighted brush, hit marker, and
+placement preview should remain pinned to the screen center instead of following
+the last clicked selection.
 
 ## Keybindings
 
@@ -146,7 +149,9 @@ The following should be true during a good test drive:
   perspective preview uses the 3D editor camera.
 - In full-screen 3D flyby mode, brush picking and placement trace from the
   screen center. The highlighted brush should be the brush under the crosshair;
-  if no brush is hit, placement falls back to the ground work plane.
+  if no brush is hit, placement falls back to the ground work plane. After
+  clicking one brush, look away and confirm the selection cursor follows the
+  reticle rather than staying offset on the previous brush.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
   writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.

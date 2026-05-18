@@ -44,8 +44,7 @@ typedef struct import_validation_stack
     int count;
 } import_validation_stack;
 
-static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
-                                    validation_names *names);
+bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path, validation_names *names);
 static bool validate_storage(validation_context *ctx, yyjson_val *root);
 static bool require_network_string_entry(validation_context *ctx, yyjson_val *map, const char *path, const char *label,
                                          const char *name);
@@ -9270,8 +9269,7 @@ static bool validate_world_metadata(validation_context *ctx, yyjson_val *root)
     return true;
 }
 
-static bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path,
-                                    validation_names *names)
+bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path, validation_names *names)
 {
     if (condition == NULL)
         return true;

@@ -320,6 +320,12 @@
     },
     "debug_overlay": {
       "enabled": true,
+      "hover_selection_if": {
+        "type": "scene_state.compare",
+        "key": "editor.view.mode",
+        "op": "==",
+        "value": "flyby_3d"
+      },
       "flags": [
         "work_plane_grid",
         "world_bounds",

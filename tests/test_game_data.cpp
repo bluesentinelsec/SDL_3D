@@ -16086,6 +16086,20 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.hover.element", ""),
                  "brush.target.cube");
 
+    SDL_Event flyby_click{};
+    flyby_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    flyby_click.button.button = SDL_BUTTON_LEFT;
+    flyby_click.button.x = 640.0f;
+    flyby_click.button.y = 360.0f;
+    slayer3d_input_process_event(input, &flyby_click);
+    slayer3d_input_update(input, 7);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.selection.element", ""),
+        "brush.target.cube");
+    flyby_click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &flyby_click);
+
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.tool.mode", "floor");
     slayer3d_properties_set_float(camera_actor->props, "yaw", -1.0f);
     slayer3d_properties_set_float(camera_actor->props, "pitch", -0.25f);
@@ -16095,6 +16109,24 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                                              false));
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.hover.element", ""),
                  "");
+    struct FlybyDebugCapture
+    {
+        int selection_edges = 0;
+        int hit_markers = 0;
+    } flyby_debug;
+    auto capture_flyby_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<FlybyDebugCapture *>(userdata);
+        if (primitive == nullptr)
+            return true;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
+            capture->selection_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_HIT_MARKER)
+            capture->hit_markers++;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_flyby_debug, &flyby_debug));
+    EXPECT_EQ(flyby_debug.selection_edges, 0);
+    EXPECT_GT(flyby_debug.hit_markers, 0);
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.tool.mode", "select");
     slayer3d_properties_set_float(camera_actor->props, "yaw", start_yaw);
     slayer3d_properties_set_float(camera_actor->props, "pitch", -0.29566f);
@@ -16102,7 +16134,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_W;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 7);
+    slayer3d_input_update(input, 8);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, start_position)), 0.1f);
 
@@ -16114,7 +16146,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     motion.motion.xrel = 60.0f;
     motion.motion.yrel = -15.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 8);
+    slayer3d_input_update(input, 9);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     const float yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);

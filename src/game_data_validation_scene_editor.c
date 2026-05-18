@@ -613,6 +613,10 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
         if (!validate_string_or_string_array_names(ctx, obj_get(overlay, "flags"), flags_path, "editor debug flag",
                                                    editor_debug_flag_name_valid))
             return false;
+        char hover_selection_path[PATH_BUFFER_SIZE];
+        format_path(hover_selection_path, sizeof(hover_selection_path), "%s.hover_selection_if", overlay_path);
+        if (!validate_data_condition(ctx, obj_get(overlay, "hover_selection_if"), hover_selection_path, names))
+            return false;
         static const char *const color_keys[] = {
             "world_bounds_color", "selection_bounds_color", "trace_color",           "face_normal_color",
             "hit_marker_color",   "command_preview_color",  "work_plane_grid_color", "player_start_color"};
