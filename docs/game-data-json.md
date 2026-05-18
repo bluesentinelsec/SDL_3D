@@ -906,10 +906,11 @@ Selection traces default to `source: "world"`, where `start` and `end` are
 authored world-space vec3 values. `source: "camera_screen"` derives the ray
 from a camera and screen point using the latest live mouse position by default.
 Tooling can override that point with `screen`, `screen_x`/`screen_y`, or
-`screen_x_key`/`screen_y_key`; viewport dimensions can likewise be authored
-with `viewport`, `viewport_width`/`viewport_height`, or scene-state keys. This
-lets editor dojos and future editor hosts share the same data-authored picking
-primitive.
+`screen_x_key`/`screen_y_key`; `screen` may be a vec2 or the string `"center"`
+for crosshair-style 3D editor picking. Viewport dimensions can likewise be
+authored with `viewport`, `viewport_width`/`viewport_height`, or scene-state
+keys. This lets editor dojos and future editor hosts share the same
+data-authored picking primitive.
 
 Selection traces may also author `work_plane` as a fallback placement plane.
 When the ray misses world geometry, the editor intersects the same ray with the
@@ -1550,7 +1551,10 @@ falls inside a viewport rect, the trace uses that viewport's camera, local
 screen coordinates, dimensions, and optional viewport-specific `work_plane`.
 This keeps floor/wall/ceiling placement correct in orthographic quadrants while
 still allowing a perspective preview in the same scene. Traces that omit
-`viewports` fall back to the trace camera or active camera.
+`viewports` fall back to the trace camera or active camera. A viewport entry may
+set `"screen": "center"` to trace from the viewport center instead of the live
+mouse position, which is the expected shape for full-screen 3D editor flyby
+placement.
 
 Use `controller.fps_brush` on an actor to drive first-person movement through
 the active scene's brush-world instances:

@@ -76,6 +76,11 @@ typedef struct editor_trace_viewport_config
     yyjson_val *work_plane;
 } editor_trace_viewport_config;
 
+static bool editor_trace_screen_value_is_center(yyjson_val *value)
+{
+    return yyjson_is_str(value) && SDL_strcmp(yyjson_get_str(value), "center") == 0;
+}
+
 static void editor_default_viewport(const slayer3d_game_data_runtime *runtime, float *out_width, float *out_height)
 {
     if (out_width == NULL || out_height == NULL)
@@ -102,16 +107,20 @@ static bool editor_trace_screen_point(const slayer3d_game_data_runtime *runtime,
     *out_x = viewport_width * 0.5f;
     *out_y = viewport_height * 0.5f;
 
-    slayer3d_input_manager *input = runtime_input(runtime);
-    float mouse_x = 0.0f;
-    float mouse_y = 0.0f;
-    if (slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+    yyjson_val *screen = obj_get(trace, "screen");
+    if (!editor_trace_screen_value_is_center(screen))
     {
-        *out_x = mouse_x;
-        *out_y = mouse_y;
+        slayer3d_input_manager *input = runtime_input(runtime);
+        float mouse_x = 0.0f;
+        float mouse_y = 0.0f;
+        if (slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+        {
+            *out_x = mouse_x;
+            *out_y = mouse_y;
+        }
     }
 
-    if (!json_vec2_value(obj_get(trace, "screen"), *out_x, *out_y, out_x, out_y))
+    if (!editor_trace_screen_value_is_center(screen) && !json_vec2_value(screen, *out_x, *out_y, out_x, out_y))
         return false;
 
     *out_x = json_float(trace, "screen_x", *out_x);
@@ -180,8 +189,15 @@ static bool editor_trace_select_viewport(const slayer3d_game_data_runtime *runti
         float height = 0.0f;
         if (!editor_trace_viewport_rect(viewport, &x, &y, &width, &height))
             continue;
-        if (screen_x < x || screen_y < y || screen_x >= x + width || screen_y >= y + height)
+
+        const bool center_screen = editor_trace_screen_value_is_center(obj_get(viewport, "screen"));
+        const float candidate_screen_x = center_screen ? x + width * 0.5f : screen_x;
+        const float candidate_screen_y = center_screen ? y + height * 0.5f : screen_y;
+        if (candidate_screen_x < x || candidate_screen_y < y || candidate_screen_x >= x + width ||
+            candidate_screen_y >= y + height)
+        {
             continue;
+        }
 
         SDL_zero(*out_viewport);
         out_viewport->camera = json_string(viewport, "camera", NULL);
@@ -189,8 +205,14 @@ static bool editor_trace_select_viewport(const slayer3d_game_data_runtime *runti
         out_viewport->y = y;
         out_viewport->width = width;
         out_viewport->height = height;
-        out_viewport->screen_x = screen_x - x;
-        out_viewport->screen_y = screen_y - y;
+        out_viewport->screen_x = candidate_screen_x - x;
+        out_viewport->screen_y = candidate_screen_y - y;
+        if (!center_screen &&
+            !json_vec2_value(obj_get(viewport, "screen"), out_viewport->screen_x, out_viewport->screen_y,
+                             &out_viewport->screen_x, &out_viewport->screen_y))
+        {
+            return false;
+        }
         out_viewport->work_plane = obj_get(viewport, "work_plane");
         return out_viewport->camera != NULL;
     }

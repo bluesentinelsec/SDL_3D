@@ -16072,6 +16072,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
     EXPECT_LT(ortho.fovy, quad_zoom_start);
 
+    camera_actor->position = start_position;
     slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
@@ -16079,6 +16080,24 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_TRUE(visible_view_label("3D Perspective / Flyby"));
     EXPECT_TRUE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, true));
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "editor.hover.hit", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.hover.element", ""),
+                 "brush.target.cube");
+
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.tool.mode", "floor");
+    slayer3d_properties_set_float(camera_actor->props, "yaw", -1.0f);
+    slayer3d_properties_set_float(camera_actor->props, "pitch", -0.25f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "editor.placement_preview.active",
+                                             false));
+    EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.hover.element", ""),
+                 "");
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.tool.mode", "select");
+    slayer3d_properties_set_float(camera_actor->props, "yaw", start_yaw);
+    slayer3d_properties_set_float(camera_actor->props, "pitch", -0.29566f);
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_W;

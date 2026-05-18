@@ -132,6 +132,17 @@ static bool validate_optional_non_negative_number(validation_context *ctx, yyjso
 
 static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val *trace, const char *trace_path);
 
+static bool validate_scene_editor_trace_screen(validation_context *ctx, yyjson_val *screen, const char *json_path)
+{
+    if (screen == NULL)
+        return true;
+    if (yyjson_is_arr(screen) && is_exact_vec_array(screen, 2))
+        return true;
+    if (yyjson_is_str(screen) && SDL_strcmp(yyjson_get_str(screen), "center") == 0)
+        return true;
+    return validation_error(ctx, json_path, "scene editor camera_screen trace screen must be a vec2 or 'center'");
+}
+
 static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, yyjson_val *trace,
                                                       const char *trace_path, validation_names *names)
 {
@@ -142,15 +153,16 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     if (camera != NULL && !require_ref(ctx, &names->cameras, "camera", camera, trace_path))
         return false;
 
+    char field_path[PATH_BUFFER_SIZE];
     yyjson_val *screen = obj_get(trace, "screen");
-    if (screen != NULL && !is_exact_vec_array(screen, 2))
-        return validation_error(ctx, trace_path, "scene editor camera_screen trace screen must be a vec2");
+    format_path(field_path, sizeof(field_path), "%s.screen", trace_path);
+    if (!validate_scene_editor_trace_screen(ctx, screen, field_path))
+        return false;
     yyjson_val *viewport = obj_get(trace, "viewport");
     if (viewport != NULL &&
         (!is_exact_vec_array(viewport, 2) || !numeric_array_values_in_range(viewport, 0.000001, DBL_MAX)))
         return validation_error(ctx, trace_path, "scene editor camera_screen trace viewport must be a positive vec2");
 
-    char field_path[PATH_BUFFER_SIZE];
     static const char *const numeric_keys[] = {"screen_x", "screen_y"};
     for (size_t i = 0; i < SDL_arraysize(numeric_keys); ++i)
     {
@@ -212,6 +224,9 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
                                         "with positive dimensions");
             }
             if (!validate_scene_editor_work_plane(ctx, viewport_entry, viewport_path))
+                return false;
+            format_path(field_path, sizeof(field_path), "%s.screen", viewport_path);
+            if (!validate_scene_editor_trace_screen(ctx, obj_get(viewport_entry, "screen"), field_path))
                 return false;
         }
     }

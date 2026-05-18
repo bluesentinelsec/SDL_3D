@@ -144,6 +144,9 @@ The following should be true during a good test drive:
   consume orthographic zoom.
 - Top/front/side orthographic views plot on their authored work planes;
   perspective preview uses the 3D editor camera.
+- In full-screen 3D flyby mode, brush picking and placement trace from the
+  screen center. The highlighted brush should be the brush under the crosshair;
+  if no brush is hit, placement falls back to the ground work plane.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
   writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.
