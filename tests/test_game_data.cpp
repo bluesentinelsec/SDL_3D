@@ -14974,6 +14974,10 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int preview_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.preview");
+    ASSERT_GE(preview_signal, 0);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.type", ""), "brush_world");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.world", ""),
@@ -15072,8 +15076,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "move");
 
-    press_key(SDL_SCANCODE_P, 6);
-    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    slayer3d_signal_emit(bus, preview_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.command", ""), "translate");
@@ -15196,8 +15199,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
 
     EXPECT_EQ(target_cube_face_material(), "mat.editor.wall");
-    press_key(SDL_SCANCODE_P, 11);
-    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    slayer3d_signal_emit(bus, preview_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.command", ""), "paint");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "face");
@@ -15357,6 +15359,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
     const int test_run_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.prepare");
     const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
+    const int palette_brush_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.brush");
+    const int palette_next_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.next");
+    const int palette_accept_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.accept");
+    const int palette_close_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.close");
     ASSERT_GE(floor_signal, 0);
     ASSERT_GE(wall_signal, 0);
     ASSERT_GE(ceiling_signal, 0);
@@ -15369,6 +15375,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(export_signal, 0);
     ASSERT_GE(test_run_signal, 0);
     ASSERT_GE(test_run_enter_signal, 0);
+    ASSERT_GE(palette_brush_signal, 0);
+    ASSERT_GE(palette_next_signal, 0);
+    ASSERT_GE(palette_accept_signal, 0);
+    ASSERT_GE(palette_close_signal, 0);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -15448,6 +15458,26 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     };
     const int initial_brush_count = world().brush_count;
     EXPECT_EQ(initial_brush_count, 1);
+
+    slayer3d_signal_emit(bus, palette_brush_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "floor");
+    std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
+    EXPECT_TRUE(contains_ui_text(modal_text, "Brushes"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Floor"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Selected: floor"));
+    slayer3d_signal_emit(bus, palette_next_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "wall");
+    modal_text = visible_ui_text("ui.editor_shell.palette.");
+    EXPECT_TRUE(contains_ui_text(modal_text, "Selected: wall"));
+    slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.selected", ""), "wall");
+    slayer3d_signal_emit(bus, palette_brush_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "brush");
+    slayer3d_signal_emit(bus, palette_close_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
 
     slayer3d_signal_emit(bus, floor_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "floor");

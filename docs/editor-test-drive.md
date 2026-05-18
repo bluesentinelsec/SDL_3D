@@ -40,7 +40,15 @@ mouse-look, then releases it again when returning to orthographic editing.
 
 - `1`: four-viewport layout
 - `2`, `3`, `4`, `5`: full-screen 3D, top, front, or side view
-- `6`, `7`, `8`, `9`: select floor, wall, ceiling, or player-start prefab
+- `B`: open or close the Brushes palette
+- `M`: open the Materials palette placeholder
+- `G`: open the Game Objects palette placeholder
+- arrow keys while a palette is open: move the palette cursor
+- `Enter` while the Brushes palette is open: select the highlighted floor,
+  wall, or ceiling brush and close the palette
+- `Esc` while a palette is open: close the palette without quitting
+- `9`: select the player-start tool until the Game Objects palette is wired to
+  thing placement
 - `C`: cycle tools
 - mouse click in an orthographic viewport: place the selected prefab at the
   snapped preview position
@@ -62,10 +70,12 @@ mouse-look, then releases it again when returning to orthographic editing.
 
 ## Suggested Pass
 
-1. Select floor with `6` and place a floor tile.
-2. Select wall with `7`, press `R` if needed, and place at least one wall.
-3. Select ceiling with `8` and place a ceiling tile.
-4. Select player start with `9` and place it on the floor.
+1. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
+2. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
+   needed, and place at least one wall.
+3. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
+   ceiling tile.
+4. Press `9` and place the player start on the floor.
 5. Hover a placed tile and right click, or select it and press `Delete`; the
    tile should disappear.
 6. Press `S` and confirm the inspector reports an in-memory JSON export and a
@@ -88,6 +98,12 @@ The following should be true during a good test drive:
 - Right click / `Delete` removes the highlighted brush and `U` can undo the
   deletion.
 - Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
+- `B` opens a modal brush palette with floor, wall, and ceiling cells. Arrow
+  keys move the highlighted cell, `Enter` selects the brush, and `Esc` closes
+  the modal without quitting the editor.
+- `M` and `G` open placeholder Material and Game Object palettes, establishing
+  the modal input path before those palettes are wired to painting and thing
+  placement.
 - The four-view layout appears on launch. Number keys switch between quad,
   full-screen 3D, and full-screen orthographic views.
 - Each viewport displays a small label identifying the active view: 3D

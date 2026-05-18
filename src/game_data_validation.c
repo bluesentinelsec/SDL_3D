@@ -4998,6 +4998,11 @@ static bool validate_components(validation_context *ctx, yyjson_val *root, valid
             {
                 if (!validate_editor_camera_component(ctx, component, path, names))
                     return false;
+                char condition_path[PATH_BUFFER_SIZE];
+                format_path(condition_path, sizeof(condition_path), "%s.orthographic_controls_if", path);
+                if (!validate_data_condition(ctx, obj_get(component, "orthographic_controls_if"), condition_path,
+                                             names))
+                    return false;
             }
             else if (SDL_strcmp(type, "combat.health") == 0)
             {
@@ -8879,6 +8884,8 @@ static bool validate_app_refs(validation_context *ctx, yyjson_val *root, validat
         return true;
     const char *action = json_string(quit, "action");
     if (action != NULL && !require_ref(ctx, &names->actions, "input action", action, "$.app.quit.action"))
+        return false;
+    if (!validate_data_condition(ctx, obj_get(quit, "enabled_if"), "$.app.quit.enabled_if", names))
         return false;
     const char *quit_signal = json_string(quit, "quit_signal");
     if (quit_signal != NULL && !require_ref(ctx, &names->signals, "signal", quit_signal, "$.app.quit.quit_signal"))

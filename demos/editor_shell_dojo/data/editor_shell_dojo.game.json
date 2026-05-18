@@ -11,7 +11,10 @@
     "logical_height": 720,
     "backend": "opengl",
     "window": { "renderer": "opengl", "vsync": true },
-    "quit": { "action": "action.exit" },
+    "quit": {
+      "action": "action.exit",
+      "enabled_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" }
+    },
     "input_policy": { "global_actions": ["action.exit"] }
   },
   "input": {
@@ -34,10 +37,6 @@
           {
             "name": "action.editor.selection.inspect",
             "bindings": [{ "device": "keyboard", "key": "I" }]
-          },
-          {
-            "name": "action.editor.command.preview",
-            "bindings": [{ "device": "keyboard", "key": "P" }]
           },
           {
             "name": "action.editor.command.commit",
@@ -124,6 +123,40 @@
           {
             "name": "action.editor.wall_axis.toggle",
             "bindings": [{ "device": "keyboard", "key": "R" }]
+          },
+          {
+            "name": "action.editor.palette.brush",
+            "bindings": [{ "device": "keyboard", "key": "B" }]
+          },
+          {
+            "name": "action.editor.palette.material",
+            "bindings": [{ "device": "keyboard", "key": "M" }]
+          },
+          {
+            "name": "action.editor.palette.game_object",
+            "bindings": [{ "device": "keyboard", "key": "G" }]
+          },
+          {
+            "name": "action.editor.palette.close",
+            "bindings": [{ "device": "keyboard", "key": "ESCAPE" }]
+          },
+          {
+            "name": "action.editor.palette.accept",
+            "bindings": [{ "device": "keyboard", "key": "RETURN" }]
+          },
+          {
+            "name": "action.editor.palette.previous",
+            "bindings": [
+              { "device": "keyboard", "key": "LEFT" },
+              { "device": "keyboard", "key": "UP" }
+            ]
+          },
+          {
+            "name": "action.editor.palette.next",
+            "bindings": [
+              { "device": "keyboard", "key": "RIGHT" },
+              { "device": "keyboard", "key": "DOWN" }
+            ]
           },
           {
             "name": "action.editor.ortho.pan.left",
@@ -232,6 +265,13 @@
     "signal.editor.grid.decrease",
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
+    "signal.editor.palette.brush",
+    "signal.editor.palette.material",
+    "signal.editor.palette.game_object",
+    "signal.editor.palette.close",
+    "signal.editor.palette.previous",
+    "signal.editor.palette.next",
+    "signal.editor.palette.accept",
     "signal.editor.export",
     "signal.editor.test_run.prepare",
     "signal.editor.test_run.enter"
@@ -255,13 +295,13 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.command.preview",
-        "on_pressed": "signal.editor.command.preview"
+        "action": "action.editor.command.commit",
+        "on_pressed": "signal.editor.command.commit"
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.command.commit",
-        "on_pressed": "signal.editor.command.commit"
+        "action": "action.editor.palette.accept",
+        "on_pressed": "signal.editor.palette.accept"
       },
       {
         "type": "sensor.input_pressed",
@@ -357,6 +397,36 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.wall_axis.toggle",
         "on_pressed": "signal.editor.wall_axis.toggle"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.brush",
+        "on_pressed": "signal.editor.palette.brush"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.material",
+        "on_pressed": "signal.editor.palette.material"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.game_object",
+        "on_pressed": "signal.editor.palette.game_object"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.close",
+        "on_pressed": "signal.editor.palette.close"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.previous",
+        "on_pressed": "signal.editor.palette.previous"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.palette.next",
+        "on_pressed": "signal.editor.palette.next"
       }
     ],
     "bindings": [
@@ -512,6 +582,128 @@
             "values": ["z", "x"]
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall axis toggled" }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.brush",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush palette closed" }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "brush" },
+              { "type": "scene_state.set", "key": "editor.palette.brush.cursor", "value": "floor" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush palette opened" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.material",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.active", "value": "material" },
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "material palette opened" }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.game_object",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.active", "value": "game_object" },
+          { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "game object palette opened" }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.close",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "!=", "value": "", "default": "" },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "palette closed" }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.previous",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.brush.cursor",
+                "default": "floor",
+                "direction": -1,
+                "values": ["floor", "wall", "ceiling"]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.next",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.brush.cursor",
+                "default": "floor",
+                "direction": 1,
+                "values": ["floor", "wall", "ceiling"]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.palette.accept",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            "then": [
+              {
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "floor", "default": "floor" },
+                "then": [
+                  { "type": "scene_state.set", "key": "editor.tool.mode", "value": "floor" },
+                  { "type": "scene_state.set", "key": "editor.brush.selected", "value": "floor" },
+                  { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor brush selected" }
+                ],
+                "else": [
+                  {
+                    "type": "branch",
+                    "if": { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "wall" },
+                    "then": [
+                      { "type": "scene_state.set", "key": "editor.tool.mode", "value": "wall" },
+                      { "type": "scene_state.set", "key": "editor.brush.selected", "value": "wall" },
+                      { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall brush selected" }
+                    ],
+                    "else": [
+                      { "type": "scene_state.set", "key": "editor.tool.mode", "value": "ceiling" },
+                      { "type": "scene_state.set", "key": "editor.brush.selected", "value": "ceiling" },
+                      { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling brush selected" }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
         ]
       },
       {
@@ -675,6 +867,10 @@
         "actions": [
           {
             "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
+            "then": [
+              {
+                "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" },
             "then": [
               {
@@ -834,6 +1030,8 @@
                     ]
                   }
                 ]
+              }
+            ]
               }
             ]
           }
@@ -1154,6 +1352,7 @@
           },
           "mode_key": "editor.view.mode",
           "orthographic_size_key": "editor.ortho.size",
+          "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
           "move_speed": 8.0,
           "fast_speed": 22.0,
           "orthographic_pan_speed": 0.85,

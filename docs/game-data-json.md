@@ -372,10 +372,13 @@ platform issue. Mouse coordinates and UI layout remain in logical pixels.
 
 `pause.action` toggles the managed runtime pause state when the active scene
 allows the action and `pause.allowed_if` is absent or true. `quit.action`
-requests shutdown through the managed app flow; when `quit.transition` names an
-authored transition, shutdown is delayed until that transition finishes. Use
-`app.input_policy.global_actions` for lifecycle actions such as quit that should
-work even when a scene restricts its local `input.actions` list.
+requests shutdown through the managed app flow when `quit.enabled_if` is absent
+or true; when `quit.transition` names an authored transition, shutdown is
+delayed until that transition finishes. `quit.enabled_if` uses the same data
+condition syntax as scene logic, which lets editor shells keep `Esc` local to a
+modal palette while the palette is open. Use `app.input_policy.global_actions`
+for lifecycle actions such as quit that should work even when a scene restricts
+its local `input.actions` list.
 
 ## UI Rectangles
 
@@ -1006,8 +1009,8 @@ validates the target world and bounds at load time, resolves the material at
 runtime, rebuilds brush collision/render data atomically, then marks the world
 dirty only after the rebuild succeeds. If `name` is omitted, the runtime
 generates a unique brush name under the target world. The editor shell dojo
-demonstrates the current blockout palette pattern: number-key tool selection is
-represented by scene-state strings, and the shared commit signal branches to
+demonstrates the current blockout palette pattern: modal palette signals write
+scene-state selection strings, and the shared commit signal branches to
 prefab-specific `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
@@ -1110,6 +1113,11 @@ Each entry has a `mode`, `label`, optional `shortcut`, optional
 `category`/`description`, and an optional `preview` reference. When omitted,
 `preview` defaults to `mode`. Validation requires every palette preview to
 match an authored placement preview, so stale sidebar entries fail at load time.
+Editor scenes can present that metadata however they like. The editor shell dojo
+currently uses authored UI and logic signals: `B` opens the Brushes palette,
+arrow keys move a scene-state cursor, `Enter` writes `selected_key`, and `Esc`
+closes the modal. Material and Game Object palettes follow the same modal input
+shape so painting and thing placement can be added without new host-specific C.
 
 ```json
 {
@@ -1474,8 +1482,11 @@ When `mode_key` points at scene state with `orthographic_top`,
 orthographic canvas controls instead of flyby movement. `pan_left/right/up/down`
 move the camera actor in the active orthographic plane, while
 `zoom_in/out/wheel` scales the scene-state float named by
-`orthographic_size_key`. Override `flyby_mode`, `top_mode`, `front_mode`, or
-`side_mode` if a project uses different authored mode names.
+`orthographic_size_key`. Optional `orthographic_controls_if` gates those pan and
+zoom controls with a data condition. This is useful for editors that reuse
+arrow keys inside a modal palette: the palette can consume selection movement
+while the orthographic camera stays still. Override `flyby_mode`, `top_mode`,
+`front_mode`, or `side_mode` if a project uses different authored mode names.
 
 Editor scenes can pair one free-flight camera actor with multiple authored
 cameras. A typical graybox editor uses an `fps` or perspective camera for 3D

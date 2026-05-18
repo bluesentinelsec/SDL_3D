@@ -404,6 +404,9 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
     const char *mode = scene_state_string(runtime, json_string(component, "mode_key", "editor.view.mode"), NULL);
     if (editor_camera_mode_is_orthographic(mode, component))
     {
+        yyjson_val *orthographic_controls_if = obj_get(component, "orthographic_controls_if");
+        if (orthographic_controls_if != NULL && !eval_data_condition(runtime, orthographic_controls_if, NULL))
+            return;
         update_editor_camera_orthographic_controller(runtime, component, actor, input, dt, mode);
         return;
     }

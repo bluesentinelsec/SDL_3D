@@ -4916,7 +4916,9 @@ bool slayer3d_game_data_app_flow_update(slayer3d_game_data_app_flow *flow, slaye
 
     if (!skip_consumed && !activity_wake_consumed)
     {
-        if (flow->app.quit_action_id >= 0 &&
+        yyjson_val *quit = obj_get(obj_get(runtime_root(runtime), "app"), "quit");
+        const bool quit_enabled = eval_data_condition(runtime, obj_get(quit, "enabled_if"), NULL);
+        if (quit_enabled && flow->app.quit_action_id >= 0 &&
             slayer3d_game_data_active_scene_allows_action(runtime, flow->app.quit_action_id) &&
             slayer3d_input_is_pressed(input, flow->app.quit_action_id))
             app_flow_request_quit(flow, ctx, runtime);
