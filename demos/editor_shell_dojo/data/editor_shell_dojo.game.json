@@ -58,6 +58,14 @@
             ]
           },
           {
+            "name": "action.editor.brush.lower_y",
+            "bindings": [{ "device": "keyboard", "key": "LEFTBRACKET" }]
+          },
+          {
+            "name": "action.editor.brush.raise_y",
+            "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
+          },
+          {
             "name": "action.editor.export",
             "bindings": [
               { "device": "keyboard", "key": "S", "modifiers": ["ctrl"] },
@@ -245,6 +253,8 @@
     "signal.editor.command.commit",
     "signal.editor.pointer.primary",
     "signal.editor.delete_selected",
+    "signal.editor.brush.lower_y",
+    "signal.editor.brush.raise_y",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
     "signal.editor.tool.floor",
@@ -315,6 +325,16 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.delete_selected",
         "on_pressed": "signal.editor.delete_selected"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.brush.lower_y",
+        "on_pressed": "signal.editor.brush.lower_y"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.brush.raise_y",
+        "on_pressed": "signal.editor.brush.raise_y"
       },
       {
         "type": "sensor.input_pressed",
@@ -1248,6 +1268,160 @@
                 ]
               }
             ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.brush.lower_y",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.mode",
+                  "op": "==",
+                  "value": "select",
+                  "default": "select"
+                },
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.selection.count",
+                  "op": ">",
+                  "value": 0,
+                  "default": 0
+                }
+              ]
+            },
+            "then": [
+              {
+                "type": "editor.selection.resize_y",
+                "direction": -1,
+                "grid_key": "editor.grid.size",
+                "default_distance": 8.0,
+                "min_height": 0.2,
+                "invalid_message": "selected brush cannot be lowered",
+                "outputs": {
+                  "valid_key": "editor.transaction.valid",
+                  "event_key": "editor.transaction.event",
+                  "message_key": "editor.transaction.message",
+                  "transaction_id_key": "editor.transaction.id",
+                  "undo_count_key": "editor.transaction.undo_count",
+                  "redo_count_key": "editor.transaction.redo_count",
+                  "command_key": "editor.transaction.command",
+                  "target_key": "editor.transaction.target",
+                  "world_key": "editor.transaction.world",
+                  "element_key": "editor.transaction.element",
+                  "face_index_key": "editor.transaction.face_index",
+                  "bounds_min_key": "editor.transaction.bounds_min",
+                  "bounds_max_key": "editor.transaction.bounds_max",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision",
+                  "source_path_key": "editor.brush_world.source_path"
+                },
+                "actions": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "{editor_transaction_message}"
+                  }
+                ],
+                "else": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "selected brush cannot be lowered"
+                  }
+                ]
+              }
+            ],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "select brushes before lowering"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.brush.raise_y",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.mode",
+                  "op": "==",
+                  "value": "select",
+                  "default": "select"
+                },
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.selection.count",
+                  "op": ">",
+                  "value": 0,
+                  "default": 0
+                }
+              ]
+            },
+            "then": [
+              {
+                "type": "editor.selection.resize_y",
+                "direction": 1,
+                "grid_key": "editor.grid.size",
+                "default_distance": 8.0,
+                "min_height": 0.2,
+                "invalid_message": "selected brush cannot be raised",
+                "outputs": {
+                  "valid_key": "editor.transaction.valid",
+                  "event_key": "editor.transaction.event",
+                  "message_key": "editor.transaction.message",
+                  "transaction_id_key": "editor.transaction.id",
+                  "undo_count_key": "editor.transaction.undo_count",
+                  "redo_count_key": "editor.transaction.redo_count",
+                  "command_key": "editor.transaction.command",
+                  "target_key": "editor.transaction.target",
+                  "world_key": "editor.transaction.world",
+                  "element_key": "editor.transaction.element",
+                  "face_index_key": "editor.transaction.face_index",
+                  "bounds_min_key": "editor.transaction.bounds_min",
+                  "bounds_max_key": "editor.transaction.bounds_max",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision",
+                  "source_path_key": "editor.brush_world.source_path"
+                },
+                "actions": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "{editor_transaction_message}"
+                  }
+                ],
+                "else": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "selected brush cannot be raised"
+                  }
+                ]
+              }
+            ],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "select brushes before raising"
               }
             ]
           }

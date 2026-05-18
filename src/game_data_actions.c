@@ -375,6 +375,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.selection.delete_selected") == 0)
         return slayer3d_game_data_delete_selected_editor_brushes(runtime, action, payload);
 
+    if (SDL_strcmp(type, "editor.selection.resize_y") == 0)
+        return slayer3d_game_data_resize_selected_editor_brushes_y(runtime, action, payload);
+
     if (SDL_strcmp(type, "editor.selection.run") == 0)
     {
         slayer3d_game_data_editor_selection selection;

@@ -9158,6 +9158,31 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("logic action list must be an array"), std::string::npos) << error;
 
+    write_text(dir / "bad_selection_resize_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Selection Resize Action" },
+  "world": { "name": "world.bad_editor_selection_resize_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.resize"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.resize",
+        "actions": [
+          { "type": "editor.selection.resize_y", "direction": 0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_selection_resize_action.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.selection.resize_y direction must be a non-zero integer"),
+              std::string::npos)
+        << error;
+
     write_text(dir / "bad_preview_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -15461,6 +15486,17 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
         return brush_world;
     };
+    auto brush_bounds = [&](const std::string &name) {
+        const slayer3d_game_data_brush_world brush_world = world();
+        for (int i = 0; i < brush_world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &candidate = brush_world.brushes[i];
+            if (candidate.name != nullptr && name == candidate.name)
+                return candidate.bounds;
+        }
+        ADD_FAILURE() << "brush not found: " << name;
+        return slayer3d_bounding_box{slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 0.0f)};
+    };
     auto visible_ui_text = [&](const char *prefix) {
         std::vector<std::string> values;
         slayer3d_game_data_ui_metrics metrics{};
@@ -15760,16 +15796,54 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                                                                           &multi_selection_debug));
     EXPECT_EQ(multi_selection_debug.edges, 24);
 
+    auto press_editor_key = [&](SDL_Scancode scancode, Uint64 frame) {
+        SDL_Event key{};
+        key.type = SDL_EVENT_KEY_DOWN;
+        key.key.scancode = scancode;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame);
+        EXPECT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        key.type = SDL_EVENT_KEY_UP;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame + 1U);
+    };
+
+    const int brush_count_before_resize = world().brush_count;
+    press_editor_key(SDL_SCANCODE_RIGHTBRACKET, 16);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.command", ""), "resize");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.target", ""), "face");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
+                 "raised 2 selected brushes");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "raised 2 selected brushes");
+    EXPECT_EQ(world().brush_count, brush_count_before_resize);
+    const std::string resized_brush_name =
+        slayer3d_properties_get_string(scene_state, "editor.transaction.element", "");
+    ASSERT_FALSE(resized_brush_name.empty());
+    const slayer3d_bounding_box bounds_after_raise = brush_bounds(resized_brush_name);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), selected_brushes);
+
+    press_editor_key(SDL_SCANCODE_LEFTBRACKET, 18);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
+                 "lowered 2 selected brushes");
+    EXPECT_EQ(world().brush_count, brush_count_before_resize);
+    const slayer3d_bounding_box bounds_after_lower = brush_bounds(resized_brush_name);
+    EXPECT_NEAR(bounds_after_lower.min.y, bounds_after_raise.min.y, 0.001f);
+    EXPECT_NEAR(bounds_after_lower.max.y, bounds_after_raise.max.y - 8.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), selected_brushes);
+
     const int brush_count_before_multi_delete = world().brush_count;
     SDL_Event backspace{};
     backspace.type = SDL_EVENT_KEY_DOWN;
     backspace.key.scancode = SDL_SCANCODE_BACKSPACE;
     slayer3d_input_process_event(input, &backspace);
-    slayer3d_input_update(input, 16);
+    slayer3d_input_update(input, 20);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     backspace.type = SDL_EVENT_KEY_UP;
     slayer3d_input_process_event(input, &backspace);
-    slayer3d_input_update(input, 17);
+    slayer3d_input_update(input, 21);
     EXPECT_EQ(world().brush_count, brush_count_before_multi_delete - selected_brushes);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));

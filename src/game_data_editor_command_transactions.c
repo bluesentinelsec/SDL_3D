@@ -800,6 +800,86 @@ static bool copy_selected_editor_brush_delete_target(selected_editor_brush_delet
     return (active_scene == NULL || target->scene != NULL) && target->world != NULL && target->element != NULL;
 }
 
+static int editor_brush_top_y_face_index(const slayer3d_game_data_brush *brush)
+{
+    int best_index = -1;
+    float best_y = 0.0f;
+    for (int i = 0; brush != NULL && i < brush->face_count; ++i)
+    {
+        const float y = brush->faces[i].normal.y;
+        if (y > 0.5f && (best_index < 0 || y > best_y))
+        {
+            best_index = i;
+            best_y = y;
+        }
+    }
+    return best_index;
+}
+
+static float editor_selected_brush_resize_y_distance(const slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const int direction = json_int(action, "direction", 1);
+    const char *distance_key = json_string(action, "distance_key", json_string(action, "grid_key", NULL));
+    float distance = json_float(action, "distance", 0.0f);
+    if (distance == 0.0f && distance_key != NULL && distance_key[0] != '\0' && runtime != NULL &&
+        runtime->scene_state != NULL)
+    {
+        distance = slayer3d_properties_get_float(runtime->scene_state, distance_key, 0.0f);
+    }
+    if (distance == 0.0f)
+        distance = json_float(action, "default_distance", 1.0f);
+    distance = SDL_fabsf(distance);
+    return direction < 0 ? -distance : distance;
+}
+
+static bool selected_editor_brush_can_resize_y(const brush_world_runtime *world_runtime,
+                                               const slayer3d_game_data_editor_selection *selection, float distance,
+                                               float min_height)
+{
+    if (world_runtime == NULL || selection == NULL || !selection->hit ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->element_name == NULL)
+    {
+        return false;
+    }
+    const slayer3d_game_data_brush *brush = NULL;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        if (world->brushes[i].name != NULL && SDL_strcmp(world->brushes[i].name, selection->element_name) == 0)
+        {
+            brush = &world->brushes[i];
+            break;
+        }
+    }
+    if (brush == NULL || !brush->has_bounds || editor_brush_top_y_face_index(brush) < 0)
+        return false;
+    return brush->bounds.max.y + distance - brush->bounds.min.y >= min_height;
+}
+
+static void refresh_selected_editor_brush_bounds_for_transaction(slayer3d_game_data_runtime *runtime,
+                                                                 const editor_command_transaction_entry *entry)
+{
+    if (runtime == NULL || entry == NULL || entry->world_name == NULL || entry->element_name == NULL)
+        return;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, entry->world_name);
+    const int brush_index = find_editor_mutable_brush_index(world_runtime, entry->element_name);
+    const slayer3d_game_data_brush *brush =
+        brush_index >= 0 && world_runtime != NULL ? &world_runtime->desc.brushes[brush_index] : NULL;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        if (selection->world_name != NULL && selection->element_name != NULL &&
+            SDL_strcmp(selection->world_name, entry->world_name) == 0 &&
+            SDL_strcmp(selection->element_name, entry->element_name) == 0)
+        {
+            selection->has_bounds = brush != NULL ? brush->has_bounds : false;
+            if (brush != NULL && brush->has_bounds)
+                selection->bounds = brush->bounds;
+        }
+    }
+}
+
 bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                        const slayer3d_properties *payload)
 {
@@ -889,6 +969,115 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
     publish_editor_transaction(runtime, outputs, "commit", deleted_count > 0, last_entry, message);
     free_selected_editor_brush_delete_targets(targets, target_count);
     return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", deleted_count > 0,
+                                               last_entry, message);
+}
+
+bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                         const slayer3d_properties *payload)
+{
+    (void)payload;
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (runtime == NULL)
+        return false;
+
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (runtime->editor_selected_brush_scene == NULL || active_scene == NULL ||
+        SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0 ||
+        runtime->editor_selected_brush_count <= 0)
+    {
+        const char *message = json_string(action, "invalid_message", "nothing selected to resize");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, message);
+    }
+
+    const float distance = editor_selected_brush_resize_y_distance(runtime, action);
+    const float min_height = json_float(action, "min_height", 0.1f);
+    if (SDL_fabsf(distance) <= 0.000001f || min_height <= 0.0f)
+    {
+        const char *message = json_string(action, "invalid_message", "invalid selected brush resize distance");
+        publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+        return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, message);
+    }
+
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        const brush_world_runtime *world_runtime =
+            selection->world_name != NULL ? find_brush_world_runtime(runtime, selection->world_name) : NULL;
+        if (!selected_editor_brush_can_resize_y(world_runtime, selection, distance, min_height))
+        {
+            const char *message = json_string(action, "invalid_message", "selected brush resize would be invalid");
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
+    }
+
+    editor_command_history_state *history = &runtime->editor_command_history;
+    const int first_entry = history->count;
+    editor_command_transaction_entry *last_entry = NULL;
+    int resized_count = 0;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+        const int brush_index = find_editor_mutable_brush_index(world_runtime, selection->element_name);
+        const slayer3d_game_data_brush *brush = brush_index >= 0 ? &world_runtime->desc.brushes[brush_index] : NULL;
+        const int top_face_index = editor_brush_top_y_face_index(brush);
+
+        editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+        if (entry == NULL || !copy_editor_transaction_string(active_scene, &entry->scene) ||
+            !copy_editor_transaction_string("resize", &entry->command) ||
+            !copy_editor_transaction_string("face", &entry->target) ||
+            !copy_editor_transaction_string(selection->world_name, &entry->world_name) ||
+            !copy_editor_transaction_string(selection->element_name, &entry->element_name))
+        {
+            const char *message = json_string(action, "invalid_message", "failed to record selected brush resize");
+            for (int rollback = history->count - 1; rollback >= first_entry; --rollback)
+                (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], false);
+            for (int clear = first_entry; clear < history->count; ++clear)
+                free_editor_command_transaction_entry(&history->entries[clear]);
+            history->count = first_entry;
+            history->cursor = first_entry;
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
+
+        entry->face_index = top_face_index;
+        entry->offset = slayer3d_vec3_make(0.0f, distance, 0.0f);
+        entry->has_bounds = brush != NULL && brush->has_bounds;
+        entry->bounds =
+            entry->has_bounds
+                ? editor_resized_preview_bounds(brush->bounds, slayer3d_vec3_make(0.0f, 1.0f, 0.0f), distance)
+                : (slayer3d_bounding_box){slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 0.0f)};
+        SDL_snprintf(entry->message, sizeof(entry->message), "%s %s by %.3f", distance >= 0.0f ? "raised" : "lowered",
+                     selection->element_name != NULL ? selection->element_name : "selected brush",
+                     (double)SDL_fabsf(distance));
+
+        if (!apply_editor_transaction_mutation(runtime, entry, true))
+        {
+            const char *message = json_string(action, "invalid_message", "selected brush resize failed");
+            for (int rollback = history->count - 1; rollback >= first_entry; --rollback)
+                (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], false);
+            for (int clear = first_entry; clear < history->count; ++clear)
+                free_editor_command_transaction_entry(&history->entries[clear]);
+            history->count = first_entry;
+            history->cursor = first_entry;
+            publish_editor_transaction(runtime, outputs, "commit", false, NULL, message);
+            return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL,
+                                                       message);
+        }
+        refresh_selected_editor_brush_bounds_for_transaction(runtime, entry);
+        last_entry = entry;
+        resized_count++;
+    }
+
+    char message[128];
+    SDL_snprintf(message, sizeof(message), resized_count == 1 ? "%s 1 selected brush" : "%s %d selected brushes",
+                 distance >= 0.0f ? "raised" : "lowered", resized_count);
+    publish_editor_transaction(runtime, outputs, "commit", resized_count > 0, last_entry, message);
+    return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", resized_count > 0,
                                                last_entry, message);
 }
 

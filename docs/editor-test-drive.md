@@ -82,6 +82,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | mouse click | Select Mode | select or deselect the highlighted brush |
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
 | right click | orthographic view | delete the highlighted tile or game object |
+| `[` / `]` | Select Mode | lower or raise the selected brush top face by one active grid step |
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
@@ -107,13 +108,17 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 3. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
    ceiling tile.
 4. Press `G`, press `Enter` to select Player Start, and place it on the floor.
-5. Press `Space`, click a tile to select it, and press `Delete` or `Backspace`;
-   the tile should disappear. Shift-click multiple tiles to delete a set.
-6. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
+5. Press `Space`, click a tile to select it, press `]`, and confirm the brush
+   stretches upward while its bottom face stays anchored. Press `[` to lower
+   the top face again. The side faces should fill the height change, leaving no
+   empty wall gap.
+6. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
+   multiple tiles to delete a set.
+7. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
    file should contain `brush_worlds` and `editor_player_starts`.
-7. Press `F5`; the editor should switch into the playable test scene using the
+8. Press `F5`; the editor should switch into the playable test scene using the
    current in-memory map and player start.
-8. In the playable scene, use `WASD` and mouse look to verify the player starts
+9. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
 ## Correctness Checks
@@ -126,9 +131,10 @@ The following should be true during a good test drive:
   grid size, height, elevation, thickness, and material.
 - `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
   selections update the same data-authored mode and brush-setting state.
-- `Space` enters Select Mode from editor layouts and the 3D flyby view. Select Mode owns brush
-  selection and multi-selection; brush transform/resize controls land in a
-  follow-up slice.
+- `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
+  Mode owns brush selection and multi-selection. `[` / `]` resize the selected
+  brush top Y face by the active grid step while preserving the bottom face, so
+  vertical wall space is filled by the brush side faces.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling brushes stay aligned to the larger
   blockout grid.
