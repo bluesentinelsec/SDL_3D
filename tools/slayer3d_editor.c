@@ -11,22 +11,6 @@
 #include "slayer3d_editor_cli.h"
 #include "slayer3d_runner_cli.h"
 
-#if !defined(SLAYER3D_EDITOR_DEFAULT_ROOT)
-#define SLAYER3D_EDITOR_DEFAULT_ROOT ""
-#endif
-
-#if !defined(SLAYER3D_EDITOR_DEFAULT_DATA)
-#define SLAYER3D_EDITOR_DEFAULT_DATA ""
-#endif
-
-#if !defined(SLAYER3D_EDITOR_DEFAULT_SAVE_PATH)
-#define SLAYER3D_EDITOR_DEFAULT_SAVE_PATH ""
-#endif
-
-#if !defined(SLAYER3D_EDITOR_DEFAULT_TEST_RUN_PATH)
-#define SLAYER3D_EDITOR_DEFAULT_TEST_RUN_PATH ""
-#endif
-
 int main(int argc, char **argv)
 {
     slayer3d_editor_args args;
@@ -34,23 +18,45 @@ int main(int argc, char **argv)
     if (cli_result != SLAYER3D_TOOL_CLI_OK)
         return cli_result == SLAYER3D_TOOL_CLI_HELP ? 0 : 2;
 
-    slayer3d_editor_args_apply_defaults(&args, SLAYER3D_EDITOR_DEFAULT_ROOT, SLAYER3D_EDITOR_DEFAULT_DATA,
-                                        SLAYER3D_EDITOR_DEFAULT_SAVE_PATH, SLAYER3D_EDITOR_DEFAULT_TEST_RUN_PATH);
-    slayer3d_editor_runner_invocation invocation;
-    if (!slayer3d_editor_build_runner_invocation(&args, argc > 0 && argv != NULL ? argv[0] : "slayer3d_editor",
-                                                 &invocation))
+    char error[512];
+    error[0] = '\0';
+    slayer3d_editor_project project;
+    if (!slayer3d_editor_project_load(args.project, &project, error, (int)sizeof(error)))
     {
-        fprintf(stderr,
-                "slayer3d_editor: --root, --data, --save, and --test-run-output are required unless build defaults "
-                "provide them\n");
+        fprintf(stderr, "slayer3d_editor: %s\n", error[0] != '\0' ? error : "failed to load project manifest");
         slayer3d_editor_args_destroy(&args);
         return 2;
     }
 
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor save path: %s", args.save_path);
-    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor test-run manifest: %s", args.test_run_path);
+    slayer3d_editor_launch launch;
+    if (!slayer3d_editor_prepare_launch(&args, &project, &launch, error, (int)sizeof(error)) ||
+        !slayer3d_editor_validate_paths(&args, &launch, error, (int)sizeof(error)))
+    {
+        fprintf(stderr, "slayer3d_editor: %s\n", error[0] != '\0' ? error : "invalid editor launch configuration");
+        slayer3d_editor_project_destroy(&project);
+        slayer3d_editor_args_destroy(&args);
+        return 2;
+    }
+
+    slayer3d_editor_runner_invocation invocation;
+    if (!slayer3d_editor_build_runner_invocation(&launch, argc > 0 && argv != NULL ? argv[0] : "slayer3d_editor",
+                                                 &invocation))
+    {
+        fprintf(stderr, "slayer3d_editor: failed to build runner invocation\n");
+        slayer3d_editor_launch_destroy(&launch);
+        slayer3d_editor_project_destroy(&project);
+        slayer3d_editor_args_destroy(&args);
+        return 2;
+    }
+
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor project: %s", project.project_dir);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor save path: %s", launch.save_path);
+    if (launch.input_path != NULL && launch.input_path[0] != '\0')
+        SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D editor input path: %s", launch.input_path);
     const int result = slayer3d_runner_main(invocation.argc, invocation.argv);
     slayer3d_editor_runner_invocation_destroy(&invocation);
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&project);
     slayer3d_editor_args_destroy(&args);
     return result;
 }

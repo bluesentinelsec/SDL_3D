@@ -148,20 +148,39 @@ TEST(ToolCli, RunnerRejectsEmptyTestRunManifestPath)
     slayer3d_runner_args_destroy(&args);
 }
 
-TEST(ToolCli, EditorParsesDefaultsAndBuildsRunnerInvocation)
+TEST(ToolCli, EditorNewLoadsProjectAndBuildsRunnerInvocation)
 {
-    std::vector<char *> argv = argv_from({"slayer3d_editor", "--state", "editor.tool.mode=floor"});
+    const std::filesystem::path project_dir = unique_cli_test_dir("editor_project");
+    std::filesystem::create_directories(project_dir / "data");
+    write_text(project_dir / "slayer3d.project.json",
+               R"json({
+  "schema": "slayer3d.project.v0",
+  "data_root": "data",
+  "editor_entry": "asset://editor.game.json",
+  "media_root": "media",
+  "test_run_output": "build/test-run.json"
+})json");
+    const std::string project = project_dir.string();
+    const std::string output = (project_dir / "levels" / "new.json").string();
+    std::vector<char *> argv =
+        argv_from({"slayer3d_editor", "new", "--project", project.c_str(), "--output", output.c_str()});
     slayer3d_editor_args args;
     ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
-    slayer3d_editor_args_apply_defaults(&args, "editor/data", "asset://editor.game.json", "build/editor/level.json",
-                                        "build/editor/run.json");
+    EXPECT_EQ(args.command, SLAYER3D_EDITOR_COMMAND_NEW);
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
 
     slayer3d_editor_runner_invocation invocation;
-    ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&args, "slayer3d_editor", &invocation));
-    ASSERT_GE(invocation.argc, 11);
+    ASSERT_TRUE(slayer3d_editor_build_runner_invocation(&launch, "slayer3d_editor", &invocation));
+    ASSERT_GE(invocation.argc, 15);
     EXPECT_STREQ(invocation.argv[0], "slayer3d_editor");
     EXPECT_STREQ(invocation.argv[1], "--root");
-    EXPECT_STREQ(invocation.argv[2], "editor/data");
+    EXPECT_STREQ(invocation.argv[2], (project_dir / "data").string().c_str());
     EXPECT_STREQ(invocation.argv[3], "--data");
     EXPECT_STREQ(invocation.argv[4], "asset://editor.game.json");
     std::string joined;
@@ -171,21 +190,97 @@ TEST(ToolCli, EditorParsesDefaultsAndBuildsRunnerInvocation)
             joined += "\n";
         joined += invocation.argv[i];
     }
-    EXPECT_NE(joined.find("editor.save.path=build/editor/level.json"), std::string::npos);
-    EXPECT_NE(joined.find("editor.test_run.path=build/editor/run.json"), std::string::npos);
-    EXPECT_NE(joined.find("editor.tool.mode=floor"), std::string::npos);
+    EXPECT_NE(joined.find("editor.command=new"), std::string::npos);
+    EXPECT_NE(joined.find("editor.input.path="), std::string::npos);
+    EXPECT_NE(joined.find("editor.save.path=" + output), std::string::npos);
+    EXPECT_NE(joined.find("editor.test_run.path=" + (project_dir / "build" / "test-run.json").string()),
+              std::string::npos);
     slayer3d_editor_runner_invocation_destroy(&invocation);
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
     slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove_all(project_dir);
 }
 
-TEST(ToolCli, EditorRequiresProjectAndOutputPathsAfterDefaults)
+TEST(ToolCli, EditorOpenDefaultsOutputToInput)
+{
+    const std::filesystem::path project_dir = unique_cli_test_dir("editor_open_project");
+    std::filesystem::create_directories(project_dir / "data");
+    write_text(project_dir / "slayer3d.project.json",
+               R"json({
+  "schema": "slayer3d.project.v0",
+  "data_root": "data",
+  "editor_entry": "asset://editor.game.json"
+})json");
+    const std::filesystem::path level_path = project_dir / "level.json";
+    write_text(level_path, R"json({ "schema": "slayer3d.fragment.v0", "brush_worlds": [] })json");
+    const std::string project = project_dir.string();
+    const std::string input = level_path.string();
+    std::vector<char *> argv =
+        argv_from({"slayer3d_editor", "open", "--project", project.c_str(), "--input", input.c_str()});
+    slayer3d_editor_args args;
+    ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error))) << error;
+    EXPECT_STREQ(launch.input_path, input.c_str());
+    EXPECT_STREQ(launch.save_path, input.c_str());
+
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
+    slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove_all(project_dir);
+}
+
+TEST(ToolCli, EditorRejectsMissingSubcommand)
 {
     std::vector<char *> argv = argv_from({"slayer3d_editor"});
     slayer3d_editor_args args;
+    EXPECT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
+}
+
+TEST(ToolCli, EditorRejectsNewWithoutOutput)
+{
+    std::vector<char *> argv = argv_from({"slayer3d_editor", "new", "--project", "project"});
+    slayer3d_editor_args args;
+    EXPECT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_ERROR);
+}
+
+TEST(ToolCli, EditorRejectsMalformedOpenInputBeforeLaunch)
+{
+    const std::filesystem::path project_dir = unique_cli_test_dir("editor_bad_open_project");
+    std::filesystem::create_directories(project_dir / "data");
+    write_text(project_dir / "slayer3d.project.json",
+               R"json({
+  "schema": "slayer3d.project.v0",
+  "data_root": "data",
+  "editor_entry": "asset://editor.game.json"
+})json");
+    const std::filesystem::path level_path = project_dir / "level.json";
+    write_text(level_path, R"json({ "schema": "slayer3d.game.v0" })json");
+    const std::string project = project_dir.string();
+    const std::string input = level_path.string();
+    std::vector<char *> argv =
+        argv_from({"slayer3d_editor", "open", "--project", project.c_str(), "--input", input.c_str()});
+    slayer3d_editor_args args;
     ASSERT_EQ(slayer3d_editor_args_parse((int)argv.size(), argv.data(), &args, nullptr), SLAYER3D_TOOL_CLI_OK);
-    slayer3d_editor_runner_invocation invocation;
-    EXPECT_FALSE(slayer3d_editor_build_runner_invocation(&args, "slayer3d_editor", &invocation));
+
+    char error[512]{};
+    slayer3d_editor_project loaded_project;
+    ASSERT_TRUE(slayer3d_editor_project_load(args.project, &loaded_project, error, sizeof(error))) << error;
+    slayer3d_editor_launch launch;
+    ASSERT_TRUE(slayer3d_editor_prepare_launch(&args, &loaded_project, &launch, error, sizeof(error))) << error;
+    EXPECT_FALSE(slayer3d_editor_validate_paths(&args, &launch, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("slayer3d.fragment.v0"), std::string::npos) << error;
+
+    slayer3d_editor_launch_destroy(&launch);
+    slayer3d_editor_project_destroy(&loaded_project);
     slayer3d_editor_args_destroy(&args);
+    std::filesystem::remove_all(project_dir);
 }
 
 TEST(ToolCli, PackParsesRepeatedFiles)

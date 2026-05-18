@@ -1161,9 +1161,40 @@
               "player_start_source_path_key": "editor.player_start.source_path"
             }
           },
-          { "type": "scene_state.set", "key": "editor.save.valid", "value": false },
-          { "type": "scene_state.set", "key": "editor.save.message", "value": "disk save disabled for MVP iteration" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "exported level JSON in memory" }
+          {
+            "type": "editor.level.save",
+            "world": "brush.editor_shell.target",
+            "path_from_state": "editor.save.path",
+            "message": "editable level saved",
+            "outputs": {
+              "valid_key": "editor.save.valid",
+              "message_key": "editor.save.message",
+              "path_key": "editor.save.path",
+              "size_key": "editor.save.size",
+              "brush_world_key": "editor.brush_world.name",
+              "brush_dirty_key": "editor.brush_world.dirty",
+              "brush_revision_key": "editor.brush_world.revision",
+              "brush_saved_revision_key": "editor.brush_world.saved_revision",
+              "brush_source_path_key": "editor.brush_world.source_path",
+              "player_start_count_key": "editor.player_start.count",
+              "player_start_dirty_key": "editor.player_start.dirty",
+              "player_start_revision_key": "editor.player_start.revision",
+              "player_start_saved_revision_key": "editor.player_start.saved_revision",
+              "player_start_source_path_key": "editor.player_start.source_path"
+            }
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.save.valid", "op": "==", "value": true },
+            "then": [{ "type": "scene_state.set", "key": "editor.tool.last_action", "value": "saved level to disk" }],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "save failed: {editor.save.message}"
+              }
+            ]
+          }
         ]
       },
       {

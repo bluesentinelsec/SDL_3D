@@ -172,22 +172,19 @@ build/MyGame
 ## Generic Editor Host
 
 `slayer3d_editor` is a thin host over the same managed runtime and renderer. It
-launches a data-authored editor project, injects editor output paths as scene
-state, and leaves the actual tool behavior in JSON/Lua. The build-tree default
-opens the editor shell dojo:
+launches a data-authored editor project, injects editor input/output paths as
+scene state, and leaves the actual tool behavior in JSON/Lua.
 
 ```sh
-build/debug/slayer3d_editor
+build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.fragment.json --overwrite
 ```
 
-For another editor project, pass explicit paths:
+Projects are described by `slayer3d.project.json` manifests. `new` starts from
+the project's empty editor scene; `open` loads an existing editable fragment and
+saves back to `--input` unless `--output` is supplied:
 
 ```sh
-build/debug/slayer3d_editor \
-  --root path/to/editor/data \
-  --data asset://editor.game.json \
-  --save path/to/generated/editable_level.fragment.json \
-  --test-run-output build/editor/test-run.json
+build/debug/slayer3d_editor open --project path/to/project --input path/to/level.fragment.json
 ```
 
 The fused executable path is still the same generic runner. The game data is

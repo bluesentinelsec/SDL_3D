@@ -5,53 +5,177 @@
 
 #include "slayer3d_editor_cli.h"
 
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include <argtable3.h>
+
+#include "../vendor/yyjson/yyjson.h"
+
+static void editor_set_error(char *buffer, int buffer_size, const char *message)
+{
+    if (buffer != NULL && buffer_size > 0)
+        SDL_snprintf(buffer, (size_t)buffer_size, "%s", message != NULL ? message : "unknown editor CLI error");
+}
+
+static void editor_set_errorf(char *buffer, int buffer_size, const char *format, const char *value)
+{
+    if (buffer != NULL && buffer_size > 0)
+        SDL_snprintf(buffer, (size_t)buffer_size, format != NULL ? format : "%s", value != NULL ? value : "");
+}
 
 void slayer3d_editor_args_print_usage(const char *argv0, FILE *stream)
 {
     FILE *out = stream != NULL ? stream : stderr;
     const char *program = argv0 != NULL ? argv0 : "slayer3d_editor";
-    fprintf(out,
-            "Usage:\n"
-            "  %s [--root <asset-root>] [--data <asset://editor.game.json>] [--media <media-dir>] "
-            "[--scene <scene>] [--save <path>] [--test-run-output <path>] [--state <key=value> ...]\n",
-            program);
+    fprintf(
+        out,
+        "Usage:\n"
+        "  %s new --project <project-dir-or-json> --output <level.json> [--overwrite]\n"
+        "  %s open --project <project-dir-or-json> --input <level.json> [--output <level.json>] [--overwrite]\n"
+        "\n"
+        "Commands:\n"
+        "  new    Start from the project's empty editor level and save to --output.\n"
+        "  open   Load an editable level fragment from --input and save to --output, or back to --input if omitted.\n"
+        "\n"
+        "Project manifests use schema slayer3d.project.v0 and define data_root plus editor_entry.\n",
+        program, program);
 }
 
-static bool copy_string_list(const char ***out_values, int *out_count, const char **values, int count)
+static bool path_is_absolute_tool(const char *path)
 {
-    if (out_values == NULL || out_count == NULL)
+    if (path == NULL || path[0] == '\0')
         return false;
-    *out_values = NULL;
-    *out_count = 0;
-    if (count <= 0)
+    if (path[0] == '/' || path[0] == '\\')
         return true;
+    return SDL_strlen(path) > 2u && path[1] == ':';
+}
 
-    const char **copy = (const char **)SDL_calloc((size_t)count, sizeof(*copy));
-    if (copy == NULL)
+static char *path_dirname_tool(const char *path)
+{
+    if (path == NULL || path[0] == '\0')
+        return SDL_strdup(".");
+    const char *last = NULL;
+    for (const char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '/' || *p == '\\')
+            last = p;
+    }
+    if (last == NULL)
+        return SDL_strdup(".");
+    const size_t length = (size_t)(last - path);
+    if (length == 0u)
+        return SDL_strdup(path[0] == '\\' ? "\\" : "/");
+    char *dir = (char *)SDL_malloc(length + 1u);
+    if (dir == NULL)
+        return NULL;
+    SDL_memcpy(dir, path, length);
+    dir[length] = '\0';
+    return dir;
+}
+
+static char *path_join_tool(const char *base, const char *path)
+{
+    if (path == NULL)
+        return NULL;
+    if (path_is_absolute_tool(path) || base == NULL || base[0] == '\0')
+        return SDL_strdup(path);
+    const size_t base_len = SDL_strlen(base);
+    const size_t path_len = SDL_strlen(path);
+    const bool needs_sep = base_len > 0u && base[base_len - 1u] != '/' && base[base_len - 1u] != '\\';
+    char *joined = (char *)SDL_malloc(base_len + (needs_sep ? 1u : 0u) + path_len + 1u);
+    if (joined == NULL)
+        return NULL;
+    SDL_memcpy(joined, base, base_len);
+    size_t offset = base_len;
+    if (needs_sep)
+        joined[offset++] = '/';
+    SDL_memcpy(joined + offset, path, path_len + 1u);
+    return joined;
+}
+
+static bool file_exists_tool(const char *path, bool *out_is_file)
+{
+    if (out_is_file != NULL)
+        *out_is_file = false;
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (path == NULL || path[0] == '\0' || !SDL_GetPathInfo(path, &info))
         return false;
-    for (int i = 0; i < count; ++i)
-        copy[i] = values[i];
-    *out_values = copy;
-    *out_count = count;
+    if (out_is_file != NULL)
+        *out_is_file = info.type == SDL_PATHTYPE_FILE;
     return true;
+}
+
+static const char *manifest_string(yyjson_val *root, const char *key)
+{
+    yyjson_val *value = yyjson_obj_get(root, key);
+    return yyjson_is_str(value) ? yyjson_get_str(value) : NULL;
+}
+
+static bool validate_editable_level_fragment_file(const char *path, char *error_buffer, int error_buffer_size)
+{
+    yyjson_read_err read_error;
+    SDL_zero(read_error);
+    yyjson_doc *doc = yyjson_read_file(path, 0, NULL, &read_error);
+    yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    const char *schema = manifest_string(root, "schema");
+    if (doc == NULL || !yyjson_is_obj(root))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "input level '%s' is not valid JSON", path);
+        yyjson_doc_free(doc);
+        return false;
+    }
+    if (SDL_strcmp(schema != NULL ? schema : "", "slayer3d.fragment.v0") != 0)
+    {
+        editor_set_error(error_buffer, error_buffer_size, "input level must use schema 'slayer3d.fragment.v0'");
+        yyjson_doc_free(doc);
+        return false;
+    }
+    if (!yyjson_is_arr(yyjson_obj_get(root, "brush_worlds")))
+    {
+        editor_set_error(error_buffer, error_buffer_size, "input level must contain a brush_worlds array");
+        yyjson_doc_free(doc);
+        return false;
+    }
+    yyjson_doc_free(doc);
+    return true;
+}
+
+static char *project_manifest_path(const char *project_arg, char *error_buffer, int error_buffer_size)
+{
+    if (project_arg == NULL || project_arg[0] == '\0')
+    {
+        editor_set_error(error_buffer, error_buffer_size, "--project is required");
+        return NULL;
+    }
+
+    SDL_PathInfo info;
+    SDL_zero(info);
+    if (!SDL_GetPathInfo(project_arg, &info))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "project path '%s' does not exist", project_arg);
+        return NULL;
+    }
+    if (info.type == SDL_PATHTYPE_DIRECTORY)
+        return path_join_tool(project_arg, "slayer3d.project.json");
+    if (info.type == SDL_PATHTYPE_FILE)
+        return SDL_strdup(project_arg);
+
+    editor_set_errorf(error_buffer, error_buffer_size, "project path '%s' must be a directory or manifest file",
+                      project_arg);
+    return NULL;
 }
 
 slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slayer3d_editor_args *args, FILE *stream)
 {
-    struct arg_str *root = arg_str0(NULL, "root", "<asset-root>", "mount an editor project asset root");
-    struct arg_str *data = arg_str0(NULL, "data", "<asset://editor.game.json>", "editor game-data asset path");
-    struct arg_str *media = arg_str0(NULL, "media", "<media-dir>", "built-in media directory");
-    struct arg_str *scene = arg_str0(NULL, "scene", "<scene>", "start directly in an editor scene");
-    struct arg_str *save = arg_str0(NULL, "save", "<path>", "editable level fragment output path");
-    struct arg_str *test_run_output =
-        arg_str0(NULL, "test-run-output", "<path>", "runner test-run manifest output path");
-    struct arg_str *state = arg_strn(NULL, "state", "<key=value>", 0, argc > 0 ? argc : 1, "scene-state override");
+    struct arg_str *project = arg_str0(NULL, "project", "<project>", "project directory or slayer3d.project.json");
+    struct arg_str *input = arg_str0(NULL, "input", "<level.json>", "editable level fragment to open");
+    struct arg_str *output = arg_str0(NULL, "output", "<level.json>", "editable level fragment save target");
+    struct arg_lit *overwrite = arg_lit0(NULL, "overwrite", "allow new/open to replace an existing output path");
     struct arg_lit *help = arg_lit0("h", "help", "print this help and exit");
     struct arg_end *end = arg_end(20);
-    void *argtable[] = {root, data, media, scene, save, test_run_output, state, help, end};
+    void *argtable[] = {project, input, output, overwrite, help, end};
     const char *program = argc > 0 && argv != NULL && argv[0] != NULL ? argv[0] : "slayer3d_editor";
     FILE *out = stream != NULL ? stream : stderr;
 
@@ -64,7 +188,43 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
     }
 
     SDL_zero(*args);
-    const int errors = arg_parse(argc, argv, argtable);
+    if (argc <= 1 || argv == NULL || argv[1] == NULL)
+    {
+        slayer3d_editor_args_print_usage(program, out);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
+    }
+    if (SDL_strcmp(argv[1], "--help") == 0 || SDL_strcmp(argv[1], "-h") == 0)
+    {
+        slayer3d_editor_args_print_usage(program, out);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_HELP;
+    }
+
+    if (SDL_strcmp(argv[1], "new") == 0)
+        args->command = SLAYER3D_EDITOR_COMMAND_NEW;
+    else if (SDL_strcmp(argv[1], "open") == 0)
+        args->command = SLAYER3D_EDITOR_COMMAND_OPEN;
+    else if (SDL_strcmp(argv[1], "check") == 0)
+        args->command = SLAYER3D_EDITOR_COMMAND_CHECK;
+    else
+    {
+        fprintf(out, "%s: unknown editor command '%s'\n", program, argv[1]);
+        fprintf(out, "Try '%s --help' for more information.\n", program);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
+    }
+
+    if (args->command == SLAYER3D_EDITOR_COMMAND_CHECK)
+    {
+        fprintf(out, "%s: 'check' is not implemented yet; use 'new' or 'open'.\n", program);
+        arg_freetable(argtable, SDL_arraysize(argtable));
+        return SLAYER3D_TOOL_CLI_ERROR;
+    }
+
+    const int parse_argc = argc - 1;
+    char **parse_argv = argv + 1;
+    const int errors = arg_parse(parse_argc, parse_argv, argtable);
     if (help->count > 0)
     {
         slayer3d_editor_args_print_usage(program, out);
@@ -79,23 +239,46 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
         return SLAYER3D_TOOL_CLI_ERROR;
     }
 
-    args->root = root->count > 0 ? root->sval[0] : NULL;
-    args->data_asset_path = data->count > 0 ? data->sval[0] : NULL;
-    args->media_dir = media->count > 0 ? media->sval[0] : NULL;
-    args->scene = scene->count > 0 ? scene->sval[0] : NULL;
-    args->save_path = save->count > 0 ? save->sval[0] : NULL;
-    args->test_run_path = test_run_output->count > 0 ? test_run_output->sval[0] : NULL;
+    args->project = project->count > 0 ? project->sval[0] : NULL;
+    args->input_path = input->count > 0 ? input->sval[0] : NULL;
+    args->output_path = output->count > 0 ? output->sval[0] : NULL;
+    args->overwrite = overwrite->count > 0;
 
-    if ((args->root != NULL && args->root[0] == '\0') ||
-        (args->data_asset_path != NULL && args->data_asset_path[0] == '\0') ||
-        (args->scene != NULL && args->scene[0] == '\0') || (args->save_path != NULL && args->save_path[0] == '\0') ||
-        (args->test_run_path != NULL && args->test_run_path[0] == '\0') ||
-        !copy_string_list(&args->state_assignments, &args->state_assignment_count, state->sval, state->count))
+    if (args->project == NULL || args->project[0] == '\0')
     {
-        fprintf(out, "%s: invalid or out-of-memory editor arguments\n", program);
+        fprintf(out, "%s: --project is required for '%s'.\n", program, argv[1]);
         arg_freetable(argtable, SDL_arraysize(argtable));
-        slayer3d_editor_args_destroy(args);
         return SLAYER3D_TOOL_CLI_ERROR;
+    }
+    if (args->command == SLAYER3D_EDITOR_COMMAND_NEW)
+    {
+        if (args->input_path != NULL)
+        {
+            fprintf(out, "%s: 'new' does not accept --input; use 'open' to edit an existing level.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->output_path == NULL || args->output_path[0] == '\0')
+        {
+            fprintf(out, "%s: 'new' requires --output <level.json>.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+    }
+    if (args->command == SLAYER3D_EDITOR_COMMAND_OPEN)
+    {
+        if (args->input_path == NULL || args->input_path[0] == '\0')
+        {
+            fprintf(out, "%s: 'open' requires --input <level.json>.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
+        if (args->output_path != NULL && args->output_path[0] == '\0')
+        {
+            fprintf(out, "%s: --output must be non-empty when present.\n", program);
+            arg_freetable(argtable, SDL_arraysize(argtable));
+            return SLAYER3D_TOOL_CLI_ERROR;
+        }
     }
 
     arg_freetable(argtable, SDL_arraysize(argtable));
@@ -104,44 +287,197 @@ slayer3d_tool_cli_result slayer3d_editor_args_parse(int argc, char **argv, slaye
 
 void slayer3d_editor_args_destroy(slayer3d_editor_args *args)
 {
-    if (args == NULL)
-        return;
-    SDL_free(args->state_assignments);
-    args->state_assignments = NULL;
-    args->state_assignment_count = 0;
+    if (args != NULL)
+        SDL_zero(*args);
 }
 
-void slayer3d_editor_args_apply_defaults(slayer3d_editor_args *args, const char *root, const char *data_asset_path,
-                                         const char *save_path, const char *test_run_path)
+bool slayer3d_editor_project_load(const char *project_arg, slayer3d_editor_project *out_project, char *error_buffer,
+                                  int error_buffer_size)
 {
-    if (args == NULL)
+    if (out_project != NULL)
+        SDL_zero(*out_project);
+    if (out_project == NULL)
+    {
+        editor_set_error(error_buffer, error_buffer_size, "project output is required");
+        return false;
+    }
+
+    char *manifest = project_manifest_path(project_arg, error_buffer, error_buffer_size);
+    if (manifest == NULL)
+        return false;
+
+    bool is_file = false;
+    if (!file_exists_tool(manifest, &is_file) || !is_file)
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "project manifest '%s' does not exist", manifest);
+        SDL_free(manifest);
+        return false;
+    }
+
+    yyjson_read_err read_error;
+    SDL_zero(read_error);
+    yyjson_doc *doc = yyjson_read_file(manifest, 0, NULL, &read_error);
+    yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
+    const char *schema = manifest_string(root, "schema");
+    const char *data_root = manifest_string(root, "data_root");
+    const char *editor_entry = manifest_string(root, "editor_entry");
+    const char *media_root = manifest_string(root, "media_root");
+    const char *test_run_output = manifest_string(root, "test_run_output");
+    if (doc == NULL || !yyjson_is_obj(root))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "failed to parse project manifest '%s'", manifest);
+        yyjson_doc_free(doc);
+        SDL_free(manifest);
+        return false;
+    }
+    if (SDL_strcmp(schema != NULL ? schema : "", "slayer3d.project.v0") != 0)
+    {
+        editor_set_error(error_buffer, error_buffer_size, "project manifest must use schema 'slayer3d.project.v0'");
+        yyjson_doc_free(doc);
+        SDL_free(manifest);
+        return false;
+    }
+    if (data_root == NULL || data_root[0] == '\0' || editor_entry == NULL || editor_entry[0] == '\0')
+    {
+        editor_set_error(error_buffer, error_buffer_size,
+                         "project manifest requires non-empty data_root and editor_entry fields");
+        yyjson_doc_free(doc);
+        SDL_free(manifest);
+        return false;
+    }
+
+    char *project_dir = path_dirname_tool(manifest);
+    char *resolved_data_root = path_join_tool(project_dir, data_root);
+    char *resolved_media_root =
+        media_root != NULL && media_root[0] != '\0' ? path_join_tool(project_dir, media_root) : NULL;
+    char *resolved_test_run =
+        test_run_output != NULL && test_run_output[0] != '\0' ? path_join_tool(project_dir, test_run_output) : NULL;
+    char *entry_copy = SDL_strdup(editor_entry);
+    if (project_dir == NULL || resolved_data_root == NULL || entry_copy == NULL ||
+        (media_root != NULL && media_root[0] != '\0' && resolved_media_root == NULL) ||
+        (test_run_output != NULL && test_run_output[0] != '\0' && resolved_test_run == NULL))
+    {
+        editor_set_error(error_buffer, error_buffer_size, "failed to allocate project manifest paths");
+        SDL_free(project_dir);
+        SDL_free(resolved_data_root);
+        SDL_free(resolved_media_root);
+        SDL_free(resolved_test_run);
+        SDL_free(entry_copy);
+        yyjson_doc_free(doc);
+        SDL_free(manifest);
+        return false;
+    }
+
+    out_project->project_dir = project_dir;
+    out_project->data_root = resolved_data_root;
+    out_project->editor_entry = entry_copy;
+    out_project->owned_media_dir = resolved_media_root;
+    out_project->media_dir = out_project->owned_media_dir;
+    out_project->test_run_path = resolved_test_run;
+    yyjson_doc_free(doc);
+    SDL_free(manifest);
+    return true;
+}
+
+void slayer3d_editor_project_destroy(slayer3d_editor_project *project)
+{
+    if (project == NULL)
         return;
-    if ((args->root == NULL || args->root[0] == '\0') && root != NULL && root[0] != '\0')
-        args->root = root;
-    if ((args->data_asset_path == NULL || args->data_asset_path[0] == '\0') && data_asset_path != NULL &&
-        data_asset_path[0] != '\0')
+    SDL_free(project->project_dir);
+    SDL_free(project->data_root);
+    SDL_free(project->editor_entry);
+    SDL_free(project->owned_media_dir);
+    SDL_free(project->test_run_path);
+    SDL_zero(*project);
+}
+
+bool slayer3d_editor_prepare_launch(const slayer3d_editor_args *args, const slayer3d_editor_project *project,
+                                    slayer3d_editor_launch *out_launch, char *error_buffer, int error_buffer_size)
+{
+    if (out_launch != NULL)
+        SDL_zero(*out_launch);
+    if (args == NULL || project == NULL || out_launch == NULL)
     {
-        args->data_asset_path = data_asset_path;
+        editor_set_error(error_buffer, error_buffer_size, "editor launch requires parsed args and project");
+        return false;
     }
-    if ((args->save_path == NULL || args->save_path[0] == '\0') && save_path != NULL && save_path[0] != '\0')
-        args->save_path = save_path;
-    if ((args->test_run_path == NULL || args->test_run_path[0] == '\0') && test_run_path != NULL &&
-        test_run_path[0] != '\0')
+    const char *save_path = args->output_path;
+    if (args->command == SLAYER3D_EDITOR_COMMAND_OPEN && (save_path == NULL || save_path[0] == '\0'))
+        save_path = args->input_path;
+    if (project->data_root == NULL || project->editor_entry == NULL || save_path == NULL || save_path[0] == '\0')
     {
-        args->test_run_path = test_run_path;
+        editor_set_error(error_buffer, error_buffer_size, "project and editor command did not resolve launch paths");
+        return false;
     }
+
+    out_launch->root = project->data_root;
+    out_launch->data_asset_path = project->editor_entry;
+    out_launch->media_dir = project->media_dir;
+    out_launch->input_path = args->command == SLAYER3D_EDITOR_COMMAND_OPEN ? args->input_path : "";
+    out_launch->save_path = save_path;
+    out_launch->test_run_path = project->test_run_path;
+    return true;
+}
+
+void slayer3d_editor_launch_destroy(slayer3d_editor_launch *launch)
+{
+    if (launch == NULL)
+        return;
+    SDL_zero(*launch);
+}
+
+bool slayer3d_editor_validate_paths(const slayer3d_editor_args *args, const slayer3d_editor_launch *launch,
+                                    char *error_buffer, int error_buffer_size)
+{
+    if (args == NULL || launch == NULL)
+    {
+        editor_set_error(error_buffer, error_buffer_size, "editor path validation requires args and launch");
+        return false;
+    }
+    bool is_file = false;
+    if (args->command == SLAYER3D_EDITOR_COMMAND_OPEN && (!file_exists_tool(args->input_path, &is_file) || !is_file))
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "input level '%s' does not exist", args->input_path);
+        return false;
+    }
+    if (args->command == SLAYER3D_EDITOR_COMMAND_OPEN &&
+        !validate_editable_level_fragment_file(args->input_path, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    if (launch->save_path == NULL || launch->save_path[0] == '\0')
+    {
+        editor_set_error(error_buffer, error_buffer_size, "output save path is required");
+        return false;
+    }
+    const bool output_exists = file_exists_tool(launch->save_path, &is_file);
+    const bool saving_back_to_input = args->command == SLAYER3D_EDITOR_COMMAND_OPEN && args->input_path != NULL &&
+                                      SDL_strcmp(args->input_path, launch->save_path) == 0;
+    if (output_exists && !is_file)
+    {
+        editor_set_errorf(error_buffer, error_buffer_size, "output path '%s' is not a regular file", launch->save_path);
+        return false;
+    }
+    if (output_exists && !saving_back_to_input && !args->overwrite)
+    {
+        editor_set_errorf(error_buffer, error_buffer_size,
+                          "output path '%s' already exists; pass --overwrite to replace it", launch->save_path);
+        return false;
+    }
+    return true;
 }
 
 static char *editor_state_assignment(const char *key, const char *value)
 {
     const size_t key_len = SDL_strlen(key);
-    const size_t value_len = SDL_strlen(value);
+    const size_t value_len = SDL_strlen(value != NULL ? value : "");
     char *assignment = (char *)SDL_malloc(key_len + 1u + value_len + 1u);
     if (assignment == NULL)
         return NULL;
     SDL_memcpy(assignment, key, key_len);
     assignment[key_len] = '=';
-    SDL_memcpy(assignment + key_len + 1u, value, value_len);
+    SDL_memcpy(assignment + key_len + 1u, value != NULL ? value : "", value_len);
     assignment[key_len + 1u + value_len] = '\0';
     return assignment;
 }
@@ -155,23 +491,20 @@ static bool editor_add_arg(slayer3d_editor_runner_invocation *invocation, int *i
     return true;
 }
 
-bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_args *args, const char *program,
+bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_launch *launch, const char *program,
                                              slayer3d_editor_runner_invocation *out_invocation)
 {
     if (out_invocation == NULL)
         return false;
     SDL_zero(*out_invocation);
-    if (args == NULL || args->root == NULL || args->root[0] == '\0' || args->data_asset_path == NULL ||
-        args->data_asset_path[0] == '\0' || args->save_path == NULL || args->save_path[0] == '\0' ||
-        args->test_run_path == NULL || args->test_run_path[0] == '\0')
+    if (launch == NULL || launch->root == NULL || launch->root[0] == '\0' || launch->data_asset_path == NULL ||
+        launch->data_asset_path[0] == '\0' || launch->save_path == NULL || launch->save_path[0] == '\0')
     {
         return false;
     }
 
-    int argc = 9 + args->state_assignment_count * 2;
-    if (args->media_dir != NULL && args->media_dir[0] != '\0')
-        argc += 2;
-    if (args->scene != NULL && args->scene[0] != '\0')
+    int argc = 13;
+    if (launch->media_dir != NULL && launch->media_dir[0] != '\0')
         argc += 2;
 
     char **argv = (char **)SDL_calloc((size_t)argc + 1u, sizeof(*argv));
@@ -180,60 +513,45 @@ bool slayer3d_editor_build_runner_invocation(const slayer3d_editor_args *args, c
 
     out_invocation->argv = argv;
     out_invocation->argc = argc;
-    int index = 0;
-    char *save_assignment = editor_state_assignment("editor.save.path", args->save_path);
-    char *test_run_assignment = editor_state_assignment("editor.test_run.path", args->test_run_path);
-    if (save_assignment == NULL || test_run_assignment == NULL)
+    out_invocation->owned_command_assignment = editor_state_assignment(
+        "editor.command", launch->input_path != NULL && launch->input_path[0] != '\0' ? "open" : "new");
+    out_invocation->owned_input_assignment = editor_state_assignment("editor.input.path", launch->input_path);
+    out_invocation->owned_save_assignment = editor_state_assignment("editor.save.path", launch->save_path);
+    out_invocation->owned_test_run_assignment =
+        editor_state_assignment("editor.test_run.path", launch->test_run_path != NULL ? launch->test_run_path : "");
+    if (out_invocation->owned_command_assignment == NULL || out_invocation->owned_input_assignment == NULL ||
+        out_invocation->owned_save_assignment == NULL || out_invocation->owned_test_run_assignment == NULL)
     {
-        SDL_free(save_assignment);
-        SDL_free(test_run_assignment);
         slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;
     }
-    out_invocation->owned_save_assignment = save_assignment;
-    out_invocation->owned_test_run_assignment = test_run_assignment;
 
+    int index = 0;
     if (!editor_add_arg(out_invocation, &index, (char *)(program != NULL ? program : "slayer3d_editor")) ||
         !editor_add_arg(out_invocation, &index, "--root") ||
-        !editor_add_arg(out_invocation, &index, (char *)args->root) ||
+        !editor_add_arg(out_invocation, &index, (char *)launch->root) ||
         !editor_add_arg(out_invocation, &index, "--data") ||
-        !editor_add_arg(out_invocation, &index, (char *)args->data_asset_path))
+        !editor_add_arg(out_invocation, &index, (char *)launch->data_asset_path))
     {
         slayer3d_editor_runner_invocation_destroy(out_invocation);
         return false;
     }
-    if (args->media_dir != NULL && args->media_dir[0] != '\0')
+    if (launch->media_dir != NULL && launch->media_dir[0] != '\0')
     {
         if (!editor_add_arg(out_invocation, &index, "--media") ||
-            !editor_add_arg(out_invocation, &index, (char *)args->media_dir))
-        {
-            slayer3d_editor_runner_invocation_destroy(out_invocation);
-            return false;
-        }
-    }
-    if (args->scene != NULL && args->scene[0] != '\0')
-    {
-        if (!editor_add_arg(out_invocation, &index, "--scene") ||
-            !editor_add_arg(out_invocation, &index, (char *)args->scene))
+            !editor_add_arg(out_invocation, &index, (char *)launch->media_dir))
         {
             slayer3d_editor_runner_invocation_destroy(out_invocation);
             return false;
         }
     }
 
-    if (!editor_add_arg(out_invocation, &index, "--state") ||
-        !editor_add_arg(out_invocation, &index, save_assignment) ||
-        !editor_add_arg(out_invocation, &index, "--state") ||
-        !editor_add_arg(out_invocation, &index, test_run_assignment))
-    {
-        slayer3d_editor_runner_invocation_destroy(out_invocation);
-        return false;
-    }
-
-    for (int i = 0; i < args->state_assignment_count; ++i)
+    char *owned_state[] = {out_invocation->owned_command_assignment, out_invocation->owned_input_assignment,
+                           out_invocation->owned_save_assignment, out_invocation->owned_test_run_assignment};
+    for (size_t i = 0; i < SDL_arraysize(owned_state); ++i)
     {
         if (!editor_add_arg(out_invocation, &index, "--state") ||
-            !editor_add_arg(out_invocation, &index, (char *)args->state_assignments[i]))
+            !editor_add_arg(out_invocation, &index, owned_state[i]))
         {
             slayer3d_editor_runner_invocation_destroy(out_invocation);
             return false;
@@ -251,11 +569,10 @@ void slayer3d_editor_runner_invocation_destroy(slayer3d_editor_runner_invocation
 {
     if (invocation == NULL)
         return;
+    SDL_free(invocation->owned_command_assignment);
+    SDL_free(invocation->owned_input_assignment);
     SDL_free(invocation->owned_save_assignment);
     SDL_free(invocation->owned_test_run_assignment);
     SDL_free(invocation->argv);
-    invocation->argv = NULL;
-    invocation->argc = 0;
-    invocation->owned_save_assignment = NULL;
-    invocation->owned_test_run_assignment = NULL;
+    SDL_zero(*invocation);
 }

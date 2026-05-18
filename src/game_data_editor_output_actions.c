@@ -298,6 +298,40 @@ bool slayer3d_game_data_save_editor_level_action(slayer3d_game_data_runtime *run
     return true;
 }
 
+bool slayer3d_game_data_load_editor_level_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    const char *path = editor_action_path(runtime, action, NULL);
+    const bool optional = json_bool(action, "optional", false);
+    char error[256];
+    error[0] = '\0';
+
+    bool ok = true;
+    bool skipped = false;
+    if (path == NULL || path[0] == '\0')
+    {
+        ok = optional;
+        skipped = optional;
+        if (!ok)
+            SDL_snprintf(error, sizeof(error), "editable level load path is required");
+    }
+    else
+    {
+        ok = slayer3d_game_data_load_editable_level_fragment_file(runtime, world_name, path, error, (int)sizeof(error));
+    }
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? (skipped ? json_string(action, "skipped_message", "no editable level input")
+                                           : json_string(action, "message", "editable level loaded"))
+                                : (error[0] != '\0' ? error : "editable level load failed"));
+    editor_set_string_output(scene_state, outputs, "path_key", ok && path != NULL ? path : "");
+    publish_editor_level_state_outputs(runtime, outputs, world_name);
+    return true;
+}
+
 bool slayer3d_game_data_prepare_editor_test_run_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");

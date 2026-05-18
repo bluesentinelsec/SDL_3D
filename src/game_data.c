@@ -89,6 +89,74 @@ bool append_format(char *buffer, size_t buffer_size, size_t *offset, const char 
     return true;
 }
 
+void free_brush_world_runtime(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return;
+    slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    slayer3d_free_model(&world_runtime->artifacts.render_model);
+    for (int brush_model_index = 0; brush_model_index < world_runtime->artifacts.brush_render_model_count;
+         ++brush_model_index)
+    {
+        slayer3d_free_model(&world_runtime->artifacts.brush_render_models[brush_model_index]);
+    }
+    for (int chunk_model_index = 0; chunk_model_index < world_runtime->artifacts.chunk_render_model_count;
+         ++chunk_model_index)
+    {
+        slayer3d_free_model(&world_runtime->artifacts.chunk_render_models[chunk_model_index]);
+    }
+    SDL_free(world_runtime->artifacts.brush_render_models);
+    SDL_free(world_runtime->artifacts.chunk_render_models);
+    free_brush_world_visibility_grid(world_runtime);
+    slayer3d_game_data_brush_world_free_compile_chunks(world);
+    SDL_free(world_runtime->editor_source_path);
+    free_editor_metadata(&world->editor);
+    SDL_free((void *)world->name);
+    SDL_free((void *)world->units);
+    for (int material_index = 0; material_index < world->material_count; ++material_index)
+    {
+        slayer3d_game_data_brush_material *material =
+            (slayer3d_game_data_brush_material *)&world->materials[material_index];
+        free_editor_metadata(&material->editor);
+        SDL_free((void *)material->name);
+        SDL_free((void *)material->texture);
+    }
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        slayer3d_game_data_brush *brush = (slayer3d_game_data_brush *)&world->brushes[brush_index];
+        SDL_free((void *)brush->name);
+        free_editor_metadata(&brush->editor);
+        for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
+            SDL_free((void *)brush->tags[tag_index]);
+        SDL_free((void *)brush->tags);
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[face_index];
+            free_editor_metadata(&face->editor);
+        }
+        SDL_free((void *)brush->faces);
+    }
+    SDL_free((void *)world->materials);
+    SDL_free((void *)world->brushes);
+    SDL_zero(*world_runtime);
+}
+
+void free_editor_player_starts_runtime(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < runtime->editor_player_start_count; ++i)
+    {
+        SDL_free(runtime->editor_player_starts[i].name);
+        SDL_free(runtime->editor_player_starts[i].scene);
+        SDL_free(runtime->editor_player_starts[i].target);
+    }
+    SDL_free(runtime->editor_player_starts);
+    runtime->editor_player_starts = NULL;
+    runtime->editor_player_start_count = 0;
+    runtime->editor_player_start_capacity = 0;
+}
+
 bool eval_data_condition(const slayer3d_game_data_runtime *runtime, yyjson_val *condition,
                          const slayer3d_game_data_ui_metrics *metrics);
 bool runtime_actor_is_active(const slayer3d_game_data_runtime *runtime, const slayer3d_registered_actor *actor);
@@ -297,59 +365,8 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         slayer3d_free_level(&runtime->sector_levels[i].unlit_without_sector_lighting);
     }
     for (int i = 0; i < runtime->brush_world_count; ++i)
-    {
-        slayer3d_game_data_brush_world *world = &runtime->brush_worlds[i].desc;
-        slayer3d_free_model(&runtime->brush_worlds[i].artifacts.render_model);
-        for (int brush_model_index = 0; brush_model_index < runtime->brush_worlds[i].artifacts.brush_render_model_count;
-             ++brush_model_index)
-        {
-            slayer3d_free_model(&runtime->brush_worlds[i].artifacts.brush_render_models[brush_model_index]);
-        }
-        for (int chunk_model_index = 0; chunk_model_index < runtime->brush_worlds[i].artifacts.chunk_render_model_count;
-             ++chunk_model_index)
-        {
-            slayer3d_free_model(&runtime->brush_worlds[i].artifacts.chunk_render_models[chunk_model_index]);
-        }
-        SDL_free(runtime->brush_worlds[i].artifacts.brush_render_models);
-        SDL_free(runtime->brush_worlds[i].artifacts.chunk_render_models);
-        free_brush_world_visibility_grid(&runtime->brush_worlds[i]);
-        slayer3d_game_data_brush_world_free_compile_chunks(world);
-        SDL_free(runtime->brush_worlds[i].editor_source_path);
-        free_editor_metadata(&world->editor);
-        SDL_free((void *)world->name);
-        SDL_free((void *)world->units);
-        for (int material_index = 0; material_index < world->material_count; ++material_index)
-        {
-            slayer3d_game_data_brush_material *material =
-                (slayer3d_game_data_brush_material *)&world->materials[material_index];
-            free_editor_metadata(&material->editor);
-            SDL_free((void *)material->name);
-            SDL_free((void *)material->texture);
-        }
-        for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
-        {
-            slayer3d_game_data_brush *brush = (slayer3d_game_data_brush *)&world->brushes[brush_index];
-            SDL_free((void *)brush->name);
-            free_editor_metadata(&brush->editor);
-            for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
-                SDL_free((void *)brush->tags[tag_index]);
-            SDL_free((void *)brush->tags);
-            for (int face_index = 0; face_index < brush->face_count; ++face_index)
-            {
-                slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[face_index];
-                free_editor_metadata(&face->editor);
-            }
-            SDL_free((void *)brush->faces);
-        }
-        SDL_free((void *)world->materials);
-        SDL_free((void *)world->brushes);
-    }
-    for (int i = 0; i < runtime->editor_player_start_count; ++i)
-    {
-        SDL_free(runtime->editor_player_starts[i].name);
-        SDL_free(runtime->editor_player_starts[i].scene);
-        SDL_free(runtime->editor_player_starts[i].target);
-    }
+        free_brush_world_runtime(&runtime->brush_worlds[i]);
+    free_editor_player_starts_runtime(runtime);
     for (int i = 0; i < runtime->actor_pool_count; ++i)
     {
         SDL_free(runtime->actor_pools[i].name);
@@ -413,7 +430,6 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     SDL_free(runtime->grid_pickup_layers);
     SDL_free(runtime->sector_levels);
     SDL_free(runtime->brush_worlds);
-    SDL_free(runtime->editor_player_starts);
     SDL_free(runtime->editor_player_start_source_path);
     SDL_free(runtime->sector_doors);
     SDL_free(runtime->sector_platforms);

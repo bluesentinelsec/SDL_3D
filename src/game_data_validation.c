@@ -7632,6 +7632,48 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.level.load") == 0)
+    {
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+            return false;
+        yyjson_val *path = obj_get(action, "path");
+        yyjson_val *path_from_state = obj_get(action, "path_from_state");
+        if ((path == NULL && path_from_state == NULL) || (path != NULL && path_from_state != NULL))
+            return validation_error(ctx, json_path,
+                                    "editor.level.load requires exactly one of path or path_from_state");
+        if (path != NULL && (!yyjson_is_str(path) || yyjson_get_str(path)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.level.load path must be a non-empty string");
+        if (path_from_state != NULL && (!yyjson_is_str(path_from_state) || yyjson_get_str(path_from_state)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.level.load path_from_state must be a non-empty string");
+        yyjson_val *optional = obj_get(action, "optional");
+        if (optional != NULL && !yyjson_is_bool(optional))
+            return validation_error(ctx, json_path, "editor.level.load optional must be a boolean");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.level.load outputs must be an object");
+        static const char *const output_keys[] = {
+            "valid_key",
+            "message_key",
+            "path_key",
+            "brush_world_key",
+            "brush_source_path_key",
+            "brush_dirty_key",
+            "brush_revision_key",
+            "brush_saved_revision_key",
+            "player_start_source_path_key",
+            "player_start_count_key",
+            "player_start_dirty_key",
+            "player_start_revision_key",
+            "player_start_saved_revision_key",
+        };
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path, "editor.level.load output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.test_run.prepare") == 0)
     {
         if (!is_non_empty_string(action, "data_asset"))

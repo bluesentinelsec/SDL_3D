@@ -147,6 +147,7 @@ target_sources(
         src/game.c
         src/game_data_brush_artifacts.c
         src/game_data_brush_editor_export.c
+        src/game_data_brush_editor_import.c
         src/game_data_brush_editor_mutation.c
         src/game_data_brush_trace_queries.c
         src/game_data_brush_visibility_runtime.c
@@ -397,16 +398,16 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     )
     target_link_libraries(slayer3d_editor PRIVATE Slayer3D::slayer3d slayer3d_argtable3)
     target_compile_features(slayer3d_editor PRIVATE c_std_17)
-    target_include_directories(slayer3d_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
+    target_include_directories(
+        slayer3d_editor
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/tools
+    )
     target_compile_definitions(
         slayer3d_editor
         PRIVATE
             SLAYER3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media"
             SLAYER3D_RUNNER_NO_MAIN
-            SLAYER3D_EDITOR_DEFAULT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}/demos/editor_shell_dojo/data"
-            SLAYER3D_EDITOR_DEFAULT_DATA="asset://editor_shell_dojo.game.json"
-            SLAYER3D_EDITOR_DEFAULT_SAVE_PATH="${CMAKE_CURRENT_SOURCE_DIR}/demos/editor_shell_dojo/data/generated/editable_level.fragment.json"
-            SLAYER3D_EDITOR_DEFAULT_TEST_RUN_PATH="${CMAKE_CURRENT_BINARY_DIR}/editor_shell_dojo/test-run.json"
     )
     slayer3d_enable_warnings(slayer3d_editor)
     slayer3d_enable_sanitizers(slayer3d_editor)
