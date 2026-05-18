@@ -5,6 +5,8 @@
 
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_timer.h>
+
 typedef struct editor_debug_iteration_context
 {
     slayer3d_game_data_editor_debug_primitive_fn callback;
@@ -24,6 +26,27 @@ static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *
 static slayer3d_color editor_debug_color_or_default(slayer3d_color color, slayer3d_color fallback)
 {
     return color.a != 0 ? color : fallback;
+}
+
+static Uint8 editor_debug_mix_channel(Uint8 a, Uint8 b, float t)
+{
+    return (Uint8)SDL_clamp((int)((float)a + ((float)b - (float)a) * t + 0.5f), 0, 255);
+}
+
+static slayer3d_color editor_debug_selection_flash_color(slayer3d_color color)
+{
+    const slayer3d_color base = editor_debug_color_or_default(color, (slayer3d_color){255, 220, 40, 255});
+    const Uint64 ticks = SDL_GetTicks();
+    const float phase = (float)(ticks % 650U) / 650.0f;
+    const float wave = 0.5f + 0.5f * SDL_sinf(phase * SDL_PI_F * 2.0f);
+    const float mix = 0.2f + wave * 0.8f;
+    const slayer3d_color flash = {255, 255, 255, 255};
+    return (slayer3d_color){
+        editor_debug_mix_channel(base.r, flash.r, mix),
+        editor_debug_mix_channel(base.g, flash.g, mix),
+        editor_debug_mix_channel(base.b, flash.b, mix),
+        editor_debug_mix_channel(base.a < 220 ? 220 : base.a, flash.a, mix),
+    };
 }
 
 static unsigned int editor_debug_flag_from_string(const char *value)
@@ -205,7 +228,7 @@ static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *
     SDL_zero(context);
     context.callback = callback;
     context.userdata = userdata;
-    context.color = editor_debug_color_or_default(desc->selection_bounds_color, (slayer3d_color){255, 220, 40, 255});
+    context.color = editor_debug_selection_flash_color(desc->selection_bounds_color);
     context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE;
 
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
@@ -402,8 +425,7 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         SDL_zero(context);
         context.callback = callback;
         context.userdata = userdata;
-        context.color =
-            editor_debug_color_or_default(desc->selection_bounds_color, (slayer3d_color){255, 220, 40, 255});
+        context.color = editor_debug_selection_flash_color(desc->selection_bounds_color);
         context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE;
         context.world_name = selection->world_name;
         context.element_name = selection->element_name;

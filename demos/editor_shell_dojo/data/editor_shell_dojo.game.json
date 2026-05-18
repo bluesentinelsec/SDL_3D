@@ -198,11 +198,11 @@
           },
           {
             "name": "action.editor.camera.up",
-            "bindings": [{ "device": "keyboard", "key": "SPACE" }]
+            "bindings": [{ "device": "keyboard", "key": "E" }]
           },
           {
             "name": "action.editor.camera.down",
-            "bindings": [{ "device": "keyboard", "key": "LCTRL" }]
+            "bindings": [{ "device": "keyboard", "key": "Q" }]
           },
           {
             "name": "action.editor.camera.look",
@@ -515,15 +515,9 @@
       {
         "signal": "signal.editor.mode.select",
         "actions": [
-          {
-            "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "!=", "value": "flyby_3d", "default": "quad_view" },
-            "then": [
-              { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
-              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
-            ]
-          }
+          { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
         ]
       },
       {

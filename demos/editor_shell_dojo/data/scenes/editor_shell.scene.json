@@ -1032,7 +1032,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, Delete/Backspace remove.",
+        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Flyby: WASD move, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, Delete/Backspace remove.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

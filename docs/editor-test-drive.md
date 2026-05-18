@@ -92,7 +92,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
 | mouse look | 3D flyby | rotate camera |
-| `Space` / `Left Ctrl` | 3D flyby | move camera up/down |
+| `Q` / `E` | 3D flyby | move camera down/up |
 | `Left Shift` | 3D flyby | move faster |
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
 | `T` | palette closed | report that disk test-run manifest handoff is disabled for this MVP iteration |
@@ -126,7 +126,7 @@ The following should be true during a good test drive:
   grid size, height, elevation, thickness, and material.
 - `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
   selections update the same data-authored mode and brush-setting state.
-- `Space` enters Select Mode from editor layouts. Select Mode owns brush
+- `Space` enters Select Mode from editor layouts and the 3D flyby view. Select Mode owns brush
   selection and multi-selection; brush transform/resize controls land in a
   follow-up slice.
 - Game object placement uses its own tighter snap grid, so player starts can be
