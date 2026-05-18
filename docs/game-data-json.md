@@ -1116,8 +1116,9 @@ match an authored placement preview, so stale sidebar entries fail at load time.
 Editor scenes can present that metadata however they like. The editor shell dojo
 currently uses authored UI and logic signals: `B` opens the Brushes palette,
 arrow keys move a scene-state cursor, `Enter` writes `selected_key`, and `Esc`
-closes the modal. Material and Game Object palettes follow the same modal input
-shape so painting and thing placement can be added without new host-specific C.
+closes the modal. The Game Objects palette uses the same modal input shape for
+player-start placement, and the Material palette is reserved for the face
+painting workflow.
 
 ```json
 {

@@ -15350,7 +15350,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int floor_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.floor");
     const int wall_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.wall");
     const int ceiling_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.ceiling");
-    const int player_start_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.player_start");
     const int grid_decrease_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.grid.decrease");
     const int grid_increase_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.grid.increase");
     const int wall_axis_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.wall_axis.toggle");
@@ -15360,13 +15359,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int test_run_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.prepare");
     const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
     const int palette_brush_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.brush");
+    const int palette_game_object_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.game_object");
     const int palette_next_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.next");
     const int palette_accept_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.accept");
     const int palette_close_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.close");
     ASSERT_GE(floor_signal, 0);
     ASSERT_GE(wall_signal, 0);
     ASSERT_GE(ceiling_signal, 0);
-    ASSERT_GE(player_start_signal, 0);
     ASSERT_GE(grid_decrease_signal, 0);
     ASSERT_GE(grid_increase_signal, 0);
     ASSERT_GE(wall_axis_signal, 0);
@@ -15376,6 +15375,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(test_run_signal, 0);
     ASSERT_GE(test_run_enter_signal, 0);
     ASSERT_GE(palette_brush_signal, 0);
+    ASSERT_GE(palette_game_object_signal, 0);
     ASSERT_GE(palette_next_signal, 0);
     ASSERT_GE(palette_accept_signal, 0);
     ASSERT_GE(palette_close_signal, 0);
@@ -15484,10 +15484,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     std::vector<std::string> palette_text = visible_ui_text("ui.editor_shell.palette.");
-    EXPECT_TRUE(contains_ui_text(palette_text, "Blockout Prefabs"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "> 6 Floor"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "  7 Wall"));
-    EXPECT_FALSE(contains_ui_text(palette_text, "  6 Floor"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "Active Tool"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "> Floor"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "  Wall"));
+    EXPECT_FALSE(contains_ui_text(palette_text, "  Floor"));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.material", ""),
@@ -15557,9 +15557,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     palette_text = visible_ui_text("ui.editor_shell.palette.");
-    EXPECT_TRUE(contains_ui_text(palette_text, "> 7 Wall"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "  6 Floor"));
-    EXPECT_FALSE(contains_ui_text(palette_text, "  7 Wall"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "> Wall"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "  Floor"));
+    EXPECT_FALSE(contains_ui_text(palette_text, "  Wall"));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
     slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -15618,8 +15618,17 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 3);
 
-    slayer3d_signal_emit(bus, player_start_signal, nullptr);
+    slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.game_object.cursor", ""), "player_start");
+    modal_text = visible_ui_text("ui.editor_shell.palette.");
+    EXPECT_TRUE(contains_ui_text(modal_text, "Game Objects"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Player Start"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Selected: player_start"));
+    slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "player_start");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.game_object.selected", ""), "player_start");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.kind", ""), "player_start");

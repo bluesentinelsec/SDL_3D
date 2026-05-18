@@ -36,37 +36,42 @@ The editor uses normal hardware cursor positioning in the four-viewport layout.
 In full-screen 3D flyby mode the runtime captures relative mouse motion for
 mouse-look, then releases it again when returning to orthographic editing.
 
-## Controls
+## Keybindings
 
-- `1`: four-viewport layout
-- `2`, `3`, `4`, `5`: full-screen 3D, top, front, or side view
-- `B`: open or close the Brushes palette
-- `M`: open the Materials palette placeholder
-- `G`: open the Game Objects palette placeholder
-- arrow keys while a palette is open: move the palette cursor
-- `Enter` while the Brushes palette is open: select the highlighted floor,
-  wall, or ceiling brush and close the palette
-- `Esc` while a palette is open: close the palette without quitting
-- `9`: select the player-start tool until the Game Objects palette is wired to
-  thing placement
-- `C`: cycle tools
-- mouse click in an orthographic viewport: place the selected prefab at the
-  snapped preview position
-- right click a highlighted tile: delete it
-- `Delete`: delete the active selected tile
-- `Enter`: commit the current preview placement
-- `+` / `-`: increase or decrease grid size
-- arrow keys: pan the active full-screen orthographic canvas
-- `Z` / `X`, or mouse wheel: zoom the active full-screen orthographic canvas in
-  or out
-- `R`: toggle wall axis
-- `Tab`: toggle between four-view layout and full-screen 3D flyby
-- in 3D flyby: `WASD` move, mouse look, `Space` / `Left Ctrl` move up/down,
-  `Left Shift` moves faster
-- `S`: export the editable level JSON in memory without writing it to disk
-- `T`: reports that disk test-run handoff is disabled for this MVP iteration
-- `F5`: enter the playable test scene in the editor from the placed player start
-- `Esc`: quit
+The number row is reserved for view selection. Tool and object selection should
+go through palettes so level-authoring shortcuts do not shadow view controls.
+
+| Key | Context | Behavior |
+| --- | --- | --- |
+| `1` | global editor | four-viewport layout |
+| `2` | global editor | full-screen 3D perspective / flyby view |
+| `3` | global editor | full-screen top orthographic view |
+| `4` | global editor | full-screen front orthographic view |
+| `5` | global editor | full-screen side orthographic view |
+| `Tab` | global editor | quick toggle between four-view layout and full-screen 3D flyby |
+| `B` | global editor | open or close the Brushes palette |
+| `M` | global editor | open the Materials palette placeholder |
+| `G` | global editor | open the Game Objects palette |
+| arrow keys | palette open | move the active palette cursor |
+| `Enter` | palette open | select the highlighted palette item and close the palette |
+| `Esc` | palette open | close the palette without quitting |
+| mouse click | orthographic view | place the selected prefab at the snapped preview position |
+| right click | orthographic view | delete the highlighted tile |
+| `Delete` | orthographic view | delete the active selected tile |
+| `Enter` | palette closed | commit the current preview placement |
+| `+` / `-` | palette closed | increase or decrease grid size |
+| arrow keys | full-screen orthographic, palette closed | pan the active canvas |
+| `Z` / `X` or mouse wheel | full-screen orthographic | zoom the active canvas in or out |
+| `R` | palette closed | toggle wall axis |
+| `C` | palette closed | cycle tools for debug/testing |
+| `WASD` | 3D flyby | move camera |
+| mouse look | 3D flyby | rotate camera |
+| `Space` / `Left Ctrl` | 3D flyby | move camera up/down |
+| `Left Shift` | 3D flyby | move faster |
+| `S` | palette closed | export editable level JSON in memory without writing it to disk |
+| `T` | palette closed | report that disk test-run handoff is disabled for this MVP iteration |
+| `F5` | palette closed | enter the playable test scene from the placed player start |
+| `Esc` | palette closed | quit |
 
 ## Suggested Pass
 
@@ -75,7 +80,7 @@ mouse-look, then releases it again when returning to orthographic editing.
    needed, and place at least one wall.
 3. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
    ceiling tile.
-4. Press `9` and place the player start on the floor.
+4. Press `G`, press `Enter` to select Player Start, and place it on the floor.
 5. Hover a placed tile and right click, or select it and press `Delete`; the
    tile should disappear.
 6. Press `S` and confirm the inspector reports an in-memory JSON export and a
@@ -101,9 +106,8 @@ The following should be true during a good test drive:
 - `B` opens a modal brush palette with floor, wall, and ceiling cells. Arrow
   keys move the highlighted cell, `Enter` selects the brush, and `Esc` closes
   the modal without quitting the editor.
-- `M` and `G` open placeholder Material and Game Object palettes, establishing
-  the modal input path before those palettes are wired to painting and thing
-  placement.
+- `M` opens the placeholder Material palette. `G` opens the Game Objects
+  palette, and `Enter` selects Player Start for placement.
 - The four-view layout appears on launch. Number keys switch between quad,
   full-screen 3D, and full-screen orthographic views.
 - Each viewport displays a small label identifying the active view: 3D

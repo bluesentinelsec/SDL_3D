@@ -34,10 +34,6 @@
       "action.editor.export",
       "action.editor.test_run.prepare",
       "action.editor.test_run.enter",
-      "action.editor.tool.floor",
-      "action.editor.tool.wall",
-      "action.editor.tool.ceiling",
-      "action.editor.tool.player_start",
       "action.editor.view.toggle",
       "action.editor.view.quad",
       "action.editor.view.perspective",
@@ -500,6 +496,56 @@
             { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "ceiling" }
           ]
         }
+      },
+      {
+        "name": "ui.editor_shell.palette.game_object.player.cell",
+        "x": 574,
+        "y": 236,
+        "w": 132,
+        "h": 132,
+        "color": [38, 44, 54, 235],
+        "border_color": [95, 115, 145, 230],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
+      },
+      {
+        "name": "ui.editor_shell.palette.game_object.player.preview.body",
+        "x": 624,
+        "y": 266,
+        "w": 32,
+        "h": 64,
+        "color": [80, 235, 130, 255],
+        "border_color": [160, 255, 190, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
+      },
+      {
+        "name": "ui.editor_shell.palette.game_object.player.preview.head",
+        "x": 616,
+        "y": 250,
+        "w": 48,
+        "h": 20,
+        "color": [92, 255, 148, 255],
+        "border_color": [175, 255, 205, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
+      },
+      {
+        "name": "ui.editor_shell.palette.game_object.player.selected",
+        "x": 570,
+        "y": 232,
+        "w": 140,
+        "h": 140,
+        "color": [0, 0, 0, 0],
+        "border_color": [95, 255, 210, 255],
+        "border_thickness": 3,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
+            { "type": "scene_state.compare", "key": "editor.palette.game_object.cursor", "op": "==", "value": "player_start", "default": "player_start" }
+          ]
+        }
       }
     ],
     "inspectors": [
@@ -600,7 +646,7 @@
     "text": [
       {
         "name": "ui.editor_shell.palette.title",
-        "text": "Blockout Prefabs",
+        "text": "Active Tool",
         "font": "font.editor_shell.ui",
         "x": 34,
         "y": 246,
@@ -609,7 +655,7 @@
       },
       {
         "name": "ui.editor_shell.palette.floor",
-        "text": "  6 Floor",
+        "text": "  Floor",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 274,
@@ -619,7 +665,7 @@
       },
       {
         "name": "ui.editor_shell.palette.floor.active",
-        "text": "> 6 Floor",
+        "text": "> Floor",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 274,
@@ -629,7 +675,7 @@
       },
       {
         "name": "ui.editor_shell.palette.wall",
-        "text": "  7 Wall",
+        "text": "  Wall",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 298,
@@ -639,7 +685,7 @@
       },
       {
         "name": "ui.editor_shell.palette.wall.active",
-        "text": "> 7 Wall",
+        "text": "> Wall",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 298,
@@ -649,7 +695,7 @@
       },
       {
         "name": "ui.editor_shell.palette.ceiling",
-        "text": "  8 Ceiling",
+        "text": "  Ceiling",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 322,
@@ -659,7 +705,7 @@
       },
       {
         "name": "ui.editor_shell.palette.ceiling.active",
-        "text": "> 8 Ceiling",
+        "text": "> Ceiling",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 322,
@@ -669,7 +715,7 @@
       },
       {
         "name": "ui.editor_shell.palette.player",
-        "text": "  9 Player",
+        "text": "  Player Start",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 346,
@@ -684,7 +730,7 @@
       },
       {
         "name": "ui.editor_shell.palette.player.active",
-        "text": "> 9 Player",
+        "text": "> Player Start",
         "font": "font.editor_shell.ui",
         "x": 42,
         "y": 346,
@@ -868,7 +914,18 @@
         "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
       },
       {
-        "name": "ui.editor_shell.palette.selected",
+        "name": "ui.editor_shell.palette.game_object.player.label",
+        "text": "Player Start",
+        "font": "font.editor_shell.ui",
+        "x": 640,
+        "y": 334,
+        "align": "center",
+        "color": [230, 238, 248, 245],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
+      },
+      {
+        "name": "ui.editor_shell.palette.selected.brush",
         "font": "font.editor_shell.ui",
         "format": "Selected: %s",
         "bindings": [{ "type": "scene_state", "key": "editor.palette.brush.cursor", "default": "floor" }],
@@ -877,6 +934,17 @@
         "color": [160, 230, 255, 245],
         "scale": 0.56,
         "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
+      },
+      {
+        "name": "ui.editor_shell.palette.selected.game_object",
+        "font": "font.editor_shell.ui",
+        "format": "Selected: %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.palette.game_object.cursor", "default": "player_start" }],
+        "x": 394,
+        "y": 398,
+        "color": [160, 230, 255, 245],
+        "scale": 0.56,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
       },
       {
         "name": "ui.editor_shell.palette.help",

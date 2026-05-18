@@ -67,22 +67,6 @@
             "bindings": [{ "device": "keyboard", "key": "F5" }]
           },
           {
-            "name": "action.editor.tool.floor",
-            "bindings": [{ "device": "keyboard", "key": "6" }]
-          },
-          {
-            "name": "action.editor.tool.wall",
-            "bindings": [{ "device": "keyboard", "key": "7" }]
-          },
-          {
-            "name": "action.editor.tool.ceiling",
-            "bindings": [{ "device": "keyboard", "key": "8" }]
-          },
-          {
-            "name": "action.editor.tool.player_start",
-            "bindings": [{ "device": "keyboard", "key": "9" }]
-          },
-          {
             "name": "action.editor.view.toggle",
             "bindings": [{ "device": "keyboard", "key": "TAB" }]
           },
@@ -332,26 +316,6 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.test_run.enter",
         "on_pressed": "signal.editor.test_run.enter"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.tool.floor",
-        "on_pressed": "signal.editor.tool.floor"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.tool.wall",
-        "on_pressed": "signal.editor.tool.wall"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.tool.ceiling",
-        "on_pressed": "signal.editor.tool.ceiling"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.tool.player_start",
-        "on_pressed": "signal.editor.tool.player_start"
       },
       {
         "type": "sensor.input_pressed",
@@ -646,6 +610,19 @@
                 "values": ["floor", "wall", "ceiling"]
               }
             ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.game_object.cursor",
+                "default": "player_start",
+                "direction": -1,
+                "values": ["player_start"]
+              }
+            ]
           }
         ]
       },
@@ -662,6 +639,19 @@
                 "default": "floor",
                 "direction": 1,
                 "values": ["floor", "wall", "ceiling"]
+              }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.game_object.cursor",
+                "default": "player_start",
+                "direction": 1,
+                "values": ["player_start"]
               }
             ]
           }
@@ -702,6 +692,16 @@
                   }
                 ]
               }
+            ]
+          },
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
+              { "type": "scene_state.set", "key": "editor.game_object.selected", "value": "player_start" },
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start selected" }
             ]
           }
         ]
