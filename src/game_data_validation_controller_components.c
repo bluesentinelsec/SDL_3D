@@ -139,13 +139,20 @@ bool validate_editor_camera_component(validation_context *ctx, yyjson_val *compo
         return validation_error(ctx, path, "controller.editor_camera actions must reference at least one input action");
 
     const char *property_keys[] = {
-        "yaw_property", "pitch_property", "forward_property", "mode_key", "orthographic_size_key",
-        "flyby_mode",   "top_mode",       "front_mode",       "side_mode"};
+        "yaw_property", "pitch_property", "forward_property", "mode_key",   "orthographic_size_key",
+        "flyby_mode",   "quad_mode",      "top_mode",         "front_mode", "side_mode"};
     for (size_t i = 0; i < SDL_arraysize(property_keys); ++i)
     {
         yyjson_val *value = obj_get(component, property_keys[i]);
         if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
             return validation_error(ctx, path, "controller.editor_camera property names must be non-empty strings");
+    }
+    const char *camera_keys[] = {"top_camera", "front_camera", "side_camera"};
+    for (size_t i = 0; i < SDL_arraysize(camera_keys); ++i)
+    {
+        yyjson_val *value = obj_get(component, camera_keys[i]);
+        if (value != NULL && !require_ref(ctx, &names->cameras, "camera", json_string(component, camera_keys[i]), path))
+            return false;
     }
 
     const char *numeric_keys[] = {"move_speed",

@@ -1454,6 +1454,10 @@
             "fast": "action.editor.camera.fast"
           },
           "mode_key": "editor.view.mode",
+          "quad_mode": "quad_view",
+          "top_camera": "camera.editor_shell.ortho_top",
+          "front_camera": "camera.editor_shell.ortho_front",
+          "side_camera": "camera.editor_shell.ortho_side",
           "orthographic_size_key": "editor.ortho.size",
           "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
           "move_speed": 8.0,

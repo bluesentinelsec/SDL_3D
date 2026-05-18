@@ -16050,6 +16050,28 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_TRUE(visible_view_label("Top / XY"));
     EXPECT_TRUE(visible_view_label("Side / YZ"));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
+    const float quad_zoom_start = ortho.fovy;
+    SDL_Event wheel{};
+    wheel.type = SDL_EVENT_MOUSE_WHEEL;
+    wheel.wheel.mouse_x = 100.0f;
+    wheel.wheel.mouse_y = 100.0f;
+    wheel.wheel.y = 1.0f;
+    slayer3d_input_process_event(input, &wheel);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
+    EXPECT_NEAR(ortho.fovy, quad_zoom_start, 0.001f);
+
+    wheel.wheel.mouse_x = 700.0f;
+    wheel.wheel.mouse_y = 100.0f;
+    wheel.wheel.y = 1.0f;
+    slayer3d_input_process_event(input, &wheel);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.ortho_top", &ortho));
+    EXPECT_LT(ortho.fovy, quad_zoom_start);
+
     slayer3d_signal_emit(bus, view_perspective_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
@@ -16061,7 +16083,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_W;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 3);
+    slayer3d_input_update(input, 7);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, start_position)), 0.1f);
 
@@ -16073,7 +16095,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     motion.motion.xrel = 60.0f;
     motion.motion.yrel = -15.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 4);
+    slayer3d_input_update(input, 8);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     const float yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);

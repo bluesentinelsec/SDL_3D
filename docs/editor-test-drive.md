@@ -80,7 +80,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `Enter` | palette closed | commit the current preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size |
 | arrow keys | full-screen orthographic, palette closed | pan the active canvas |
-| `Z` / `X` or mouse wheel | full-screen orthographic | zoom the active canvas in or out |
+| `Z` / `X` or mouse wheel | orthographic view | zoom the active canvas in or out; in four-view layout, the mouse cursor must be over an orthographic pane |
 | `R` | palette closed | toggle wall axis |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
@@ -139,6 +139,9 @@ The following should be true during a good test drive:
   perspective, top/XY, front/XZ, or side/YZ.
 - Full-screen orthographic views pan with the arrow keys and zoom with `Z`,
   `X`, or the mouse wheel while keeping a visible work grid.
+- In the four-view layout, mouse wheel zoom works when the cursor is over the
+  top, front, or side orthographic pane. The 3D perspective pane does not
+  consume orthographic zoom.
 - Top/front/side orthographic views plot on their authored work planes;
   perspective preview uses the 3D editor camera.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
