@@ -23,7 +23,19 @@ template, and `open` loads an existing editable level fragment:
 
 The project path points at a directory containing `slayer3d.project.json`.
 Saving uses an atomic same-directory temporary file and rename; `open` without
-`--output` saves back to `--input`.
+`--output` saves back to `--input`. Use `--output` with `open` when you want to
+fork an existing editable fragment into a different file, and pass
+`--overwrite` only when replacing an existing output path is intentional.
+
+The editor host is a thin wrapper around the generic runner. For runtime/data
+debugging, the equivalent raw runner command for opening a saved level is:
+
+```sh
+./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --state editor.command=open --state editor.input.path=/tmp/slayer3d-test-level.fragment.json --state editor.save.path=/tmp/slayer3d-test-level.fragment.json
+```
+
+The raw runner path is useful for debugging state injection, but normal editing
+should use `slayer3d_editor new` or `slayer3d_editor open`.
 
 ## Default Layout
 
@@ -76,7 +88,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `Space` / `Left Ctrl` | 3D flyby | move camera up/down |
 | `Left Shift` | 3D flyby | move faster |
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
-| `T` | palette closed | report that disk test-run handoff is disabled for this MVP iteration |
+| `T` | palette closed | report that disk test-run manifest handoff is disabled for this MVP iteration |
 | `F5` | palette closed | enter the playable test scene from the placed player start |
 | `Esc` | palette closed | quit |
 
@@ -92,7 +104,8 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    tile should disappear.
 6. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
    file should contain `brush_worlds` and `editor_player_starts`.
-7. Press `F5`; the editor should switch into the playable test scene.
+7. Press `F5`; the editor should switch into the playable test scene using the
+   current in-memory map and player start.
 8. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
@@ -130,7 +143,7 @@ The following should be true during a good test drive:
   perspective preview uses the 3D editor camera.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
   writes the same fragment to the CLI output path.
-- `T` does not write a manifest during this MVP iteration.
+- `T` does not write a test-run manifest during this MVP iteration.
 - `F5` applies the stored player start before entering the playable scene.
 
 Current limitations are expected: this is not yet a polished TrenchBroom-style

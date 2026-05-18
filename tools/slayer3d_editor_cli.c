@@ -51,6 +51,30 @@ static bool path_is_absolute_tool(const char *path)
     return SDL_strlen(path) > 2u && path[1] == ':';
 }
 
+static void path_normalize_host_separators_tool(char *path)
+{
+#if defined(_WIN32)
+    if (path == NULL)
+        return;
+    for (char *p = path; *p != '\0'; ++p)
+    {
+        if (*p == '/')
+            *p = '\\';
+    }
+#else
+    (void)path;
+#endif
+}
+
+static char path_separator_tool(void)
+{
+#if defined(_WIN32)
+    return '\\';
+#else
+    return '/';
+#endif
+}
+
 static char *path_dirname_tool(const char *path)
 {
     if (path == NULL || path[0] == '\0')
@@ -79,7 +103,11 @@ static char *path_join_tool(const char *base, const char *path)
     if (path == NULL)
         return NULL;
     if (path_is_absolute_tool(path) || base == NULL || base[0] == '\0')
-        return SDL_strdup(path);
+    {
+        char *copy = SDL_strdup(path);
+        path_normalize_host_separators_tool(copy);
+        return copy;
+    }
     const size_t base_len = SDL_strlen(base);
     const size_t path_len = SDL_strlen(path);
     const bool needs_sep = base_len > 0u && base[base_len - 1u] != '/' && base[base_len - 1u] != '\\';
@@ -89,8 +117,9 @@ static char *path_join_tool(const char *base, const char *path)
     SDL_memcpy(joined, base, base_len);
     size_t offset = base_len;
     if (needs_sep)
-        joined[offset++] = '/';
+        joined[offset++] = path_separator_tool();
     SDL_memcpy(joined + offset, path, path_len + 1u);
+    path_normalize_host_separators_tool(joined);
     return joined;
 }
 

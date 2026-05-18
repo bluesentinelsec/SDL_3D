@@ -187,6 +187,26 @@ saves back to `--input` unless `--output` is supplied:
 build/debug/slayer3d_editor open --project path/to/project --input path/to/level.fragment.json
 ```
 
+The manifest currently carries `data_root`, `editor_entry`, optional
+`media_root`, and optional `test_run_output`. The editor host translates those
+fields into a normal runner launch and injects `editor.command`,
+`editor.input.path`, `editor.save.path`, and `editor.test_run.path` as scene
+state. This keeps the shell data-authored while still giving users a stable CLI:
+`--project` selects the editor project, `--input` selects the editable fragment
+for `open`, and `--output` selects the save target.
+
+For low-level debugging, the same launch can be written directly with the
+generic runner:
+
+```sh
+build/debug/slayer3d_runner \
+  --root demos/editor_shell_dojo/data \
+  --data asset://editor_shell_dojo.game.json \
+  --state editor.command=open \
+  --state editor.input.path=/tmp/level.fragment.json \
+  --state editor.save.path=/tmp/level.fragment.json
+```
+
 The fused executable path is still the same generic runner. The game data is
 stored as an appended `.slayer3dpak`, and the runner auto-mounts it only when no
 explicit mount flags are provided.

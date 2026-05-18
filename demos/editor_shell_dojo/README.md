@@ -18,14 +18,19 @@ Reopen that saved level:
 ```
 
 `--project` points at a directory containing `slayer3d.project.json`; the
-manifest defines the data root and editor entry point. Press `Ctrl+S` or
-`Command+S` in the editor to atomically save an editable fragment containing
-`brush_worlds` and `editor_player_starts`.
+manifest defines the data root, editor entry point, optional media root, and
+optional test-run manifest path. `new` requires `--output`. `open` requires
+`--input` and saves back to that same file unless `--output` is supplied. Pass
+`--overwrite` only when replacing an existing output file is intentional.
+
+Press `Ctrl+S` or `Command+S` in the editor to atomically save an editable
+fragment containing `brush_worlds` and `editor_player_starts`. Press `F5` to
+enter the in-runtime playable test scene from the current in-memory level.
 
 The equivalent raw runner command remains useful for data/runtime debugging:
 
 ```sh
-./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json
+./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --state editor.command=open --state editor.input.path=/tmp/slayer3d-editor-level.fragment.json --state editor.save.path=/tmp/slayer3d-editor-level.fragment.json
 ```
 
 See [docs/editor-test-drive.md](../../docs/editor-test-drive.md) for the current
