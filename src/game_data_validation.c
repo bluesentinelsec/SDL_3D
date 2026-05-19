@@ -7997,6 +7997,10 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *snap = obj_get(action, "snap");
         if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
             return validation_error(ctx, json_path, "editor.brush_world.create_box snap must be a positive number");
+        yyjson_val *structural_grid = obj_get(action, "structural_grid");
+        if (structural_grid != NULL && (!yyjson_is_num(structural_grid) || yyjson_get_num(structural_grid) <= 0.0))
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.create_box structural_grid must be a positive number");
         if (!from_preview)
         {
             const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));

@@ -14623,6 +14623,7 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
             "material": "mat.wall",
             "min": [2.0, 0.0, 0.0],
             "max": [4.0, 2.0, 0.5],
+            "structural_grid": 0.1,
             "outputs": {
               "valid_key": "editor.create.valid",
               "message_key": "editor.create.message",
@@ -14689,6 +14690,7 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     desc.material_name = "mat.floor";
     desc.min = slayer3d_vec3_make(0.0f, -0.25f, 2.0f);
     desc.max = slayer3d_vec3_make(3.0f, 0.0f, 4.0f);
+    desc.structural_grid = 0.25f;
     char generated_name[256]{};
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &desc, generated_name, sizeof(generated_name), error,
                                                     sizeof(error)))
@@ -14703,6 +14705,19 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     ASSERT_NE(world.compile_artifact_hash, 0u);
     EXPECT_NE(world.compile_artifact_hash, signal_create_compile_hash);
     const Uint64 direct_create_compile_hash = world.compile_artifact_hash;
+
+    slayer3d_game_data_create_box_brush_desc off_grid_desc = desc;
+    off_grid_desc.brush_name = "brush.off_grid";
+    off_grid_desc.min = slayer3d_vec3_make(0.03f, 0.0f, 0.0f);
+    off_grid_desc.max = slayer3d_vec3_make(1.03f, 1.0f, 1.0f);
+    off_grid_desc.structural_grid = 0.1f;
+    EXPECT_FALSE(slayer3d_game_data_create_box_brush(runtime, &off_grid_desc, nullptr, 0, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("structural grid"), std::string::npos) << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_EQ(world.brush_count, 3);
+    EXPECT_EQ(world.compile_artifact_hash, direct_create_compile_hash);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_EQ(editor_state.revision, 2U);
 
     slayer3d_game_data_resize_brush_face_desc resize_desc{};
     resize_desc.world_name = "brush.editor.level";

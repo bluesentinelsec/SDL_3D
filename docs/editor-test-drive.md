@@ -150,7 +150,10 @@ The following should be true during a good test drive:
   are thin grid-edge segments, so simple blockout maps can be tiled without
   visible gaps while adjacent hallways can pass close to one another. Wall
   bottoms sit directly on the connected floor elevation; authored blockout
-  seams should be watertight rather than relying on visual offsets.
+  seams should be watertight rather than relying on visual offsets. The shell
+  dojo also snaps generated floor/wall/ceiling bounds to a 0.05m structural
+  source grid, so accidental sub-millimeter hover offsets should not appear in
+  saved brush planes.
 - In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
   cardinal axis from the camera direction. Orthographic placement keeps the
   explicit `R` wall-axis toggle for drafting control.

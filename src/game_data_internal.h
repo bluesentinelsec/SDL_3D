@@ -176,6 +176,7 @@ typedef struct editor_placement_preview_state
     const char *material_name;
     slayer3d_vec3 anchor;
     float snap;
+    float structural_grid;
     bool has_bounds;
     slayer3d_bounding_box bounds;
 } editor_placement_preview_state;

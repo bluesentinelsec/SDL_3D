@@ -234,6 +234,7 @@
       "ceiling_material": "mat.editor.ceiling",
       "default_snap": 8.0,
       "default_grid_size": 8.0,
+      "default_structural_grid": 0.05,
       "default_elevation": 0.0,
       "outputs": {
         "active_key": "editor.placement_preview.active",
