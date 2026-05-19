@@ -355,7 +355,9 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
     if (!yyjson_is_obj(placement))
         return validation_error(ctx, placement_path, "scene editor placement must be an object");
 
-    const char *string_fields[] = {"tool_key", "snap_key", "grid_size_key", "default_tool"};
+    const char *string_fields[] = {"tool_key",       "snap_key",        "grid_size_key",
+                                   "default_tool",   "elevation_key",   "work_plane_distance_key",
+                                   "floor_material", "ceiling_material"};
     for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
     {
         char field_path[PATH_BUFFER_SIZE];
@@ -370,6 +372,11 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
     yyjson_val *default_grid_size = obj_get(placement, "default_grid_size");
     if (default_grid_size != NULL && (!yyjson_is_num(default_grid_size) || yyjson_get_num(default_grid_size) <= 0.0))
         return validation_error(ctx, placement_path, "scene editor placement default_grid_size must be positive");
+    char default_elevation_path[PATH_BUFFER_SIZE];
+    format_path(default_elevation_path, sizeof(default_elevation_path), "%s.default_elevation", placement_path);
+    if (!validate_optional_number(ctx, obj_get(placement, "default_elevation"), default_elevation_path,
+                                  "scene editor placement default_elevation"))
+        return false;
 
     yyjson_val *outputs = obj_get(placement, "outputs");
     if (outputs != NULL && !yyjson_is_obj(outputs))
@@ -426,6 +433,12 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         if (snap_mode != NULL && SDL_strcmp(snap_mode, "floor") != 0 && SDL_strcmp(snap_mode, "nearest") != 0)
             return validation_error(ctx, preview_path,
                                     "scene editor placement preview snap_mode must be floor or nearest");
+        const char *elevation_mode = json_string(preview, "elevation_mode");
+        if (elevation_mode != NULL && SDL_strcmp(elevation_mode, "connected_grid") != 0)
+        {
+            return validation_error(ctx, preview_path,
+                                    "scene editor placement preview elevation_mode must be connected_grid");
+        }
         yyjson_val *grid_size = obj_get(preview, "grid_size");
         if (grid_size != NULL && (!yyjson_is_num(grid_size) || yyjson_get_num(grid_size) <= 0.0))
             return validation_error(ctx, preview_path, "scene editor placement preview grid_size must be positive");

@@ -228,8 +228,13 @@
       "tool_key": "editor.tool.mode",
       "snap_key": "editor.grid.size",
       "grid_size_key": "editor.grid.size",
+      "elevation_key": "editor.brush.elevation",
+      "work_plane_distance_key": "editor.work_plane.distance",
+      "floor_material": "mat.editor.floor",
+      "ceiling_material": "mat.editor.ceiling",
       "default_snap": 8.0,
       "default_grid_size": 8.0,
+      "default_elevation": 0.0,
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "valid_key": "editor.placement_preview.valid",
@@ -250,6 +255,7 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.floor",
+          "elevation_mode": "connected_grid",
           "grid_min": [0.0, -0.025, 0.0],
           "grid_max": [1.0, 0.0, 1.0],
           "message": "floor prefab preview"
@@ -261,6 +267,7 @@
           "material": "mat.editor.wall",
           "axis_key": "editor.placement.wall_axis",
           "axis": "z",
+          "elevation_mode": "connected_grid",
           "grid_min": [0.0, 0.0, 0.0],
           "grid_max": [1.0, 1.0, 1.0],
           "message": "wall prefab preview"
@@ -270,6 +277,7 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.ceiling",
+          "elevation_mode": "connected_grid",
           "grid_min": [0.0, 1.0, 0.0],
           "grid_max": [1.0, 1.025, 1.0],
           "message": "ceiling prefab preview"

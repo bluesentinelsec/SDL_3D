@@ -9065,6 +9065,63 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
     EXPECT_NE(std::string(grid_placement_error).find("exactly one of min/max or grid_min/grid_max"), std::string::npos)
         << grid_placement_error;
 
+    write_text(dir / "bad_elevation_mode_placement.game.json", R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Elevation Mode Scene Editor Placement" },
+  "world": {
+    "name": "world.bad_elevation_mode_scene_editor_placement",
+    "kind": "brush",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "brush_worlds": [
+    {
+      "name": "brush.editor.target",
+      "materials": [{ "name": "mat.gray", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.valid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 0 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.gray" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "placement": {
+      "previews": [
+        {
+          "mode": "wall",
+          "kind": "box",
+          "world": "brush.editor.target",
+          "material": "mat.gray",
+          "elevation_mode": "freeform",
+          "grid_min": [-0.5, 0.0, -0.5],
+          "grid_max": [0.5, 1.0, 0.5]
+        }
+      ]
+    }
+  }
+})json");
+    char elevation_mode_error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_elevation_mode_placement.game.json").string().c_str(),
+                                                  nullptr, elevation_mode_error, sizeof(elevation_mode_error)));
+    EXPECT_NE(std::string(elevation_mode_error).find("elevation_mode must be connected_grid"), std::string::npos)
+        << elevation_mode_error;
+
     write_text(dir / "bad_palette.game.json", R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Scene Editor Palette" },
@@ -15739,6 +15796,38 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(west_fill_bounds.min.y, floor_bounds_before_lower.max.y - 8.0f, 0.001f);
     EXPECT_NEAR(west_fill_bounds.max.y, floor_bounds_before_lower.min.y, 0.001f);
 
+    slayer3d_signal_emit(bus, wall_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_NE(placement_max, nullptr);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.elevation", 0.0f),
+                floor_bounds_below_plane.max.y, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.work_plane.distance", 0.0f),
+                floor_bounds_below_plane.max.y, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.y, floor_bounds_below_plane.max.y + 8.0f, 0.001f);
+
+    slayer3d_signal_emit(bus, ceiling_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_NE(placement_max, nullptr);
+    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y + 8.0f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.y, floor_bounds_below_plane.max.y + 8.2f, 0.001f);
+
+    slayer3d_signal_emit(bus, floor_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_NE(placement_max, nullptr);
+    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y - 0.2f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.y, floor_bounds_below_plane.max.y, 0.001f);
+
+    slayer3d_signal_emit(bus, mode_select_signal, nullptr);
     press_editor_key(SDL_SCANCODE_RIGHTBRACKET, 9);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),

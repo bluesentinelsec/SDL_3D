@@ -113,13 +113,16 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    slab at the default floor plane and confirm the floor slab can move below
    the plane; the editor should add side-wall fill brushes around the exposed
    height change.
-6. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
+6. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
+   wall, and ceiling tiles. Their previews should stay on the lowered
+   connected grid instead of snapping back to the original world plane.
+7. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
-7. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
+8. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
    file should contain `brush_worlds` and `editor_player_starts`.
-8. Press `F5`; the editor should switch into the playable test scene using the
+9. Press `F5`; the editor should switch into the playable test scene using the
    current in-memory map and player start.
-9. In the playable scene, use `WASD` and mouse look to verify the player starts
+10. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
 ## Correctness Checks
@@ -146,6 +149,10 @@ The following should be true during a good test drive:
 - Floor, wall, and ceiling prefabs share the same grid-cell footprint and are
   anchored to grid-cell boundaries, so simple blockout maps can be tiled without
   visible gaps.
+- Floor, wall, and ceiling previews share a connected-grid elevation. Hovering
+  or working from a lowered floor or one of its side-wall fills should update
+  the editor brush elevation and work plane so new floor, wall, and ceiling
+  tiles can continue the lower level without manual state edits.
 - Right click / `Delete` removes the highlighted brush and `U` can undo the
   deletion.
 - Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
