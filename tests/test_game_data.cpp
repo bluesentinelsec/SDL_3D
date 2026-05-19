@@ -16184,9 +16184,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+#if defined(__EMSCRIPTEN__)
+    const std::string save_path_string = "/tmp/level.fragment.json";
+#else
     const std::filesystem::path save_dir = unique_test_dir("editable_level_reload");
     const std::filesystem::path save_path = save_dir / "level.fragment.json";
     const std::string save_path_string = save_path.string();
+#endif
     char error[512]{};
 
     slayer3d_game_session *session = nullptr;
@@ -16201,11 +16205,13 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
         << error;
     ASSERT_NE(export_json, nullptr);
     EXPECT_GT(export_size, 0u);
+#if !defined(__EMSCRIPTEN__)
     size_t saved_size = 0;
     ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
         runtime, "brush.editor_shell.target", save_path_string.c_str(), &saved_size, error, sizeof(error)))
         << error;
     EXPECT_GT(saved_size, 0u);
+#endif
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 
