@@ -128,6 +128,27 @@ static void init_box_brush_face(slayer3d_game_data_brush_face *face, slayer3d_ve
     face->uv_scale[1] = 1.0f;
 }
 
+static bool editor_box_brush_value_aligned_to_grid(float value, float structural_grid)
+{
+    if (structural_grid <= 0.0f)
+        return true;
+    const float snapped = SDL_roundf(value / structural_grid) * structural_grid;
+    const float epsilon = SDL_max(0.00001f, structural_grid * 0.0001f);
+    return SDL_fabsf(value - snapped) <= epsilon;
+}
+
+static bool editor_box_brush_bounds_aligned_to_grid(const slayer3d_game_data_create_box_brush_desc *desc)
+{
+    if (desc == NULL || desc->structural_grid <= 0.0f)
+        return true;
+    return editor_box_brush_value_aligned_to_grid(desc->min.x, desc->structural_grid) &&
+           editor_box_brush_value_aligned_to_grid(desc->min.y, desc->structural_grid) &&
+           editor_box_brush_value_aligned_to_grid(desc->min.z, desc->structural_grid) &&
+           editor_box_brush_value_aligned_to_grid(desc->max.x, desc->structural_grid) &&
+           editor_box_brush_value_aligned_to_grid(desc->max.y, desc->structural_grid) &&
+           editor_box_brush_value_aligned_to_grid(desc->max.z, desc->structural_grid);
+}
+
 static bool init_editor_box_brush(const brush_world_runtime *world_runtime,
                                   const slayer3d_game_data_create_box_brush_desc *desc, const char *brush_name,
                                   int material_index, slayer3d_game_data_brush *out_brush)
@@ -179,6 +200,16 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     if (!(desc->min.x < desc->max.x && desc->min.y < desc->max.y && desc->min.z < desc->max.z))
     {
         set_error(error_buffer, error_buffer_size, "box brush bounds must have min < max on all axes");
+        return false;
+    }
+    if (desc->structural_grid < 0.0f)
+    {
+        set_error(error_buffer, error_buffer_size, "box brush structural grid must be positive");
+        return false;
+    }
+    if (!editor_box_brush_bounds_aligned_to_grid(desc))
+    {
+        set_error(error_buffer, error_buffer_size, "box brush bounds must align to structural grid");
         return false;
     }
 

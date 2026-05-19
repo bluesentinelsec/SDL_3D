@@ -14623,6 +14623,7 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
             "material": "mat.wall",
             "min": [2.0, 0.0, 0.0],
             "max": [4.0, 2.0, 0.5],
+            "structural_grid": 0.1,
             "outputs": {
               "valid_key": "editor.create.valid",
               "message_key": "editor.create.message",
@@ -14689,6 +14690,7 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     desc.material_name = "mat.floor";
     desc.min = slayer3d_vec3_make(0.0f, -0.25f, 2.0f);
     desc.max = slayer3d_vec3_make(3.0f, 0.0f, 4.0f);
+    desc.structural_grid = 0.25f;
     char generated_name[256]{};
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &desc, generated_name, sizeof(generated_name), error,
                                                     sizeof(error)))
@@ -14703,6 +14705,19 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     ASSERT_NE(world.compile_artifact_hash, 0u);
     EXPECT_NE(world.compile_artifact_hash, signal_create_compile_hash);
     const Uint64 direct_create_compile_hash = world.compile_artifact_hash;
+
+    slayer3d_game_data_create_box_brush_desc off_grid_desc = desc;
+    off_grid_desc.brush_name = "brush.off_grid";
+    off_grid_desc.min = slayer3d_vec3_make(0.03f, 0.0f, 0.0f);
+    off_grid_desc.max = slayer3d_vec3_make(1.03f, 1.0f, 1.0f);
+    off_grid_desc.structural_grid = 0.1f;
+    EXPECT_FALSE(slayer3d_game_data_create_box_brush(runtime, &off_grid_desc, nullptr, 0, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("structural grid"), std::string::npos) << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_EQ(world.brush_count, 3);
+    EXPECT_EQ(world.compile_artifact_hash, direct_create_compile_hash);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_EQ(editor_state.revision, 2U);
 
     slayer3d_game_data_resize_brush_face_desc resize_desc{};
     resize_desc.world_name = "brush.editor.level";
@@ -15660,6 +15675,16 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         ADD_FAILURE() << "brush not found: " << name;
         return slayer3d_bounding_box{slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 0.0f)};
     };
+    auto find_brush_by_name = [&](const std::string &name) -> const slayer3d_game_data_brush * {
+        const slayer3d_game_data_brush_world brush_world = world();
+        for (int i = 0; i < brush_world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &candidate = brush_world.brushes[i];
+            if (candidate.name != nullptr && name == candidate.name)
+                return &candidate;
+        }
+        return nullptr;
+    };
     auto visible_ui_text = [&](const char *prefix) {
         std::vector<std::string> values;
         slayer3d_game_data_ui_metrics metrics{};
@@ -15839,8 +15864,19 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.element", ""), floor_brush_name.c_str());
-    const int brush_count_before_floor_lower = world().brush_count;
     const slayer3d_bounding_box floor_bounds_before_lower = brush_bounds(floor_brush_name);
+    slayer3d_game_data_create_box_brush_desc west_context_desc{};
+    west_context_desc.world_name = "brush.editor_shell.target";
+    west_context_desc.brush_name = "brush.editor_shell.context.west_wall";
+    west_context_desc.material_name = "mat.editor.ceiling";
+    west_context_desc.min = slayer3d_vec3_make(floor_bounds_before_lower.min.x - 0.2f,
+                                               floor_bounds_before_lower.max.y - 8.0f, floor_bounds_before_lower.min.z);
+    west_context_desc.max = slayer3d_vec3_make(floor_bounds_before_lower.min.x, floor_bounds_before_lower.max.y + 8.0f,
+                                               floor_bounds_before_lower.max.z);
+    west_context_desc.structural_grid = 0.05f;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &west_context_desc, nullptr, 0, error, sizeof(error)))
+        << error;
+    const int brush_count_before_floor_lower = world().brush_count;
     press_editor_key(SDL_SCANCODE_LEFTBRACKET, 7);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
@@ -15851,7 +15887,17 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(floor_bounds_below_plane.max.y, floor_bounds_before_lower.max.y - 8.0f, 0.001f);
     const slayer3d_bounding_box west_fill_bounds = brush_bounds(floor_brush_name + ".auto_fill.n8000_p0.west");
     EXPECT_NEAR(west_fill_bounds.min.y, floor_bounds_before_lower.max.y - 8.0f, 0.001f);
-    EXPECT_NEAR(west_fill_bounds.max.y, floor_bounds_before_lower.min.y, 0.001f);
+    EXPECT_NEAR(west_fill_bounds.max.y, floor_bounds_before_lower.max.y, 0.001f);
+    EXPECT_NEAR(west_fill_bounds.min.x, floor_bounds_before_lower.min.x, 0.001f);
+    EXPECT_NEAR(west_fill_bounds.max.x, floor_bounds_before_lower.min.x + 0.2f, 0.001f);
+    const slayer3d_game_data_brush *west_fill = find_brush_by_name(floor_brush_name + ".auto_fill.n8000_p0.west");
+    ASSERT_NE(west_fill, nullptr);
+    ASSERT_GT(west_fill->face_count, 0);
+    EXPECT_STREQ(west_fill->faces[0].material_name, "mat.editor.ceiling");
+    const slayer3d_game_data_brush *east_fill = find_brush_by_name(floor_brush_name + ".auto_fill.n8000_p0.east");
+    ASSERT_NE(east_fill, nullptr);
+    ASSERT_GT(east_fill->face_count, 0);
+    EXPECT_STREQ(east_fill->faces[0].material_name, "mat.editor.wall");
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -15967,7 +16013,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(brush->bounds.max.x, ceiling_bounds_max.x, 0.001f);
     EXPECT_NEAR(brush->bounds.max.y, ceiling_bounds_max.y, 0.001f);
     EXPECT_NEAR(brush->bounds.max.z, ceiling_bounds_max.z, 0.001f);
-    EXPECT_EQ(world().brush_count, initial_brush_count + 3);
+    EXPECT_EQ(world().brush_count, initial_brush_count + 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
     EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 3);
 
@@ -15981,9 +16027,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.command", ""), "delete");
-    EXPECT_EQ(world().brush_count, initial_brush_count + 2);
-    slayer3d_signal_emit(bus, undo_signal, nullptr);
     EXPECT_EQ(world().brush_count, initial_brush_count + 3);
+    slayer3d_signal_emit(bus, undo_signal, nullptr);
+    EXPECT_EQ(world().brush_count, initial_brush_count + 4);
 
     SDL_Event right_release{};
     right_release.type = SDL_EVENT_MOUSE_BUTTON_UP;

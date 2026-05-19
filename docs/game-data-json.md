@@ -1052,6 +1052,11 @@ For interactive placement, set `position_from` to `selection_point`. The action
 then treats `min` and `max` as offsets from the current active editor selection
 point. `position_offset` can move the prefab anchor before creation, and `snap`
 rounds the anchor to a grid size in world units before applying the offsets.
+`structural_grid` is an optional source-coordinate correctness guard: when it
+is present, every generated bounds component must land on that grid. This is
+separate from the visible placement grid. For example, an editor can place 8m
+floor tiles while validating thin floor and wall slabs on a 0.05m structural
+source grid.
 
 ```json
 {
@@ -1060,6 +1065,7 @@ rounds the anchor to a grid size in world units before applying the offsets.
   "material": "mat.stone_floor",
   "position_from": "selection_point",
   "snap": 0.5,
+  "structural_grid": 0.05,
   "min": [-4.0, -0.25, -4.0],
   "max": [4.0, 0.0, 4.0],
   "outputs": {
@@ -1084,11 +1090,15 @@ floor tiles. `grid_size_key` can point at the same scene-state float when box
 previews use `grid_min` and `grid_max` instead of fixed `min` and `max` bounds.
 Those grid bounds are multipliers from the snapped grid anchor, so a floor
 authored from `[0, 0, 0]` to `[1, 0.025, 1]` becomes one active grid cell wide
-at any configured grid size. For tile-like blockout tools, author floors,
-walls, and ceilings from grid-boundary anchors with matching horizontal
-footprints instead of centering them around the snap point; this keeps adjacent
-tiles aligned without gaps. Each preview entry maps a tool `mode` to either a
-`box` ghost or a `player_start` marker. Box
+at any configured grid size. `default_structural_grid`,
+`structural_grid_key`, and per-preview `structural_grid` apply a second snap to
+the preview anchor and bounds before the brush is created. Use this source grid
+to prevent tiny hit-test offsets such as `0.001` from becoming authored brush
+planes. For tile-like blockout tools, author floors, walls, and ceilings from
+grid-boundary anchors with matching horizontal footprints instead of centering
+them around the snap point; this keeps adjacent tiles aligned without gaps.
+Each preview entry maps a tool `mode` to either a `box` ghost or a
+`player_start` marker. Box
 previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
 between horizontal grid axes. A box preview must author exactly one bounds
 source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. The preview

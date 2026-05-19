@@ -139,8 +139,13 @@ The following should be true during a good test drive:
   Mode owns brush selection and multi-selection. `[` and `]` resize generic
   selected brushes by the active grid step. Thin floor slabs can move below the
   default plane; the editor creates deterministic side-wall fill brushes for
-  the exposed vertical space and removes the matching fill segment when raised
-  back up.
+  the exposed vertical space. Fill brushes sit on the lowered tile boundary
+  and extend to the upper walk surface so the test-run view should not show a
+  dark slab-height seam around the pit. Fill materials are selected per side:
+  adjacent wall-height brush context wins, and the authored fallback fill
+  material is used when no context exists. Thin floor-slab side faces do not
+  count as wall context. The matching fill segment is removed when the floor is
+  raised back up.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling brushes stay aligned to the larger
   blockout grid.
@@ -150,7 +155,10 @@ The following should be true during a good test drive:
   are thin grid-edge segments, so simple blockout maps can be tiled without
   visible gaps while adjacent hallways can pass close to one another. Wall
   bottoms sit directly on the connected floor elevation; authored blockout
-  seams should be watertight rather than relying on visual offsets.
+  seams should be watertight rather than relying on visual offsets. The shell
+  dojo also snaps generated floor/wall/ceiling bounds to a 0.05m structural
+  source grid, so accidental sub-millimeter hover offsets should not appear in
+  saved brush planes.
 - In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
   cardinal axis from the camera direction. Orthographic placement keeps the
   explicit `R` wall-axis toggle for drafting control.

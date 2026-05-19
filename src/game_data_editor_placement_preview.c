@@ -83,6 +83,18 @@ static float editor_placement_grid_size(slayer3d_game_data_runtime *runtime, yyj
     return authored_grid_size;
 }
 
+static float editor_placement_structural_grid(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
+                                              yyjson_val *preview)
+{
+    const float authored_grid =
+        json_float(preview, "structural_grid", json_float(placement, "default_structural_grid", 0.0f));
+    const char *grid_key =
+        json_string(preview, "structural_grid_key", json_string(placement, "structural_grid_key", NULL));
+    if (runtime != NULL && grid_key != NULL && grid_key[0] != '\0')
+        return slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), grid_key, authored_grid);
+    return authored_grid;
+}
+
 static float editor_placement_elevation(slayer3d_game_data_runtime *runtime, yyjson_val *placement)
 {
     const float authored_elevation = json_float(placement, "default_elevation", 0.0f);
@@ -155,6 +167,29 @@ static float editor_placement_snap_value(float value, float snap, const char *mo
     return editor_placement_snap_floor(value, snap);
 }
 
+static float editor_placement_snap_source_value(float value, float structural_grid)
+{
+    if (structural_grid <= 0.0f)
+        return value;
+    const float snapped = SDL_roundf(value / structural_grid) * structural_grid;
+    return SDL_fabsf(snapped) <= 0.000001f ? 0.0f : snapped;
+}
+
+static slayer3d_vec3 editor_placement_snap_source_vec3(slayer3d_vec3 value, float structural_grid)
+{
+    value.x = editor_placement_snap_source_value(value.x, structural_grid);
+    value.y = editor_placement_snap_source_value(value.y, structural_grid);
+    value.z = editor_placement_snap_source_value(value.z, structural_grid);
+    return value;
+}
+
+static slayer3d_bounding_box editor_placement_snap_source_bounds(slayer3d_bounding_box bounds, float structural_grid)
+{
+    bounds.min = editor_placement_snap_source_vec3(bounds.min, structural_grid);
+    bounds.max = editor_placement_snap_source_vec3(bounds.max, structural_grid);
+    return bounds;
+}
+
 static bool editor_placement_uses_connected_grid(yyjson_val *preview)
 {
     return SDL_strcmp(json_string(preview, "elevation_mode", ""), "connected_grid") == 0;
@@ -224,7 +259,7 @@ static slayer3d_bounding_box editor_placement_oriented_box_bounds(slayer3d_game_
 
 static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
                                              yyjson_val *preview, const slayer3d_game_data_editor_selection *selection,
-                                             float snap)
+                                             float snap, float structural_grid)
 {
     slayer3d_vec3 anchor = selection != NULL ? selection->point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     anchor = slayer3d_vec3_add(anchor, json_vec3(preview, "position_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
@@ -239,8 +274,10 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
     {
         const float grid_size = editor_placement_grid_size(runtime, placement, preview, snap);
         anchor.y = editor_placement_connected_grid_elevation(runtime, placement, selection, grid_size);
-        publish_editor_placement_elevation(runtime, placement, anchor.y);
     }
+    anchor = editor_placement_snap_source_vec3(anchor, structural_grid);
+    if (editor_placement_uses_connected_grid(preview))
+        publish_editor_placement_elevation(runtime, placement, anchor.y);
     return anchor;
 }
 
@@ -268,7 +305,9 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
     }
 
     const float snap = editor_placement_snap(runtime, placement, preview_json);
-    const slayer3d_vec3 anchor = editor_placement_anchor(runtime, placement, preview_json, hover_selection, snap);
+    const float structural_grid = editor_placement_structural_grid(runtime, placement, preview_json);
+    const slayer3d_vec3 anchor =
+        editor_placement_anchor(runtime, placement, preview_json, hover_selection, snap, structural_grid);
     editor_placement_preview_state *preview = &runtime->editor_placement_preview;
     SDL_zero(*preview);
     preview->active = true;
@@ -280,6 +319,7 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
     preview->material_name = json_string(preview_json, "material", hover_selection->material_name);
     preview->anchor = anchor;
     preview->snap = snap;
+    preview->structural_grid = structural_grid;
     preview->has_bounds = true;
     if (SDL_strcmp(preview->kind, "player_start") == 0)
     {
@@ -292,6 +332,7 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
         preview->bounds =
             editor_placement_oriented_box_bounds(runtime, placement, preview_json, anchor, preview->axis, snap);
     }
+    preview->bounds = editor_placement_snap_source_bounds(preview->bounds, structural_grid);
     publish_editor_placement_preview(runtime, outputs, true, preview_json, preview,
                                      json_string(preview_json, "message", "placement preview"));
 }

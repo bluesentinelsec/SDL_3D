@@ -176,6 +176,7 @@ typedef struct editor_placement_preview_state
     const char *material_name;
     slayer3d_vec3 anchor;
     float snap;
+    float structural_grid;
     bool has_bounds;
     slayer3d_bounding_box bounds;
 } editor_placement_preview_state;
@@ -197,6 +198,8 @@ typedef struct editor_command_transaction_entry
     int material_index;
     int previous_material_index;
     slayer3d_vec3 offset;
+    bool has_fill_material_indices;
+    int fill_material_indices[4];
     bool has_bounds;
     slayer3d_bounding_box bounds;
     int brush_index;

@@ -2219,6 +2219,15 @@ extern "C"
         slayer3d_vec3 max;
         /** @brief Brush contents bitmask. Zero defaults to solid. */
         unsigned int contents;
+        /**
+         * @brief Optional source-coordinate snap step for structural brushes.
+         *
+         * When greater than zero, all min/max bounds components must align to
+         * this grid before the brush is appended. This is separate from the
+         * editor's visible placement grid: a level can place 8m tiles while
+         * still allowing 0.2m-thick walls on a 0.1m structural source grid.
+         */
+        float structural_grid;
     } slayer3d_game_data_create_box_brush_desc;
 
     /**

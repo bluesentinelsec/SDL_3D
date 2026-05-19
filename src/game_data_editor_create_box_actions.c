@@ -19,6 +19,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
     desc.material_name = json_string(action, "material", NULL);
     desc.min = json_vec3(action, "min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     desc.max = json_vec3(action, "max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    desc.structural_grid = json_float(action, "structural_grid", 0.0f);
 
     char error[256];
     error[0] = '\0';
@@ -43,6 +44,8 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
                 desc.material_name = json_string(action, "material", preview->material_name);
                 desc.min = preview->bounds.min;
                 desc.max = preview->bounds.max;
+                if (desc.structural_grid <= 0.0f)
+                    desc.structural_grid = preview->structural_grid;
             }
         }
     }
