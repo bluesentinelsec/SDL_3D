@@ -233,6 +233,8 @@ static bool init_editor_box_brush(const brush_world_runtime *world_runtime,
     out_brush->contents = desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
     out_brush->face_count = 6;
     out_brush->faces = (slayer3d_game_data_brush_face *)SDL_calloc(6u, sizeof(*out_brush->faces));
+    out_brush->bounds = (slayer3d_bounding_box){desc->min, desc->max};
+    out_brush->has_bounds = true;
     if (out_brush->name == NULL || out_brush->faces == NULL)
     {
         free_editor_runtime_brush(out_brush);
@@ -368,6 +370,25 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     {
         set_error(error_buffer, error_buffer_size, "failed to allocate box brush");
         return false;
+    }
+
+    if (world_runtime->editor_has_source_model)
+    {
+        char rebuild_error[256] = {0};
+        if (!editor_brush_world_insert_source_box_from_brush(world_runtime, world_runtime->editor_source_box_count,
+                                                             &new_brush, rebuild_error, sizeof(rebuild_error)))
+        {
+            free_editor_runtime_brush(&new_brush);
+            set_errorf(error_buffer, error_buffer_size,
+                       "failed to rebuild source-backed brush world after box creation%s%s",
+                       rebuild_error[0] != '\0' ? ": " : "", rebuild_error[0] != '\0' ? rebuild_error : "");
+            return false;
+        }
+        if (out_brush_name != NULL && out_brush_name_size > 0u)
+            SDL_strlcpy(out_brush_name, new_brush.name != NULL ? new_brush.name : "", out_brush_name_size);
+        free_editor_runtime_brush(&new_brush);
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
     }
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;

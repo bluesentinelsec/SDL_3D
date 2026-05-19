@@ -1129,6 +1129,11 @@ bool editor_brush_world_rebuild_from_source(brush_world_runtime *world_runtime, 
                                             int error_buffer_size);
 bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,
                                                  int error_buffer_size);
+bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_runtime, int box_index,
+                                                     const slayer3d_game_data_brush *brush, char *error_buffer,
+                                                     int error_buffer_size);
+bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
+                                                   char *error_buffer, int error_buffer_size);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);

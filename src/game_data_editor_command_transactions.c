@@ -374,6 +374,19 @@ static int find_editor_mutable_brush_index(const brush_world_runtime *world_runt
     return -1;
 }
 
+static int find_editor_source_box_index(const brush_world_runtime *world_runtime, const char *brush_name)
+{
+    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
+        return -1;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
+        if (box->name != NULL && SDL_strcmp(box->name, brush_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
 static int editor_brush_material_index_by_name(const brush_world_runtime *world_runtime, const char *material_name)
 {
     if (world_runtime == NULL || material_name == NULL || material_name[0] == '\0')
@@ -402,6 +415,24 @@ static bool remove_editor_brush_at_index(brush_world_runtime *world_runtime, int
         return false;
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    if (world_runtime->editor_has_source_model)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        const int source_index = find_editor_source_box_index(world_runtime, brush->name);
+        if (source_index < 0)
+            return false;
+        if (out_removed != NULL && !copy_editor_brush_snapshot(brush, out_removed))
+            return false;
+        if (!editor_brush_world_remove_source_box_at_index(world_runtime, source_index, NULL, 0))
+        {
+            if (out_removed != NULL)
+                free_editor_runtime_brush_copy(out_removed);
+            return false;
+        }
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
+    }
+
     slayer3d_game_data_brush *old_brushes = (slayer3d_game_data_brush *)world->brushes;
     const int old_count = world->brush_count;
     const int new_count = old_count - 1;
@@ -442,6 +473,14 @@ static bool insert_editor_brush_at_index(brush_world_runtime *world_runtime, int
 {
     if (world_runtime == NULL || brush == NULL)
         return false;
+
+    if (world_runtime->editor_has_source_model)
+    {
+        if (!editor_brush_world_insert_source_box_from_brush(world_runtime, brush_index, brush, NULL, 0))
+            return false;
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
+    }
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;
     const int old_count = world->brush_count;

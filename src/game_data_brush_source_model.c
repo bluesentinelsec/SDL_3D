@@ -433,3 +433,108 @@ bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runt
     world_runtime->editor_has_source_model = true;
     return true;
 }
+
+bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_runtime, int box_index,
+                                                     const slayer3d_game_data_brush *brush, char *error_buffer,
+                                                     int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || brush == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush insertion requires a source model and brush");
+        return false;
+    }
+
+    editor_brush_source_box_runtime inserted;
+    if (!source_box_from_runtime_brush(&world_runtime->desc, brush, &inserted))
+    {
+        set_errorf(error_buffer, error_buffer_size, "brush '%s' cannot be represented as a source box",
+                   brush->name != NULL ? brush->name : "<unnamed>");
+        return false;
+    }
+
+    const int old_count = world_runtime->editor_source_box_count;
+    const int insert_index = SDL_clamp(box_index, 0, old_count);
+    editor_brush_source_box_runtime *old_boxes = world_runtime->editor_source_boxes;
+    editor_brush_source_box_runtime *new_boxes =
+        (editor_brush_source_box_runtime *)SDL_calloc((size_t)old_count + 1u, sizeof(*new_boxes));
+    if (new_boxes == NULL)
+    {
+        free_editor_brush_source_box(&inserted);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush insertion");
+        return false;
+    }
+
+    for (int i = 0; i < insert_index; ++i)
+        new_boxes[i] = old_boxes[i];
+    new_boxes[insert_index] = inserted;
+    for (int i = insert_index; i < old_count; ++i)
+        new_boxes[i + 1] = old_boxes[i];
+
+    world_runtime->editor_source_boxes = new_boxes;
+    world_runtime->editor_source_box_count = old_count + 1;
+    world_runtime->editor_source_box_capacity = old_count + 1;
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        world_runtime->editor_source_boxes = old_boxes;
+        world_runtime->editor_source_box_count = old_count;
+        world_runtime->editor_source_box_capacity = old_count;
+        free_editor_brush_source_box(&new_boxes[insert_index]);
+        SDL_free(new_boxes);
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    SDL_free(old_boxes);
+    return true;
+}
+
+bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
+                                                   char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush removal requires a source model");
+        return false;
+    }
+    const int old_count = world_runtime->editor_source_box_count;
+    if (box_index < 0 || box_index >= old_count)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush index out of range");
+        return false;
+    }
+
+    editor_brush_source_box_runtime *old_boxes = world_runtime->editor_source_boxes;
+    editor_brush_source_box_runtime removed = old_boxes[box_index];
+    const int new_count = old_count - 1;
+    editor_brush_source_box_runtime *new_boxes =
+        new_count > 0 ? (editor_brush_source_box_runtime *)SDL_calloc((size_t)new_count, sizeof(*new_boxes)) : NULL;
+    if (new_count > 0 && new_boxes == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush removal");
+        return false;
+    }
+
+    int write_index = 0;
+    for (int read_index = 0; read_index < old_count; ++read_index)
+    {
+        if (read_index != box_index)
+            new_boxes[write_index++] = old_boxes[read_index];
+    }
+
+    world_runtime->editor_source_boxes = new_boxes;
+    world_runtime->editor_source_box_count = new_count;
+    world_runtime->editor_source_box_capacity = new_count;
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        world_runtime->editor_source_boxes = old_boxes;
+        world_runtime->editor_source_box_count = old_count;
+        world_runtime->editor_source_box_capacity = old_count;
+        SDL_free(new_boxes);
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    free_editor_brush_source_box(&removed);
+    SDL_free(old_boxes);
+    return true;
+}
