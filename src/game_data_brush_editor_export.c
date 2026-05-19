@@ -291,19 +291,51 @@ static bool export_add_structural_box_source(yyjson_mut_doc *doc, yyjson_mut_val
            export_add_brush_contents(doc, obj, brush->contents);
 }
 
-static bool export_add_editor_brush_source_world(yyjson_mut_doc *doc, yyjson_mut_val *sources,
-                                                 const slayer3d_game_data_brush_world *world)
+static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *boxes,
+                                        const editor_brush_source_box_runtime *box)
 {
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    if (obj == NULL || !yyjson_mut_arr_add_val(boxes, obj))
+        return false;
+    return yyjson_mut_obj_add_strcpy(doc, obj, "stable_id", box->stable_id != NULL ? box->stable_id : "") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "name", box->name != NULL ? box->name : "") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "kind", "box") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "prefab", box->prefab != NULL ? box->prefab : "box") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "material", box->material != NULL ? box->material : "") &&
+           export_add_vec3i_values(doc, obj, "min", box->min[0], box->min[1], box->min[2]) &&
+           export_add_vec3i_values(doc, obj, "max", box->max[0], box->max[1], box->max[2]) &&
+           export_add_brush_contents(doc, obj,
+                                     box->contents != 0u ? box->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+}
+
+static bool export_add_editor_brush_source_world(yyjson_mut_doc *doc, yyjson_mut_val *sources,
+                                                 const brush_world_runtime *world_runtime)
+{
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
     yyjson_mut_val *boxes = yyjson_mut_arr(doc);
     if (obj == NULL || boxes == NULL || !yyjson_mut_arr_add_val(sources, obj) ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "world", world->name != NULL ? world->name : "") ||
         !yyjson_mut_obj_add_strcpy(doc, obj, "coordinate_system", "fixed_millimeters") ||
-        !yyjson_mut_obj_add_real(doc, obj, "meters_per_unit", 0.001f) ||
+        !yyjson_mut_obj_add_real(doc, obj, "meters_per_unit",
+                                 world_runtime->editor_source_meters_per_unit > 0.0f
+                                     ? world_runtime->editor_source_meters_per_unit
+                                     : 0.001f) ||
         !yyjson_mut_obj_add_val(doc, obj, "boxes", boxes))
     {
         return false;
     }
+
+    if (world_runtime->editor_has_source_model)
+    {
+        for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+        {
+            if (!export_add_source_model_box(doc, boxes, &world_runtime->editor_source_boxes[i]))
+                return false;
+        }
+        return true;
+    }
+
     for (int i = 0; i < world->brush_count; ++i)
     {
         if (!export_add_structural_box_source(doc, boxes, world, &world->brushes[i]))
@@ -612,7 +644,7 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
               yyjson_mut_obj_add_val(doc, root, "brush_worlds", worlds) &&
               export_add_brush_world(doc, worlds, &world_runtime->desc) &&
               yyjson_mut_obj_add_val(doc, root, "editor_brush_sources", sources) &&
-              export_add_editor_brush_source_world(doc, sources, &world_runtime->desc) &&
+              export_add_editor_brush_source_world(doc, sources, world_runtime) &&
               yyjson_mut_obj_add_val(doc, root, "editor_player_starts", starts);
     for (int i = 0; ok && i < runtime->editor_player_start_count; ++i)
         ok = export_add_player_start(doc, starts, &runtime->editor_player_starts[i]);

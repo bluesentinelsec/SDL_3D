@@ -16621,6 +16621,112 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditing)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.imported", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.imported",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-level.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_create_box_brush_desc box{};
+    box.world_name = "brush.editor_shell.target";
+    box.brush_name = "brush.source.box.002";
+    box.material_name = "mat.imported";
+    box.min = slayer3d_vec3_make(8.0f, -0.2f, 0.0f);
+    box.max = slayer3d_vec3_make(16.0f, 0.0f, 8.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error))) << error;
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+
+    yyjson_doc *doc = yyjson_read(export_json, export_size, 0);
+    ASSERT_NE(doc, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *sources = yyjson_obj_get(root, "editor_brush_sources");
+    ASSERT_TRUE(yyjson_is_arr(sources));
+    yyjson_val *source = yyjson_arr_get(sources, 0);
+    ASSERT_NE(source, nullptr);
+    yyjson_val *boxes = yyjson_obj_get(source, "boxes");
+    ASSERT_TRUE(yyjson_is_arr(boxes));
+    ASSERT_EQ(yyjson_arr_size(boxes), 2u);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 0), "stable_id")), "source.box.001");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 1), "stable_id")), "brush.source.box.002");
+    yyjson_val *new_min = yyjson_obj_get(yyjson_arr_get(boxes, 1), "min");
+    yyjson_val *new_max = yyjson_obj_get(yyjson_arr_get(boxes, 1), "max");
+    ASSERT_TRUE(yyjson_is_arr(new_min));
+    ASSERT_TRUE(yyjson_is_arr(new_max));
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_min, 0)), 8000);
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_max, 0)), 16000);
+    yyjson_doc_free(doc);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", export_json, export_size, "/tmp/source-level.json", error, sizeof(error)))
+        << error;
+    SDL_free(export_json);
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    EXPECT_STREQ(world.brushes[1].name, "brush.source.box.002");
+    ASSERT_TRUE(world.brushes[1].has_bounds);
+    EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 16.0f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoOpenLoadsEditableLevelOnEnter)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

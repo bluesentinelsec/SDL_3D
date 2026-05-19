@@ -466,10 +466,26 @@ typedef struct brush_world_compile_artifacts
     Uint64 visibility_grid_visible_cache_clock;
 } brush_world_compile_artifacts;
 
+typedef struct editor_brush_source_box_runtime
+{
+    char *stable_id;
+    char *name;
+    char *prefab;
+    char *material;
+    int min[3];
+    int max[3];
+    unsigned int contents;
+} editor_brush_source_box_runtime;
+
 typedef struct brush_world_runtime
 {
     slayer3d_game_data_brush_world desc;
     brush_world_compile_artifacts artifacts;
+    editor_brush_source_box_runtime *editor_source_boxes;
+    int editor_source_box_count;
+    int editor_source_box_capacity;
+    float editor_source_meters_per_unit;
+    bool editor_has_source_model;
     char *editor_source_path;
     Uint64 editor_revision;
     Uint64 editor_saved_revision;
@@ -1106,6 +1122,13 @@ bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
                                            int error_buffer_size);
+void free_editor_brush_source_model(brush_world_runtime *world_runtime);
+bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
+                                    char *error_buffer, int error_buffer_size);
+bool editor_brush_world_rebuild_from_source(brush_world_runtime *world_runtime, char *error_buffer,
+                                            int error_buffer_size);
+bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,
+                                                 int error_buffer_size);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);

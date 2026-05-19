@@ -388,7 +388,8 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     world->brush_count = old_count + 1;
 
     char rebuild_error[256] = {0};
-    if (!rebuild_brush_world_runtime_artifacts(world_runtime, rebuild_error, sizeof(rebuild_error)))
+    if (!rebuild_brush_world_runtime_artifacts(world_runtime, rebuild_error, sizeof(rebuild_error)) ||
+        !editor_brush_world_sync_source_from_runtime(world_runtime, rebuild_error, sizeof(rebuild_error)))
     {
         world->brushes = old_brushes;
         world->brush_count = old_count;
@@ -495,7 +496,8 @@ bool slayer3d_game_data_resize_brush_face(slayer3d_game_data_runtime *runtime,
     const bool resize_valid =
         rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0) && editor_brush_bounds_valid(brush) &&
         !editor_brush_world_box_overlaps_structural_brush(world_runtime, brush->bounds, brush->contents, brush,
-                                                          &overlapping_brush);
+                                                          &overlapping_brush) &&
+        editor_brush_world_sync_source_from_runtime(world_runtime, NULL, 0);
     if (resize_valid)
     {
         editor_brush_world_mark_dirty(world_runtime);

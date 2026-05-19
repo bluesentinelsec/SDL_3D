@@ -389,7 +389,8 @@ static int editor_brush_material_index_by_name(const brush_world_runtime *world_
 
 static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
 {
-    return rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0);
+    return rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0) &&
+           editor_brush_world_sync_source_from_runtime(world_runtime, NULL, 0);
 }
 
 static bool remove_editor_brush_at_index(brush_world_runtime *world_runtime, int brush_index,

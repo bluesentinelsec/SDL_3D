@@ -645,121 +645,6 @@ static bool find_editor_brush_source_boxes(yyjson_val *root, const char *world_n
     return true;
 }
 
-static bool editor_source_int_vec3(yyjson_val *object, const char *key, float meters_per_unit, slayer3d_vec3 *out)
-{
-    yyjson_val *value = obj_get(object, key);
-    if (out == NULL || !yyjson_is_arr(value) || yyjson_arr_size(value) < 3)
-        return false;
-    yyjson_val *x = yyjson_arr_get(value, 0);
-    yyjson_val *y = yyjson_arr_get(value, 1);
-    yyjson_val *z = yyjson_arr_get(value, 2);
-    if (!yyjson_is_int(x) || !yyjson_is_int(y) || !yyjson_is_int(z))
-        return false;
-    *out = slayer3d_vec3_make((float)yyjson_get_int(x) * meters_per_unit, (float)yyjson_get_int(y) * meters_per_unit,
-                              (float)yyjson_get_int(z) * meters_per_unit);
-    return true;
-}
-
-static bool set_loaded_editor_metadata_string(const char **field, const char *value)
-{
-    if (field == NULL)
-        return false;
-    SDL_free((void *)*field);
-    *field = value != NULL ? SDL_strdup(value) : NULL;
-    return value == NULL || *field != NULL;
-}
-
-static void free_loaded_brush(slayer3d_game_data_brush *brush)
-{
-    if (brush == NULL)
-        return;
-    SDL_free((void *)brush->name);
-    for (int tag_index = 0; tag_index < brush->tag_count; ++tag_index)
-        SDL_free((void *)brush->tags[tag_index]);
-    SDL_free((void *)brush->tags);
-    for (int face_index = 0; face_index < brush->face_count; ++face_index)
-    {
-        slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[face_index];
-        free_editor_metadata(&face->editor);
-    }
-    SDL_free((void *)brush->faces);
-    free_editor_metadata(&brush->editor);
-    SDL_zero(*brush);
-}
-
-static void init_loaded_box_face(slayer3d_game_data_brush_face *face, slayer3d_vec3 normal, float distance,
-                                 int material_index, const char *material_name)
-{
-    SDL_zero(*face);
-    face->normal = normal;
-    face->distance = distance;
-    face->material_index = material_index;
-    face->material_name = material_name;
-    face->uv_scale[0] = 1.0f;
-    face->uv_scale[1] = 1.0f;
-}
-
-static bool load_editor_source_box_brush(slayer3d_game_data_brush_world *world, yyjson_val *box, float meters_per_unit,
-                                         slayer3d_game_data_brush *brush, char *error_buffer, int error_buffer_size)
-{
-    slayer3d_vec3 min;
-    slayer3d_vec3 max;
-    const char *stable_id = json_string(box, "stable_id", NULL);
-    const char *name = json_string(box, "name", stable_id);
-    const char *prefab = json_string(box, "prefab", "box");
-    const int material_index =
-        brush_material_index_from_ref(world->materials, world->material_count, obj_get(box, "material"));
-    if (name == NULL || name[0] == '\0' || stable_id == NULL || stable_id[0] == '\0' || material_index < 0 ||
-        !editor_source_int_vec3(box, "min", meters_per_unit, &min) ||
-        !editor_source_int_vec3(box, "max", meters_per_unit, &max) || min.x >= max.x || min.y >= max.y ||
-        min.z >= max.z)
-    {
-        set_errorf(error_buffer, error_buffer_size, "invalid editor brush source box '%s'",
-                   stable_id != NULL ? stable_id : "<unnamed>");
-        return false;
-    }
-
-    SDL_zero(*brush);
-    brush->name = SDL_strdup(name);
-    brush->contents = brush_flags_from_json(obj_get(box, "contents"), brush_content_flag_from_string,
-                                            SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
-    brush->face_count = 6;
-    brush->faces = (slayer3d_game_data_brush_face *)SDL_calloc(6u, sizeof(*brush->faces));
-    brush->has_bounds = true;
-    brush->bounds = (slayer3d_bounding_box){min, max};
-    if (brush->name == NULL || brush->faces == NULL ||
-        !set_loaded_editor_metadata_string(&brush->editor.stable_id, stable_id) ||
-        !set_loaded_editor_metadata_string(&brush->editor.prefab, prefab))
-    {
-        free_loaded_brush(brush);
-        set_error(error_buffer, error_buffer_size, "failed to allocate editor source brush");
-        return false;
-    }
-
-    const char *material_name = world->materials[material_index].name;
-    slayer3d_game_data_brush_face *faces = (slayer3d_game_data_brush_face *)brush->faces;
-    init_loaded_box_face(&faces[0], slayer3d_vec3_make(1.0f, 0.0f, 0.0f), max.x, material_index, material_name);
-    init_loaded_box_face(&faces[1], slayer3d_vec3_make(-1.0f, 0.0f, 0.0f), -min.x, material_index, material_name);
-    init_loaded_box_face(&faces[2], slayer3d_vec3_make(0.0f, 1.0f, 0.0f), max.y, material_index, material_name);
-    init_loaded_box_face(&faces[3], slayer3d_vec3_make(0.0f, -1.0f, 0.0f), -min.y, material_index, material_name);
-    init_loaded_box_face(&faces[4], slayer3d_vec3_make(0.0f, 0.0f, 1.0f), max.z, material_index, material_name);
-    init_loaded_box_face(&faces[5], slayer3d_vec3_make(0.0f, 0.0f, -1.0f), -min.z, material_index, material_name);
-
-    static const char *const suffixes[] = {"px", "nx", "py", "ny", "pz", "nz"};
-    for (int i = 0; i < brush->face_count; ++i)
-    {
-        char face_stable_id[320];
-        SDL_snprintf(face_stable_id, sizeof(face_stable_id), "%s.face.%s", stable_id, suffixes[i]);
-        if (!set_loaded_editor_metadata_string(&faces[i].editor.stable_id, face_stable_id))
-        {
-            free_loaded_brush(brush);
-            set_error(error_buffer, error_buffer_size, "failed to allocate editor source face metadata");
-            return false;
-        }
-    }
-    return true;
-}
-
 bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *worlds = obj_get(root, "brush_worlds");
@@ -793,7 +678,7 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             return false;
         }
         const bool use_source_boxes = source_boxes != NULL;
-        yyjson_val *brushes_json = use_source_boxes ? source_boxes : obj_get(world_json, "brushes");
+        yyjson_val *brushes_json = use_source_boxes ? NULL : obj_get(world_json, "brushes");
         slayer3d_game_data_brush_world *world = &runtime->brush_worlds[world_index].desc;
 
         world->name = SDL_strdup(world_name);
@@ -804,7 +689,7 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
         world->compile_hidden_face_culling = json_bool(compile_json, "hidden_face_culling", true);
         world->compile_chunk_cell_size_hint = json_float(compile_json, "chunk_cell_size", 0.0f);
         world->material_count = (int)yyjson_arr_size(materials_json);
-        world->brush_count = (int)yyjson_arr_size(brushes_json);
+        world->brush_count = use_source_boxes ? 0 : (int)yyjson_arr_size(brushes_json);
         if (world->name == NULL || world->units == NULL)
         {
             set_error(error_buffer, error_buffer_size, "failed to allocate brush world strings");
@@ -849,18 +734,21 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
                 return false;
         }
 
+        if (use_source_boxes)
+        {
+            if (!load_editor_brush_source_boxes(&runtime->brush_worlds[world_index], source_boxes,
+                                                source_meters_per_unit, error_buffer, error_buffer_size) ||
+                !editor_brush_world_rebuild_from_source(&runtime->brush_worlds[world_index], error_buffer,
+                                                        error_buffer_size))
+            {
+                return false;
+            }
+            continue;
+        }
+
         for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
         {
             yyjson_val *brush_json = yyjson_arr_get(brushes_json, (size_t)brush_index);
-            if (use_source_boxes)
-            {
-                if (!load_editor_source_box_brush(world, brush_json, source_meters_per_unit, &brushes[brush_index],
-                                                  error_buffer, error_buffer_size))
-                {
-                    return false;
-                }
-                continue;
-            }
             yyjson_val *tags_json = obj_get(brush_json, "tags");
             yyjson_val *faces_json = obj_get(brush_json, "faces");
             slayer3d_game_data_brush *brush = &brushes[brush_index];

@@ -1032,6 +1032,12 @@ compatibility paths. Each source world references a brush world and stores
 stable source brush IDs, prefab metadata, material references, and integer
 `min`/`max` coordinates for box sources.
 
+For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
+in-memory source model. Successful editor mutations synchronize that source
+model before save/export, then reload compiles runtime brushes from the source
+again. This makes source boxes the durable editing truth and keeps generated
+`brush_worlds` as load-time/runtime derived data.
+
 ```json
 {
   "editor_brush_sources": [
