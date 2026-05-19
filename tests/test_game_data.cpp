@@ -14680,9 +14680,17 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     EXPECT_TRUE(created.has_bounds);
     EXPECT_NEAR(created.bounds.min.x, 2.0f, 0.001f);
     EXPECT_NEAR(created.bounds.max.y, 2.0f, 0.001f);
+    ASSERT_NE(created.editor.stable_id, nullptr);
+    EXPECT_STREQ(created.editor.stable_id, "brush.created.wall");
+    ASSERT_NE(created.editor.prefab, nullptr);
+    EXPECT_STREQ(created.editor.prefab, "editor.box");
     ASSERT_EQ(created.face_count, 6);
     for (int i = 0; i < created.face_count; ++i)
+    {
         EXPECT_STREQ(created.faces[i].material_name, "mat.wall");
+        ASSERT_NE(created.faces[i].editor.stable_id, nullptr);
+    }
+    EXPECT_STREQ(created.faces[0].editor.stable_id, "brush.created.wall.face.px");
 
     slayer3d_game_data_create_box_brush_desc desc{};
     desc.world_name = "brush.editor.level";
@@ -14760,12 +14768,104 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
     ASSERT_NE(roundtrip_world.render_model, nullptr);
     EXPECT_EQ(roundtrip_world.compile_artifact_hash, resized_compile_hash);
     EXPECT_STREQ(roundtrip_world.brushes[1].name, "brush.created.wall");
+    EXPECT_STREQ(roundtrip_world.brushes[1].editor.stable_id, "brush.created.wall");
+    EXPECT_STREQ(roundtrip_world.brushes[1].editor.prefab, "editor.box");
+    EXPECT_STREQ(roundtrip_world.brushes[1].faces[0].editor.stable_id, "brush.created.wall.face.px");
     EXPECT_NEAR(roundtrip_world.brushes[1].bounds.max.x, 4.75f, 0.001f);
     EXPECT_STREQ(roundtrip_world.brushes[2].name, "brush.editor.level.box.1");
+    EXPECT_STREQ(roundtrip_world.brushes[2].editor.stable_id, "brush.editor.level.box.1");
     EXPECT_STREQ(roundtrip_world.brushes[2].faces[0].material_name, "mat.floor");
 
     slayer3d_game_data_destroy(roundtrip_runtime);
     slayer3d_game_session_destroy(roundtrip_session);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, EditorCreateBoxBrushRejectsPositiveOverlapButAllowsContact)
+{
+    const std::filesystem::path dir = unique_test_dir("editor_create_box_overlap");
+    write_text(dir / "scenes" / "play.scene.json",
+               R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    write_text(dir / "create_box_overlap.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Editor Create Box Brush Overlap Test" },
+  "world": { "name": "world.editor_create_box_overlap", "kind": "brush" },
+  "brush_worlds": [
+    {
+      "name": "brush.editor.level",
+      "materials": [
+        { "name": "mat.wall", "albedo": [0.7, 0.7, 0.7, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "contents": "solid",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "create_box_overlap.game.json").string().c_str(), session, &runtime,
+                                             error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_create_box_brush_desc touching{};
+    touching.world_name = "brush.editor.level";
+    touching.brush_name = "brush.touching.seed";
+    touching.material_name = "mat.wall";
+    touching.min = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    touching.max = slayer3d_vec3_make(2.0f, 1.0f, 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &touching, nullptr, 0, error, sizeof(error))) << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    slayer3d_game_data_brush_world_editor_state editor_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_EQ(editor_state.revision, 1U);
+
+    slayer3d_game_data_create_box_brush_desc overlapping{};
+    overlapping.world_name = "brush.editor.level";
+    overlapping.brush_name = "brush.overlapping.seed";
+    overlapping.material_name = "mat.wall";
+    overlapping.min = slayer3d_vec3_make(0.5f, 0.0f, 0.0f);
+    overlapping.max = slayer3d_vec3_make(1.5f, 1.0f, 1.0f);
+    EXPECT_FALSE(slayer3d_game_data_create_box_brush(runtime, &overlapping, nullptr, 0, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("overlaps existing brush 'brush.seed'"), std::string::npos);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    EXPECT_EQ(world.brush_count, 2);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
+    EXPECT_EQ(editor_state.revision, 1U);
+
+    slayer3d_game_data_resize_brush_face_desc resize{};
+    resize.world_name = "brush.editor.level";
+    resize.brush_name = "brush.touching.seed";
+    resize.face_index = 1;
+    resize.distance = 0.5f;
+    EXPECT_FALSE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("overlap existing brush 'brush.seed'"), std::string::npos);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    EXPECT_NEAR(world.brushes[1].bounds.min.x, 1.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 2.0f, 0.001f);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);

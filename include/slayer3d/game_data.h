@@ -2227,8 +2227,11 @@ extern "C"
      * The operation is atomic from the runtime caller's perspective: the brush
      * is visible only after allocations, acceleration rebuild, and render-model
      * compilation all succeed. Success marks the brush world dirty and
-     * increments its editor revision. @p out_brush_name receives the final
-     * runtime brush name when non-NULL.
+     * increments its editor revision. Structural box brushes may touch existing
+     * structural brushes exactly, but positive-volume overlap is rejected.
+     * Runtime-created boxes receive stable editor metadata on the brush and
+     * generated faces. @p out_brush_name receives the final runtime brush name
+     * when non-NULL.
      */
     bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,
