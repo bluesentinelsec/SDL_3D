@@ -718,7 +718,6 @@ static bool editor_floor_fill_name(const char *brush_name, float low_y, float hi
                                    size_t buffer_size);
 static slayer3d_bounding_box editor_floor_fill_bounds(slayer3d_bounding_box floor_bounds, float low_y, float high_y,
                                                       float thickness, int side_index);
-static int editor_brush_top_y_face_index(const slayer3d_game_data_brush *brush);
 static void translate_active_editor_selection_for_transaction(slayer3d_game_data_runtime *runtime,
                                                               const editor_command_transaction_entry *entry,
                                                               slayer3d_vec3 offset);
@@ -788,43 +787,6 @@ static bool editor_intervals_overlap(float a_min, float a_max, float b_min, floa
     return SDL_min(a_max, b_max) > SDL_max(a_min, b_min) + epsilon;
 }
 
-static int editor_floor_side_face_index(const slayer3d_game_data_brush *brush, int side_index)
-{
-    if (brush == NULL)
-        return -1;
-
-    const slayer3d_vec3 expected[] = {
-        slayer3d_vec3_make(-1.0f, 0.0f, 0.0f),
-        slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
-        slayer3d_vec3_make(0.0f, 0.0f, -1.0f),
-        slayer3d_vec3_make(0.0f, 0.0f, 1.0f),
-    };
-    const slayer3d_vec3 normal = side_index >= 0 && side_index < 4 ? expected[side_index] : expected[0];
-    for (int face_index = 0; face_index < brush->face_count; ++face_index)
-    {
-        const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
-        if (slayer3d_vec3_dot(face->normal, normal) > 0.99f)
-            return face_index;
-    }
-    return -1;
-}
-
-static int editor_floor_top_face_material_index(const slayer3d_game_data_brush *brush)
-{
-    const int face_index = editor_brush_top_y_face_index(brush);
-    return face_index >= 0 ? brush->faces[face_index].material_index : -1;
-}
-
-static int editor_floor_painted_side_material_index(const slayer3d_game_data_brush *brush, int side_index)
-{
-    const int face_index = editor_floor_side_face_index(brush, side_index);
-    const int top_material_index = editor_floor_top_face_material_index(brush);
-    if (face_index < 0)
-        return -1;
-    const int side_material_index = brush->faces[face_index].material_index;
-    return side_material_index >= 0 && side_material_index != top_material_index ? side_material_index : -1;
-}
-
 static int editor_adjacent_fill_material_index(const brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_bounding_box floor_bounds, int side_index)
 {
@@ -846,6 +808,8 @@ static int editor_adjacent_fill_material_index(const brush_world_runtime *world_
         {
             continue;
         }
+        if (brush->bounds.max.y - brush->bounds.min.y <= 0.5f)
+            continue;
 
         const bool horizontal_overlap = x_side
                                             ? editor_intervals_overlap(brush->bounds.min.z, brush->bounds.max.z,
@@ -886,11 +850,10 @@ static void editor_floor_fill_material_indices(const brush_world_runtime *world_
                                                slayer3d_bounding_box floor_bounds, int fallback_material_index,
                                                int out_material_indices[4])
 {
+    (void)floor_brush;
     for (int side = 0; side < 4; ++side)
     {
         int material_index = editor_adjacent_fill_material_index(world_runtime, brush_name, floor_bounds, side);
-        if (material_index < 0)
-            material_index = editor_floor_painted_side_material_index(floor_brush, side);
         out_material_indices[side] = material_index >= 0 ? material_index : fallback_material_index;
     }
 }
