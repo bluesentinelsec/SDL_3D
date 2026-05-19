@@ -141,8 +141,10 @@ The following should be true during a good test drive:
   default plane; the editor creates deterministic side-wall fill brushes for
   the exposed vertical space. Fill brushes sit on the lowered tile boundary
   and extend to the upper walk surface so the test-run view should not show a
-  dark slab-height seam around the pit. The matching fill segment is removed
-  when the floor is raised back up.
+  dark slab-height seam around the pit. Fill materials are selected per side:
+  adjacent wall context wins, deliberately painted floor side faces come next,
+  and the authored fallback fill material is used when no context exists. The
+  matching fill segment is removed when the floor is raised back up.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling brushes stay aligned to the larger
   blockout grid.

@@ -198,6 +198,8 @@ typedef struct editor_command_transaction_entry
     int material_index;
     int previous_material_index;
     slayer3d_vec3 offset;
+    bool has_fill_material_indices;
+    int fill_material_indices[4];
     bool has_bounds;
     slayer3d_bounding_box bounds;
     int brush_index;

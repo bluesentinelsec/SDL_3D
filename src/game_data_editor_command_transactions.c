@@ -718,6 +718,7 @@ static bool editor_floor_fill_name(const char *brush_name, float low_y, float hi
                                    size_t buffer_size);
 static slayer3d_bounding_box editor_floor_fill_bounds(slayer3d_bounding_box floor_bounds, float low_y, float high_y,
                                                       float thickness, int side_index);
+static int editor_brush_top_y_face_index(const slayer3d_game_data_brush *brush);
 static void translate_active_editor_selection_for_transaction(slayer3d_game_data_runtime *runtime,
                                                               const editor_command_transaction_entry *entry,
                                                               slayer3d_vec3 offset);
@@ -782,9 +783,121 @@ static bool delete_editor_floor_fill_brushes(brush_world_runtime *world_runtime,
     return true;
 }
 
+static bool editor_intervals_overlap(float a_min, float a_max, float b_min, float b_max, float epsilon)
+{
+    return SDL_min(a_max, b_max) > SDL_max(a_min, b_min) + epsilon;
+}
+
+static int editor_floor_side_face_index(const slayer3d_game_data_brush *brush, int side_index)
+{
+    if (brush == NULL)
+        return -1;
+
+    const slayer3d_vec3 expected[] = {
+        slayer3d_vec3_make(-1.0f, 0.0f, 0.0f),
+        slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
+        slayer3d_vec3_make(0.0f, 0.0f, -1.0f),
+        slayer3d_vec3_make(0.0f, 0.0f, 1.0f),
+    };
+    const slayer3d_vec3 normal = side_index >= 0 && side_index < 4 ? expected[side_index] : expected[0];
+    for (int face_index = 0; face_index < brush->face_count; ++face_index)
+    {
+        const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+        if (slayer3d_vec3_dot(face->normal, normal) > 0.99f)
+            return face_index;
+    }
+    return -1;
+}
+
+static int editor_floor_top_face_material_index(const slayer3d_game_data_brush *brush)
+{
+    const int face_index = editor_brush_top_y_face_index(brush);
+    return face_index >= 0 ? brush->faces[face_index].material_index : -1;
+}
+
+static int editor_floor_painted_side_material_index(const slayer3d_game_data_brush *brush, int side_index)
+{
+    const int face_index = editor_floor_side_face_index(brush, side_index);
+    const int top_material_index = editor_floor_top_face_material_index(brush);
+    if (face_index < 0)
+        return -1;
+    const int side_material_index = brush->faces[face_index].material_index;
+    return side_material_index >= 0 && side_material_index != top_material_index ? side_material_index : -1;
+}
+
+static int editor_adjacent_fill_material_index(const brush_world_runtime *world_runtime, const char *brush_name,
+                                               slayer3d_bounding_box floor_bounds, int side_index)
+{
+    if (world_runtime == NULL)
+        return -1;
+
+    const float epsilon = 0.001f;
+    const bool x_side = side_index == 0 || side_index == 1;
+    const float side_coord = side_index == 0   ? floor_bounds.min.x
+                             : side_index == 1 ? floor_bounds.max.x
+                             : side_index == 2 ? floor_bounds.min.z
+                                               : floor_bounds.max.z;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if (brush->name == NULL || (brush_name != NULL && SDL_strcmp(brush->name, brush_name) == 0) ||
+            !brush->has_bounds)
+        {
+            continue;
+        }
+
+        const bool horizontal_overlap = x_side
+                                            ? editor_intervals_overlap(brush->bounds.min.z, brush->bounds.max.z,
+                                                                       floor_bounds.min.z, floor_bounds.max.z, epsilon)
+                                            : editor_intervals_overlap(brush->bounds.min.x, brush->bounds.max.x,
+                                                                       floor_bounds.min.x, floor_bounds.max.x, epsilon);
+        if (!horizontal_overlap)
+            continue;
+
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+            if (face->material_index < 0)
+                continue;
+            if (x_side)
+            {
+                if (SDL_fabsf(face->normal.x) <= 0.99f)
+                    continue;
+                const float face_coord = face->normal.x > 0.0f ? face->distance : -face->distance;
+                if (SDL_fabsf(face_coord - side_coord) <= epsilon)
+                    return face->material_index;
+            }
+            else
+            {
+                if (SDL_fabsf(face->normal.z) <= 0.99f)
+                    continue;
+                const float face_coord = face->normal.z > 0.0f ? face->distance : -face->distance;
+                if (SDL_fabsf(face_coord - side_coord) <= epsilon)
+                    return face->material_index;
+            }
+        }
+    }
+    return -1;
+}
+
+static void editor_floor_fill_material_indices(const brush_world_runtime *world_runtime, const char *brush_name,
+                                               const slayer3d_game_data_brush *floor_brush,
+                                               slayer3d_bounding_box floor_bounds, int fallback_material_index,
+                                               int out_material_indices[4])
+{
+    for (int side = 0; side < 4; ++side)
+    {
+        int material_index = editor_adjacent_fill_material_index(world_runtime, brush_name, floor_bounds, side);
+        if (material_index < 0)
+            material_index = editor_floor_painted_side_material_index(floor_brush, side);
+        out_material_indices[side] = material_index >= 0 ? material_index : fallback_material_index;
+    }
+}
+
 static bool create_editor_floor_fill_brushes(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_bounding_box floor_bounds, float low_y, float high_y,
-                                             float fill_thickness, int material_index)
+                                             float fill_thickness, const int material_indices[4])
 {
     static const char *const fill_side_names[] = {"west", "east", "north", "south"};
     int created_count = 0;
@@ -799,7 +912,8 @@ static bool create_editor_floor_fill_brushes(brush_world_runtime *world_runtime,
         slayer3d_game_data_brush fill_brush;
         const slayer3d_bounding_box fill_bounds =
             editor_floor_fill_bounds(floor_bounds, low_y, high_y, fill_thickness, side);
-        if (!create_editor_box_brush_snapshot(world_runtime, fill_name, fill_bounds, material_index, &fill_brush))
+        if (!create_editor_box_brush_snapshot(world_runtime, fill_name, fill_bounds, material_indices[side],
+                                              &fill_brush))
             goto fail;
         if (!insert_editor_brush_at_index(world_runtime, world_runtime->desc.brush_count, &fill_brush))
         {
@@ -852,6 +966,19 @@ static bool apply_editor_brush_sector_floor(slayer3d_game_data_runtime *runtime,
     if (fill_material_index < 0)
         return false;
 
+    int fill_material_indices[4] = {fill_material_index, fill_material_index, fill_material_index, fill_material_index};
+    if (entry->has_fill_material_indices)
+    {
+        for (int side = 0; side < 4; ++side)
+            fill_material_indices[side] =
+                entry->fill_material_indices[side] >= 0 ? entry->fill_material_indices[side] : fill_material_index;
+    }
+    else if (offset.y < 0.0f)
+    {
+        editor_floor_fill_material_indices(world_runtime, entry->element_name, brush, current_bounds,
+                                           fill_material_index, fill_material_indices);
+    }
+
     if (offset.y > 0.0f && !delete_editor_floor_fill_brushes(world_runtime, entry->element_name, low_y, high_y))
         return false;
 
@@ -859,7 +986,7 @@ static bool apply_editor_brush_sector_floor(slayer3d_game_data_runtime *runtime,
         return false;
 
     if (offset.y < 0.0f && !create_editor_floor_fill_brushes(world_runtime, entry->element_name, current_bounds, low_y,
-                                                             high_y, fill_thickness, fill_material_index))
+                                                             high_y, fill_thickness, fill_material_indices))
     {
         (void)apply_editor_brush_translate(runtime, entry, slayer3d_vec3_scale(offset, -1.0f));
         (void)delete_editor_floor_fill_brushes(world_runtime, entry->element_name, low_y, high_y);
@@ -1237,6 +1364,10 @@ static bool editor_append_sector_floor_transaction(slayer3d_game_data_runtime *r
     }
     entry->material_index = fill_material_index;
     entry->offset = slayer3d_vec3_make(fill_thickness, distance, 0.0f);
+    entry->has_fill_material_indices = true;
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    editor_floor_fill_material_indices(world_runtime, selection->element_name, brush, brush->bounds,
+                                       fill_material_index, entry->fill_material_indices);
     entry->has_bounds = brush != NULL && brush->has_bounds;
     entry->bounds = entry->has_bounds ? translated_bounds(brush->bounds, slayer3d_vec3_make(0.0f, distance, 0.0f))
                                       : (slayer3d_bounding_box){slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
