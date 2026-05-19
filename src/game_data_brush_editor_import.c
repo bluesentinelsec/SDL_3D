@@ -6,7 +6,74 @@
 #include "game_data_internal.h"
 
 #include <SDL3/SDL_filesystem.h>
+#include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
+
+static void *load_editable_fragment_file(const char *path, size_t *out_size, char *error_buffer, int error_buffer_size)
+{
+    if (out_size != NULL)
+        *out_size = 0u;
+    if (path == NULL || path[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "editable level load requires a non-empty file path");
+        return NULL;
+    }
+
+    SDL_IOStream *stream = SDL_IOFromFile(path, "rb");
+    if (stream == NULL)
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to open editable level '%s': %s", path, SDL_GetError());
+        return NULL;
+    }
+
+    const Sint64 stream_size = SDL_GetIOSize(stream);
+    if (stream_size <= 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to read editable level '%s': file is empty", path);
+        SDL_CloseIO(stream);
+        return NULL;
+    }
+    if ((Uint64)stream_size > (Uint64)SIZE_MAX)
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to read editable level '%s': file is too large", path);
+        SDL_CloseIO(stream);
+        return NULL;
+    }
+
+    const size_t size = (size_t)stream_size;
+    void *bytes = SDL_malloc(size);
+    if (bytes == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate editable level buffer");
+        SDL_CloseIO(stream);
+        return NULL;
+    }
+
+    size_t offset = 0u;
+    while (offset < size)
+    {
+        const size_t read = SDL_ReadIO(stream, (Uint8 *)bytes + offset, size - offset);
+        if (read == 0u)
+        {
+            set_errorf(error_buffer, error_buffer_size, "failed to read editable level '%s': %s", path, SDL_GetError());
+            SDL_free(bytes);
+            SDL_CloseIO(stream);
+            return NULL;
+        }
+        offset += read;
+    }
+
+    if (!SDL_CloseIO(stream))
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to close editable level '%s': %s", path, SDL_GetError());
+        SDL_free(bytes);
+        return NULL;
+    }
+
+    if (out_size != NULL)
+        *out_size = size;
+    return bytes;
+}
 
 static bool editable_fragment_schema_valid(yyjson_val *root)
 {
@@ -52,13 +119,9 @@ bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_run
     }
 
     size_t size = 0u;
-    void *bytes = SDL_LoadFile(path, &size);
-    if (bytes == NULL || size == 0u)
-    {
-        set_errorf(error_buffer, error_buffer_size, "failed to read editable level '%s'", path);
-        SDL_free(bytes);
+    void *bytes = load_editable_fragment_file(path, &size, error_buffer, error_buffer_size);
+    if (bytes == NULL)
         return false;
-    }
 
     yyjson_read_err read_error;
     SDL_zero(read_error);
