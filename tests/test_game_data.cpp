@@ -15806,8 +15806,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                 floor_bounds_below_plane.max.y, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.work_plane.distance", 0.0f),
                 floor_bounds_below_plane.max.y, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y + 0.001f, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z - 0.1f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 8.0f, 0.001f);
     EXPECT_NEAR(placement_max->as_vec3.y, floor_bounds_below_plane.max.y + 8.0f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 0.1f, 0.001f);
 
     slayer3d_signal_emit(bus, ceiling_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -15860,10 +15864,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
     ASSERT_NE(placement_min, nullptr);
     ASSERT_NE(placement_max, nullptr);
-    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.y, placement_origin.y, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x - 0.1f, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.y, placement_origin.y + 0.001f, 0.001f);
     EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 8.0f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 0.1f, 0.001f);
     EXPECT_NEAR(placement_max->as_vec3.y, placement_origin.y + 8.0f, 0.001f);
     EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 8.0f, 0.001f);
     slayer3d_signal_emit(bus, commit_signal, nullptr);
@@ -15875,10 +15879,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GT(brush_world.brush_count, 0);
     brush = &brush_world.brushes[brush_world.brush_count - 1];
     EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.wall");
-    EXPECT_NEAR(brush->bounds.min.x, placement_origin.x, 0.001f);
-    EXPECT_NEAR(brush->bounds.min.y, placement_origin.y, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.x, placement_origin.x - 0.1f, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.y, placement_origin.y + 0.001f, 0.001f);
     EXPECT_NEAR(brush->bounds.min.z, placement_origin.z, 0.001f);
-    EXPECT_NEAR(brush->bounds.max.x, placement_origin.x + 8.0f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.x, placement_origin.x + 0.1f, 0.001f);
     EXPECT_NEAR(brush->bounds.max.z, placement_origin.z + 8.0f, 0.001f);
     EXPECT_NEAR(brush->bounds.max.y, placement_origin.y + 8.0f, 0.001f);
 

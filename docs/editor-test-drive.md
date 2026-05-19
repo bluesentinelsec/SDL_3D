@@ -146,9 +146,9 @@ The following should be true during a good test drive:
   blockout grid.
 - The bright green placement preview sits under the mouse in orthographic
   views, using the containing grid cell rather than the nearest grid line.
-- Floor, wall, and ceiling prefabs share the same grid-cell footprint and are
-  anchored to grid-cell boundaries, so simple blockout maps can be tiled without
-  visible gaps.
+- Floor and ceiling prefabs share the same grid-cell footprint. Wall prefabs
+  are thin grid-edge segments, so simple blockout maps can be tiled without
+  visible gaps while adjacent hallways can pass close to one another.
 - Floor, wall, and ceiling previews share a connected-grid elevation. Hovering
   or working from a lowered floor or one of its side-wall fills should update
   the editor brush elevation and work plane so new floor, wall, and ceiling

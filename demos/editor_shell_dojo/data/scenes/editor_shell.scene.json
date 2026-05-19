@@ -268,8 +268,8 @@
           "axis_key": "editor.placement.wall_axis",
           "axis": "z",
           "elevation_mode": "connected_grid",
-          "grid_min": [0.0, 0.0, 0.0],
-          "grid_max": [1.0, 1.0, 1.0],
+          "grid_min": [0.0, 0.000125, -0.0125],
+          "grid_max": [1.0, 1.0, 0.0125],
           "message": "wall prefab preview"
         },
         {
@@ -309,7 +309,7 @@
           "kind": "box",
           "label": "Wall",
           "category": "blockout",
-          "description": "8m gray wall tile"
+          "description": "thin gray wall segment"
         },
         {
           "mode": "ceiling",
