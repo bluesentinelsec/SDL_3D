@@ -2503,9 +2503,10 @@ extern "C"
      * The exported document uses `schema: "slayer3d.fragment.v0"` and contains
      * the selected `brush_worlds` entry, a fixed-coordinate
      * `editor_brush_sources` snapshot for structural editor workflows, and the
-     * runtime `editor_player_starts` collection. This is the canonical
-     * first-pass editor level artifact for blockout workflows that need geometry
-     * and test-run spawn points to reload together. The returned string is
+     * runtime `editor_player_starts` collection. When this fragment is loaded
+     * again, matching `editor_brush_sources` are compiled back into the runtime
+     * brush world, making the fixed-coordinate source boxes the authoritative
+     * editable geometry for supported box brushes. The returned string is
      * allocated with SDL_malloc and must be released with SDL_free().
      */
     bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_data_runtime *runtime,
@@ -2549,10 +2550,11 @@ extern "C"
      * The input must be a `slayer3d.fragment.v0` document containing a
      * `brush_worlds` entry whose name matches @p world_name. The matching world
      * replaces the runtime world in place; `editor_brush_sources`, when present,
-     * records the canonical fixed-coordinate editor source model for the same
-     * world, and `editor_player_starts` from the fragment replaces the runtime
-     * player-start collection. On success both runtime collections are marked
-     * clean and @p path becomes their editor source path.
+     * is the canonical fixed-coordinate editor source model for the same world
+     * and is compiled into runtime brushes during import. `editor_player_starts`
+     * from the fragment replaces the runtime player-start collection. On success
+     * both runtime collections are marked clean and @p path becomes their editor
+     * source path.
      */
     bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime,
                                                               const char *world_name, const char *path,

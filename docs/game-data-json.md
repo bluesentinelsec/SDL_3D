@@ -1023,13 +1023,14 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 ```
 
 `editor_brush_sources` is the editor-owned source model for structurally correct
-brush editing. Editable fragments may include it alongside `brush_worlds` during
-the migration to a full source-to-runtime compiler. Coordinates are fixed
-millimeters so editor decisions round-trip without accumulating floating-point
-drift; runtime `brush_worlds` remain meter-based derived output. Each source
-world references a brush world and stores stable source brush IDs, prefab
-metadata, material references, and integer `min`/`max` coordinates for box
-sources.
+brush editing. Editable fragments include it alongside `brush_worlds`; when a
+matching source world is present, Slayer3D compiles the source boxes into the
+runtime brush world during load/import. Coordinates are fixed millimeters so
+editor decisions round-trip without accumulating floating-point drift; runtime
+`brush_worlds` remain meter-based derived output for renderer, collision, and
+compatibility paths. Each source world references a brush world and stores
+stable source brush IDs, prefab metadata, material references, and integer
+`min`/`max` coordinates for box sources.
 
 ```json
 {
@@ -1433,9 +1434,10 @@ with an editable fragment from disk. This is intended for editor hosts that pass
 `editor.input.path` at launch time. The fragment must use
 `schema: "slayer3d.fragment.v0"` and contain a `brush_worlds` entry whose name
 matches `world`; `editor_brush_sources`, when present, records the canonical
-editor source model for the same world, and `editor_player_starts` replaces the
-runtime player-start collection. Set `optional: true` when the same editor scene
-should also support new/blank sessions with no input file.
+editor source model for the same world and is compiled into runtime brushes on
+import, and `editor_player_starts` replaces the runtime player-start collection.
+Set `optional: true` when the same editor scene should also support new/blank
+sessions with no input file.
 
 ```json
 {
