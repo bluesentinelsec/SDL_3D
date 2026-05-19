@@ -54,6 +54,41 @@ static bool editor_brush_world_name_exists(const brush_world_runtime *world_runt
     return false;
 }
 
+static bool editor_metadata_stable_id_matches(const slayer3d_game_data_editor_metadata *metadata, const char *stable_id)
+{
+    return metadata != NULL && metadata->stable_id != NULL && stable_id != NULL &&
+           SDL_strcmp(metadata->stable_id, stable_id) == 0;
+}
+
+static bool editor_brush_world_stable_id_exists(const brush_world_runtime *world_runtime, const char *stable_id)
+{
+    if (world_runtime == NULL || stable_id == NULL || stable_id[0] == '\0')
+        return false;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    if (editor_metadata_stable_id_matches(&world->editor, stable_id))
+        return true;
+    for (int i = 0; i < world->material_count; ++i)
+    {
+        if (editor_metadata_stable_id_matches(&world->materials[i].editor, stable_id))
+            return true;
+    }
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[i];
+        if (editor_metadata_stable_id_matches(&brush->editor, stable_id))
+            return true;
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            if (editor_metadata_stable_id_matches(&brush->faces[face_index].editor, stable_id))
+                return true;
+        }
+    }
+    return false;
+}
+
+static bool editor_brush_world_box_stable_ids_available(const brush_world_runtime *world_runtime,
+                                                        const char *brush_name);
+
 static bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer,
                                                    size_t buffer_size)
 {
@@ -65,10 +100,42 @@ static bool editor_brush_world_generate_brush_name(const brush_world_runtime *wo
         SDL_snprintf(buffer, buffer_size, "%s.box.%d", world_name, i + 1);
         if (buffer[0] == '\0')
             return false;
-        if (!editor_brush_world_name_exists(world_runtime, buffer))
+        if (!editor_brush_world_name_exists(world_runtime, buffer) &&
+            editor_brush_world_box_stable_ids_available(world_runtime, buffer))
+        {
             return true;
+        }
     }
     return false;
+}
+
+static bool editor_metadata_set_string(const char **field, const char *value)
+{
+    if (field == NULL)
+        return false;
+    if (value == NULL || value[0] == '\0')
+        return true;
+    char *copy = SDL_strdup(value);
+    if (copy == NULL)
+        return false;
+    *field = copy;
+    return true;
+}
+
+static bool editor_brush_world_box_stable_ids_available(const brush_world_runtime *world_runtime,
+                                                        const char *brush_name)
+{
+    if (editor_brush_world_stable_id_exists(world_runtime, brush_name))
+        return false;
+    static const char *const face_suffixes[] = {"px", "nx", "py", "ny", "pz", "nz"};
+    for (size_t i = 0; i < SDL_arraysize(face_suffixes); ++i)
+    {
+        char stable_id[320];
+        SDL_snprintf(stable_id, sizeof(stable_id), "%s.face.%s", brush_name, face_suffixes[i]);
+        if (editor_brush_world_stable_id_exists(world_runtime, stable_id))
+            return false;
+    }
+    return true;
 }
 
 static int find_editor_brush_material_index(const brush_world_runtime *world_runtime, const char *material_name)
@@ -128,6 +195,29 @@ static void init_box_brush_face(slayer3d_game_data_brush_face *face, slayer3d_ve
     face->uv_scale[1] = 1.0f;
 }
 
+static bool init_editor_box_brush_metadata(slayer3d_game_data_brush *brush)
+{
+    if (brush == NULL || brush->name == NULL)
+        return false;
+    if (!editor_metadata_set_string(&brush->editor.stable_id, brush->name) ||
+        !editor_metadata_set_string(&brush->editor.prefab, "editor.box"))
+    {
+        return false;
+    }
+
+    static const char *const face_suffixes[] = {"px", "nx", "py", "ny", "pz", "nz"};
+    for (int i = 0; i < brush->face_count; ++i)
+    {
+        char stable_id[320];
+        SDL_snprintf(stable_id, sizeof(stable_id), "%s.face.%s", brush->name,
+                     i >= 0 && i < (int)SDL_arraysize(face_suffixes) ? face_suffixes[i] : "unknown");
+        slayer3d_game_data_brush_face *face = (slayer3d_game_data_brush_face *)&brush->faces[i];
+        if (!editor_metadata_set_string(&face->editor.stable_id, stable_id))
+            return false;
+    }
+    return true;
+}
+
 static bool init_editor_box_brush(const brush_world_runtime *world_runtime,
                                   const slayer3d_game_data_create_box_brush_desc *desc, const char *brush_name,
                                   int material_index, slayer3d_game_data_brush *out_brush)
@@ -157,7 +247,53 @@ static bool init_editor_box_brush(const brush_world_runtime *world_runtime,
     init_box_brush_face(&faces[3], slayer3d_vec3_make(0.0f, -1.0f, 0.0f), -desc->min.y, material_index, material_name);
     init_box_brush_face(&faces[4], slayer3d_vec3_make(0.0f, 0.0f, 1.0f), desc->max.z, material_index, material_name);
     init_box_brush_face(&faces[5], slayer3d_vec3_make(0.0f, 0.0f, -1.0f), -desc->min.z, material_index, material_name);
+    if (!init_editor_box_brush_metadata(out_brush))
+    {
+        free_editor_runtime_brush(out_brush);
+        return false;
+    }
     return true;
+}
+
+static bool editor_brush_contents_are_structural(unsigned int contents)
+{
+    if (contents == 0u)
+        contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    return (contents & (SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP |
+                        SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP | SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY)) != 0u;
+}
+
+static bool editor_bounds_overlap_positive_volume(slayer3d_bounding_box a, slayer3d_bounding_box b)
+{
+    const float epsilon = 0.00001f;
+    return a.min.x < b.max.x - epsilon && b.min.x < a.max.x - epsilon && a.min.y < b.max.y - epsilon &&
+           b.min.y < a.max.y - epsilon && a.min.z < b.max.z - epsilon && b.min.z < a.max.z - epsilon;
+}
+
+static bool editor_brush_world_box_overlaps_structural_brush(const brush_world_runtime *world_runtime,
+                                                             slayer3d_bounding_box bounds, unsigned int contents,
+                                                             const slayer3d_game_data_brush *exclude,
+                                                             const char **out_existing_name)
+{
+    if (out_existing_name != NULL)
+        *out_existing_name = NULL;
+    if (world_runtime == NULL || !editor_brush_contents_are_structural(contents))
+        return false;
+
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[i];
+        if (brush == exclude || !brush->has_bounds || !editor_brush_contents_are_structural(brush->contents))
+            continue;
+        if (editor_bounds_overlap_positive_volume(bounds, brush->bounds))
+        {
+            if (out_existing_name != NULL)
+                *out_existing_name = brush->name;
+            return true;
+        }
+    }
+    return false;
 }
 
 bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
@@ -194,6 +330,16 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
         set_error(error_buffer, error_buffer_size, "box brush material not found");
         return false;
     }
+    const slayer3d_bounding_box new_bounds = {desc->min, desc->max};
+    const char *overlapping_brush = NULL;
+    if (editor_brush_world_box_overlaps_structural_brush(
+            world_runtime, new_bounds, desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID,
+            NULL, &overlapping_brush))
+    {
+        set_errorf(error_buffer, error_buffer_size, "box brush overlaps existing brush '%s'",
+                   overlapping_brush != NULL ? overlapping_brush : "");
+        return false;
+    }
 
     char generated_name[256];
     const char *brush_name = desc->brush_name;
@@ -209,6 +355,11 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     else if (editor_brush_world_name_exists(world_runtime, brush_name))
     {
         set_error(error_buffer, error_buffer_size, "box brush name already exists");
+        return false;
+    }
+    if (!editor_brush_world_box_stable_ids_available(world_runtime, brush_name))
+    {
+        set_error(error_buffer, error_buffer_size, "box brush stable id already exists");
         return false;
     }
 
@@ -340,7 +491,12 @@ bool slayer3d_game_data_resize_brush_face(slayer3d_game_data_runtime *runtime,
         return false;
     }
 
-    if (rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0) && editor_brush_bounds_valid(brush))
+    const char *overlapping_brush = NULL;
+    const bool resize_valid =
+        rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0) && editor_brush_bounds_valid(brush) &&
+        !editor_brush_world_box_overlaps_structural_brush(world_runtime, brush->bounds, brush->contents, brush,
+                                                          &overlapping_brush);
+    if (resize_valid)
     {
         editor_brush_world_mark_dirty(world_runtime);
         return true;
@@ -348,6 +504,10 @@ bool slayer3d_game_data_resize_brush_face(slayer3d_game_data_runtime *runtime,
 
     (void)resize_editor_brush_face_plane(brush, desc->face_index, -desc->distance);
     (void)rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0);
-    set_error(error_buffer, error_buffer_size, "brush face resize would create invalid geometry");
+    if (overlapping_brush != NULL)
+        set_errorf(error_buffer, error_buffer_size, "brush face resize would overlap existing brush '%s'",
+                   overlapping_brush);
+    else
+        set_error(error_buffer, error_buffer_size, "brush face resize would create invalid geometry");
     return false;
 }
