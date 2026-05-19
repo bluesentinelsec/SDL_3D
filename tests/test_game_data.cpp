@@ -15866,7 +15866,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(floor_bounds_below_plane.max.y, floor_bounds_before_lower.max.y - 8.0f, 0.001f);
     const slayer3d_bounding_box west_fill_bounds = brush_bounds(floor_brush_name + ".auto_fill.n8000_p0.west");
     EXPECT_NEAR(west_fill_bounds.min.y, floor_bounds_before_lower.max.y - 8.0f, 0.001f);
-    EXPECT_NEAR(west_fill_bounds.max.y, floor_bounds_before_lower.min.y, 0.001f);
+    EXPECT_NEAR(west_fill_bounds.max.y, floor_bounds_before_lower.max.y, 0.001f);
+    EXPECT_NEAR(west_fill_bounds.min.x, floor_bounds_before_lower.min.x, 0.001f);
+    EXPECT_NEAR(west_fill_bounds.max.x, floor_bounds_before_lower.min.x + 0.2f, 0.001f);
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));

@@ -139,8 +139,10 @@ The following should be true during a good test drive:
   Mode owns brush selection and multi-selection. `[` and `]` resize generic
   selected brushes by the active grid step. Thin floor slabs can move below the
   default plane; the editor creates deterministic side-wall fill brushes for
-  the exposed vertical space and removes the matching fill segment when raised
-  back up.
+  the exposed vertical space. Fill brushes sit on the lowered tile boundary
+  and extend to the upper walk surface so the test-run view should not show a
+  dark slab-height seam around the pit. The matching fill segment is removed
+  when the floor is raised back up.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling brushes stay aligned to the larger
   blockout grid.
