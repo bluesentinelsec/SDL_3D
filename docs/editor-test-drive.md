@@ -119,7 +119,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 7. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
 8. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
-   file should contain `brush_worlds` and `editor_player_starts`.
+   file should contain `brush_worlds`, `editor_brush_sources`, and `editor_player_starts`.
 9. Press `F5`; the editor should switch into the playable test scene using the
    current in-memory map and player start.
 10. In the playable scene, use `WASD` and mouse look to verify the player starts
@@ -184,8 +184,8 @@ The following should be true during a good test drive:
   if no brush is hit, placement falls back to the ground work plane. After
   clicking one brush, look away and confirm the selection cursor follows the
   reticle rather than staying offset on the previous brush.
-- `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
-  writes the same fragment to the CLI output path.
+- `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
+  `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.
 - `F5` applies the stored player start before entering the playable scene.
 

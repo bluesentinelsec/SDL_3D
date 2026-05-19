@@ -9670,6 +9670,54 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_player_start_section.game.json").string().c_str(),
                                                   nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("editor player start requires position vec3"), std::string::npos) << error;
+
+    write_text(dir / "bad_editor_brush_source.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Brush Source Section" },
+  "world": { "name": "world.bad_editor_brush_source", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "brush.bad_source",
+      "materials": [{ "name": "mat.wall" }],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.bad_source",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "box.bad",
+          "kind": "box",
+          "material": "mat.wall",
+          "min": [0, 0.5, 0],
+          "max": [1000, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_editor_brush_source.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("integer min/max vec3"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -16275,6 +16323,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
     ASSERT_NE(export_json, nullptr);
     EXPECT_NE(std::string(export_json).find("\"brush_worlds\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"editor_brush_sources\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"coordinate_system\": \"fixed_millimeters\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"meters_per_unit\": 0.001"), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"prefab\": \"wall\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"stable_id\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);

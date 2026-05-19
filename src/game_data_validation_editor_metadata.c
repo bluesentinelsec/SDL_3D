@@ -354,6 +354,106 @@ bool validate_editor_player_starts(validation_context *ctx, yyjson_val *root, va
     return ok;
 }
 
+static bool is_exact_int_vec3_array(yyjson_val *value)
+{
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) != 3u)
+        return false;
+    for (size_t i = 0; i < 3u; ++i)
+    {
+        if (!yyjson_is_int(yyjson_arr_get(value, i)))
+            return false;
+    }
+    return true;
+}
+
+static bool editor_brush_source_box_has_positive_extent(yyjson_val *min_value, yyjson_val *max_value)
+{
+    if (!is_exact_int_vec3_array(min_value) || !is_exact_int_vec3_array(max_value))
+        return false;
+    for (size_t i = 0; i < 3u; ++i)
+    {
+        if (yyjson_get_sint(yyjson_arr_get(min_value, i)) >= yyjson_get_sint(yyjson_arr_get(max_value, i)))
+            return false;
+    }
+    return true;
+}
+
+bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *sources = obj_get(root, "editor_brush_sources");
+    if (sources == NULL)
+        return true;
+    if (!yyjson_is_arr(sources))
+        return validation_error(ctx, "$.editor_brush_sources", "editor_brush_sources must be an array");
+
+    name_table source_worlds;
+    SDL_zero(source_worlds);
+    bool ok = true;
+    for (size_t source_index = 0; ok && source_index < yyjson_arr_size(sources); ++source_index)
+    {
+        char source_path[PATH_BUFFER_SIZE];
+        format_path(source_path, sizeof(source_path), "$.editor_brush_sources[%zu]", source_index);
+        yyjson_val *source = yyjson_arr_get(sources, source_index);
+        if (!yyjson_is_obj(source))
+        {
+            ok = validation_error(ctx, source_path, "editor brush source entries must be objects");
+            break;
+        }
+
+        yyjson_val *meters_per_unit = obj_get(source, "meters_per_unit");
+        yyjson_val *boxes = obj_get(source, "boxes");
+        const char *coordinate_system = json_string(source, "coordinate_system");
+        ok = require_unique_name(ctx, &source_worlds, "editor brush source world", json_string(source, "world"),
+                                 source_path) &&
+             require_ref(ctx, &names->brush_worlds, "brush world", json_string(source, "world"), source_path) &&
+             (coordinate_system == NULL || SDL_strcmp(coordinate_system, "fixed_millimeters") == 0) &&
+             (meters_per_unit == NULL || (yyjson_is_num(meters_per_unit) && yyjson_get_real(meters_per_unit) > 0.0)) &&
+             yyjson_is_arr(boxes);
+        if (!ok)
+        {
+            if (!ctx->failed)
+                ok = validation_error(ctx, source_path,
+                                      "editor brush source requires world ref, optional fixed_millimeters coordinate "
+                                      "system, positive meters_per_unit, and boxes array");
+            break;
+        }
+
+        name_table box_ids;
+        SDL_zero(box_ids);
+        for (size_t box_index = 0; ok && box_index < yyjson_arr_size(boxes); ++box_index)
+        {
+            char box_path[PATH_BUFFER_SIZE];
+            format_path(box_path, sizeof(box_path), "%s.boxes[%zu]", source_path, box_index);
+            yyjson_val *box = yyjson_arr_get(boxes, box_index);
+            if (!yyjson_is_obj(box))
+            {
+                ok = validation_error(ctx, box_path, "editor brush source boxes must be objects");
+                break;
+            }
+            const char *kind = json_string(box, "kind");
+            const char *prefab = json_string(box, "prefab");
+            const char *material = json_string(box, "material");
+            yyjson_val *contents = obj_get(box, "contents");
+            ok = require_unique_name(ctx, &box_ids, "editor brush source stable id", json_string(box, "stable_id"),
+                                     box_path) &&
+                 (kind == NULL || SDL_strcmp(kind, "box") == 0) && (prefab == NULL || prefab[0] != '\0') &&
+                 material != NULL && material[0] != '\0' &&
+                 editor_brush_source_box_has_positive_extent(obj_get(box, "min"), obj_get(box, "max")) &&
+                 validate_brush_string_or_string_array(ctx, contents, box_path, "editor brush source contents",
+                                                       brush_content_name_valid, false);
+            if (!ok && !ctx->failed)
+            {
+                ok = validation_error(ctx, box_path,
+                                      "editor brush source box requires stable_id, kind 'box', material, integer "
+                                      "min/max vec3 with positive extent, and valid contents");
+            }
+        }
+        name_table_destroy(&box_ids);
+    }
+    name_table_destroy(&source_worlds);
+    return ok;
+}
+
 bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
                                      const char *json_path)
 {

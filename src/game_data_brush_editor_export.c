@@ -34,6 +34,13 @@ static bool export_add_vec2_values(yyjson_mut_doc *doc, yyjson_mut_val *obj, con
            yyjson_mut_obj_add_val(doc, obj, key, arr);
 }
 
+static bool export_add_vec3i_values(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, int x, int y, int z)
+{
+    yyjson_mut_val *arr = yyjson_mut_arr(doc);
+    return arr != NULL && yyjson_mut_arr_add_int(doc, arr, x) && yyjson_mut_arr_add_int(doc, arr, y) &&
+           yyjson_mut_arr_add_int(doc, arr, z) && yyjson_mut_obj_add_val(doc, obj, key, arr);
+}
+
 static bool export_add_optional_string(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, const char *value)
 {
     return value == NULL || value[0] == '\0' || yyjson_mut_obj_add_strcpy(doc, obj, key, value);
@@ -137,6 +144,172 @@ static bool export_add_brush_contents(yyjson_mut_doc *doc, yyjson_mut_val *brush
     };
     return export_add_flag_array(doc, brush, "contents", flags != 0u ? flags : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID,
                                  entries, SDL_arraysize(entries));
+}
+
+static int editor_source_millimeters(float value)
+{
+    return (int)SDL_lroundf(value * 1000.0f);
+}
+
+static const char *brush_first_material_name(const slayer3d_game_data_brush_world *world,
+                                             const slayer3d_game_data_brush *brush)
+{
+    if (brush == NULL || brush->face_count <= 0)
+        return "";
+    const slayer3d_game_data_brush_face *face = &brush->faces[0];
+    if (face->material_name != NULL)
+        return face->material_name;
+    if (world != NULL && face->material_index >= 0 && face->material_index < world->material_count)
+        return world->materials[face->material_index].name != NULL ? world->materials[face->material_index].name : "";
+    return "";
+}
+
+static const char *brush_face_material_name(const slayer3d_game_data_brush_world *world,
+                                            const slayer3d_game_data_brush_face *face)
+{
+    if (face == NULL)
+        return "";
+    if (face->material_name != NULL)
+        return face->material_name;
+    if (world != NULL && face->material_index >= 0 && face->material_index < world->material_count)
+        return world->materials[face->material_index].name != NULL ? world->materials[face->material_index].name : "";
+    return "";
+}
+
+static const char *editor_source_prefab_name(const slayer3d_game_data_brush *brush, const char *material)
+{
+    if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
+        return brush->editor.prefab;
+    if (material != NULL)
+    {
+        if (SDL_strstr(material, ".floor") != NULL)
+            return "floor";
+        if (SDL_strstr(material, ".wall") != NULL)
+            return "wall";
+        if (SDL_strstr(material, ".ceiling") != NULL)
+            return "ceiling";
+    }
+    return brush != NULL && brush->editor.prefab != NULL ? brush->editor.prefab : "box";
+}
+
+static const char *editor_source_prefab_name_for_brush(const slayer3d_game_data_brush_world *world,
+                                                       const slayer3d_game_data_brush *brush, const char *fallback)
+{
+    if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
+        return brush->editor.prefab;
+
+    int floor_count = 0;
+    int wall_count = 0;
+    int ceiling_count = 0;
+    for (int i = 0; brush != NULL && i < brush->face_count; ++i)
+    {
+        const char *material = brush_face_material_name(world, &brush->faces[i]);
+        if (SDL_strstr(material, ".floor") != NULL)
+            floor_count++;
+        if (SDL_strstr(material, ".wall") != NULL)
+            wall_count++;
+        if (SDL_strstr(material, ".ceiling") != NULL)
+            ceiling_count++;
+    }
+    if (floor_count > wall_count && floor_count > ceiling_count)
+        return "floor";
+    if (ceiling_count > floor_count && ceiling_count > wall_count)
+        return "ceiling";
+    if (wall_count > 0)
+        return "wall";
+    return editor_source_prefab_name(brush, fallback);
+}
+
+static bool brush_face_matches_box_plane(const slayer3d_game_data_brush_face *face, slayer3d_vec3 normal,
+                                         float distance)
+{
+    return face != NULL && SDL_fabsf(face->normal.x - normal.x) <= 0.0001f &&
+           SDL_fabsf(face->normal.y - normal.y) <= 0.0001f && SDL_fabsf(face->normal.z - normal.z) <= 0.0001f &&
+           SDL_fabsf(face->distance - distance) <= 0.001f;
+}
+
+static bool brush_can_export_as_structural_box(const slayer3d_game_data_brush *brush)
+{
+    if (brush == NULL || !brush->has_bounds || brush->face_count != 6)
+        return false;
+
+    bool found[6] = {false, false, false, false, false, false};
+    for (int i = 0; i < brush->face_count; ++i)
+    {
+        const slayer3d_game_data_brush_face *face = &brush->faces[i];
+        if (brush_face_matches_box_plane(face, slayer3d_vec3_make(1.0f, 0.0f, 0.0f), brush->bounds.max.x))
+            found[0] = true;
+        else if (brush_face_matches_box_plane(face, slayer3d_vec3_make(-1.0f, 0.0f, 0.0f), -brush->bounds.min.x))
+            found[1] = true;
+        else if (brush_face_matches_box_plane(face, slayer3d_vec3_make(0.0f, 1.0f, 0.0f), brush->bounds.max.y))
+            found[2] = true;
+        else if (brush_face_matches_box_plane(face, slayer3d_vec3_make(0.0f, -1.0f, 0.0f), -brush->bounds.min.y))
+            found[3] = true;
+        else if (brush_face_matches_box_plane(face, slayer3d_vec3_make(0.0f, 0.0f, 1.0f), brush->bounds.max.z))
+            found[4] = true;
+        else if (brush_face_matches_box_plane(face, slayer3d_vec3_make(0.0f, 0.0f, -1.0f), -brush->bounds.min.z))
+            found[5] = true;
+        else
+            return false;
+    }
+    for (size_t i = 0; i < SDL_arraysize(found); ++i)
+    {
+        if (!found[i])
+            return false;
+    }
+    return true;
+}
+
+static bool export_add_structural_box_source(yyjson_mut_doc *doc, yyjson_mut_val *boxes,
+                                             const slayer3d_game_data_brush_world *world,
+                                             const slayer3d_game_data_brush *brush)
+{
+    if (!brush_can_export_as_structural_box(brush))
+        return false;
+
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    if (obj == NULL || !yyjson_mut_arr_add_val(boxes, obj))
+        return false;
+
+    const char *stable_id = brush->editor.stable_id != NULL ? brush->editor.stable_id : brush->name;
+    const char *material = brush_first_material_name(world, brush);
+    const char *prefab = editor_source_prefab_name_for_brush(world, brush, material);
+    const int min_x = editor_source_millimeters(brush->bounds.min.x);
+    const int min_y = editor_source_millimeters(brush->bounds.min.y);
+    const int min_z = editor_source_millimeters(brush->bounds.min.z);
+    const int max_x = editor_source_millimeters(brush->bounds.max.x);
+    const int max_y = editor_source_millimeters(brush->bounds.max.y);
+    const int max_z = editor_source_millimeters(brush->bounds.max.z);
+
+    return yyjson_mut_obj_add_strcpy(doc, obj, "stable_id", stable_id != NULL ? stable_id : "") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "name", brush->name != NULL ? brush->name : "") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "kind", "box") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "prefab", prefab) &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "material", material) &&
+           export_add_vec3i_values(doc, obj, "min", min_x, min_y, min_z) &&
+           export_add_vec3i_values(doc, obj, "max", max_x, max_y, max_z) &&
+           export_add_brush_contents(doc, obj, brush->contents);
+}
+
+static bool export_add_editor_brush_source_world(yyjson_mut_doc *doc, yyjson_mut_val *sources,
+                                                 const slayer3d_game_data_brush_world *world)
+{
+    yyjson_mut_val *obj = yyjson_mut_obj(doc);
+    yyjson_mut_val *boxes = yyjson_mut_arr(doc);
+    if (obj == NULL || boxes == NULL || !yyjson_mut_arr_add_val(sources, obj) ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "world", world->name != NULL ? world->name : "") ||
+        !yyjson_mut_obj_add_strcpy(doc, obj, "coordinate_system", "fixed_millimeters") ||
+        !yyjson_mut_obj_add_real(doc, obj, "meters_per_unit", 0.001f) ||
+        !yyjson_mut_obj_add_val(doc, obj, "boxes", boxes))
+    {
+        return false;
+    }
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        if (!export_add_structural_box_source(doc, boxes, world, &world->brushes[i]))
+            return false;
+    }
+    return true;
 }
 
 static bool export_add_surface_flags(yyjson_mut_doc *doc, yyjson_mut_val *face, unsigned int flags)
@@ -425,8 +598,9 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;
     yyjson_mut_val *worlds = doc != NULL ? yyjson_mut_arr(doc) : NULL;
+    yyjson_mut_val *sources = doc != NULL ? yyjson_mut_arr(doc) : NULL;
     yyjson_mut_val *starts = doc != NULL ? yyjson_mut_arr(doc) : NULL;
-    if (doc == NULL || root == NULL || worlds == NULL || starts == NULL)
+    if (doc == NULL || root == NULL || worlds == NULL || sources == NULL || starts == NULL)
     {
         yyjson_mut_doc_free(doc);
         set_error(error_buffer, error_buffer_size, "failed to allocate editable level export document");
@@ -437,6 +611,8 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
     bool ok = yyjson_mut_obj_add_strcpy(doc, root, "schema", "slayer3d.fragment.v0") &&
               yyjson_mut_obj_add_val(doc, root, "brush_worlds", worlds) &&
               export_add_brush_world(doc, worlds, &world_runtime->desc) &&
+              yyjson_mut_obj_add_val(doc, root, "editor_brush_sources", sources) &&
+              export_add_editor_brush_source_world(doc, sources, &world_runtime->desc) &&
               yyjson_mut_obj_add_val(doc, root, "editor_player_starts", starts);
     for (int i = 0; ok && i < runtime->editor_player_start_count; ++i)
         ok = export_add_player_start(doc, starts, &runtime->editor_player_starts[i]);

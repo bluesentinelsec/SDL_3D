@@ -45,6 +45,7 @@ Every root game file is a JSON object.
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
 | `sector_level_fragments` | no | Composition-only material/sector/light fragments merged into named sector levels before validation. |
 | `brush_worlds` | no | Native convex-brush worlds for true 3D FPS-style spaces. |
+| `editor_brush_sources` | no | Canonical fixed-coordinate editor brush sources used by level-editing tools before runtime compilation. |
 | `editor_player_starts` | no | Editor-authored player spawn markers for test-run workflows and level-editing tools. |
 | `sector_navigation` | no | Authored sector navigation graphs for AI/path queries in sector worlds. |
 | `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
@@ -1021,6 +1022,39 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 }
 ```
 
+`editor_brush_sources` is the editor-owned source model for structurally correct
+brush editing. Editable fragments may include it alongside `brush_worlds` during
+the migration to a full source-to-runtime compiler. Coordinates are fixed
+millimeters so editor decisions round-trip without accumulating floating-point
+drift; runtime `brush_worlds` remain meter-based derived output. Each source
+world references a brush world and stores stable source brush IDs, prefab
+metadata, material references, and integer `min`/`max` coordinates for box
+sources.
+
+```json
+{
+  "editor_brush_sources": [
+    {
+      "world": "brush.level.blockout",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "floor.spawn.001",
+          "name": "brush.level.blockout.box.1",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ]
+}
+```
+
 The generic runner can apply a marker directly:
 
 ```sh
@@ -1398,9 +1432,10 @@ Use `editor.level.load` to replace an editor runtime's authored starter level
 with an editable fragment from disk. This is intended for editor hosts that pass
 `editor.input.path` at launch time. The fragment must use
 `schema: "slayer3d.fragment.v0"` and contain a `brush_worlds` entry whose name
-matches `world`; its `editor_player_starts` collection replaces the runtime
-player-start collection. Set `optional: true` when the same editor scene should
-also support new/blank sessions with no input file.
+matches `world`; `editor_brush_sources`, when present, records the canonical
+editor source model for the same world, and `editor_player_starts` replaces the
+runtime player-start collection. Set `optional: true` when the same editor scene
+should also support new/blank sessions with no input file.
 
 ```json
 {
