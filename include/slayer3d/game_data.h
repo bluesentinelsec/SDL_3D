@@ -2525,6 +2525,21 @@ extern "C"
                                                               int error_buffer_size);
 
     /**
+     * @brief Load an editable level fragment JSON buffer into an existing editor runtime.
+     *
+     * This performs the same import as
+     * @ref slayer3d_game_data_load_editable_level_fragment_file, but reads from
+     * an already loaded JSON buffer. Use this for in-memory editor workflows,
+     * tests, and browser builds where the caller owns file selection/storage.
+     * When @p source_path is non-null and non-empty, it becomes the clean
+     * editor source path for the imported brush world and player starts.
+     */
+    bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_runtime *runtime,
+                                                              const char *world_name, const void *json,
+                                                              size_t json_size, const char *source_path,
+                                                              char *error_buffer, int error_buffer_size);
+
+    /**
      * @brief Load an editable level fragment file into an existing editor runtime.
      *
      * The input must be a `slayer3d.fragment.v0` document containing a

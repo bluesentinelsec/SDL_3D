@@ -16194,6 +16194,13 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+    EXPECT_GT(export_size, 0u);
     size_t saved_size = 0;
     ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
         runtime, "brush.editor_shell.target", save_path_string.c_str(), &saved_size, error, sizeof(error)))
@@ -16206,9 +16213,16 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
     runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+#if defined(__EMSCRIPTEN__)
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", export_json, export_size, save_path_string.c_str(), error, sizeof(error)))
+        << error;
+#else
     ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_file(runtime, "brush.editor_shell.target",
                                                                      save_path_string.c_str(), error, sizeof(error)))
         << error;
+#endif
+    SDL_free(export_json);
 
     slayer3d_game_data_brush_world_editor_state brush_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &brush_state));

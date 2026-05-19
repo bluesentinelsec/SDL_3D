@@ -108,25 +108,20 @@ static void free_staged_import_runtime(slayer3d_game_data_runtime *runtime)
     runtime->editor_player_start_source_path = NULL;
 }
 
-bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
-                                                          const char *path, char *error_buffer, int error_buffer_size)
+bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                          const void *json, size_t json_size, const char *source_path,
+                                                          char *error_buffer, int error_buffer_size)
 {
-    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || path == NULL || path[0] == '\0')
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || json == NULL || json_size == 0u)
     {
         set_error(error_buffer, error_buffer_size,
-                  "editable level load requires runtime, world name, and non-empty file path");
+                  "editable level JSON load requires runtime, world name, and non-empty JSON buffer");
         return false;
     }
 
-    size_t size = 0u;
-    void *bytes = load_editable_fragment_file(path, &size, error_buffer, error_buffer_size);
-    if (bytes == NULL)
-        return false;
-
     yyjson_read_err read_error;
     SDL_zero(read_error);
-    yyjson_doc *doc = yyjson_read_opts((char *)bytes, size, 0, NULL, &read_error);
-    SDL_free(bytes);
+    yyjson_doc *doc = yyjson_read_opts((char *)json, json_size, 0, NULL, &read_error);
     yyjson_val *root = doc != NULL ? yyjson_doc_get_root(doc) : NULL;
     if (!editable_fragment_schema_valid(root))
     {
@@ -186,10 +181,33 @@ bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_run
     free_staged_import_runtime(&staged);
     yyjson_doc_free(doc);
 
-    if (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, path, error_buffer, error_buffer_size) ||
-        !slayer3d_game_data_mark_player_starts_saved(runtime, path, error_buffer, error_buffer_size))
+    if (source_path != NULL && source_path[0] != '\0' &&
+        (!slayer3d_game_data_mark_brush_world_saved(runtime, world_name, source_path, error_buffer,
+                                                    error_buffer_size) ||
+         !slayer3d_game_data_mark_player_starts_saved(runtime, source_path, error_buffer, error_buffer_size)))
     {
         return false;
     }
     return true;
+}
+
+bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                          const char *path, char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || path == NULL || path[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "editable level load requires runtime, world name, and non-empty file path");
+        return false;
+    }
+
+    size_t size = 0u;
+    void *bytes = load_editable_fragment_file(path, &size, error_buffer, error_buffer_size);
+    if (bytes == NULL)
+        return false;
+
+    const bool ok = slayer3d_game_data_load_editable_level_fragment_json(runtime, world_name, bytes, size, path,
+                                                                         error_buffer, error_buffer_size);
+    SDL_free(bytes);
+    return ok;
 }
