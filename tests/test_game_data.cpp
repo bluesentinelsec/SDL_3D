@@ -14834,12 +14834,21 @@ TEST(GameDataRuntime, EditorCreateBoxBrushRejectsPositiveOverlapButAllowsContact
     touching.max = slayer3d_vec3_make(2.0f, 1.0f, 1.0f);
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &touching, nullptr, 0, error, sizeof(error))) << error;
 
+    slayer3d_game_data_create_box_brush_desc vertical_contact{};
+    vertical_contact.world_name = "brush.editor.level";
+    vertical_contact.brush_name = "brush.above.seed";
+    vertical_contact.material_name = "mat.wall";
+    vertical_contact.min = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    vertical_contact.max = slayer3d_vec3_make(1.0f, 2.0f, 1.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &vertical_contact, nullptr, 0, error, sizeof(error)))
+        << error;
+
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
-    ASSERT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brush_count, 3);
     slayer3d_game_data_brush_world_editor_state editor_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
-    EXPECT_EQ(editor_state.revision, 1U);
+    EXPECT_EQ(editor_state.revision, 2U);
 
     slayer3d_game_data_create_box_brush_desc overlapping{};
     overlapping.world_name = "brush.editor.level";
@@ -14850,9 +14859,9 @@ TEST(GameDataRuntime, EditorCreateBoxBrushRejectsPositiveOverlapButAllowsContact
     EXPECT_FALSE(slayer3d_game_data_create_box_brush(runtime, &overlapping, nullptr, 0, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("overlaps existing brush 'brush.seed'"), std::string::npos);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
-    EXPECT_EQ(world.brush_count, 2);
+    EXPECT_EQ(world.brush_count, 3);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor.level", &editor_state));
-    EXPECT_EQ(editor_state.revision, 1U);
+    EXPECT_EQ(editor_state.revision, 2U);
 
     slayer3d_game_data_resize_brush_face_desc resize{};
     resize.world_name = "brush.editor.level";
@@ -14862,7 +14871,7 @@ TEST(GameDataRuntime, EditorCreateBoxBrushRejectsPositiveOverlapButAllowsContact
     EXPECT_FALSE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("overlap existing brush 'brush.seed'"), std::string::npos);
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
-    ASSERT_EQ(world.brush_count, 2);
+    ASSERT_EQ(world.brush_count, 3);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 1.0f, 0.001f);
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 2.0f, 0.001f);
 

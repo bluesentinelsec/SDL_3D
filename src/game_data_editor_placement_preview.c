@@ -175,6 +175,10 @@ static float editor_placement_connected_grid_elevation(slayer3d_game_data_runtim
         elevation = selection->bounds.max.y;
     else if (ceiling_material != NULL && ceiling_material[0] != '\0' && SDL_strcmp(material, ceiling_material) == 0)
         elevation = selection->bounds.min.y - grid_size;
+    else if (selection->normal.y > 0.5f)
+        elevation = selection->bounds.max.y;
+    else if (selection->normal.y < -0.5f)
+        elevation = selection->bounds.min.y - grid_size;
     else
         elevation = selection->bounds.min.y;
     return elevation;
