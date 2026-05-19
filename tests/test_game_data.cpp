@@ -16198,6 +16198,45 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+
+#if defined(__EMSCRIPTEN__)
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.imported", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.imported.box",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.imported" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.imported" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.imported" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.imported" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.imported" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1 }, "material": "mat.imported" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": [
+    {
+      "name": "player_start.imported",
+      "scene": "scene.editor_shell.test_run",
+      "target": "entity.editor_shell.player",
+      "position": [2.0, 3.0, 4.0],
+      "yaw": 1.25,
+      "pitch": 0.125
+    }
+  ]
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, save_path_string.c_str(),
+                                                                     error, sizeof(error)))
+        << error;
+#else
     char *export_json = nullptr;
     size_t export_size = 0u;
     ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
@@ -16205,13 +16244,11 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
         << error;
     ASSERT_NE(export_json, nullptr);
     EXPECT_GT(export_size, 0u);
-#if !defined(__EMSCRIPTEN__)
     size_t saved_size = 0;
     ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
         runtime, "brush.editor_shell.target", save_path_string.c_str(), &saved_size, error, sizeof(error)))
         << error;
     EXPECT_GT(saved_size, 0u);
-#endif
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 
@@ -16219,21 +16256,19 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
     runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-#if defined(__EMSCRIPTEN__)
-    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
-        runtime, "brush.editor_shell.target", export_json, export_size, save_path_string.c_str(), error, sizeof(error)))
-        << error;
-#else
     ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_file(runtime, "brush.editor_shell.target",
                                                                      save_path_string.c_str(), error, sizeof(error)))
         << error;
-#endif
     SDL_free(export_json);
+#endif
 
     slayer3d_game_data_brush_world_editor_state brush_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &brush_state));
     EXPECT_STREQ(brush_state.source_path, save_path_string.c_str());
     EXPECT_FALSE(brush_state.dirty);
+    slayer3d_game_data_brush_world imported_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &imported_world));
+    EXPECT_GT(imported_world.brush_count, 0);
     slayer3d_game_data_player_start_editor_state start_state{};
     ASSERT_TRUE(slayer3d_game_data_get_player_start_editor_state(runtime, &start_state));
     EXPECT_STREQ(start_state.source_path, save_path_string.c_str());
