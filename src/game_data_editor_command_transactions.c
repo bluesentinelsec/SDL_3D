@@ -593,6 +593,16 @@ static bool apply_editor_brush_translate(slayer3d_game_data_runtime *runtime,
         return true;
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+    if (world_runtime != NULL && world_runtime->editor_has_source_model)
+    {
+        if (editor_brush_world_translate_source_box(world_runtime, entry->element_name, offset, NULL, 0))
+        {
+            editor_brush_world_mark_dirty(world_runtime);
+            return true;
+        }
+        return false;
+    }
+
     slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, entry->element_name);
     if (brush == NULL)
         return false;

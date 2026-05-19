@@ -1134,6 +1134,11 @@ bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_
                                                      int error_buffer_size);
 bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
                                                    char *error_buffer, int error_buffer_size);
+bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                             slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
+bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
+                                               slayer3d_vec3 face_normal, float distance, char *error_buffer,
+                                               int error_buffer_size);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);

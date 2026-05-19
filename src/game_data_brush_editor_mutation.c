@@ -507,6 +507,37 @@ bool slayer3d_game_data_resize_brush_face(slayer3d_game_data_runtime *runtime,
         return false;
     }
 
+    if (world_runtime->editor_has_source_model)
+    {
+        const slayer3d_vec3 face_normal = slayer3d_vec3_normalize(brush->faces[desc->face_index].normal);
+        if (!editor_brush_world_resize_source_box_face(world_runtime, desc->brush_name, face_normal, desc->distance,
+                                                       error_buffer, error_buffer_size))
+        {
+            return false;
+        }
+
+        const char *overlapping_brush = NULL;
+        const slayer3d_game_data_brush *resized_brush = find_editor_mutable_brush(world_runtime, desc->brush_name);
+        const bool resize_valid =
+            resized_brush != NULL && editor_brush_bounds_valid(resized_brush) &&
+            !editor_brush_world_box_overlaps_structural_brush(
+                world_runtime, resized_brush->bounds, resized_brush->contents, resized_brush, &overlapping_brush);
+        if (resize_valid)
+        {
+            editor_brush_world_mark_dirty(world_runtime);
+            return true;
+        }
+
+        (void)editor_brush_world_resize_source_box_face(world_runtime, desc->brush_name, face_normal, -desc->distance,
+                                                        NULL, 0);
+        if (overlapping_brush != NULL)
+            set_errorf(error_buffer, error_buffer_size, "brush face resize would overlap existing brush '%s'",
+                       overlapping_brush);
+        else
+            set_error(error_buffer, error_buffer_size, "brush face resize would create invalid geometry");
+        return false;
+    }
+
     if (!resize_editor_brush_face_plane(brush, desc->face_index, desc->distance))
     {
         set_error(error_buffer, error_buffer_size, "failed to resize brush face");

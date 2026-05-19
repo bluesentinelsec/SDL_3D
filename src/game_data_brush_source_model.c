@@ -12,6 +12,14 @@ static int source_millimeters_from_meters(float value)
     return (int)SDL_lroundf(value * 1000.0f);
 }
 
+static int source_units_from_meters(const brush_world_runtime *world_runtime, float value)
+{
+    const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
+                                      ? world_runtime->editor_source_meters_per_unit
+                                      : 0.001f;
+    return (int)SDL_lroundf(value / meters_per_unit);
+}
+
 static bool source_vec3i(yyjson_val *object, const char *key, int out_values[3])
 {
     yyjson_val *value = obj_get(object, key);
@@ -73,6 +81,47 @@ static bool copy_source_string(char **field, const char *value)
         return true;
     *field = SDL_strdup(value);
     return *field != NULL;
+}
+
+static int find_editor_source_box_index_by_name(const brush_world_runtime *world_runtime, const char *brush_name)
+{
+    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
+        return -1;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
+        if (box->name != NULL && SDL_strcmp(box->name, brush_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
+static bool source_box_extents_valid(const editor_brush_source_box_runtime *box)
+{
+    return box != NULL && box->min[0] < box->max[0] && box->min[1] < box->max[1] && box->min[2] < box->max[2];
+}
+
+static void copy_source_box_coordinates(const editor_brush_source_box_runtime *box, int out_min[3], int out_max[3])
+{
+    if (box == NULL || out_min == NULL || out_max == NULL)
+        return;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        out_min[axis] = box->min[axis];
+        out_max[axis] = box->max[axis];
+    }
+}
+
+static void restore_source_box_coordinates(editor_brush_source_box_runtime *box, const int min_values[3],
+                                           const int max_values[3])
+{
+    if (box == NULL || min_values == NULL || max_values == NULL)
+        return;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        box->min[axis] = min_values[axis];
+        box->max[axis] = max_values[axis];
+    }
 }
 
 static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_box_runtime *out_box, char *error_buffer,
@@ -536,5 +585,111 @@ bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_ru
 
     free_editor_brush_source_box(&removed);
     SDL_free(old_boxes);
+    return true;
+}
+
+bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                             slayer3d_vec3 offset, char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush translation requires a source model");
+        return false;
+    }
+
+    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    const int delta[3] = {source_units_from_meters(world_runtime, offset.x),
+                          source_units_from_meters(world_runtime, offset.y),
+                          source_units_from_meters(world_runtime, offset.z)};
+    if (delta[0] == 0 && delta[1] == 0 && delta[2] == 0)
+        return true;
+
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    int old_min[3];
+    int old_max[3];
+    copy_source_box_coordinates(box, old_min, old_max);
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        box->min[axis] += delta[axis];
+        box->max[axis] += delta[axis];
+    }
+
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        restore_source_box_coordinates(box, old_min, old_max);
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+    return true;
+}
+
+bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
+                                               slayer3d_vec3 face_normal, float distance, char *error_buffer,
+                                               int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush resize requires a source model");
+        return false;
+    }
+
+    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    const int delta = source_units_from_meters(world_runtime, distance);
+    if (delta == 0)
+        return true;
+
+    int axis = -1;
+    int side = 0;
+    const slayer3d_vec3 normal = slayer3d_vec3_normalize(face_normal);
+    if (SDL_fabsf(normal.x) >= SDL_fabsf(normal.y) && SDL_fabsf(normal.x) >= SDL_fabsf(normal.z))
+    {
+        axis = 0;
+        side = normal.x >= 0.0f ? 1 : -1;
+    }
+    else if (SDL_fabsf(normal.y) >= SDL_fabsf(normal.z))
+    {
+        axis = 1;
+        side = normal.y >= 0.0f ? 1 : -1;
+    }
+    else
+    {
+        axis = 2;
+        side = normal.z >= 0.0f ? 1 : -1;
+    }
+
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    int old_min[3];
+    int old_max[3];
+    copy_source_box_coordinates(box, old_min, old_max);
+    if (side > 0)
+        box->max[axis] += delta;
+    else
+        box->min[axis] -= delta;
+
+    if (!source_box_extents_valid(box))
+    {
+        restore_source_box_coordinates(box, old_min, old_max);
+        set_error(error_buffer, error_buffer_size, "source brush resize would create invalid geometry");
+        return false;
+    }
+
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        restore_source_box_coordinates(box, old_min, old_max);
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
     return true;
 }

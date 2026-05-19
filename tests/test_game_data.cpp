@@ -16676,6 +16676,13 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     box.max = slayer3d_vec3_make(16.0f, 0.0f, 8.0f);
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error))) << error;
 
+    slayer3d_game_data_resize_brush_face_desc resize{};
+    resize.world_name = "brush.editor_shell.target";
+    resize.brush_name = "brush.source.box.002";
+    resize.face_index = 0;
+    resize.distance = 0.75f;
+    ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error))) << error;
+
     char *export_json = nullptr;
     size_t export_size = 0u;
     ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
@@ -16700,7 +16707,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     ASSERT_TRUE(yyjson_is_arr(new_min));
     ASSERT_TRUE(yyjson_is_arr(new_max));
     EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_min, 0)), 8000);
-    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_max, 0)), 16000);
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_max, 0)), 16750);
     yyjson_doc_free(doc);
 
     slayer3d_game_data_destroy(runtime);
@@ -16721,7 +16728,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     EXPECT_STREQ(world.brushes[1].name, "brush.source.box.002");
     ASSERT_TRUE(world.brushes[1].has_bounds);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
-    EXPECT_NEAR(world.brushes[1].bounds.max.x, 16.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 16.75f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
