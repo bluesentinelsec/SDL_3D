@@ -16290,6 +16290,97 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoTrimsPerpendicularWallEndpointPreview)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int floor_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.floor");
+    const int wall_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.wall");
+    const int wall_axis_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.wall_axis.toggle");
+    const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
+    ASSERT_GE(floor_signal, 0);
+    ASSERT_GE(wall_signal, 0);
+    ASSERT_GE(wall_axis_signal, 0);
+    ASSERT_GE(commit_signal, 0);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 660.0f;
+    motion.motion.y = 20.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    auto world = [&]() {
+        slayer3d_game_data_brush_world brush_world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+        return brush_world;
+    };
+
+    const int initial_brush_count = world().brush_count;
+    slayer3d_signal_emit(bus, floor_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    const slayer3d_value *floor_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    const slayer3d_value *floor_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
+    ASSERT_NE(floor_min, nullptr);
+    ASSERT_NE(floor_max, nullptr);
+    ASSERT_EQ(floor_min->type, SLAYER3D_VALUE_VEC3);
+    ASSERT_EQ(floor_max->type, SLAYER3D_VALUE_VEC3);
+    const slayer3d_vec3 placement_origin =
+        slayer3d_vec3_make(floor_min->as_vec3.x, floor_max->as_vec3.y, floor_min->as_vec3.z);
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+
+    slayer3d_signal_emit(bus, wall_signal, nullptr);
+    slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "x");
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    EXPECT_EQ(world().brush_count, initial_brush_count + 2);
+
+    slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
+    const slayer3d_value *placement_min =
+        slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    const slayer3d_value *placement_max =
+        slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_NE(placement_max, nullptr);
+    ASSERT_EQ(placement_min->type, SLAYER3D_VALUE_VEC3);
+    ASSERT_EQ(placement_max->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x + 0.1f, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.y, placement_origin.y, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z - 0.1f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 8.0f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.y, placement_origin.y + 8.0f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 0.1f, 0.001f);
+
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "wall prefab created");
+    EXPECT_EQ(world().brush_count, initial_brush_count + 3);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
