@@ -272,7 +272,7 @@
           "auto_axis_view_key": "editor.view.mode",
           "auto_axis_view": "flyby_3d",
           "elevation_mode": "connected_grid",
-          "grid_min": [0.0, 0.000125, -0.0125],
+          "grid_min": [0.0, 0.0, -0.0125],
           "grid_max": [1.0, 1.0, 0.0125],
           "message": "wall prefab preview"
         },
