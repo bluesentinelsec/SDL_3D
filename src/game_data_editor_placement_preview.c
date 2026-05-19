@@ -93,10 +93,46 @@ static float editor_placement_elevation(slayer3d_game_data_runtime *runtime, yyj
     return authored_elevation;
 }
 
+static bool editor_placement_auto_axis_enabled(slayer3d_game_data_runtime *runtime, yyjson_val *preview)
+{
+    if (runtime == NULL || SDL_strcmp(json_string(preview, "auto_axis", ""), "camera_cardinal") != 0)
+        return false;
+
+    const char *view_key = json_string(preview, "auto_axis_view_key", NULL);
+    const char *required_view = json_string(preview, "auto_axis_view", NULL);
+    if (view_key == NULL || view_key[0] == '\0' || required_view == NULL || required_view[0] == '\0')
+        return true;
+
+    const char *view = slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), view_key, "");
+    return SDL_strcmp(view, required_view) == 0;
+}
+
+static const char *editor_placement_camera_cardinal_axis(slayer3d_game_data_runtime *runtime, yyjson_val *preview,
+                                                         const char *fallback)
+{
+    const char *camera_name = json_string(preview, "auto_axis_camera", slayer3d_game_data_active_camera(runtime));
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, camera_name, &camera))
+        return fallback;
+
+    slayer3d_vec3 forward = slayer3d_vec3_sub(camera.target, camera.position);
+    forward.y = 0.0f;
+    if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
+        return fallback;
+    return SDL_fabsf(forward.x) >= SDL_fabsf(forward.z) ? "x" : "z";
+}
+
 static const char *editor_placement_axis(slayer3d_game_data_runtime *runtime, yyjson_val *preview)
 {
     const char *authored_axis = json_string(preview, "axis", "z");
     const char *axis_key = json_string(preview, "axis_key", NULL);
+    if (editor_placement_auto_axis_enabled(runtime, preview))
+    {
+        const char *axis = editor_placement_camera_cardinal_axis(runtime, preview, authored_axis);
+        if (axis_key != NULL && axis_key[0] != '\0')
+            slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), axis_key, axis);
+        return axis;
+    }
     if (runtime != NULL && axis_key != NULL && axis_key[0] != '\0')
         return slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), axis_key, authored_axis);
     return authored_axis;

@@ -9122,6 +9122,63 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
     EXPECT_NE(std::string(elevation_mode_error).find("elevation_mode must be connected_grid"), std::string::npos)
         << elevation_mode_error;
 
+    write_text(dir / "bad_auto_axis_placement.game.json", R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Auto Axis Scene Editor Placement" },
+  "world": {
+    "name": "world.bad_auto_axis_scene_editor_placement",
+    "kind": "brush",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "brush_worlds": [
+    {
+      "name": "brush.editor.target",
+      "materials": [{ "name": "mat.gray", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": [
+        {
+          "name": "brush.valid",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 0 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.gray" },
+            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.gray" }
+          ]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "placement": {
+      "previews": [
+        {
+          "mode": "wall",
+          "kind": "box",
+          "world": "brush.editor.target",
+          "material": "mat.gray",
+          "auto_axis": "camera_freeform",
+          "grid_min": [-0.5, 0.0, -0.5],
+          "grid_max": [0.5, 1.0, 0.5]
+        }
+      ]
+    }
+  }
+})json");
+    char auto_axis_error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_auto_axis_placement.game.json").string().c_str(), nullptr,
+                                                  auto_axis_error, sizeof(auto_axis_error)));
+    EXPECT_NE(std::string(auto_axis_error).find("auto_axis must be camera_cardinal"), std::string::npos)
+        << auto_axis_error;
+
     write_text(dir / "bad_palette.game.json", R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Scene Editor Palette" },
@@ -16463,6 +16520,34 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_TRUE(slayer3d_properties_get_bool(slayer3d_game_data_scene_state(runtime), "editor.hover.hit", false));
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.hover.element", ""),
                  "brush.target.cube");
+
+    slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties_set_string(mutable_scene_state, "editor.mode", "brush");
+    slayer3d_properties_set_string(mutable_scene_state, "editor.tool.mode", "wall");
+    slayer3d_properties_set_string(mutable_scene_state, "editor.placement.wall_axis", "x");
+    slayer3d_properties_set_float(camera_actor->props, "yaw", 0.0f);
+    slayer3d_properties_set_float(camera_actor->props, "pitch", -0.25f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.placement_preview.axis", ""),
+        "z");
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.placement.wall_axis", ""), "z");
+
+    slayer3d_properties_set_string(mutable_scene_state, "editor.placement.wall_axis", "z");
+    slayer3d_properties_set_float(camera_actor->props, "yaw", 1.5707963f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.placement_preview.axis", ""),
+        "x");
+    EXPECT_STREQ(
+        slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.placement.wall_axis", ""), "x");
+
+    slayer3d_properties_set_float(camera_actor->props, "yaw", start_yaw);
+    slayer3d_properties_set_float(camera_actor->props, "pitch", -0.29566f);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.mode", "brush");
     EXPECT_TRUE(press_editor_key(SDL_SCANCODE_SPACE, mode_select_action, 7));
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.mode", ""), "select");

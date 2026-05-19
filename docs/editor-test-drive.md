@@ -89,7 +89,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `+` / `-` | palette closed | increase or decrease grid size |
 | arrow keys | full-screen orthographic, palette closed | pan the active canvas |
 | `Z` / `X` or mouse wheel | orthographic view | zoom the active canvas in or out; in four-view layout, the mouse cursor must be over an orthographic pane |
-| `R` | palette closed | toggle wall axis |
+| `R` | palette closed | toggle wall axis for orthographic/manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
 | mouse look | 3D flyby | rotate camera |
@@ -149,6 +149,9 @@ The following should be true during a good test drive:
 - Floor and ceiling prefabs share the same grid-cell footprint. Wall prefabs
   are thin grid-edge segments, so simple blockout maps can be tiled without
   visible gaps while adjacent hallways can pass close to one another.
+- In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
+  cardinal axis from the camera direction. Orthographic placement keeps the
+  explicit `R` wall-axis toggle for drafting control.
 - Floor, wall, and ceiling previews share a connected-grid elevation. Hovering
   or working from a lowered floor or one of its side-wall fills should update
   the editor brush elevation and work plane so new floor, wall, and ceiling
