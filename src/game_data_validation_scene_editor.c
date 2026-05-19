@@ -355,7 +355,9 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
     if (!yyjson_is_obj(placement))
         return validation_error(ctx, placement_path, "scene editor placement must be an object");
 
-    const char *string_fields[] = {"tool_key", "snap_key", "grid_size_key", "default_tool"};
+    const char *string_fields[] = {"tool_key",       "snap_key",        "grid_size_key",
+                                   "default_tool",   "elevation_key",   "work_plane_distance_key",
+                                   "floor_material", "ceiling_material"};
     for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
     {
         char field_path[PATH_BUFFER_SIZE];
@@ -370,6 +372,11 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
     yyjson_val *default_grid_size = obj_get(placement, "default_grid_size");
     if (default_grid_size != NULL && (!yyjson_is_num(default_grid_size) || yyjson_get_num(default_grid_size) <= 0.0))
         return validation_error(ctx, placement_path, "scene editor placement default_grid_size must be positive");
+    char default_elevation_path[PATH_BUFFER_SIZE];
+    format_path(default_elevation_path, sizeof(default_elevation_path), "%s.default_elevation", placement_path);
+    if (!validate_optional_number(ctx, obj_get(placement, "default_elevation"), default_elevation_path,
+                                  "scene editor placement default_elevation"))
+        return false;
 
     yyjson_val *outputs = obj_get(placement, "outputs");
     if (outputs != NULL && !yyjson_is_obj(outputs))
@@ -403,16 +410,30 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         if (SDL_strcmp(kind, "box") != 0 && SDL_strcmp(kind, "player_start") != 0)
             return validation_error(ctx, preview_path,
                                     "scene editor placement preview kind must be box or player_start");
-        yyjson_val *axis_key = obj_get(preview, "axis_key");
-        if (axis_key != NULL && (!yyjson_is_str(axis_key) || yyjson_get_str(axis_key)[0] == '\0'))
-            return validation_error(ctx, preview_path, "scene editor placement preview axis_key must be non-empty");
-        yyjson_val *grid_size_key = obj_get(preview, "grid_size_key");
-        if (grid_size_key != NULL && (!yyjson_is_str(grid_size_key) || yyjson_get_str(grid_size_key)[0] == '\0'))
-            return validation_error(ctx, preview_path,
-                                    "scene editor placement preview grid_size_key must be non-empty");
+        static const char *const preview_string_fields[] = {"axis_key", "grid_size_key", "auto_axis_camera",
+                                                            "auto_axis_view_key", "auto_axis_view"};
+        for (size_t field_index = 0; field_index < SDL_arraysize(preview_string_fields); ++field_index)
+        {
+            char field_path[PATH_BUFFER_SIZE];
+            format_path(field_path, sizeof(field_path), "%s.%s", preview_path, preview_string_fields[field_index]);
+            if (!validate_optional_non_empty_string(ctx, obj_get(preview, preview_string_fields[field_index]),
+                                                    field_path, "scene editor placement preview field"))
+            {
+                return false;
+            }
+        }
         const char *axis = json_string(preview, "axis");
         if (axis != NULL && SDL_strcmp(axis, "x") != 0 && SDL_strcmp(axis, "z") != 0)
             return validation_error(ctx, preview_path, "scene editor placement preview axis must be x or z");
+        const char *auto_axis = json_string(preview, "auto_axis");
+        if (auto_axis != NULL && SDL_strcmp(auto_axis, "camera_cardinal") != 0)
+        {
+            return validation_error(ctx, preview_path,
+                                    "scene editor placement preview auto_axis must be camera_cardinal");
+        }
+        const char *auto_axis_camera = json_string(preview, "auto_axis_camera");
+        if (auto_axis_camera != NULL && !require_ref(ctx, &names->cameras, "camera", auto_axis_camera, preview_path))
+            return false;
         yyjson_val *offset = obj_get(preview, "position_offset");
         if (offset != NULL && !is_exact_vec_array(offset, 3))
             return validation_error(ctx, preview_path, "scene editor placement preview position_offset must be a vec3");
@@ -426,6 +447,12 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         if (snap_mode != NULL && SDL_strcmp(snap_mode, "floor") != 0 && SDL_strcmp(snap_mode, "nearest") != 0)
             return validation_error(ctx, preview_path,
                                     "scene editor placement preview snap_mode must be floor or nearest");
+        const char *elevation_mode = json_string(preview, "elevation_mode");
+        if (elevation_mode != NULL && SDL_strcmp(elevation_mode, "connected_grid") != 0)
+        {
+            return validation_error(ctx, preview_path,
+                                    "scene editor placement preview elevation_mode must be connected_grid");
+        }
         yyjson_val *grid_size = obj_get(preview, "grid_size");
         if (grid_size != NULL && (!yyjson_is_num(grid_size) || yyjson_get_num(grid_size) <= 0.0))
             return validation_error(ctx, preview_path, "scene editor placement preview grid_size must be positive");

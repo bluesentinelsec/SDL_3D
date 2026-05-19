@@ -942,6 +942,24 @@ grid half-extent in world units, and `work_plane_grid_spacing` controls line
 spacing. The grid uses the same `work_plane.normal` and `work_plane.distance`
 as placement, so visual feedback and picking stay aligned.
 
+Editor scenes should keep authoring mode and brush defaults in scene state so
+the host, UI, and save pipeline all see the same values. The editor shell dojo
+uses these conventional keys:
+
+- `editor.mode`: high-level behavior such as `brush`, `select`, or `texture`.
+- `editor.brush.prefab`: active blockout prefab such as `floor`, `wall`, or
+  `ceiling`.
+- `editor.brush.grid_size`: placement/snap size in world units.
+- `editor.brush.height`: default vertical size for wall-like brush editing.
+- `editor.brush.elevation`: default placement elevation.
+- `editor.brush.thickness`: slab thickness for floor/ceiling-like brushes.
+- `editor.brush.material`: active material reference for future brush/face
+  paint operations.
+
+Early editor milestones may mirror `editor.brush.prefab` into legacy placement
+keys such as `editor.tool.mode`; newer editor logic should prefer the explicit
+mode and brush-setting keys above.
+
 `scene_state.set` accepts boolean, numeric, string, and vec3-array values. Vec3
 scene-state values are useful for editor work-plane normals, runtime placement
 offsets, and other authored tool state that should not require Lua.

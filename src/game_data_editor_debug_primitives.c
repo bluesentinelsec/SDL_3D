@@ -5,6 +5,8 @@
 
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_timer.h>
+
 typedef struct editor_debug_iteration_context
 {
     slayer3d_game_data_editor_debug_primitive_fn callback;
@@ -17,9 +19,34 @@ typedef struct editor_debug_iteration_context
     bool stopped;
 } editor_debug_iteration_context;
 
+static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
+
 static slayer3d_color editor_debug_color_or_default(slayer3d_color color, slayer3d_color fallback)
 {
     return color.a != 0 ? color : fallback;
+}
+
+static Uint8 editor_debug_mix_channel(Uint8 a, Uint8 b, float t)
+{
+    return (Uint8)SDL_clamp((int)((float)a + ((float)b - (float)a) * t + 0.5f), 0, 255);
+}
+
+static slayer3d_color editor_debug_selection_flash_color(slayer3d_color color)
+{
+    const slayer3d_color base = editor_debug_color_or_default(color, (slayer3d_color){255, 220, 40, 255});
+    const Uint64 ticks = SDL_GetTicks();
+    const float phase = (float)(ticks % 650U) / 650.0f;
+    const float wave = 0.5f + 0.5f * SDL_sinf(phase * SDL_PI_F * 2.0f);
+    const float mix = 0.2f + wave * 0.8f;
+    const slayer3d_color flash = {255, 255, 255, 255};
+    return (slayer3d_color){
+        editor_debug_mix_channel(base.r, flash.r, mix),
+        editor_debug_mix_channel(base.g, flash.g, mix),
+        editor_debug_mix_channel(base.b, flash.b, mix),
+        editor_debug_mix_channel(base.a < 220 ? 220 : base.a, flash.a, mix),
+    };
 }
 
 static unsigned int editor_debug_flag_from_string(const char *value)
@@ -153,7 +180,9 @@ bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_ga
     slayer3d_game_data_editor_selection selection;
     if (!active_editor_debug_desc_from_json(runtime, &desc, &trace, &selection))
         return true;
-    return slayer3d_game_data_for_each_editor_debug_primitive(runtime, &desc, callback, userdata);
+    if (!slayer3d_game_data_for_each_editor_debug_primitive(runtime, &desc, callback, userdata))
+        return false;
+    return emit_editor_selected_brush_bounds(runtime, &desc, callback, userdata);
 }
 
 static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, slayer3d_bounding_box bounds)
@@ -173,6 +202,51 @@ static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, sl
     for (int i = 0; i < 12; ++i)
     {
         if (!emit_editor_debug_line(context, corners[edges[i][0]], corners[edges[i][1]]))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || desc == NULL || callback == NULL || runtime->editor_selected_brush_count <= 0)
+        return true;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (runtime->editor_selected_brush_scene == NULL || active_scene == NULL ||
+        SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0)
+    {
+        return true;
+    }
+
+    const unsigned int flags = desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS) == 0u)
+        return true;
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.color = editor_debug_selection_flash_color(desc->selection_bounds_color);
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE;
+
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        if (!selection->hit || selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || !selection->has_bounds)
+            continue;
+        if (desc->selection != NULL && desc->selection->hit && desc->selection->world_name != NULL &&
+            desc->selection->element_name != NULL && selection->world_name != NULL && selection->element_name != NULL &&
+            SDL_strcmp(desc->selection->world_name, selection->world_name) == 0 &&
+            SDL_strcmp(desc->selection->element_name, selection->element_name) == 0)
+        {
+            continue;
+        }
+        context.world_name = selection->world_name;
+        context.element_name = selection->element_name;
+        context.face_index = selection->face_index;
+        if (!emit_editor_debug_bounds(&context, selection->bounds))
             return false;
     }
     return true;
@@ -351,8 +425,7 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         SDL_zero(context);
         context.callback = callback;
         context.userdata = userdata;
-        context.color =
-            editor_debug_color_or_default(desc->selection_bounds_color, (slayer3d_color){255, 220, 40, 255});
+        context.color = editor_debug_selection_flash_color(desc->selection_bounds_color);
         context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE;
         context.world_name = selection->world_name;
         context.element_name = selection->element_name;

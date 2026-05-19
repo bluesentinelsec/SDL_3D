@@ -7528,6 +7528,73 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return true;
+    if (SDL_strcmp(type, "editor.selection.delete_selected") == 0)
+    {
+        char actions_path[PATH_BUFFER_SIZE];
+        char else_path[PATH_BUFFER_SIZE];
+        format_path(actions_path, sizeof(actions_path), "%s.actions", json_path);
+        format_path(else_path, sizeof(else_path), "%s.else", json_path);
+        yyjson_val *actions = obj_get(action, "actions");
+        yyjson_val *else_actions = obj_get(action, "else");
+        return (actions == NULL || validate_action_array(ctx, actions, actions_path, names)) &&
+               (else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names));
+    }
+    if (SDL_strcmp(type, "editor.selection.resize_y") == 0)
+    {
+        yyjson_val *direction = obj_get(action, "direction");
+        if (direction != NULL && (!yyjson_is_int(direction) || yyjson_get_int(direction) == 0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y direction must be a non-zero integer");
+        yyjson_val *distance = obj_get(action, "distance");
+        if (distance != NULL && (!yyjson_is_num(distance) || yyjson_get_num(distance) <= 0.0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y distance must be positive");
+        yyjson_val *default_distance = obj_get(action, "default_distance");
+        if (default_distance != NULL && (!yyjson_is_num(default_distance) || yyjson_get_num(default_distance) <= 0.0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y default_distance must be positive");
+        yyjson_val *distance_key = obj_get(action, "distance_key");
+        if (distance_key != NULL && (!yyjson_is_str(distance_key) || yyjson_get_str(distance_key)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.resize_y distance_key must be non-empty");
+        yyjson_val *grid_key = obj_get(action, "grid_key");
+        if (grid_key != NULL && (!yyjson_is_str(grid_key) || yyjson_get_str(grid_key)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.resize_y grid_key must be non-empty");
+        yyjson_val *min_height = obj_get(action, "min_height");
+        if (min_height != NULL && (!yyjson_is_num(min_height) || yyjson_get_num(min_height) <= 0.0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y min_height must be positive");
+        yyjson_val *min_elevation = obj_get(action, "min_elevation");
+        if (min_elevation != NULL && !yyjson_is_num(min_elevation))
+            return validation_error(ctx, json_path, "editor.selection.resize_y min_elevation must be numeric");
+        yyjson_val *max_elevation = obj_get(action, "max_elevation");
+        if (max_elevation != NULL && !yyjson_is_num(max_elevation))
+            return validation_error(ctx, json_path, "editor.selection.resize_y max_elevation must be numeric");
+        if (min_elevation != NULL && max_elevation != NULL &&
+            yyjson_get_num(min_elevation) >= yyjson_get_num(max_elevation))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.selection.resize_y min_elevation must be less than max_elevation");
+        }
+        yyjson_val *slab_max_height = obj_get(action, "slab_max_height");
+        if (slab_max_height != NULL && (!yyjson_is_num(slab_max_height) || yyjson_get_num(slab_max_height) <= 0.0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y slab_max_height must be positive");
+        yyjson_val *fill_thickness = obj_get(action, "fill_thickness");
+        if (fill_thickness != NULL && (!yyjson_is_num(fill_thickness) || yyjson_get_num(fill_thickness) <= 0.0))
+            return validation_error(ctx, json_path, "editor.selection.resize_y fill_thickness must be positive");
+        yyjson_val *floor_material = obj_get(action, "floor_material");
+        if (floor_material != NULL && (!yyjson_is_str(floor_material) || yyjson_get_str(floor_material)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.resize_y floor_material must be non-empty");
+        yyjson_val *fill_material = obj_get(action, "fill_material");
+        if (fill_material != NULL && (!yyjson_is_str(fill_material) || yyjson_get_str(fill_material)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.resize_y fill_material must be non-empty");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.selection.resize_y outputs must be an object");
+        char actions_path[PATH_BUFFER_SIZE];
+        char else_path[PATH_BUFFER_SIZE];
+        format_path(actions_path, sizeof(actions_path), "%s.actions", json_path);
+        format_path(else_path, sizeof(else_path), "%s.else", json_path);
+        yyjson_val *actions = obj_get(action, "actions");
+        yyjson_val *else_actions = obj_get(action, "else");
+        return (actions == NULL || validate_action_array(ctx, actions, actions_path, names)) &&
+               (else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names));
+    }
     if (SDL_strcmp(type, "editor.selection.run") == 0)
     {
         char actions_path[PATH_BUFFER_SIZE];

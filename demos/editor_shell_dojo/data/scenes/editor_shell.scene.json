@@ -36,6 +36,9 @@
       "action.editor.grid.decrease",
       "action.editor.grid.increase",
       "action.editor.wall_axis.toggle",
+      "action.editor.mode.select",
+      "action.editor.brush.lower_y",
+      "action.editor.brush.raise_y",
       "action.editor.palette.brush",
       "action.editor.palette.material",
       "action.editor.palette.game_object",
@@ -225,8 +228,13 @@
       "tool_key": "editor.tool.mode",
       "snap_key": "editor.grid.size",
       "grid_size_key": "editor.grid.size",
+      "elevation_key": "editor.brush.elevation",
+      "work_plane_distance_key": "editor.work_plane.distance",
+      "floor_material": "mat.editor.floor",
+      "ceiling_material": "mat.editor.ceiling",
       "default_snap": 8.0,
       "default_grid_size": 8.0,
+      "default_elevation": 0.0,
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "valid_key": "editor.placement_preview.valid",
@@ -247,6 +255,7 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.floor",
+          "elevation_mode": "connected_grid",
           "grid_min": [0.0, -0.025, 0.0],
           "grid_max": [1.0, 0.0, 1.0],
           "message": "floor prefab preview"
@@ -258,8 +267,13 @@
           "material": "mat.editor.wall",
           "axis_key": "editor.placement.wall_axis",
           "axis": "z",
-          "grid_min": [0.0, 0.0, 0.0],
-          "grid_max": [1.0, 1.0, 1.0],
+          "auto_axis": "camera_cardinal",
+          "auto_axis_camera": "camera.editor_shell.viewport",
+          "auto_axis_view_key": "editor.view.mode",
+          "auto_axis_view": "flyby_3d",
+          "elevation_mode": "connected_grid",
+          "grid_min": [0.0, 0.0, -0.0125],
+          "grid_max": [1.0, 1.0, 0.0125],
           "message": "wall prefab preview"
         },
         {
@@ -267,6 +281,7 @@
           "kind": "box",
           "world": "brush.editor_shell.target",
           "material": "mat.editor.ceiling",
+          "elevation_mode": "connected_grid",
           "grid_min": [0.0, 1.0, 0.0],
           "grid_max": [1.0, 1.025, 1.0],
           "message": "ceiling prefab preview"
@@ -298,7 +313,7 @@
           "kind": "box",
           "label": "Wall",
           "category": "blockout",
-          "description": "8m gray wall tile"
+          "description": "thin gray wall segment"
         },
         {
           "mode": "ceiling",
@@ -595,6 +610,14 @@
             "binding": { "type": "scene_state", "key": "editor.selection.face_stable_id", "default": "none" }
           },
           {
+            "label": "Mode",
+            "binding": { "type": "scene_state", "key": "editor.mode", "default": "select" }
+          },
+          {
+            "label": "Prefab",
+            "binding": { "type": "scene_state", "key": "editor.brush.prefab", "default": "floor" }
+          },
+          {
             "label": "Tool",
             "binding": { "type": "scene_state", "key": "editor.tool.mode", "default": "select" }
           },
@@ -636,7 +659,23 @@
           },
           {
             "label": "Grid",
-            "binding": { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 8.0 }
+            "binding": { "type": "scene_state", "key": "editor.brush.grid_size", "default": 8.0 }
+          },
+          {
+            "label": "Height",
+            "binding": { "type": "scene_state", "key": "editor.brush.height", "default": 8.0 }
+          },
+          {
+            "label": "Elev",
+            "binding": { "type": "scene_state", "key": "editor.brush.elevation", "default": 0.0 }
+          },
+          {
+            "label": "Thick",
+            "binding": { "type": "scene_state", "key": "editor.brush.thickness", "default": 0.2 }
+          },
+          {
+            "label": "Brush Mat",
+            "binding": { "type": "scene_state", "key": "editor.brush.material", "default": "mat.editor.floor" }
           },
           {
             "label": "Axis",
@@ -1007,7 +1046,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Tools: C cycle, 6 floor 7 wall 8 ceiling 9 player. Enter commit, Delete remove.",
+        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Flyby: WASD move, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, [ and ] height, Delete/Backspace remove.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.075,

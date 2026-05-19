@@ -231,6 +231,11 @@ else()
             slayer3d_game_data_test
             PRIVATE
                 "-sALLOW_MEMORY_GROWTH=1"
+                # Data-action validation is recursive and intentionally covers
+                # deeply nested authored gameplay flows in the demo fixtures.
+                # Keep the wasm stack explicit so browser/Node runners do not
+                # fail from stack pressure before reporting the real test result.
+                "-sSTACK_SIZE=8388608"
                 "-sINITIAL_MEMORY=134217728"
                 "-sMAXIMUM_MEMORY=536870912"
         )

@@ -5,6 +5,7 @@
 
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_stdinc.h>
 
 #include "game_data_brush_internal.h"
@@ -408,12 +409,42 @@ bool editor_selection_active_for_scene(const slayer3d_game_data_runtime *runtime
            SDL_strcmp(runtime->editor_selection_scene, active_scene) == 0;
 }
 
+static bool editor_selected_brushes_active_for_scene(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    return runtime->editor_selected_brush_scene != NULL && active_scene != NULL &&
+           SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) == 0;
+}
+
+static void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const int count = editor_selected_brushes_active_for_scene(runtime) ? runtime->editor_selected_brush_count : 0;
+    slayer3d_properties_set_int(runtime->scene_state, "editor.selection.count", count);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.selection.multiple", count > 1);
+}
+
+static void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY; ++i)
+        init_editor_selection(&runtime->editor_selected_brushes[i]);
+    runtime->editor_selected_brush_count = 0;
+    runtime->editor_selected_brush_scene = slayer3d_game_data_active_scene(runtime);
+    publish_editor_selected_brush_count(runtime);
+}
+
 static void clear_editor_active_selection(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
         return;
     init_editor_selection(&runtime->editor_active_selection);
     runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+    clear_editor_selected_brushes(runtime);
     clear_editor_command_preview(runtime);
     clear_editor_placement_preview(runtime);
 }
@@ -429,6 +460,9 @@ static bool editor_selection_button_requested(const slayer3d_game_data_runtime *
     return button != 0 && slayer3d_input_get_pressed_mouse_button(input) == button;
 }
 
+static slayer3d_game_data_editor_selection resolved_editor_selection(
+    const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_editor_selection *selection);
+
 static bool emit_editor_selection_signal(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
                                          const char *signal_key, const slayer3d_game_data_editor_selection *selection)
 {
@@ -441,7 +475,8 @@ static bool emit_editor_selection_signal(slayer3d_game_data_runtime *runtime, yy
     if (bus == NULL || signal_id < 0)
         return false;
 
-    slayer3d_properties *payload = slayer3d_game_data_create_editor_selection_payload(selection);
+    slayer3d_game_data_editor_selection resolved = resolved_editor_selection(runtime, selection);
+    slayer3d_properties *payload = slayer3d_game_data_create_editor_selection_payload(&resolved);
     if (payload == NULL)
         return false;
     slayer3d_signal_emit(bus, signal_id, payload);
@@ -460,9 +495,186 @@ static const char *editor_selection_type_name(slayer3d_game_data_world_model_typ
     return "none";
 }
 
+static bool editor_selection_is_selectable_brush(const slayer3d_game_data_editor_selection *selection)
+{
+    return selection != NULL && selection->hit && selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD &&
+           selection->world_name != NULL && selection->world_name[0] != '\0' && selection->element_name != NULL &&
+           selection->element_name[0] != '\0';
+}
+
+static int editor_selected_brush_index(const slayer3d_game_data_runtime *runtime,
+                                       const slayer3d_game_data_editor_selection *selection)
+{
+    if (runtime == NULL || !editor_selected_brushes_active_for_scene(runtime) ||
+        !editor_selection_is_selectable_brush(selection))
+    {
+        return -1;
+    }
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *candidate = &runtime->editor_selected_brushes[i];
+        if (editor_selection_is_selectable_brush(candidate) &&
+            SDL_strcmp(candidate->world_name, selection->world_name) == 0 &&
+            SDL_strcmp(candidate->element_name, selection->element_name) == 0)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void remove_editor_selected_brush_at(slayer3d_game_data_runtime *runtime, int index)
+{
+    if (runtime == NULL || index < 0 || index >= runtime->editor_selected_brush_count)
+        return;
+    for (int i = index; i + 1 < runtime->editor_selected_brush_count; ++i)
+        runtime->editor_selected_brushes[i] = runtime->editor_selected_brushes[i + 1];
+    runtime->editor_selected_brush_count--;
+    init_editor_selection(&runtime->editor_selected_brushes[runtime->editor_selected_brush_count]);
+    publish_editor_selected_brush_count(runtime);
+}
+
+static bool add_editor_selected_brush(slayer3d_game_data_runtime *runtime,
+                                      const slayer3d_game_data_editor_selection *selection)
+{
+    if (runtime == NULL || !editor_selection_is_selectable_brush(selection) ||
+        runtime->editor_selected_brush_count >= SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY)
+    {
+        return false;
+    }
+    if (!editor_selected_brushes_active_for_scene(runtime))
+        clear_editor_selected_brushes(runtime);
+    runtime->editor_selected_brushes[runtime->editor_selected_brush_count++] = *selection;
+    runtime->editor_selected_brush_scene = slayer3d_game_data_active_scene(runtime);
+    publish_editor_selected_brush_count(runtime);
+    return true;
+}
+
+static void update_active_editor_selection_from_selected_brushes(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    if (editor_selected_brushes_active_for_scene(runtime) && runtime->editor_selected_brush_count > 0)
+        runtime->editor_active_selection = runtime->editor_selected_brushes[runtime->editor_selected_brush_count - 1];
+    else
+        init_editor_selection(&runtime->editor_active_selection);
+    runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+}
+
+static bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime,
+                                             const slayer3d_game_data_editor_selection *hover_selection)
+{
+    const bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+    if (!editor_selection_is_selectable_brush(hover_selection))
+    {
+        if (!shift)
+            clear_editor_selected_brushes(runtime);
+        runtime->editor_active_selection = *hover_selection;
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+        return true;
+    }
+
+    const int selected_index = editor_selected_brush_index(runtime, hover_selection);
+    if (selected_index >= 0)
+    {
+        remove_editor_selected_brush_at(runtime, selected_index);
+        update_active_editor_selection_from_selected_brushes(runtime);
+        return true;
+    }
+
+    if (!shift)
+        clear_editor_selected_brushes(runtime);
+    if (!add_editor_selected_brush(runtime, hover_selection))
+        return false;
+    update_active_editor_selection_from_selected_brushes(runtime);
+    return true;
+}
+
+static bool editor_select_mode_secondary_click(slayer3d_game_data_runtime *runtime,
+                                               const slayer3d_game_data_editor_selection *hover_selection)
+{
+    if (editor_selection_is_selectable_brush(hover_selection) &&
+        editor_selected_brush_index(runtime, hover_selection) < 0)
+    {
+        clear_editor_selected_brushes(runtime);
+        if (!add_editor_selected_brush(runtime, hover_selection))
+            return false;
+        update_active_editor_selection_from_selected_brushes(runtime);
+        return true;
+    }
+
+    if (!editor_selection_is_selectable_brush(hover_selection) && hover_selection != NULL && hover_selection->hit)
+    {
+        clear_editor_selected_brushes(runtime);
+        runtime->editor_active_selection = *hover_selection;
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+    }
+    return true;
+}
+
+static bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "select") == 0;
+}
+
 static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)
 {
     return metadata != NULL && metadata->stable_id != NULL ? metadata->stable_id : "";
+}
+
+static void resolve_brush_editor_selection_metadata(const slayer3d_game_data_runtime *runtime,
+                                                    slayer3d_game_data_editor_selection *selection)
+{
+    if (runtime == NULL || selection == NULL || !editor_selection_is_selectable_brush(selection))
+        return;
+
+    selection->world_editor = NULL;
+    selection->element_editor = NULL;
+    selection->face_editor = NULL;
+    selection->material_editor = NULL;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    if (world_runtime == NULL)
+        return;
+
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    selection->world_editor = &world->editor;
+    selection->element_index = -1;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if (brush->name == NULL || SDL_strcmp(brush->name, selection->element_name) != 0)
+            continue;
+
+        selection->element_index = brush_index;
+        selection->element_editor = &brush->editor;
+        selection->has_bounds = brush->has_bounds;
+        if (brush->has_bounds)
+            selection->bounds = brush->bounds;
+
+        if (selection->face_index >= 0 && selection->face_index < brush->face_count)
+        {
+            const slayer3d_game_data_brush_face *face = &brush->faces[selection->face_index];
+            selection->face_editor = &face->editor;
+            selection->material_name = face->material_name;
+            if (face->material_index >= 0 && face->material_index < world->material_count)
+                selection->material_editor = &world->materials[face->material_index].editor;
+        }
+        return;
+    }
+}
+
+static slayer3d_game_data_editor_selection resolved_editor_selection(
+    const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_editor_selection *selection)
+{
+    slayer3d_game_data_editor_selection resolved;
+    init_editor_selection(&resolved);
+    if (selection == NULL)
+        return resolved;
+    resolved = *selection;
+    resolve_brush_editor_selection_metadata(runtime, &resolved);
+    return resolved;
 }
 
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
@@ -471,27 +683,28 @@ void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *o
     if (runtime == NULL || outputs == NULL || selection == NULL)
         return;
 
+    slayer3d_game_data_editor_selection resolved = resolved_editor_selection(runtime, selection);
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
-    editor_set_bool_output(scene_state, outputs, "hit_key", selection->hit);
-    editor_set_string_output(scene_state, outputs, "type_key", editor_selection_type_name(selection->type));
-    editor_set_string_output(scene_state, outputs, "world_key", selection->hit ? selection->world_name : "");
-    editor_set_string_output(scene_state, outputs, "element_key", selection->hit ? selection->element_name : "");
-    editor_set_string_output(scene_state, outputs, "material_key", selection->hit ? selection->material_name : "");
+    editor_set_bool_output(scene_state, outputs, "hit_key", resolved.hit);
+    editor_set_string_output(scene_state, outputs, "type_key", editor_selection_type_name(resolved.type));
+    editor_set_string_output(scene_state, outputs, "world_key", resolved.hit ? resolved.world_name : "");
+    editor_set_string_output(scene_state, outputs, "element_key", resolved.hit ? resolved.element_name : "");
+    editor_set_string_output(scene_state, outputs, "material_key", resolved.hit ? resolved.material_name : "");
     editor_set_string_output(scene_state, outputs, "world_stable_id_key",
-                             selection->hit ? editor_metadata_stable_id(selection->world_editor) : "");
+                             resolved.hit ? editor_metadata_stable_id(resolved.world_editor) : "");
     editor_set_string_output(scene_state, outputs, "element_stable_id_key",
-                             selection->hit ? editor_metadata_stable_id(selection->element_editor) : "");
+                             resolved.hit ? editor_metadata_stable_id(resolved.element_editor) : "");
     editor_set_string_output(scene_state, outputs, "material_stable_id_key",
-                             selection->hit ? editor_metadata_stable_id(selection->material_editor) : "");
+                             resolved.hit ? editor_metadata_stable_id(resolved.material_editor) : "");
     editor_set_string_output(scene_state, outputs, "face_stable_id_key",
-                             selection->hit ? editor_metadata_stable_id(selection->face_editor) : "");
-    editor_set_int_output(scene_state, outputs, "element_index_key", selection->hit ? selection->element_index : -1);
-    editor_set_int_output(scene_state, outputs, "face_index_key", selection->hit ? selection->face_index : -1);
-    editor_set_float_output(scene_state, outputs, "fraction_key", selection->hit ? selection->fraction : 1.0f);
+                             resolved.hit ? editor_metadata_stable_id(resolved.face_editor) : "");
+    editor_set_int_output(scene_state, outputs, "element_index_key", resolved.hit ? resolved.element_index : -1);
+    editor_set_int_output(scene_state, outputs, "face_index_key", resolved.hit ? resolved.face_index : -1);
+    editor_set_float_output(scene_state, outputs, "fraction_key", resolved.hit ? resolved.fraction : 1.0f);
     editor_set_vec3_output(scene_state, outputs, "point_key",
-                           selection->hit ? selection->point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+                           resolved.hit ? resolved.point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     editor_set_vec3_output(scene_state, outputs, "normal_key",
-                           selection->hit ? selection->normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+                           resolved.hit ? resolved.normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
 }
 
 bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime *runtime)
@@ -532,8 +745,38 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
+    if (editor_mode_is_select(runtime))
+    {
+        if (select_requested)
+        {
+            if (hover_selection.hit)
+            {
+                if (!editor_select_mode_primary_click(runtime, &hover_selection))
+                    return false;
+            }
+            else if (json_bool(selection_json, "clear_on_miss", true))
+            {
+                clear_editor_active_selection(runtime);
+            }
+        }
+        if (secondary_select_requested && hover_selection.hit)
+        {
+            if (!editor_select_mode_secondary_click(runtime, &hover_selection))
+                return false;
+        }
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        if (secondary_select_requested && !emit_editor_selection_signal(runtime, selection_json, "on_secondary_select",
+                                                                        &runtime->editor_active_selection))
+        {
+            return false;
+        }
+        return true;
+    }
+
     if (select_requested || secondary_select_requested)
     {
+        clear_editor_selected_brushes(runtime);
         if (hover_selection.hit)
             runtime->editor_active_selection = hover_selection;
         else if (json_bool(selection_json, "clear_on_miss", true))
@@ -542,6 +785,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+    publish_editor_selected_brush_count(runtime);
     if (secondary_select_requested && !emit_editor_selection_signal(runtime, selection_json, "on_secondary_select",
                                                                     &runtime->editor_active_selection))
     {

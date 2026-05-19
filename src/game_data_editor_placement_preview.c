@@ -83,10 +83,56 @@ static float editor_placement_grid_size(slayer3d_game_data_runtime *runtime, yyj
     return authored_grid_size;
 }
 
+static float editor_placement_elevation(slayer3d_game_data_runtime *runtime, yyjson_val *placement)
+{
+    const float authored_elevation = json_float(placement, "default_elevation", 0.0f);
+    const char *elevation_key = json_string(placement, "elevation_key", NULL);
+    if (runtime != NULL && elevation_key != NULL && elevation_key[0] != '\0')
+        return slayer3d_properties_get_float(slayer3d_game_data_scene_state(runtime), elevation_key,
+                                             authored_elevation);
+    return authored_elevation;
+}
+
+static bool editor_placement_auto_axis_enabled(slayer3d_game_data_runtime *runtime, yyjson_val *preview)
+{
+    if (runtime == NULL || SDL_strcmp(json_string(preview, "auto_axis", ""), "camera_cardinal") != 0)
+        return false;
+
+    const char *view_key = json_string(preview, "auto_axis_view_key", NULL);
+    const char *required_view = json_string(preview, "auto_axis_view", NULL);
+    if (view_key == NULL || view_key[0] == '\0' || required_view == NULL || required_view[0] == '\0')
+        return true;
+
+    const char *view = slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), view_key, "");
+    return SDL_strcmp(view, required_view) == 0;
+}
+
+static const char *editor_placement_camera_cardinal_axis(slayer3d_game_data_runtime *runtime, yyjson_val *preview,
+                                                         const char *fallback)
+{
+    const char *camera_name = json_string(preview, "auto_axis_camera", slayer3d_game_data_active_camera(runtime));
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, camera_name, &camera))
+        return fallback;
+
+    slayer3d_vec3 forward = slayer3d_vec3_sub(camera.target, camera.position);
+    forward.y = 0.0f;
+    if (slayer3d_vec3_length_squared(forward) <= 0.000001f)
+        return fallback;
+    return SDL_fabsf(forward.x) >= SDL_fabsf(forward.z) ? "x" : "z";
+}
+
 static const char *editor_placement_axis(slayer3d_game_data_runtime *runtime, yyjson_val *preview)
 {
     const char *authored_axis = json_string(preview, "axis", "z");
     const char *axis_key = json_string(preview, "axis_key", NULL);
+    if (editor_placement_auto_axis_enabled(runtime, preview))
+    {
+        const char *axis = editor_placement_camera_cardinal_axis(runtime, preview, authored_axis);
+        if (axis_key != NULL && axis_key[0] != '\0')
+            slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), axis_key, axis);
+        return axis;
+    }
     if (runtime != NULL && axis_key != NULL && axis_key[0] != '\0')
         return slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), axis_key, authored_axis);
     return authored_axis;
@@ -107,6 +153,46 @@ static float editor_placement_snap_value(float value, float snap, const char *mo
     if (mode != NULL && SDL_strcmp(mode, "nearest") == 0)
         return SDL_roundf(value / snap) * snap;
     return editor_placement_snap_floor(value, snap);
+}
+
+static bool editor_placement_uses_connected_grid(yyjson_val *preview)
+{
+    return SDL_strcmp(json_string(preview, "elevation_mode", ""), "connected_grid") == 0;
+}
+
+static float editor_placement_connected_grid_elevation(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
+                                                       const slayer3d_game_data_editor_selection *selection,
+                                                       float grid_size)
+{
+    float elevation = editor_placement_elevation(runtime, placement);
+    if (selection == NULL || !selection->hit || !selection->has_bounds)
+        return elevation;
+
+    const char *material = selection->material_name != NULL ? selection->material_name : "";
+    const char *floor_material = json_string(placement, "floor_material", "mat.editor.floor");
+    const char *ceiling_material = json_string(placement, "ceiling_material", "mat.editor.ceiling");
+    if (floor_material != NULL && floor_material[0] != '\0' && SDL_strcmp(material, floor_material) == 0)
+        elevation = selection->bounds.max.y;
+    else if (ceiling_material != NULL && ceiling_material[0] != '\0' && SDL_strcmp(material, ceiling_material) == 0)
+        elevation = selection->bounds.min.y - grid_size;
+    else
+        elevation = selection->bounds.min.y;
+    return elevation;
+}
+
+static void publish_editor_placement_elevation(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
+                                               float elevation)
+{
+    if (runtime == NULL || placement == NULL)
+        return;
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    const char *elevation_key = json_string(placement, "elevation_key", NULL);
+    if (elevation_key != NULL && elevation_key[0] != '\0')
+        slayer3d_properties_set_float(scene_state, elevation_key, elevation);
+    const char *work_plane_distance_key = json_string(placement, "work_plane_distance_key", NULL);
+    if (work_plane_distance_key != NULL && work_plane_distance_key[0] != '\0')
+        slayer3d_properties_set_float(scene_state, work_plane_distance_key, elevation);
 }
 
 static slayer3d_bounding_box editor_placement_oriented_box_bounds(slayer3d_game_data_runtime *runtime,
@@ -140,8 +226,6 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
                                              yyjson_val *preview, const slayer3d_game_data_editor_selection *selection,
                                              float snap)
 {
-    (void)runtime;
-    (void)placement;
     slayer3d_vec3 anchor = selection != NULL ? selection->point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     anchor = slayer3d_vec3_add(anchor, json_vec3(preview, "position_offset", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)));
     if (snap > 0.0f)
@@ -150,6 +234,12 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
         anchor.x = editor_placement_snap_value(anchor.x, snap, snap_mode);
         anchor.y = editor_placement_snap_value(anchor.y, snap, snap_mode);
         anchor.z = editor_placement_snap_value(anchor.z, snap, snap_mode);
+    }
+    if (editor_placement_uses_connected_grid(preview))
+    {
+        const float grid_size = editor_placement_grid_size(runtime, placement, preview, snap);
+        anchor.y = editor_placement_connected_grid_elevation(runtime, placement, selection, grid_size);
+        publish_editor_placement_elevation(runtime, placement, anchor.y);
     }
     return anchor;
 }

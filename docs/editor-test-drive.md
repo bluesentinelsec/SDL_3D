@@ -71,24 +71,29 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `4` | global editor | full-screen front orthographic view |
 | `5` | global editor | full-screen side orthographic view |
 | `Tab` | global editor | quick toggle between four-view layout and full-screen 3D flyby |
-| `B` | global editor | open or close the Brushes palette |
-| `M` | global editor | open the Materials palette placeholder |
+| `B` | global editor | enter Brush Paint Mode and open or close the Brushes palette |
+| `M` | global editor | enter Texture Mode and open the Materials palette placeholder |
 | `G` | global editor | open the Game Objects palette |
+| `Space` | editor layout, palette closed | enter Select Mode |
 | arrow keys | palette open | move the active palette cursor |
 | `Enter` | palette open | select the highlighted palette item and close the palette |
 | `Esc` | palette open | close the palette without quitting |
-| mouse click | orthographic view | place the selected prefab at the snapped preview position |
+| mouse click | Brush/Game Object Mode | place the selected prefab at the snapped preview position |
+| mouse click | Select Mode | select or deselect the highlighted brush |
+| `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
 | right click | orthographic view | delete the highlighted tile or game object |
-| `Delete` | orthographic view | delete the active selected tile or game object |
+| `[` and `]` | Select Mode | lower or raise selected brush height/elevation by one active grid step |
+| `Delete` / `Backspace` | Select Mode | delete all selected brushes |
+| `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size |
 | arrow keys | full-screen orthographic, palette closed | pan the active canvas |
 | `Z` / `X` or mouse wheel | orthographic view | zoom the active canvas in or out; in four-view layout, the mouse cursor must be over an orthographic pane |
-| `R` | palette closed | toggle wall axis |
+| `R` | palette closed | toggle wall axis for orthographic/manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
 | mouse look | 3D flyby | rotate camera |
-| `Space` / `Left Ctrl` | 3D flyby | move camera up/down |
+| `Q` / `E` | 3D flyby | move camera down/up |
 | `Left Shift` | 3D flyby | move faster |
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
 | `T` | palette closed | report that disk test-run manifest handoff is disabled for this MVP iteration |
@@ -103,13 +108,21 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 3. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
    ceiling tile.
 4. Press `G`, press `Enter` to select Player Start, and place it on the floor.
-5. Hover a placed tile and right click, or select it and press `Delete`; the
-   tile should disappear.
-6. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
+5. Press `Space`, click a tile to select it, press `]`, and confirm the brush
+   stretches upward while its bottom face stays anchored. Press `[` on a floor
+   slab at the default floor plane and confirm the floor slab can move below
+   the plane; the editor should add side-wall fill brushes around the exposed
+   height change.
+6. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
+   wall, and ceiling tiles. Their previews should stay on the lowered
+   connected grid instead of snapping back to the original world plane.
+7. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
+   multiple tiles to delete a set.
+8. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
    file should contain `brush_worlds` and `editor_player_starts`.
-7. Press `F5`; the editor should switch into the playable test scene using the
+9. Press `F5`; the editor should switch into the playable test scene using the
    current in-memory map and player start.
-8. In the playable scene, use `WASD` and mouse look to verify the player starts
+10. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
 ## Correctness Checks
@@ -118,14 +131,33 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed.
+- The inspector reports explicit editor mode and brush settings: active prefab,
+  grid size, height, elevation, thickness, and material.
+- `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
+  selections update the same data-authored mode and brush-setting state.
+- `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
+  Mode owns brush selection and multi-selection. `[` and `]` resize generic
+  selected brushes by the active grid step. Thin floor slabs can move below the
+  default plane; the editor creates deterministic side-wall fill brushes for
+  the exposed vertical space and removes the matching fill segment when raised
+  back up.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling brushes stay aligned to the larger
   blockout grid.
 - The bright green placement preview sits under the mouse in orthographic
   views, using the containing grid cell rather than the nearest grid line.
-- Floor, wall, and ceiling prefabs share the same grid-cell footprint and are
-  anchored to grid-cell boundaries, so simple blockout maps can be tiled without
-  visible gaps.
+- Floor and ceiling prefabs share the same grid-cell footprint. Wall prefabs
+  are thin grid-edge segments, so simple blockout maps can be tiled without
+  visible gaps while adjacent hallways can pass close to one another. Wall
+  bottoms sit directly on the connected floor elevation; authored blockout
+  seams should be watertight rather than relying on visual offsets.
+- In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
+  cardinal axis from the camera direction. Orthographic placement keeps the
+  explicit `R` wall-axis toggle for drafting control.
+- Floor, wall, and ceiling previews share a connected-grid elevation. Hovering
+  or working from a lowered floor or one of its side-wall fills should update
+  the editor brush elevation and work plane so new floor, wall, and ceiling
+  tiles can continue the lower level without manual state edits.
 - Right click / `Delete` removes the highlighted brush and `U` can undo the
   deletion.
 - Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
