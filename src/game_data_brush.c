@@ -725,6 +725,314 @@ static bool brush_polygon_covers_polygon(const slayer3d_vec3 *covering, int cove
     return true;
 }
 
+typedef struct brush_rect_2d
+{
+    float min_u;
+    float max_u;
+    float min_v;
+    float max_v;
+} brush_rect_2d;
+
+static bool brush_material_is_opaque(const slayer3d_game_data_brush_world *world, int material_index);
+static bool brush_face_can_be_compile_culled(const slayer3d_game_data_brush_world *world,
+                                             const slayer3d_game_data_brush *brush,
+                                             const slayer3d_game_data_brush_face *face);
+
+static bool brush_rect_append(brush_rect_2d **rects, int *count, int *capacity, brush_rect_2d rect)
+{
+    if (rects == NULL || count == NULL || capacity == NULL)
+        return false;
+    if (rect.max_u <= rect.min_u + 0.0001f || rect.max_v <= rect.min_v + 0.0001f)
+        return true;
+    if (*count >= *capacity)
+    {
+        const int next_capacity = *capacity > 0 ? *capacity * 2 : 8;
+        brush_rect_2d *next_rects = (brush_rect_2d *)SDL_realloc(*rects, (size_t)next_capacity * sizeof(*next_rects));
+        if (next_rects == NULL)
+            return false;
+        *rects = next_rects;
+        *capacity = next_capacity;
+    }
+    (*rects)[*count] = rect;
+    (*count)++;
+    return true;
+}
+
+static float brush_polygon_area_2d(const slayer3d_vec3 *polygon, int count, slayer3d_vec3 basis_u,
+                                   slayer3d_vec3 basis_v)
+{
+    if (polygon == NULL || count < 3)
+        return 0.0f;
+    float area = 0.0f;
+    for (int i = 0; i < count; ++i)
+    {
+        const int next = (i + 1) % count;
+        const float ax = slayer3d_vec3_dot(polygon[i], basis_u);
+        const float ay = slayer3d_vec3_dot(polygon[i], basis_v);
+        const float bx = slayer3d_vec3_dot(polygon[next], basis_u);
+        const float by = slayer3d_vec3_dot(polygon[next], basis_v);
+        area += ax * by - bx * ay;
+    }
+    return area * 0.5f;
+}
+
+static bool brush_polygon_rect_bounds_2d(const slayer3d_vec3 *polygon, int count, slayer3d_vec3 basis_u,
+                                         slayer3d_vec3 basis_v, brush_rect_2d *out_rect)
+{
+    if (polygon == NULL || count != 4 || out_rect == NULL)
+        return false;
+    brush_rect_2d rect = {
+        slayer3d_vec3_dot(polygon[0], basis_u),
+        slayer3d_vec3_dot(polygon[0], basis_u),
+        slayer3d_vec3_dot(polygon[0], basis_v),
+        slayer3d_vec3_dot(polygon[0], basis_v),
+    };
+    for (int i = 1; i < count; ++i)
+    {
+        const float u = slayer3d_vec3_dot(polygon[i], basis_u);
+        const float v = slayer3d_vec3_dot(polygon[i], basis_v);
+        rect.min_u = SDL_min(rect.min_u, u);
+        rect.max_u = SDL_max(rect.max_u, u);
+        rect.min_v = SDL_min(rect.min_v, v);
+        rect.max_v = SDL_max(rect.max_v, v);
+    }
+    if (rect.max_u <= rect.min_u + 0.0001f || rect.max_v <= rect.min_v + 0.0001f)
+        return false;
+
+    bool corners[4] = {false, false, false, false};
+    for (int i = 0; i < count; ++i)
+    {
+        const float u = slayer3d_vec3_dot(polygon[i], basis_u);
+        const float v = slayer3d_vec3_dot(polygon[i], basis_v);
+        const bool min_u = SDL_fabsf(u - rect.min_u) <= 0.001f;
+        const bool max_u = SDL_fabsf(u - rect.max_u) <= 0.001f;
+        const bool min_v = SDL_fabsf(v - rect.min_v) <= 0.001f;
+        const bool max_v = SDL_fabsf(v - rect.max_v) <= 0.001f;
+        if (min_u && min_v)
+            corners[0] = true;
+        else if (max_u && min_v)
+            corners[1] = true;
+        else if (max_u && max_v)
+            corners[2] = true;
+        else if (min_u && max_v)
+            corners[3] = true;
+        else
+            return false;
+    }
+    for (size_t i = 0; i < SDL_arraysize(corners); ++i)
+    {
+        if (!corners[i])
+            return false;
+    }
+    *out_rect = rect;
+    return true;
+}
+
+static bool brush_float_append_unique(float **values, int *count, int *capacity, float value)
+{
+    if (values == NULL || count == NULL || capacity == NULL)
+        return false;
+    for (int i = 0; i < *count; ++i)
+    {
+        if (SDL_fabsf((*values)[i] - value) <= 0.0001f)
+            return true;
+    }
+    if (*count >= *capacity)
+    {
+        const int next_capacity = *capacity > 0 ? *capacity * 2 : 8;
+        float *next_values = (float *)SDL_realloc(*values, (size_t)next_capacity * sizeof(*next_values));
+        if (next_values == NULL)
+            return false;
+        *values = next_values;
+        *capacity = next_capacity;
+    }
+    (*values)[*count] = value;
+    (*count)++;
+    return true;
+}
+
+static int brush_compare_floats(const void *a, const void *b)
+{
+    const float af = *(const float *)a;
+    const float bf = *(const float *)b;
+    return (af > bf) - (af < bf);
+}
+
+static bool brush_rect_contains_point(const brush_rect_2d *rect, float u, float v)
+{
+    return rect != NULL && u >= rect->min_u - 0.0001f && u <= rect->max_u + 0.0001f && v >= rect->min_v - 0.0001f &&
+           v <= rect->max_v + 0.0001f;
+}
+
+static bool brush_face_visible_rects_after_neighbor_covers(const slayer3d_game_data_brush_world *world, int brush_index,
+                                                           int face_index, const slayer3d_vec3 *polygon,
+                                                           int polygon_count, slayer3d_vec3 normal,
+                                                           slayer3d_vec3 basis_u, slayer3d_vec3 basis_v, float distance,
+                                                           slayer3d_vec3 *scratch, int scratch_capacity,
+                                                           brush_rect_2d **out_rects, int *out_rect_count)
+{
+    if (out_rects != NULL)
+        *out_rects = NULL;
+    if (out_rect_count != NULL)
+        *out_rect_count = 0;
+    if (world == NULL || polygon == NULL || scratch == NULL || out_rects == NULL || out_rect_count == NULL ||
+        brush_index < 0 || brush_index >= world->brush_count)
+    {
+        return false;
+    }
+
+    const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+    const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+    if (!brush_face_can_be_compile_culled(world, brush, face))
+        return false;
+
+    brush_rect_2d subject;
+    if (!brush_polygon_rect_bounds_2d(polygon, polygon_count, basis_u, basis_v, &subject))
+        return false;
+
+    brush_rect_2d *covers = NULL;
+    int cover_count = 0;
+    int cover_capacity = 0;
+    const float normal_epsilon = 0.001f;
+    const float distance_epsilon = 0.001f;
+    bool ok = true;
+    for (int other_brush_index = 0; ok && other_brush_index < world->brush_count; ++other_brush_index)
+    {
+        if (other_brush_index == brush_index)
+            continue;
+        const slayer3d_game_data_brush *other = &world->brushes[other_brush_index];
+        if ((other->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID) == 0u)
+            continue;
+
+        for (int other_face_index = 0; ok && other_face_index < other->face_count; ++other_face_index)
+        {
+            const slayer3d_game_data_brush_face *other_face = &other->faces[other_face_index];
+            if (!brush_material_is_opaque(world, other_face->material_index))
+                continue;
+
+            slayer3d_vec3 other_normal;
+            float other_distance = 0.0f;
+            if (!brush_plane_normalized(other_face, &other_normal, &other_distance))
+                continue;
+            if (slayer3d_vec3_dot(normal, other_normal) > -1.0f + normal_epsilon)
+                continue;
+            if (SDL_fabsf(distance + other_distance) > distance_epsilon)
+                continue;
+
+            const int other_count =
+                brush_build_face_polygon(other, other_face_index, scratch, scratch_capacity, NULL, NULL, NULL);
+            brush_rect_2d cover;
+            if (other_count < 3 || !brush_polygon_rect_bounds_2d(scratch, other_count, basis_u, basis_v, &cover))
+                continue;
+            cover.min_u = SDL_max(cover.min_u, subject.min_u);
+            cover.max_u = SDL_min(cover.max_u, subject.max_u);
+            cover.min_v = SDL_max(cover.min_v, subject.min_v);
+            cover.max_v = SDL_min(cover.max_v, subject.max_v);
+            ok = brush_rect_append(&covers, &cover_count, &cover_capacity, cover);
+        }
+    }
+    if (!ok)
+    {
+        SDL_free(covers);
+        return false;
+    }
+    if (cover_count <= 0)
+    {
+        SDL_free(covers);
+        return false;
+    }
+
+    float *u_edges = NULL;
+    float *v_edges = NULL;
+    int u_count = 0;
+    int v_count = 0;
+    int u_capacity = 0;
+    int v_capacity = 0;
+    ok = brush_float_append_unique(&u_edges, &u_count, &u_capacity, subject.min_u) &&
+         brush_float_append_unique(&u_edges, &u_count, &u_capacity, subject.max_u) &&
+         brush_float_append_unique(&v_edges, &v_count, &v_capacity, subject.min_v) &&
+         brush_float_append_unique(&v_edges, &v_count, &v_capacity, subject.max_v);
+    for (int i = 0; ok && i < cover_count; ++i)
+    {
+        ok = brush_float_append_unique(&u_edges, &u_count, &u_capacity, covers[i].min_u) &&
+             brush_float_append_unique(&u_edges, &u_count, &u_capacity, covers[i].max_u) &&
+             brush_float_append_unique(&v_edges, &v_count, &v_capacity, covers[i].min_v) &&
+             brush_float_append_unique(&v_edges, &v_count, &v_capacity, covers[i].max_v);
+    }
+    if (ok)
+    {
+        qsort(u_edges, (size_t)u_count, sizeof(*u_edges), brush_compare_floats);
+        qsort(v_edges, (size_t)v_count, sizeof(*v_edges), brush_compare_floats);
+    }
+
+    brush_rect_2d *visible = NULL;
+    int visible_count = 0;
+    int visible_capacity = 0;
+    for (int ui = 0; ok && ui + 1 < u_count; ++ui)
+    {
+        for (int vi = 0; ok && vi + 1 < v_count; ++vi)
+        {
+            brush_rect_2d cell = {u_edges[ui], u_edges[ui + 1], v_edges[vi], v_edges[vi + 1]};
+            if (cell.max_u <= cell.min_u + 0.0001f || cell.max_v <= cell.min_v + 0.0001f)
+                continue;
+            const float center_u = (cell.min_u + cell.max_u) * 0.5f;
+            const float center_v = (cell.min_v + cell.max_v) * 0.5f;
+            bool covered = false;
+            for (int cover_index = 0; cover_index < cover_count; ++cover_index)
+            {
+                if (brush_rect_contains_point(&covers[cover_index], center_u, center_v))
+                {
+                    covered = true;
+                    break;
+                }
+            }
+            if (!covered)
+                ok = brush_rect_append(&visible, &visible_count, &visible_capacity, cell);
+        }
+    }
+
+    SDL_free(covers);
+    SDL_free(u_edges);
+    SDL_free(v_edges);
+    if (!ok)
+    {
+        SDL_free(visible);
+        return false;
+    }
+    *out_rects = visible;
+    *out_rect_count = visible_count;
+    return true;
+}
+
+static void brush_rect_vertices_3d(const brush_rect_2d *rect, slayer3d_vec3 normal, slayer3d_vec3 basis_u,
+                                   slayer3d_vec3 basis_v, float distance, float winding_sign,
+                                   slayer3d_vec3 out_vertices[4])
+{
+    const slayer3d_vec3 origin = slayer3d_vec3_scale(normal, distance);
+    const slayer3d_vec3 corners[4] = {
+        slayer3d_vec3_add(origin, slayer3d_vec3_add(slayer3d_vec3_scale(basis_u, rect->min_u),
+                                                    slayer3d_vec3_scale(basis_v, rect->min_v))),
+        slayer3d_vec3_add(origin, slayer3d_vec3_add(slayer3d_vec3_scale(basis_u, rect->max_u),
+                                                    slayer3d_vec3_scale(basis_v, rect->min_v))),
+        slayer3d_vec3_add(origin, slayer3d_vec3_add(slayer3d_vec3_scale(basis_u, rect->max_u),
+                                                    slayer3d_vec3_scale(basis_v, rect->max_v))),
+        slayer3d_vec3_add(origin, slayer3d_vec3_add(slayer3d_vec3_scale(basis_u, rect->min_u),
+                                                    slayer3d_vec3_scale(basis_v, rect->max_v))),
+    };
+    if (winding_sign >= 0.0f)
+    {
+        for (int i = 0; i < 4; ++i)
+            out_vertices[i] = corners[i];
+    }
+    else
+    {
+        out_vertices[0] = corners[0];
+        out_vertices[1] = corners[3];
+        out_vertices[2] = corners[2];
+        out_vertices[3] = corners[1];
+    }
+}
+
 static bool brush_material_is_opaque(const slayer3d_game_data_brush_world *world, int material_index)
 {
     if (world == NULL || material_index < 0 || material_index >= world->material_count)
@@ -871,9 +1179,25 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             {
                 if (update_compile_counters)
                     ++world->compile_face_count;
-                if (cull_hidden_faces &&
-                    brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
-                                                  distance, neighbor_polygon, polygon_capacity))
+                int visible_triangle_count = count - 2;
+                brush_rect_2d *visible_rects = NULL;
+                int visible_rect_count = 0;
+                const bool has_split_visible_rects =
+                    cull_hidden_faces && brush_face_visible_rects_after_neighbor_covers(
+                                             world, brush_index, face_index, polygon, count, normal, u, v, distance,
+                                             neighbor_polygon, polygon_capacity, &visible_rects, &visible_rect_count);
+                if (has_split_visible_rects)
+                {
+                    visible_triangle_count = visible_rect_count * 2;
+                }
+                else if (cull_hidden_faces &&
+                         brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
+                                                       distance, neighbor_polygon, polygon_capacity))
+                {
+                    visible_triangle_count = 0;
+                }
+                SDL_free(visible_rects);
+                if (visible_triangle_count <= 0)
                 {
                     if (update_compile_counters)
                         ++world->compile_culled_face_count;
@@ -882,9 +1206,9 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
                 if (update_compile_counters)
                 {
                     ++world->compile_rendered_face_count;
-                    world->compile_triangle_count += count - 2;
+                    world->compile_triangle_count += visible_triangle_count;
                 }
-                triangle_counts[material_to_batch[material_index]] += count - 2;
+                triangle_counts[material_to_batch[material_index]] += visible_triangle_count;
             }
         }
     }
@@ -1011,10 +1335,24 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             if (count < 3 || mesh_for_material < 0)
                 continue;
             float distance = 0.0f;
-            if (!brush_plane_normalized(face, &normal, &distance) ||
-                (cull_hidden_faces &&
-                 brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v, distance,
-                                               neighbor_polygon, polygon_capacity)))
+            if (!brush_plane_normalized(face, &normal, &distance))
+            {
+                continue;
+            }
+            brush_rect_2d *visible_rects = NULL;
+            int visible_rect_count = 0;
+            const bool has_split_visible_rects =
+                cull_hidden_faces && brush_face_visible_rects_after_neighbor_covers(
+                                         world, brush_index, face_index, polygon, count, normal, u, v, distance,
+                                         neighbor_polygon, polygon_capacity, &visible_rects, &visible_rect_count);
+            if (has_split_visible_rects && visible_rect_count <= 0)
+            {
+                SDL_free(visible_rects);
+                continue;
+            }
+            if (!has_split_visible_rects && cull_hidden_faces &&
+                brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v, distance,
+                                              neighbor_polygon, polygon_capacity))
             {
                 continue;
             }
@@ -1034,7 +1372,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
                 (float)color.a / 255.0f,
             };
             const int face_first_vertex = vertex_offsets[batch_for_material];
-            const int face_vertex_count = (count - 2) * 3;
+            const int face_vertex_count = has_split_visible_rects ? visible_rect_count * 6 : (count - 2) * 3;
             if (compiled_faces != NULL && compiled_face_write < world->compile_rendered_face_count)
             {
                 slayer3d_game_data_brush_compiled_face *compiled_face = &compiled_faces[compiled_face_write++];
@@ -1044,15 +1382,35 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
                 compiled_face->mesh_index = mesh_for_material;
                 compiled_face->first_vertex = face_first_vertex;
                 compiled_face->vertex_count = face_vertex_count;
-                compiled_face->triangle_count = count - 2;
+                compiled_face->triangle_count = face_vertex_count / 3;
                 compiled_face->brush_name = brush->name;
                 compiled_face->material_name = face->material_name;
                 compiled_face->source_brush_stable_id = brush->editor.stable_id;
                 compiled_face->source_face_stable_id = face->editor.stable_id;
             }
-            for (int tri = 1; tri + 1 < count; ++tri)
+            const float winding_sign = brush_polygon_area_2d(polygon, count, u, v);
+            const int output_triangle_count = has_split_visible_rects ? visible_rect_count * 2 : count - 2;
+            for (int tri = 0; tri < output_triangle_count; ++tri)
             {
-                const slayer3d_vec3 verts[3] = {polygon[0], polygon[tri], polygon[tri + 1]};
+                slayer3d_vec3 rect_vertices[4];
+                const slayer3d_vec3 *verts = NULL;
+                slayer3d_vec3 fan_triangle[3];
+                if (has_split_visible_rects)
+                {
+                    brush_rect_vertices_3d(&visible_rects[tri / 2], normal, u, v, distance, winding_sign,
+                                           rect_vertices);
+                    fan_triangle[0] = rect_vertices[0];
+                    fan_triangle[1] = tri % 2 == 0 ? rect_vertices[1] : rect_vertices[2];
+                    fan_triangle[2] = tri % 2 == 0 ? rect_vertices[2] : rect_vertices[3];
+                    verts = fan_triangle;
+                }
+                else
+                {
+                    fan_triangle[0] = polygon[0];
+                    fan_triangle[1] = polygon[tri + 1];
+                    fan_triangle[2] = polygon[tri + 2];
+                    verts = fan_triangle;
+                }
                 for (int corner = 0; corner < 3; ++corner)
                 {
                     const int vertex = vertex_offsets[batch_for_material]++;
@@ -1075,6 +1433,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
                     brush_mesh_bounds_add(mesh, verts[corner]);
                 }
             }
+            SDL_free(visible_rects);
         }
     }
 
