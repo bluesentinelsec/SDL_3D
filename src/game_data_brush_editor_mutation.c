@@ -159,8 +159,11 @@ static slayer3d_game_data_brush *find_editor_mutable_brush(brush_world_runtime *
     for (int i = 0; i < world->brush_count; ++i)
     {
         slayer3d_game_data_brush *brush = (slayer3d_game_data_brush *)&world->brushes[i];
-        if (brush->name != NULL && SDL_strcmp(brush->name, brush_name) == 0)
+        if ((brush->name != NULL && SDL_strcmp(brush->name, brush_name) == 0) ||
+            editor_metadata_stable_id_matches(&brush->editor, brush_name))
+        {
             return brush;
+        }
     }
     return NULL;
 }

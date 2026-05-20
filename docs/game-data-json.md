@@ -1092,15 +1092,17 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 `editor_brush_sources` is the editor-owned source model for structurally correct
 brush editing. Editable fragments include it alongside `brush_worlds`; when a
 matching source world is present, Slayer3D compiles the source boxes into the
-runtime brush world during load/import. Coordinates are fixed millimeters so
-editor decisions round-trip without accumulating floating-point drift; runtime
-`brush_worlds` remain meter-based derived output for renderer, collision, and
-compatibility paths. Each source world references a brush world and stores
-stable source brush IDs, prefab metadata, material references, and integer
-`min`/`max` coordinates for box sources. `material` is the default material for
-all six generated faces. `face_materials` may override individual generated box
-faces with keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit
-`material`.
+runtime brush world during load/import. Coordinates are fixed integer source
+units so editor decisions round-trip without accumulating floating-point drift;
+`meters_per_unit` converts those source units to runtime meters. The default is
+millimeter precision (`meters_per_unit: 0.001`), but source-backed mutations and
+exports preserve the authored scale. Runtime `brush_worlds` remain meter-based
+derived output for renderer, collision, and compatibility paths. Each source
+world references a brush world and stores stable source brush IDs, prefab
+metadata, material references, and integer `min`/`max` coordinates for box
+sources. `material` is the default material for all six generated faces.
+`face_materials` may override individual generated box faces with keys `px`,
+`nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.
 
 Each source box must have a unique `stable_id` and a unique brush `name` within
 its source world. When `name` is omitted, it defaults to `stable_id`. The

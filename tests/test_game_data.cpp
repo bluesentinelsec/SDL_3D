@@ -17357,7 +17357,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     {
       "world": "brush.editor_shell.target",
       "coordinate_system": "fixed_millimeters",
-      "meters_per_unit": 0.001,
+      "meters_per_unit": 0.5,
       "boxes": [
         {
           "stable_id": "source.box.001",
@@ -17366,8 +17366,8 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
           "prefab": "floor",
           "material": "mat.editor.floor",
           "face_materials": { "px": "mat.editor.wall" },
-          "min": [0, -200, 0],
-          "max": [8000, 0, 8000],
+          "min": [0, -1, 0],
+          "max": [16, 0, 16],
           "contents": ["solid"]
         }
       ]
@@ -17380,19 +17380,25 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
                                                                      error, sizeof(error)))
         << error;
 
+    slayer3d_game_data_resize_brush_face_desc resize{};
+    resize.world_name = "brush.editor_shell.target";
+    resize.brush_name = "source.box.001";
+    resize.face_index = 1;
+    resize.distance = 1.0f;
+    ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error))) << error;
+
     slayer3d_game_data_create_box_brush_desc box{};
     box.world_name = "brush.editor_shell.target";
     box.brush_name = "brush.source.box.002";
     box.material_name = "mat.editor.floor";
-    box.min = slayer3d_vec3_make(8.0f, -0.2f, 0.0f);
+    box.min = slayer3d_vec3_make(8.0f, -0.5f, 0.0f);
     box.max = slayer3d_vec3_make(16.0f, 0.0f, 8.0f);
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error))) << error;
 
-    slayer3d_game_data_resize_brush_face_desc resize{};
     resize.world_name = "brush.editor_shell.target";
     resize.brush_name = "brush.source.box.002";
     resize.face_index = 0;
-    resize.distance = 0.75f;
+    resize.distance = 1.0f;
     ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error))) << error;
 
     char *export_json = nullptr;
@@ -17409,10 +17415,17 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     ASSERT_TRUE(yyjson_is_arr(sources));
     yyjson_val *source = yyjson_arr_get(sources, 0);
     ASSERT_NE(source, nullptr);
+    EXPECT_DOUBLE_EQ(yyjson_get_real(yyjson_obj_get(source, "meters_per_unit")), 0.5);
     yyjson_val *boxes = yyjson_obj_get(source, "boxes");
     ASSERT_TRUE(yyjson_is_arr(boxes));
     ASSERT_EQ(yyjson_arr_size(boxes), 2u);
     EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 0), "stable_id")), "source.box.001");
+    yyjson_val *source_min = yyjson_obj_get(yyjson_arr_get(boxes, 0), "min");
+    yyjson_val *source_max = yyjson_obj_get(yyjson_arr_get(boxes, 0), "max");
+    ASSERT_TRUE(yyjson_is_arr(source_min));
+    ASSERT_TRUE(yyjson_is_arr(source_max));
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(source_min, 0)), -2);
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(source_max, 0)), 16);
     yyjson_val *source_face_materials = yyjson_obj_get(yyjson_arr_get(boxes, 0), "face_materials");
     ASSERT_TRUE(yyjson_is_obj(source_face_materials));
     EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(source_face_materials, "px")), "mat.editor.wall");
@@ -17421,8 +17434,8 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     yyjson_val *new_max = yyjson_obj_get(yyjson_arr_get(boxes, 1), "max");
     ASSERT_TRUE(yyjson_is_arr(new_min));
     ASSERT_TRUE(yyjson_is_arr(new_max));
-    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_min, 0)), 8000);
-    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_max, 0)), 16750);
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_min, 0)), 16);
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_max, 0)), 34);
     yyjson_doc_free(doc);
 
     slayer3d_game_data_destroy(runtime);
@@ -17441,10 +17454,12 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 2);
     EXPECT_STREQ(world.brushes[0].faces[0].material_name, "mat.editor.wall");
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, -1.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 8.0f, 0.001f);
     EXPECT_STREQ(world.brushes[1].name, "brush.source.box.002");
     ASSERT_TRUE(world.brushes[1].has_bounds);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
-    EXPECT_NEAR(world.brushes[1].bounds.max.x, 16.75f, 0.001f);
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 17.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

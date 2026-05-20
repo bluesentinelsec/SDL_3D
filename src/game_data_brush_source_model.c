@@ -10,11 +10,6 @@
 #include <limits.h>
 #include <stdlib.h>
 
-static int source_millimeters_from_meters(float value)
-{
-    return (int)SDL_lroundf(value * 1000.0f);
-}
-
 static int source_units_from_meters(const brush_world_runtime *world_runtime, float value)
 {
     const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
@@ -1267,12 +1262,13 @@ static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush
     return brush != NULL && brush->editor.prefab != NULL ? brush->editor.prefab : "box";
 }
 
-static bool source_box_from_runtime_brush(const slayer3d_game_data_brush_world *world,
+static bool source_box_from_runtime_brush(const brush_world_runtime *world_runtime,
                                           const slayer3d_game_data_brush *brush,
                                           editor_brush_source_box_runtime *out_box)
 {
-    if (world == NULL || brush == NULL || out_box == NULL || !brush_can_sync_as_source_box(brush))
+    if (world_runtime == NULL || brush == NULL || out_box == NULL || !brush_can_sync_as_source_box(brush))
         return false;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
     const char *stable_id = brush->editor.stable_id != NULL ? brush->editor.stable_id : brush->name;
     const char *name = brush->name;
     const char *material = brush_material_name_for_source_box(world, brush);
@@ -1286,12 +1282,12 @@ static bool source_box_from_runtime_brush(const slayer3d_game_data_brush_world *
         free_editor_brush_source_box(out_box);
         return false;
     }
-    out_box->min[0] = source_millimeters_from_meters(brush->bounds.min.x);
-    out_box->min[1] = source_millimeters_from_meters(brush->bounds.min.y);
-    out_box->min[2] = source_millimeters_from_meters(brush->bounds.min.z);
-    out_box->max[0] = source_millimeters_from_meters(brush->bounds.max.x);
-    out_box->max[1] = source_millimeters_from_meters(brush->bounds.max.y);
-    out_box->max[2] = source_millimeters_from_meters(brush->bounds.max.z);
+    out_box->min[0] = source_units_from_meters(world_runtime, brush->bounds.min.x);
+    out_box->min[1] = source_units_from_meters(world_runtime, brush->bounds.min.y);
+    out_box->min[2] = source_units_from_meters(world_runtime, brush->bounds.min.z);
+    out_box->max[0] = source_units_from_meters(world_runtime, brush->bounds.max.x);
+    out_box->max[1] = source_units_from_meters(world_runtime, brush->bounds.max.y);
+    out_box->max[2] = source_units_from_meters(world_runtime, brush->bounds.max.z);
     out_box->contents = brush->contents != 0u ? brush->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
     for (int i = 0; i < brush->face_count && i < (int)SDL_arraysize(out_box->face_materials); ++i)
     {
@@ -1325,7 +1321,7 @@ bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runt
 
     for (int i = 0; i < world->brush_count; ++i)
     {
-        if (!source_box_from_runtime_brush(world, &world->brushes[i], &boxes[i]))
+        if (!source_box_from_runtime_brush(world_runtime, &world->brushes[i], &boxes[i]))
         {
             for (int j = 0; j <= i; ++j)
                 free_editor_brush_source_box(&boxes[j]);
@@ -1342,7 +1338,8 @@ bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runt
     world_runtime->editor_source_boxes = boxes;
     world_runtime->editor_source_box_count = world->brush_count;
     world_runtime->editor_source_box_capacity = world->brush_count;
-    world_runtime->editor_source_meters_per_unit = 0.001f;
+    if (world_runtime->editor_source_meters_per_unit <= 0.0f)
+        world_runtime->editor_source_meters_per_unit = 0.001f;
     world_runtime->editor_has_source_model = true;
     return true;
 }
@@ -1358,7 +1355,7 @@ bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_
     }
 
     editor_brush_source_box_runtime inserted;
-    if (!source_box_from_runtime_brush(&world_runtime->desc, brush, &inserted))
+    if (!source_box_from_runtime_brush(world_runtime, brush, &inserted))
     {
         set_errorf(error_buffer, error_buffer_size, "brush '%s' cannot be represented as a source box",
                    brush->name != NULL ? brush->name : "<unnamed>");
