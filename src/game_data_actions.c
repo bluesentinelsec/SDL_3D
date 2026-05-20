@@ -429,6 +429,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.brush_world.status") == 0)
         return slayer3d_game_data_publish_editor_brush_world_status_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.brush_world.validate_source") == 0)
+        return slayer3d_game_data_validate_editor_brush_source_action(runtime, action);
+
     if (SDL_strcmp(type, "editor.brush_world.create_box") == 0)
         return slayer3d_game_data_create_box_brush_action(runtime, action);
 

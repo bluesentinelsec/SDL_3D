@@ -7967,6 +7967,41 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.brush_world.validate_source") == 0)
+    {
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+            return false;
+        yyjson_val *message = obj_get(action, "message");
+        if (message != NULL && !yyjson_is_str(message))
+            return validation_error(ctx, json_path, "editor.brush_world.validate_source message must be a string");
+        yyjson_val *near_gap_units = obj_get(action, "near_gap_units");
+        if (near_gap_units != NULL && (!yyjson_is_int(near_gap_units) || yyjson_get_int(near_gap_units) < 0))
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.validate_source near_gap_units must be a non-negative integer");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.brush_world.validate_source outputs must be an object");
+        static const char *const output_keys[] = {"valid_key",
+                                                  "message_key",
+                                                  "box_count_key",
+                                                  "overlap_count_key",
+                                                  "near_gap_count_key",
+                                                  "face_contact_count_key",
+                                                  "partial_face_contact_count_key",
+                                                  "world_key",
+                                                  "source_path_key",
+                                                  "dirty_key",
+                                                  "revision_key",
+                                                  "saved_revision_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.brush_world.validate_source output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.brush_world.create_box") == 0)
     {
         const char *position_from = json_string(action, "position_from");

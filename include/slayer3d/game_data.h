@@ -2195,6 +2195,45 @@ extern "C"
                                                          const char *world_name,
                                                          slayer3d_game_data_brush_world_editor_state *out_state);
 
+    /** @brief Maximum bytes, including the NUL terminator, for editor structural diagnostic text. */
+#define SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX 256
+
+    /** @brief Source-model structural diagnostics for one editable brush world. */
+    typedef struct slayer3d_game_data_editor_brush_source_diagnostics
+    {
+        /** @brief True when the brush world has an editor-owned source model. */
+        bool has_source_model;
+        /** @brief True when no blocking structural defects were found. */
+        bool structurally_valid;
+        /** @brief Number of source boxes inspected. */
+        int source_box_count;
+        /** @brief Positive-volume overlaps between source boxes. These are invalid. */
+        int positive_overlap_count;
+        /** @brief Tiny non-zero gaps between otherwise adjacent source boxes. These indicate seams/leaks. */
+        int near_gap_count;
+        /** @brief Exact face contacts between source boxes. */
+        int face_contact_count;
+        /** @brief Exact face contacts where only part of a face is covered by the neighbor. */
+        int partial_face_contact_count;
+        /** @brief First blocking issue, or an empty string when the source model is structurally valid. */
+        char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    } slayer3d_game_data_editor_brush_source_diagnostics;
+
+    /**
+     * @brief Validate source-box topology for an editable brush world.
+     *
+     * This pass operates on canonical `editor_brush_sources` integer/fixed
+     * coordinates, not derived runtime triangles. It reports structural defects
+     * that can create seams or z-fighting before the map is compiled for play.
+     *
+     * @p near_gap_units controls how many source units count as a suspicious
+     * near miss between otherwise overlapping boxes. Pass 0 to use the default
+     * tolerance of one source unit.
+     */
+    bool slayer3d_game_data_validate_editor_brush_source_model(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, int near_gap_units,
+        slayer3d_game_data_editor_brush_source_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size);
+
     /**
      * @brief Mark one runtime brush world as saved by an editor host.
      *

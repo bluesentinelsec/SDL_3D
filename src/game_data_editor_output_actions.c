@@ -432,6 +432,38 @@ bool slayer3d_game_data_publish_editor_brush_world_status_action(slayer3d_game_d
                                              json_string(action, "message", "brush world status published"), true);
 }
 
+bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    const int near_gap_units = json_int(action, "near_gap_units", 1);
+    slayer3d_game_data_editor_brush_source_diagnostics diagnostics;
+    char error[256];
+    error[0] = '\0';
+    const bool ok = slayer3d_game_data_validate_editor_brush_source_model(runtime, world_name, near_gap_units,
+                                                                          &diagnostics, error, (int)sizeof(error));
+    const bool valid = ok && diagnostics.structurally_valid;
+    const char *message = NULL;
+    if (valid)
+        message = json_string(action, "message", "editor brush source model is structurally valid");
+    else if (ok && diagnostics.first_issue[0] != '\0')
+        message = diagnostics.first_issue;
+    else
+        message = error[0] != '\0' ? error : "editor brush source validation failed";
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", valid);
+    editor_set_string_output(scene_state, outputs, "message_key", message);
+    editor_set_int_output(scene_state, outputs, "box_count_key", ok ? diagnostics.source_box_count : 0);
+    editor_set_int_output(scene_state, outputs, "overlap_count_key", ok ? diagnostics.positive_overlap_count : 0);
+    editor_set_int_output(scene_state, outputs, "near_gap_count_key", ok ? diagnostics.near_gap_count : 0);
+    editor_set_int_output(scene_state, outputs, "face_contact_count_key", ok ? diagnostics.face_contact_count : 0);
+    editor_set_int_output(scene_state, outputs, "partial_face_contact_count_key",
+                          ok ? diagnostics.partial_face_contact_count : 0);
+    (void)publish_editor_brush_world_status(runtime, outputs, world_name, NULL, false);
+    return true;
+}
+
 bool slayer3d_game_data_place_editor_player_start_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
     yyjson_val *outputs = obj_get(action, "outputs");

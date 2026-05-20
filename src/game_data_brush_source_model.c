@@ -150,6 +150,61 @@ static bool source_box_extents_valid(const editor_brush_source_box_runtime *box)
     return box != NULL && box->min[0] < box->max[0] && box->min[1] < box->max[1] && box->min[2] < box->max[2];
 }
 
+static bool source_intervals_overlap_positive(int a_min, int a_max, int b_min, int b_max)
+{
+    return SDL_max(a_min, b_min) < SDL_min(a_max, b_max);
+}
+
+static bool source_box_positive_volume_overlap(const editor_brush_source_box_runtime *a,
+                                               const editor_brush_source_box_runtime *b)
+{
+    return a != NULL && b != NULL && source_intervals_overlap_positive(a->min[0], a->max[0], b->min[0], b->max[0]) &&
+           source_intervals_overlap_positive(a->min[1], a->max[1], b->min[1], b->max[1]) &&
+           source_intervals_overlap_positive(a->min[2], a->max[2], b->min[2], b->max[2]);
+}
+
+static bool source_box_overlaps_on_other_axes(const editor_brush_source_box_runtime *a,
+                                              const editor_brush_source_box_runtime *b, int axis)
+{
+    if (a == NULL || b == NULL || axis < 0 || axis > 2)
+        return false;
+    for (int other_axis = 0; other_axis < 3; ++other_axis)
+    {
+        if (other_axis == axis)
+            continue;
+        if (!source_intervals_overlap_positive(a->min[other_axis], a->max[other_axis], b->min[other_axis],
+                                               b->max[other_axis]))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool source_box_contact_fully_covers_face(const editor_brush_source_box_runtime *a,
+                                                 const editor_brush_source_box_runtime *b, int axis)
+{
+    for (int other_axis = 0; other_axis < 3; ++other_axis)
+    {
+        if (other_axis == axis)
+            continue;
+        if (a->min[other_axis] != b->min[other_axis] || a->max[other_axis] != b->max[other_axis])
+            return false;
+    }
+    return true;
+}
+
+static void set_first_source_diagnostic_issue(slayer3d_game_data_editor_brush_source_diagnostics *diagnostics,
+                                              const char *format, const editor_brush_source_box_runtime *a,
+                                              const editor_brush_source_box_runtime *b, int value)
+{
+    if (diagnostics == NULL || diagnostics->first_issue[0] != '\0')
+        return;
+    SDL_snprintf(diagnostics->first_issue, sizeof(diagnostics->first_issue), format,
+                 a != NULL && a->name != NULL ? a->name : "<unnamed>",
+                 b != NULL && b->name != NULL ? b->name : "<unnamed>", value);
+}
+
 static void copy_source_box_coordinates(const editor_brush_source_box_runtime *box, int out_min[3], int out_max[3])
 {
     if (box == NULL || out_min == NULL || out_max == NULL)
@@ -239,6 +294,79 @@ bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_v
         }
         world_runtime->editor_source_box_count++;
     }
+    return true;
+}
+
+bool slayer3d_game_data_validate_editor_brush_source_model(
+    const slayer3d_game_data_runtime *runtime, const char *world_name, int near_gap_units,
+    slayer3d_game_data_editor_brush_source_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size)
+{
+    if (out_diagnostics != NULL)
+        SDL_zero(*out_diagnostics);
+    if (out_diagnostics == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editor brush source diagnostics output is required");
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush world not found");
+        return false;
+    }
+    out_diagnostics->has_source_model = world_runtime->editor_has_source_model;
+    if (!world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "brush world has no editor brush source model");
+        return false;
+    }
+
+    const int gap_tolerance = near_gap_units > 0 ? near_gap_units : 1;
+    out_diagnostics->source_box_count = world_runtime->editor_source_box_count;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        const editor_brush_source_box_runtime *a = &world_runtime->editor_source_boxes[i];
+        for (int j = i + 1; j < world_runtime->editor_source_box_count; ++j)
+        {
+            const editor_brush_source_box_runtime *b = &world_runtime->editor_source_boxes[j];
+            if (source_box_positive_volume_overlap(a, b))
+            {
+                out_diagnostics->positive_overlap_count++;
+                set_first_source_diagnostic_issue(out_diagnostics,
+                                                  "source boxes '%s' and '%s' overlap with positive volume", a, b, 0);
+                continue;
+            }
+
+            for (int axis = 0; axis < 3; ++axis)
+            {
+                if (!source_box_overlaps_on_other_axes(a, b, axis))
+                    continue;
+
+                int gap = 0;
+                if (a->max[axis] <= b->min[axis])
+                    gap = b->min[axis] - a->max[axis];
+                else if (b->max[axis] <= a->min[axis])
+                    gap = a->min[axis] - b->max[axis];
+
+                if (gap == 0)
+                {
+                    out_diagnostics->face_contact_count++;
+                    if (!source_box_contact_fully_covers_face(a, b, axis))
+                        out_diagnostics->partial_face_contact_count++;
+                }
+                else if (gap > 0 && gap <= gap_tolerance)
+                {
+                    out_diagnostics->near_gap_count++;
+                    set_first_source_diagnostic_issue(out_diagnostics,
+                                                      "source boxes '%s' and '%s' have a %d-unit near gap", a, b, gap);
+                }
+            }
+        }
+    }
+
+    out_diagnostics->structurally_valid =
+        out_diagnostics->positive_overlap_count == 0 && out_diagnostics->near_gap_count == 0;
     return true;
 }
 

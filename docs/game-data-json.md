@@ -1041,6 +1041,15 @@ model before save/export, then reload compiles runtime brushes from the source
 again. This makes source boxes the durable editing truth and keeps generated
 `brush_worlds` as load-time/runtime derived data.
 
+Use `editor.brush_world.validate_source` or the native
+`slayer3d_game_data_validate_editor_brush_source_model()` API to inspect source
+boxes before save or test-run. The pass runs on fixed source coordinates and
+reports positive-volume overlaps plus tiny non-zero near gaps between boxes that
+otherwise overlap on the other two axes. Exact face contact is counted as
+structural adjacency. This is the first source-level correctness gate for
+watertight brush editing; future leak tracing can build on the same source model
+without relying on visual offsets.
+
 ```json
 {
   "editor_brush_sources": [
@@ -1065,6 +1074,22 @@ again. This makes source boxes the durable editing truth and keeps generated
       ]
     }
   ]
+}
+```
+
+```json
+{
+  "type": "editor.brush_world.validate_source",
+  "world": "brush.level.blockout",
+  "near_gap_units": 1,
+  "outputs": {
+    "valid_key": "editor.source.valid",
+    "message_key": "editor.source.message",
+    "box_count_key": "editor.source.boxes",
+    "overlap_count_key": "editor.source.overlaps",
+    "near_gap_count_key": "editor.source.near_gaps",
+    "face_contact_count_key": "editor.source.face_contacts"
+  }
 }
 ```
 
