@@ -884,6 +884,12 @@ face normal through the normal 3D presentation path:
         "element_key": "editor.selection.element",
         "material_key": "editor.selection.material",
         "face_stable_id_key": "editor.selection.face_stable_id",
+        "face_rendered_key": "editor.selection.face_rendered",
+        "compiled_face_index_key": "editor.selection.compiled_face_index",
+        "compiled_mesh_index_key": "editor.selection.compiled_mesh_index",
+        "compiled_first_vertex_key": "editor.selection.compiled_first_vertex",
+        "compiled_vertex_count_key": "editor.selection.compiled_vertex_count",
+        "compiled_triangle_count_key": "editor.selection.compiled_triangle_count",
         "face_index_key": "editor.selection.face_index"
       },
       "hover_outputs": {
@@ -924,6 +930,14 @@ for crosshair-style 3D editor picking. Viewport dimensions can likewise be
 authored with `viewport`, `viewport_width`/`viewport_height`, or scene-state
 keys. This lets editor dojos and future editor hosts share the same
 data-authored picking primitive.
+
+For brush-world selections, optional `face_rendered_key` and `compiled_*_key`
+outputs report whether the selected source face survived compile-time hidden
+face culling and where its triangles live in the optimized render mesh. Culled
+or non-brush selections publish `face_rendered=false`, `compiled_face_index=-1`,
+mesh/vertex indexes of `-1`, and zero vertex/triangle counts. This lets editor
+inspectors and offline tools keep source brushes as the durable editing model
+without losing the mapping to compiled render output.
 
 Selection traces may also author `work_plane` as a fallback placement plane.
 When the ray misses world geometry, the editor intersects the same ray with the

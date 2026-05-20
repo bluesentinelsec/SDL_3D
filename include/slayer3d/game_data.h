@@ -969,6 +969,10 @@ extern "C"
         const slayer3d_game_data_editor_metadata *material_editor;
         /** @brief Optional face editor metadata for brush face hits. */
         const slayer3d_game_data_editor_metadata *face_editor;
+        /** @brief Visible compiled render face backing this source face, or NULL when culled/not applicable. */
+        const slayer3d_game_data_brush_compiled_face *compiled_face;
+        /** @brief Index into the owning brush world's compile_rendered_faces table, or -1 when unavailable. */
+        int compiled_face_index;
     } slayer3d_game_data_editor_selection;
 
     /** @brief Editor debug primitive kind emitted by tooling helpers. */
@@ -2144,7 +2148,8 @@ extern "C"
      * for editor viewports. The returned selection includes the raw trace hit,
      * stable authored names and indexes, world-space bounds where available, and
      * pointers to runtime-owned editor metadata for the selected world, element,
-     * material, and face. Pointers remain valid until the runtime is destroyed.
+     * material, face, and visible compiled render face when available. Pointers
+     * remain valid until the runtime is destroyed or the brush world is rebuilt.
      */
     bool slayer3d_game_data_pick_editor_world_model(const slayer3d_game_data_runtime *runtime,
                                                     const slayer3d_game_data_world_trace_desc *desc,
@@ -2201,7 +2206,8 @@ extern "C"
      *
      * Returns false and writes an empty selection when no object has been
      * selected in the active scene. Selection pointers are runtime-owned and
-     * remain valid until the runtime is destroyed or reloaded.
+     * remain valid until the runtime is destroyed, reloaded, or the selected
+     * brush world is rebuilt.
      */
     bool slayer3d_game_data_get_active_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                         slayer3d_game_data_editor_selection *out_selection);

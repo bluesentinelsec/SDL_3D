@@ -15520,13 +15520,27 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.face_stable_id", ""),
                  "editor.face.target_cube.left");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.face_index", -1), 1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.face_rendered", false));
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.selection.compiled_face_index", -1), 0);
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.selection.compiled_mesh_index", -1), 0);
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.selection.compiled_first_vertex", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.compiled_vertex_count", 0), 6);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.compiled_triangle_count", 0), 2);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.hover.hit", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.hover.element", ""), "brush.target.cube");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.hover.face_rendered", false));
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.hover.compiled_face_index", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
 
     slayer3d_game_data_editor_selection active_selection{};
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
     EXPECT_STREQ(active_selection.element_name, "brush.target.cube");
+    ASSERT_NE(active_selection.compiled_face, nullptr);
+    EXPECT_GE(active_selection.compiled_face_index, 0);
+    EXPECT_EQ(active_selection.compiled_face->mesh_index,
+              slayer3d_properties_get_int(scene_state, "editor.selection.compiled_mesh_index", -1));
+    EXPECT_EQ(active_selection.compiled_face->vertex_count, 6);
+    EXPECT_EQ(active_selection.compiled_face->triangle_count, 2);
     slayer3d_game_data_brush_world_editor_state editor_state{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &editor_state));
     EXPECT_STREQ(editor_state.world_name, "brush.editor_shell.target");

@@ -665,6 +665,8 @@ static void resolve_brush_editor_selection_metadata(const slayer3d_game_data_run
     selection->element_editor = NULL;
     selection->face_editor = NULL;
     selection->material_editor = NULL;
+    selection->compiled_face = NULL;
+    selection->compiled_face_index = -1;
 
     const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
     if (world_runtime == NULL)
@@ -692,6 +694,16 @@ static void resolve_brush_editor_selection_metadata(const slayer3d_game_data_run
             selection->material_name = face->material_name;
             if (face->material_index >= 0 && face->material_index < world->material_count)
                 selection->material_editor = &world->materials[face->material_index].editor;
+            for (int i = 0; i < world->compile_rendered_face_metadata_count; ++i)
+            {
+                const slayer3d_game_data_brush_compiled_face *compiled_face = &world->compile_rendered_faces[i];
+                if (compiled_face->brush_index == brush_index && compiled_face->face_index == selection->face_index)
+                {
+                    selection->compiled_face = compiled_face;
+                    selection->compiled_face_index = i;
+                    break;
+                }
+            }
         }
         return;
     }
@@ -817,6 +829,17 @@ void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *o
                              resolved.hit ? editor_metadata_stable_id(resolved.face_editor) : "");
     editor_set_int_output(scene_state, outputs, "element_index_key", resolved.hit ? resolved.element_index : -1);
     editor_set_int_output(scene_state, outputs, "face_index_key", resolved.hit ? resolved.face_index : -1);
+    editor_set_bool_output(scene_state, outputs, "face_rendered_key", resolved.hit && resolved.compiled_face != NULL);
+    editor_set_int_output(scene_state, outputs, "compiled_face_index_key",
+                          resolved.hit ? resolved.compiled_face_index : -1);
+    editor_set_int_output(scene_state, outputs, "compiled_mesh_index_key",
+                          resolved.hit && resolved.compiled_face != NULL ? resolved.compiled_face->mesh_index : -1);
+    editor_set_int_output(scene_state, outputs, "compiled_first_vertex_key",
+                          resolved.hit && resolved.compiled_face != NULL ? resolved.compiled_face->first_vertex : -1);
+    editor_set_int_output(scene_state, outputs, "compiled_vertex_count_key",
+                          resolved.hit && resolved.compiled_face != NULL ? resolved.compiled_face->vertex_count : 0);
+    editor_set_int_output(scene_state, outputs, "compiled_triangle_count_key",
+                          resolved.hit && resolved.compiled_face != NULL ? resolved.compiled_face->triangle_count : 0);
     editor_set_float_output(scene_state, outputs, "fraction_key", resolved.hit ? resolved.fraction : 1.0f);
     editor_set_vec3_output(scene_state, outputs, "point_key",
                            resolved.hit ? resolved.point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
@@ -967,6 +990,16 @@ slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
                                    hit ? editor_metadata_stable_id(selection->face_editor) : "");
     slayer3d_properties_set_int(payload, "selection_element_index", hit ? selection->element_index : -1);
     slayer3d_properties_set_int(payload, "selection_face_index", hit ? selection->face_index : -1);
+    slayer3d_properties_set_bool(payload, "selection_face_rendered", hit && selection->compiled_face != NULL);
+    slayer3d_properties_set_int(payload, "selection_compiled_face_index", hit ? selection->compiled_face_index : -1);
+    slayer3d_properties_set_int(payload, "selection_compiled_mesh_index",
+                                hit && selection->compiled_face != NULL ? selection->compiled_face->mesh_index : -1);
+    slayer3d_properties_set_int(payload, "selection_compiled_first_vertex",
+                                hit && selection->compiled_face != NULL ? selection->compiled_face->first_vertex : -1);
+    slayer3d_properties_set_int(payload, "selection_compiled_vertex_count",
+                                hit && selection->compiled_face != NULL ? selection->compiled_face->vertex_count : 0);
+    slayer3d_properties_set_int(payload, "selection_compiled_triangle_count",
+                                hit && selection->compiled_face != NULL ? selection->compiled_face->triangle_count : 0);
     slayer3d_properties_set_float(payload, "selection_fraction", hit ? selection->fraction : 1.0f);
     slayer3d_properties_set_vec3(payload, "selection_world_position",
                                  hit ? selection->world_position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));

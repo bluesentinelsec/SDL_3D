@@ -219,6 +219,12 @@
         "element_stable_id_key": "editor.selection.element_stable_id",
         "material_stable_id_key": "editor.selection.material_stable_id",
         "face_stable_id_key": "editor.selection.face_stable_id",
+        "face_rendered_key": "editor.selection.face_rendered",
+        "compiled_face_index_key": "editor.selection.compiled_face_index",
+        "compiled_mesh_index_key": "editor.selection.compiled_mesh_index",
+        "compiled_first_vertex_key": "editor.selection.compiled_first_vertex",
+        "compiled_vertex_count_key": "editor.selection.compiled_vertex_count",
+        "compiled_triangle_count_key": "editor.selection.compiled_triangle_count",
         "element_index_key": "editor.selection.element_index",
         "face_index_key": "editor.selection.face_index",
         "fraction_key": "editor.selection.fraction",
@@ -228,7 +234,9 @@
       "hover_outputs": {
         "hit_key": "editor.hover.hit",
         "element_key": "editor.hover.element",
-        "face_stable_id_key": "editor.hover.face_stable_id"
+        "face_stable_id_key": "editor.hover.face_stable_id",
+        "face_rendered_key": "editor.hover.face_rendered",
+        "compiled_face_index_key": "editor.hover.compiled_face_index"
       },
       "on_select": "signal.editor.pointer.primary",
       "on_secondary_select": "signal.editor.delete_selected"
