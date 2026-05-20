@@ -1008,6 +1008,33 @@ pinned or current selection. It supplies payload fields such as
 `selection_point`, and `selection_normal`. `editor.selection.clear` clears the
 active selection and republishes the scene's `outputs` as an empty selection.
 
+`editor.selection.select_brush` selects a known brush by name without requiring
+a pointer pick. This is intended for editor diagnostics and repair workflows:
+validation actions can publish a source brush and face to scene state, then this
+action can turn that diagnostic into the same active selection used by the
+debug overlay, inspector, and delete/resize tools.
+
+```json
+{
+  "type": "editor.selection.select_brush",
+  "world": "brush.editor_shell.target",
+  "element_from_state": "editor.leak.candidate",
+  "face_from_state": "editor.leak.candidate_face",
+  "message": "selected leak candidate",
+  "invalid_message": "no leak candidate to select",
+  "outputs": {
+    "valid_key": "editor.leak.candidate_selected",
+    "message_key": "editor.leak.candidate_select_message"
+  }
+}
+```
+
+`element` may be authored directly or read from `element_from_state`; exactly
+one is required. `face` and `face_from_state` are optional and accept the
+canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`. When the target
+cannot be resolved, the action clears the active selection, publishes
+`valid_key: false` when configured, and reports `invalid_message`.
+
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
 test-run should place an existing actor, while the actor remains defined by the

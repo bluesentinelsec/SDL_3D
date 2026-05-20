@@ -7529,6 +7529,53 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return true;
+    if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
+    {
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+            return false;
+        yyjson_val *element = obj_get(action, "element");
+        yyjson_val *element_from_state = obj_get(action, "element_from_state");
+        if ((element == NULL && element_from_state == NULL) || (element != NULL && element_from_state != NULL))
+            return validation_error(ctx, json_path,
+                                    "editor.selection.select_brush requires exactly one of element or "
+                                    "element_from_state");
+        if (element != NULL && (!yyjson_is_str(element) || yyjson_get_str(element)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.select_brush element must be non-empty");
+        if (element_from_state != NULL &&
+            (!yyjson_is_str(element_from_state) || yyjson_get_str(element_from_state)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.selection.select_brush element_from_state must be non-empty");
+        }
+
+        yyjson_val *face = obj_get(action, "face");
+        yyjson_val *face_from_state = obj_get(action, "face_from_state");
+        if (face != NULL && face_from_state != NULL)
+            return validation_error(ctx, json_path,
+                                    "editor.selection.select_brush accepts at most one of face or face_from_state");
+        if (face != NULL && (!yyjson_is_str(face) || yyjson_get_str(face)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.select_brush face must be non-empty");
+        if (face_from_state != NULL && (!yyjson_is_str(face_from_state) || yyjson_get_str(face_from_state)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.select_brush face_from_state must be non-empty");
+        yyjson_val *message = obj_get(action, "message");
+        if (message != NULL && !yyjson_is_str(message))
+            return validation_error(ctx, json_path, "editor.selection.select_brush message must be a string");
+        yyjson_val *invalid_message = obj_get(action, "invalid_message");
+        if (invalid_message != NULL && !yyjson_is_str(invalid_message))
+            return validation_error(ctx, json_path, "editor.selection.select_brush invalid_message must be a string");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.selection.select_brush outputs must be an object");
+        static const char *const output_keys[] = {"valid_key", "message_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
+                return validation_error(ctx, json_path,
+                                        "editor.selection.select_brush output keys must be non-empty strings");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.selection.delete_selected") == 0)
     {
         char actions_path[PATH_BUFFER_SIZE];

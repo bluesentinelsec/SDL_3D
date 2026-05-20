@@ -623,6 +623,38 @@ static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_met
     return metadata != NULL && metadata->stable_id != NULL ? metadata->stable_id : "";
 }
 
+static int editor_box_face_key_index(const char *face_key)
+{
+    static const char *const face_keys[] = {"px", "nx", "py", "ny", "pz", "nz"};
+    for (size_t i = 0; face_key != NULL && i < SDL_arraysize(face_keys); ++i)
+    {
+        if (SDL_strcmp(face_key, face_keys[i]) == 0)
+            return (int)i;
+    }
+    return -1;
+}
+
+static slayer3d_vec3 editor_selection_face_center(const slayer3d_game_data_brush *brush, int face_index)
+{
+    if (brush == NULL || !brush->has_bounds)
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+
+    slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(brush->bounds.min, brush->bounds.max), 0.5f);
+    if (face_index == 0)
+        center.x = brush->bounds.max.x;
+    else if (face_index == 1)
+        center.x = brush->bounds.min.x;
+    else if (face_index == 2)
+        center.y = brush->bounds.max.y;
+    else if (face_index == 3)
+        center.y = brush->bounds.min.y;
+    else if (face_index == 4)
+        center.z = brush->bounds.max.z;
+    else if (face_index == 5)
+        center.z = brush->bounds.min.z;
+    return center;
+}
+
 static void resolve_brush_editor_selection_metadata(const slayer3d_game_data_runtime *runtime,
                                                     slayer3d_game_data_editor_selection *selection)
 {
@@ -675,6 +707,91 @@ static slayer3d_game_data_editor_selection resolved_editor_selection(
     resolved = *selection;
     resolve_brush_editor_selection_metadata(runtime, &resolved);
     return resolved;
+}
+
+static bool editor_select_brush_by_name(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                        const char *brush_name, const char *face_key,
+                                        slayer3d_game_data_editor_selection *out_selection)
+{
+    init_editor_selection(out_selection);
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || brush_name == NULL || brush_name[0] == '\0' ||
+        out_selection == NULL)
+    {
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+        return false;
+
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if (brush->name == NULL || SDL_strcmp(brush->name, brush_name) != 0)
+            continue;
+
+        const int face_index = editor_box_face_key_index(face_key);
+        const slayer3d_game_data_brush_face *face =
+            face_index >= 0 && face_index < brush->face_count ? &brush->faces[face_index] : NULL;
+
+        out_selection->hit = true;
+        out_selection->type = SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD;
+        out_selection->world_name = world->name;
+        out_selection->world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        out_selection->element_name = brush->name;
+        out_selection->material_name = face != NULL ? face->material_name : NULL;
+        out_selection->element_index = brush_index;
+        out_selection->face_index = face != NULL ? face_index : -1;
+        out_selection->fraction = 0.0f;
+        out_selection->point = editor_selection_face_center(brush, face_index);
+        out_selection->normal = face != NULL ? slayer3d_vec3_normalize(face->normal) : slayer3d_vec3_make(0, 1, 0);
+        out_selection->has_bounds = brush->has_bounds;
+        if (brush->has_bounds)
+            out_selection->bounds = brush->bounds;
+        resolve_brush_editor_selection_metadata(runtime, out_selection);
+        return true;
+    }
+    return false;
+}
+
+bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    const char *world_name = json_string(action, "world", NULL);
+    const char *brush_name = json_string(action, "element", NULL);
+    const char *brush_name_key = json_string(action, "element_from_state", NULL);
+    const char *face_key = json_string(action, "face", NULL);
+    const char *face_from_state = json_string(action, "face_from_state", NULL);
+    if (runtime != NULL && runtime->scene_state != NULL)
+    {
+        if ((brush_name == NULL || brush_name[0] == '\0') && brush_name_key != NULL && brush_name_key[0] != '\0')
+            brush_name = slayer3d_properties_get_string(runtime->scene_state, brush_name_key, "");
+        if ((face_key == NULL || face_key[0] == '\0') && face_from_state != NULL && face_from_state[0] != '\0')
+            face_key = slayer3d_properties_get_string(runtime->scene_state, face_from_state, "");
+    }
+
+    slayer3d_game_data_editor_selection selection;
+    const bool ok = editor_select_brush_by_name(runtime, world_name, brush_name, face_key, &selection);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    editor_set_bool_output(scene_state, outputs, "valid_key", ok);
+    editor_set_string_output(scene_state, outputs, "message_key",
+                             ok ? json_string(action, "message", "brush selected")
+                                : json_string(action, "invalid_message", "brush selection failed"));
+    yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
+    if (ok)
+    {
+        clear_editor_selected_brushes(runtime);
+        (void)add_editor_selected_brush(runtime, &selection);
+        update_active_editor_selection_from_selected_brushes(runtime);
+        publish_editor_selection(runtime, obj_get(selection_json, "outputs"), &runtime->editor_active_selection);
+    }
+    else
+    {
+        clear_editor_active_selection(runtime);
+        publish_editor_selection(runtime, obj_get(selection_json, "outputs"), &runtime->editor_active_selection);
+    }
+    return true;
 }
 
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,

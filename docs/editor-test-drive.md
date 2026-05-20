@@ -127,7 +127,9 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    the source issue in the inspector. Reachable leaks also draw a bright
    magenta diagnostic marker at the first outside-boundary cell so you have a
    concrete place to inspect, plus an orange candidate marker on the nearest
-   source-box face associated with that leak boundary.
+   source-box face associated with that leak boundary. The candidate brush face
+   should also become the active selection, making the suspected source face
+   obvious in the selection outline and inspector.
 10. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 

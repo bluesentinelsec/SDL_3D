@@ -1662,6 +1662,18 @@
                 "else": [
                   { "type": "scene_state.set", "key": "editor.test_run.enter.valid", "value": false },
                   {
+                    "type": "editor.selection.select_brush",
+                    "world": "brush.editor_shell.target",
+                    "element_from_state": "editor.leak.candidate",
+                    "face_from_state": "editor.leak.candidate_face",
+                    "message": "selected leak candidate",
+                    "invalid_message": "no leak candidate to select",
+                    "outputs": {
+                      "valid_key": "editor.leak.candidate_selected",
+                      "message_key": "editor.leak.candidate_select_message"
+                    }
+                  },
+                  {
                     "type": "scene_state.set",
                     "key": "editor.test_run.enter.message",
                     "value": "brush source model leaks to outside"

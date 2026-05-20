@@ -17242,6 +17242,20 @@ TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnLeakingSourceModel)
     EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.leak.candidate", "")).find("room."),
               std::string::npos);
     EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.leak.candidate_distance", 0.0f), 0.0f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.leak.candidate_selected", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_select_message", ""),
+                 "selected leak candidate");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    slayer3d_game_data_editor_selection leak_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &leak_selection));
+    EXPECT_EQ(leak_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
+    EXPECT_STREQ(leak_selection.world_name, "brush.editor_shell.target");
+    EXPECT_STREQ(leak_selection.element_name, slayer3d_properties_get_string(scene_state, "editor.leak.candidate", ""));
+    EXPECT_EQ(leak_selection.face_index, 0);
+    ASSERT_NE(leak_selection.face_editor, nullptr);
+    const std::string expected_face_stable =
+        std::string(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_stable", "")) + ".face.px";
+    EXPECT_STREQ(leak_selection.face_editor->stable_id, expected_face_stable.c_str());
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
                  "brush source model leaks to outside");
