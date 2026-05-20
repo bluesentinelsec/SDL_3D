@@ -741,7 +741,12 @@ runtime descriptor also exposes `compile_rendered_faces`, a source-to-render
 table for every visible compiled face. Each entry records the source brush,
 source face, material, render mesh index, and vertex range, so editor selection,
 diagnostics, and offline compilers can map optimized render output back to
-stable source brush/face IDs even after hidden internal faces are culled. The
+stable source brush/face IDs even after hidden internal faces are culled. When a
+source face is only partially covered by adjacent structural brushes, hidden
+face culling splits the remaining visible region into rectangular fragments
+instead of emitting the covered span. This keeps stacked floors, pits, and
+prefab-adjacent wall runs from producing duplicate coplanar render surfaces
+while preserving the original source face identity. The
 runtime descriptor's `compile_artifact_hash` is a deterministic hash of the
 compiled mesh/chunk metadata and can be used by tests, tools, and future offline
 cache invalidation. Tools can also call

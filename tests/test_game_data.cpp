@@ -17176,6 +17176,140 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitPartiallyCoveredFaces
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitMultipleCoveredFaceRegions)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "compile": { "hidden_face_culling": true },
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 1.0,
+      "boxes": [
+        {
+          "stable_id": "source.box.floor",
+          "name": "brush.source.floor",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, 0, 0],
+          "max": [10, 1, 8],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.cover_a",
+          "name": "brush.source.cover_a",
+          "kind": "box",
+          "prefab": "wall",
+          "material": "mat.editor.floor",
+          "min": [2, 1, 0],
+          "max": [4, 2, 8],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.cover_b",
+          "name": "brush.source.cover_b",
+          "kind": "box",
+          "prefab": "wall",
+          "material": "mat.editor.floor",
+          "min": [6, 1, 0],
+          "max": [8, 2, 8],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u,
+        "/tmp/source-multiple-partial-cover.json", error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_editor_brush_source_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.structurally_valid) << diagnostics.first_issue;
+    EXPECT_EQ(diagnostics.face_contact_count, 2);
+    EXPECT_EQ(diagnostics.partial_face_contact_count, 2);
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_TRUE(world.compile_hidden_face_culling);
+    EXPECT_EQ(world.compile_face_count, 18);
+    EXPECT_EQ(world.compile_culled_face_count, 2);
+    EXPECT_EQ(world.compile_rendered_face_count, 16);
+    EXPECT_EQ(world.compile_triangle_count, 36);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_EQ(world.render_model->mesh_count, 1);
+    ASSERT_NE(world.compile_rendered_faces, nullptr);
+    ASSERT_EQ(world.compile_rendered_face_metadata_count, 16);
+
+    const slayer3d_game_data_brush_compiled_face *split_face = nullptr;
+    bool found_culled_cover_a_bottom = false;
+    bool found_culled_cover_b_bottom = false;
+    for (int i = 0; i < world.compile_rendered_face_metadata_count; ++i)
+    {
+        const slayer3d_game_data_brush_compiled_face &face = world.compile_rendered_faces[i];
+        const std::string face_id = face.source_face_stable_id != nullptr ? face.source_face_stable_id : "";
+        if (face_id == "source.box.floor.face.py")
+            split_face = &face;
+        found_culled_cover_a_bottom = found_culled_cover_a_bottom || face_id == "source.box.cover_a.face.ny";
+        found_culled_cover_b_bottom = found_culled_cover_b_bottom || face_id == "source.box.cover_b.face.ny";
+    }
+    ASSERT_NE(split_face, nullptr);
+    EXPECT_EQ(split_face->vertex_count, 18);
+    EXPECT_EQ(split_face->triangle_count, 6);
+    EXPECT_FALSE(found_culled_cover_a_bottom);
+    EXPECT_FALSE(found_culled_cover_b_bottom);
+
+    const slayer3d_mesh &mesh = world.render_model->meshes[split_face->mesh_index];
+    ASSERT_NE(mesh.positions, nullptr);
+    bool has_left_strip = false;
+    bool has_middle_strip = false;
+    bool has_right_strip = false;
+    for (int vertex = split_face->first_vertex; vertex < split_face->first_vertex + split_face->vertex_count; ++vertex)
+    {
+        ASSERT_GE(vertex, 0);
+        ASSERT_LT(vertex, mesh.vertex_count);
+        const float x = mesh.positions[vertex * 3 + 0];
+        const float y = mesh.positions[vertex * 3 + 1];
+        EXPECT_NEAR(y, 1.0f, 0.001f);
+        EXPECT_TRUE(x <= 2.001f || (x >= 3.999f && x <= 6.001f) || x >= 7.999f)
+            << "covered source face span was emitted at x=" << x;
+        has_left_strip = has_left_strip || x <= 2.001f;
+        has_middle_strip = has_middle_strip || (x >= 3.999f && x <= 6.001f);
+        has_right_strip = has_right_strip || x >= 7.999f;
+    }
+    EXPECT_TRUE(has_left_strip);
+    EXPECT_TRUE(has_middle_strip);
+    EXPECT_TRUE(has_right_strip);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxResizeRejectsPositiveOverlap)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
