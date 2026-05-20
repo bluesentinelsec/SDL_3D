@@ -1580,32 +1580,66 @@
         "signal": "signal.editor.test_run.enter",
         "actions": [
           {
-            "type": "editor.player_start.apply",
-            "name": "player_start.editor_shell",
-            "message": "test run player start applied",
+            "type": "editor.brush_world.validate_source",
+            "world": "brush.editor_shell.target",
+            "allow_missing_source": true,
+            "message": "editor source model is structurally valid",
             "outputs": {
-              "valid_key": "editor.test_run.enter.valid",
-              "message_key": "editor.test_run.enter.message",
-              "player_start_key": "editor.test_run.enter.player_start",
-              "scene_key": "editor.test_run.enter.scene",
-              "target_key": "editor.test_run.enter.target",
-              "position_key": "editor.test_run.enter.position",
-              "yaw_key": "editor.test_run.enter.yaw",
-              "pitch_key": "editor.test_run.enter.pitch"
+              "valid_key": "editor.source.valid",
+              "message_key": "editor.source.message",
+              "box_count_key": "editor.source.boxes",
+              "overlap_count_key": "editor.source.overlaps",
+              "near_gap_count_key": "editor.source.near_gaps",
+              "face_contact_count_key": "editor.source.face_contacts",
+              "partial_face_contact_count_key": "editor.source.partial_contacts"
             }
           },
           {
             "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+            "if": { "type": "scene_state.compare", "key": "editor.source.valid", "op": "==", "value": true },
             "then": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
-              { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+              {
+                "type": "editor.player_start.apply",
+                "name": "player_start.editor_shell",
+                "message": "test run player start applied",
+                "outputs": {
+                  "valid_key": "editor.test_run.enter.valid",
+                  "message_key": "editor.test_run.enter.message",
+                  "player_start_key": "editor.test_run.enter.player_start",
+                  "scene_key": "editor.test_run.enter.scene",
+                  "target_key": "editor.test_run.enter.target",
+                  "position_key": "editor.test_run.enter.position",
+                  "yaw_key": "editor.test_run.enter.yaw",
+                  "pitch_key": "editor.test_run.enter.pitch"
+                }
+              },
+              {
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+                "then": [
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
+                  { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+                ],
+                "else": [
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "player start required before playable test run"
+                  }
+                ]
+              }
             ],
             "else": [
+              { "type": "scene_state.set", "key": "editor.test_run.enter.valid", "value": false },
+              {
+                "type": "scene_state.set",
+                "key": "editor.test_run.enter.message",
+                "value": "brush source model has overlaps or near gaps"
+              },
               {
                 "type": "scene_state.set",
                 "key": "editor.tool.last_action",
-                "value": "player start required before playable test run"
+                "value": "fix brush source errors before playable test run"
               }
             ]
           }

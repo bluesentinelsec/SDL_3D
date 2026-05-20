@@ -1050,6 +1050,13 @@ structural adjacency. This is the first source-level correctness gate for
 watertight brush editing; future leak tracing can build on the same source model
 without relying on visual offsets.
 
+The action form may set `allow_missing_source: true` when a workflow still needs
+to support legacy/runtime-only brush worlds. In that mode, worlds without an
+`editor_brush_sources` model are treated as valid for gating purposes while
+source-backed worlds still fail on overlaps and near gaps. The editor shell uses
+this action before entering playable test-run mode so source defects block F5
+instead of becoming game-runtime surprises.
+
 ```json
 {
   "editor_brush_sources": [
@@ -1081,6 +1088,7 @@ without relying on visual offsets.
 {
   "type": "editor.brush_world.validate_source",
   "world": "brush.level.blockout",
+  "allow_missing_source": false,
   "near_gap_units": 1,
   "outputs": {
     "valid_key": "editor.source.valid",
@@ -1088,7 +1096,8 @@ without relying on visual offsets.
     "box_count_key": "editor.source.boxes",
     "overlap_count_key": "editor.source.overlaps",
     "near_gap_count_key": "editor.source.near_gaps",
-    "face_contact_count_key": "editor.source.face_contacts"
+    "face_contact_count_key": "editor.source.face_contacts",
+    "partial_face_contact_count_key": "editor.source.partial_contacts"
   }
 }
 ```

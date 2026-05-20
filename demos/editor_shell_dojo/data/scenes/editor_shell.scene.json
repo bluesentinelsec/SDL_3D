@@ -684,6 +684,18 @@
           {
             "label": "Txn",
             "binding": { "type": "scene_state", "key": "editor.transaction.message", "default": "none" }
+          },
+          {
+            "label": "Source",
+            "binding": { "type": "scene_state", "key": "editor.source.message", "default": "unchecked" }
+          },
+          {
+            "label": "Src Ov",
+            "binding": { "type": "scene_state", "key": "editor.source.overlaps", "default": 0 }
+          },
+          {
+            "label": "Src Gap",
+            "binding": { "type": "scene_state", "key": "editor.source.near_gaps", "default": 0 }
           }
         ]
       }

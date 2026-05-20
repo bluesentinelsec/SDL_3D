@@ -7978,6 +7978,10 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (near_gap_units != NULL && (!yyjson_is_int(near_gap_units) || yyjson_get_int(near_gap_units) < 0))
             return validation_error(ctx, json_path,
                                     "editor.brush_world.validate_source near_gap_units must be a non-negative integer");
+        yyjson_val *allow_missing_source = obj_get(action, "allow_missing_source");
+        if (allow_missing_source != NULL && !yyjson_is_bool(allow_missing_source))
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.validate_source allow_missing_source must be a boolean");
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.brush_world.validate_source outputs must be an object");

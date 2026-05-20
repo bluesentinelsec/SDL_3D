@@ -120,8 +120,10 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    multiple tiles to delete a set.
 8. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
    file should contain `brush_worlds`, `editor_brush_sources`, and `editor_player_starts`.
-9. Press `F5`; the editor should switch into the playable test scene using the
-   current in-memory map and player start.
+9. Press `F5`; the editor should validate the brush source model, then switch
+   into the playable test scene using the current in-memory map and player
+   start. If the source model has overlaps or near-gaps, the editor should stay
+   in edit mode and report the source issue in the inspector.
 10. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
@@ -187,7 +189,9 @@ The following should be true during a good test drive:
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
   `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.
-- `F5` applies the stored player start before entering the playable scene.
+- `F5` validates source-backed brush structure, then applies the stored player
+  start before entering the playable scene. Source overlaps and near-gaps block
+  the transition.
 
 Current limitations are expected: this is not yet a polished TrenchBroom-style
 frontend, there is no file picker, and texture/face painting remains outside
