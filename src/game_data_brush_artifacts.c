@@ -37,6 +37,12 @@ static bool artifact_export_add_bounds(yyjson_mut_doc *doc, yyjson_mut_val *obj,
            artifact_export_add_vec3(doc, bounds_obj, "max", bounds.max);
 }
 
+static bool artifact_export_add_optional_string(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key,
+                                                const char *value)
+{
+    return value == NULL || value[0] == '\0' || yyjson_mut_obj_add_strcpy(doc, obj, key, value);
+}
+
 static bool artifact_export_add_compile_policy(yyjson_mut_doc *doc, yyjson_mut_val *root,
                                                const slayer3d_game_data_brush_world *world)
 {
@@ -61,6 +67,9 @@ static bool artifact_export_add_source_summary(yyjson_mut_doc *doc, yyjson_mut_v
            yyjson_mut_obj_add_bool(doc, source, "has_bounds", world->has_bounds) &&
            (!world->has_bounds || artifact_export_add_bounds(doc, source, "bounds", world->bounds));
 }
+
+static bool artifact_export_add_render_face_metadata(yyjson_mut_doc *doc, yyjson_mut_val *render,
+                                                     const slayer3d_game_data_brush_world *world);
 
 static bool artifact_export_add_render_summary(yyjson_mut_doc *doc, yyjson_mut_val *root,
                                                const slayer3d_game_data_brush_world *world)
@@ -89,7 +98,43 @@ static bool artifact_export_add_render_summary(yyjson_mut_doc *doc, yyjson_mut_v
     return yyjson_mut_obj_add_int(doc, render, "material_count", model != NULL ? model->material_count : 0) &&
            yyjson_mut_obj_add_int(doc, render, "mesh_count", model != NULL ? model->mesh_count : 0) &&
            yyjson_mut_obj_add_int(doc, render, "vertex_count", vertex_count) &&
-           yyjson_mut_obj_add_int(doc, render, "index_count", index_count);
+           yyjson_mut_obj_add_int(doc, render, "index_count", index_count) &&
+           artifact_export_add_render_face_metadata(doc, render, world);
+}
+
+static bool artifact_export_add_render_face_metadata(yyjson_mut_doc *doc, yyjson_mut_val *render,
+                                                     const slayer3d_game_data_brush_world *world)
+{
+    yyjson_mut_val *faces = yyjson_mut_arr(doc);
+    if (faces == NULL ||
+        !yyjson_mut_obj_add_int(doc, render, "face_metadata_count", world->compile_rendered_face_metadata_count) ||
+        !yyjson_mut_obj_add_val(doc, render, "faces", faces))
+    {
+        return false;
+    }
+
+    for (int face_index = 0; face_index < world->compile_rendered_face_metadata_count; ++face_index)
+    {
+        const slayer3d_game_data_brush_compiled_face *face = &world->compile_rendered_faces[face_index];
+        yyjson_mut_val *item = yyjson_mut_obj(doc);
+        if (item == NULL || !yyjson_mut_arr_add_val(faces, item) ||
+            !yyjson_mut_obj_add_int(doc, item, "index", face_index) ||
+            !yyjson_mut_obj_add_int(doc, item, "brush_index", face->brush_index) ||
+            !yyjson_mut_obj_add_int(doc, item, "face_index", face->face_index) ||
+            !yyjson_mut_obj_add_int(doc, item, "material_index", face->material_index) ||
+            !yyjson_mut_obj_add_int(doc, item, "mesh_index", face->mesh_index) ||
+            !yyjson_mut_obj_add_int(doc, item, "first_vertex", face->first_vertex) ||
+            !yyjson_mut_obj_add_int(doc, item, "vertex_count", face->vertex_count) ||
+            !yyjson_mut_obj_add_int(doc, item, "triangle_count", face->triangle_count) ||
+            !artifact_export_add_optional_string(doc, item, "brush", face->brush_name) ||
+            !artifact_export_add_optional_string(doc, item, "material", face->material_name) ||
+            !artifact_export_add_optional_string(doc, item, "source_brush_stable_id", face->source_brush_stable_id) ||
+            !artifact_export_add_optional_string(doc, item, "source_face_stable_id", face->source_face_stable_id))
+        {
+            return false;
+        }
+    }
+    return true;
 }
 
 static bool artifact_export_add_chunks(yyjson_mut_doc *doc, yyjson_mut_val *root,

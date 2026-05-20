@@ -14436,6 +14436,52 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "culled_face_count")), culled_world_a.compile_culled_face_count);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "triangle_count")), culled_world_a.compile_triangle_count);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "mesh_count")), culled_world_a.render_model->mesh_count);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "face_metadata_count")),
+              culled_world_a.compile_rendered_face_metadata_count);
+    yyjson_val *render_faces = yyjson_obj_get(render, "faces");
+    ASSERT_TRUE(yyjson_is_arr(render_faces));
+    EXPECT_EQ(yyjson_arr_size(render_faces), static_cast<size_t>(culled_world_a.compile_rendered_face_metadata_count));
+    EXPECT_EQ(yyjson_arr_size(render_faces), 10u);
+    int artifact_render_face_vertex_count = 0;
+    bool has_left_internal_face = false;
+    bool has_right_internal_face = false;
+    bool has_left_external_face = false;
+    bool has_right_external_face = false;
+    for (size_t face_index = 0; face_index < yyjson_arr_size(render_faces); ++face_index)
+    {
+        yyjson_val *face = yyjson_arr_get(render_faces, face_index);
+        ASSERT_NE(face, nullptr);
+        EXPECT_EQ(yyjson_get_int(yyjson_obj_get(face, "index")), static_cast<int>(face_index));
+        EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(face, "material")), "mat.wall");
+        EXPECT_GE(yyjson_get_int(yyjson_obj_get(face, "mesh_index")), 0);
+        EXPECT_GE(yyjson_get_int(yyjson_obj_get(face, "first_vertex")), 0);
+        EXPECT_EQ(yyjson_get_int(yyjson_obj_get(face, "vertex_count")), 6);
+        EXPECT_EQ(yyjson_get_int(yyjson_obj_get(face, "triangle_count")), 2);
+        artifact_render_face_vertex_count += yyjson_get_int(yyjson_obj_get(face, "vertex_count"));
+        const char *brush_name = yyjson_get_str(yyjson_obj_get(face, "brush"));
+        const int source_face_index = yyjson_get_int(yyjson_obj_get(face, "face_index"));
+        if (brush_name != nullptr && SDL_strcmp(brush_name, "brush.left") == 0 && source_face_index == 0)
+        {
+            has_left_internal_face = true;
+        }
+        if (brush_name != nullptr && SDL_strcmp(brush_name, "brush.right") == 0 && source_face_index == 1)
+        {
+            has_right_internal_face = true;
+        }
+        if (brush_name != nullptr && SDL_strcmp(brush_name, "brush.left") == 0 && source_face_index == 1)
+        {
+            has_left_external_face = true;
+        }
+        if (brush_name != nullptr && SDL_strcmp(brush_name, "brush.right") == 0 && source_face_index == 0)
+        {
+            has_right_external_face = true;
+        }
+    }
+    EXPECT_EQ(artifact_render_face_vertex_count, yyjson_get_int(yyjson_obj_get(render, "vertex_count")));
+    EXPECT_FALSE(has_left_internal_face);
+    EXPECT_FALSE(has_right_internal_face);
+    EXPECT_TRUE(has_left_external_face);
+    EXPECT_TRUE(has_right_external_face);
     yyjson_val *chunks = yyjson_obj_get(artifact_root, "chunks");
     ASSERT_NE(chunks, nullptr);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(chunks, "count")), culled_world_a.compile_chunk_count);
@@ -16905,6 +16951,38 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
     EXPECT_EQ(world.render_model->meshes[0].vertex_count, 60);
     EXPECT_STREQ(world.brushes[0].editor.stable_id, "source.box.left");
     EXPECT_STREQ(world.brushes[1].editor.stable_id, "source.box.right");
+
+    char *artifact_json = nullptr;
+    size_t artifact_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        runtime, "brush.editor_shell.target", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(artifact_json, nullptr);
+    yyjson_doc *artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    yyjson_val *artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    yyjson_val *artifact_render = yyjson_obj_get(artifact_root, "render");
+    ASSERT_NE(artifact_render, nullptr);
+    yyjson_val *artifact_faces = yyjson_obj_get(artifact_render, "faces");
+    ASSERT_TRUE(yyjson_is_arr(artifact_faces));
+    EXPECT_EQ(yyjson_arr_size(artifact_faces), 10u);
+    bool artifact_has_left_exterior = false;
+    bool artifact_has_left_internal = false;
+    for (size_t i = 0; i < yyjson_arr_size(artifact_faces); ++i)
+    {
+        yyjson_val *face = yyjson_arr_get(artifact_faces, i);
+        ASSERT_NE(face, nullptr);
+        const char *face_id = yyjson_get_str(yyjson_obj_get(face, "source_face_stable_id"));
+        artifact_has_left_exterior =
+            artifact_has_left_exterior || (face_id != nullptr && SDL_strcmp(face_id, "source.box.left.face.nx") == 0);
+        artifact_has_left_internal =
+            artifact_has_left_internal || (face_id != nullptr && SDL_strcmp(face_id, "source.box.left.face.px") == 0);
+    }
+    EXPECT_TRUE(artifact_has_left_exterior);
+    EXPECT_FALSE(artifact_has_left_internal);
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
