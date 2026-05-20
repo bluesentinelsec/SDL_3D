@@ -1082,6 +1082,12 @@ model before save/export, then reload compiles runtime brushes from the source
 again. This makes source boxes the durable editing truth and keeps generated
 `brush_worlds` as load-time/runtime derived data.
 
+Source-backed editor mutations validate candidate source boxes before they are
+committed. Exact snapped face, edge, or vertex contact is legal; positive-volume
+overlap between structural source boxes is rejected at the source-model boundary.
+This keeps placement, translate, and resize tools from introducing hidden
+runtime-only overlap states.
+
 Use `editor.brush_world.validate_source` or the native
 `slayer3d_game_data_validate_editor_brush_source_model()` API to inspect source
 boxes before save or test-run. The pass runs on fixed source coordinates and
