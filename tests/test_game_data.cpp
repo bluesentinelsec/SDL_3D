@@ -36,6 +36,13 @@ extern "C"
 
     typedef struct brush_world_runtime brush_world_runtime;
     brush_world_runtime *find_brush_world_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
+    int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
+                                                              const char *brush_identity, int fallback_face_index,
+                                                              const char *face_identity);
+    bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_runtime *world_runtime,
+                                                                const char *brush_identity, int fallback_face_index,
+                                                                const char *face_identity, int *out_face_index,
+                                                                slayer3d_vec3 *out_normal);
     bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                                  slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
 }
@@ -16886,6 +16893,23 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
     EXPECT_STREQ(brush.faces[0].material_name, "mat.editor.wall");
     EXPECT_STREQ(brush.faces[1].material_name, "mat.editor.floor");
     EXPECT_STREQ(brush.faces[0].editor.stable_id, "source.box.001.face.px");
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    EXPECT_EQ(editor_brush_world_source_box_face_index_for_identity(world_runtime, "source.box.001", -1,
+                                                                    "source.box.001.face.px"),
+              0);
+    EXPECT_EQ(editor_brush_world_source_box_face_index_for_identity(world_runtime, "brush.source.box.001", -1,
+                                                                    "brush.source.box.001.face.nz"),
+              5);
+    int resolved_face = -1;
+    slayer3d_vec3 resolved_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    ASSERT_TRUE(editor_brush_world_source_box_face_normal_for_identity(
+        world_runtime, "source.box.001", -1, "source.box.001.face.ny", &resolved_face, &resolved_normal));
+    EXPECT_EQ(resolved_face, 3);
+    EXPECT_NEAR(resolved_normal.x, 0.0f, 0.001f);
+    EXPECT_NEAR(resolved_normal.y, -1.0f, 0.001f);
+    EXPECT_NEAR(resolved_normal.z, 0.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

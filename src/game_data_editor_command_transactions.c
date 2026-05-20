@@ -753,17 +753,18 @@ static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const 
     }
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
-    slayer3d_game_data_brush *brush =
-        find_editor_mutable_brush_by_identity(world_runtime, entry->element_name, entry->element_stable_id);
-    const int face_index = editor_face_index_for_identity(brush, entry->face_index, entry->face_stable_id);
     const int material_index = forward ? entry->material_index : entry->previous_material_index;
     const int rollback_index = forward ? entry->previous_material_index : entry->material_index;
     if (world_runtime != NULL && world_runtime->editor_has_source_model && material_index >= 0 &&
-        material_index < world_runtime->desc.material_count && face_index >= 0)
+        material_index < world_runtime->desc.material_count)
     {
         const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
                                          ? entry->element_stable_id
                                          : entry->element_name;
+        const int face_index = editor_brush_world_source_box_face_index_for_identity(
+            world_runtime, brush_identity, entry->face_index, entry->face_stable_id);
+        if (face_index < 0)
+            return false;
         if (editor_brush_world_set_source_box_face_material(
                 world_runtime, brush_identity, face_index, world_runtime->desc.materials[material_index].name, NULL, 0))
         {
@@ -777,6 +778,10 @@ static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const 
         }
         return false;
     }
+
+    slayer3d_game_data_brush *brush =
+        find_editor_mutable_brush_by_identity(world_runtime, entry->element_name, entry->element_stable_id);
+    const int face_index = editor_face_index_for_identity(brush, entry->face_index, entry->face_stable_id);
     if (!set_editor_brush_face_material(world_runtime, brush, face_index, material_index))
         return false;
     if (rebuild_editor_brush_world(world_runtime))
@@ -800,9 +805,29 @@ static bool apply_editor_brush_face_resize(slayer3d_game_data_runtime *runtime,
     }
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+    const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
+                                     ? entry->element_stable_id
+                                     : entry->element_name;
+    slayer3d_vec3 face_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    int face_index = -1;
+    if (world_runtime != NULL && world_runtime->editor_has_source_model)
+    {
+        if (!editor_brush_world_source_box_face_normal_for_identity(world_runtime, brush_identity, entry->face_index,
+                                                                    entry->face_stable_id, &face_index, &face_normal))
+        {
+            return false;
+        }
+        const float distance =
+            slayer3d_vec3_dot(face_normal, forward ? entry->offset : slayer3d_vec3_scale(entry->offset, -1.0f));
+        if (!editor_brush_world_resize_source_box_face(world_runtime, brush_identity, face_normal, distance, NULL, 0))
+            return false;
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
+    }
+
     slayer3d_game_data_brush *brush =
         find_editor_mutable_brush_by_identity(world_runtime, entry->element_name, entry->element_stable_id);
-    const int face_index = editor_face_index_for_identity(brush, entry->face_index, entry->face_stable_id);
+    face_index = editor_face_index_for_identity(brush, entry->face_index, entry->face_stable_id);
     if (brush == NULL || face_index < 0)
         return false;
 
@@ -812,10 +837,7 @@ static bool apply_editor_brush_face_resize(slayer3d_game_data_runtime *runtime,
     slayer3d_game_data_resize_brush_face_desc desc;
     SDL_zero(desc);
     desc.world_name = entry->world_name;
-    desc.brush_name = world_runtime != NULL && world_runtime->editor_has_source_model &&
-                              entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
-                          ? entry->element_stable_id
-                          : entry->element_name;
+    desc.brush_name = entry->element_name;
     desc.face_index = face_index;
     desc.distance = distance;
     return slayer3d_game_data_resize_brush_face(runtime, &desc, NULL, 0);

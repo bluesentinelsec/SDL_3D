@@ -1158,6 +1158,13 @@ bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_ru
                                                    char *error_buffer, int error_buffer_size);
 bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
+int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
+                                                          const char *brush_identity, int fallback_face_index,
+                                                          const char *face_identity);
+bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_runtime *world_runtime,
+                                                            const char *brush_identity, int fallback_face_index,
+                                                            const char *face_identity, int *out_face_index,
+                                                            slayer3d_vec3 *out_normal);
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size);

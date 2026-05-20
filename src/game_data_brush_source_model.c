@@ -189,6 +189,88 @@ int editor_brush_world_find_source_box_index(const brush_world_runtime *world_ru
     return find_editor_source_box_index_by_identity(world_runtime, brush_identity);
 }
 
+static bool source_box_face_identity_matches(const editor_brush_source_box_runtime *box, int face_index,
+                                             const char *face_identity)
+{
+    if (box == NULL || face_index < 0 || face_index >= (int)SDL_arraysize(source_box_face_keys) ||
+        face_identity == NULL || face_identity[0] == '\0')
+    {
+        return false;
+    }
+
+    const char *face_key = source_box_face_keys[face_index];
+    if (SDL_strcmp(face_identity, face_key) == 0)
+        return true;
+
+    char stable_id[320];
+    if (box->stable_id != NULL && box->stable_id[0] != '\0')
+    {
+        SDL_snprintf(stable_id, sizeof(stable_id), "%s.face.%s", box->stable_id, face_key);
+        if (SDL_strcmp(face_identity, stable_id) == 0)
+            return true;
+    }
+    if (box->name != NULL && box->name[0] != '\0')
+    {
+        SDL_snprintf(stable_id, sizeof(stable_id), "%s.face.%s", box->name, face_key);
+        if (SDL_strcmp(face_identity, stable_id) == 0)
+            return true;
+    }
+    return false;
+}
+
+int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
+                                                          const char *brush_identity, int fallback_face_index,
+                                                          const char *face_identity)
+{
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+    if (source_index < 0)
+        return -1;
+    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    for (int i = 0; i < (int)SDL_arraysize(source_box_face_keys); ++i)
+    {
+        if (source_box_face_identity_matches(box, i, face_identity))
+            return i;
+    }
+    return fallback_face_index >= 0 && fallback_face_index < (int)SDL_arraysize(source_box_face_keys)
+               ? fallback_face_index
+               : -1;
+}
+
+static slayer3d_vec3 source_box_face_normal_for_index(int face_index)
+{
+    switch (face_index)
+    {
+    case 0:
+        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    case 1:
+        return slayer3d_vec3_make(-1.0f, 0.0f, 0.0f);
+    case 2:
+        return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    case 3:
+        return slayer3d_vec3_make(0.0f, -1.0f, 0.0f);
+    case 4:
+        return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    case 5:
+        return slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+    default:
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    }
+}
+
+bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_runtime *world_runtime,
+                                                            const char *brush_identity, int fallback_face_index,
+                                                            const char *face_identity, int *out_face_index,
+                                                            slayer3d_vec3 *out_normal)
+{
+    const int face_index = editor_brush_world_source_box_face_index_for_identity(world_runtime, brush_identity,
+                                                                                 fallback_face_index, face_identity);
+    if (out_face_index != NULL)
+        *out_face_index = face_index;
+    if (out_normal != NULL)
+        *out_normal = source_box_face_normal_for_index(face_index);
+    return face_index >= 0;
+}
+
 bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *world_runtime,
                                                     const char *brush_identity,
                                                     editor_brush_source_box_runtime *out_box, int *out_index,
