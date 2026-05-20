@@ -17449,6 +17449,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
         runtime, "brush.editor_shell.target", export_json, export_size, "/tmp/source-level.json", error, sizeof(error)))
         << error;
     SDL_free(export_json);
+    export_json = nullptr;
 
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
@@ -17460,6 +17461,31 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     ASSERT_TRUE(world.brushes[1].has_bounds);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 17.0f, 0.001f);
+
+    char *second_export_json = nullptr;
+    size_t second_export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &second_export_json, &second_export_size, error, sizeof(error)))
+        << error;
+    yyjson_doc *second_doc = yyjson_read(second_export_json, second_export_size, 0);
+    ASSERT_NE(second_doc, nullptr);
+    yyjson_val *second_root = yyjson_doc_get_root(second_doc);
+    yyjson_val *second_sources = yyjson_obj_get(second_root, "editor_brush_sources");
+    ASSERT_TRUE(yyjson_is_arr(second_sources));
+    yyjson_val *second_source = yyjson_arr_get(second_sources, 0);
+    ASSERT_NE(second_source, nullptr);
+    EXPECT_DOUBLE_EQ(yyjson_get_real(yyjson_obj_get(second_source, "meters_per_unit")), 0.5);
+    yyjson_val *second_boxes = yyjson_obj_get(second_source, "boxes");
+    ASSERT_TRUE(yyjson_is_arr(second_boxes));
+    ASSERT_EQ(yyjson_arr_size(second_boxes), 2u);
+    yyjson_val *second_first_min = yyjson_obj_get(yyjson_arr_get(second_boxes, 0), "min");
+    yyjson_val *second_second_max = yyjson_obj_get(yyjson_arr_get(second_boxes, 1), "max");
+    ASSERT_TRUE(yyjson_is_arr(second_first_min));
+    ASSERT_TRUE(yyjson_is_arr(second_second_max));
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(second_first_min, 0)), -2);
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(second_second_max, 0)), 34);
+    yyjson_doc_free(second_doc);
+    SDL_free(second_export_json);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
