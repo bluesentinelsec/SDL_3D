@@ -16958,6 +16958,17 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxResizeRejectsPositiveOverlap
     EXPECT_EQ(world.compile_rendered_face_count, initial_rendered_faces);
 
     SDL_zeroa(error);
+    resize.face_index = 1;
+    resize.distance = -8.0f;
+    EXPECT_FALSE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("invalid geometry"), std::string::npos) << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    ASSERT_TRUE(world.brushes[1].has_bounds);
+    EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 16.0f, 0.001f);
+
+    SDL_zeroa(error);
     resize.face_index = 0;
     resize.distance = 1.0f;
     ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error))) << error;
@@ -16966,6 +16977,82 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxResizeRejectsPositiveOverlap
     ASSERT_TRUE(world.brushes[1].has_bounds);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 17.0f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateRejectsOverlapButAllowsContact)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.left",
+          "name": "brush.source.left",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-level.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_create_box_brush_desc box{};
+    box.world_name = "brush.editor_shell.target";
+    box.brush_name = "brush.source.overlap";
+    box.material_name = "mat.editor.floor";
+    box.min = slayer3d_vec3_make(7.0f, -0.2f, 0.0f);
+    box.max = slayer3d_vec3_make(15.0f, 0.0f, 8.0f);
+    EXPECT_FALSE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("overlaps existing brush"), std::string::npos) << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    EXPECT_STREQ(world.brushes[0].name, "brush.source.left");
+
+    SDL_zeroa(error);
+    box.brush_name = "brush.source.right";
+    box.min = slayer3d_vec3_make(8.0f, -0.2f, 0.0f);
+    box.max = slayer3d_vec3_make(16.0f, 0.0f, 8.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    EXPECT_STREQ(world.brushes[1].name, "brush.source.right");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

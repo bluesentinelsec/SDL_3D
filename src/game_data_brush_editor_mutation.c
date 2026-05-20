@@ -334,7 +334,8 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     }
     const slayer3d_bounding_box new_bounds = {desc->min, desc->max};
     const char *overlapping_brush = NULL;
-    if (editor_brush_world_box_overlaps_structural_brush(
+    if (!world_runtime->editor_has_source_model &&
+        editor_brush_world_box_overlaps_structural_brush(
             world_runtime, new_bounds, desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID,
             NULL, &overlapping_brush))
     {
@@ -379,9 +380,11 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
                                                              &new_brush, rebuild_error, sizeof(rebuild_error)))
         {
             free_editor_runtime_brush(&new_brush);
-            set_errorf(error_buffer, error_buffer_size,
-                       "failed to rebuild source-backed brush world after box creation%s%s",
-                       rebuild_error[0] != '\0' ? ": " : "", rebuild_error[0] != '\0' ? rebuild_error : "");
+            if (rebuild_error[0] != '\0')
+                set_error(error_buffer, error_buffer_size, rebuild_error);
+            else
+                set_error(error_buffer, error_buffer_size,
+                          "failed to rebuild source-backed brush world after box creation");
             return false;
         }
         if (out_brush_name != NULL && out_brush_name_size > 0u)
