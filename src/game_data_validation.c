@@ -8006,6 +8006,56 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.brush_world.validate_enclosure") == 0)
+    {
+        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+            return false;
+        const char *player_start = json_string(action, "player_start");
+        if (player_start == NULL || player_start[0] == '\0')
+            return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure requires a player_start");
+        if (!require_ref(ctx, &names->editor_player_starts, "editor player start", player_start, json_path))
+            return false;
+        yyjson_val *message = obj_get(action, "message");
+        if (message != NULL && !yyjson_is_str(message))
+            return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure message must be a string");
+        yyjson_val *allow_missing_source = obj_get(action, "allow_missing_source");
+        if (allow_missing_source != NULL && !yyjson_is_bool(allow_missing_source))
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.validate_enclosure allow_missing_source must be a boolean");
+        yyjson_val *max_cells = obj_get(action, "max_cells");
+        if (max_cells != NULL && (!yyjson_is_int(max_cells) || yyjson_get_int(max_cells) <= 0))
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.validate_enclosure max_cells must be a positive integer");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure outputs must be an object");
+        static const char *const output_keys[] = {"valid_key",
+                                                  "message_key",
+                                                  "has_source_key",
+                                                  "has_player_start_key",
+                                                  "box_count_key",
+                                                  "grid_cell_count_key",
+                                                  "solid_cell_count_key",
+                                                  "visited_cell_count_key",
+                                                  "open_boundary_count_key",
+                                                  "leak_point_key",
+                                                  "world_key",
+                                                  "source_path_key",
+                                                  "dirty_key",
+                                                  "revision_key",
+                                                  "saved_revision_key"};
+        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
+        {
+            yyjson_val *output = obj_get(outputs, output_keys[i]);
+            if (output != NULL &&
+                (!yyjson_is_str(output) || yyjson_get_str(output) == NULL || yyjson_get_str(output)[0] == '\0'))
+            {
+                return validation_error(ctx, json_path,
+                                        "editor.brush_world.validate_enclosure output keys must be non-empty strings");
+            }
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.brush_world.create_box") == 0)
     {
         const char *position_from = json_string(action, "position_from");

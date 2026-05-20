@@ -7,6 +7,9 @@
 
 #include <SDL3/SDL_stdinc.h>
 
+#include <limits.h>
+#include <stdlib.h>
+
 static int source_millimeters_from_meters(float value)
 {
     return (int)SDL_lroundf(value * 1000.0f);
@@ -367,6 +370,286 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
 
     out_diagnostics->structurally_valid =
         out_diagnostics->positive_overlap_count == 0 && out_diagnostics->near_gap_count == 0;
+    return true;
+}
+
+static int compare_source_ints(const void *a, const void *b)
+{
+    const int ai = *(const int *)a;
+    const int bi = *(const int *)b;
+    return (ai > bi) - (ai < bi);
+}
+
+static bool source_int_array_append_unique(int **values, int *count, int *capacity, int value)
+{
+    if (values == NULL || count == NULL || capacity == NULL)
+        return false;
+    for (int i = 0; i < *count; ++i)
+    {
+        if ((*values)[i] == value)
+            return true;
+    }
+    if (*count >= *capacity)
+    {
+        const int next_capacity = *capacity > 0 ? *capacity * 2 : 16;
+        int *next_values = (int *)SDL_realloc(*values, (size_t)next_capacity * sizeof(*next_values));
+        if (next_values == NULL)
+            return false;
+        *values = next_values;
+        *capacity = next_capacity;
+    }
+    (*values)[*count] = value;
+    (*count)++;
+    return true;
+}
+
+static bool source_bounds_include_box(const editor_brush_source_box_runtime *box, int bounds_min[3], int bounds_max[3])
+{
+    if (box == NULL || bounds_min == NULL || bounds_max == NULL)
+        return false;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        bounds_min[axis] = SDL_min(bounds_min[axis], box->min[axis]);
+        bounds_max[axis] = SDL_max(bounds_max[axis], box->max[axis]);
+    }
+    return true;
+}
+
+static int source_cell_index_for_coord(const int *edges, int edge_count, int coord)
+{
+    if (edges == NULL || edge_count < 2)
+        return -1;
+    for (int i = 0; i < edge_count - 1; ++i)
+    {
+        if (coord >= edges[i] && coord < edges[i + 1])
+            return i;
+    }
+    return coord == edges[edge_count - 1] ? edge_count - 2 : -1;
+}
+
+static bool source_cell_inside_box(const int *x_edges, const int *y_edges, const int *z_edges, int x, int y, int z,
+                                   const editor_brush_source_box_runtime *box)
+{
+    return box != NULL && x_edges[x] >= box->min[0] && x_edges[x + 1] <= box->max[0] && y_edges[y] >= box->min[1] &&
+           y_edges[y + 1] <= box->max[1] && z_edges[z] >= box->min[2] && z_edges[z + 1] <= box->max[2];
+}
+
+static int source_grid_cell_index(int x, int y, int z, int dim_x, int dim_y)
+{
+    return (z * dim_y + y) * dim_x + x;
+}
+
+static slayer3d_vec3 source_grid_cell_center_meters(const int *x_edges, const int *y_edges, const int *z_edges, int x,
+                                                    int y, int z, float meters_per_unit)
+{
+    const float sx = ((float)x_edges[x] + (float)x_edges[x + 1]) * 0.5f * meters_per_unit;
+    const float sy = ((float)y_edges[y] + (float)y_edges[y + 1]) * 0.5f * meters_per_unit;
+    const float sz = ((float)z_edges[z] + (float)z_edges[z + 1]) * 0.5f * meters_per_unit;
+    return slayer3d_vec3_make(sx, sy, sz);
+}
+
+bool slayer3d_game_data_validate_editor_brush_source_enclosure(
+    const slayer3d_game_data_runtime *runtime, const char *world_name, const char *player_start_name, int max_cells,
+    slayer3d_game_data_editor_brush_enclosure_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size)
+{
+    if (out_diagnostics != NULL)
+        SDL_zero(*out_diagnostics);
+    if (out_diagnostics == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editor brush enclosure diagnostics output is required");
+        return false;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, world_name);
+    if (world_runtime == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "brush world not found");
+        return false;
+    }
+    out_diagnostics->has_source_model = world_runtime->editor_has_source_model;
+    if (!world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "brush world has no editor brush source model");
+        return false;
+    }
+    if (world_runtime->editor_source_box_count <= 0)
+    {
+        set_error(error_buffer, error_buffer_size, "brush source model has no boxes");
+        SDL_strlcpy(out_diagnostics->first_issue, "brush source model has no boxes",
+                    sizeof(out_diagnostics->first_issue));
+        return true;
+    }
+
+    const editor_player_start_runtime *player_start = find_editor_player_start(runtime, player_start_name);
+    out_diagnostics->has_player_start = player_start != NULL;
+    if (player_start == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "editor player start not found");
+        SDL_strlcpy(out_diagnostics->first_issue, "editor player start not found",
+                    sizeof(out_diagnostics->first_issue));
+        return true;
+    }
+
+    const int cell_cap = max_cells > 0 ? max_cells : 262144;
+    const int player_coord[3] = {source_units_from_meters(world_runtime, player_start->position.x),
+                                 source_units_from_meters(world_runtime, player_start->position.y),
+                                 source_units_from_meters(world_runtime, player_start->position.z)};
+    int bounds_min[3] = {player_coord[0], player_coord[1], player_coord[2]};
+    int bounds_max[3] = {player_coord[0], player_coord[1], player_coord[2]};
+    out_diagnostics->source_box_count = world_runtime->editor_source_box_count;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+        source_bounds_include_box(&world_runtime->editor_source_boxes[i], bounds_min, bounds_max);
+
+    int *axis_edges[3] = {NULL, NULL, NULL};
+    int edge_counts[3] = {0, 0, 0};
+    int edge_capacities[3] = {0, 0, 0};
+    bool edges_ok = true;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        edges_ok = edges_ok && source_int_array_append_unique(&axis_edges[axis], &edge_counts[axis],
+                                                              &edge_capacities[axis], bounds_min[axis] - 1);
+        edges_ok = edges_ok && source_int_array_append_unique(&axis_edges[axis], &edge_counts[axis],
+                                                              &edge_capacities[axis], bounds_max[axis] + 1);
+        edges_ok = edges_ok && source_int_array_append_unique(&axis_edges[axis], &edge_counts[axis],
+                                                              &edge_capacities[axis], player_coord[axis]);
+        for (int box_index = 0; box_index < world_runtime->editor_source_box_count; ++box_index)
+        {
+            const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[box_index];
+            edges_ok = edges_ok && source_int_array_append_unique(&axis_edges[axis], &edge_counts[axis],
+                                                                  &edge_capacities[axis], box->min[axis]);
+            edges_ok = edges_ok && source_int_array_append_unique(&axis_edges[axis], &edge_counts[axis],
+                                                                  &edge_capacities[axis], box->max[axis]);
+        }
+        if (edge_counts[axis] > 1)
+            qsort(axis_edges[axis], (size_t)edge_counts[axis], sizeof(int), compare_source_ints);
+    }
+    if (!edges_ok)
+    {
+        for (int axis = 0; axis < 3; ++axis)
+            SDL_free(axis_edges[axis]);
+        set_error(error_buffer, error_buffer_size, "failed to allocate brush enclosure grid edges");
+        return false;
+    }
+
+    const int dim_x = edge_counts[0] - 1;
+    const int dim_y = edge_counts[1] - 1;
+    const int dim_z = edge_counts[2] - 1;
+    const Sint64 wide_cell_count =
+        dim_x > 0 && dim_y > 0 && dim_z > 0 ? (Sint64)dim_x * (Sint64)dim_y * (Sint64)dim_z : 0;
+    out_diagnostics->grid_cell_count =
+        wide_cell_count > 0 && wide_cell_count <= (Sint64)INT_MAX ? (int)wide_cell_count : 0;
+    if (wide_cell_count <= 0 || wide_cell_count > (Sint64)cell_cap || wide_cell_count > (Sint64)INT_MAX)
+    {
+        for (int axis = 0; axis < 3; ++axis)
+            SDL_free(axis_edges[axis]);
+        set_errorf(error_buffer, error_buffer_size, "brush enclosure grid has %lld cells, cap is %d",
+                   (long long)wide_cell_count, cell_cap);
+        return false;
+    }
+    const int cell_count = (int)wide_cell_count;
+
+    Uint8 *solid = (Uint8 *)SDL_calloc((size_t)cell_count, sizeof(*solid));
+    Uint8 *visited = (Uint8 *)SDL_calloc((size_t)cell_count, sizeof(*visited));
+    int *queue = (int *)SDL_malloc((size_t)cell_count * sizeof(*queue));
+    if (solid == NULL || visited == NULL || queue == NULL)
+    {
+        SDL_free(solid);
+        SDL_free(visited);
+        SDL_free(queue);
+        for (int axis = 0; axis < 3; ++axis)
+            SDL_free(axis_edges[axis]);
+        set_error(error_buffer, error_buffer_size, "failed to allocate brush enclosure flood grid");
+        return false;
+    }
+
+    for (int z = 0; z < dim_z; ++z)
+    {
+        for (int y = 0; y < dim_y; ++y)
+        {
+            for (int x = 0; x < dim_x; ++x)
+            {
+                const int cell_index = source_grid_cell_index(x, y, z, dim_x, dim_y);
+                for (int box_index = 0; box_index < world_runtime->editor_source_box_count; ++box_index)
+                {
+                    if (source_cell_inside_box(axis_edges[0], axis_edges[1], axis_edges[2], x, y, z,
+                                               &world_runtime->editor_source_boxes[box_index]))
+                    {
+                        solid[cell_index] = 1;
+                        out_diagnostics->solid_cell_count++;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    const int start_x = source_cell_index_for_coord(axis_edges[0], edge_counts[0], player_coord[0]);
+    const int start_y = source_cell_index_for_coord(axis_edges[1], edge_counts[1], player_coord[1]);
+    const int start_z = source_cell_index_for_coord(axis_edges[2], edge_counts[2], player_coord[2]);
+    if (start_x < 0 || start_y < 0 || start_z < 0)
+    {
+        SDL_strlcpy(out_diagnostics->first_issue, "player start is outside source enclosure grid",
+                    sizeof(out_diagnostics->first_issue));
+    }
+    else
+    {
+        const int start_cell = source_grid_cell_index(start_x, start_y, start_z, dim_x, dim_y);
+        if (solid[start_cell])
+        {
+            SDL_strlcpy(out_diagnostics->first_issue, "player start is inside a source solid",
+                        sizeof(out_diagnostics->first_issue));
+        }
+        else
+        {
+            int head = 0;
+            int tail = 0;
+            visited[start_cell] = 1;
+            queue[tail++] = start_cell;
+            static const int offsets[6][3] = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+            while (head < tail)
+            {
+                const int cell = queue[head++];
+                const int x = cell % dim_x;
+                const int yz = cell / dim_x;
+                const int y = yz % dim_y;
+                const int z = yz / dim_y;
+                out_diagnostics->visited_cell_count++;
+                if (x == 0 || y == 0 || z == 0 || x == dim_x - 1 || y == dim_y - 1 || z == dim_z - 1)
+                {
+                    out_diagnostics->open_boundary_cell_count++;
+                    if (out_diagnostics->first_issue[0] == '\0')
+                    {
+                        SDL_strlcpy(out_diagnostics->first_issue, "player-start reachable space leaks to outside",
+                                    sizeof(out_diagnostics->first_issue));
+                        out_diagnostics->first_leak_point =
+                            source_grid_cell_center_meters(axis_edges[0], axis_edges[1], axis_edges[2], x, y, z,
+                                                           world_runtime->editor_source_meters_per_unit);
+                    }
+                }
+                for (size_t direction = 0; direction < SDL_arraysize(offsets); ++direction)
+                {
+                    const int nx = x + offsets[direction][0];
+                    const int ny = y + offsets[direction][1];
+                    const int nz = z + offsets[direction][2];
+                    if (nx < 0 || ny < 0 || nz < 0 || nx >= dim_x || ny >= dim_y || nz >= dim_z)
+                        continue;
+                    const int next_cell = source_grid_cell_index(nx, ny, nz, dim_x, dim_y);
+                    if (solid[next_cell] || visited[next_cell])
+                        continue;
+                    visited[next_cell] = 1;
+                    queue[tail++] = next_cell;
+                }
+            }
+        }
+    }
+
+    out_diagnostics->enclosed =
+        out_diagnostics->first_issue[0] == '\0' && out_diagnostics->open_boundary_cell_count == 0;
+    SDL_free(solid);
+    SDL_free(visited);
+    SDL_free(queue);
+    for (int axis = 0; axis < 3; ++axis)
+        SDL_free(axis_edges[axis]);
     return true;
 }
 

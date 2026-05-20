@@ -696,6 +696,14 @@
           {
             "label": "Src Gap",
             "binding": { "type": "scene_state", "key": "editor.source.near_gaps", "default": 0 }
+          },
+          {
+            "label": "Leak",
+            "binding": { "type": "scene_state", "key": "editor.leak.message", "default": "unchecked" }
+          },
+          {
+            "label": "Open",
+            "binding": { "type": "scene_state", "key": "editor.leak.open_boundaries", "default": 0 }
           }
         ]
       }

@@ -1599,32 +1599,70 @@
             "if": { "type": "scene_state.compare", "key": "editor.source.valid", "op": "==", "value": true },
             "then": [
               {
-                "type": "editor.player_start.apply",
-                "name": "player_start.editor_shell",
-                "message": "test run player start applied",
+                "type": "editor.brush_world.validate_enclosure",
+                "world": "brush.editor_shell.target",
+                "player_start": "player_start.editor_shell",
+                "allow_missing_source": true,
+                "message": "editor source enclosure is sealed",
                 "outputs": {
-                  "valid_key": "editor.test_run.enter.valid",
-                  "message_key": "editor.test_run.enter.message",
-                  "player_start_key": "editor.test_run.enter.player_start",
-                  "scene_key": "editor.test_run.enter.scene",
-                  "target_key": "editor.test_run.enter.target",
-                  "position_key": "editor.test_run.enter.position",
-                  "yaw_key": "editor.test_run.enter.yaw",
-                  "pitch_key": "editor.test_run.enter.pitch"
+                  "valid_key": "editor.leak.valid",
+                  "message_key": "editor.leak.message",
+                  "has_source_key": "editor.leak.has_source",
+                  "has_player_start_key": "editor.leak.has_player_start",
+                  "box_count_key": "editor.leak.boxes",
+                  "grid_cell_count_key": "editor.leak.grid_cells",
+                  "solid_cell_count_key": "editor.leak.solid_cells",
+                  "visited_cell_count_key": "editor.leak.visited_cells",
+                  "open_boundary_count_key": "editor.leak.open_boundaries",
+                  "leak_point_key": "editor.leak.point"
                 }
               },
               {
                 "type": "branch",
-                "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+                "if": { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": true },
                 "then": [
-                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
-                  { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+                  {
+                    "type": "editor.player_start.apply",
+                    "name": "player_start.editor_shell",
+                    "message": "test run player start applied",
+                    "outputs": {
+                      "valid_key": "editor.test_run.enter.valid",
+                      "message_key": "editor.test_run.enter.message",
+                      "player_start_key": "editor.test_run.enter.player_start",
+                      "scene_key": "editor.test_run.enter.scene",
+                      "target_key": "editor.test_run.enter.target",
+                      "position_key": "editor.test_run.enter.position",
+                      "yaw_key": "editor.test_run.enter.yaw",
+                      "pitch_key": "editor.test_run.enter.pitch"
+                    }
+                  },
+                  {
+                    "type": "branch",
+                    "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+                    "then": [
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
+                      { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+                    ],
+                    "else": [
+                      {
+                        "type": "scene_state.set",
+                        "key": "editor.tool.last_action",
+                        "value": "player start required before playable test run"
+                      }
+                    ]
+                  }
                 ],
                 "else": [
+                  { "type": "scene_state.set", "key": "editor.test_run.enter.valid", "value": false },
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.test_run.enter.message",
+                    "value": "brush source model leaks to outside"
+                  },
                   {
                     "type": "scene_state.set",
                     "key": "editor.tool.last_action",
-                    "value": "player start required before playable test run"
+                    "value": "fix brush source leaks before playable test run"
                   }
                 ]
               }

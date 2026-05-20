@@ -1053,9 +1053,16 @@ without relying on visual offsets.
 The action form may set `allow_missing_source: true` when a workflow still needs
 to support legacy/runtime-only brush worlds. In that mode, worlds without an
 `editor_brush_sources` model are treated as valid for gating purposes while
-source-backed worlds still fail on overlaps and near gaps. The editor shell uses
-this action before entering playable test-run mode so source defects block F5
-instead of becoming game-runtime surprises.
+source-backed worlds still fail on overlaps and near gaps.
+
+Use `editor.brush_world.validate_enclosure` or
+`slayer3d_game_data_validate_editor_brush_source_enclosure()` to run the first
+source-backed leak diagnostic. This pass derives an exact interval grid from
+the fixed source box coordinates, marks source boxes as solid, and flood-fills
+empty cells from an `editor_player_starts` marker. If the flood reaches the
+expanded outside boundary, the playable space leaks. The editor shell runs both
+validation actions before entering playable test-run mode so source defects
+block F5 instead of becoming game-runtime surprises.
 
 ```json
 {
@@ -1098,6 +1105,23 @@ instead of becoming game-runtime surprises.
     "near_gap_count_key": "editor.source.near_gaps",
     "face_contact_count_key": "editor.source.face_contacts",
     "partial_face_contact_count_key": "editor.source.partial_contacts"
+  }
+}
+```
+
+```json
+{
+  "type": "editor.brush_world.validate_enclosure",
+  "world": "brush.level.blockout",
+  "player_start": "player_start.level_01",
+  "allow_missing_source": false,
+  "max_cells": 262144,
+  "outputs": {
+    "valid_key": "editor.leak.valid",
+    "message_key": "editor.leak.message",
+    "open_boundary_count_key": "editor.leak.open_boundaries",
+    "visited_cell_count_key": "editor.leak.visited_cells",
+    "leak_point_key": "editor.leak.point"
   }
 }
 ```

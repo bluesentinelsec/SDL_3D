@@ -2234,6 +2234,47 @@ extern "C"
         const slayer3d_game_data_runtime *runtime, const char *world_name, int near_gap_units,
         slayer3d_game_data_editor_brush_source_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size);
 
+    /** @brief Source-model playable-space leak diagnostics for one player start. */
+    typedef struct slayer3d_game_data_editor_brush_enclosure_diagnostics
+    {
+        /** @brief True when the brush world has an editor-owned source model. */
+        bool has_source_model;
+        /** @brief True when the named player start exists. */
+        bool has_player_start;
+        /** @brief True when the player-start reachable empty space does not reach outside the source bounds. */
+        bool enclosed;
+        /** @brief Number of source boxes inspected. */
+        int source_box_count;
+        /** @brief Total source flood-grid cells inspected. */
+        int grid_cell_count;
+        /** @brief Number of grid cells marked solid by source boxes. */
+        int solid_cell_count;
+        /** @brief Number of empty cells reachable from the player-start cell. */
+        int visited_cell_count;
+        /** @brief Number of outside-boundary cells reached by the flood. Non-zero means leaked/open. */
+        int open_boundary_cell_count;
+        /** @brief First reachable outside-boundary cell center in world meters. */
+        slayer3d_vec3 first_leak_point;
+        /** @brief First blocking issue, or an empty string when enclosed. */
+        char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    } slayer3d_game_data_editor_brush_enclosure_diagnostics;
+
+    /**
+     * @brief Validate source-box playable-space closure from one editor player start.
+     *
+     * This pass derives an exact interval grid from fixed-coordinate
+     * `editor_brush_sources`, marks source boxes as solid, and flood-fills empty
+     * space from @p player_start_name. If reachable empty space reaches the
+     * expanded outside boundary, the map is considered open/leaking for MVP
+     * grid-prefab test-run workflows.
+     *
+     * @p max_cells bounds diagnostic cost. Pass 0 to use the default cap.
+     */
+    bool slayer3d_game_data_validate_editor_brush_source_enclosure(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, const char *player_start_name, int max_cells,
+        slayer3d_game_data_editor_brush_enclosure_diagnostics *out_diagnostics, char *error_buffer,
+        int error_buffer_size);
+
     /**
      * @brief Mark one runtime brush world as saved by an editor host.
      *
