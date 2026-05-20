@@ -65,6 +65,11 @@ static void free_editor_brush_source_box(editor_brush_source_box_runtime *box)
     SDL_zero(*box);
 }
 
+void free_editor_brush_source_box_runtime(editor_brush_source_box_runtime *box)
+{
+    free_editor_brush_source_box(box);
+}
+
 void free_editor_brush_source_model(brush_world_runtime *world_runtime)
 {
     if (world_runtime == NULL)
@@ -88,6 +93,35 @@ static bool copy_source_string(char **field, const char *value)
         return true;
     *field = SDL_strdup(value);
     return *field != NULL;
+}
+
+bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime *source,
+                                          editor_brush_source_box_runtime *dest)
+{
+    if (source == NULL || dest == NULL)
+        return false;
+    SDL_zero(*dest);
+    if (!copy_source_string(&dest->stable_id, source->stable_id) || !copy_source_string(&dest->name, source->name) ||
+        !copy_source_string(&dest->prefab, source->prefab) || !copy_source_string(&dest->material, source->material))
+    {
+        free_editor_brush_source_box(dest);
+        return false;
+    }
+    for (int i = 0; i < 6; ++i)
+    {
+        if (!copy_source_string(&dest->face_materials[i], source->face_materials[i]))
+        {
+            free_editor_brush_source_box(dest);
+            return false;
+        }
+    }
+    for (int i = 0; i < 3; ++i)
+    {
+        dest->min[i] = source->min[i];
+        dest->max[i] = source->max[i];
+    }
+    dest->contents = source->contents;
+    return true;
 }
 
 static int source_box_face_index_from_key(const char *key)
@@ -148,6 +182,42 @@ static int find_editor_source_box_index_by_identity(const brush_world_runtime *w
             return i;
     }
     return -1;
+}
+
+int editor_brush_world_find_source_box_index(const brush_world_runtime *world_runtime, const char *brush_identity)
+{
+    return find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+}
+
+bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *world_runtime,
+                                                    const char *brush_identity,
+                                                    editor_brush_source_box_runtime *out_box, int *out_index,
+                                                    char *error_buffer, int error_buffer_size)
+{
+    if (out_box != NULL)
+        SDL_zero(*out_box);
+    if (out_index != NULL)
+        *out_index = -1;
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush lookup requires a source model");
+        return false;
+    }
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+    if (out_box != NULL &&
+        !copy_editor_brush_source_box_runtime(&world_runtime->editor_source_boxes[source_index], out_box))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to copy source brush");
+        return false;
+    }
+    if (out_index != NULL)
+        *out_index = source_index;
+    return true;
 }
 
 static bool source_box_extents_valid(const editor_brush_source_box_runtime *box)
@@ -1210,6 +1280,28 @@ bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_
     {
         set_errorf(error_buffer, error_buffer_size, "brush '%s' cannot be represented as a source box",
                    brush->name != NULL ? brush->name : "<unnamed>");
+        return false;
+    }
+    const bool ok = editor_brush_world_insert_source_box_at_index(world_runtime, box_index, &inserted, error_buffer,
+                                                                  error_buffer_size);
+    free_editor_brush_source_box(&inserted);
+    return ok;
+}
+
+bool editor_brush_world_insert_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
+                                                   const editor_brush_source_box_runtime *box, char *error_buffer,
+                                                   int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || box == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush insertion requires a source model and brush");
+        return false;
+    }
+
+    editor_brush_source_box_runtime inserted;
+    if (!copy_editor_brush_source_box_runtime(box, &inserted))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to copy source brush insertion");
         return false;
     }
     if (!source_box_candidate_valid(world_runtime, &inserted, -1, error_buffer, error_buffer_size))

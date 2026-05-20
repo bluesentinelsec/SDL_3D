@@ -290,6 +290,8 @@ static void free_editor_command_transaction_entry(editor_command_transaction_ent
     SDL_free((void *)entry->material_name);
     SDL_free((void *)entry->previous_material_name);
     SDL_free((void *)entry->face_stable_id);
+    if (entry->has_source_box_snapshot)
+        free_editor_brush_source_box_runtime(&entry->source_box_snapshot);
     if (entry->has_brush_snapshot)
         free_editor_runtime_brush_copy(&entry->brush_snapshot);
     SDL_zero(*entry);
@@ -488,19 +490,6 @@ static int find_editor_mutable_brush_index_by_identity(const brush_world_runtime
     return -1;
 }
 
-static int find_editor_source_box_index(const brush_world_runtime *world_runtime, const char *brush_name)
-{
-    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
-        return -1;
-    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
-    {
-        const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
-        if (box->name != NULL && SDL_strcmp(box->name, brush_name) == 0)
-            return i;
-    }
-    return -1;
-}
-
 static int editor_brush_material_index_by_name(const brush_world_runtime *world_runtime, const char *material_name)
 {
     if (world_runtime == NULL || material_name == NULL || material_name[0] == '\0')
@@ -532,7 +521,10 @@ static bool remove_editor_brush_at_index(brush_world_runtime *world_runtime, int
     if (world_runtime->editor_has_source_model)
     {
         const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
-        const int source_index = find_editor_source_box_index(world_runtime, brush->name);
+        const char *brush_identity = brush->editor.stable_id != NULL && brush->editor.stable_id[0] != '\0'
+                                         ? brush->editor.stable_id
+                                         : brush->name;
+        const int source_index = editor_brush_world_find_source_box_index(world_runtime, brush_identity);
         if (source_index < 0)
             return false;
         if (out_removed != NULL && !copy_editor_brush_snapshot(brush, out_removed))
@@ -841,6 +833,18 @@ static bool apply_editor_brush_delete(slayer3d_game_data_runtime *runtime, edito
 
     if (!forward)
     {
+        if (world_runtime->editor_has_source_model)
+        {
+            if (!entry->has_source_box_snapshot)
+                return false;
+            if (!editor_brush_world_insert_source_box_at_index(world_runtime, entry->brush_index,
+                                                               &entry->source_box_snapshot, NULL, 0))
+            {
+                return false;
+            }
+            editor_brush_world_mark_dirty(world_runtime);
+            return true;
+        }
         if (!entry->has_brush_snapshot)
             return false;
         return insert_editor_brush_at_index(world_runtime, entry->brush_index, &entry->brush_snapshot);
@@ -851,7 +855,22 @@ static bool apply_editor_brush_delete(slayer3d_game_data_runtime *runtime, edito
     if (brush_index < 0)
         return false;
     const slayer3d_game_data_brush *brush = &world_runtime->desc.brushes[brush_index];
-    if (!entry->has_brush_snapshot)
+    if (world_runtime->editor_has_source_model)
+    {
+        const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
+                                         ? entry->element_stable_id
+                                         : entry->element_name;
+        if (!entry->has_source_box_snapshot)
+        {
+            if (!editor_brush_world_copy_source_box_by_identity(
+                    world_runtime, brush_identity, &entry->source_box_snapshot, &entry->brush_index, NULL, 0))
+            {
+                return false;
+            }
+            entry->has_source_box_snapshot = true;
+        }
+    }
+    else if (!entry->has_brush_snapshot)
     {
         if (!copy_editor_brush_snapshot(brush, &entry->brush_snapshot))
             return false;
@@ -864,10 +883,19 @@ static bool apply_editor_brush_delete(slayer3d_game_data_runtime *runtime, edito
         SDL_strcmp(runtime->editor_active_selection.world_name, entry->world_name) == 0 &&
         editor_selection_matches_transaction_element(&runtime->editor_active_selection, entry);
 
-    slayer3d_game_data_brush removed;
-    if (!remove_editor_brush_at_index(world_runtime, brush_index, &removed))
-        return false;
-    free_editor_runtime_brush_copy(&removed);
+    if (world_runtime->editor_has_source_model)
+    {
+        if (!editor_brush_world_remove_source_box_at_index(world_runtime, entry->brush_index, NULL, 0))
+            return false;
+        editor_brush_world_mark_dirty(world_runtime);
+    }
+    else
+    {
+        slayer3d_game_data_brush removed;
+        if (!remove_editor_brush_at_index(world_runtime, brush_index, &removed))
+            return false;
+        free_editor_runtime_brush_copy(&removed);
+    }
 
     if (clears_active_selection)
     {
@@ -891,6 +919,19 @@ static bool apply_editor_brush_create(slayer3d_game_data_runtime *runtime, edito
 
     if (!forward)
     {
+        const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
+                                         ? entry->element_stable_id
+                                         : entry->element_name;
+        if (world_runtime->editor_has_source_model)
+        {
+            const int source_index = editor_brush_world_find_source_box_index(world_runtime, brush_identity);
+            if (source_index < 0)
+                return true;
+            if (!editor_brush_world_remove_source_box_at_index(world_runtime, source_index, NULL, 0))
+                return false;
+            editor_brush_world_mark_dirty(world_runtime);
+            return true;
+        }
         const int brush_index =
             find_editor_mutable_brush_index_by_identity(world_runtime, entry->element_name, entry->element_stable_id);
         if (brush_index < 0)
@@ -899,6 +940,24 @@ static bool apply_editor_brush_create(slayer3d_game_data_runtime *runtime, edito
         if (!remove_editor_brush_at_index(world_runtime, brush_index, &removed))
             return false;
         free_editor_runtime_brush_copy(&removed);
+        return true;
+    }
+
+    if (world_runtime->editor_has_source_model)
+    {
+        if (!entry->has_source_box_snapshot)
+            return false;
+        const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
+                                         ? entry->element_stable_id
+                                         : entry->element_name;
+        if (editor_brush_world_find_source_box_index(world_runtime, brush_identity) >= 0)
+            return true;
+        if (!editor_brush_world_insert_source_box_at_index(world_runtime, entry->brush_index,
+                                                           &entry->source_box_snapshot, NULL, 0))
+        {
+            return false;
+        }
+        editor_brush_world_mark_dirty(world_runtime);
         return true;
     }
 

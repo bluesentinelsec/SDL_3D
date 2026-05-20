@@ -183,6 +183,18 @@ typedef struct editor_placement_preview_state
     slayer3d_bounding_box bounds;
 } editor_placement_preview_state;
 
+typedef struct editor_brush_source_box_runtime
+{
+    char *stable_id;
+    char *name;
+    char *prefab;
+    char *material;
+    char *face_materials[6];
+    int min[3];
+    int max[3];
+    unsigned int contents;
+} editor_brush_source_box_runtime;
+
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
 #define SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY 512
 
@@ -205,6 +217,8 @@ typedef struct editor_command_transaction_entry
     bool has_bounds;
     slayer3d_bounding_box bounds;
     int brush_index;
+    bool has_source_box_snapshot;
+    editor_brush_source_box_runtime source_box_snapshot;
     bool has_brush_snapshot;
     slayer3d_game_data_brush brush_snapshot;
     char message[128];
@@ -470,18 +484,6 @@ typedef struct brush_world_compile_artifacts
     Uint64 visibility_grid_visible_cache_tick[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
     Uint64 visibility_grid_visible_cache_clock;
 } brush_world_compile_artifacts;
-
-typedef struct editor_brush_source_box_runtime
-{
-    char *stable_id;
-    char *name;
-    char *prefab;
-    char *material;
-    char *face_materials[6];
-    int min[3];
-    int max[3];
-    unsigned int contents;
-} editor_brush_source_box_runtime;
 
 typedef struct brush_world_runtime
 {
@@ -1132,12 +1134,23 @@ void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
                                            int error_buffer_size);
 void free_editor_brush_source_model(brush_world_runtime *world_runtime);
+void free_editor_brush_source_box_runtime(editor_brush_source_box_runtime *box);
+bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime *source,
+                                          editor_brush_source_box_runtime *dest);
 bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
                                     char *error_buffer, int error_buffer_size);
 bool editor_brush_world_rebuild_from_source(brush_world_runtime *world_runtime, char *error_buffer,
                                             int error_buffer_size);
 bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,
                                                  int error_buffer_size);
+int editor_brush_world_find_source_box_index(const brush_world_runtime *world_runtime, const char *brush_identity);
+bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *world_runtime,
+                                                    const char *brush_identity,
+                                                    editor_brush_source_box_runtime *out_box, int *out_index,
+                                                    char *error_buffer, int error_buffer_size);
+bool editor_brush_world_insert_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
+                                                   const editor_brush_source_box_runtime *box, char *error_buffer,
+                                                   int error_buffer_size);
 bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_runtime, int box_index,
                                                      const slayer3d_game_data_brush *brush, char *error_buffer,
                                                      int error_buffer_size);
