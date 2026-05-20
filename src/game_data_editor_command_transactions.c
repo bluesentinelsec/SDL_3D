@@ -374,6 +374,19 @@ static int find_editor_mutable_brush_index(const brush_world_runtime *world_runt
     return -1;
 }
 
+static int find_editor_source_box_index(const brush_world_runtime *world_runtime, const char *brush_name)
+{
+    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
+        return -1;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
+        if (box->name != NULL && SDL_strcmp(box->name, brush_name) == 0)
+            return i;
+    }
+    return -1;
+}
+
 static int editor_brush_material_index_by_name(const brush_world_runtime *world_runtime, const char *material_name)
 {
     if (world_runtime == NULL || material_name == NULL || material_name[0] == '\0')
@@ -389,7 +402,8 @@ static int editor_brush_material_index_by_name(const brush_world_runtime *world_
 
 static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
 {
-    return rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0);
+    return rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0) &&
+           editor_brush_world_sync_source_from_runtime(world_runtime, NULL, 0);
 }
 
 static bool remove_editor_brush_at_index(brush_world_runtime *world_runtime, int brush_index,
@@ -401,6 +415,24 @@ static bool remove_editor_brush_at_index(brush_world_runtime *world_runtime, int
         return false;
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    if (world_runtime->editor_has_source_model)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        const int source_index = find_editor_source_box_index(world_runtime, brush->name);
+        if (source_index < 0)
+            return false;
+        if (out_removed != NULL && !copy_editor_brush_snapshot(brush, out_removed))
+            return false;
+        if (!editor_brush_world_remove_source_box_at_index(world_runtime, source_index, NULL, 0))
+        {
+            if (out_removed != NULL)
+                free_editor_runtime_brush_copy(out_removed);
+            return false;
+        }
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
+    }
+
     slayer3d_game_data_brush *old_brushes = (slayer3d_game_data_brush *)world->brushes;
     const int old_count = world->brush_count;
     const int new_count = old_count - 1;
@@ -441,6 +473,14 @@ static bool insert_editor_brush_at_index(brush_world_runtime *world_runtime, int
 {
     if (world_runtime == NULL || brush == NULL)
         return false;
+
+    if (world_runtime->editor_has_source_model)
+    {
+        if (!editor_brush_world_insert_source_box_from_brush(world_runtime, brush_index, brush, NULL, 0))
+            return false;
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
+    }
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;
     const int old_count = world->brush_count;
@@ -553,6 +593,16 @@ static bool apply_editor_brush_translate(slayer3d_game_data_runtime *runtime,
         return true;
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+    if (world_runtime != NULL && world_runtime->editor_has_source_model)
+    {
+        if (editor_brush_world_translate_source_box(world_runtime, entry->element_name, offset, NULL, 0))
+        {
+            editor_brush_world_mark_dirty(world_runtime);
+            return true;
+        }
+        return false;
+    }
+
     slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, entry->element_name);
     if (brush == NULL)
         return false;
@@ -596,6 +646,24 @@ static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const 
     slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, entry->element_name);
     const int material_index = forward ? entry->material_index : entry->previous_material_index;
     const int rollback_index = forward ? entry->previous_material_index : entry->material_index;
+    if (world_runtime != NULL && world_runtime->editor_has_source_model && material_index >= 0 &&
+        material_index < world_runtime->desc.material_count)
+    {
+        if (editor_brush_world_set_source_box_face_material(world_runtime, entry->element_name, entry->face_index,
+                                                            world_runtime->desc.materials[material_index].name, NULL,
+                                                            0))
+        {
+            editor_brush_world_mark_dirty(world_runtime);
+            return true;
+        }
+        if (rollback_index >= 0 && rollback_index < world_runtime->desc.material_count)
+        {
+            (void)editor_brush_world_set_source_box_face_material(world_runtime, entry->element_name, entry->face_index,
+                                                                  world_runtime->desc.materials[rollback_index].name,
+                                                                  NULL, 0);
+        }
+        return false;
+    }
     if (!set_editor_brush_face_material(world_runtime, brush, entry->face_index, material_index))
         return false;
     if (rebuild_editor_brush_world(world_runtime))

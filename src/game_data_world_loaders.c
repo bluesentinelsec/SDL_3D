@@ -608,6 +608,43 @@ static int brush_material_index_from_ref(const slayer3d_game_data_brush_material
     return -1;
 }
 
+static bool find_editor_brush_source_boxes(yyjson_val *root, const char *world_name, yyjson_val **out_boxes,
+                                           float *out_meters_per_unit, char *error_buffer, int error_buffer_size)
+{
+    if (out_boxes != NULL)
+        *out_boxes = NULL;
+    if (out_meters_per_unit != NULL)
+        *out_meters_per_unit = 0.001f;
+    yyjson_val *sources = obj_get(root, "editor_brush_sources");
+    if (!yyjson_is_arr(sources))
+        return true;
+
+    for (size_t i = 0; i < yyjson_arr_size(sources); ++i)
+    {
+        yyjson_val *source = yyjson_arr_get(sources, i);
+        const char *source_world = json_string(source, "world", NULL);
+        if (source_world == NULL || world_name == NULL || SDL_strcmp(source_world, world_name) != 0)
+            continue;
+
+        yyjson_val *boxes = obj_get(source, "boxes");
+        if (!yyjson_is_arr(boxes))
+        {
+            set_errorf(error_buffer, error_buffer_size, "editor brush source for world '%s' requires boxes array",
+                       world_name);
+            return false;
+        }
+        if (out_boxes != NULL)
+            *out_boxes = boxes;
+        if (out_meters_per_unit != NULL)
+        {
+            const float meters_per_unit = json_float(source, "meters_per_unit", 0.001f);
+            *out_meters_per_unit = meters_per_unit > 0.0f ? meters_per_unit : 0.001f;
+        }
+        return true;
+    }
+    return true;
+}
+
 bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size)
 {
     yyjson_val *worlds = obj_get(root, "brush_worlds");
@@ -632,10 +669,19 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
     {
         yyjson_val *world_json = yyjson_arr_get(worlds, (size_t)world_index);
         yyjson_val *materials_json = obj_get(world_json, "materials");
-        yyjson_val *brushes_json = obj_get(world_json, "brushes");
+        yyjson_val *source_boxes = NULL;
+        float source_meters_per_unit = 0.001f;
+        const char *world_name = json_string(world_json, "name", "");
+        if (!find_editor_brush_source_boxes(root, world_name, &source_boxes, &source_meters_per_unit, error_buffer,
+                                            error_buffer_size))
+        {
+            return false;
+        }
+        const bool use_source_boxes = source_boxes != NULL;
+        yyjson_val *brushes_json = use_source_boxes ? NULL : obj_get(world_json, "brushes");
         slayer3d_game_data_brush_world *world = &runtime->brush_worlds[world_index].desc;
 
-        world->name = SDL_strdup(json_string(world_json, "name", ""));
+        world->name = SDL_strdup(world_name);
         world->units = SDL_strdup(json_string(world_json, "units", "meters"));
         world->meters_per_unit = json_float(world_json, "meters_per_unit", 1.0f);
         world->visibility_cell_size = json_float(world_json, "visibility_cell_size", 2.0f);
@@ -643,7 +689,7 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
         world->compile_hidden_face_culling = json_bool(compile_json, "hidden_face_culling", true);
         world->compile_chunk_cell_size_hint = json_float(compile_json, "chunk_cell_size", 0.0f);
         world->material_count = (int)yyjson_arr_size(materials_json);
-        world->brush_count = (int)yyjson_arr_size(brushes_json);
+        world->brush_count = use_source_boxes ? 0 : (int)yyjson_arr_size(brushes_json);
         if (world->name == NULL || world->units == NULL)
         {
             set_error(error_buffer, error_buffer_size, "failed to allocate brush world strings");
@@ -686,6 +732,18 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
             if (!load_editor_metadata(obj_get(material_json, "editor"), &material->editor, error_buffer,
                                       error_buffer_size))
                 return false;
+        }
+
+        if (use_source_boxes)
+        {
+            if (!load_editor_brush_source_boxes(&runtime->brush_worlds[world_index], source_boxes,
+                                                source_meters_per_unit, error_buffer, error_buffer_size) ||
+                !editor_brush_world_rebuild_from_source(&runtime->brush_worlds[world_index], error_buffer,
+                                                        error_buffer_size))
+            {
+                return false;
+            }
+            continue;
         }
 
         for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)

@@ -959,6 +959,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID = 7,
         /** @brief Editor-authored player-start marker line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE = 8,
+        /** @brief Data-authored diagnostic marker line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER = 9,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -979,12 +981,15 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID = 1u << 6,
         /** @brief Emit editor-authored player-start marker icons. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS = 1u << 7,
+        /** @brief Emit data-authored diagnostic markers. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS = 1u << 8,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
@@ -2195,6 +2200,100 @@ extern "C"
                                                          const char *world_name,
                                                          slayer3d_game_data_brush_world_editor_state *out_state);
 
+    /** @brief Maximum bytes, including the NUL terminator, for editor structural diagnostic text. */
+#define SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX 256
+
+    /** @brief Source-model structural diagnostics for one editable brush world. */
+    typedef struct slayer3d_game_data_editor_brush_source_diagnostics
+    {
+        /** @brief True when the brush world has an editor-owned source model. */
+        bool has_source_model;
+        /** @brief True when no blocking structural defects were found. */
+        bool structurally_valid;
+        /** @brief Number of source boxes inspected. */
+        int source_box_count;
+        /** @brief Positive-volume overlaps between source boxes. These are invalid. */
+        int positive_overlap_count;
+        /** @brief Tiny non-zero gaps between otherwise adjacent source boxes. These indicate seams/leaks. */
+        int near_gap_count;
+        /** @brief Exact face contacts between source boxes. */
+        int face_contact_count;
+        /** @brief Exact face contacts where only part of a face is covered by the neighbor. */
+        int partial_face_contact_count;
+        /** @brief First blocking issue, or an empty string when the source model is structurally valid. */
+        char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    } slayer3d_game_data_editor_brush_source_diagnostics;
+
+    /**
+     * @brief Validate source-box topology for an editable brush world.
+     *
+     * This pass operates on canonical `editor_brush_sources` integer/fixed
+     * coordinates, not derived runtime triangles. It reports structural defects
+     * that can create seams or z-fighting before the map is compiled for play.
+     *
+     * @p near_gap_units controls how many source units count as a suspicious
+     * near miss between otherwise overlapping boxes. Pass 0 to use the default
+     * tolerance of one source unit.
+     */
+    bool slayer3d_game_data_validate_editor_brush_source_model(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, int near_gap_units,
+        slayer3d_game_data_editor_brush_source_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size);
+
+    /** @brief Source-model playable-space leak diagnostics for one player start. */
+    typedef struct slayer3d_game_data_editor_brush_enclosure_diagnostics
+    {
+        /** @brief True when the brush world has an editor-owned source model. */
+        bool has_source_model;
+        /** @brief True when the named player start exists. */
+        bool has_player_start;
+        /** @brief True when the player-start reachable empty space does not reach outside the source bounds. */
+        bool enclosed;
+        /** @brief Number of source boxes inspected. */
+        int source_box_count;
+        /** @brief Total source flood-grid cells inspected. */
+        int grid_cell_count;
+        /** @brief Number of grid cells marked solid by source boxes. */
+        int solid_cell_count;
+        /** @brief Number of empty cells reachable from the player-start cell. */
+        int visited_cell_count;
+        /** @brief Number of outside-boundary cells reached by the flood. Non-zero means leaked/open. */
+        int open_boundary_cell_count;
+        /** @brief First reachable outside-boundary cell center in world meters. */
+        slayer3d_vec3 first_leak_point;
+        /** @brief Axis of the first reachable outside-boundary cell, or empty. */
+        char first_leak_axis[8];
+        /** @brief Side of the first reachable outside-boundary cell, either "negative", "positive", or empty. */
+        char first_leak_side[16];
+        /** @brief Nearest source-box name for the first leak boundary, or empty. */
+        char candidate_source_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Nearest source-box stable id for the first leak boundary, or empty. */
+        char candidate_source_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Nearest source-box face key for the first leak boundary, or empty. */
+        char candidate_source_face[8];
+        /** @brief Nearest point on the candidate source face in world meters. */
+        slayer3d_vec3 candidate_source_point;
+        /** @brief Distance in meters from the first leak point to the candidate source face. */
+        float candidate_source_distance;
+        /** @brief First blocking issue, or an empty string when enclosed. */
+        char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    } slayer3d_game_data_editor_brush_enclosure_diagnostics;
+
+    /**
+     * @brief Validate source-box playable-space closure from one editor player start.
+     *
+     * This pass derives an exact interval grid from fixed-coordinate
+     * `editor_brush_sources`, marks source boxes as solid, and flood-fills empty
+     * space from @p player_start_name. If reachable empty space reaches the
+     * expanded outside boundary, the map is considered open/leaking for MVP
+     * grid-prefab test-run workflows.
+     *
+     * @p max_cells bounds diagnostic cost. Pass 0 to use the default cap.
+     */
+    bool slayer3d_game_data_validate_editor_brush_source_enclosure(
+        const slayer3d_game_data_runtime *runtime, const char *world_name, const char *player_start_name, int max_cells,
+        slayer3d_game_data_editor_brush_enclosure_diagnostics *out_diagnostics, char *error_buffer,
+        int error_buffer_size);
+
     /**
      * @brief Mark one runtime brush world as saved by an editor host.
      *
@@ -2498,14 +2597,16 @@ extern "C"
                                                            int error_buffer_size);
 
     /**
-     * @brief Export one editable level fragment containing brushes and starts.
+     * @brief Export one editable level fragment containing brushes, source brushes, and starts.
      *
      * The exported document uses `schema: "slayer3d.fragment.v0"` and contains
-     * the selected `brush_worlds` entry plus the runtime `editor_player_starts`
-     * collection. This is the canonical first-pass editor level artifact for
-     * blockout workflows that need geometry and test-run spawn points to reload
-     * together. The returned string is allocated with SDL_malloc and must be
-     * released with SDL_free().
+     * the selected `brush_worlds` entry, a fixed-coordinate
+     * `editor_brush_sources` snapshot for structural editor workflows, and the
+     * runtime `editor_player_starts` collection. When this fragment is loaded
+     * again, matching `editor_brush_sources` are compiled back into the runtime
+     * brush world, making the fixed-coordinate source boxes the authoritative
+     * editable geometry for supported box brushes. The returned string is
+     * allocated with SDL_malloc and must be released with SDL_free().
      */
     bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_data_runtime *runtime,
                                                                 const char *world_name, char **out_json,
@@ -2547,9 +2648,12 @@ extern "C"
      *
      * The input must be a `slayer3d.fragment.v0` document containing a
      * `brush_worlds` entry whose name matches @p world_name. The matching world
-     * replaces the runtime world in place, and `editor_player_starts` from the
-     * fragment replaces the runtime player-start collection. On success both
-     * collections are marked clean and @p path becomes their editor source path.
+     * replaces the runtime world in place; `editor_brush_sources`, when present,
+     * is the canonical fixed-coordinate editor source model for the same world
+     * and is compiled into runtime brushes during import. `editor_player_starts`
+     * from the fragment replaces the runtime player-start collection. On success
+     * both runtime collections are marked clean and @p path becomes their editor
+     * source path.
      */
     bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime,
                                                               const char *world_name, const char *path,

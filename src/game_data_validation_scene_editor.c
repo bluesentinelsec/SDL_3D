@@ -45,7 +45,8 @@ static bool editor_debug_flag_name_valid(const char *value)
                              SDL_strcmp(value, "face_normal") == 0 || SDL_strcmp(value, "hit_marker") == 0 ||
                              SDL_strcmp(value, "command_preview") == 0 || SDL_strcmp(value, "work_plane_grid") == 0 ||
                              SDL_strcmp(value, "grid") == 0 || SDL_strcmp(value, "player_starts") == 0 ||
-                             SDL_strcmp(value, "game_objects") == 0);
+                             SDL_strcmp(value, "game_objects") == 0 || SDL_strcmp(value, "markers") == 0 ||
+                             SDL_strcmp(value, "diagnostic_markers") == 0);
 }
 
 static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,
@@ -472,6 +473,14 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
             return false;
         if (!is_non_empty_string(preview, "material"))
             return validation_error(ctx, preview_path, "scene editor placement box preview requires a material");
+        char contents_path[PATH_BUFFER_SIZE];
+        format_path(contents_path, sizeof(contents_path), "%s.contents", preview_path);
+        if (!validate_brush_string_or_string_array(ctx, obj_get(preview, "contents"), contents_path,
+                                                   "scene editor placement preview contents", brush_content_name_valid,
+                                                   false))
+        {
+            return false;
+        }
         yyjson_val *min = obj_get(preview, "min");
         yyjson_val *max = obj_get(preview, "max");
         yyjson_val *grid_min = obj_get(preview, "grid_min");
@@ -678,6 +687,38 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
             (!yyjson_is_num(player_start_height) || yyjson_get_num(player_start_height) <= 0.0))
             return validation_error(ctx, overlay_path,
                                     "scene editor debug_overlay player_start_height must be positive");
+        yyjson_val *markers = obj_get(overlay, "markers");
+        if (markers != NULL)
+        {
+            if (!yyjson_is_arr(markers))
+                return validation_error(ctx, overlay_path, "scene editor debug_overlay markers must be an array");
+            for (size_t i = 0; i < yyjson_arr_size(markers); ++i)
+            {
+                char marker_path[PATH_BUFFER_SIZE];
+                format_path(marker_path, sizeof(marker_path), "%s.markers[%zu]", overlay_path, i);
+                yyjson_val *marker = yyjson_arr_get(markers, i);
+                if (!yyjson_is_obj(marker))
+                    return validation_error(ctx, marker_path, "scene editor debug marker must be an object");
+                if (!is_non_empty_string(marker, "point_key"))
+                    return validation_error(ctx, marker_path, "scene editor debug marker requires a point_key");
+                yyjson_val *name = obj_get(marker, "name");
+                if (name != NULL && (!yyjson_is_str(name) || yyjson_get_str(name)[0] == '\0'))
+                    return validation_error(ctx, marker_path, "scene editor debug marker name must be non-empty");
+                yyjson_val *world = obj_get(marker, "world");
+                if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
+                    return validation_error(ctx, marker_path, "scene editor debug marker world must be non-empty");
+                yyjson_val *color = obj_get(marker, "color");
+                if (color != NULL && !is_exact_vec3_or_vec4_array(color))
+                    return validation_error(ctx, marker_path, "scene editor debug marker color must be a vec3 or vec4");
+                yyjson_val *size = obj_get(marker, "size");
+                if (size != NULL && (!yyjson_is_num(size) || yyjson_get_num(size) <= 0.0))
+                    return validation_error(ctx, marker_path, "scene editor debug marker size must be positive");
+                char condition_path[PATH_BUFFER_SIZE];
+                format_path(condition_path, sizeof(condition_path), "%s.visible_if", marker_path);
+                if (!validate_data_condition(ctx, obj_get(marker, "visible_if"), condition_path, names))
+                    return false;
+            }
+        }
     }
     return true;
 }

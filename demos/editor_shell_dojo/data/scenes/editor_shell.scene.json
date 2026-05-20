@@ -58,6 +58,15 @@
   },
   "entities": ["entity.editor_shell.camera"],
   "world": {
+    "skybox": {
+      "pos_x": "image.editor_shell.skybox.px",
+      "neg_x": "image.editor_shell.skybox.nx",
+      "pos_y": "image.editor_shell.skybox.py",
+      "neg_y": "image.editor_shell.skybox.ny",
+      "pos_z": "image.editor_shell.skybox.pz",
+      "neg_z": "image.editor_shell.skybox.nz",
+      "size": 400.0
+    },
     "brush_worlds": [
       { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0] }
     ]
@@ -287,6 +296,17 @@
           "message": "ceiling prefab preview"
         },
         {
+          "mode": "sky",
+          "kind": "box",
+          "world": "brush.editor_shell.target",
+          "material": "mat.editor.sky",
+          "contents": ["sky", "player_clip", "projectile_clip"],
+          "elevation_mode": "connected_grid",
+          "grid_min": [0.0, 1.0, 0.0],
+          "grid_max": [1.0, 1.025, 1.0],
+          "message": "sky prefab preview"
+        },
+        {
           "mode": "player_start",
           "kind": "player_start",
           "snap": 1.0,
@@ -324,6 +344,14 @@
           "description": "8m gray ceiling tile"
         },
         {
+          "mode": "sky",
+          "preview": "sky",
+          "kind": "box",
+          "label": "Sky",
+          "category": "blockout",
+          "description": "sealing sky boundary tile"
+        },
+        {
           "mode": "player_start",
           "preview": "player_start",
           "kind": "player_start",
@@ -349,7 +377,8 @@
         "trace_ray",
         "face_normal",
         "hit_marker",
-        "command_preview"
+        "command_preview",
+        "markers"
       ],
       "world_bounds_color": [80, 170, 255, 190],
       "selection_bounds_color": [255, 220, 40, 255],
@@ -364,7 +393,36 @@
       "normal_length": 0.65,
       "hit_marker_size": 0.12,
       "player_start_radius": 0.35,
-      "player_start_height": 1.8
+      "player_start_height": 1.8,
+      "markers": [
+        {
+          "name": "editor.leak.point",
+          "point_key": "editor.leak.point",
+          "color": [255, 60, 230, 255],
+          "size": 1.2,
+          "visible_if": {
+            "type": "all",
+            "conditions": [
+              { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": false },
+              { "type": "scene_state.compare", "key": "editor.leak.open_boundaries", "op": ">", "value": 0 }
+            ]
+          }
+        },
+        {
+          "name": "editor.leak.candidate",
+          "point_key": "editor.leak.candidate_point",
+          "color": [255, 170, 40, 255],
+          "size": 0.9,
+          "visible_if": {
+            "type": "all",
+            "conditions": [
+              { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": false },
+              { "type": "scene_state.compare", "key": "editor.leak.open_boundaries", "op": ">", "value": 0 },
+              { "type": "scene_state.compare", "key": "editor.leak.candidate_face", "op": "!=", "value": "", "default": "" }
+            ]
+          }
+        }
+      ]
     }
   },
   "ui": {
@@ -403,10 +461,10 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.floor.cell",
-        "x": 414,
+        "x": 398,
         "y": 236,
-        "w": 132,
-        "h": 132,
+        "w": 104,
+        "h": 104,
         "color": [38, 44, 54, 235],
         "border_color": [95, 115, 145, 230],
         "border_thickness": 1,
@@ -414,9 +472,9 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.floor.preview",
-        "x": 446,
-        "y": 278,
-        "w": 68,
+        "x": 422,
+        "y": 270,
+        "w": 56,
         "h": 22,
         "color": [105, 110, 118, 255],
         "border_color": [170, 178, 190, 255],
@@ -425,10 +483,10 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.floor.selected",
-        "x": 410,
+        "x": 394,
         "y": 232,
-        "w": 140,
-        "h": 140,
+        "w": 112,
+        "h": 112,
         "color": [0, 0, 0, 0],
         "border_color": [95, 255, 210, 255],
         "border_thickness": 3,
@@ -442,10 +500,10 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.wall.cell",
-        "x": 574,
+        "x": 522,
         "y": 236,
-        "w": 132,
-        "h": 132,
+        "w": 104,
+        "h": 104,
         "color": [38, 44, 54, 235],
         "border_color": [95, 115, 145, 230],
         "border_thickness": 1,
@@ -453,10 +511,10 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.wall.preview",
-        "x": 626,
-        "y": 260,
-        "w": 28,
-        "h": 74,
+        "x": 564,
+        "y": 254,
+        "w": 20,
+        "h": 70,
         "color": [128, 132, 142, 255],
         "border_color": [195, 202, 214, 255],
         "border_thickness": 1,
@@ -464,10 +522,10 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.wall.selected",
-        "x": 570,
+        "x": 518,
         "y": 232,
-        "w": 140,
-        "h": 140,
+        "w": 112,
+        "h": 112,
         "color": [0, 0, 0, 0],
         "border_color": [95, 255, 210, 255],
         "border_thickness": 3,
@@ -481,10 +539,10 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.ceiling.cell",
-        "x": 734,
+        "x": 646,
         "y": 236,
-        "w": 132,
-        "h": 132,
+        "w": 104,
+        "h": 104,
         "color": [38, 44, 54, 235],
         "border_color": [95, 115, 145, 230],
         "border_thickness": 1,
@@ -492,9 +550,9 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.ceiling.preview",
-        "x": 766,
+        "x": 670,
         "y": 256,
-        "w": 68,
+        "w": 56,
         "h": 22,
         "color": [152, 154, 164, 255],
         "border_color": [215, 218, 226, 255],
@@ -503,10 +561,10 @@
       },
       {
         "name": "ui.editor_shell.palette.brush.ceiling.selected",
-        "x": 730,
+        "x": 642,
         "y": 232,
-        "w": 140,
-        "h": 140,
+        "w": 112,
+        "h": 112,
         "color": [0, 0, 0, 0],
         "border_color": [95, 255, 210, 255],
         "border_thickness": 3,
@@ -515,6 +573,45 @@
           "conditions": [
             { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
             { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "ceiling" }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.brush.sky.cell",
+        "x": 770,
+        "y": 236,
+        "w": 104,
+        "h": 104,
+        "color": [34, 56, 86, 235],
+        "border_color": [95, 135, 180, 230],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
+      },
+      {
+        "name": "ui.editor_shell.palette.brush.sky.preview",
+        "x": 794,
+        "y": 256,
+        "w": 56,
+        "h": 22,
+        "color": [74, 132, 205, 255],
+        "border_color": [165, 215, 255, 255],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
+      },
+      {
+        "name": "ui.editor_shell.palette.brush.sky.selected",
+        "x": 766,
+        "y": 232,
+        "w": 112,
+        "h": 112,
+        "color": [0, 0, 0, 0],
+        "border_color": [95, 255, 210, 255],
+        "border_thickness": 3,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
+            { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "sky" }
           ]
         }
       },
@@ -684,6 +781,38 @@
           {
             "label": "Txn",
             "binding": { "type": "scene_state", "key": "editor.transaction.message", "default": "none" }
+          },
+          {
+            "label": "Source",
+            "binding": { "type": "scene_state", "key": "editor.source.message", "default": "unchecked" }
+          },
+          {
+            "label": "Src Ov",
+            "binding": { "type": "scene_state", "key": "editor.source.overlaps", "default": 0 }
+          },
+          {
+            "label": "Src Gap",
+            "binding": { "type": "scene_state", "key": "editor.source.near_gaps", "default": 0 }
+          },
+          {
+            "label": "Leak",
+            "binding": { "type": "scene_state", "key": "editor.leak.message", "default": "unchecked" }
+          },
+          {
+            "label": "Open",
+            "binding": { "type": "scene_state", "key": "editor.leak.open_boundaries", "default": 0 }
+          },
+          {
+            "label": "L Axis",
+            "binding": { "type": "scene_state", "key": "editor.leak.axis", "default": "none" }
+          },
+          {
+            "label": "L Face",
+            "binding": { "type": "scene_state", "key": "editor.leak.candidate_face", "default": "none" }
+          },
+          {
+            "label": "L Brush",
+            "binding": { "type": "scene_state", "key": "editor.leak.candidate", "default": "none" }
           }
         ]
       }
@@ -759,11 +888,31 @@
         "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" }
       },
       {
+        "name": "ui.editor_shell.palette.sky",
+        "text": "  Sky",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 346,
+        "color": [205, 215, 225, 220],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "!=", "value": "sky" }
+      },
+      {
+        "name": "ui.editor_shell.palette.sky.active",
+        "text": "> Sky",
+        "font": "font.editor_shell.ui",
+        "x": 42,
+        "y": 346,
+        "color": [120, 220, 255, 255],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "sky" }
+      },
+      {
         "name": "ui.editor_shell.palette.player",
         "text": "  Player Start",
         "font": "font.editor_shell.ui",
         "x": 42,
-        "y": 346,
+        "y": 370,
         "color": [205, 215, 225, 220],
         "scale": 0.58,
         "visible_if": {
@@ -778,7 +927,7 @@
         "text": "> Player Start",
         "font": "font.editor_shell.ui",
         "x": 42,
-        "y": 346,
+        "y": 370,
         "color": [120, 220, 255, 255],
         "scale": 0.58,
         "visible_if": {
@@ -929,8 +1078,8 @@
         "name": "ui.editor_shell.palette.brush.floor.label",
         "text": "Floor",
         "font": "font.editor_shell.ui",
-        "x": 480,
-        "y": 334,
+        "x": 450,
+        "y": 326,
         "align": "center",
         "color": [230, 238, 248, 245],
         "scale": 0.58,
@@ -940,8 +1089,8 @@
         "name": "ui.editor_shell.palette.brush.wall.label",
         "text": "Wall",
         "font": "font.editor_shell.ui",
-        "x": 640,
-        "y": 334,
+        "x": 574,
+        "y": 326,
         "align": "center",
         "color": [230, 238, 248, 245],
         "scale": 0.58,
@@ -951,8 +1100,19 @@
         "name": "ui.editor_shell.palette.brush.ceiling.label",
         "text": "Ceiling",
         "font": "font.editor_shell.ui",
-        "x": 800,
-        "y": 334,
+        "x": 698,
+        "y": 326,
+        "align": "center",
+        "color": [230, 238, 248, 245],
+        "scale": 0.58,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
+      },
+      {
+        "name": "ui.editor_shell.palette.brush.sky.label",
+        "text": "Sky",
+        "font": "font.editor_shell.ui",
+        "x": 822,
+        "y": 326,
         "align": "center",
         "color": [230, 238, 248, 245],
         "scale": 0.58,

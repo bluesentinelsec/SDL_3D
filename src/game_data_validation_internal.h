@@ -100,6 +100,7 @@ bool asset_path_exists(validation_context *ctx, const char *asset_path, const ch
 bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, const char *json_path,
                               validation_names *names, bool allow_templates);
 bool validate_editor_metadata_tree(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_editor_player_starts(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable_ids, yyjson_val *json,
                                      const char *json_path);

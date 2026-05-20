@@ -423,6 +423,8 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
     preview->axis = editor_placement_axis(runtime, preview_json);
     preview->world_name = json_string(preview_json, "world", hover_selection->world_name);
     preview->material_name = json_string(preview_json, "material", hover_selection->material_name);
+    preview->contents = brush_flags_from_json(obj_get(preview_json, "contents"), brush_content_flag_from_string,
+                                              SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
     preview->anchor = anchor;
     preview->snap = snap;
     preview->has_bounds = true;

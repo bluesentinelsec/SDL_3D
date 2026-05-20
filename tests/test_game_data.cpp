@@ -8973,6 +8973,38 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
     EXPECT_NE(std::string(grid_error).find("work_plane_grid_spacing must be positive"), std::string::npos)
         << grid_error;
 
+    write_text(dir / "bad_marker_overlay.game.json", R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Scene Editor Marker" },
+  "world": {
+    "name": "world.bad_scene_editor_marker",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "selection": {
+      "trace": { "source": "camera_screen", "camera": "camera.valid" },
+      "outputs": { "hit_key": "editor.hit" }
+    },
+    "debug_overlay": {
+      "flags": ["markers"],
+      "markers": [{ "name": "bad.marker", "size": 1.0 }]
+    }
+  }
+})json");
+    char marker_error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_marker_overlay.game.json").string().c_str(), nullptr,
+                                                  marker_error, sizeof(marker_error)));
+    EXPECT_NE(std::string(marker_error).find("debug marker requires a point_key"), std::string::npos) << marker_error;
+
     write_text(dir / "bad_placement.game.json", R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Scene Editor Placement" },
@@ -9670,6 +9702,104 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_player_start_section.game.json").string().c_str(),
                                                   nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("editor player start requires position vec3"), std::string::npos) << error;
+
+    write_text(dir / "bad_editor_brush_source.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Brush Source Section" },
+  "world": { "name": "world.bad_editor_brush_source", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "brush.bad_source",
+      "materials": [{ "name": "mat.wall" }],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.bad_source",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "box.bad",
+          "kind": "box",
+          "material": "mat.wall",
+          "min": [0, 0.5, 0],
+          "max": [1000, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_editor_brush_source.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("integer min/max vec3"), std::string::npos) << error;
+
+    write_text(dir / "bad_editor_brush_source_face_material.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Brush Source Face Material" },
+  "world": { "name": "world.bad_editor_brush_source_face_material", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "brush.bad_source_face_material",
+      "materials": [{ "name": "mat.wall" }],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.bad_source_face_material",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "box.bad_face_material",
+          "kind": "box",
+          "material": "mat.wall",
+          "face_materials": { "px": "mat.missing" },
+          "min": [0, 0, 0],
+          "max": [1000, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file(
+        (dir / "bad_editor_brush_source_face_material.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("face material must reference a declared brush material"), std::string::npos)
+        << error;
     remove_test_dir(dir);
 }
 
@@ -14593,7 +14723,8 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
       "name": "brush.editor.level",
       "materials": [
         { "name": "mat.wall", "albedo": [0.7, 0.7, 0.7, 1.0] },
-        { "name": "mat.floor", "albedo": [0.2, 0.2, 0.2, 1.0] }
+        { "name": "mat.floor", "albedo": [0.2, 0.2, 0.2, 1.0] },
+        { "name": "mat.sky", "albedo": [0.2, 0.4, 0.8, 1.0] }
       ],
       "brushes": [
         {
@@ -14778,6 +14909,24 @@ TEST(GameDataRuntime, EditorCreateBoxBrushAppendsAndRoundTrips)
 
     slayer3d_game_data_destroy(roundtrip_runtime);
     slayer3d_game_session_destroy(roundtrip_session);
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    const int rendered_faces_before_sky = world.compile_rendered_face_count;
+    slayer3d_game_data_create_box_brush_desc sky_desc{};
+    sky_desc.world_name = "brush.editor.level";
+    sky_desc.material_name = "mat.sky";
+    sky_desc.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP |
+                        SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP;
+    sky_desc.min = slayer3d_vec3_make(5.0f, 3.0f, 0.0f);
+    sky_desc.max = slayer3d_vec3_make(7.0f, 3.25f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &sky_desc, generated_name, sizeof(generated_name), error,
+                                                    sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor.level", &world));
+    ASSERT_EQ(world.brush_count, 4);
+    EXPECT_TRUE((world.brushes[3].contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY) != 0u);
+    EXPECT_EQ(world.compile_rendered_face_count, rendered_faces_before_sky);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
@@ -15626,6 +15775,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int floor_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.floor");
     const int wall_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.wall");
     const int ceiling_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.ceiling");
+    const int sky_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.sky");
     const int grid_decrease_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.grid.decrease");
     const int grid_increase_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.grid.increase");
     const int wall_axis_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.wall_axis.toggle");
@@ -15647,6 +15797,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(floor_signal, 0);
     ASSERT_GE(wall_signal, 0);
     ASSERT_GE(ceiling_signal, 0);
+    ASSERT_GE(sky_signal, 0);
     ASSERT_GE(grid_decrease_signal, 0);
     ASSERT_GE(grid_increase_signal, 0);
     ASSERT_GE(wall_axis_signal, 0);
@@ -15836,6 +15987,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(modal_text, "Brushes"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Floor"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Sky"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Selected: floor"));
     slayer3d_signal_emit(bus, palette_next_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "wall");
@@ -15864,6 +16016,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(contains_ui_text(palette_text, "Active Tool"));
     EXPECT_TRUE(contains_ui_text(palette_text, "> Floor"));
     EXPECT_TRUE(contains_ui_text(palette_text, "  Wall"));
+    EXPECT_TRUE(contains_ui_text(palette_text, "  Sky"));
     EXPECT_FALSE(contains_ui_text(palette_text, "  Floor"));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
@@ -16275,11 +16428,24 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
     ASSERT_NE(export_json, nullptr);
     EXPECT_NE(std::string(export_json).find("\"brush_worlds\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"editor_brush_sources\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"coordinate_system\": \"fixed_millimeters\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"meters_per_unit\": 0.001"), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"prefab\": \"wall\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"stable_id\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"editor_player_starts\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"mat.editor.ceiling\""), std::string::npos);
     EXPECT_NE(std::string(export_json).find("\"player_start.editor_shell\""), std::string::npos);
 
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.source.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.source.message", ""),
+                 "brush world has no editor brush source model");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.overlaps", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.near_gaps", -1), 0);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.leak.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.message", ""),
+                 "brush world has no editor brush source model");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
                  "test run player start applied");
@@ -16482,6 +16648,677 @@ TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
     EXPECT_STREQ(start_state.source_path, save_path_string.c_str());
     EXPECT_EQ(start_state.count, 1);
     EXPECT_FALSE(start_state.dirty);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] },
+        { "name": "mat.editor.wall", "albedo": [0.9, 0.8, 0.2, 1.0] }
+      ],
+      "brushes": [
+        {
+          "name": "brush.runtime.placeholder",
+          "faces": [
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1 }, "material": "mat.editor.floor" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "face_materials": { "px": "mat.editor.wall" },
+          "min": [0, -200, 8000],
+          "max": [8000, 0, 16000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-level.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    const slayer3d_game_data_brush &brush = world.brushes[0];
+    EXPECT_STREQ(brush.name, "brush.source.box.001");
+    EXPECT_STREQ(brush.editor.stable_id, "source.box.001");
+    EXPECT_STREQ(brush.editor.prefab, "floor");
+    ASSERT_TRUE(brush.has_bounds);
+    EXPECT_NEAR(brush.bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush.bounds.min.y, -0.2f, 0.001f);
+    EXPECT_NEAR(brush.bounds.min.z, 8.0f, 0.001f);
+    EXPECT_NEAR(brush.bounds.max.x, 8.0f, 0.001f);
+    EXPECT_NEAR(brush.bounds.max.y, 0.0f, 0.001f);
+    EXPECT_NEAR(brush.bounds.max.z, 16.0f, 0.001f);
+    ASSERT_EQ(brush.face_count, 6);
+    EXPECT_STREQ(brush.faces[0].material_name, "mat.editor.wall");
+    EXPECT_STREQ(brush.faces[1].material_name, "mat.editor.floor");
+    EXPECT_STREQ(brush.faces[0].editor.stable_id, "source.box.001.face.px");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditing)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] },
+        { "name": "mat.editor.wall", "albedo": [0.9, 0.8, 0.2, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "face_materials": { "px": "mat.editor.wall" },
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-level.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_create_box_brush_desc box{};
+    box.world_name = "brush.editor_shell.target";
+    box.brush_name = "brush.source.box.002";
+    box.material_name = "mat.editor.floor";
+    box.min = slayer3d_vec3_make(8.0f, -0.2f, 0.0f);
+    box.max = slayer3d_vec3_make(16.0f, 0.0f, 8.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error))) << error;
+
+    slayer3d_game_data_resize_brush_face_desc resize{};
+    resize.world_name = "brush.editor_shell.target";
+    resize.brush_name = "brush.source.box.002";
+    resize.face_index = 0;
+    resize.distance = 0.75f;
+    ASSERT_TRUE(slayer3d_game_data_resize_brush_face(runtime, &resize, error, sizeof(error))) << error;
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+
+    yyjson_doc *doc = yyjson_read(export_json, export_size, 0);
+    ASSERT_NE(doc, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(doc);
+    yyjson_val *sources = yyjson_obj_get(root, "editor_brush_sources");
+    ASSERT_TRUE(yyjson_is_arr(sources));
+    yyjson_val *source = yyjson_arr_get(sources, 0);
+    ASSERT_NE(source, nullptr);
+    yyjson_val *boxes = yyjson_obj_get(source, "boxes");
+    ASSERT_TRUE(yyjson_is_arr(boxes));
+    ASSERT_EQ(yyjson_arr_size(boxes), 2u);
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 0), "stable_id")), "source.box.001");
+    yyjson_val *source_face_materials = yyjson_obj_get(yyjson_arr_get(boxes, 0), "face_materials");
+    ASSERT_TRUE(yyjson_is_obj(source_face_materials));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(source_face_materials, "px")), "mat.editor.wall");
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 1), "stable_id")), "brush.source.box.002");
+    yyjson_val *new_min = yyjson_obj_get(yyjson_arr_get(boxes, 1), "min");
+    yyjson_val *new_max = yyjson_obj_get(yyjson_arr_get(boxes, 1), "max");
+    ASSERT_TRUE(yyjson_is_arr(new_min));
+    ASSERT_TRUE(yyjson_is_arr(new_max));
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_min, 0)), 8000);
+    EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_max, 0)), 16750);
+    yyjson_doc_free(doc);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", export_json, export_size, "/tmp/source-level.json", error, sizeof(error)))
+        << error;
+    SDL_free(export_json);
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    EXPECT_STREQ(world.brushes[0].faces[0].material_name, "mat.editor.wall");
+    EXPECT_STREQ(world.brushes[1].name, "brush.source.box.002");
+    ASSERT_TRUE(world.brushes[1].has_bounds);
+    EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[1].bounds.max.x, 16.75f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto load_fragment = [&](const char *boxes_json) {
+        std::string fragment = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+)json";
+        fragment += boxes_json;
+        fragment += R"json(
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+        SDL_zeroa(error);
+        return slayer3d_game_data_load_editable_level_fragment_json(
+            runtime, "brush.editor_shell.target", fragment.c_str(), fragment.size(), "/tmp/source-diagnostics.json",
+            error, sizeof(error));
+    };
+
+    const char valid_boxes[] = R"json(
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.002",
+          "name": "brush.source.box.002",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [8000, -200, 0],
+          "max": [16000, 0, 8000],
+          "contents": ["solid"]
+        })json";
+    ASSERT_TRUE(load_fragment(valid_boxes)) << error;
+    slayer3d_game_data_editor_brush_source_diagnostics diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.has_source_model);
+    EXPECT_TRUE(diagnostics.structurally_valid);
+    EXPECT_EQ(diagnostics.source_box_count, 2);
+    EXPECT_EQ(diagnostics.positive_overlap_count, 0);
+    EXPECT_EQ(diagnostics.near_gap_count, 0);
+    EXPECT_EQ(diagnostics.face_contact_count, 1);
+    EXPECT_EQ(diagnostics.partial_face_contact_count, 0);
+    EXPECT_STREQ(diagnostics.first_issue, "");
+
+    const char near_gap_boxes[] = R"json(
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.002",
+          "name": "brush.source.box.002",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [8001, -200, 0],
+          "max": [16001, 0, 8000],
+          "contents": ["solid"]
+        })json";
+    ASSERT_TRUE(load_fragment(near_gap_boxes)) << error;
+    SDL_zero(diagnostics);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(diagnostics.structurally_valid);
+    EXPECT_EQ(diagnostics.positive_overlap_count, 0);
+    EXPECT_EQ(diagnostics.near_gap_count, 1);
+    EXPECT_NE(std::string(diagnostics.first_issue).find("near gap"), std::string::npos) << diagnostics.first_issue;
+
+    const char overlap_boxes[] = R"json(
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.002",
+          "name": "brush.source.box.002",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [7000, -200, 0],
+          "max": [15000, 0, 8000],
+          "contents": ["solid"]
+        })json";
+    ASSERT_TRUE(load_fragment(overlap_boxes)) << error;
+    SDL_zero(diagnostics);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(diagnostics.structurally_valid);
+    EXPECT_EQ(diagnostics.positive_overlap_count, 1);
+    EXPECT_EQ(diagnostics.near_gap_count, 0);
+    EXPECT_NE(std::string(diagnostics.first_issue).find("overlap"), std::string::npos) << diagnostics.first_issue;
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto load_room_fragment = [&](bool include_east_wall, bool sky_ceiling = false) {
+        const char *ceiling_prefab = sky_ceiling ? "sky" : "ceiling";
+        const char *ceiling_contents = sky_ceiling ? "[\"sky\", \"player_clip\", \"projectile_clip\"]" : "[\"solid\"]";
+        std::string fragment = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        { "stable_id": "room.floor", "name": "room.floor", "kind": "box", "prefab": "floor", "material": "mat.editor.floor", "min": [0, -200, 0], "max": [8000, 0, 8000], "contents": ["solid"] },
+        { "stable_id": "room.ceiling", "name": "room.ceiling", "kind": "box", "prefab": ")json";
+        fragment += ceiling_prefab;
+        fragment +=
+            R"json(", "material": "mat.editor.floor", "min": [0, 8000, 0], "max": [8000, 8200, 8000], "contents": )json";
+        fragment += ceiling_contents;
+        fragment += R"json( },
+        { "stable_id": "room.west", "name": "room.west", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [-200, 0, 0], "max": [0, 8000, 8000], "contents": ["solid"] },
+)json";
+        if (include_east_wall)
+        {
+            fragment +=
+                R"json(        { "stable_id": "room.east", "name": "room.east", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [8000, 0, 0], "max": [8200, 8000, 8000], "contents": ["solid"] },
+)json";
+        }
+        fragment +=
+            R"json(        { "stable_id": "room.north", "name": "room.north", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [0, 0, -200], "max": [8000, 8000, 0], "contents": ["solid"] },
+        { "stable_id": "room.south", "name": "room.south", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [0, 0, 8000], "max": [8000, 8000, 8200], "contents": ["solid"] }
+)json";
+        fragment += R"json(
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+        SDL_zeroa(error);
+        return slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target",
+                                                                    fragment.c_str(), fragment.size(),
+                                                                    "/tmp/source-enclosure.json", error, sizeof(error));
+    };
+    ASSERT_TRUE(load_room_fragment(true)) << error;
+
+    slayer3d_game_data_place_player_start_desc start{};
+    start.name = "player_start.editor_shell";
+    start.scene = "scene.editor_shell.test_run";
+    start.target = "entity.editor_shell.player";
+    start.position = slayer3d_vec3_make(4.0f, 1.6f, 4.0f);
+    start.has_position = true;
+    start.yaw = 0.0f;
+    start.has_yaw = true;
+    start.pitch = 0.0f;
+    start.has_pitch = true;
+    start.apply_to_target = true;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+
+    slayer3d_game_data_editor_brush_enclosure_diagnostics enclosure{};
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_enclosure(
+        runtime, "brush.editor_shell.target", "player_start.editor_shell", 0, &enclosure, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(enclosure.has_source_model);
+    EXPECT_TRUE(enclosure.has_player_start);
+    EXPECT_TRUE(enclosure.enclosed) << enclosure.first_issue;
+    EXPECT_EQ(enclosure.open_boundary_cell_count, 0);
+    EXPECT_GT(enclosure.visited_cell_count, 0);
+    EXPECT_GT(enclosure.solid_cell_count, 0);
+
+    ASSERT_TRUE(load_room_fragment(true, true)) << error;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_enclosure(
+        runtime, "brush.editor_shell.target", "player_start.editor_shell", 0, &enclosure, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(enclosure.enclosed) << enclosure.first_issue;
+    EXPECT_EQ(enclosure.open_boundary_cell_count, 0);
+
+    ASSERT_TRUE(load_room_fragment(false)) << error;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_enclosure(
+        runtime, "brush.editor_shell.target", "player_start.editor_shell", 0, &enclosure, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(enclosure.enclosed);
+    EXPECT_GT(enclosure.open_boundary_cell_count, 0);
+    EXPECT_NE(std::string(enclosure.first_issue).find("leaks to outside"), std::string::npos) << enclosure.first_issue;
+    EXPECT_STREQ(enclosure.first_leak_axis, "x");
+    EXPECT_STREQ(enclosure.first_leak_side, "positive");
+    EXPECT_STREQ(enclosure.candidate_source_face, "px");
+    EXPECT_NE(std::string(enclosure.candidate_source_name).find("room."), std::string::npos)
+        << enclosure.candidate_source_name;
+    EXPECT_GT(enclosure.candidate_source_distance, 0.0f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnInvalidSourceModel)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.002",
+          "name": "brush.source.box.002",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [8001, -200, 0],
+          "max": [16001, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, SDL_strlen(import_json), "/tmp/source-gap-level.json", error,
+        sizeof(error)))
+        << error;
+
+    slayer3d_game_data_place_player_start_desc start{};
+    start.name = "player_start.editor_shell";
+    start.scene = "scene.editor_shell.test_run";
+    start.target = "entity.editor_shell.player";
+    start.position = slayer3d_vec3_make(1.0f, 1.6f, 1.0f);
+    start.has_position = true;
+    start.yaw = 0.0f;
+    start.has_yaw = true;
+    start.pitch = 0.0f;
+    start.has_pitch = true;
+    start.apply_to_target = true;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
+    ASSERT_GE(test_run_enter_signal, 0);
+    ASSERT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+
+    slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.source.valid", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.overlaps", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.near_gaps", 0), 1);
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.source.message", "")).find("near gap"),
+              std::string::npos);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
+                 "brush source model has overlaps or near gaps");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "fix brush source errors before playable test run");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnLeakingSourceModel)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        { "stable_id": "room.floor", "name": "room.floor", "kind": "box", "prefab": "floor", "material": "mat.editor.floor", "min": [0, -200, 0], "max": [8000, 0, 8000], "contents": ["solid"] },
+        { "stable_id": "room.ceiling", "name": "room.ceiling", "kind": "box", "prefab": "ceiling", "material": "mat.editor.floor", "min": [0, 8000, 0], "max": [8000, 8200, 8000], "contents": ["solid"] },
+        { "stable_id": "room.west", "name": "room.west", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [-200, 0, 0], "max": [0, 8000, 8000], "contents": ["solid"] },
+        { "stable_id": "room.north", "name": "room.north", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [0, 0, -200], "max": [8000, 8000, 0], "contents": ["solid"] },
+        { "stable_id": "room.south", "name": "room.south", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [0, 0, 8000], "max": [8000, 8000, 8200], "contents": ["solid"] }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, SDL_strlen(import_json), "/tmp/source-leak-level.json",
+        error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_place_player_start_desc start{};
+    start.name = "player_start.editor_shell";
+    start.scene = "scene.editor_shell.test_run";
+    start.target = "entity.editor_shell.player";
+    start.position = slayer3d_vec3_make(4.0f, 1.6f, 4.0f);
+    start.has_position = true;
+    start.apply_to_target = true;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
+    ASSERT_GE(test_run_enter_signal, 0);
+    slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.source.valid", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.leak.valid", true));
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.leak.open_boundaries", 0), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.axis", ""), "x");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.side", ""), "positive");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_face", ""), "px");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.leak.candidate", "")).find("room."),
+              std::string::npos);
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.leak.candidate_distance", 0.0f), 0.0f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.leak.candidate_selected", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_select_message", ""),
+                 "selected leak candidate");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    slayer3d_game_data_editor_selection leak_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &leak_selection));
+    EXPECT_EQ(leak_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
+    EXPECT_STREQ(leak_selection.world_name, "brush.editor_shell.target");
+    EXPECT_STREQ(leak_selection.element_name, slayer3d_properties_get_string(scene_state, "editor.leak.candidate", ""));
+    EXPECT_EQ(leak_selection.face_index, 0);
+    ASSERT_NE(leak_selection.face_editor, nullptr);
+    const std::string expected_face_stable =
+        std::string(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_stable", "")) + ".face.px";
+    EXPECT_STREQ(leak_selection.face_editor->stable_id, expected_face_stable.c_str());
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
+                 "brush source model leaks to outside");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+    const slayer3d_value *leak_point = slayer3d_properties_get_value(scene_state, "editor.leak.point");
+    ASSERT_NE(leak_point, nullptr);
+    ASSERT_EQ(leak_point->type, SLAYER3D_VALUE_VEC3);
+
+    struct LeakMarkerCapture
+    {
+        int marker_lines = 0;
+        bool named = false;
+    } leak_debug;
+    auto capture_leak_marker = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<LeakMarkerCapture *>(userdata);
+        if (primitive == nullptr || primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER)
+            return true;
+        capture->marker_lines++;
+        if (primitive->element_name != nullptr && std::string(primitive->element_name) == "editor.leak.point")
+            capture->named = true;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_leak_marker, &leak_debug));
+    EXPECT_EQ(leak_debug.marker_lines, 10);
+    EXPECT_TRUE(leak_debug.named);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

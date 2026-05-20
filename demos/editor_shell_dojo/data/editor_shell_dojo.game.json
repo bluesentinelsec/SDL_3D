@@ -260,6 +260,7 @@
     "signal.editor.tool.floor",
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
+    "signal.editor.tool.sky",
     "signal.editor.tool.player_start",
     "signal.editor.view.toggle",
     "signal.editor.view.quad",
@@ -484,7 +485,7 @@
             "type": "scene_state.cycle",
             "key": "editor.tool.mode",
             "default": "select",
-            "values": ["select", "move", "paint", "floor", "wall", "ceiling", "player_start"]
+            "values": ["select", "move", "paint", "floor", "wall", "ceiling", "sky", "player_start"]
           }
         ]
       },
@@ -516,6 +517,16 @@
           { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "ceiling" },
           { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.ceiling" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling prefab selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.tool.sky",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "sky" },
+          { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "sky" },
+          { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.sky" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "sky prefab selected" }
         ]
       },
       {
@@ -740,7 +751,7 @@
                 "key": "editor.palette.brush.cursor",
                 "default": "floor",
                 "direction": -1,
-                "values": ["floor", "wall", "ceiling"]
+                "values": ["floor", "wall", "ceiling", "sky"]
               }
             ]
           },
@@ -771,7 +782,7 @@
                 "key": "editor.palette.brush.cursor",
                 "default": "floor",
                 "direction": 1,
-                "values": ["floor", "wall", "ceiling"]
+                "values": ["floor", "wall", "ceiling", "sky"]
               }
             ]
           },
@@ -823,13 +834,28 @@
                       { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall brush selected" }
                     ],
                     "else": [
-                      { "type": "scene_state.set", "key": "editor.tool.mode", "value": "ceiling" },
-                      { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
-                      { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "ceiling" },
-                      { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.ceiling" },
-                      { "type": "scene_state.set", "key": "editor.brush.selected", "value": "ceiling" },
-                      { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
-                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling brush selected" }
+                      {
+                        "type": "branch",
+                        "if": { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "ceiling" },
+                        "then": [
+                          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "ceiling" },
+                          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
+                          { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "ceiling" },
+                          { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.ceiling" },
+                          { "type": "scene_state.set", "key": "editor.brush.selected", "value": "ceiling" },
+                          { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling brush selected" }
+                        ],
+                        "else": [
+                          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "sky" },
+                          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
+                          { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "sky" },
+                          { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.sky" },
+                          { "type": "scene_state.set", "key": "editor.brush.selected", "value": "sky" },
+                          { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+                          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "sky brush selected" }
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -1107,38 +1133,13 @@
             "then": [
               {
                 "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" },
-            "then": [
-              {
-                "type": "editor.brush_world.create_box",
-                "position_from": "placement_preview",
-                "preview_mode": "floor",
-                "message": "floor prefab created",
-                "outputs": {
-                  "valid_key": "editor.create.valid",
-                  "message_key": "editor.create.message",
-                  "brush_key": "editor.create.brush",
-                  "bounds_min_key": "editor.create.bounds_min",
-                  "bounds_max_key": "editor.create.bounds_max",
-                  "world_key": "editor.brush_world.name",
-                  "dirty_key": "editor.brush_world.dirty",
-                  "revision_key": "editor.brush_world.revision",
-                  "saved_revision_key": "editor.brush_world.saved_revision",
-                  "source_path_key": "editor.brush_world.source_path"
-                }
-              },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor prefab created" }
-            ],
-            "else": [
-              {
-                "type": "branch",
-                "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "wall" },
+                "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" },
                 "then": [
                   {
                     "type": "editor.brush_world.create_box",
                     "position_from": "placement_preview",
-                    "preview_mode": "wall",
-                    "message": "wall prefab created",
+                    "preview_mode": "floor",
+                    "message": "floor prefab created",
                     "outputs": {
                       "valid_key": "editor.create.valid",
                       "message_key": "editor.create.message",
@@ -1152,18 +1153,18 @@
                       "source_path_key": "editor.brush_world.source_path"
                     }
                   },
-                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall prefab created" }
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "floor prefab created" }
                 ],
                 "else": [
                   {
                     "type": "branch",
-                    "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" },
+                    "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "wall" },
                     "then": [
                       {
                         "type": "editor.brush_world.create_box",
                         "position_from": "placement_preview",
-                        "preview_mode": "ceiling",
-                        "message": "ceiling prefab created",
+                        "preview_mode": "wall",
+                        "message": "wall prefab created",
                         "outputs": {
                           "valid_key": "editor.create.valid",
                           "message_key": "editor.create.message",
@@ -1177,87 +1178,120 @@
                           "source_path_key": "editor.brush_world.source_path"
                         }
                       },
-                      {
-                        "type": "scene_state.set",
-                        "key": "editor.tool.last_action",
-                        "value": "ceiling prefab created"
-                      }
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall prefab created" }
                     ],
                     "else": [
                       {
                         "type": "branch",
-                        "if": {
-                          "type": "scene_state.compare",
-                          "key": "editor.tool.mode",
-                          "op": "==",
-                          "value": "player_start"
-                        },
+                        "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" },
                         "then": [
                           {
-                            "type": "editor.player_start.place",
-                            "name": "player_start.editor_shell",
-                            "scene": "scene.editor_shell.test_run",
-                            "target": "entity.editor_shell.player",
+                            "type": "editor.brush_world.create_box",
                             "position_from": "placement_preview",
-                            "preview_mode": "player_start",
-                            "yaw": 3.14159,
-                            "pitch": 0.0,
+                            "preview_mode": "ceiling",
+                            "message": "ceiling prefab created",
                             "outputs": {
-                              "valid_key": "editor.player_start.valid",
-                              "message_key": "editor.player_start.message",
-                              "player_start_key": "editor.player_start.name",
-                              "scene_key": "editor.player_start.scene",
-                              "target_key": "editor.player_start.target",
-                              "position_key": "editor.player_start.position",
-                              "yaw_key": "editor.player_start.yaw",
-                              "pitch_key": "editor.player_start.pitch",
-                              "dirty_key": "editor.player_start.dirty",
-                              "revision_key": "editor.player_start.revision",
-                              "saved_revision_key": "editor.player_start.saved_revision"
-                            }
-                          },
-                          {
-                            "type": "scene_state.set",
-                            "key": "editor.tool.last_action",
-                            "value": "player start placed"
-                          }
-                        ],
-                        "else": [
-                          {
-                            "type": "editor.command.commit",
-                            "message": "committed {editor_command} #{editor_transaction_id_text}",
-                            "invalid_message": "nothing to commit",
-                            "outputs": {
-                              "valid_key": "editor.transaction.valid",
-                              "event_key": "editor.transaction.event",
-                              "message_key": "editor.transaction.message",
-                              "transaction_id_key": "editor.transaction.id",
-                              "undo_count_key": "editor.transaction.undo_count",
-                              "redo_count_key": "editor.transaction.redo_count",
-                              "command_key": "editor.transaction.command",
-                              "target_key": "editor.transaction.target",
-                              "world_key": "editor.transaction.world",
-                              "element_key": "editor.transaction.element",
-                              "face_index_key": "editor.transaction.face_index",
-                              "bounds_min_key": "editor.transaction.bounds_min",
-                              "bounds_max_key": "editor.transaction.bounds_max",
+                              "valid_key": "editor.create.valid",
+                              "message_key": "editor.create.message",
+                              "brush_key": "editor.create.brush",
+                              "bounds_min_key": "editor.create.bounds_min",
+                              "bounds_max_key": "editor.create.bounds_max",
+                              "world_key": "editor.brush_world.name",
                               "dirty_key": "editor.brush_world.dirty",
                               "revision_key": "editor.brush_world.revision",
                               "saved_revision_key": "editor.brush_world.saved_revision",
                               "source_path_key": "editor.brush_world.source_path"
-                            },
-                            "actions": [
+                            }
+                          },
+                          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling prefab created" }
+                        ],
+                        "else": [
+                          {
+                            "type": "branch",
+                            "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "sky" },
+                            "then": [
                               {
-                                "type": "scene_state.set",
-                                "key": "editor.tool.last_action",
-                                "value": "commit {editor_command} #{editor_transaction_id_text}"
-                              }
+                                "type": "editor.brush_world.create_box",
+                                "position_from": "placement_preview",
+                                "preview_mode": "sky",
+                                "message": "sky prefab created",
+                                "outputs": {
+                                  "valid_key": "editor.create.valid",
+                                  "message_key": "editor.create.message",
+                                  "brush_key": "editor.create.brush",
+                                  "bounds_min_key": "editor.create.bounds_min",
+                                  "bounds_max_key": "editor.create.bounds_max",
+                                  "world_key": "editor.brush_world.name",
+                                  "dirty_key": "editor.brush_world.dirty",
+                                  "revision_key": "editor.brush_world.revision",
+                                  "saved_revision_key": "editor.brush_world.saved_revision",
+                                  "source_path_key": "editor.brush_world.source_path"
+                                }
+                              },
+                              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "sky prefab created" }
                             ],
                             "else": [
                               {
-                                "type": "scene_state.set",
-                                "key": "editor.tool.last_action",
-                                "value": "nothing to commit"
+                                "type": "branch",
+                                "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "player_start" },
+                                "then": [
+                                  {
+                                    "type": "editor.player_start.place",
+                                    "name": "player_start.editor_shell",
+                                    "scene": "scene.editor_shell.test_run",
+                                    "target": "entity.editor_shell.player",
+                                    "position_from": "placement_preview",
+                                    "preview_mode": "player_start",
+                                    "yaw": 3.14159,
+                                    "pitch": 0.0,
+                                    "outputs": {
+                                      "valid_key": "editor.player_start.valid",
+                                      "message_key": "editor.player_start.message",
+                                      "player_start_key": "editor.player_start.name",
+                                      "scene_key": "editor.player_start.scene",
+                                      "target_key": "editor.player_start.target",
+                                      "position_key": "editor.player_start.position",
+                                      "yaw_key": "editor.player_start.yaw",
+                                      "pitch_key": "editor.player_start.pitch",
+                                      "dirty_key": "editor.player_start.dirty",
+                                      "revision_key": "editor.player_start.revision",
+                                      "saved_revision_key": "editor.player_start.saved_revision"
+                                    }
+                                  },
+                                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start placed" }
+                                ],
+                                "else": [
+                                  {
+                                    "type": "editor.command.commit",
+                                    "message": "committed {editor_command} #{editor_transaction_id_text}",
+                                    "invalid_message": "nothing to commit",
+                                    "outputs": {
+                                      "valid_key": "editor.transaction.valid",
+                                      "event_key": "editor.transaction.event",
+                                      "message_key": "editor.transaction.message",
+                                      "transaction_id_key": "editor.transaction.id",
+                                      "undo_count_key": "editor.transaction.undo_count",
+                                      "redo_count_key": "editor.transaction.redo_count",
+                                      "command_key": "editor.transaction.command",
+                                      "target_key": "editor.transaction.target",
+                                      "world_key": "editor.transaction.world",
+                                      "element_key": "editor.transaction.element",
+                                      "face_index_key": "editor.transaction.face_index",
+                                      "bounds_min_key": "editor.transaction.bounds_min",
+                                      "bounds_max_key": "editor.transaction.bounds_max",
+                                      "dirty_key": "editor.brush_world.dirty",
+                                      "revision_key": "editor.brush_world.revision",
+                                      "saved_revision_key": "editor.brush_world.saved_revision",
+                                      "source_path_key": "editor.brush_world.source_path"
+                                    },
+                                    "actions": [
+                                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "commit {editor_command} #{editor_transaction_id_text}" }
+                                    ],
+                                    "else": [
+                                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing to commit" }
+                                    ]
+                                  }
+                                ]
                               }
                             ]
                           }
@@ -1266,8 +1300,6 @@
                     ]
                   }
                 ]
-              }
-            ]
               }
             ]
           }
@@ -1580,32 +1612,123 @@
         "signal": "signal.editor.test_run.enter",
         "actions": [
           {
-            "type": "editor.player_start.apply",
-            "name": "player_start.editor_shell",
-            "message": "test run player start applied",
+            "type": "editor.brush_world.validate_source",
+            "world": "brush.editor_shell.target",
+            "allow_missing_source": true,
+            "message": "editor source model is structurally valid",
             "outputs": {
-              "valid_key": "editor.test_run.enter.valid",
-              "message_key": "editor.test_run.enter.message",
-              "player_start_key": "editor.test_run.enter.player_start",
-              "scene_key": "editor.test_run.enter.scene",
-              "target_key": "editor.test_run.enter.target",
-              "position_key": "editor.test_run.enter.position",
-              "yaw_key": "editor.test_run.enter.yaw",
-              "pitch_key": "editor.test_run.enter.pitch"
+              "valid_key": "editor.source.valid",
+              "message_key": "editor.source.message",
+              "box_count_key": "editor.source.boxes",
+              "overlap_count_key": "editor.source.overlaps",
+              "near_gap_count_key": "editor.source.near_gaps",
+              "face_contact_count_key": "editor.source.face_contacts",
+              "partial_face_contact_count_key": "editor.source.partial_contacts"
             }
           },
           {
             "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+            "if": { "type": "scene_state.compare", "key": "editor.source.valid", "op": "==", "value": true },
             "then": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
-              { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+              {
+                "type": "editor.brush_world.validate_enclosure",
+                "world": "brush.editor_shell.target",
+                "player_start": "player_start.editor_shell",
+                "allow_missing_source": true,
+                "message": "editor source enclosure is sealed",
+                "outputs": {
+                  "valid_key": "editor.leak.valid",
+                  "message_key": "editor.leak.message",
+                  "has_source_key": "editor.leak.has_source",
+                  "has_player_start_key": "editor.leak.has_player_start",
+                  "box_count_key": "editor.leak.boxes",
+                  "grid_cell_count_key": "editor.leak.grid_cells",
+                  "solid_cell_count_key": "editor.leak.solid_cells",
+                  "visited_cell_count_key": "editor.leak.visited_cells",
+                  "open_boundary_count_key": "editor.leak.open_boundaries",
+                  "leak_point_key": "editor.leak.point",
+                  "leak_axis_key": "editor.leak.axis",
+                  "leak_side_key": "editor.leak.side",
+                  "candidate_name_key": "editor.leak.candidate",
+                  "candidate_stable_id_key": "editor.leak.candidate_stable",
+                  "candidate_face_key": "editor.leak.candidate_face",
+                  "candidate_point_key": "editor.leak.candidate_point",
+                  "candidate_distance_key": "editor.leak.candidate_distance"
+                }
+              },
+              {
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": true },
+                "then": [
+                  {
+                    "type": "editor.player_start.apply",
+                    "name": "player_start.editor_shell",
+                    "message": "test run player start applied",
+                    "outputs": {
+                      "valid_key": "editor.test_run.enter.valid",
+                      "message_key": "editor.test_run.enter.message",
+                      "player_start_key": "editor.test_run.enter.player_start",
+                      "scene_key": "editor.test_run.enter.scene",
+                      "target_key": "editor.test_run.enter.target",
+                      "position_key": "editor.test_run.enter.position",
+                      "yaw_key": "editor.test_run.enter.yaw",
+                      "pitch_key": "editor.test_run.enter.pitch"
+                    }
+                  },
+                  {
+                    "type": "branch",
+                    "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+                    "then": [
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
+                      { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+                    ],
+                    "else": [
+                      {
+                        "type": "scene_state.set",
+                        "key": "editor.tool.last_action",
+                        "value": "player start required before playable test run"
+                      }
+                    ]
+                  }
+                ],
+                "else": [
+                  { "type": "scene_state.set", "key": "editor.test_run.enter.valid", "value": false },
+                  {
+                    "type": "editor.selection.select_brush",
+                    "world": "brush.editor_shell.target",
+                    "element_from_state": "editor.leak.candidate",
+                    "face_from_state": "editor.leak.candidate_face",
+                    "message": "selected leak candidate",
+                    "invalid_message": "no leak candidate to select",
+                    "outputs": {
+                      "valid_key": "editor.leak.candidate_selected",
+                      "message_key": "editor.leak.candidate_select_message"
+                    }
+                  },
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.test_run.enter.message",
+                    "value": "brush source model leaks to outside"
+                  },
+                  {
+                    "type": "scene_state.set",
+                    "key": "editor.tool.last_action",
+                    "value": "fix brush source leaks before playable test run"
+                  }
+                ]
+              }
             ],
             "else": [
+              { "type": "scene_state.set", "key": "editor.test_run.enter.valid", "value": false },
+              {
+                "type": "scene_state.set",
+                "key": "editor.test_run.enter.message",
+                "value": "brush source model has overlaps or near gaps"
+              },
               {
                 "type": "scene_state.set",
                 "key": "editor.tool.last_action",
-                "value": "player start required before playable test run"
+                "value": "fix brush source errors before playable test run"
               }
             ]
           }
@@ -1657,6 +1780,15 @@
           "editor": {
             "stable_id": "editor.material.ceiling",
             "display_name": "Light Gray Ceiling Material"
+          }
+        },
+        {
+          "name": "mat.editor.sky",
+          "albedo": [0.20, 0.42, 0.78, 1.0],
+          "roughness": 1.0,
+          "editor": {
+            "stable_id": "editor.material.sky",
+            "display_name": "Sky Boundary Material"
           }
         }
       ],
@@ -1743,6 +1875,14 @@
     ]
   },
   "assets": {
+    "images": [
+      { "id": "image.editor_shell.skybox.px", "path": "asset://skyboxes/sky_17/px.png" },
+      { "id": "image.editor_shell.skybox.nx", "path": "asset://skyboxes/sky_17/nx.png" },
+      { "id": "image.editor_shell.skybox.py", "path": "asset://skyboxes/sky_17/py.png" },
+      { "id": "image.editor_shell.skybox.ny", "path": "asset://skyboxes/sky_17/ny.png" },
+      { "id": "image.editor_shell.skybox.pz", "path": "asset://skyboxes/sky_17/pz.png" },
+      { "id": "image.editor_shell.skybox.nz", "path": "asset://skyboxes/sky_17/nz.png" }
+    ],
     "fonts": [
       { "id": "font.editor_shell.ui", "builtin": "Inter", "size": 18 }
     ]

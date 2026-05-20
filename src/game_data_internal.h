@@ -174,6 +174,7 @@ typedef struct editor_placement_preview_state
     const char *axis;
     const char *world_name;
     const char *material_name;
+    unsigned int contents;
     slayer3d_vec3 anchor;
     float snap;
     bool has_bounds;
@@ -466,10 +467,27 @@ typedef struct brush_world_compile_artifacts
     Uint64 visibility_grid_visible_cache_clock;
 } brush_world_compile_artifacts;
 
+typedef struct editor_brush_source_box_runtime
+{
+    char *stable_id;
+    char *name;
+    char *prefab;
+    char *material;
+    char *face_materials[6];
+    int min[3];
+    int max[3];
+    unsigned int contents;
+} editor_brush_source_box_runtime;
+
 typedef struct brush_world_runtime
 {
     slayer3d_game_data_brush_world desc;
     brush_world_compile_artifacts artifacts;
+    editor_brush_source_box_runtime *editor_source_boxes;
+    int editor_source_box_count;
+    int editor_source_box_capacity;
+    float editor_source_meters_per_unit;
+    bool editor_has_source_model;
     char *editor_source_path;
     Uint64 editor_revision;
     Uint64 editor_saved_revision;
@@ -1087,6 +1105,7 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
                                      const slayer3d_game_data_editor_selection *hover_selection);
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                               const slayer3d_game_data_editor_selection *selection);
+bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
 void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
 void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);
@@ -1106,6 +1125,28 @@ bool compile_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 void free_brush_world_visibility_grid(brush_world_runtime *world_runtime);
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
                                            int error_buffer_size);
+void free_editor_brush_source_model(brush_world_runtime *world_runtime);
+bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
+                                    char *error_buffer, int error_buffer_size);
+bool editor_brush_world_rebuild_from_source(brush_world_runtime *world_runtime, char *error_buffer,
+                                            int error_buffer_size);
+bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,
+                                                 int error_buffer_size);
+bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_runtime, int box_index,
+                                                     const slayer3d_game_data_brush *brush, char *error_buffer,
+                                                     int error_buffer_size);
+bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
+                                                   char *error_buffer, int error_buffer_size);
+bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                             slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
+bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
+                                               slayer3d_vec3 face_normal, float distance, char *error_buffer,
+                                               int error_buffer_size);
+bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
+                                                     int face_index, const char *material_name, char *error_buffer,
+                                                     int error_buffer_size);
+bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_validate_editor_brush_enclosure_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);

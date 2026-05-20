@@ -45,6 +45,7 @@ Every root game file is a JSON object.
 | `sector_levels` | no | Authored sector/portal worlds for Doom/Quake-style indoor levels. |
 | `sector_level_fragments` | no | Composition-only material/sector/light fragments merged into named sector levels before validation. |
 | `brush_worlds` | no | Native convex-brush worlds for true 3D FPS-style spaces. |
+| `editor_brush_sources` | no | Canonical fixed-coordinate editor brush sources used by level-editing tools before runtime compilation. |
 | `editor_player_starts` | no | Editor-authored player spawn markers for test-run workflows and level-editing tools. |
 | `sector_navigation` | no | Authored sector navigation graphs for AI/path queries in sector worlds. |
 | `sector_doors` | no | Runtime sliding doors for sector/FPS worlds. |
@@ -942,6 +943,13 @@ grid half-extent in world units, and `work_plane_grid_spacing` controls line
 spacing. The grid uses the same `work_plane.normal` and `work_plane.distance`
 as placement, so visual feedback and picking stay aligned.
 
+Add `markers` (or `diagnostic_markers`) to `editor.debug_overlay.flags` to draw
+scene-state-driven diagnostic markers. Each entry in
+`editor.debug_overlay.markers` requires a `point_key` that resolves to a vec3 in
+scene state and may include `name`, `color`, `size`, and `visible_if`. This is
+intended for actionable editor diagnostics, such as showing the first
+source-model leak point returned by `editor.brush_world.validate_enclosure`.
+
 Editor scenes should keep authoring mode and brush defaults in scene state so
 the host, UI, and save pipeline all see the same values. The editor shell dojo
 uses these conventional keys:
@@ -1000,6 +1008,33 @@ pinned or current selection. It supplies payload fields such as
 `selection_point`, and `selection_normal`. `editor.selection.clear` clears the
 active selection and republishes the scene's `outputs` as an empty selection.
 
+`editor.selection.select_brush` selects a known brush by name without requiring
+a pointer pick. This is intended for editor diagnostics and repair workflows:
+validation actions can publish a source brush and face to scene state, then this
+action can turn that diagnostic into the same active selection used by the
+debug overlay, inspector, and delete/resize tools.
+
+```json
+{
+  "type": "editor.selection.select_brush",
+  "world": "brush.editor_shell.target",
+  "element_from_state": "editor.leak.candidate",
+  "face_from_state": "editor.leak.candidate_face",
+  "message": "selected leak candidate",
+  "invalid_message": "no leak candidate to select",
+  "outputs": {
+    "valid_key": "editor.leak.candidate_selected",
+    "message_key": "editor.leak.candidate_select_message"
+  }
+}
+```
+
+`element` may be authored directly or read from `element_from_state`; exactly
+one is required. `face` and `face_from_state` are optional and accept the
+canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`. When the target
+cannot be resolved, the action clears the active selection, publishes
+`valid_key: false` when configured, and reports `invalid_message`.
+
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
 test-run should place an existing actor, while the actor remains defined by the
@@ -1021,6 +1056,122 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 }
 ```
 
+`editor_brush_sources` is the editor-owned source model for structurally correct
+brush editing. Editable fragments include it alongside `brush_worlds`; when a
+matching source world is present, Slayer3D compiles the source boxes into the
+runtime brush world during load/import. Coordinates are fixed millimeters so
+editor decisions round-trip without accumulating floating-point drift; runtime
+`brush_worlds` remain meter-based derived output for renderer, collision, and
+compatibility paths. Each source world references a brush world and stores
+stable source brush IDs, prefab metadata, material references, and integer
+`min`/`max` coordinates for box sources. `material` is the default material for
+all six generated faces. `face_materials` may override individual generated box
+faces with keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit
+`material`.
+
+For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
+in-memory source model. Successful editor mutations synchronize that source
+model before save/export, then reload compiles runtime brushes from the source
+again. This makes source boxes the durable editing truth and keeps generated
+`brush_worlds` as load-time/runtime derived data.
+
+Use `editor.brush_world.validate_source` or the native
+`slayer3d_game_data_validate_editor_brush_source_model()` API to inspect source
+boxes before save or test-run. The pass runs on fixed source coordinates and
+reports positive-volume overlaps plus tiny non-zero near gaps between boxes that
+otherwise overlap on the other two axes. Exact face contact is counted as
+structural adjacency. This is the first source-level correctness gate for
+watertight brush editing; future leak tracing can build on the same source model
+without relying on visual offsets.
+
+The action form may set `allow_missing_source: true` when a workflow still needs
+to support legacy/runtime-only brush worlds. In that mode, worlds without an
+`editor_brush_sources` model are treated as valid for gating purposes while
+source-backed worlds still fail on overlaps and near gaps.
+
+Use `editor.brush_world.validate_enclosure` or
+`slayer3d_game_data_validate_editor_brush_source_enclosure()` to run the first
+source-backed leak diagnostic. This pass derives an exact interval grid from
+the fixed source box coordinates, marks source boxes as solid, and flood-fills
+empty cells from an `editor_player_starts` marker. If the flood reaches the
+expanded outside boundary, the playable space leaks. The editor shell runs both
+validation actions before entering playable test-run mode so source defects
+block F5 instead of becoming game-runtime surprises. The `leak_point_key`
+output can feed an `editor.debug_overlay.markers` entry so the editor shows the
+first reachable outside-boundary cell directly in the 3D view. The candidate
+outputs identify the nearest source-box face on the same leak boundary axis,
+giving editor UI a second point to highlight while the user decides which
+missing or malformed brush should be repaired.
+
+```json
+{
+  "editor_brush_sources": [
+    {
+      "world": "brush.level.blockout",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "floor.spawn.001",
+          "name": "brush.level.blockout.box.1",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "face_materials": {
+            "px": "mat.editor.trim"
+          },
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ]
+}
+```
+
+```json
+{
+  "type": "editor.brush_world.validate_source",
+  "world": "brush.level.blockout",
+  "allow_missing_source": false,
+  "near_gap_units": 1,
+  "outputs": {
+    "valid_key": "editor.source.valid",
+    "message_key": "editor.source.message",
+    "box_count_key": "editor.source.boxes",
+    "overlap_count_key": "editor.source.overlaps",
+    "near_gap_count_key": "editor.source.near_gaps",
+    "face_contact_count_key": "editor.source.face_contacts",
+    "partial_face_contact_count_key": "editor.source.partial_contacts"
+  }
+}
+```
+
+```json
+{
+  "type": "editor.brush_world.validate_enclosure",
+  "world": "brush.level.blockout",
+  "player_start": "player_start.level_01",
+  "allow_missing_source": false,
+  "max_cells": 262144,
+  "outputs": {
+    "valid_key": "editor.leak.valid",
+    "message_key": "editor.leak.message",
+    "open_boundary_count_key": "editor.leak.open_boundaries",
+    "visited_cell_count_key": "editor.leak.visited_cells",
+    "leak_point_key": "editor.leak.point",
+    "leak_axis_key": "editor.leak.axis",
+    "leak_side_key": "editor.leak.side",
+    "candidate_name_key": "editor.leak.candidate",
+    "candidate_stable_id_key": "editor.leak.candidate_stable",
+    "candidate_face_key": "editor.leak.candidate_face",
+    "candidate_point_key": "editor.leak.candidate_point",
+    "candidate_distance_key": "editor.leak.candidate_distance"
+  }
+}
+```
+
 The generic runner can apply a marker directly:
 
 ```sh
@@ -1037,7 +1188,7 @@ before the first scene-enter signal runs.
 
 Use `editor.brush_world.create_box` to append a new axis-aligned convex box
 brush to a runtime brush world. The action is intended for first-pass editor
-blockout tools: floors, walls, ceilings, platforms, and simple room pieces. It
+blockout tools: floors, walls, ceilings, sky seals, platforms, and simple room pieces. It
 validates the target world and bounds at load time, resolves the material at
 runtime, rebuilds brush collision/render data atomically, then marks the world
 dirty only after the rebuild succeeds. If `name` is omitted, the runtime
@@ -1051,6 +1202,13 @@ scene-state selection strings, and the shared commit signal branches to
 prefab-specific `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
+
+`contents` is optional and accepts the same brush-content string or string array
+as authored brush JSON. If omitted, created boxes default to `solid`. Sky
+prefabs should author `contents` such as `["sky", "player_clip"]`: the source
+model can use the brush as a structural leak seal, collision can still block the
+player, and the renderer can treat the brush as a sky boundary instead of an
+ordinary opaque wall.
 
 For interactive placement, set `position_from` to `selection_point`. The action
 then treats `min` and `max` as offsets from the current active editor selection
@@ -1091,7 +1249,9 @@ authored from `[0, 0, 0]` to `[1, 0.025, 1]` becomes one active grid cell wide
 at any configured grid size. For tile-like blockout tools, author floors,
 walls, and ceilings from grid-boundary anchors with matching horizontal
 footprints instead of centering them around the snap point; this keeps adjacent
-tiles aligned without gaps. Each preview entry maps a tool `mode` to either a
+tiles aligned without gaps. `contents` can also be authored on box previews; it
+is copied into `editor.brush_world.create_box` when committing with
+`"position_from": "placement_preview"`. Each preview entry maps a tool `mode` to either a
 `box` ghost or a `player_start` marker. Box
 previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
 between horizontal grid axes. A box preview must author exactly one bounds
@@ -1132,6 +1292,15 @@ hosts do not need a second rendering path.
           "axis": "z",
           "grid_min": [0.0, 0.0, 0.0],
           "grid_max": [1.0, 1.0, 1.0]
+        },
+        {
+          "mode": "sky",
+          "kind": "box",
+          "world": "brush.level.blockout",
+          "material": "mat.sky",
+          "contents": ["sky", "player_clip"],
+          "grid_min": [0.0, 1.0, 0.0],
+          "grid_max": [1.0, 1.025, 1.0]
         },
         {
           "mode": "player_start",
@@ -1398,9 +1567,11 @@ Use `editor.level.load` to replace an editor runtime's authored starter level
 with an editable fragment from disk. This is intended for editor hosts that pass
 `editor.input.path` at launch time. The fragment must use
 `schema: "slayer3d.fragment.v0"` and contain a `brush_worlds` entry whose name
-matches `world`; its `editor_player_starts` collection replaces the runtime
-player-start collection. Set `optional: true` when the same editor scene should
-also support new/blank sessions with no input file.
+matches `world`; `editor_brush_sources`, when present, records the canonical
+editor source model for the same world and is compiled into runtime brushes on
+import, and `editor_player_starts` replaces the runtime player-start collection.
+Set `optional: true` when the same editor scene should also support new/blank
+sessions with no input file.
 
 ```json
 {

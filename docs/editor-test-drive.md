@@ -1,8 +1,8 @@
 # Editor Test Drive
 
 This is the current graybox-editor milestone. It is still an alpha editor shell,
-but it should prove the core editing loop: place floor/wall/ceiling blocks on
-grid-cell boundaries, delete mistakes, place a player start, and jump into a
+but it should prove the core editing loop: place floor/wall/ceiling/sky blocks
+on grid-cell boundaries, delete mistakes, place a player start, and jump into a
 playable test scene using the same data-driven runtime used by games.
 
 ## Launch
@@ -107,21 +107,32 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    needed, and place at least one wall.
 3. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
    ceiling tile.
-4. Press `G`, press `Enter` to select Player Start, and place it on the floor.
-5. Press `Space`, click a tile to select it, press `]`, and confirm the brush
+4. Press `B`, move to Sky with the arrow keys, press `Enter`, and place a sky
+   tile over an opening. The brush should seal leak validation while rendering
+   as the scene skybox in editor and test-run views.
+5. Press `G`, press `Enter` to select Player Start, and place it on the floor.
+6. Press `Space`, click a tile to select it, press `]`, and confirm the brush
    stretches upward while its bottom face stays anchored. Press `[` on a floor
    slab at the default floor plane and confirm the floor slab can move below
    the plane; the editor should add side-wall fill brushes around the exposed
    height change.
-6. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
+7. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
    wall, and ceiling tiles. Their previews should stay on the lowered
    connected grid instead of snapping back to the original world plane.
-7. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
+8. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
-8. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
-   file should contain `brush_worlds` and `editor_player_starts`.
-9. Press `F5`; the editor should switch into the playable test scene using the
-   current in-memory map and player start.
+9. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
+   file should contain `brush_worlds`, `editor_brush_sources`, and `editor_player_starts`.
+10. Press `F5`; the editor should validate the brush source model, then switch
+   into the playable test scene using the current in-memory map and player
+   start. If the source model has overlaps, near-gaps, or a reachable leak to
+   outside from the player start, the editor should stay in edit mode and report
+   the source issue in the inspector. Reachable leaks also draw a bright
+   magenta diagnostic marker at the first outside-boundary cell so you have a
+   concrete place to inspect, plus an orange candidate marker on the nearest
+   source-box face associated with that leak boundary. The candidate brush face
+   should also become the active selection, making the suspected source face
+   obvious in the selection outline and inspector.
 10. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
@@ -142,7 +153,7 @@ The following should be true during a good test drive:
   the exposed vertical space and removes the matching fill segment when raised
   back up.
 - Game object placement uses its own tighter snap grid, so player starts can be
-  placed precisely while floor/wall/ceiling brushes stay aligned to the larger
+  placed precisely while floor/wall/ceiling/sky brushes stay aligned to the larger
   blockout grid.
 - The bright green placement preview sits under the mouse in orthographic
   views, using the containing grid cell rather than the nearest grid line.
@@ -154,14 +165,14 @@ The following should be true during a good test drive:
 - In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
   cardinal axis from the camera direction. Orthographic placement keeps the
   explicit `R` wall-axis toggle for drafting control.
-- Floor, wall, and ceiling previews share a connected-grid elevation. Hovering
+- Floor, wall, ceiling, and sky previews share a connected-grid elevation. Hovering
   or working from a lowered floor or one of its side-wall fills should update
   the editor brush elevation and work plane so new floor, wall, and ceiling
   tiles can continue the lower level without manual state edits.
 - Right click / `Delete` removes the highlighted brush and `U` can undo the
   deletion.
-- Floor, wall, and ceiling prefabs are distinct gray blockout brushes.
-- `B` opens a modal brush palette with floor, wall, and ceiling cells. Arrow
+- Floor, wall, ceiling, and sky prefabs are distinct blockout brushes.
+- `B` opens a modal brush palette with floor, wall, ceiling, and sky cells. Arrow
   keys move the highlighted cell, `Enter` selects the brush, and `Esc` closes
   the modal without quitting the editor.
 - `M` opens the placeholder Material palette. `G` opens the Game Objects
@@ -184,10 +195,13 @@ The following should be true during a good test drive:
   if no brush is hit, placement falls back to the ground work plane. After
   clicking one brush, look away and confirm the selection cursor follows the
   reticle rather than staying offset on the previous brush.
-- `Ctrl+S` and `Command+S` export JSON containing `brush_worlds` and `editor_player_starts` and
-  writes the same fragment to the CLI output path.
+- `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
+  `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.
-- `F5` applies the stored player start before entering the playable scene.
+- `F5` validates source-backed brush structure, then applies the stored player
+  start before entering the playable scene. Source overlaps and near-gaps block
+  the transition. Source-backed maps that leak from the player start to outside
+  also block the transition.
 
 Current limitations are expected: this is not yet a polished TrenchBroom-style
 frontend, there is no file picker, and texture/face painting remains outside
