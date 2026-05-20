@@ -9718,6 +9718,56 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_editor_brush_source.game.json").string().c_str(), nullptr,
                                                   error, sizeof(error)));
     EXPECT_NE(std::string(error).find("integer min/max vec3"), std::string::npos) << error;
+
+    write_text(dir / "bad_editor_brush_source_face_material.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Brush Source Face Material" },
+  "world": { "name": "world.bad_editor_brush_source_face_material", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "brush.bad_source_face_material",
+      "materials": [{ "name": "mat.wall" }],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.bad_source_face_material",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "box.bad_face_material",
+          "kind": "box",
+          "material": "mat.wall",
+          "face_materials": { "px": "mat.missing" },
+          "min": [0, 0, 0],
+          "max": [1000, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file(
+        (dir / "bad_editor_brush_source_face_material.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("face material must reference a declared brush material"), std::string::npos)
+        << error;
     remove_test_dir(dir);
 }
 
@@ -16557,17 +16607,20 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
   "brush_worlds": [
     {
       "name": "brush.editor_shell.target",
-      "materials": [{ "name": "mat.imported", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] },
+        { "name": "mat.editor.wall", "albedo": [0.9, 0.8, 0.2, 1.0] }
+      ],
       "brushes": [
         {
           "name": "brush.runtime.placeholder",
           "faces": [
-            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.imported" },
-            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.imported" },
-            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.imported" },
-            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.imported" },
-            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.imported" },
-            { "plane": { "normal": [0, 0, -1], "distance": 1 }, "material": "mat.imported" }
+            { "plane": { "normal": [1, 0, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [-1, 0, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 1, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, -1, 0], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, 1], "distance": 1 }, "material": "mat.editor.floor" },
+            { "plane": { "normal": [0, 0, -1], "distance": 1 }, "material": "mat.editor.floor" }
           ]
         }
       ]
@@ -16584,7 +16637,8 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
           "name": "brush.source.box.001",
           "kind": "box",
           "prefab": "floor",
-          "material": "mat.imported",
+          "material": "mat.editor.floor",
+          "face_materials": { "px": "mat.editor.wall" },
           "min": [0, -200, 8000],
           "max": [8000, 0, 16000],
           "contents": ["solid"]
@@ -16614,7 +16668,8 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
     EXPECT_NEAR(brush.bounds.max.y, 0.0f, 0.001f);
     EXPECT_NEAR(brush.bounds.max.z, 16.0f, 0.001f);
     ASSERT_EQ(brush.face_count, 6);
-    EXPECT_STREQ(brush.faces[0].material_name, "mat.imported");
+    EXPECT_STREQ(brush.faces[0].material_name, "mat.editor.wall");
+    EXPECT_STREQ(brush.faces[1].material_name, "mat.editor.floor");
     EXPECT_STREQ(brush.faces[0].editor.stable_id, "source.box.001.face.px");
 
     slayer3d_game_data_destroy(runtime);
@@ -16638,7 +16693,10 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
   "brush_worlds": [
     {
       "name": "brush.editor_shell.target",
-      "materials": [{ "name": "mat.imported", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] },
+        { "name": "mat.editor.wall", "albedo": [0.9, 0.8, 0.2, 1.0] }
+      ],
       "brushes": []
     }
   ],
@@ -16653,7 +16711,8 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
           "name": "brush.source.box.001",
           "kind": "box",
           "prefab": "floor",
-          "material": "mat.imported",
+          "material": "mat.editor.floor",
+          "face_materials": { "px": "mat.editor.wall" },
           "min": [0, -200, 0],
           "max": [8000, 0, 8000],
           "contents": ["solid"]
@@ -16671,7 +16730,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     slayer3d_game_data_create_box_brush_desc box{};
     box.world_name = "brush.editor_shell.target";
     box.brush_name = "brush.source.box.002";
-    box.material_name = "mat.imported";
+    box.material_name = "mat.editor.floor";
     box.min = slayer3d_vec3_make(8.0f, -0.2f, 0.0f);
     box.max = slayer3d_vec3_make(16.0f, 0.0f, 8.0f);
     ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &box, nullptr, 0, error, sizeof(error))) << error;
@@ -16701,6 +16760,9 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     ASSERT_TRUE(yyjson_is_arr(boxes));
     ASSERT_EQ(yyjson_arr_size(boxes), 2u);
     EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 0), "stable_id")), "source.box.001");
+    yyjson_val *source_face_materials = yyjson_obj_get(yyjson_arr_get(boxes, 0), "face_materials");
+    ASSERT_TRUE(yyjson_is_obj(source_face_materials));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(source_face_materials, "px")), "mat.editor.wall");
     EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 1), "stable_id")), "brush.source.box.002");
     yyjson_val *new_min = yyjson_obj_get(yyjson_arr_get(boxes, 1), "min");
     yyjson_val *new_max = yyjson_obj_get(yyjson_arr_get(boxes, 1), "max");
@@ -16725,6 +16787,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 2);
+    EXPECT_STREQ(world.brushes[0].faces[0].material_name, "mat.editor.wall");
     EXPECT_STREQ(world.brushes[1].name, "brush.source.box.002");
     ASSERT_TRUE(world.brushes[1].has_bounds);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);

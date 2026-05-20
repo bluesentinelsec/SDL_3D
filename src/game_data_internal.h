@@ -472,6 +472,7 @@ typedef struct editor_brush_source_box_runtime
     char *name;
     char *prefab;
     char *material;
+    char *face_materials[6];
     int min[3];
     int max[3];
     unsigned int contents;
@@ -1139,6 +1140,9 @@ bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime,
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size);
+bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
+                                                     int face_index, const char *material_name, char *error_buffer,
+                                                     int error_buffer_size);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_grid_pickup_layers(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
                              int error_buffer_size);

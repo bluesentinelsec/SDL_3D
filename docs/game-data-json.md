@@ -1030,7 +1030,10 @@ editor decisions round-trip without accumulating floating-point drift; runtime
 `brush_worlds` remain meter-based derived output for renderer, collision, and
 compatibility paths. Each source world references a brush world and stores
 stable source brush IDs, prefab metadata, material references, and integer
-`min`/`max` coordinates for box sources.
+`min`/`max` coordinates for box sources. `material` is the default material for
+all six generated faces. `face_materials` may override individual generated box
+faces with keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit
+`material`.
 
 For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
 in-memory source model. Successful editor mutations synchronize that source
@@ -1052,6 +1055,9 @@ again. This makes source boxes the durable editing truth and keeps generated
           "kind": "box",
           "prefab": "floor",
           "material": "mat.editor.floor",
+          "face_materials": {
+            "px": "mat.editor.trim"
+          },
           "min": [0, -200, 0],
           "max": [8000, 0, 8000],
           "contents": ["solid"]

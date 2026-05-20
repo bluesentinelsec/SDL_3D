@@ -220,6 +220,32 @@ static const char *editor_source_prefab_name_for_brush(const slayer3d_game_data_
     return editor_source_prefab_name(brush, fallback);
 }
 
+static const char *const editor_source_face_keys[6] = {"px", "nx", "py", "ny", "pz", "nz"};
+
+static bool export_add_source_face_material_overrides(yyjson_mut_doc *doc, yyjson_mut_val *obj,
+                                                      const char *base_material, const char *const face_materials[6])
+{
+    yyjson_mut_val *face_materials_obj = NULL;
+    for (size_t i = 0; i < SDL_arraysize(editor_source_face_keys); ++i)
+    {
+        const char *face_material = face_materials[i];
+        if (face_material == NULL || face_material[0] == '\0' ||
+            (base_material != NULL && SDL_strcmp(face_material, base_material) == 0))
+        {
+            continue;
+        }
+        if (face_materials_obj == NULL)
+        {
+            face_materials_obj = yyjson_mut_obj(doc);
+            if (face_materials_obj == NULL)
+                return false;
+        }
+        if (!yyjson_mut_obj_add_strcpy(doc, face_materials_obj, editor_source_face_keys[i], face_material))
+            return false;
+    }
+    return face_materials_obj == NULL || yyjson_mut_obj_add_val(doc, obj, "face_materials", face_materials_obj);
+}
+
 static bool brush_face_matches_box_plane(const slayer3d_game_data_brush_face *face, slayer3d_vec3 normal,
                                          float distance)
 {
@@ -280,6 +306,9 @@ static bool export_add_structural_box_source(yyjson_mut_doc *doc, yyjson_mut_val
     const int max_x = editor_source_millimeters(brush->bounds.max.x);
     const int max_y = editor_source_millimeters(brush->bounds.max.y);
     const int max_z = editor_source_millimeters(brush->bounds.max.z);
+    const char *face_materials[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
+    for (int i = 0; i < brush->face_count && i < (int)SDL_arraysize(face_materials); ++i)
+        face_materials[i] = brush_face_material_name(world, &brush->faces[i]);
 
     return yyjson_mut_obj_add_strcpy(doc, obj, "stable_id", stable_id != NULL ? stable_id : "") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "name", brush->name != NULL ? brush->name : "") &&
@@ -288,6 +317,7 @@ static bool export_add_structural_box_source(yyjson_mut_doc *doc, yyjson_mut_val
            yyjson_mut_obj_add_strcpy(doc, obj, "material", material) &&
            export_add_vec3i_values(doc, obj, "min", min_x, min_y, min_z) &&
            export_add_vec3i_values(doc, obj, "max", max_x, max_y, max_z) &&
+           export_add_source_face_material_overrides(doc, obj, material, face_materials) &&
            export_add_brush_contents(doc, obj, brush->contents);
 }
 
@@ -297,6 +327,8 @@ static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *box
     yyjson_mut_val *obj = yyjson_mut_obj(doc);
     if (obj == NULL || !yyjson_mut_arr_add_val(boxes, obj))
         return false;
+    const char *face_materials[6] = {box->face_materials[0], box->face_materials[1], box->face_materials[2],
+                                     box->face_materials[3], box->face_materials[4], box->face_materials[5]};
     return yyjson_mut_obj_add_strcpy(doc, obj, "stable_id", box->stable_id != NULL ? box->stable_id : "") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "name", box->name != NULL ? box->name : "") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "kind", "box") &&
@@ -304,6 +336,7 @@ static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *box
            yyjson_mut_obj_add_strcpy(doc, obj, "material", box->material != NULL ? box->material : "") &&
            export_add_vec3i_values(doc, obj, "min", box->min[0], box->min[1], box->min[2]) &&
            export_add_vec3i_values(doc, obj, "max", box->max[0], box->max[1], box->max[2]) &&
+           export_add_source_face_material_overrides(doc, obj, box->material, face_materials) &&
            export_add_brush_contents(doc, obj,
                                      box->contents != 0u ? box->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
 }

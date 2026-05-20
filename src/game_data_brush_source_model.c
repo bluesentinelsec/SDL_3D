@@ -20,6 +20,8 @@ static int source_units_from_meters(const brush_world_runtime *world_runtime, fl
     return (int)SDL_lroundf(value / meters_per_unit);
 }
 
+static const char *const source_box_face_keys[6] = {"px", "nx", "py", "ny", "pz", "nz"};
+
 static bool source_vec3i(yyjson_val *object, const char *key, int out_values[3])
 {
     yyjson_val *value = obj_get(object, key);
@@ -55,6 +57,8 @@ static void free_editor_brush_source_box(editor_brush_source_box_runtime *box)
     SDL_free(box->name);
     SDL_free(box->prefab);
     SDL_free(box->material);
+    for (size_t i = 0; i < SDL_arraysize(box->face_materials); ++i)
+        SDL_free(box->face_materials[i]);
     SDL_zero(*box);
 }
 
@@ -81,6 +85,51 @@ static bool copy_source_string(char **field, const char *value)
         return true;
     *field = SDL_strdup(value);
     return *field != NULL;
+}
+
+static int source_box_face_index_from_key(const char *key)
+{
+    for (size_t i = 0; key != NULL && i < SDL_arraysize(source_box_face_keys); ++i)
+    {
+        if (SDL_strcmp(key, source_box_face_keys[i]) == 0)
+            return (int)i;
+    }
+    return -1;
+}
+
+static bool copy_source_face_materials(editor_brush_source_box_runtime *out_box, yyjson_val *face_materials,
+                                       char *error_buffer, int error_buffer_size)
+{
+    if (out_box == NULL || face_materials == NULL)
+        return true;
+    if (!yyjson_is_obj(face_materials))
+    {
+        set_error(error_buffer, error_buffer_size, "editor brush source face_materials must be an object");
+        return false;
+    }
+
+    size_t index = 0;
+    size_t max = 0;
+    yyjson_val *key = NULL;
+    yyjson_val *value = NULL;
+    yyjson_obj_foreach(face_materials, index, max, key, value)
+    {
+        const char *face_key = yyjson_get_str(key);
+        const int face_index = source_box_face_index_from_key(face_key);
+        if (face_index < 0 || !yyjson_is_str(value) || yyjson_get_str(value) == NULL ||
+            yyjson_get_str(value)[0] == '\0')
+        {
+            set_error(error_buffer, error_buffer_size,
+                      "editor brush source face_materials requires px/nx/py/ny/pz/nz non-empty string entries");
+            return false;
+        }
+        if (!copy_source_string(&out_box->face_materials[face_index], yyjson_get_str(value)))
+        {
+            set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source face material");
+            return false;
+        }
+    }
+    return true;
 }
 
 static int find_editor_source_box_index_by_name(const brush_world_runtime *world_runtime, const char *brush_name)
@@ -144,10 +193,12 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
         return false;
     }
     if (!copy_source_string(&out_box->stable_id, stable_id) || !copy_source_string(&out_box->name, name) ||
-        !copy_source_string(&out_box->prefab, prefab) || !copy_source_string(&out_box->material, material))
+        !copy_source_string(&out_box->prefab, prefab) || !copy_source_string(&out_box->material, material) ||
+        !copy_source_face_materials(out_box, obj_get(box, "face_materials"), error_buffer, error_buffer_size))
     {
         free_editor_brush_source_box(out_box);
-        set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source box");
+        if (error_buffer != NULL && error_buffer_size > 0 && error_buffer[0] == '\0')
+            set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source box");
         return false;
     }
     out_box->contents = brush_flags_from_json(obj_get(box, "contents"), brush_content_flag_from_string,
@@ -246,6 +297,7 @@ static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime
     if (world_runtime == NULL || box == NULL || out_brush == NULL)
         return false;
     const int material_index = source_material_index_by_name(&world_runtime->desc, box->material);
+    int face_material_indices[6] = {-1, -1, -1, -1, -1, -1};
     const float meters_per_unit =
         world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit : 0.001f;
     const slayer3d_vec3 min =
@@ -259,6 +311,17 @@ static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime
         set_errorf(error_buffer, error_buffer_size, "invalid editor brush source box '%s'",
                    box->stable_id != NULL ? box->stable_id : "<unnamed>");
         return false;
+    }
+    for (size_t i = 0; i < SDL_arraysize(face_material_indices); ++i)
+    {
+        const char *face_material = box->face_materials[i] != NULL ? box->face_materials[i] : box->material;
+        face_material_indices[i] = source_material_index_by_name(&world_runtime->desc, face_material);
+        if (face_material_indices[i] < 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "invalid editor brush source face material '%s'",
+                       face_material != NULL ? face_material : "<null>");
+            return false;
+        }
     }
 
     SDL_zero(*out_brush);
@@ -277,21 +340,25 @@ static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime
         return false;
     }
 
-    const char *material_name = world_runtime->desc.materials[material_index].name;
     slayer3d_game_data_brush_face *faces = (slayer3d_game_data_brush_face *)out_brush->faces;
-    init_source_box_face(&faces[0], slayer3d_vec3_make(1.0f, 0.0f, 0.0f), max.x, material_index, material_name);
-    init_source_box_face(&faces[1], slayer3d_vec3_make(-1.0f, 0.0f, 0.0f), -min.x, material_index, material_name);
-    init_source_box_face(&faces[2], slayer3d_vec3_make(0.0f, 1.0f, 0.0f), max.y, material_index, material_name);
-    init_source_box_face(&faces[3], slayer3d_vec3_make(0.0f, -1.0f, 0.0f), -min.y, material_index, material_name);
-    init_source_box_face(&faces[4], slayer3d_vec3_make(0.0f, 0.0f, 1.0f), max.z, material_index, material_name);
-    init_source_box_face(&faces[5], slayer3d_vec3_make(0.0f, 0.0f, -1.0f), -min.z, material_index, material_name);
+    init_source_box_face(&faces[0], slayer3d_vec3_make(1.0f, 0.0f, 0.0f), max.x, face_material_indices[0],
+                         world_runtime->desc.materials[face_material_indices[0]].name);
+    init_source_box_face(&faces[1], slayer3d_vec3_make(-1.0f, 0.0f, 0.0f), -min.x, face_material_indices[1],
+                         world_runtime->desc.materials[face_material_indices[1]].name);
+    init_source_box_face(&faces[2], slayer3d_vec3_make(0.0f, 1.0f, 0.0f), max.y, face_material_indices[2],
+                         world_runtime->desc.materials[face_material_indices[2]].name);
+    init_source_box_face(&faces[3], slayer3d_vec3_make(0.0f, -1.0f, 0.0f), -min.y, face_material_indices[3],
+                         world_runtime->desc.materials[face_material_indices[3]].name);
+    init_source_box_face(&faces[4], slayer3d_vec3_make(0.0f, 0.0f, 1.0f), max.z, face_material_indices[4],
+                         world_runtime->desc.materials[face_material_indices[4]].name);
+    init_source_box_face(&faces[5], slayer3d_vec3_make(0.0f, 0.0f, -1.0f), -min.z, face_material_indices[5],
+                         world_runtime->desc.materials[face_material_indices[5]].name);
 
-    static const char *const suffixes[] = {"px", "nx", "py", "ny", "pz", "nz"};
     for (int i = 0; i < out_brush->face_count; ++i)
     {
         char face_stable_id[320];
         SDL_snprintf(face_stable_id, sizeof(face_stable_id), "%s.face.%s",
-                     box->stable_id != NULL ? box->stable_id : box->name, suffixes[i]);
+                     box->stable_id != NULL ? box->stable_id : box->name, source_box_face_keys[i]);
         if (!set_source_brush_metadata_string(&faces[i].editor.stable_id, face_stable_id))
         {
             free_source_runtime_brush(out_brush);
@@ -397,6 +464,18 @@ static const char *brush_material_name_for_source_box(const slayer3d_game_data_b
     return "";
 }
 
+static const char *brush_face_material_name_for_source_box(const slayer3d_game_data_brush_world *world,
+                                                           const slayer3d_game_data_brush_face *face)
+{
+    if (face == NULL)
+        return "";
+    if (face->material_name != NULL)
+        return face->material_name;
+    if (world != NULL && face->material_index >= 0 && face->material_index < world->material_count)
+        return world->materials[face->material_index].name != NULL ? world->materials[face->material_index].name : "";
+    return "";
+}
+
 static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush, const char *material)
 {
     if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
@@ -439,6 +518,16 @@ static bool source_box_from_runtime_brush(const slayer3d_game_data_brush_world *
     out_box->max[1] = source_millimeters_from_meters(brush->bounds.max.y);
     out_box->max[2] = source_millimeters_from_meters(brush->bounds.max.z);
     out_box->contents = brush->contents != 0u ? brush->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    for (int i = 0; i < brush->face_count && i < (int)SDL_arraysize(out_box->face_materials); ++i)
+    {
+        const char *face_material = brush_face_material_name_for_source_box(world, &brush->faces[i]);
+        if (face_material != NULL && material != NULL && SDL_strcmp(face_material, material) != 0 &&
+            !copy_source_string(&out_box->face_materials[i], face_material))
+        {
+            free_editor_brush_source_box(out_box);
+            return false;
+        }
+    }
     return true;
 }
 
@@ -691,5 +780,56 @@ bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtim
         (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
         return false;
     }
+    return true;
+}
+
+bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
+                                                     int face_index, const char *material_name, char *error_buffer,
+                                                     int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || material_name == NULL ||
+        material_name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush paint requires a source model and material");
+        return false;
+    }
+    if (face_index < 0 || face_index >= (int)SDL_arraysize(source_box_face_keys))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush face index out of range");
+        return false;
+    }
+    if (source_material_index_by_name(&world_runtime->desc, material_name) < 0)
+    {
+        set_errorf(error_buffer, error_buffer_size, "source brush material '%s' not found", material_name);
+        return false;
+    }
+
+    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    char *old_face_material = box->face_materials[face_index];
+    box->face_materials[face_index] = NULL;
+    if (box->material != NULL && SDL_strcmp(box->material, material_name) != 0 &&
+        !copy_source_string(&box->face_materials[face_index], material_name))
+    {
+        box->face_materials[face_index] = old_face_material;
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush face material");
+        return false;
+    }
+
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        SDL_free(box->face_materials[face_index]);
+        box->face_materials[face_index] = old_face_material;
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    SDL_free(old_face_material);
     return true;
 }

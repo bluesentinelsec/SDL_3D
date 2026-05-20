@@ -378,6 +378,82 @@ static bool editor_brush_source_box_has_positive_extent(yyjson_val *min_value, y
     return true;
 }
 
+static bool editor_brush_source_face_key_valid(const char *key)
+{
+    static const char *const valid[] = {"px", "nx", "py", "ny", "pz", "nz"};
+    for (size_t i = 0; key != NULL && i < SDL_arraysize(valid); ++i)
+    {
+        if (SDL_strcmp(key, valid[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static yyjson_val *editor_brush_source_world_materials(yyjson_val *root, const char *world_name)
+{
+    yyjson_val *worlds = obj_get(root, "brush_worlds");
+    if (!yyjson_is_arr(worlds))
+        return NULL;
+    for (size_t i = 0; i < yyjson_arr_size(worlds); ++i)
+    {
+        yyjson_val *world = yyjson_arr_get(worlds, i);
+        const char *name = json_string(world, "name");
+        if (name != NULL && world_name != NULL && SDL_strcmp(name, world_name) == 0)
+            return obj_get(world, "materials");
+    }
+    return NULL;
+}
+
+static bool editor_brush_source_material_table(validation_context *ctx, yyjson_val *materials, const char *source_path,
+                                               name_table *out_material_names)
+{
+    SDL_zero(*out_material_names);
+    if (!yyjson_is_arr(materials))
+        return validation_error(ctx, source_path, "editor brush source world materials must be available");
+    for (size_t i = 0; i < yyjson_arr_size(materials); ++i)
+    {
+        char material_path[PATH_BUFFER_SIZE];
+        format_path(material_path, sizeof(material_path), "%s.materials[%zu]", source_path, i);
+        if (!require_unique_name(ctx, out_material_names, "editor brush source material",
+                                 json_string(yyjson_arr_get(materials, i), "name"), material_path))
+            return false;
+    }
+    return true;
+}
+
+static bool validate_editor_brush_source_face_materials(validation_context *ctx, yyjson_val *face_materials,
+                                                        const char *box_path, const name_table *material_names)
+{
+    if (face_materials == NULL)
+        return true;
+    if (!yyjson_is_obj(face_materials))
+        return validation_error(ctx, box_path, "editor brush source face_materials must be an object");
+
+    size_t index = 0;
+    size_t max = 0;
+    yyjson_val *key = NULL;
+    yyjson_val *value = NULL;
+    yyjson_obj_foreach(face_materials, index, max, key, value)
+    {
+        const char *face_key = yyjson_get_str(key);
+        char face_path[PATH_BUFFER_SIZE];
+        format_path(face_path, sizeof(face_path), "%s.face_materials.%s", box_path, face_key != NULL ? face_key : "");
+        if (!editor_brush_source_face_key_valid(face_key) || !yyjson_is_str(value) || yyjson_get_str(value) == NULL ||
+            yyjson_get_str(value)[0] == '\0')
+        {
+            return validation_error(ctx, face_path,
+                                    "editor brush source face material keys must be px/nx/py/ny/pz/nz with non-empty "
+                                    "string material refs");
+        }
+        if (!name_table_contains(material_names, yyjson_get_str(value)))
+        {
+            return validation_error(ctx, face_path,
+                                    "editor brush source face material must reference a declared brush material");
+        }
+    }
+    return true;
+}
+
 bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, validation_names *names)
 {
     yyjson_val *sources = obj_get(root, "editor_brush_sources");
@@ -403,18 +479,24 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
         yyjson_val *meters_per_unit = obj_get(source, "meters_per_unit");
         yyjson_val *boxes = obj_get(source, "boxes");
         const char *coordinate_system = json_string(source, "coordinate_system");
+        const char *source_world = json_string(source, "world");
+        name_table material_names;
+        SDL_zero(material_names);
         ok = require_unique_name(ctx, &source_worlds, "editor brush source world", json_string(source, "world"),
                                  source_path) &&
-             require_ref(ctx, &names->brush_worlds, "brush world", json_string(source, "world"), source_path) &&
+             require_ref(ctx, &names->brush_worlds, "brush world", source_world, source_path) &&
              (coordinate_system == NULL || SDL_strcmp(coordinate_system, "fixed_millimeters") == 0) &&
              (meters_per_unit == NULL || (yyjson_is_num(meters_per_unit) && yyjson_get_real(meters_per_unit) > 0.0)) &&
-             yyjson_is_arr(boxes);
+             yyjson_is_arr(boxes) &&
+             editor_brush_source_material_table(ctx, editor_brush_source_world_materials(root, source_world),
+                                                source_path, &material_names);
         if (!ok)
         {
             if (!ctx->failed)
                 ok = validation_error(ctx, source_path,
                                       "editor brush source requires world ref, optional fixed_millimeters coordinate "
                                       "system, positive meters_per_unit, and boxes array");
+            name_table_destroy(&material_names);
             break;
         }
 
@@ -437,18 +519,21 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             ok = require_unique_name(ctx, &box_ids, "editor brush source stable id", json_string(box, "stable_id"),
                                      box_path) &&
                  (kind == NULL || SDL_strcmp(kind, "box") == 0) && (prefab == NULL || prefab[0] != '\0') &&
-                 material != NULL && material[0] != '\0' &&
+                 material != NULL && material[0] != '\0' && name_table_contains(&material_names, material) &&
                  editor_brush_source_box_has_positive_extent(obj_get(box, "min"), obj_get(box, "max")) &&
                  validate_brush_string_or_string_array(ctx, contents, box_path, "editor brush source contents",
-                                                       brush_content_name_valid, false);
+                                                       brush_content_name_valid, false) &&
+                 validate_editor_brush_source_face_materials(ctx, obj_get(box, "face_materials"), box_path,
+                                                             &material_names);
             if (!ok && !ctx->failed)
             {
                 ok = validation_error(ctx, box_path,
-                                      "editor brush source box requires stable_id, kind 'box', material, integer "
-                                      "min/max vec3 with positive extent, and valid contents");
+                                      "editor brush source box requires stable_id, kind 'box', material ref, integer "
+                                      "min/max vec3 with positive extent, valid contents, and valid face_materials");
             }
         }
         name_table_destroy(&box_ids);
+        name_table_destroy(&material_names);
     }
     name_table_destroy(&source_worlds);
     return ok;

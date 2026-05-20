@@ -646,6 +646,24 @@ static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const 
     slayer3d_game_data_brush *brush = find_editor_mutable_brush(world_runtime, entry->element_name);
     const int material_index = forward ? entry->material_index : entry->previous_material_index;
     const int rollback_index = forward ? entry->previous_material_index : entry->material_index;
+    if (world_runtime != NULL && world_runtime->editor_has_source_model && material_index >= 0 &&
+        material_index < world_runtime->desc.material_count)
+    {
+        if (editor_brush_world_set_source_box_face_material(world_runtime, entry->element_name, entry->face_index,
+                                                            world_runtime->desc.materials[material_index].name, NULL,
+                                                            0))
+        {
+            editor_brush_world_mark_dirty(world_runtime);
+            return true;
+        }
+        if (rollback_index >= 0 && rollback_index < world_runtime->desc.material_count)
+        {
+            (void)editor_brush_world_set_source_box_face_material(world_runtime, entry->element_name, entry->face_index,
+                                                                  world_runtime->desc.materials[rollback_index].name,
+                                                                  NULL, 0);
+        }
+        return false;
+    }
     if (!set_editor_brush_face_material(world_runtime, brush, entry->face_index, material_index))
         return false;
     if (rebuild_editor_brush_world(world_runtime))
