@@ -16872,6 +16872,36 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
     EXPECT_EQ(world.compile_triangle_count, 20);
     ASSERT_NE(world.render_model, nullptr);
     ASSERT_EQ(world.render_model->mesh_count, 1);
+    ASSERT_NE(world.compile_rendered_faces, nullptr);
+    ASSERT_EQ(world.compile_rendered_face_metadata_count, 10);
+    int compiled_vertices = 0;
+    bool found_left_exterior = false;
+    bool found_right_exterior = false;
+    bool found_left_internal = false;
+    bool found_right_internal = false;
+    for (int i = 0; i < world.compile_rendered_face_metadata_count; ++i)
+    {
+        const slayer3d_game_data_brush_compiled_face &compiled_face = world.compile_rendered_faces[i];
+        EXPECT_GE(compiled_face.brush_index, 0);
+        EXPECT_LT(compiled_face.brush_index, world.brush_count);
+        EXPECT_GE(compiled_face.face_index, 0);
+        EXPECT_LT(compiled_face.face_index, world.brushes[compiled_face.brush_index].face_count);
+        EXPECT_EQ(compiled_face.mesh_index, 0);
+        EXPECT_EQ(compiled_face.vertex_count, 6);
+        EXPECT_EQ(compiled_face.triangle_count, 2);
+        compiled_vertices += compiled_face.vertex_count;
+        const std::string face_id =
+            compiled_face.source_face_stable_id != nullptr ? compiled_face.source_face_stable_id : "";
+        found_left_exterior = found_left_exterior || face_id == "source.box.left.face.nx";
+        found_right_exterior = found_right_exterior || face_id == "source.box.right.face.px";
+        found_left_internal = found_left_internal || face_id == "source.box.left.face.px";
+        found_right_internal = found_right_internal || face_id == "source.box.right.face.nx";
+    }
+    EXPECT_EQ(compiled_vertices, world.render_model->meshes[0].vertex_count);
+    EXPECT_TRUE(found_left_exterior);
+    EXPECT_TRUE(found_right_exterior);
+    EXPECT_FALSE(found_left_internal);
+    EXPECT_FALSE(found_right_internal);
     EXPECT_EQ(world.render_model->meshes[0].vertex_count, 60);
     EXPECT_STREQ(world.brushes[0].editor.stable_id, "source.box.left");
     EXPECT_STREQ(world.brushes[1].editor.stable_id, "source.box.right");

@@ -509,6 +509,33 @@ extern "C"
         int brush_count;
     } slayer3d_game_data_brush_compile_chunk;
 
+    /** @brief One visible source brush face emitted into a compiled brush-world render mesh. */
+    typedef struct slayer3d_game_data_brush_compiled_face
+    {
+        /** @brief Brush index in the owning brush world. */
+        int brush_index;
+        /** @brief Face index in the owning brush. */
+        int face_index;
+        /** @brief Material index used by this compiled face. */
+        int material_index;
+        /** @brief Render-model mesh index that contains this face's triangles. */
+        int mesh_index;
+        /** @brief First vertex for this face inside @p mesh_index. */
+        int first_vertex;
+        /** @brief Number of vertices emitted for this face. */
+        int vertex_count;
+        /** @brief Number of triangles emitted for this face. */
+        int triangle_count;
+        /** @brief Authored brush name, or NULL. */
+        const char *brush_name;
+        /** @brief Authored material name, or NULL. */
+        const char *material_name;
+        /** @brief Stable source brush id from editor metadata, or NULL. */
+        const char *source_brush_stable_id;
+        /** @brief Stable source face id from editor metadata, or NULL. */
+        const char *source_face_stable_id;
+    } slayer3d_game_data_brush_compiled_face;
+
     /** @brief Runtime-owned native brush world. */
     typedef struct slayer3d_game_data_brush_world
     {
@@ -542,6 +569,10 @@ extern "C"
         int compile_culled_face_count;
         /** @brief Triangles emitted to the compiled render model after compile-time face culling. */
         int compile_triangle_count;
+        /** @brief Source brush/face metadata for each visible face emitted to the compiled render model. */
+        const slayer3d_game_data_brush_compiled_face *compile_rendered_faces;
+        /** @brief Number of entries in @p compile_rendered_faces. */
+        int compile_rendered_face_metadata_count;
         /** @brief Authored brushes that failed to produce bounded geometry during compile. */
         int compile_invalid_brush_count;
         /** @brief Authored brush faces that produced fewer than three clipped vertices during compile. */

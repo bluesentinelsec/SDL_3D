@@ -457,6 +457,15 @@ void slayer3d_game_data_brush_world_free_compile_chunks(slayer3d_game_data_brush
     world->compile_chunk_cell_size = 0.0f;
 }
 
+void slayer3d_game_data_brush_world_free_compiled_faces(slayer3d_game_data_brush_world *world)
+{
+    if (world == NULL)
+        return;
+    SDL_free((void *)world->compile_rendered_faces);
+    world->compile_rendered_faces = NULL;
+    world->compile_rendered_face_metadata_count = 0;
+}
+
 static int brush_chunk_coord(float value, float min_value, float cell_size, int dim)
 {
     if (cell_size <= 0.0f || dim <= 0)
@@ -821,6 +830,8 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
         return false;
     }
 
+    slayer3d_game_data_brush_compiled_face *compiled_faces = NULL;
+
     int max_face_count = 0;
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
         max_face_count = SDL_max(max_face_count, world->brushes[brush_index].face_count);
@@ -886,6 +897,8 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
     }
     if (mesh_count <= 0)
     {
+        if (update_compile_counters)
+            slayer3d_game_data_brush_world_free_compiled_faces(world);
         SDL_free(polygon);
         SDL_free(neighbor_polygon);
         SDL_free(material_to_batch);
@@ -894,9 +907,25 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
         return true;
     }
 
+    if (update_compile_counters && world->compile_rendered_face_count > 0)
+    {
+        compiled_faces = (slayer3d_game_data_brush_compiled_face *)SDL_calloc(
+            (size_t)world->compile_rendered_face_count, sizeof(*compiled_faces));
+        if (compiled_faces == NULL)
+        {
+            SDL_free(polygon);
+            SDL_free(neighbor_polygon);
+            SDL_free(material_to_batch);
+            SDL_free(batch_material_indices);
+            SDL_free(triangle_counts);
+            return false;
+        }
+    }
+
     model->meshes = (slayer3d_mesh *)SDL_calloc((size_t)mesh_count, sizeof(*model->meshes));
     if (model->meshes == NULL)
     {
+        SDL_free(compiled_faces);
         SDL_free(polygon);
         SDL_free(neighbor_polygon);
         SDL_free(material_to_batch);
@@ -913,6 +942,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
     {
         SDL_free(batch_to_mesh);
         SDL_free(vertex_offsets);
+        SDL_free(compiled_faces);
         SDL_free(polygon);
         SDL_free(neighbor_polygon);
         SDL_free(material_to_batch);
@@ -945,6 +975,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             slayer3d_free_model(model);
             SDL_free(batch_to_mesh);
             SDL_free(vertex_offsets);
+            SDL_free(compiled_faces);
             SDL_free(polygon);
             SDL_free(neighbor_polygon);
             SDL_free(material_to_batch);
@@ -957,6 +988,7 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
         batch_to_mesh[batch_index] = mesh_index++;
     }
 
+    int compiled_face_write = 0;
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
         if (!brush_index_in_render_filter(brush_index, filter_indices, filter_count))
@@ -1001,6 +1033,23 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
                 (float)color.b / 255.0f,
                 (float)color.a / 255.0f,
             };
+            const int face_first_vertex = vertex_offsets[batch_for_material];
+            const int face_vertex_count = (count - 2) * 3;
+            if (compiled_faces != NULL && compiled_face_write < world->compile_rendered_face_count)
+            {
+                slayer3d_game_data_brush_compiled_face *compiled_face = &compiled_faces[compiled_face_write++];
+                compiled_face->brush_index = brush_index;
+                compiled_face->face_index = face_index;
+                compiled_face->material_index = face->material_index;
+                compiled_face->mesh_index = mesh_for_material;
+                compiled_face->first_vertex = face_first_vertex;
+                compiled_face->vertex_count = face_vertex_count;
+                compiled_face->triangle_count = count - 2;
+                compiled_face->brush_name = brush->name;
+                compiled_face->material_name = face->material_name;
+                compiled_face->source_brush_stable_id = brush->editor.stable_id;
+                compiled_face->source_face_stable_id = face->editor.stable_id;
+            }
             for (int tri = 1; tri + 1 < count; ++tri)
             {
                 const slayer3d_vec3 verts[3] = {polygon[0], polygon[tri], polygon[tri + 1]};
@@ -1036,6 +1085,16 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
     SDL_free(material_to_batch);
     SDL_free(batch_material_indices);
     SDL_free(triangle_counts);
+    if (update_compile_counters)
+    {
+        slayer3d_game_data_brush_world_free_compiled_faces(world);
+        world->compile_rendered_faces = compiled_faces;
+        world->compile_rendered_face_metadata_count = compiled_face_write;
+    }
+    else
+    {
+        SDL_free(compiled_faces);
+    }
     return true;
 }
 
@@ -1147,6 +1206,20 @@ Uint64 slayer3d_game_data_brush_world_compute_compile_artifact_hash(const slayer
     brush_compile_hash_int(&hash, world->compile_rendered_face_count);
     brush_compile_hash_int(&hash, world->compile_culled_face_count);
     brush_compile_hash_int(&hash, world->compile_triangle_count);
+    brush_compile_hash_int(&hash, world->compile_rendered_face_metadata_count);
+    for (int i = 0; i < world->compile_rendered_face_metadata_count; ++i)
+    {
+        const slayer3d_game_data_brush_compiled_face *face = &world->compile_rendered_faces[i];
+        brush_compile_hash_int(&hash, face->brush_index);
+        brush_compile_hash_int(&hash, face->face_index);
+        brush_compile_hash_int(&hash, face->material_index);
+        brush_compile_hash_int(&hash, face->mesh_index);
+        brush_compile_hash_int(&hash, face->first_vertex);
+        brush_compile_hash_int(&hash, face->vertex_count);
+        brush_compile_hash_int(&hash, face->triangle_count);
+        brush_compile_hash_string(&hash, face->source_brush_stable_id);
+        brush_compile_hash_string(&hash, face->source_face_stable_id);
+    }
     brush_compile_hash_int(&hash, world->compile_invalid_brush_count);
     brush_compile_hash_int(&hash, world->compile_degenerate_face_count);
     brush_compile_hash_bool(&hash, world->has_bounds);

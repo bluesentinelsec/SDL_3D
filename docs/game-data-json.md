@@ -737,6 +737,11 @@ tools a stable chunking knob; otherwise the runtime computes a conservative
 automatic size. Compile chunks preserve authored brushes as the source of truth
 while grouping them into optimized runtime broad-phase artifacts for collision
 traces, editor diagnostics, and future render/collision chunk generation. The
+runtime descriptor also exposes `compile_rendered_faces`, a source-to-render
+table for every visible compiled face. Each entry records the source brush,
+source face, material, render mesh index, and vertex range, so editor selection,
+diagnostics, and offline compilers can map optimized render output back to
+stable source brush/face IDs even after hidden internal faces are culled. The
 runtime descriptor's `compile_artifact_hash` is a deterministic hash of the
 compiled mesh/chunk metadata and can be used by tests, tools, and future offline
 cache invalidation. Tools can also call

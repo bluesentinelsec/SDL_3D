@@ -108,6 +108,7 @@ void free_brush_world_runtime(brush_world_runtime *world_runtime)
     SDL_free(world_runtime->artifacts.brush_render_models);
     SDL_free(world_runtime->artifacts.chunk_render_models);
     free_brush_world_visibility_grid(world_runtime);
+    slayer3d_game_data_brush_world_free_compiled_faces(world);
     slayer3d_game_data_brush_world_free_compile_chunks(world);
     free_editor_brush_source_model(world_runtime);
     SDL_free(world_runtime->editor_source_path);
