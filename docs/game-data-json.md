@@ -1488,6 +1488,8 @@ shrink it.
     "active_key": "editor.command_preview.active",
     "valid_key": "editor.command_preview.valid",
     "message_key": "editor.command_preview.message",
+    "element_stable_id_key": "editor.command_preview.element_stable_id",
+    "face_stable_id_key": "editor.command_preview.face_stable_id",
     "bounds_min_key": "editor.command_preview.bounds_min",
     "bounds_max_key": "editor.command_preview.bounds_max"
   }
@@ -1512,6 +1514,10 @@ Successful brush-world mutations mark the affected runtime brush world dirty and
 increment its editor revision. Transaction outputs can publish `dirty_key`,
 `revision_key`, `saved_revision_key`, and `source_path_key` alongside the
 transaction payload so editor UI can show unsaved state without host-specific C.
+For editor source models, command previews and committed transaction records
+capture brush and face stable ids in addition to display names/indexes, so
+undo/redo and repair workflows continue to target the source brush even when the
+compiled/runtime brush representation is regenerated.
 
 ```json
 {
@@ -1524,7 +1530,9 @@ transaction payload so editor UI can show unsaved state without host-specific C.
     "message_key": "editor.transaction.message",
     "transaction_id_key": "editor.transaction.id",
     "undo_count_key": "editor.transaction.undo_count",
-    "redo_count_key": "editor.transaction.redo_count"
+    "redo_count_key": "editor.transaction.redo_count",
+    "element_stable_id_key": "editor.transaction.element_stable_id",
+    "face_stable_id_key": "editor.transaction.face_stable_id"
   },
   "actions": [
     {
@@ -1543,8 +1551,9 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_event`, `editor_transaction_id`,
 `editor_transaction_id_text`, `editor_command`, `editor_command_target`, `editor_transaction_scene`,
 `editor_transaction_world`, `editor_transaction_element`,
+`editor_transaction_element_stable_id`,
 `editor_transaction_material`, `editor_transaction_previous_material`,
-`editor_transaction_face_index`, `editor_transaction_offset`,
+`editor_transaction_face_stable_id`, `editor_transaction_face_index`, `editor_transaction_offset`,
 `editor_transaction_undo_count`, `editor_transaction_redo_count`, and
 `editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
 

@@ -154,8 +154,10 @@ typedef struct editor_command_preview_state
     const char *target;
     const char *world_name;
     const char *element_name;
+    const char *element_stable_id;
     const char *material_name;
     const char *previous_material_name;
+    const char *face_stable_id;
     int face_index;
     int material_index;
     int previous_material_index;
@@ -192,8 +194,10 @@ typedef struct editor_command_transaction_entry
     const char *target;
     const char *world_name;
     const char *element_name;
+    const char *element_stable_id;
     const char *material_name;
     const char *previous_material_name;
+    const char *face_stable_id;
     int face_index;
     int material_index;
     int previous_material_index;

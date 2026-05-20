@@ -135,14 +135,16 @@ static bool copy_source_face_materials(editor_brush_source_box_runtime *out_box,
     return true;
 }
 
-static int find_editor_source_box_index_by_name(const brush_world_runtime *world_runtime, const char *brush_name)
+static int find_editor_source_box_index_by_identity(const brush_world_runtime *world_runtime,
+                                                    const char *brush_identity)
 {
-    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
+    if (world_runtime == NULL || brush_identity == NULL || brush_identity[0] == '\0')
         return -1;
     for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
     {
         const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
-        if (box->name != NULL && SDL_strcmp(box->name, brush_name) == 0)
+        if ((box->name != NULL && SDL_strcmp(box->name, brush_identity) == 0) ||
+            (box->stable_id != NULL && SDL_strcmp(box->stable_id, brush_identity) == 0))
             return i;
     }
     return -1;
@@ -1312,7 +1314,7 @@ bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime,
         return false;
     }
 
-    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
     if (source_index < 0)
     {
         set_error(error_buffer, error_buffer_size, "source brush not found");
@@ -1360,7 +1362,7 @@ bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtim
         return false;
     }
 
-    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
     if (source_index < 0)
     {
         set_error(error_buffer, error_buffer_size, "source brush not found");
@@ -1442,7 +1444,7 @@ bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_
         return false;
     }
 
-    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
     if (source_index < 0)
     {
         set_error(error_buffer, error_buffer_size, "source brush not found");

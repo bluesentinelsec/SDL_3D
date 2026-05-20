@@ -15641,6 +15641,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.command", ""), "translate");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "element");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.element_stable_id", ""),
+                 "editor.brush.target_cube");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.message", ""),
                  "preview translate brush.target.cube");
     const slayer3d_value *preview_min = slayer3d_properties_get_value(scene_state, "editor.command_preview.bounds_min");
@@ -15726,6 +15728,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.element", ""), "brush.target.cube");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.element_stable_id", ""),
+                 "editor.brush.target_cube");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "commit translate #1");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 1);
@@ -15770,6 +15774,10 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.command_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.command", ""), "paint");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.target", ""), "face");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.element_stable_id", ""),
+                 "editor.brush.target_cube");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.face_stable_id", ""),
+                 "editor.face.target_cube.left");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.command_preview.message", ""),
                  "preview paint brush.target.cube");
 
@@ -15778,6 +15786,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.event", ""), "commit");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "committed paint #2");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.face_stable_id", ""),
+                 "editor.face.target_cube.left");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 2);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_EQ(target_cube_face_material(), "mat.editor.floor");
@@ -17282,7 +17292,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxTranslateRejectsOverlapButAl
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 24.0f, 0.001f);
 
     SDL_zeroa(error);
-    ASSERT_TRUE(editor_brush_world_translate_source_box(world_runtime, "brush.source.right",
+    ASSERT_TRUE(editor_brush_world_translate_source_box(world_runtime, "source.box.right",
                                                         slayer3d_vec3_make(-8.0f, 0.0f, 0.0f), error, sizeof(error)))
         << error;
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
