@@ -509,6 +509,33 @@ extern "C"
         int brush_count;
     } slayer3d_game_data_brush_compile_chunk;
 
+    /** @brief One visible source brush face emitted into a compiled brush-world render mesh. */
+    typedef struct slayer3d_game_data_brush_compiled_face
+    {
+        /** @brief Brush index in the owning brush world. */
+        int brush_index;
+        /** @brief Face index in the owning brush. */
+        int face_index;
+        /** @brief Material index used by this compiled face. */
+        int material_index;
+        /** @brief Render-model mesh index that contains this face's triangles. */
+        int mesh_index;
+        /** @brief First vertex for this face inside @p mesh_index. */
+        int first_vertex;
+        /** @brief Number of vertices emitted for this face. */
+        int vertex_count;
+        /** @brief Number of triangles emitted for this face. */
+        int triangle_count;
+        /** @brief Authored brush name, or NULL. */
+        const char *brush_name;
+        /** @brief Authored material name, or NULL. */
+        const char *material_name;
+        /** @brief Stable source brush id from editor metadata, or NULL. */
+        const char *source_brush_stable_id;
+        /** @brief Stable source face id from editor metadata, or NULL. */
+        const char *source_face_stable_id;
+    } slayer3d_game_data_brush_compiled_face;
+
     /** @brief Runtime-owned native brush world. */
     typedef struct slayer3d_game_data_brush_world
     {
@@ -542,6 +569,10 @@ extern "C"
         int compile_culled_face_count;
         /** @brief Triangles emitted to the compiled render model after compile-time face culling. */
         int compile_triangle_count;
+        /** @brief Source brush/face metadata for each visible face emitted to the compiled render model. */
+        const slayer3d_game_data_brush_compiled_face *compile_rendered_faces;
+        /** @brief Number of entries in @p compile_rendered_faces. */
+        int compile_rendered_face_metadata_count;
         /** @brief Authored brushes that failed to produce bounded geometry during compile. */
         int compile_invalid_brush_count;
         /** @brief Authored brush faces that produced fewer than three clipped vertices during compile. */
@@ -938,6 +969,10 @@ extern "C"
         const slayer3d_game_data_editor_metadata *material_editor;
         /** @brief Optional face editor metadata for brush face hits. */
         const slayer3d_game_data_editor_metadata *face_editor;
+        /** @brief Visible compiled render face backing this source face, or NULL when culled/not applicable. */
+        const slayer3d_game_data_brush_compiled_face *compiled_face;
+        /** @brief Index into the owning brush world's compile_rendered_faces table, or -1 when unavailable. */
+        int compiled_face_index;
     } slayer3d_game_data_editor_selection;
 
     /** @brief Editor debug primitive kind emitted by tooling helpers. */
@@ -961,6 +996,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE = 8,
         /** @brief Data-authored diagnostic marker line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER = 9,
+        /** @brief Selected brush source face edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_FACE_EDGE = 10,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -983,13 +1020,16 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS = 1u << 7,
         /** @brief Emit data-authored diagnostic markers. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS = 1u << 8,
+        /** @brief Emit the selected source brush face outline when known. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE = 1u << 9,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
@@ -1024,6 +1064,8 @@ extern "C"
         slayer3d_color world_bounds_color;
         /** @brief Color for selected element bounds, or alpha 0 for default. */
         slayer3d_color selection_bounds_color;
+        /** @brief Color for selected source face outline, or alpha 0 for default. */
+        slayer3d_color selection_face_color;
         /** @brief Color for trace rays, or alpha 0 for default. */
         slayer3d_color trace_color;
         /** @brief Color for face normals, or alpha 0 for default. */
@@ -2113,7 +2155,8 @@ extern "C"
      * for editor viewports. The returned selection includes the raw trace hit,
      * stable authored names and indexes, world-space bounds where available, and
      * pointers to runtime-owned editor metadata for the selected world, element,
-     * material, and face. Pointers remain valid until the runtime is destroyed.
+     * material, face, and visible compiled render face when available. Pointers
+     * remain valid until the runtime is destroyed or the brush world is rebuilt.
      */
     bool slayer3d_game_data_pick_editor_world_model(const slayer3d_game_data_runtime *runtime,
                                                     const slayer3d_game_data_world_trace_desc *desc,
@@ -2170,7 +2213,8 @@ extern "C"
      *
      * Returns false and writes an empty selection when no object has been
      * selected in the active scene. Selection pointers are runtime-owned and
-     * remain valid until the runtime is destroyed or reloaded.
+     * remain valid until the runtime is destroyed, reloaded, or the selected
+     * brush world is rebuilt.
      */
     bool slayer3d_game_data_get_active_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                         slayer3d_game_data_editor_selection *out_selection);

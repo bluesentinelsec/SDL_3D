@@ -737,16 +737,22 @@ tools a stable chunking knob; otherwise the runtime computes a conservative
 automatic size. Compile chunks preserve authored brushes as the source of truth
 while grouping them into optimized runtime broad-phase artifacts for collision
 traces, editor diagnostics, and future render/collision chunk generation. The
+runtime descriptor also exposes `compile_rendered_faces`, a source-to-render
+table for every visible compiled face. Each entry records the source brush,
+source face, material, render mesh index, and vertex range, so editor selection,
+diagnostics, and offline compilers can map optimized render output back to
+stable source brush/face IDs even after hidden internal faces are culled. The
 runtime descriptor's `compile_artifact_hash` is a deterministic hash of the
 compiled mesh/chunk metadata and can be used by tests, tools, and future offline
 cache invalidation. Tools can also call
 `slayer3d_game_data_export_brush_world_compile_artifact_json()` to write an
 inspection manifest using `schema: "slayer3d.brush_compile_artifact.v0"`. The
 manifest records a deterministic source hash for authored brush inputs, the
-compile policy, render mesh totals, spatial chunk summaries, and visibility-grid
-metadata. It is intentionally a descriptor rather than a binary cache payload:
-use the source hash, policy, and compile artifact hash together to inspect,
-compare, and invalidate compiled artifacts before adding cache storage/loading.
+compile policy, render mesh totals, visible source-face mappings, spatial chunk
+summaries, and visibility-grid metadata. It is intentionally a descriptor rather
+than a binary cache payload: use the source hash, policy, and compile artifact
+hash together to inspect, compare, and invalidate compiled artifacts before
+adding cache storage/loading.
 Native editor/offline compiler hosts can call
 `slayer3d_game_data_save_brush_world_compile_artifact_file()` to atomically save
 that manifest beside authored brush fragments, then use
@@ -878,6 +884,12 @@ face normal through the normal 3D presentation path:
         "element_key": "editor.selection.element",
         "material_key": "editor.selection.material",
         "face_stable_id_key": "editor.selection.face_stable_id",
+        "face_rendered_key": "editor.selection.face_rendered",
+        "compiled_face_index_key": "editor.selection.compiled_face_index",
+        "compiled_mesh_index_key": "editor.selection.compiled_mesh_index",
+        "compiled_first_vertex_key": "editor.selection.compiled_first_vertex",
+        "compiled_vertex_count_key": "editor.selection.compiled_vertex_count",
+        "compiled_triangle_count_key": "editor.selection.compiled_triangle_count",
         "face_index_key": "editor.selection.face_index"
       },
       "hover_outputs": {
@@ -897,6 +909,7 @@ face normal through the normal 3D presentation path:
         "work_plane_grid",
         "world_bounds",
         "selection_bounds",
+        "selection_face",
         "trace_ray",
         "face_normal",
         "hit_marker"
@@ -919,12 +932,27 @@ authored with `viewport`, `viewport_width`/`viewport_height`, or scene-state
 keys. This lets editor dojos and future editor hosts share the same
 data-authored picking primitive.
 
+For brush-world selections, optional `face_rendered_key` and `compiled_*_key`
+outputs report whether the selected source face survived compile-time hidden
+face culling and where its triangles live in the optimized render mesh. Culled
+or non-brush selections publish `face_rendered=false`, `compiled_face_index=-1`,
+mesh/vertex indexes of `-1`, and zero vertex/triangle counts. This lets editor
+inspectors and offline tools keep source brushes as the durable editing model
+without losing the mapping to compiled render output.
+
 Selection traces may also author `work_plane` as a fallback placement plane.
 When the ray misses world geometry, the editor intersects the same ray with the
 plane described by `dot(normal, point) = distance` and publishes that as a hit
 with `selection_type: "none"`. This is intended for blockout tools: a blank
 scene can still place the first floor on the ground plane, while later clicks on
 real brush faces keep returning normal brush-world selections.
+
+`selection_face` draws the selected source brush face outline separately from
+the full brush bounds. This is useful for source-brush editors because the
+selected face remains visible in tooling even when the compiler culls that face
+from the optimized runtime render mesh as an internal hidden surface. Override
+`selection_face_color` when the default green outline does not fit the editor
+theme.
 
 `editor.debug_overlay.hover_selection_if` can be used when the overlay should
 draw the live hover trace instead of the last clicked active selection. Full
@@ -1069,11 +1097,24 @@ all six generated faces. `face_materials` may override individual generated box
 faces with keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit
 `material`.
 
+Each source box must have a unique `stable_id` and a unique brush `name` within
+its source world. When `name` is omitted, it defaults to `stable_id`. The
+runtime derives stable face ids from the brush stable id and canonical box face
+keys, for example `floor.spawn.001.face.px`. This keeps selection, painting,
+diagnostics, and undo/redo addressable by source brush/face identity instead of
+by transient compiled-surface indexes.
+
 For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
 in-memory source model. Successful editor mutations synchronize that source
 model before save/export, then reload compiles runtime brushes from the source
 again. This makes source boxes the durable editing truth and keeps generated
 `brush_worlds` as load-time/runtime derived data.
+
+Source-backed editor mutations validate candidate source boxes before they are
+committed. Exact snapped face, edge, or vertex contact is legal; positive-volume
+overlap between structural source boxes is rejected at the source-model boundary.
+This keeps placement, translate, and resize tools from introducing hidden
+runtime-only overlap states.
 
 Use `editor.brush_world.validate_source` or the native
 `slayer3d_game_data_validate_editor_brush_source_model()` API to inspect source

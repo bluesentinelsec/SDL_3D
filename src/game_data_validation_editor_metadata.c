@@ -501,7 +501,9 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
         }
 
         name_table box_ids;
+        name_table box_names;
         SDL_zero(box_ids);
+        SDL_zero(box_names);
         for (size_t box_index = 0; ok && box_index < yyjson_arr_size(boxes); ++box_index)
         {
             char box_path[PATH_BUFFER_SIZE];
@@ -515,9 +517,12 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             const char *kind = json_string(box, "kind");
             const char *prefab = json_string(box, "prefab");
             const char *material = json_string(box, "material");
+            const char *stable_id = json_string(box, "stable_id");
+            const char *explicit_name = json_string(box, "name");
+            const char *name = explicit_name != NULL ? explicit_name : stable_id;
             yyjson_val *contents = obj_get(box, "contents");
-            ok = require_unique_name(ctx, &box_ids, "editor brush source stable id", json_string(box, "stable_id"),
-                                     box_path) &&
+            ok = require_unique_name(ctx, &box_ids, "editor brush source stable id", stable_id, box_path) &&
+                 require_unique_name(ctx, &box_names, "editor brush source name", name, box_path) &&
                  (kind == NULL || SDL_strcmp(kind, "box") == 0) && (prefab == NULL || prefab[0] != '\0') &&
                  material != NULL && material[0] != '\0' && name_table_contains(&material_names, material) &&
                  editor_brush_source_box_has_positive_extent(obj_get(box, "min"), obj_get(box, "max")) &&
@@ -532,6 +537,7 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
                                       "min/max vec3 with positive extent, valid contents, and valid face_materials");
             }
         }
+        name_table_destroy(&box_names);
         name_table_destroy(&box_ids);
         name_table_destroy(&material_names);
     }

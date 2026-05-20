@@ -166,6 +166,56 @@ static bool source_box_positive_volume_overlap(const editor_brush_source_box_run
            source_intervals_overlap_positive(a->min[2], a->max[2], b->min[2], b->max[2]);
 }
 
+static bool source_box_contents_are_structural(unsigned int contents)
+{
+    if (contents == 0u)
+        contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    return (contents & (SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP |
+                        SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP | SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY)) != 0u;
+}
+
+static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
+                                       const editor_brush_source_box_runtime *candidate, int exclude_index,
+                                       char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || candidate == NULL)
+        return false;
+    if (!source_box_extents_valid(candidate))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush edit would create invalid geometry");
+        return false;
+    }
+
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        if (i == exclude_index)
+            continue;
+        const editor_brush_source_box_runtime *existing = &world_runtime->editor_source_boxes[i];
+        if (existing->stable_id != NULL && candidate->stable_id != NULL &&
+            SDL_strcmp(existing->stable_id, candidate->stable_id) == 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "duplicate editor brush source stable id '%s'",
+                       candidate->stable_id);
+            return false;
+        }
+        if (existing->name != NULL && candidate->name != NULL && SDL_strcmp(existing->name, candidate->name) == 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "duplicate editor brush source name '%s'", candidate->name);
+            return false;
+        }
+        if (source_box_contents_are_structural(candidate->contents) &&
+            source_box_contents_are_structural(existing->contents) &&
+            source_box_positive_volume_overlap(candidate, existing))
+        {
+            set_errorf(error_buffer, error_buffer_size, "source brush '%s' overlaps existing brush '%s'",
+                       candidate->name != NULL ? candidate->name : "<unnamed>",
+                       existing->name != NULL ? existing->name : "<unnamed>");
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool source_box_overlaps_on_other_axes(const editor_brush_source_box_runtime *a,
                                               const editor_brush_source_box_runtime *b, int axis)
 {
@@ -264,6 +314,31 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
     return true;
 }
 
+static bool editor_source_box_identifier_unique(const editor_brush_source_box_runtime *boxes, int box_count,
+                                                const editor_brush_source_box_runtime *candidate, char *error_buffer,
+                                                int error_buffer_size)
+{
+    if (boxes == NULL || box_count <= 0 || candidate == NULL)
+        return true;
+    for (int i = 0; i < box_count; ++i)
+    {
+        const editor_brush_source_box_runtime *box = &boxes[i];
+        if (box->stable_id != NULL && candidate->stable_id != NULL &&
+            SDL_strcmp(box->stable_id, candidate->stable_id) == 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "duplicate editor brush source stable id '%s'",
+                       candidate->stable_id);
+            return false;
+        }
+        if (box->name != NULL && candidate->name != NULL && SDL_strcmp(box->name, candidate->name) == 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "duplicate editor brush source name '%s'", candidate->name);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
                                     char *error_buffer, int error_buffer_size)
 {
@@ -292,6 +367,13 @@ bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_v
         if (!load_editor_brush_source_box(yyjson_arr_get(boxes, (size_t)i), &source_boxes[i], error_buffer,
                                           error_buffer_size))
         {
+            free_editor_brush_source_model(world_runtime);
+            return false;
+        }
+        if (!editor_source_box_identifier_unique(source_boxes, world_runtime->editor_source_box_count, &source_boxes[i],
+                                                 error_buffer, error_buffer_size))
+        {
+            free_editor_brush_source_box(&source_boxes[i]);
             free_editor_brush_source_model(world_runtime);
             return false;
         }
@@ -1128,6 +1210,11 @@ bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_
                    brush->name != NULL ? brush->name : "<unnamed>");
         return false;
     }
+    if (!source_box_candidate_valid(world_runtime, &inserted, -1, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(&inserted);
+        return false;
+    }
 
     const int old_count = world_runtime->editor_source_box_count;
     const int insert_index = SDL_clamp(box_index, 0, old_count);
@@ -1248,6 +1335,12 @@ bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime,
         box->max[axis] += delta[axis];
     }
 
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size))
+    {
+        restore_source_box_coordinates(box, old_min, old_max);
+        return false;
+    }
+
     if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
     {
         restore_source_box_coordinates(box, old_min, old_max);
@@ -1310,6 +1403,12 @@ bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtim
     {
         restore_source_box_coordinates(box, old_min, old_max);
         set_error(error_buffer, error_buffer_size, "source brush resize would create invalid geometry");
+        return false;
+    }
+
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size))
+    {
+        restore_source_box_coordinates(box, old_min, old_max);
         return false;
     }
 

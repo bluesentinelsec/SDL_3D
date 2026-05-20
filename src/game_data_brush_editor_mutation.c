@@ -334,7 +334,8 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
     }
     const slayer3d_bounding_box new_bounds = {desc->min, desc->max};
     const char *overlapping_brush = NULL;
-    if (editor_brush_world_box_overlaps_structural_brush(
+    if (!world_runtime->editor_has_source_model &&
+        editor_brush_world_box_overlaps_structural_brush(
             world_runtime, new_bounds, desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID,
             NULL, &overlapping_brush))
     {
@@ -379,9 +380,11 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
                                                              &new_brush, rebuild_error, sizeof(rebuild_error)))
         {
             free_editor_runtime_brush(&new_brush);
-            set_errorf(error_buffer, error_buffer_size,
-                       "failed to rebuild source-backed brush world after box creation%s%s",
-                       rebuild_error[0] != '\0' ? ": " : "", rebuild_error[0] != '\0' ? rebuild_error : "");
+            if (rebuild_error[0] != '\0')
+                set_error(error_buffer, error_buffer_size, rebuild_error);
+            else
+                set_error(error_buffer, error_buffer_size,
+                          "failed to rebuild source-backed brush world after box creation");
             return false;
         }
         if (out_brush_name != NULL && out_brush_name_size > 0u)
@@ -515,27 +518,8 @@ bool slayer3d_game_data_resize_brush_face(slayer3d_game_data_runtime *runtime,
         {
             return false;
         }
-
-        const char *overlapping_brush = NULL;
-        const slayer3d_game_data_brush *resized_brush = find_editor_mutable_brush(world_runtime, desc->brush_name);
-        const bool resize_valid =
-            resized_brush != NULL && editor_brush_bounds_valid(resized_brush) &&
-            !editor_brush_world_box_overlaps_structural_brush(
-                world_runtime, resized_brush->bounds, resized_brush->contents, resized_brush, &overlapping_brush);
-        if (resize_valid)
-        {
-            editor_brush_world_mark_dirty(world_runtime);
-            return true;
-        }
-
-        (void)editor_brush_world_resize_source_box_face(world_runtime, desc->brush_name, face_normal, -desc->distance,
-                                                        NULL, 0);
-        if (overlapping_brush != NULL)
-            set_errorf(error_buffer, error_buffer_size, "brush face resize would overlap existing brush '%s'",
-                       overlapping_brush);
-        else
-            set_error(error_buffer, error_buffer_size, "brush face resize would create invalid geometry");
-        return false;
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
     }
 
     if (!resize_editor_brush_face_plane(brush, desc->face_index, desc->distance))

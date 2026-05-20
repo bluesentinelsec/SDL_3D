@@ -13,6 +13,7 @@ void init_editor_selection(slayer3d_game_data_editor_selection *selection)
     selection->type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
     selection->element_index = -1;
     selection->face_index = -1;
+    selection->compiled_face_index = -1;
     selection->fraction = 1.0f;
 }
 
@@ -97,6 +98,16 @@ static bool populate_brush_editor_selection(const slayer3d_game_data_runtime *ru
         selection->face_editor = &face->editor;
         if (face->material_index >= 0 && face->material_index < world->material_count)
             selection->material_editor = &world->materials[face->material_index].editor;
+        for (int i = 0; i < world->compile_rendered_face_metadata_count; ++i)
+        {
+            const slayer3d_game_data_brush_compiled_face *compiled_face = &world->compile_rendered_faces[i];
+            if (compiled_face->brush_index == trace->element_index && compiled_face->face_index == trace->face_index)
+            {
+                selection->compiled_face = compiled_face;
+                selection->compiled_face_index = i;
+                break;
+            }
+        }
     }
     return true;
 }

@@ -60,6 +60,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS;
     if (SDL_strcmp(value != NULL ? value : "", "selection_bounds") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS;
+    if (SDL_strcmp(value != NULL ? value : "", "selection_face") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE;
     if (SDL_strcmp(value != NULL ? value : "", "trace_ray") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY;
     if (SDL_strcmp(value != NULL ? value : "", "face_normal") == 0)
@@ -119,6 +121,7 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
     out_desc->flags = editor_debug_flags_from_json(obj_get(overlay, "flags"));
     out_desc->world_bounds_color = json_color(overlay, "world_bounds_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->selection_bounds_color = json_color(overlay, "selection_bounds_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->selection_face_color = json_color(overlay, "selection_face_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->trace_color = json_color(overlay, "trace_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->face_normal_color = json_color(overlay, "face_normal_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->hit_marker_color = json_color(overlay, "hit_marker_color", (slayer3d_color){0, 0, 0, 0});
@@ -142,7 +145,7 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
         if (out_selection != NULL && !prefer_hover_selection && editor_selection_mode_is_click(selection_json) &&
             editor_selection_active_for_scene(runtime) && runtime->editor_active_selection.hit)
         {
-            *out_selection = runtime->editor_active_selection;
+            *out_selection = resolved_editor_selection(runtime, &runtime->editor_active_selection);
             out_desc->selection = out_selection;
         }
         else if (out_selection != NULL &&
@@ -244,20 +247,102 @@ static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *
 
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
     {
-        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
-        if (!selection->hit || selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || !selection->has_bounds)
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        if (!selection.hit || selection.type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || !selection.has_bounds)
             continue;
         if (desc->selection != NULL && desc->selection->hit && desc->selection->world_name != NULL &&
-            desc->selection->element_name != NULL && selection->world_name != NULL && selection->element_name != NULL &&
-            SDL_strcmp(desc->selection->world_name, selection->world_name) == 0 &&
-            SDL_strcmp(desc->selection->element_name, selection->element_name) == 0)
+            desc->selection->element_name != NULL && selection.world_name != NULL && selection.element_name != NULL &&
+            SDL_strcmp(desc->selection->world_name, selection.world_name) == 0 &&
+            SDL_strcmp(desc->selection->element_name, selection.element_name) == 0)
         {
             continue;
         }
-        context.world_name = selection->world_name;
-        context.element_name = selection->element_name;
-        context.face_index = selection->face_index;
-        if (!emit_editor_debug_bounds(&context, selection->bounds))
+        context.world_name = selection.world_name;
+        context.element_name = selection.element_name;
+        context.face_index = selection.face_index;
+        if (!emit_editor_debug_bounds(&context, selection.bounds))
+            return false;
+    }
+    return true;
+}
+
+static bool editor_selection_face_corners(const slayer3d_game_data_editor_selection *selection,
+                                          slayer3d_vec3 out_corners[4])
+{
+    if (selection == NULL || out_corners == NULL || !selection->hit || !selection->has_bounds ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->face_index < 0)
+    {
+        return false;
+    }
+
+    const slayer3d_vec3 min = selection->bounds.min;
+    const slayer3d_vec3 max = selection->bounds.max;
+    switch (selection->face_index)
+    {
+    case 0:
+        out_corners[0] = slayer3d_vec3_make(max.x, min.y, min.z);
+        out_corners[1] = slayer3d_vec3_make(max.x, min.y, max.z);
+        out_corners[2] = slayer3d_vec3_make(max.x, max.y, max.z);
+        out_corners[3] = slayer3d_vec3_make(max.x, max.y, min.z);
+        return true;
+    case 1:
+        out_corners[0] = slayer3d_vec3_make(min.x, min.y, min.z);
+        out_corners[1] = slayer3d_vec3_make(min.x, max.y, min.z);
+        out_corners[2] = slayer3d_vec3_make(min.x, max.y, max.z);
+        out_corners[3] = slayer3d_vec3_make(min.x, min.y, max.z);
+        return true;
+    case 2:
+        out_corners[0] = slayer3d_vec3_make(min.x, max.y, min.z);
+        out_corners[1] = slayer3d_vec3_make(max.x, max.y, min.z);
+        out_corners[2] = slayer3d_vec3_make(max.x, max.y, max.z);
+        out_corners[3] = slayer3d_vec3_make(min.x, max.y, max.z);
+        return true;
+    case 3:
+        out_corners[0] = slayer3d_vec3_make(min.x, min.y, min.z);
+        out_corners[1] = slayer3d_vec3_make(min.x, min.y, max.z);
+        out_corners[2] = slayer3d_vec3_make(max.x, min.y, max.z);
+        out_corners[3] = slayer3d_vec3_make(max.x, min.y, min.z);
+        return true;
+    case 4:
+        out_corners[0] = slayer3d_vec3_make(min.x, min.y, max.z);
+        out_corners[1] = slayer3d_vec3_make(min.x, max.y, max.z);
+        out_corners[2] = slayer3d_vec3_make(max.x, max.y, max.z);
+        out_corners[3] = slayer3d_vec3_make(max.x, min.y, max.z);
+        return true;
+    case 5:
+        out_corners[0] = slayer3d_vec3_make(min.x, min.y, min.z);
+        out_corners[1] = slayer3d_vec3_make(max.x, min.y, min.z);
+        out_corners[2] = slayer3d_vec3_make(max.x, max.y, min.z);
+        out_corners[3] = slayer3d_vec3_make(min.x, max.y, min.z);
+        return true;
+    default:
+        return false;
+    }
+}
+
+static bool emit_editor_debug_selection_face(const slayer3d_game_data_editor_debug_desc *desc,
+                                             const slayer3d_game_data_editor_selection *selection,
+                                             slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    slayer3d_vec3 corners[4];
+    if (desc == NULL || selection == NULL || callback == NULL || !editor_selection_face_corners(selection, corners))
+        return true;
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.color = editor_debug_selection_flash_color(
+        editor_debug_color_or_default(desc->selection_face_color, (slayer3d_color){110, 255, 180, 255}));
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_FACE_EDGE;
+    context.world_name = selection->world_name;
+    context.element_name = selection->element_name;
+    context.face_index = selection->face_index;
+
+    for (int i = 0; i < 4; ++i)
+    {
+        if (!emit_editor_debug_line(&context, corners[i], corners[(i + 1) % 4]))
             return false;
     }
     return true;
@@ -505,6 +590,12 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         context.face_index = selection->face_index;
         if (!emit_editor_debug_bounds(&context, selection->bounds))
             return true;
+    }
+
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE) != 0u &&
+        !emit_editor_debug_selection_face(desc, selection, callback, userdata))
+    {
+        return true;
     }
 
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY) != 0u && desc->trace != NULL)
