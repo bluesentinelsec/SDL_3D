@@ -14003,6 +14003,7 @@ TEST(GameDataRuntime, WorldModelInterfaceEnumeratesQueriesAndTracesSectorAndBrus
     {
         int world_edges = 0;
         int selection_edges = 0;
+        int selection_face_edges = 0;
         int rays = 0;
         int normals = 0;
         int markers = 0;
@@ -14016,6 +14017,16 @@ TEST(GameDataRuntime, WorldModelInterfaceEnumeratesQueriesAndTracesSectorAndBrus
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
         {
             capture->selection_edges++;
+            if (primitive->world_name != nullptr && std::string(primitive->world_name) == "brush.world_model" &&
+                primitive->element_name != nullptr && std::string(primitive->element_name) == "brush.cube")
+            {
+                capture->saw_selection_world = true;
+            }
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_FACE_EDGE)
+        {
+            capture->selection_face_edges++;
+            EXPECT_EQ(primitive->face_index, 1);
             if (primitive->world_name != nullptr && std::string(primitive->world_name) == "brush.world_model" &&
                 primitive->element_name != nullptr && std::string(primitive->element_name) == "brush.cube")
             {
@@ -14049,6 +14060,7 @@ TEST(GameDataRuntime, WorldModelInterfaceEnumeratesQueriesAndTracesSectorAndBrus
         slayer3d_game_data_for_each_editor_debug_primitive(runtime, &debug_desc, capture_editor_debug, &debug_capture));
     EXPECT_EQ(debug_capture.world_edges, 24);
     EXPECT_EQ(debug_capture.selection_edges, 12);
+    EXPECT_EQ(debug_capture.selection_face_edges, 4);
     EXPECT_EQ(debug_capture.rays, 1);
     EXPECT_EQ(debug_capture.normals, 1);
     EXPECT_EQ(debug_capture.markers, 3);
@@ -15641,6 +15653,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         int grid_lines = 0;
         int world_edges = 0;
         int selection_edges = 0;
+        int selection_face_edges = 0;
         int command_preview_edges = 0;
         int rays = 0;
         int normals = 0;
@@ -15658,6 +15671,11 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
             capture->world_edges++;
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
             capture->selection_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_FACE_EDGE)
+        {
+            capture->selection_face_edges++;
+            EXPECT_EQ(primitive->face_index, 1);
+        }
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE)
             capture->command_preview_edges++;
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_TRACE_RAY)
@@ -15672,6 +15690,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(debug.grid_lines, 1026);
     EXPECT_EQ(debug.world_edges, 12);
     EXPECT_EQ(debug.selection_edges, 12);
+    EXPECT_EQ(debug.selection_face_edges, 4);
     EXPECT_EQ(debug.command_preview_edges, 12);
     EXPECT_EQ(debug.rays, 1);
     EXPECT_EQ(debug.normals, 1);

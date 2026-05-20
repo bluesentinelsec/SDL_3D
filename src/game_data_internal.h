@@ -919,6 +919,8 @@ bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actio
 bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
                                    const slayer3d_properties *payload);
 bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
+slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
+                                                              const slayer3d_game_data_editor_selection *selection);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
     const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,

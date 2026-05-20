@@ -909,6 +909,7 @@ face normal through the normal 3D presentation path:
         "work_plane_grid",
         "world_bounds",
         "selection_bounds",
+        "selection_face",
         "trace_ray",
         "face_normal",
         "hit_marker"
@@ -945,6 +946,13 @@ plane described by `dot(normal, point) = distance` and publishes that as a hit
 with `selection_type: "none"`. This is intended for blockout tools: a blank
 scene can still place the first floor on the ground plane, while later clicks on
 real brush faces keep returning normal brush-world selections.
+
+`selection_face` draws the selected source brush face outline separately from
+the full brush bounds. This is useful for source-brush editors because the
+selected face remains visible in tooling even when the compiler culls that face
+from the optimized runtime render mesh as an internal hidden surface. Override
+`selection_face_color` when the default green outline does not fit the editor
+theme.
 
 `editor.debug_overlay.hover_selection_if` can be used when the overlay should
 draw the live hover trace instead of the last clicked active selection. Full

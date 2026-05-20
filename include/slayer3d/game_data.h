@@ -996,6 +996,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE = 8,
         /** @brief Data-authored diagnostic marker line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER = 9,
+        /** @brief Selected brush source face edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_FACE_EDGE = 10,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -1018,13 +1020,16 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS = 1u << 7,
         /** @brief Emit data-authored diagnostic markers. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS = 1u << 8,
+        /** @brief Emit the selected source brush face outline when known. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE = 1u << 9,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
@@ -1059,6 +1064,8 @@ extern "C"
         slayer3d_color world_bounds_color;
         /** @brief Color for selected element bounds, or alpha 0 for default. */
         slayer3d_color selection_bounds_color;
+        /** @brief Color for selected source face outline, or alpha 0 for default. */
+        slayer3d_color selection_face_color;
         /** @brief Color for trace rays, or alpha 0 for default. */
         slayer3d_color trace_color;
         /** @brief Color for face normals, or alpha 0 for default. */

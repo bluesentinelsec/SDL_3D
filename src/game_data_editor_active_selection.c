@@ -460,8 +460,8 @@ static bool editor_selection_button_requested(const slayer3d_game_data_runtime *
     return button != 0 && slayer3d_input_get_pressed_mouse_button(input) == button;
 }
 
-static slayer3d_game_data_editor_selection resolved_editor_selection(
-    const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_editor_selection *selection);
+slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
+                                                              const slayer3d_game_data_editor_selection *selection);
 
 static bool emit_editor_selection_signal(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
                                          const char *signal_key, const slayer3d_game_data_editor_selection *selection)
@@ -709,8 +709,8 @@ static void resolve_brush_editor_selection_metadata(const slayer3d_game_data_run
     }
 }
 
-static slayer3d_game_data_editor_selection resolved_editor_selection(
-    const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_editor_selection *selection)
+slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
+                                                              const slayer3d_game_data_editor_selection *selection)
 {
     slayer3d_game_data_editor_selection resolved;
     init_editor_selection(&resolved);
@@ -949,7 +949,7 @@ bool slayer3d_game_data_get_active_editor_selection(const slayer3d_game_data_run
     {
         return false;
     }
-    *out_selection = runtime->editor_active_selection;
+    *out_selection = resolved_editor_selection(runtime, &runtime->editor_active_selection);
     return true;
 }
 
