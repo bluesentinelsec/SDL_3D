@@ -9800,6 +9800,64 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
         (dir / "bad_editor_brush_source_face_material.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("face material must reference a declared brush material"), std::string::npos)
         << error;
+
+    write_text(dir / "bad_editor_brush_source_duplicate_name.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Brush Source Duplicate Name" },
+  "world": { "name": "world.bad_editor_brush_source_duplicate_name", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "brush.bad_source_duplicate_name",
+      "materials": [{ "name": "mat.wall" }],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.bad_source_duplicate_name",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "box.first",
+          "name": "brush.duplicate",
+          "kind": "box",
+          "material": "mat.wall",
+          "min": [0, 0, 0],
+          "max": [1000, 1000, 1000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "box.second",
+          "name": "brush.duplicate",
+          "kind": "box",
+          "material": "mat.wall",
+          "min": [1000, 0, 0],
+          "max": [2000, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file(
+        (dir / "bad_editor_brush_source_duplicate_name.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("duplicate editor brush source name"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -16739,6 +16797,84 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "compile": { "hidden_face_culling": true },
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.left",
+          "name": "brush.source.left",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.right",
+          "name": "brush.source.right",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [8000, -200, 0],
+          "max": [16000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-level.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 2);
+    EXPECT_TRUE(world.compile_hidden_face_culling);
+    EXPECT_EQ(world.compile_face_count, 12);
+    EXPECT_EQ(world.compile_culled_face_count, 2);
+    EXPECT_EQ(world.compile_rendered_face_count, 10);
+    EXPECT_EQ(world.compile_triangle_count, 20);
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_EQ(world.render_model->mesh_count, 1);
+    EXPECT_EQ(world.render_model->meshes[0].vertex_count, 60);
+    EXPECT_STREQ(world.brushes[0].editor.stable_id, "source.box.left");
+    EXPECT_STREQ(world.brushes[1].editor.stable_id, "source.box.right");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditing)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -16855,6 +16991,69 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     ASSERT_TRUE(world.brushes[1].has_bounds);
     EXPECT_NEAR(world.brushes[1].bounds.min.x, 8.0f, 0.001f);
     EXPECT_NEAR(world.brushes[1].bounds.max.x, 16.75f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentRejectsDuplicateSourceBrushNames)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.duplicate",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.002",
+          "name": "brush.source.duplicate",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [8000, -200, 0],
+          "max": [16000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    EXPECT_FALSE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/duplicate-source-level.json",
+        error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("duplicate editor brush source name"), std::string::npos) << error;
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

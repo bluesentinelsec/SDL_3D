@@ -264,6 +264,31 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
     return true;
 }
 
+static bool editor_source_box_identifier_unique(const editor_brush_source_box_runtime *boxes, int box_count,
+                                                const editor_brush_source_box_runtime *candidate, char *error_buffer,
+                                                int error_buffer_size)
+{
+    if (boxes == NULL || box_count <= 0 || candidate == NULL)
+        return true;
+    for (int i = 0; i < box_count; ++i)
+    {
+        const editor_brush_source_box_runtime *box = &boxes[i];
+        if (box->stable_id != NULL && candidate->stable_id != NULL &&
+            SDL_strcmp(box->stable_id, candidate->stable_id) == 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "duplicate editor brush source stable id '%s'",
+                       candidate->stable_id);
+            return false;
+        }
+        if (box->name != NULL && candidate->name != NULL && SDL_strcmp(box->name, candidate->name) == 0)
+        {
+            set_errorf(error_buffer, error_buffer_size, "duplicate editor brush source name '%s'", candidate->name);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
                                     char *error_buffer, int error_buffer_size)
 {
@@ -292,6 +317,13 @@ bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_v
         if (!load_editor_brush_source_box(yyjson_arr_get(boxes, (size_t)i), &source_boxes[i], error_buffer,
                                           error_buffer_size))
         {
+            free_editor_brush_source_model(world_runtime);
+            return false;
+        }
+        if (!editor_source_box_identifier_unique(source_boxes, world_runtime->editor_source_box_count, &source_boxes[i],
+                                                 error_buffer, error_buffer_size))
+        {
+            free_editor_brush_source_box(&source_boxes[i]);
             free_editor_brush_source_model(world_runtime);
             return false;
         }

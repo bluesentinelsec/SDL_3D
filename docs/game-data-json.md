@@ -1069,6 +1069,13 @@ all six generated faces. `face_materials` may override individual generated box
 faces with keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit
 `material`.
 
+Each source box must have a unique `stable_id` and a unique brush `name` within
+its source world. When `name` is omitted, it defaults to `stable_id`. The
+runtime derives stable face ids from the brush stable id and canonical box face
+keys, for example `floor.spawn.001.face.px`. This keeps selection, painting,
+diagnostics, and undo/redo addressable by source brush/face identity instead of
+by transient compiled-surface indexes.
+
 For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
 in-memory source model. Successful editor mutations synchronize that source
 model before save/export, then reload compiles runtime brushes from the source
