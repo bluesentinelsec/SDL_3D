@@ -17896,6 +17896,7 @@ TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnLeakingSourceModel)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.axis", ""), "x");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.side", ""), "positive");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_face", ""), "px");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_stable", "")), "");
     EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.leak.candidate", "")).find("room."),
               std::string::npos);
     EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.leak.candidate_distance", 0.0f), 0.0f);

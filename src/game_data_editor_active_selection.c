@@ -721,13 +721,48 @@ slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_gam
     return resolved;
 }
 
-static bool editor_select_brush_by_name(slayer3d_game_data_runtime *runtime, const char *world_name,
-                                        const char *brush_name, const char *face_key,
-                                        slayer3d_game_data_editor_selection *out_selection)
+static bool editor_metadata_matches_stable_id(const slayer3d_game_data_editor_metadata *metadata, const char *stable_id)
+{
+    return stable_id != NULL && stable_id[0] != '\0' && metadata != NULL && metadata->stable_id != NULL &&
+           SDL_strcmp(metadata->stable_id, stable_id) == 0;
+}
+
+static int editor_face_index_from_key_or_stable_id(const slayer3d_game_data_brush *brush, const char *face_key,
+                                                   const char *face_stable_id)
+{
+    if (brush == NULL)
+        return -1;
+    if (face_stable_id != NULL && face_stable_id[0] != '\0')
+    {
+        for (int i = 0; i < brush->face_count; ++i)
+        {
+            if (editor_metadata_matches_stable_id(&brush->faces[i].editor, face_stable_id))
+                return i;
+        }
+        return -1;
+    }
+    return editor_box_face_key_index(face_key);
+}
+
+static bool editor_brush_matches_name_or_stable_id(const slayer3d_game_data_brush *brush, const char *brush_name,
+                                                   const char *brush_stable_id)
+{
+    if (brush == NULL)
+        return false;
+    if (brush_stable_id != NULL && brush_stable_id[0] != '\0')
+        return editor_metadata_matches_stable_id(&brush->editor, brush_stable_id);
+    return brush_name != NULL && brush_name[0] != '\0' && brush->name != NULL &&
+           SDL_strcmp(brush->name, brush_name) == 0;
+}
+
+static bool editor_select_brush_by_identity(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                            const char *brush_name, const char *brush_stable_id, const char *face_key,
+                                            const char *face_stable_id,
+                                            slayer3d_game_data_editor_selection *out_selection)
 {
     init_editor_selection(out_selection);
-    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || brush_name == NULL || brush_name[0] == '\0' ||
-        out_selection == NULL)
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || out_selection == NULL ||
+        ((brush_name == NULL || brush_name[0] == '\0') && (brush_stable_id == NULL || brush_stable_id[0] == '\0')))
     {
         return false;
     }
@@ -740,10 +775,14 @@ static bool editor_select_brush_by_name(slayer3d_game_data_runtime *runtime, con
     for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
     {
         const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
-        if (brush->name == NULL || SDL_strcmp(brush->name, brush_name) != 0)
+        if (!editor_brush_matches_name_or_stable_id(brush, brush_name, brush_stable_id))
             continue;
 
-        const int face_index = editor_box_face_key_index(face_key);
+        const int face_index = editor_face_index_from_key_or_stable_id(brush, face_key, face_stable_id);
+        const bool requested_face =
+            (face_key != NULL && face_key[0] != '\0') || (face_stable_id != NULL && face_stable_id[0] != '\0');
+        if (requested_face && face_index < 0)
+            return false;
         const slayer3d_game_data_brush_face *face =
             face_index >= 0 && face_index < brush->face_count ? &brush->faces[face_index] : NULL;
 
@@ -773,18 +812,33 @@ bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *r
     const char *world_name = json_string(action, "world", NULL);
     const char *brush_name = json_string(action, "element", NULL);
     const char *brush_name_key = json_string(action, "element_from_state", NULL);
+    const char *brush_stable_id = json_string(action, "element_stable_id", NULL);
+    const char *brush_stable_id_key = json_string(action, "element_stable_id_from_state", NULL);
     const char *face_key = json_string(action, "face", NULL);
     const char *face_from_state = json_string(action, "face_from_state", NULL);
+    const char *face_stable_id = json_string(action, "face_stable_id", NULL);
+    const char *face_stable_id_from_state = json_string(action, "face_stable_id_from_state", NULL);
     if (runtime != NULL && runtime->scene_state != NULL)
     {
         if ((brush_name == NULL || brush_name[0] == '\0') && brush_name_key != NULL && brush_name_key[0] != '\0')
             brush_name = slayer3d_properties_get_string(runtime->scene_state, brush_name_key, "");
+        if ((brush_stable_id == NULL || brush_stable_id[0] == '\0') && brush_stable_id_key != NULL &&
+            brush_stable_id_key[0] != '\0')
+        {
+            brush_stable_id = slayer3d_properties_get_string(runtime->scene_state, brush_stable_id_key, "");
+        }
         if ((face_key == NULL || face_key[0] == '\0') && face_from_state != NULL && face_from_state[0] != '\0')
             face_key = slayer3d_properties_get_string(runtime->scene_state, face_from_state, "");
+        if ((face_stable_id == NULL || face_stable_id[0] == '\0') && face_stable_id_from_state != NULL &&
+            face_stable_id_from_state[0] != '\0')
+        {
+            face_stable_id = slayer3d_properties_get_string(runtime->scene_state, face_stable_id_from_state, "");
+        }
     }
 
     slayer3d_game_data_editor_selection selection;
-    const bool ok = editor_select_brush_by_name(runtime, world_name, brush_name, face_key, &selection);
+    const bool ok = editor_select_brush_by_identity(runtime, world_name, brush_name, brush_stable_id, face_key,
+                                                    face_stable_id, &selection);
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
     editor_set_string_output(scene_state, outputs, "message_key",

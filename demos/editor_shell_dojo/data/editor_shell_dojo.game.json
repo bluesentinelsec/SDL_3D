@@ -1696,7 +1696,7 @@
                   {
                     "type": "editor.selection.select_brush",
                     "world": "brush.editor_shell.target",
-                    "element_from_state": "editor.leak.candidate",
+                    "element_stable_id_from_state": "editor.leak.candidate_stable",
                     "face_from_state": "editor.leak.candidate_face",
                     "message": "selected leak candidate",
                     "invalid_message": "no leak candidate to select",

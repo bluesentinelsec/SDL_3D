@@ -1046,7 +1046,7 @@ debug overlay, inspector, and delete/resize tools.
 {
   "type": "editor.selection.select_brush",
   "world": "brush.editor_shell.target",
-  "element_from_state": "editor.leak.candidate",
+  "element_stable_id_from_state": "editor.leak.candidate_stable",
   "face_from_state": "editor.leak.candidate_face",
   "message": "selected leak candidate",
   "invalid_message": "no leak candidate to select",
@@ -1057,9 +1057,14 @@ debug overlay, inspector, and delete/resize tools.
 }
 ```
 
-`element` may be authored directly or read from `element_from_state`; exactly
-one is required. `face` and `face_from_state` are optional and accept the
-canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`. When the target
+Exactly one brush identity is required: `element`, `element_from_state`,
+`element_stable_id`, or `element_stable_id_from_state`. Prefer stable ids for
+diagnostics and repair commands, because source brush names may be edited while
+stable ids continue to identify the same authored brush. `face`,
+`face_from_state`, `face_stable_id`, and `face_stable_id_from_state` are
+optional; at most one may be supplied. `face` and `face_from_state` accept the
+canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`, while
+`face_stable_id` selects a face by its source/editor stable id. When the target
 cannot be resolved, the action clears the active selection, publishes
 `valid_key: false` when configured, and reports `invalid_message`.
 
