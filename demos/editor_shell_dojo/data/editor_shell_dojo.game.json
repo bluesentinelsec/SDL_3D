@@ -1614,7 +1614,14 @@
                   "solid_cell_count_key": "editor.leak.solid_cells",
                   "visited_cell_count_key": "editor.leak.visited_cells",
                   "open_boundary_count_key": "editor.leak.open_boundaries",
-                  "leak_point_key": "editor.leak.point"
+                  "leak_point_key": "editor.leak.point",
+                  "leak_axis_key": "editor.leak.axis",
+                  "leak_side_key": "editor.leak.side",
+                  "candidate_name_key": "editor.leak.candidate",
+                  "candidate_stable_id_key": "editor.leak.candidate_stable",
+                  "candidate_face_key": "editor.leak.candidate_face",
+                  "candidate_point_key": "editor.leak.candidate_point",
+                  "candidate_distance_key": "editor.leak.candidate_distance"
                 }
               },
               {

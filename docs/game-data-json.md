@@ -1071,7 +1071,10 @@ expanded outside boundary, the playable space leaks. The editor shell runs both
 validation actions before entering playable test-run mode so source defects
 block F5 instead of becoming game-runtime surprises. The `leak_point_key`
 output can feed an `editor.debug_overlay.markers` entry so the editor shows the
-first reachable outside-boundary cell directly in the 3D view.
+first reachable outside-boundary cell directly in the 3D view. The candidate
+outputs identify the nearest source-box face on the same leak boundary axis,
+giving editor UI a second point to highlight while the user decides which
+missing or malformed brush should be repaired.
 
 ```json
 {
@@ -1130,7 +1133,14 @@ first reachable outside-boundary cell directly in the 3D view.
     "message_key": "editor.leak.message",
     "open_boundary_count_key": "editor.leak.open_boundaries",
     "visited_cell_count_key": "editor.leak.visited_cells",
-    "leak_point_key": "editor.leak.point"
+    "leak_point_key": "editor.leak.point",
+    "leak_axis_key": "editor.leak.axis",
+    "leak_side_key": "editor.leak.side",
+    "candidate_name_key": "editor.leak.candidate",
+    "candidate_stable_id_key": "editor.leak.candidate_stable",
+    "candidate_face_key": "editor.leak.candidate_face",
+    "candidate_point_key": "editor.leak.candidate_point",
+    "candidate_distance_key": "editor.leak.candidate_distance"
   }
 }
 ```

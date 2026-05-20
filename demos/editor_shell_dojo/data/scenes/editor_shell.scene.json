@@ -379,6 +379,20 @@
               { "type": "scene_state.compare", "key": "editor.leak.open_boundaries", "op": ">", "value": 0 }
             ]
           }
+        },
+        {
+          "name": "editor.leak.candidate",
+          "point_key": "editor.leak.candidate_point",
+          "color": [255, 170, 40, 255],
+          "size": 0.9,
+          "visible_if": {
+            "type": "all",
+            "conditions": [
+              { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": false },
+              { "type": "scene_state.compare", "key": "editor.leak.open_boundaries", "op": ">", "value": 0 },
+              { "type": "scene_state.compare", "key": "editor.leak.candidate_face", "op": "!=", "value": "", "default": "" }
+            ]
+          }
         }
       ]
     }
@@ -720,6 +734,18 @@
           {
             "label": "Open",
             "binding": { "type": "scene_state", "key": "editor.leak.open_boundaries", "default": 0 }
+          },
+          {
+            "label": "L Axis",
+            "binding": { "type": "scene_state", "key": "editor.leak.axis", "default": "none" }
+          },
+          {
+            "label": "L Face",
+            "binding": { "type": "scene_state", "key": "editor.leak.candidate_face", "default": "none" }
+          },
+          {
+            "label": "L Brush",
+            "binding": { "type": "scene_state", "key": "editor.leak.candidate", "default": "none" }
           }
         ]
       }

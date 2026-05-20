@@ -505,6 +505,16 @@ bool slayer3d_game_data_validate_editor_brush_enclosure_action(slayer3d_game_dat
                           ok ? diagnostics.open_boundary_cell_count : 0);
     editor_set_vec3_output(scene_state, outputs, "leak_point_key",
                            ok ? diagnostics.first_leak_point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    editor_set_string_output(scene_state, outputs, "leak_axis_key", ok ? diagnostics.first_leak_axis : "");
+    editor_set_string_output(scene_state, outputs, "leak_side_key", ok ? diagnostics.first_leak_side : "");
+    editor_set_string_output(scene_state, outputs, "candidate_name_key", ok ? diagnostics.candidate_source_name : "");
+    editor_set_string_output(scene_state, outputs, "candidate_stable_id_key",
+                             ok ? diagnostics.candidate_source_stable_id : "");
+    editor_set_string_output(scene_state, outputs, "candidate_face_key", ok ? diagnostics.candidate_source_face : "");
+    editor_set_vec3_output(scene_state, outputs, "candidate_point_key",
+                           ok ? diagnostics.candidate_source_point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    editor_set_float_output(scene_state, outputs, "candidate_distance_key",
+                            ok ? diagnostics.candidate_source_distance : 0.0f);
     (void)publish_editor_brush_world_status(runtime, outputs, world_name, NULL, false);
     return true;
 }

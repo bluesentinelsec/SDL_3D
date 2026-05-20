@@ -17067,6 +17067,12 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
     EXPECT_FALSE(enclosure.enclosed);
     EXPECT_GT(enclosure.open_boundary_cell_count, 0);
     EXPECT_NE(std::string(enclosure.first_issue).find("leaks to outside"), std::string::npos) << enclosure.first_issue;
+    EXPECT_STREQ(enclosure.first_leak_axis, "x");
+    EXPECT_STREQ(enclosure.first_leak_side, "positive");
+    EXPECT_STREQ(enclosure.candidate_source_face, "px");
+    EXPECT_NE(std::string(enclosure.candidate_source_name).find("room."), std::string::npos)
+        << enclosure.candidate_source_name;
+    EXPECT_GT(enclosure.candidate_source_distance, 0.0f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -17230,6 +17236,12 @@ TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnLeakingSourceModel)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.source.valid", false));
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.leak.valid", true));
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.leak.open_boundaries", 0), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.axis", ""), "x");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.side", ""), "positive");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.candidate_face", ""), "px");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.leak.candidate", "")).find("room."),
+              std::string::npos);
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.leak.candidate_distance", 0.0f), 0.0f);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
                  "brush source model leaks to outside");
@@ -17253,7 +17265,7 @@ TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnLeakingSourceModel)
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_leak_marker, &leak_debug));
-    EXPECT_EQ(leak_debug.marker_lines, 5);
+    EXPECT_EQ(leak_debug.marker_lines, 10);
     EXPECT_TRUE(leak_debug.named);
 
     slayer3d_game_data_destroy(runtime);

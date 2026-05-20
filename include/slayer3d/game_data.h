@@ -2260,6 +2260,20 @@ extern "C"
         int open_boundary_cell_count;
         /** @brief First reachable outside-boundary cell center in world meters. */
         slayer3d_vec3 first_leak_point;
+        /** @brief Axis of the first reachable outside-boundary cell, or empty. */
+        char first_leak_axis[8];
+        /** @brief Side of the first reachable outside-boundary cell, either "negative", "positive", or empty. */
+        char first_leak_side[16];
+        /** @brief Nearest source-box name for the first leak boundary, or empty. */
+        char candidate_source_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Nearest source-box stable id for the first leak boundary, or empty. */
+        char candidate_source_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Nearest source-box face key for the first leak boundary, or empty. */
+        char candidate_source_face[8];
+        /** @brief Nearest point on the candidate source face in world meters. */
+        slayer3d_vec3 candidate_source_point;
+        /** @brief Distance in meters from the first leak point to the candidate source face. */
+        float candidate_source_distance;
         /** @brief First blocking issue, or an empty string when enclosed. */
         char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
     } slayer3d_game_data_editor_brush_enclosure_diagnostics;

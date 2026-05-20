@@ -126,7 +126,8 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    outside from the player start, the editor should stay in edit mode and report
    the source issue in the inspector. Reachable leaks also draw a bright
    magenta diagnostic marker at the first outside-boundary cell so you have a
-   concrete place to inspect.
+   concrete place to inspect, plus an orange candidate marker on the nearest
+   source-box face associated with that leak boundary.
 10. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 

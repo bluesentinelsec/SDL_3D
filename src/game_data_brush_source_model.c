@@ -448,6 +448,119 @@ static slayer3d_vec3 source_grid_cell_center_meters(const int *x_edges, const in
     return slayer3d_vec3_make(sx, sy, sz);
 }
 
+static int source_box_face_index_for_axis_side(int axis, int side)
+{
+    if (axis < 0 || axis > 2 || side == 0)
+        return -1;
+    return axis * 2 + (side > 0 ? 0 : 1);
+}
+
+static const char *source_axis_name(int axis)
+{
+    static const char *const names[3] = {"x", "y", "z"};
+    return axis >= 0 && axis < 3 ? names[axis] : "";
+}
+
+static void source_boundary_axis_side(int x, int y, int z, int dim_x, int dim_y, int dim_z, int *out_axis,
+                                      int *out_side)
+{
+    int axis = -1;
+    int side = 0;
+    if (x == 0)
+    {
+        axis = 0;
+        side = -1;
+    }
+    else if (x == dim_x - 1)
+    {
+        axis = 0;
+        side = 1;
+    }
+    else if (y == 0)
+    {
+        axis = 1;
+        side = -1;
+    }
+    else if (y == dim_y - 1)
+    {
+        axis = 1;
+        side = 1;
+    }
+    else if (z == 0)
+    {
+        axis = 2;
+        side = -1;
+    }
+    else if (z == dim_z - 1)
+    {
+        axis = 2;
+        side = 1;
+    }
+    if (out_axis != NULL)
+        *out_axis = axis;
+    if (out_side != NULL)
+        *out_side = side;
+}
+
+static double source_clamp_double(double value, double min_value, double max_value)
+{
+    return value < min_value ? min_value : (value > max_value ? max_value : value);
+}
+
+static slayer3d_vec3 source_point_units_to_meters(const double point[3], float meters_per_unit)
+{
+    return slayer3d_vec3_make((float)point[0] * meters_per_unit, (float)point[1] * meters_per_unit,
+                              (float)point[2] * meters_per_unit);
+}
+
+static void source_enclosure_set_candidate_source_face(
+    const brush_world_runtime *world_runtime, const double leak_point_units[3], int leak_axis, int leak_side,
+    slayer3d_game_data_editor_brush_enclosure_diagnostics *out_diagnostics)
+{
+    if (world_runtime == NULL || leak_point_units == NULL || out_diagnostics == NULL)
+        return;
+    const int face_index = source_box_face_index_for_axis_side(leak_axis, leak_side);
+    if (face_index < 0)
+        return;
+
+    const float meters_per_unit =
+        world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit : 0.001f;
+    double best_distance_sq = -1.0;
+    double best_point[3] = {0.0, 0.0, 0.0};
+    const editor_brush_source_box_runtime *best_box = NULL;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
+        double candidate[3] = {source_clamp_double(leak_point_units[0], (double)box->min[0], (double)box->max[0]),
+                               source_clamp_double(leak_point_units[1], (double)box->min[1], (double)box->max[1]),
+                               source_clamp_double(leak_point_units[2], (double)box->min[2], (double)box->max[2])};
+        candidate[leak_axis] = leak_side > 0 ? box->max[leak_axis] : box->min[leak_axis];
+        const double dx = (double)candidate[0] - (double)leak_point_units[0];
+        const double dy = (double)candidate[1] - (double)leak_point_units[1];
+        const double dz = (double)candidate[2] - (double)leak_point_units[2];
+        const double distance_sq = dx * dx + dy * dy + dz * dz;
+        if (best_box == NULL || distance_sq < best_distance_sq)
+        {
+            best_box = box;
+            best_distance_sq = distance_sq;
+            best_point[0] = candidate[0];
+            best_point[1] = candidate[1];
+            best_point[2] = candidate[2];
+        }
+    }
+    if (best_box == NULL)
+        return;
+
+    SDL_strlcpy(out_diagnostics->candidate_source_name, best_box->name != NULL ? best_box->name : "",
+                sizeof(out_diagnostics->candidate_source_name));
+    SDL_strlcpy(out_diagnostics->candidate_source_stable_id, best_box->stable_id != NULL ? best_box->stable_id : "",
+                sizeof(out_diagnostics->candidate_source_stable_id));
+    SDL_strlcpy(out_diagnostics->candidate_source_face, source_box_face_keys[face_index],
+                sizeof(out_diagnostics->candidate_source_face));
+    out_diagnostics->candidate_source_point = source_point_units_to_meters(best_point, meters_per_unit);
+    out_diagnostics->candidate_source_distance = (float)SDL_sqrt(best_distance_sq) * meters_per_unit;
+}
+
 bool slayer3d_game_data_validate_editor_brush_source_enclosure(
     const slayer3d_game_data_runtime *runtime, const char *world_name, const char *player_start_name, int max_cells,
     slayer3d_game_data_editor_brush_enclosure_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size)
@@ -624,6 +737,21 @@ bool slayer3d_game_data_validate_editor_brush_source_enclosure(
                         out_diagnostics->first_leak_point =
                             source_grid_cell_center_meters(axis_edges[0], axis_edges[1], axis_edges[2], x, y, z,
                                                            world_runtime->editor_source_meters_per_unit);
+                        int leak_axis = -1;
+                        int leak_side = 0;
+                        source_boundary_axis_side(x, y, z, dim_x, dim_y, dim_z, &leak_axis, &leak_side);
+                        SDL_strlcpy(out_diagnostics->first_leak_axis, source_axis_name(leak_axis),
+                                    sizeof(out_diagnostics->first_leak_axis));
+                        SDL_strlcpy(out_diagnostics->first_leak_side,
+                                    leak_side > 0 ? "positive" : (leak_side < 0 ? "negative" : ""),
+                                    sizeof(out_diagnostics->first_leak_side));
+                        const double leak_point_units[3] = {
+                            ((double)axis_edges[0][x] + (double)axis_edges[0][x + 1]) * 0.5,
+                            ((double)axis_edges[1][y] + (double)axis_edges[1][y + 1]) * 0.5,
+                            ((double)axis_edges[2][z] + (double)axis_edges[2][z + 1]) * 0.5,
+                        };
+                        source_enclosure_set_candidate_source_face(world_runtime, leak_point_units, leak_axis,
+                                                                   leak_side, out_diagnostics);
                     }
                 }
                 for (size_t direction = 0; direction < SDL_arraysize(offsets); ++direction)
