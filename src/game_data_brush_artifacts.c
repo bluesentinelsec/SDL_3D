@@ -54,16 +54,42 @@ static bool artifact_export_add_compile_policy(yyjson_mut_doc *doc, yyjson_mut_v
            yyjson_mut_obj_add_real(doc, policy, "visibility_cell_size", world->visibility_cell_size);
 }
 
+static bool artifact_brush_is_renderable(const slayer3d_game_data_brush *brush)
+{
+    if (brush == NULL || (brush->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY) != 0u)
+        return false;
+    return (brush->contents & (SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER |
+                               SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA)) != 0u;
+}
+
 static bool artifact_export_add_source_summary(yyjson_mut_doc *doc, yyjson_mut_val *root,
                                                const slayer3d_game_data_brush_world *world)
 {
     yyjson_mut_val *source = yyjson_mut_obj(doc);
     const char *units = world->units != NULL ? world->units : "meters";
+    int solid_brush_count = 0;
+    int sky_brush_count = 0;
+    int renderable_brush_count = 0;
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        if ((brush->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID) != 0u)
+            ++solid_brush_count;
+        if ((brush->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY) != 0u)
+            ++sky_brush_count;
+        if (artifact_brush_is_renderable(brush))
+            ++renderable_brush_count;
+    }
+    const int nonrenderable_brush_count = world->brush_count - renderable_brush_count;
     return source != NULL && yyjson_mut_obj_add_val(doc, root, "source", source) &&
            yyjson_mut_obj_add_strcpy(doc, source, "units", units) &&
            yyjson_mut_obj_add_real(doc, source, "meters_per_unit", world->meters_per_unit) &&
            yyjson_mut_obj_add_int(doc, source, "material_count", world->material_count) &&
            yyjson_mut_obj_add_int(doc, source, "brush_count", world->brush_count) &&
+           yyjson_mut_obj_add_int(doc, source, "solid_brush_count", solid_brush_count) &&
+           yyjson_mut_obj_add_int(doc, source, "sky_brush_count", sky_brush_count) &&
+           yyjson_mut_obj_add_int(doc, source, "renderable_brush_count", renderable_brush_count) &&
+           yyjson_mut_obj_add_int(doc, source, "nonrenderable_brush_count", nonrenderable_brush_count) &&
            yyjson_mut_obj_add_bool(doc, source, "has_bounds", world->has_bounds) &&
            (!world->has_bounds || artifact_export_add_bounds(doc, source, "bounds", world->bounds));
 }

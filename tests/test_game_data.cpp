@@ -14447,6 +14447,10 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     ASSERT_NE(source, nullptr);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "brush_count")), 2);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "material_count")), 1);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "solid_brush_count")), 2);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "sky_brush_count")), 0);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "renderable_brush_count")), 2);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "nonrenderable_brush_count")), 0);
     yyjson_val *render = yyjson_obj_get(artifact_root, "render");
     ASSERT_NE(render, nullptr);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "face_count")), culled_world_a.compile_face_count);
@@ -17907,6 +17911,55 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
         << error;
     EXPECT_TRUE(enclosure.enclosed) << enclosure.first_issue;
     EXPECT_EQ(enclosure.open_boundary_cell_count, 0);
+    slayer3d_game_data_brush_world sky_room_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &sky_room_world));
+    ASSERT_EQ(sky_room_world.brush_count, 6);
+    int sky_brush_count = 0;
+    for (int brush_index = 0; brush_index < sky_room_world.brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush &brush = sky_room_world.brushes[brush_index];
+        if ((brush.contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY) != 0u)
+            ++sky_brush_count;
+    }
+    EXPECT_EQ(sky_brush_count, 1);
+    for (int face_index = 0; face_index < sky_room_world.compile_rendered_face_metadata_count; ++face_index)
+    {
+        const slayer3d_game_data_brush_compiled_face &face = sky_room_world.compile_rendered_faces[face_index];
+        EXPECT_TRUE(face.source_brush_stable_id == nullptr ||
+                    SDL_strcmp(face.source_brush_stable_id, "room.ceiling") != 0)
+            << "sky source brush should seal the room without emitting opaque render faces";
+    }
+
+    char *artifact_json = nullptr;
+    size_t artifact_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        runtime, "brush.editor_shell.target", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(artifact_json, nullptr);
+    yyjson_doc *artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    yyjson_val *artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    yyjson_val *artifact_source = yyjson_obj_get(artifact_root, "source");
+    ASSERT_NE(artifact_source, nullptr);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(artifact_source, "brush_count")), 6);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(artifact_source, "solid_brush_count")), 5);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(artifact_source, "sky_brush_count")), 1);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(artifact_source, "renderable_brush_count")), 5);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(artifact_source, "nonrenderable_brush_count")), 1);
+    yyjson_val *artifact_render = yyjson_obj_get(artifact_root, "render");
+    ASSERT_NE(artifact_render, nullptr);
+    yyjson_val *artifact_faces = yyjson_obj_get(artifact_render, "faces");
+    ASSERT_TRUE(yyjson_is_arr(artifact_faces));
+    for (size_t face_index = 0; face_index < yyjson_arr_size(artifact_faces); ++face_index)
+    {
+        yyjson_val *face = yyjson_arr_get(artifact_faces, face_index);
+        ASSERT_NE(face, nullptr);
+        const char *source_brush_id = yyjson_get_str(yyjson_obj_get(face, "source_brush_stable_id"));
+        EXPECT_TRUE(source_brush_id == nullptr || SDL_strcmp(source_brush_id, "room.ceiling") != 0);
+    }
+    yyjson_doc_free(artifact_doc);
+    SDL_free(artifact_json);
 
     ASSERT_TRUE(load_room_fragment(false)) << error;
     ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
