@@ -959,6 +959,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID = 7,
         /** @brief Editor-authored player-start marker line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE = 8,
+        /** @brief Data-authored diagnostic marker line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER = 9,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -979,12 +981,15 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID = 1u << 6,
         /** @brief Emit editor-authored player-start marker icons. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS = 1u << 7,
+        /** @brief Emit data-authored diagnostic markers. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS = 1u << 8,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_TRACE_RAY | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_FACE_NORMAL |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */

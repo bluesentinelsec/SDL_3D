@@ -349,7 +349,8 @@
         "trace_ray",
         "face_normal",
         "hit_marker",
-        "command_preview"
+        "command_preview",
+        "markers"
       ],
       "world_bounds_color": [80, 170, 255, 190],
       "selection_bounds_color": [255, 220, 40, 255],
@@ -364,7 +365,22 @@
       "normal_length": 0.65,
       "hit_marker_size": 0.12,
       "player_start_radius": 0.35,
-      "player_start_height": 1.8
+      "player_start_height": 1.8,
+      "markers": [
+        {
+          "name": "editor.leak.point",
+          "point_key": "editor.leak.point",
+          "color": [255, 60, 230, 255],
+          "size": 1.2,
+          "visible_if": {
+            "type": "all",
+            "conditions": [
+              { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": false },
+              { "type": "scene_state.compare", "key": "editor.leak.open_boundaries", "op": ">", "value": 0 }
+            ]
+          }
+        }
+      ]
     }
   },
   "ui": {

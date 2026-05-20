@@ -124,7 +124,9 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    into the playable test scene using the current in-memory map and player
    start. If the source model has overlaps, near-gaps, or a reachable leak to
    outside from the player start, the editor should stay in edit mode and report
-   the source issue in the inspector.
+   the source issue in the inspector. Reachable leaks also draw a bright
+   magenta diagnostic marker at the first outside-boundary cell so you have a
+   concrete place to inspect.
 10. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 

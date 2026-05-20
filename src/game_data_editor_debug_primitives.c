@@ -22,6 +22,9 @@ typedef struct editor_debug_iteration_context
 static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
+static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
 
 static slayer3d_color editor_debug_color_or_default(slayer3d_color color, slayer3d_color fallback)
 {
@@ -74,6 +77,11 @@ static unsigned int editor_debug_flag_from_string(const char *value)
         SDL_strcmp(value != NULL ? value : "", "game_objects") == 0)
     {
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS;
+    }
+    if (SDL_strcmp(value != NULL ? value : "", "markers") == 0 ||
+        SDL_strcmp(value != NULL ? value : "", "diagnostic_markers") == 0)
+    {
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS;
     }
     return 0u;
 }
@@ -182,7 +190,10 @@ bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_ga
         return true;
     if (!slayer3d_game_data_for_each_editor_debug_primitive(runtime, &desc, callback, userdata))
         return false;
-    return emit_editor_selected_brush_bounds(runtime, &desc, callback, userdata);
+    if (!emit_editor_selected_brush_bounds(runtime, &desc, callback, userdata))
+        return false;
+
+    return emit_editor_debug_overlay_markers(runtime, &desc, callback, userdata);
 }
 
 static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, slayer3d_bounding_box bounds)
@@ -247,6 +258,68 @@ static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *
         context.element_name = selection->element_name;
         context.face_index = selection->face_index;
         if (!emit_editor_debug_bounds(&context, selection->bounds))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_editor_debug_marker_cross(editor_debug_iteration_context *context, slayer3d_vec3 center, float size)
+{
+    const float half_size = size > 0.0f ? size * 0.5f : 0.225f;
+    const slayer3d_vec3 x = slayer3d_vec3_make(half_size, 0.0f, 0.0f);
+    const slayer3d_vec3 y = slayer3d_vec3_make(0.0f, half_size, 0.0f);
+    const slayer3d_vec3 z = slayer3d_vec3_make(0.0f, 0.0f, half_size);
+    return emit_editor_debug_line(context, slayer3d_vec3_sub(center, x), slayer3d_vec3_add(center, x)) &&
+           emit_editor_debug_line(context, slayer3d_vec3_sub(center, y), slayer3d_vec3_add(center, y)) &&
+           emit_editor_debug_line(context, slayer3d_vec3_sub(center, z), slayer3d_vec3_add(center, z)) &&
+           emit_editor_debug_line(context, slayer3d_vec3_sub(slayer3d_vec3_sub(center, x), z),
+                                  slayer3d_vec3_add(slayer3d_vec3_add(center, x), z)) &&
+           emit_editor_debug_line(context, slayer3d_vec3_add(slayer3d_vec3_sub(center, x), z),
+                                  slayer3d_vec3_add(slayer3d_vec3_sub(center, z), x));
+}
+
+static bool emit_editor_debug_overlay_marker(const slayer3d_game_data_runtime *runtime, yyjson_val *marker,
+                                             slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || !yyjson_is_obj(marker) || !eval_data_condition(runtime, obj_get(marker, "visible_if"), NULL))
+        return true;
+
+    const char *point_key = json_string(marker, "point_key", NULL);
+    const slayer3d_value *point_value =
+        point_key != NULL ? slayer3d_properties_get_value(runtime->scene_state, point_key) : NULL;
+    if (point_value == NULL || point_value->type != SLAYER3D_VALUE_VEC3)
+        return true;
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.color = editor_debug_color_or_default(json_color(marker, "color", (slayer3d_color){0, 0, 0, 0}),
+                                                  (slayer3d_color){255, 60, 230, 255});
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER;
+    context.world_name = json_string(marker, "world", NULL);
+    context.element_name = json_string(marker, "name", point_key);
+    context.face_index = -1;
+    return emit_editor_debug_marker_cross(&context, point_value->as_vec3, json_float(marker, "size", 0.45f));
+}
+
+static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    const unsigned int flags =
+        desc != NULL && desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS) == 0u)
+        return true;
+
+    yyjson_val *overlay = obj_get(active_editor_tooling_root(runtime), "debug_overlay");
+    yyjson_val *markers = obj_get(overlay, "markers");
+    if (!yyjson_is_arr(markers))
+        return true;
+
+    for (size_t i = 0; i < yyjson_arr_size(markers); ++i)
+    {
+        if (!emit_editor_debug_overlay_marker(runtime, yyjson_arr_get(markers, i), callback, userdata))
             return false;
     }
     return true;

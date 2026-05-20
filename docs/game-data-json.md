@@ -943,6 +943,13 @@ grid half-extent in world units, and `work_plane_grid_spacing` controls line
 spacing. The grid uses the same `work_plane.normal` and `work_plane.distance`
 as placement, so visual feedback and picking stay aligned.
 
+Add `markers` (or `diagnostic_markers`) to `editor.debug_overlay.flags` to draw
+scene-state-driven diagnostic markers. Each entry in
+`editor.debug_overlay.markers` requires a `point_key` that resolves to a vec3 in
+scene state and may include `name`, `color`, `size`, and `visible_if`. This is
+intended for actionable editor diagnostics, such as showing the first
+source-model leak point returned by `editor.brush_world.validate_enclosure`.
+
 Editor scenes should keep authoring mode and brush defaults in scene state so
 the host, UI, and save pipeline all see the same values. The editor shell dojo
 uses these conventional keys:
@@ -1062,7 +1069,9 @@ the fixed source box coordinates, marks source boxes as solid, and flood-fills
 empty cells from an `editor_player_starts` marker. If the flood reaches the
 expanded outside boundary, the playable space leaks. The editor shell runs both
 validation actions before entering playable test-run mode so source defects
-block F5 instead of becoming game-runtime surprises.
+block F5 instead of becoming game-runtime surprises. The `leak_point_key`
+output can feed an `editor.debug_overlay.markers` entry so the editor shows the
+first reachable outside-boundary cell directly in the 3D view.
 
 ```json
 {

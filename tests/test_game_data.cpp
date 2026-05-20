@@ -8973,6 +8973,38 @@ TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
     EXPECT_NE(std::string(grid_error).find("work_plane_grid_spacing must be positive"), std::string::npos)
         << grid_error;
 
+    write_text(dir / "bad_marker_overlay.game.json", R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Scene Editor Marker" },
+  "world": {
+    "name": "world.bad_scene_editor_marker",
+    "kind": "3d",
+    "cameras": [
+      { "name": "camera.valid", "type": "perspective", "position": [0, 0, 5], "target": [0, 0, 0], "up": [0, 1, 0] }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "play.scene.json", R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.play",
+  "camera": "camera.valid",
+  "editor": {
+    "selection": {
+      "trace": { "source": "camera_screen", "camera": "camera.valid" },
+      "outputs": { "hit_key": "editor.hit" }
+    },
+    "debug_overlay": {
+      "flags": ["markers"],
+      "markers": [{ "name": "bad.marker", "size": 1.0 }]
+    }
+  }
+})json");
+    char marker_error[512]{};
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_marker_overlay.game.json").string().c_str(), nullptr,
+                                                  marker_error, sizeof(marker_error)));
+    EXPECT_NE(std::string(marker_error).find("debug marker requires a point_key"), std::string::npos) << marker_error;
+
     write_text(dir / "bad_placement.game.json", R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Bad Scene Editor Placement" },
@@ -17202,6 +17234,27 @@ TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnLeakingSourceModel)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
                  "brush source model leaks to outside");
     EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+    const slayer3d_value *leak_point = slayer3d_properties_get_value(scene_state, "editor.leak.point");
+    ASSERT_NE(leak_point, nullptr);
+    ASSERT_EQ(leak_point->type, SLAYER3D_VALUE_VEC3);
+
+    struct LeakMarkerCapture
+    {
+        int marker_lines = 0;
+        bool named = false;
+    } leak_debug;
+    auto capture_leak_marker = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<LeakMarkerCapture *>(userdata);
+        if (primitive == nullptr || primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER)
+            return true;
+        capture->marker_lines++;
+        if (primitive->element_name != nullptr && std::string(primitive->element_name) == "editor.leak.point")
+            capture->named = true;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_leak_marker, &leak_debug));
+    EXPECT_EQ(leak_debug.marker_lines, 5);
+    EXPECT_TRUE(leak_debug.named);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
