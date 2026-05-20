@@ -174,6 +174,7 @@ typedef struct editor_placement_preview_state
     const char *axis;
     const char *world_name;
     const char *material_name;
+    unsigned int contents;
     slayer3d_vec3 anchor;
     float snap;
     bool has_bounds;

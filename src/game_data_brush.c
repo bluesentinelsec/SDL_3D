@@ -257,9 +257,11 @@ static bool brush_is_renderable(const slayer3d_game_data_brush *brush)
 {
     if (brush == NULL)
         return false;
+    if ((brush->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY) != 0u)
+        return false;
     const unsigned int visible_contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID |
                                           SLAYER3D_GAME_DATA_BRUSH_CONTENT_WATER |
-                                          SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA | SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY;
+                                          SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA;
     return (brush->contents & visible_contents) != 0u;
 }
 

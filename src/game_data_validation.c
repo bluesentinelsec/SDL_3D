@@ -8141,6 +8141,14 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *snap = obj_get(action, "snap");
         if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
             return validation_error(ctx, json_path, "editor.brush_world.create_box snap must be a positive number");
+        char contents_path[PATH_BUFFER_SIZE];
+        format_path(contents_path, sizeof(contents_path), "%s.contents", json_path);
+        if (!validate_brush_string_or_string_array(ctx, obj_get(action, "contents"), contents_path,
+                                                   "editor.brush_world.create_box contents", brush_content_name_valid,
+                                                   false))
+        {
+            return false;
+        }
         if (!from_preview)
         {
             const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));

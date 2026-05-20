@@ -17,6 +17,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
     desc.world_name = json_string(action, "world", NULL);
     desc.brush_name = json_string(action, "name", NULL);
     desc.material_name = json_string(action, "material", NULL);
+    desc.contents = brush_flags_from_json(obj_get(action, "contents"), brush_content_flag_from_string, 0u);
     desc.min = json_vec3(action, "min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     desc.max = json_vec3(action, "max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
 
@@ -41,6 +42,8 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
             {
                 desc.world_name = json_string(action, "world", preview->world_name);
                 desc.material_name = json_string(action, "material", preview->material_name);
+                if (obj_get(action, "contents") == NULL)
+                    desc.contents = preview->contents;
                 desc.min = preview->bounds.min;
                 desc.max = preview->bounds.max;
             }

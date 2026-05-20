@@ -17,6 +17,15 @@
     ]
   },
   "world": {
+    "skybox": {
+      "pos_x": "image.editor_shell.skybox.px",
+      "neg_x": "image.editor_shell.skybox.nx",
+      "pos_y": "image.editor_shell.skybox.py",
+      "neg_y": "image.editor_shell.skybox.ny",
+      "pos_z": "image.editor_shell.skybox.pz",
+      "neg_z": "image.editor_shell.skybox.nz",
+      "size": 400.0
+    },
     "brush_worlds": [
       { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0], "acceleration": true, "lighting": true }
     ]

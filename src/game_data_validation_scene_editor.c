@@ -473,6 +473,14 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
             return false;
         if (!is_non_empty_string(preview, "material"))
             return validation_error(ctx, preview_path, "scene editor placement box preview requires a material");
+        char contents_path[PATH_BUFFER_SIZE];
+        format_path(contents_path, sizeof(contents_path), "%s.contents", preview_path);
+        if (!validate_brush_string_or_string_array(ctx, obj_get(preview, "contents"), contents_path,
+                                                   "scene editor placement preview contents", brush_content_name_valid,
+                                                   false))
+        {
+            return false;
+        }
         yyjson_val *min = obj_get(preview, "min");
         yyjson_val *max = obj_get(preview, "max");
         yyjson_val *grid_min = obj_get(preview, "grid_min");

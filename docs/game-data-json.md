@@ -1188,7 +1188,7 @@ before the first scene-enter signal runs.
 
 Use `editor.brush_world.create_box` to append a new axis-aligned convex box
 brush to a runtime brush world. The action is intended for first-pass editor
-blockout tools: floors, walls, ceilings, platforms, and simple room pieces. It
+blockout tools: floors, walls, ceilings, sky seals, platforms, and simple room pieces. It
 validates the target world and bounds at load time, resolves the material at
 runtime, rebuilds brush collision/render data atomically, then marks the world
 dirty only after the rebuild succeeds. If `name` is omitted, the runtime
@@ -1202,6 +1202,13 @@ scene-state selection strings, and the shared commit signal branches to
 prefab-specific `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
+
+`contents` is optional and accepts the same brush-content string or string array
+as authored brush JSON. If omitted, created boxes default to `solid`. Sky
+prefabs should author `contents` such as `["sky", "player_clip"]`: the source
+model can use the brush as a structural leak seal, collision can still block the
+player, and the renderer can treat the brush as a sky boundary instead of an
+ordinary opaque wall.
 
 For interactive placement, set `position_from` to `selection_point`. The action
 then treats `min` and `max` as offsets from the current active editor selection
@@ -1242,7 +1249,9 @@ authored from `[0, 0, 0]` to `[1, 0.025, 1]` becomes one active grid cell wide
 at any configured grid size. For tile-like blockout tools, author floors,
 walls, and ceilings from grid-boundary anchors with matching horizontal
 footprints instead of centering them around the snap point; this keeps adjacent
-tiles aligned without gaps. Each preview entry maps a tool `mode` to either a
+tiles aligned without gaps. `contents` can also be authored on box previews; it
+is copied into `editor.brush_world.create_box` when committing with
+`"position_from": "placement_preview"`. Each preview entry maps a tool `mode` to either a
 `box` ghost or a `player_start` marker. Box
 previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
 between horizontal grid axes. A box preview must author exactly one bounds
@@ -1283,6 +1292,15 @@ hosts do not need a second rendering path.
           "axis": "z",
           "grid_min": [0.0, 0.0, 0.0],
           "grid_max": [1.0, 1.0, 1.0]
+        },
+        {
+          "mode": "sky",
+          "kind": "box",
+          "world": "brush.level.blockout",
+          "material": "mat.sky",
+          "contents": ["sky", "player_clip"],
+          "grid_min": [0.0, 1.0, 0.0],
+          "grid_max": [1.0, 1.025, 1.0]
         },
         {
           "mode": "player_start",
