@@ -53,6 +53,8 @@ static void publish_editor_placement_preview(slayer3d_game_data_runtime *runtime
     editor_set_vec3_output(scene_state, outputs, "bounds_max_key",
                            valid && preview != NULL && preview->has_bounds ? preview->bounds.max
                                                                            : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    editor_set_int_output(scene_state, outputs, "overlap_count_key",
+                          valid && preview != NULL ? preview->source_positive_overlap_count : 0);
     const char *last_action_key = json_string(preview_json, "last_action_key", NULL);
     if (last_action_key != NULL && last_action_key[0] != '\0')
         slayer3d_properties_set_string(scene_state, last_action_key, message != NULL ? message : "");
@@ -273,6 +275,8 @@ static bool editor_placement_preview_validate_source_box(slayer3d_game_data_runt
     {
         preview->bounds = result.bounds;
         preview->has_source_candidate = true;
+        preview->source_positive_overlap_count = result.positive_overlap_count;
+        SDL_strlcpy(preview->source_warning, result.warning, sizeof(preview->source_warning));
         for (int axis = 0; axis < 3; ++axis)
         {
             preview->source_min[axis] = result.source_min[axis];
@@ -342,6 +346,11 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
                                                                      : "placement preview is invalid");
         return;
     }
-    publish_editor_placement_preview(runtime, outputs, true, preview_json, preview,
-                                     json_string(preview_json, "message", "placement preview"));
+    char message[256];
+    const char *base_message = json_string(preview_json, "message", "placement preview");
+    if (preview->source_warning[0] != '\0')
+        SDL_snprintf(message, sizeof(message), "%s; %s", base_message, preview->source_warning);
+    else
+        SDL_strlcpy(message, base_message, sizeof(message));
+    publish_editor_placement_preview(runtime, outputs, true, preview_json, preview, message);
 }

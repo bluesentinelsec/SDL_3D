@@ -18112,6 +18112,102 @@ TEST(GameDataRuntime, EditorShellDojoCommitsPrefabPreviewSourceCandidate)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoPrefabPreviewReportsSourceOverlapWarning)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.30, 0.31, 0.33, 1.0] },
+        { "name": "mat.editor.wall", "albedo": [0.50, 0.52, 0.56, 1.0] },
+        { "name": "mat.editor.ceiling", "albedo": [0.68, 0.69, 0.71, 1.0] },
+        { "name": "mat.editor.sky", "albedo": [0.20, 0.42, 0.78, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.floor.seed",
+          "name": "brush.source.floor.seed",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -25, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/source-preview-overlap.json",
+        error, sizeof(error)))
+        << error;
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_string(scene_state, "editor.tool.mode", "floor");
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    hover.point = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    hover.world_name = "brush.editor_shell.target";
+    update_editor_placement_preview(runtime, editor, &hover);
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.placement_preview.overlaps", 0), 1);
+    const char *preview_message = slayer3d_properties_get_string(scene_state, "editor.placement_preview.message", "");
+    EXPECT_NE(std::string(preview_message).find("overlaps source brush 'brush.source.floor.seed'"), std::string::npos)
+        << preview_message;
+    EXPECT_NE(std::string(preview_message).find("compiler will resolve hidden faces"), std::string::npos)
+        << preview_message;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
+    ASSERT_GE(commit_signal, 0);
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    const char *create_message = slayer3d_properties_get_string(scene_state, "editor.create.message", "");
+    EXPECT_NE(std::string(create_message).find("overlaps source brush 'brush.source.floor.seed'"), std::string::npos)
+        << create_message;
+    EXPECT_NE(std::string(create_message).find("compiler will resolve hidden faces"), std::string::npos)
+        << create_message;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxTranslateAllowsOverlapAndContact)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

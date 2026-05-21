@@ -184,6 +184,8 @@ typedef struct editor_placement_preview_state
     bool has_source_candidate;
     int source_min[3];
     int source_max[3];
+    int source_positive_overlap_count;
+    char source_warning[256];
 } editor_placement_preview_state;
 
 typedef struct editor_brush_source_box_runtime
@@ -220,6 +222,8 @@ typedef struct editor_brush_source_prefab_result
     slayer3d_bounding_box bounds;
     int source_min[3];
     int source_max[3];
+    int positive_overlap_count;
+    char warning[256];
 } editor_brush_source_prefab_result;
 
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32

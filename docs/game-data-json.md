@@ -1274,7 +1274,9 @@ editor floor/wall/ceiling/sky workflow uses source-backed prefab recipes.
 
 Created structural boxes receive stable editor ids, exact face/edge/vertex
 contact with existing structural brushes is allowed, and positive-volume overlap
-with an existing structural brush is rejected before the world is marked dirty.
+with an existing structural brush is accepted as editable source data. Preview
+and commit messages report overlap as a warning, and the brush compiler removes
+hidden/internal faces from runtime render output.
 The editor shell dojo demonstrates the current blockout palette pattern: modal
 palette signals write scene-state selection strings, and the shared commit
 signal branches to source-backed `editor.brush_world.create_box` or
