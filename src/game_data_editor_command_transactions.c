@@ -1241,6 +1241,7 @@ static void update_active_editor_selection_material_for_transaction(slayer3d_gam
                                                                     const editor_command_transaction_entry *entry,
                                                                     bool forward, bool active_matches)
 {
+    (void)forward;
     if (runtime == NULL || entry == NULL || !runtime->editor_active_selection.hit || !active_matches)
         return;
     slayer3d_game_data_editor_selection *selection = &runtime->editor_active_selection;
@@ -1253,12 +1254,8 @@ static void update_active_editor_selection_material_for_transaction(slayer3d_gam
     }
 
     const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, entry->world_name);
-    const int material_index = forward ? entry->material_index : entry->previous_material_index;
-    selection->material_name = forward ? entry->material_name : entry->previous_material_name;
-    selection->material_editor =
-        world_runtime != NULL && material_index >= 0 && material_index < world_runtime->desc.material_count
-            ? &world_runtime->desc.materials[material_index].editor
-            : NULL;
+    refresh_editor_brush_selection_for_identity(world_runtime, selection, entry->element_name, entry->element_stable_id,
+                                                entry->face_index, entry->face_stable_id);
 
     yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
     publish_editor_selection(runtime, obj_get(selection_json, "outputs"), selection);

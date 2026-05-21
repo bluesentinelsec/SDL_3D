@@ -392,17 +392,6 @@ static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
             set_errorf(error_buffer, error_buffer_size, "duplicate editor brush source name '%s'", candidate->name);
             return false;
         }
-        if (source_box_contents_are_structural(candidate->contents) &&
-            source_box_contents_are_structural(existing->contents) &&
-            source_box_positive_volume_overlap(candidate, existing))
-        {
-            set_errorf(error_buffer, error_buffer_size,
-                       "source brush '%s' overlaps existing brush '%s' with positive volume; use an adjacent snapped "
-                       "cell or a source operation that trims, splits, or merges the candidate",
-                       candidate->name != NULL ? candidate->name : "<unnamed>",
-                       existing->name != NULL ? existing->name : "<unnamed>");
-            return false;
-        }
     }
     return true;
 }
@@ -705,9 +694,7 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
         }
     }
 
-    out_diagnostics->structurally_valid = out_diagnostics->off_snap_count == 0 &&
-                                          out_diagnostics->positive_overlap_count == 0 &&
-                                          out_diagnostics->near_gap_count == 0;
+    out_diagnostics->structurally_valid = out_diagnostics->off_snap_count == 0;
     return true;
 }
 

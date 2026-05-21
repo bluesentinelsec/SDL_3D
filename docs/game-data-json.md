@@ -1133,10 +1133,10 @@ again. This makes source boxes the durable editing truth and keeps generated
 `brush_worlds` as load-time/runtime derived data.
 
 Source-backed editor mutations validate candidate source boxes before they are
-committed. Exact snapped face, edge, or vertex contact is legal; positive-volume
-overlap between structural source boxes is rejected at the source-model boundary.
-This keeps placement, translate, and resize tools from introducing hidden
-runtime-only overlap states.
+committed. Exact snapped face, edge, or vertex contact is legal. Positive-volume
+overlap between structural source boxes is allowed in the editable source model
+and reported as a warning diagnostic; the brush compiler is responsible for
+removing hidden/internal faces from runtime render output.
 Structural checks consider solid, player/projectile clip, and sky source boxes
 as map-sealing architecture. Non-structural content such as trigger-only boxes
 may overlap structural brushes for gameplay volumes; those boxes do not report
@@ -1147,14 +1147,13 @@ Use `editor.brush_world.validate_source` or the native
 boxes before save or test-run. The pass runs on fixed source coordinates and
 reports off-snap coordinates, positive-volume overlaps, and tiny non-zero near
 gaps between boxes that otherwise overlap on the other two axes. Exact face
-contact is counted as structural adjacency. This is the first source-level
-correctness gate for watertight brush editing; future leak tracing can build on
-the same source model without relying on visual offsets.
+contact is counted as structural adjacency. Off-snap source coordinates are
+blocking source-model defects. Overlaps and near-gaps are warning diagnostics
+while the editor foundation is still evolving.
 
 The action form may set `allow_missing_source: true` when a workflow still needs
 to support legacy/runtime-only brush worlds. In that mode, worlds without an
-`editor_brush_sources` model are treated as valid for gating purposes while
-source-backed worlds still fail on overlaps and near gaps.
+`editor_brush_sources` model are treated as valid for gating purposes.
 
 Use `editor.brush_world.validate_enclosure` or
 `slayer3d_game_data_validate_editor_brush_source_enclosure()` to run the first
@@ -1162,9 +1161,10 @@ source-backed leak diagnostic. This pass derives an exact interval grid from
 the fixed source box coordinates, marks structural source boxes as solid, and
 flood-fills empty cells from an `editor_player_starts` marker. If the flood
 reaches the expanded outside boundary, the playable space leaks. The editor
-shell runs both validation actions before entering playable test-run mode so
-source defects block F5 instead of becoming game-runtime surprises. The `leak_point_key`
-output can feed an `editor.debug_overlay.markers` entry so the editor shows the
+shell runs both validation actions before entering playable test-run mode.
+During the current graybox-editor milestone, leak findings are warning-level:
+they are visible in the inspector and debug overlay, but they do not block F5.
+The `leak_point_key` output can feed an `editor.debug_overlay.markers` entry so the editor shows the
 first reachable outside-boundary cell directly in the 3D view. The candidate
 outputs identify the nearest source-box face on the same leak boundary axis,
 giving editor UI a second point to highlight while the user decides which
@@ -1282,7 +1282,7 @@ signal branches to source-backed `editor.brush_world.create_box` or
 data-authored while a dedicated editor frontend is still evolving.
 `editor.brush_world.validate_source` reports exact face, edge, and vertex
 contacts separately, so editor tools can distinguish legal snapped contact from
-suspicious near gaps or invalid positive-volume overlap.
+warning-level near gaps or positive-volume overlap.
 
 `contents` is optional and accepts the same brush-content string or string array
 as authored brush JSON. If omitted, created boxes default to `solid`. Sky

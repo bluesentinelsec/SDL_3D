@@ -915,9 +915,13 @@ static bool brush_face_visible_rects_after_neighbor_covers(const slayer3d_game_d
             float other_distance = 0.0f;
             if (!brush_plane_normalized(other_face, &other_normal, &other_distance))
                 continue;
-            if (slayer3d_vec3_dot(normal, other_normal) > -1.0f + normal_epsilon)
-                continue;
-            if (SDL_fabsf(distance + other_distance) > distance_epsilon)
+            const float normal_alignment = slayer3d_vec3_dot(normal, other_normal);
+            const bool opposite_internal_cover =
+                normal_alignment <= -1.0f + normal_epsilon && SDL_fabsf(distance + other_distance) <= distance_epsilon;
+            const bool prior_same_plane_cover = other_brush_index < brush_index &&
+                                                normal_alignment >= 1.0f - normal_epsilon &&
+                                                SDL_fabsf(distance - other_distance) <= distance_epsilon;
+            if (!opposite_internal_cover && !prior_same_plane_cover)
                 continue;
 
             const int other_count =
@@ -1104,6 +1108,117 @@ static bool brush_face_hidden_by_neighbor(const slayer3d_game_data_brush_world *
     return false;
 }
 
+static bool brush_point_inside_brush(const slayer3d_game_data_brush *brush, slayer3d_vec3 point, bool *out_strict)
+{
+    if (brush == NULL)
+        return false;
+    bool strict = false;
+    const float epsilon = 0.001f;
+    for (int face_index = 0; face_index < brush->face_count; ++face_index)
+    {
+        slayer3d_vec3 normal;
+        float distance = 0.0f;
+        if (!brush_plane_normalized(&brush->faces[face_index], &normal, &distance))
+            return false;
+        const float signed_distance = slayer3d_vec3_dot(normal, point) - distance;
+        if (signed_distance > epsilon)
+            return false;
+        if (signed_distance < -epsilon)
+            strict = true;
+    }
+    if (out_strict != NULL)
+        *out_strict = strict;
+    return true;
+}
+
+static bool brush_polygon_inside_solid_neighbor(const slayer3d_game_data_brush_world *world, int brush_index,
+                                                int face_index, const slayer3d_vec3 *polygon, int polygon_count)
+{
+    if (world == NULL || polygon == NULL || polygon_count < 3 || brush_index < 0 || brush_index >= world->brush_count)
+        return false;
+
+    const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+    const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+    if (!brush_face_can_be_compile_culled(world, brush, face))
+        return false;
+
+    for (int other_brush_index = 0; other_brush_index < world->brush_count; ++other_brush_index)
+    {
+        if (other_brush_index == brush_index)
+            continue;
+        const slayer3d_game_data_brush *other = &world->brushes[other_brush_index];
+        if ((other->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID) == 0u)
+            continue;
+
+        bool any_strict = false;
+        bool all_inside = true;
+        for (int vertex_index = 0; vertex_index < polygon_count; ++vertex_index)
+        {
+            bool strict = false;
+            if (!brush_point_inside_brush(other, polygon[vertex_index], &strict))
+            {
+                all_inside = false;
+                break;
+            }
+            any_strict = any_strict || strict;
+        }
+        if (all_inside && any_strict)
+            return true;
+    }
+    return false;
+}
+
+static bool brush_face_duplicate_by_prior_neighbor(const slayer3d_game_data_brush_world *world, int brush_index,
+                                                   int face_index, const slayer3d_vec3 *polygon, int polygon_count,
+                                                   slayer3d_vec3 normal, slayer3d_vec3 basis_u, slayer3d_vec3 basis_v,
+                                                   float distance, slayer3d_vec3 *scratch, int scratch_capacity)
+{
+    if (world == NULL || polygon == NULL || polygon_count < 3 || scratch == NULL || brush_index <= 0 ||
+        brush_index >= world->brush_count)
+    {
+        return false;
+    }
+
+    const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+    const slayer3d_game_data_brush_face *face = &brush->faces[face_index];
+    if (!brush_face_can_be_compile_culled(world, brush, face))
+        return false;
+
+    const float normal_epsilon = 0.001f;
+    const float distance_epsilon = 0.001f;
+    for (int other_brush_index = 0; other_brush_index < brush_index; ++other_brush_index)
+    {
+        const slayer3d_game_data_brush *other = &world->brushes[other_brush_index];
+        if ((other->contents & SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID) == 0u)
+            continue;
+
+        for (int other_face_index = 0; other_face_index < other->face_count; ++other_face_index)
+        {
+            const slayer3d_game_data_brush_face *other_face = &other->faces[other_face_index];
+            if (!brush_material_is_opaque(world, other_face->material_index))
+                continue;
+
+            slayer3d_vec3 other_normal;
+            float other_distance = 0.0f;
+            if (!brush_plane_normalized(other_face, &other_normal, &other_distance))
+                continue;
+            if (slayer3d_vec3_dot(normal, other_normal) < 1.0f - normal_epsilon)
+                continue;
+            if (SDL_fabsf(distance - other_distance) > distance_epsilon)
+                continue;
+
+            const int other_count =
+                brush_build_face_polygon(other, other_face_index, scratch, scratch_capacity, NULL, NULL, NULL);
+            if (other_count >= 3 &&
+                brush_polygon_covers_polygon(scratch, other_count, polygon, polygon_count, basis_u, basis_v))
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_world *world, slayer3d_model *model,
                                                       const int *filter_indices, int filter_count,
                                                       bool update_compile_counters)
@@ -1183,19 +1298,32 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
                 int visible_triangle_count = count - 2;
                 brush_rect_2d *visible_rects = NULL;
                 int visible_rect_count = 0;
-                const bool has_split_visible_rects =
-                    cull_hidden_faces && brush_face_visible_rects_after_neighbor_covers(
-                                             world, brush_index, face_index, polygon, count, normal, u, v, distance,
-                                             neighbor_polygon, polygon_capacity, &visible_rects, &visible_rect_count);
-                if (has_split_visible_rects)
-                {
-                    visible_triangle_count = visible_rect_count * 2;
-                }
-                else if (cull_hidden_faces &&
-                         brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
-                                                       distance, neighbor_polygon, polygon_capacity))
+                const bool hidden_by_solid = cull_hidden_faces && brush_polygon_inside_solid_neighbor(
+                                                                      world, brush_index, face_index, polygon, count);
+                const bool duplicate_by_prior =
+                    cull_hidden_faces &&
+                    brush_face_duplicate_by_prior_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
+                                                           distance, neighbor_polygon, polygon_capacity);
+                bool has_split_visible_rects = false;
+                if (hidden_by_solid || duplicate_by_prior)
                 {
                     visible_triangle_count = 0;
+                }
+                else
+                {
+                    has_split_visible_rects =
+                        cull_hidden_faces &&
+                        brush_face_visible_rects_after_neighbor_covers(
+                            world, brush_index, face_index, polygon, count, normal, u, v, distance, neighbor_polygon,
+                            polygon_capacity, &visible_rects, &visible_rect_count);
+                    if (has_split_visible_rects)
+                        visible_triangle_count = visible_rect_count * 2;
+                    else if (cull_hidden_faces &&
+                             brush_face_hidden_by_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
+                                                           distance, neighbor_polygon, polygon_capacity))
+                    {
+                        visible_triangle_count = 0;
+                    }
                 }
                 SDL_free(visible_rects);
                 if (visible_triangle_count <= 0)
@@ -1342,6 +1470,14 @@ static bool brush_world_compile_render_model_filtered(slayer3d_game_data_brush_w
             }
             brush_rect_2d *visible_rects = NULL;
             int visible_rect_count = 0;
+            const bool hidden_by_solid = cull_hidden_faces && brush_polygon_inside_solid_neighbor(
+                                                                  world, brush_index, face_index, polygon, count);
+            const bool duplicate_by_prior =
+                cull_hidden_faces &&
+                brush_face_duplicate_by_prior_neighbor(world, brush_index, face_index, polygon, count, normal, u, v,
+                                                       distance, neighbor_polygon, polygon_capacity);
+            if (hidden_by_solid || duplicate_by_prior)
+                continue;
             const bool has_split_visible_rects =
                 cull_hidden_faces && brush_face_visible_rects_after_neighbor_covers(
                                          world, brush_index, face_index, polygon, count, normal, u, v, distance,

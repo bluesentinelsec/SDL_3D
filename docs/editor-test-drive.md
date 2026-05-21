@@ -125,14 +125,15 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    file should contain `brush_worlds`, `editor_brush_sources`, and `editor_player_starts`.
 10. Press `F5`; the editor should validate the brush source model, then switch
    into the playable test scene using the current in-memory map and player
-   start. If the source model has overlaps, near-gaps, or a reachable leak to
-   outside from the player start, the editor should stay in edit mode and report
-   the source issue in the inspector. Reachable leaks also draw a bright
-   magenta diagnostic marker at the first outside-boundary cell so you have a
-   concrete place to inspect, plus an orange candidate marker on the nearest
-   source-box face associated with that leak boundary. The candidate brush face
-   should also become the active selection, making the suspected source face
-   obvious in the selection outline and inspector.
+   start. Source overlaps, near-gaps, and reachable leaks are warning-level
+   diagnostics during this MVP iteration: the inspector should still report
+   them, but they should not block entering the playable test scene. Reachable
+   leaks also draw a bright magenta diagnostic marker at the first
+   outside-boundary cell so you have a concrete place to inspect, plus an
+   orange candidate marker on the nearest source-box face associated with that
+   leak boundary. The candidate brush face should also become the active
+   selection, making the suspected source face obvious in the selection outline
+   and inspector.
 11. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
@@ -203,9 +204,10 @@ The following should be true during a good test drive:
   `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.
 - `F5` validates source-backed brush structure, then applies the stored player
-  start before entering the playable scene. Source overlaps and near-gaps block
-  the transition. Source-backed maps that leak from the player start to outside
-  also block the transition.
+  start before entering the playable scene. Source overlaps, near-gaps, and
+  leaks are surfaced as warnings while this foundation is still being built;
+  hard source defects such as invalid geometry, duplicate identifiers, or
+  off-snap coordinates still prevent source edits from committing.
 
 Current limitations are expected: this is not yet a polished TrenchBroom-style
 frontend, there is no file picker, and texture/face painting remains outside
