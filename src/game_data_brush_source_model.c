@@ -76,6 +76,7 @@ void free_editor_brush_source_model(brush_world_runtime *world_runtime)
     world_runtime->editor_source_box_count = 0;
     world_runtime->editor_source_box_capacity = 0;
     world_runtime->editor_source_meters_per_unit = 0.001f;
+    world_runtime->editor_source_snap_units = 1;
     world_runtime->editor_has_source_model = false;
 }
 
@@ -302,6 +303,30 @@ static bool source_box_extents_valid(const editor_brush_source_box_runtime *box)
     return box != NULL && box->min[0] < box->max[0] && box->min[1] < box->max[1] && box->min[2] < box->max[2];
 }
 
+static int source_snap_units(const brush_world_runtime *world_runtime)
+{
+    return world_runtime != NULL && world_runtime->editor_source_snap_units > 0
+               ? world_runtime->editor_source_snap_units
+               : 1;
+}
+
+static bool source_coord_on_snap(int coord, int snap_units)
+{
+    return snap_units <= 1 || coord % snap_units == 0;
+}
+
+static bool source_box_coordinates_on_snap(const editor_brush_source_box_runtime *box, int snap_units)
+{
+    if (box == NULL)
+        return false;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (!source_coord_on_snap(box->min[axis], snap_units) || !source_coord_on_snap(box->max[axis], snap_units))
+            return false;
+    }
+    return true;
+}
+
 static bool source_intervals_overlap_positive(int a_min, int a_max, int b_min, int b_max)
 {
     return SDL_max(a_min, b_min) < SDL_min(a_max, b_max);
@@ -332,6 +357,13 @@ static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
     if (!source_box_extents_valid(candidate))
     {
         set_error(error_buffer, error_buffer_size, "source brush edit would create invalid geometry");
+        return false;
+    }
+    const int snap_units = source_snap_units(world_runtime);
+    if (!source_box_coordinates_on_snap(candidate, snap_units))
+    {
+        set_errorf(error_buffer, error_buffer_size, "source brush '%s' is not aligned to %d-unit source snap",
+                   candidate->name != NULL ? candidate->name : "<unnamed>", snap_units);
         return false;
     }
 
@@ -524,7 +556,7 @@ static bool editor_source_box_identifier_unique(const editor_brush_source_box_ru
 }
 
 bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
-                                    char *error_buffer, int error_buffer_size)
+                                    int snap_units, char *error_buffer, int error_buffer_size)
 {
     if (world_runtime == NULL || !yyjson_is_arr(boxes))
     {
@@ -545,6 +577,7 @@ bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_v
     world_runtime->editor_source_boxes = source_boxes;
     world_runtime->editor_source_box_capacity = box_count;
     world_runtime->editor_source_meters_per_unit = meters_per_unit > 0.0f ? meters_per_unit : 0.001f;
+    world_runtime->editor_source_snap_units = snap_units > 0 ? snap_units : 1;
     world_runtime->editor_has_source_model = true;
     for (int i = 0; i < box_count; ++i)
     {
@@ -592,10 +625,22 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
     }
 
     const int gap_tolerance = near_gap_units > 0 ? near_gap_units : 1;
+    const int snap_units = source_snap_units(world_runtime);
+    out_diagnostics->source_snap_units = snap_units;
     out_diagnostics->source_box_count = world_runtime->editor_source_box_count;
     for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
     {
         const editor_brush_source_box_runtime *a = &world_runtime->editor_source_boxes[i];
+        if (!source_box_coordinates_on_snap(a, snap_units))
+        {
+            out_diagnostics->off_snap_count++;
+            if (out_diagnostics->first_issue[0] == '\0')
+            {
+                SDL_snprintf(out_diagnostics->first_issue, sizeof(out_diagnostics->first_issue),
+                             "source box '%s' is not aligned to %d-unit source snap",
+                             a->name != NULL ? a->name : "<unnamed>", snap_units);
+            }
+        }
         for (int j = i + 1; j < world_runtime->editor_source_box_count; ++j)
         {
             const editor_brush_source_box_runtime *b = &world_runtime->editor_source_boxes[j];
@@ -650,8 +695,9 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
         }
     }
 
-    out_diagnostics->structurally_valid =
-        out_diagnostics->positive_overlap_count == 0 && out_diagnostics->near_gap_count == 0;
+    out_diagnostics->structurally_valid = out_diagnostics->off_snap_count == 0 &&
+                                          out_diagnostics->positive_overlap_count == 0 &&
+                                          out_diagnostics->near_gap_count == 0;
     return true;
 }
 
@@ -1431,6 +1477,8 @@ bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runt
     world_runtime->editor_source_box_capacity = world->brush_count;
     if (world_runtime->editor_source_meters_per_unit <= 0.0f)
         world_runtime->editor_source_meters_per_unit = 0.001f;
+    if (world_runtime->editor_source_snap_units <= 0)
+        world_runtime->editor_source_snap_units = 1;
     world_runtime->editor_has_source_model = true;
     return true;
 }

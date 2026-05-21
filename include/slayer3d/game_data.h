@@ -2256,6 +2256,10 @@ extern "C"
         bool structurally_valid;
         /** @brief Number of source boxes inspected. */
         int source_box_count;
+        /** @brief Source-coordinate snap unit for this source world. */
+        int source_snap_units;
+        /** @brief Source boxes whose min/max coordinates are not aligned to source_snap_units. */
+        int off_snap_count;
         /** @brief Positive-volume overlaps between structural source boxes. These are invalid. */
         int positive_overlap_count;
         /** @brief Tiny non-zero gaps between otherwise adjacent structural source boxes. These indicate seams/leaks. */
@@ -2280,6 +2284,8 @@ extern "C"
      * that can create seams or z-fighting before the map is compiled for play.
      * Non-structural content such as trigger-only boxes is ignored by topology
      * checks so gameplay volumes can overlap sealed architecture.
+     * Source worlds may author `snap_units` to make off-grid source coordinates
+     * a blocking structural defect.
      *
      * @p near_gap_units controls how many source units count as a suspicious
      * near miss between otherwise overlapping boxes. Pass 0 to use the default

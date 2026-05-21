@@ -1119,6 +1119,13 @@ keys, for example `floor.spawn.001.face.px`. This keeps selection, painting,
 diagnostics, and undo/redo addressable by source brush/face identity instead of
 by transient compiled-surface indexes.
 
+`snap_units` is optional and defaults to `1`. When present, every source-box
+`min` and `max` coordinate must remain aligned to that source-unit increment.
+For example, with `meters_per_unit: 0.001` and `snap_units: 100`, source edits
+are constrained to a 0.1 meter structural grid. The editor can still use larger
+placement grids, but malformed off-grid source coordinates are reported as
+source-model defects and rejected by source-backed mutation tools.
+
 For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
 in-memory source model. Successful editor mutations synchronize that source
 model before save/export, then reload compiles runtime brushes from the source
@@ -1138,11 +1145,11 @@ source-model overlap/gap/contact defects and do not seal leaks.
 Use `editor.brush_world.validate_source` or the native
 `slayer3d_game_data_validate_editor_brush_source_model()` API to inspect source
 boxes before save or test-run. The pass runs on fixed source coordinates and
-reports positive-volume overlaps plus tiny non-zero near gaps between boxes that
-otherwise overlap on the other two axes. Exact face contact is counted as
-structural adjacency. This is the first source-level correctness gate for
-watertight brush editing; future leak tracing can build on the same source model
-without relying on visual offsets.
+reports off-snap coordinates, positive-volume overlaps, and tiny non-zero near
+gaps between boxes that otherwise overlap on the other two axes. Exact face
+contact is counted as structural adjacency. This is the first source-level
+correctness gate for watertight brush editing; future leak tracing can build on
+the same source model without relying on visual offsets.
 
 The action form may set `allow_missing_source: true` when a workflow still needs
 to support legacy/runtime-only brush worlds. In that mode, worlds without an
@@ -1205,6 +1212,8 @@ missing.
     "valid_key": "editor.source.valid",
     "message_key": "editor.source.message",
     "box_count_key": "editor.source.boxes",
+    "snap_units_key": "editor.source.snap_units",
+    "off_snap_count_key": "editor.source.off_snap",
     "overlap_count_key": "editor.source.overlaps",
     "near_gap_count_key": "editor.source.near_gaps",
     "face_contact_count_key": "editor.source.face_contacts",

@@ -459,6 +459,8 @@ bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_r
     editor_set_bool_output(scene_state, outputs, "valid_key", valid);
     editor_set_string_output(scene_state, outputs, "message_key", message);
     editor_set_int_output(scene_state, outputs, "box_count_key", ok ? diagnostics.source_box_count : 0);
+    editor_set_int_output(scene_state, outputs, "snap_units_key", ok ? diagnostics.source_snap_units : 0);
+    editor_set_int_output(scene_state, outputs, "off_snap_count_key", ok ? diagnostics.off_snap_count : 0);
     editor_set_int_output(scene_state, outputs, "overlap_count_key", ok ? diagnostics.positive_overlap_count : 0);
     editor_set_int_output(scene_state, outputs, "near_gap_count_key", ok ? diagnostics.near_gap_count : 0);
     editor_set_int_output(scene_state, outputs, "face_contact_count_key", ok ? diagnostics.face_contact_count : 0);

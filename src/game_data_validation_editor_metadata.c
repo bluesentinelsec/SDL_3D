@@ -477,6 +477,7 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
         }
 
         yyjson_val *meters_per_unit = obj_get(source, "meters_per_unit");
+        yyjson_val *snap_units = obj_get(source, "snap_units");
         yyjson_val *boxes = obj_get(source, "boxes");
         const char *coordinate_system = json_string(source, "coordinate_system");
         const char *source_world = json_string(source, "world");
@@ -487,6 +488,7 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
              require_ref(ctx, &names->brush_worlds, "brush world", source_world, source_path) &&
              (coordinate_system == NULL || SDL_strcmp(coordinate_system, "fixed_millimeters") == 0) &&
              (meters_per_unit == NULL || (yyjson_is_num(meters_per_unit) && yyjson_get_real(meters_per_unit) > 0.0)) &&
+             (snap_units == NULL || (yyjson_is_int(snap_units) && yyjson_get_int(snap_units) > 0)) &&
              yyjson_is_arr(boxes) &&
              editor_brush_source_material_table(ctx, editor_brush_source_world_materials(root, source_world),
                                                 source_path, &material_names);
@@ -495,7 +497,7 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             if (!ctx->failed)
                 ok = validation_error(ctx, source_path,
                                       "editor brush source requires world ref, optional fixed_millimeters coordinate "
-                                      "system, positive meters_per_unit, and boxes array");
+                                      "system, positive meters_per_unit, positive snap_units, and boxes array");
             name_table_destroy(&material_names);
             break;
         }

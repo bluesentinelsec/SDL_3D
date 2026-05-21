@@ -354,6 +354,9 @@ static bool export_add_editor_brush_source_world(yyjson_mut_doc *doc, yyjson_mut
                                  world_runtime->editor_source_meters_per_unit > 0.0f
                                      ? world_runtime->editor_source_meters_per_unit
                                      : 0.001f) ||
+        !yyjson_mut_obj_add_int(doc, obj, "snap_units",
+                                world_runtime->editor_source_snap_units > 0 ? world_runtime->editor_source_snap_units
+                                                                            : 1) ||
         !yyjson_mut_obj_add_val(doc, obj, "boxes", boxes))
     {
         return false;

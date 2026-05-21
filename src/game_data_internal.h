@@ -493,6 +493,7 @@ typedef struct brush_world_runtime
     int editor_source_box_count;
     int editor_source_box_capacity;
     float editor_source_meters_per_unit;
+    int editor_source_snap_units;
     bool editor_has_source_model;
     char *editor_source_path;
     Uint64 editor_revision;
@@ -1139,7 +1140,7 @@ void free_editor_brush_source_box_runtime(editor_brush_source_box_runtime *box);
 bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime *source,
                                           editor_brush_source_box_runtime *dest);
 bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
-                                    char *error_buffer, int error_buffer_size);
+                                    int snap_units, char *error_buffer, int error_buffer_size);
 bool editor_brush_world_rebuild_from_source(brush_world_runtime *world_runtime, char *error_buffer,
                                             int error_buffer_size);
 bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,

@@ -8061,6 +8061,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         static const char *const output_keys[] = {"valid_key",
                                                   "message_key",
                                                   "box_count_key",
+                                                  "snap_units_key",
+                                                  "off_snap_count_key",
                                                   "overlap_count_key",
                                                   "near_gap_count_key",
                                                   "face_contact_count_key",
