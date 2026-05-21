@@ -16857,6 +16857,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.source.compiled_faces", 0), 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.compiled_missing_source", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.compiled_unknown_source", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.source.issue.kind", ""), "");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.source.issue.source", ""), "");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.issue.runtime_index", -2), -1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.issue.compiled_face_index", -2), -1);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.leak.valid", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.message", ""),
                  "player-start reachable space leaks to outside");
@@ -19032,6 +19036,13 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
     EXPECT_EQ(diagnostics.edge_contact_count, 0);
     EXPECT_EQ(diagnostics.vertex_contact_count, 0);
     EXPECT_NE(std::string(diagnostics.first_issue).find("near gap"), std::string::npos) << diagnostics.first_issue;
+    EXPECT_STREQ(diagnostics.first_issue_kind, "near_gap");
+    EXPECT_STREQ(diagnostics.first_issue_source_name, "brush.source.box.001");
+    EXPECT_STREQ(diagnostics.first_issue_source_stable_id, "source.box.001");
+    EXPECT_STREQ(diagnostics.first_issue_related_source_name, "brush.source.box.002");
+    EXPECT_STREQ(diagnostics.first_issue_related_source_stable_id, "source.box.002");
+    EXPECT_EQ(diagnostics.first_issue_runtime_brush_index, -1);
+    EXPECT_EQ(diagnostics.first_issue_compiled_face_index, -1);
 
     const char overlap_boxes[] = R"json(
         {
@@ -19065,6 +19076,12 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
     EXPECT_EQ(diagnostics.edge_contact_count, 0);
     EXPECT_EQ(diagnostics.vertex_contact_count, 0);
     EXPECT_NE(std::string(diagnostics.first_issue).find("overlap"), std::string::npos) << diagnostics.first_issue;
+    EXPECT_STREQ(diagnostics.first_issue_kind, "overlap");
+    EXPECT_STREQ(diagnostics.first_issue_source_name, "brush.source.box.001");
+    EXPECT_STREQ(diagnostics.first_issue_source_stable_id, "source.box.001");
+    EXPECT_STREQ(diagnostics.first_issue_related_source_name, "brush.source.box.002");
+    EXPECT_STREQ(diagnostics.first_issue_related_source_stable_id, "source.box.002");
+    EXPECT_STREQ(diagnostics.first_issue_source_face, "");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

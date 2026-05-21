@@ -2284,6 +2284,24 @@ extern "C"
         int compiled_face_unknown_source_count;
         /** @brief First source diagnostic issue or warning, or an empty string when none was found. */
         char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Stable category for first_issue, or empty when no issue/warning was found. */
+        char first_issue_kind[64];
+        /** @brief Primary source brush name related to first_issue, or empty when not applicable. */
+        char first_issue_source_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Primary source brush stable id related to first_issue, or empty when not applicable. */
+        char first_issue_source_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Secondary source brush name related to first_issue, or empty when not applicable. */
+        char first_issue_related_source_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Secondary source brush stable id related to first_issue, or empty when not applicable. */
+        char first_issue_related_source_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Source face key or stable id related to first_issue, or empty when not applicable. */
+        char first_issue_source_face[64];
+        /** @brief Runtime brush name related to first_issue, or empty when not applicable. */
+        char first_issue_runtime_brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Runtime brush index related to first_issue, or -1 when not applicable. */
+        int first_issue_runtime_brush_index;
+        /** @brief Compiled render-face metadata index related to first_issue, or -1 when not applicable. */
+        int first_issue_compiled_face_index;
     } slayer3d_game_data_editor_brush_source_diagnostics;
 
     /**

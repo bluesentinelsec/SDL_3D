@@ -516,6 +516,42 @@ static void set_first_source_diagnostic_issue(slayer3d_game_data_editor_brush_so
                  b != NULL && b->name != NULL ? b->name : "<unnamed>", value);
 }
 
+static void set_first_source_diagnostic_context(slayer3d_game_data_editor_brush_source_diagnostics *diagnostics,
+                                                const char *kind, const editor_brush_source_box_runtime *source,
+                                                const editor_brush_source_box_runtime *related_source,
+                                                const char *source_face, const slayer3d_game_data_brush *runtime_brush,
+                                                int runtime_brush_index, int compiled_face_index)
+{
+    if (diagnostics == NULL || diagnostics->first_issue_kind[0] != '\0')
+        return;
+    SDL_strlcpy(diagnostics->first_issue_kind, kind != NULL ? kind : "", sizeof(diagnostics->first_issue_kind));
+    if (source != NULL)
+    {
+        SDL_strlcpy(diagnostics->first_issue_source_name, source->name != NULL ? source->name : "",
+                    sizeof(diagnostics->first_issue_source_name));
+        SDL_strlcpy(diagnostics->first_issue_source_stable_id, source->stable_id != NULL ? source->stable_id : "",
+                    sizeof(diagnostics->first_issue_source_stable_id));
+    }
+    if (related_source != NULL)
+    {
+        SDL_strlcpy(diagnostics->first_issue_related_source_name,
+                    related_source->name != NULL ? related_source->name : "",
+                    sizeof(diagnostics->first_issue_related_source_name));
+        SDL_strlcpy(diagnostics->first_issue_related_source_stable_id,
+                    related_source->stable_id != NULL ? related_source->stable_id : "",
+                    sizeof(diagnostics->first_issue_related_source_stable_id));
+    }
+    SDL_strlcpy(diagnostics->first_issue_source_face, source_face != NULL ? source_face : "",
+                sizeof(diagnostics->first_issue_source_face));
+    if (runtime_brush != NULL)
+    {
+        SDL_strlcpy(diagnostics->first_issue_runtime_brush_name, runtime_brush->name != NULL ? runtime_brush->name : "",
+                    sizeof(diagnostics->first_issue_runtime_brush_name));
+    }
+    diagnostics->first_issue_runtime_brush_index = runtime_brush_index;
+    diagnostics->first_issue_compiled_face_index = compiled_face_index;
+}
+
 static void set_first_source_diagnostic_text(slayer3d_game_data_editor_brush_source_diagnostics *diagnostics,
                                              const char *text)
 {
@@ -586,6 +622,7 @@ static void validate_source_runtime_brush_identity(const brush_world_runtime *wo
                          box->name != NULL ? box->name : "<unnamed>");
             diagnostics->runtime_source_mismatch_count++;
             set_first_source_diagnostic_text(diagnostics, message);
+            set_first_source_diagnostic_context(diagnostics, "runtime_source_mismatch", box, NULL, NULL, NULL, -1, -1);
         }
     }
 
@@ -604,6 +641,8 @@ static void validate_source_runtime_brush_identity(const brush_world_runtime *wo
                          brush->name != NULL ? brush->name : "<unnamed>");
             diagnostics->runtime_source_mismatch_count++;
             set_first_source_diagnostic_text(diagnostics, message);
+            set_first_source_diagnostic_context(diagnostics, "runtime_source_mismatch", NULL, NULL, NULL, brush,
+                                                brush_index, -1);
         }
     }
 }
@@ -619,6 +658,7 @@ static void validate_source_compiled_face_identity(const brush_world_runtime *wo
     {
         diagnostics->compiled_face_missing_source_count += world->compile_rendered_face_metadata_count;
         set_first_source_diagnostic_text(diagnostics, "compiled render-face metadata is missing");
+        set_first_source_diagnostic_context(diagnostics, "compiled_missing_source", NULL, NULL, NULL, NULL, -1, -1);
         return;
     }
     for (int face_index = 0; face_index < world->compile_rendered_face_metadata_count; ++face_index)
@@ -633,6 +673,8 @@ static void validate_source_compiled_face_identity(const brush_world_runtime *wo
                 SDL_snprintf(diagnostics->first_issue, sizeof(diagnostics->first_issue),
                              "compiled face %d is missing source identity", face_index);
             }
+            set_first_source_diagnostic_context(diagnostics, "compiled_missing_source", NULL, NULL, NULL, NULL, -1,
+                                                face_index);
             continue;
         }
 
@@ -663,6 +705,11 @@ static void validate_source_compiled_face_identity(const brush_world_runtime *wo
                 SDL_snprintf(diagnostics->first_issue, sizeof(diagnostics->first_issue),
                              "compiled face %d source identity does not resolve", face_index);
             }
+            const editor_brush_source_box_runtime *source_box =
+                source_index >= 0 ? &world_runtime->editor_source_boxes[source_index] : NULL;
+            set_first_source_diagnostic_context(diagnostics, "compiled_unknown_source", source_box, NULL,
+                                                compiled_face->source_face_stable_id, brush, compiled_face->brush_index,
+                                                face_index);
         }
     }
 }
@@ -803,7 +850,11 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
     slayer3d_game_data_editor_brush_source_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size)
 {
     if (out_diagnostics != NULL)
+    {
         SDL_zero(*out_diagnostics);
+        out_diagnostics->first_issue_runtime_brush_index = -1;
+        out_diagnostics->first_issue_compiled_face_index = -1;
+    }
     if (out_diagnostics == NULL)
     {
         set_error(error_buffer, error_buffer_size, "editor brush source diagnostics output is required");
@@ -839,6 +890,7 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
                              "source box '%s' is not aligned to %d-unit source snap",
                              a->name != NULL ? a->name : "<unnamed>", snap_units);
             }
+            set_first_source_diagnostic_context(out_diagnostics, "off_snap", a, NULL, NULL, NULL, -1, -1);
         }
         for (int j = i + 1; j < world_runtime->editor_source_box_count; ++j)
         {
@@ -853,6 +905,7 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
                 out_diagnostics->positive_overlap_count++;
                 set_first_source_diagnostic_issue(out_diagnostics,
                                                   "source boxes '%s' and '%s' overlap with positive volume", a, b, 0);
+                set_first_source_diagnostic_context(out_diagnostics, "overlap", a, b, NULL, NULL, -1, -1);
                 continue;
             }
 
@@ -889,6 +942,7 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
                     out_diagnostics->near_gap_count++;
                     set_first_source_diagnostic_issue(out_diagnostics,
                                                       "source boxes '%s' and '%s' have a %d-unit near gap", a, b, gap);
+                    set_first_source_diagnostic_context(out_diagnostics, "near_gap", a, b, NULL, NULL, -1, -1);
                 }
             }
         }

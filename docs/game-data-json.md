@@ -1231,10 +1231,25 @@ missing.
     "runtime_source_mismatch_count_key": "editor.source.runtime_mismatches",
     "compiled_face_count_key": "editor.source.compiled_faces",
     "compiled_face_missing_source_count_key": "editor.source.compiled_missing_source",
-    "compiled_face_unknown_source_count_key": "editor.source.compiled_unknown_source"
+    "compiled_face_unknown_source_count_key": "editor.source.compiled_unknown_source",
+    "first_issue_kind_key": "editor.source.issue.kind",
+    "first_issue_source_name_key": "editor.source.issue.source",
+    "first_issue_source_stable_id_key": "editor.source.issue.source_id",
+    "first_issue_related_source_name_key": "editor.source.issue.related_source",
+    "first_issue_related_source_stable_id_key": "editor.source.issue.related_source_id",
+    "first_issue_source_face_key": "editor.source.issue.face",
+    "first_issue_runtime_brush_name_key": "editor.source.issue.runtime_brush",
+    "first_issue_runtime_brush_index_key": "editor.source.issue.runtime_index",
+    "first_issue_compiled_face_index_key": "editor.source.issue.compiled_face_index"
   }
 }
 ```
+
+The first-issue outputs are optional structured context for the human-readable
+message. `first_issue_kind` uses stable categories such as `off_snap`, `overlap`,
+`near_gap`, `runtime_source_mismatch`, `compiled_missing_source`, and
+`compiled_unknown_source`; source/runtime/compiled fields are empty or `-1` when
+they do not apply.
 
 ```json
 {
