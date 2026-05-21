@@ -8051,10 +8051,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (near_gap_units != NULL && (!yyjson_is_int(near_gap_units) || yyjson_get_int(near_gap_units) < 0))
             return validation_error(ctx, json_path,
                                     "editor.brush_world.validate_source near_gap_units must be a non-negative integer");
-        yyjson_val *allow_missing_source = obj_get(action, "allow_missing_source");
-        if (allow_missing_source != NULL && !yyjson_is_bool(allow_missing_source))
+        if (obj_get(action, "allow_missing_source") != NULL)
             return validation_error(ctx, json_path,
-                                    "editor.brush_world.validate_source allow_missing_source must be a boolean");
+                                    "editor.brush_world.validate_source allow_missing_source is no longer supported");
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.brush_world.validate_source outputs must be an object");
@@ -8095,10 +8094,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *message = obj_get(action, "message");
         if (message != NULL && !yyjson_is_str(message))
             return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure message must be a string");
-        yyjson_val *allow_missing_source = obj_get(action, "allow_missing_source");
-        if (allow_missing_source != NULL && !yyjson_is_bool(allow_missing_source))
-            return validation_error(ctx, json_path,
-                                    "editor.brush_world.validate_enclosure allow_missing_source must be a boolean");
+        if (obj_get(action, "allow_missing_source") != NULL)
+            return validation_error(
+                ctx, json_path, "editor.brush_world.validate_enclosure allow_missing_source is no longer supported");
         yyjson_val *max_cells = obj_get(action, "max_cells");
         if (max_cells != NULL && (!yyjson_is_int(max_cells) || yyjson_get_int(max_cells) <= 0))
             return validation_error(ctx, json_path,

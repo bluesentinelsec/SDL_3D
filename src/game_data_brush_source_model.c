@@ -356,6 +356,49 @@ static bool source_box_contents_are_structural(unsigned int contents)
                         SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP | SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY)) != 0u;
 }
 
+static void source_box_candidate_collect_warnings(const brush_world_runtime *world_runtime,
+                                                  const editor_brush_source_box_runtime *candidate, int exclude_index,
+                                                  editor_brush_source_prefab_result *out_result)
+{
+    if (world_runtime == NULL || candidate == NULL || out_result == NULL ||
+        !source_box_contents_are_structural(candidate->contents))
+    {
+        return;
+    }
+
+    const char *first_overlap = NULL;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        if (i == exclude_index)
+            continue;
+        const editor_brush_source_box_runtime *existing = &world_runtime->editor_source_boxes[i];
+        if (!source_box_contents_are_structural(existing->contents) ||
+            !source_box_positive_volume_overlap(candidate, existing))
+        {
+            continue;
+        }
+        out_result->positive_overlap_count++;
+        if (first_overlap == NULL)
+            first_overlap = existing->name != NULL ? existing->name : existing->stable_id;
+    }
+
+    if (out_result->positive_overlap_count <= 0)
+        return;
+
+    if (out_result->positive_overlap_count == 1)
+    {
+        SDL_snprintf(out_result->warning, sizeof(out_result->warning),
+                     "overlaps source brush '%s'; compiler will resolve hidden faces",
+                     first_overlap != NULL ? first_overlap : "<unnamed>");
+    }
+    else
+    {
+        SDL_snprintf(out_result->warning, sizeof(out_result->warning),
+                     "overlaps %d source brushes including '%s'; compiler will resolve hidden faces",
+                     out_result->positive_overlap_count, first_overlap != NULL ? first_overlap : "<unnamed>");
+    }
+}
+
 static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
                                        const editor_brush_source_box_runtime *candidate, int exclude_index,
                                        char *error_buffer, int error_buffer_size)
@@ -1592,6 +1635,8 @@ bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_run
 
     bool ok = editor_brush_world_validate_source_box_candidate(world_runtime, &source_box, -1, error_buffer,
                                                                error_buffer_size);
+    if (ok && out_result != NULL)
+        source_box_candidate_collect_warnings(world_runtime, &source_box, -1, out_result);
     if (ok && apply)
     {
         ok = editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
@@ -1649,50 +1694,6 @@ static bool source_box_from_runtime_brush(const brush_world_runtime *world_runti
             return false;
         }
     }
-    return true;
-}
-
-bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,
-                                                 int error_buffer_size)
-{
-    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
-        return true;
-
-    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
-    editor_brush_source_box_runtime *boxes =
-        world->brush_count > 0
-            ? (editor_brush_source_box_runtime *)SDL_calloc((size_t)world->brush_count, sizeof(*boxes))
-            : NULL;
-    if (world->brush_count > 0 && boxes == NULL)
-    {
-        set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source sync");
-        return false;
-    }
-
-    for (int i = 0; i < world->brush_count; ++i)
-    {
-        if (!source_box_from_runtime_brush(world_runtime, &world->brushes[i], &boxes[i]))
-        {
-            for (int j = 0; j <= i; ++j)
-                free_editor_brush_source_box(&boxes[j]);
-            SDL_free(boxes);
-            set_errorf(error_buffer, error_buffer_size, "runtime brush '%s' cannot be represented as a source box",
-                       world->brushes[i].name != NULL ? world->brushes[i].name : "<unnamed>");
-            return false;
-        }
-    }
-
-    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
-        free_editor_brush_source_box(&world_runtime->editor_source_boxes[i]);
-    SDL_free(world_runtime->editor_source_boxes);
-    world_runtime->editor_source_boxes = boxes;
-    world_runtime->editor_source_box_count = world->brush_count;
-    world_runtime->editor_source_box_capacity = world->brush_count;
-    if (world_runtime->editor_source_meters_per_unit <= 0.0f)
-        world_runtime->editor_source_meters_per_unit = 0.001f;
-    if (world_runtime->editor_source_snap_units <= 0)
-        world_runtime->editor_source_snap_units = 1;
-    world_runtime->editor_has_source_model = true;
     return true;
 }
 

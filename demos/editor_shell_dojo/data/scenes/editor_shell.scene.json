@@ -264,7 +264,8 @@
         "anchor_key": "editor.placement_preview.anchor",
         "snap_key": "editor.placement_preview.snap",
         "bounds_min_key": "editor.placement_preview.bounds_min",
-        "bounds_max_key": "editor.placement_preview.bounds_max"
+        "bounds_max_key": "editor.placement_preview.bounds_max",
+        "overlap_count_key": "editor.placement_preview.overlaps"
       },
       "previews": [
         {

@@ -437,18 +437,14 @@ bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_r
     yyjson_val *outputs = obj_get(action, "outputs");
     const char *world_name = json_string(action, "world", NULL);
     const int near_gap_units = json_int(action, "near_gap_units", 1);
-    const bool allow_missing_source = json_bool(action, "allow_missing_source", false);
     slayer3d_game_data_editor_brush_source_diagnostics diagnostics;
     char error[256];
     error[0] = '\0';
     const bool ok = slayer3d_game_data_validate_editor_brush_source_model(runtime, world_name, near_gap_units,
                                                                           &diagnostics, error, (int)sizeof(error));
-    const bool missing_allowed = !ok && allow_missing_source && !diagnostics.has_source_model;
-    const bool valid = (ok && diagnostics.structurally_valid) || missing_allowed;
+    const bool valid = ok && diagnostics.structurally_valid;
     const char *message = NULL;
-    if (missing_allowed)
-        message = error[0] != '\0' ? error : "brush world has no editor brush source model";
-    else if (valid && ok && diagnostics.first_issue[0] != '\0')
+    if (valid && ok && diagnostics.first_issue[0] != '\0')
         message = diagnostics.first_issue;
     else if (valid)
         message = json_string(action, "message", "editor brush source model is structurally valid");
@@ -480,18 +476,14 @@ bool slayer3d_game_data_validate_editor_brush_enclosure_action(slayer3d_game_dat
     const char *world_name = json_string(action, "world", NULL);
     const char *player_start_name = json_string(action, "player_start", NULL);
     const int max_cells = json_int(action, "max_cells", 0);
-    const bool allow_missing_source = json_bool(action, "allow_missing_source", false);
     slayer3d_game_data_editor_brush_enclosure_diagnostics diagnostics;
     char error[256];
     error[0] = '\0';
     const bool ok = slayer3d_game_data_validate_editor_brush_source_enclosure(
         runtime, world_name, player_start_name, max_cells, &diagnostics, error, (int)sizeof(error));
-    const bool missing_allowed = !ok && allow_missing_source && !diagnostics.has_source_model;
-    const bool valid = (ok && diagnostics.enclosed) || missing_allowed;
+    const bool valid = ok && diagnostics.enclosed;
     const char *message = NULL;
-    if (missing_allowed)
-        message = error[0] != '\0' ? error : "brush world has no editor brush source model";
-    else if (valid)
+    if (valid)
         message = json_string(action, "message", "editor brush source enclosure is sealed");
     else if (ok && diagnostics.first_issue[0] != '\0')
         message = diagnostics.first_issue;

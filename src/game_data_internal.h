@@ -184,6 +184,8 @@ typedef struct editor_placement_preview_state
     bool has_source_candidate;
     int source_min[3];
     int source_max[3];
+    int source_positive_overlap_count;
+    char source_warning[256];
 } editor_placement_preview_state;
 
 typedef struct editor_brush_source_box_runtime
@@ -220,6 +222,8 @@ typedef struct editor_brush_source_prefab_result
     slayer3d_bounding_box bounds;
     int source_min[3];
     int source_max[3];
+    int positive_overlap_count;
+    char warning[256];
 } editor_brush_source_prefab_result;
 
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
@@ -246,8 +250,6 @@ typedef struct editor_command_transaction_entry
     int brush_index;
     bool has_source_box_snapshot;
     editor_brush_source_box_runtime source_box_snapshot;
-    bool has_brush_snapshot;
-    slayer3d_game_data_brush brush_snapshot;
     char message[128];
 } editor_command_transaction_entry;
 
@@ -1170,8 +1172,6 @@ bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_v
                                     int snap_units, char *error_buffer, int error_buffer_size);
 bool editor_brush_world_rebuild_from_source(brush_world_runtime *world_runtime, char *error_buffer,
                                             int error_buffer_size);
-bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,
-                                                 int error_buffer_size);
 int editor_brush_world_find_source_box_index(const brush_world_runtime *world_runtime, const char *brush_identity);
 bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *world_runtime,
                                                     const char *brush_identity,

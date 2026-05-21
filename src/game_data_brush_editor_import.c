@@ -163,6 +163,14 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
         yyjson_doc_free(doc);
         return false;
     }
+    if (!staged.brush_worlds[staged_index].editor_has_source_model)
+    {
+        set_errorf(error_buffer, error_buffer_size,
+                   "editable level brush world '%s' requires a matching editor_brush_sources source model", world_name);
+        free_staged_import_runtime(&staged);
+        yyjson_doc_free(doc);
+        return false;
+    }
 
     brush_world_runtime replacement = staged.brush_worlds[staged_index];
     SDL_zero(staged.brush_worlds[staged_index]);

@@ -1632,7 +1632,6 @@
           {
             "type": "editor.brush_world.validate_source",
             "world": "brush.editor_shell.target",
-            "allow_missing_source": true,
             "message": "editor source model is structurally valid",
             "outputs": {
               "valid_key": "editor.source.valid",
@@ -1654,7 +1653,6 @@
                 "type": "editor.brush_world.validate_enclosure",
                 "world": "brush.editor_shell.target",
                 "player_start": "player_start.editor_shell",
-                "allow_missing_source": true,
                 "message": "editor source enclosure is sealed",
                 "outputs": {
                   "valid_key": "editor.leak.valid",

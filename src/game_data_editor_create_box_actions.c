@@ -76,6 +76,8 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
 
     char brush_name[256];
     brush_name[0] = '\0';
+    char source_warning[256];
+    source_warning[0] = '\0';
     bool ok = false;
     bool source_command_applied = false;
     if (position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0)
@@ -97,6 +99,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
             {
                 source_command_applied = true;
                 SDL_strlcpy(brush_name, result.brush_name, sizeof(brush_name));
+                SDL_strlcpy(source_warning, result.warning, sizeof(source_warning));
                 desc.world_name = preview->world_name;
                 desc.material_name = preview->material_name;
                 desc.contents = preview->contents;
@@ -116,11 +119,22 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
         ok = error[0] == '\0' && slayer3d_game_data_create_box_brush(runtime, &desc, brush_name, sizeof(brush_name),
                                                                      error, (int)sizeof(error));
     }
+    char message[256];
+    if (ok && source_warning[0] != '\0')
+    {
+        SDL_snprintf(message, sizeof(message), "%s; %s", json_string(action, "message", "box brush created"),
+                     source_warning);
+    }
+    else
+    {
+        SDL_strlcpy(message,
+                    ok ? json_string(action, "message", "box brush created")
+                       : (error[0] != '\0' ? error : "box brush creation failed"),
+                    sizeof(message));
+    }
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
-    editor_set_string_output(scene_state, outputs, "message_key",
-                             ok ? json_string(action, "message", "box brush created")
-                                : (error[0] != '\0' ? error : "box brush creation failed"));
+    editor_set_string_output(scene_state, outputs, "message_key", message);
     editor_set_string_output(scene_state, outputs, "brush_key", ok ? brush_name : "");
     editor_set_vec3_output(scene_state, outputs, "bounds_min_key",
                            ok ? desc.min : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
