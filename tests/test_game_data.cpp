@@ -80,6 +80,138 @@ struct CapturedLogMessage
     std::string message;
 };
 
+struct CompiledFaceRect
+{
+    std::string source_face;
+    int axis = -1;
+    int normal_sign = 0;
+    float plane = 0.0f;
+    float min_u = 0.0f;
+    float max_u = 0.0f;
+    float min_v = 0.0f;
+    float max_v = 0.0f;
+};
+
+int dominant_axis_for_normal(float x, float y, float z)
+{
+    const float ax = SDL_fabsf(x);
+    const float ay = SDL_fabsf(y);
+    const float az = SDL_fabsf(z);
+    if (ax >= ay && ax >= az)
+        return 0;
+    if (ay >= ax && ay >= az)
+        return 1;
+    return 2;
+}
+
+float component_for_axis(slayer3d_vec3 value, int axis)
+{
+    switch (axis)
+    {
+    case 0:
+        return value.x;
+    case 1:
+        return value.y;
+    default:
+        return value.z;
+    }
+}
+
+void face_uv_for_axis(slayer3d_vec3 value, int axis, float *out_u, float *out_v)
+{
+    ASSERT_NE(out_u, nullptr);
+    ASSERT_NE(out_v, nullptr);
+    switch (axis)
+    {
+    case 0:
+        *out_u = value.y;
+        *out_v = value.z;
+        break;
+    case 1:
+        *out_u = value.x;
+        *out_v = value.z;
+        break;
+    default:
+        *out_u = value.x;
+        *out_v = value.y;
+        break;
+    }
+}
+
+void expect_compiled_brush_world_has_no_positive_coplanar_overlap(const slayer3d_game_data_brush_world &world)
+{
+    ASSERT_NE(world.render_model, nullptr);
+    ASSERT_NE(world.compile_rendered_faces, nullptr);
+    std::vector<CompiledFaceRect> rects;
+    for (int face_index = 0; face_index < world.compile_rendered_face_metadata_count; ++face_index)
+    {
+        const slayer3d_game_data_brush_compiled_face &face = world.compile_rendered_faces[face_index];
+        ASSERT_GE(face.mesh_index, 0);
+        ASSERT_LT(face.mesh_index, world.render_model->mesh_count);
+        const slayer3d_mesh &mesh = world.render_model->meshes[face.mesh_index];
+        ASSERT_NE(mesh.positions, nullptr);
+        ASSERT_NE(mesh.normals, nullptr);
+        ASSERT_GE(face.first_vertex, 0);
+        ASSERT_GE(face.vertex_count, 0);
+        ASSERT_LE(face.first_vertex + face.vertex_count, mesh.vertex_count);
+        ASSERT_EQ(face.vertex_count % 6, 0)
+            << "source box compile output should group each rectangular visible region as two triangles";
+        for (int vertex_base = face.first_vertex; vertex_base < face.first_vertex + face.vertex_count; vertex_base += 6)
+        {
+            const float nx = mesh.normals[vertex_base * 3 + 0];
+            const float ny = mesh.normals[vertex_base * 3 + 1];
+            const float nz = mesh.normals[vertex_base * 3 + 2];
+            const int axis = dominant_axis_for_normal(nx, ny, nz);
+            const float normal_component = axis == 0 ? nx : (axis == 1 ? ny : nz);
+            CompiledFaceRect rect{};
+            rect.source_face = face.source_face_stable_id != nullptr ? face.source_face_stable_id : "";
+            rect.axis = axis;
+            rect.normal_sign = normal_component < 0.0f ? -1 : 1;
+
+            slayer3d_vec3 first =
+                slayer3d_vec3_make(mesh.positions[vertex_base * 3 + 0], mesh.positions[vertex_base * 3 + 1],
+                                   mesh.positions[vertex_base * 3 + 2]);
+            rect.plane = component_for_axis(first, axis);
+            face_uv_for_axis(first, axis, &rect.min_u, &rect.min_v);
+            rect.max_u = rect.min_u;
+            rect.max_v = rect.min_v;
+
+            for (int vertex = vertex_base; vertex < vertex_base + 6; ++vertex)
+            {
+                slayer3d_vec3 p = slayer3d_vec3_make(mesh.positions[vertex * 3 + 0], mesh.positions[vertex * 3 + 1],
+                                                     mesh.positions[vertex * 3 + 2]);
+                EXPECT_NEAR(component_for_axis(p, axis), rect.plane, 0.001f) << rect.source_face;
+                float u = 0.0f;
+                float v = 0.0f;
+                face_uv_for_axis(p, axis, &u, &v);
+                rect.min_u = SDL_min(rect.min_u, u);
+                rect.max_u = SDL_max(rect.max_u, u);
+                rect.min_v = SDL_min(rect.min_v, v);
+                rect.max_v = SDL_max(rect.max_v, v);
+            }
+            if (rect.max_u > rect.min_u + 0.0001f && rect.max_v > rect.min_v + 0.0001f)
+                rects.push_back(rect);
+        }
+    }
+
+    for (size_t i = 0; i < rects.size(); ++i)
+    {
+        for (size_t j = i + 1; j < rects.size(); ++j)
+        {
+            const CompiledFaceRect &a = rects[i];
+            const CompiledFaceRect &b = rects[j];
+            if (a.axis != b.axis || SDL_fabsf(a.plane - b.plane) > 0.001f)
+                continue;
+            const float overlap_u = SDL_min(a.max_u, b.max_u) - SDL_max(a.min_u, b.min_u);
+            const float overlap_v = SDL_min(a.max_v, b.max_v) - SDL_max(a.min_v, b.min_v);
+            EXPECT_TRUE(overlap_u <= 0.001f || overlap_v <= 0.001f)
+                << "compiled coplanar visible faces overlap: " << a.source_face << " and " << b.source_face
+                << " on axis " << a.axis << " plane " << a.plane << " overlap_u=" << overlap_u
+                << " overlap_v=" << overlap_v;
+        }
+    }
+}
+
 void SDLCALL capture_log_output(void *userdata, int category, SDL_LogPriority priority, const char *message)
 {
     auto *capture = static_cast<CapturedLogMessage *>(userdata);
@@ -17045,6 +17177,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
     ASSERT_EQ(world.render_model->mesh_count, 1);
     ASSERT_NE(world.compile_rendered_faces, nullptr);
     ASSERT_EQ(world.compile_rendered_face_metadata_count, 10);
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
     int compiled_vertices = 0;
     bool found_left_exterior = false;
     bool found_right_exterior = false;
@@ -17192,6 +17325,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitPartiallyCoveredFaces
     ASSERT_EQ(world.render_model->mesh_count, 1);
     ASSERT_NE(world.compile_rendered_faces, nullptr);
     ASSERT_EQ(world.compile_rendered_face_metadata_count, 11);
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
 
     const slayer3d_game_data_brush_compiled_face *split_face = nullptr;
     bool found_culled_cover_bottom = false;
@@ -17319,6 +17453,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesSplitMultipleCoveredFaceRe
     ASSERT_EQ(world.render_model->mesh_count, 1);
     ASSERT_NE(world.compile_rendered_faces, nullptr);
     ASSERT_EQ(world.compile_rendered_face_metadata_count, 16);
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
 
     const slayer3d_game_data_brush_compiled_face *split_face = nullptr;
     bool found_culled_cover_a_bottom = false;
@@ -17442,6 +17577,8 @@ TEST(GameDataRuntime, EditableLevelFragmentOverlappingSourceBoxesCompileWithoutD
     EXPECT_EQ(world.compile_triangle_count, 20);
     ASSERT_NE(world.compile_rendered_faces, nullptr);
     ASSERT_EQ(world.compile_rendered_face_metadata_count, 10);
+    ASSERT_NE(world.render_model, nullptr);
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
 
     bool rendered_left_internal = false;
     bool rendered_right_internal = false;
@@ -17823,6 +17960,7 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxPrefabOperationsAllowGridCor
     slayer3d_game_data_brush_world world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 14);
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -19050,6 +19188,10 @@ TEST(GameDataRuntime, EditableLevelFragmentValidatesLoweredPitEnclosure)
     EXPECT_GT(source.face_contact_count, 0);
     EXPECT_GT(source.edge_contact_count, 0);
     EXPECT_EQ(source.vertex_contact_count, 0);
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
 
     slayer3d_game_data_editor_brush_enclosure_diagnostics enclosure{};
     ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_enclosure(
