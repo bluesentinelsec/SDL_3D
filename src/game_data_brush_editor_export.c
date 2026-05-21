@@ -356,6 +356,25 @@ static bool export_add_brush_world(yyjson_mut_doc *doc, yyjson_mut_val *worlds,
     return true;
 }
 
+static bool validate_editable_source_for_export(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                char *error_buffer, int error_buffer_size)
+{
+    slayer3d_game_data_editor_brush_source_diagnostics diagnostics;
+    if (!slayer3d_game_data_validate_editor_brush_source_model(runtime, world_name, 1, &diagnostics, error_buffer,
+                                                               error_buffer_size))
+    {
+        return false;
+    }
+    if (!diagnostics.structurally_valid)
+    {
+        set_errorf(error_buffer, error_buffer_size, "editable level source model for '%s' is invalid: %s",
+                   world_name != NULL ? world_name : "<unnamed>",
+                   diagnostics.first_issue[0] != '\0' ? diagnostics.first_issue : "source integrity check failed");
+        return false;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_export_brush_world_fragment_json(const slayer3d_game_data_runtime *runtime,
                                                          const char *world_name, char **out_json, size_t *out_size,
                                                          char *error_buffer, int error_buffer_size)
@@ -507,6 +526,8 @@ bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_
         set_errorf(error_buffer, error_buffer_size, "brush world '%s' not found", world_name);
         return false;
     }
+    if (!validate_editable_source_for_export(runtime, world_name, error_buffer, error_buffer_size))
+        return false;
 
     yyjson_mut_doc *doc = yyjson_mut_doc_new(NULL);
     yyjson_mut_val *root = doc != NULL ? yyjson_mut_obj(doc) : NULL;

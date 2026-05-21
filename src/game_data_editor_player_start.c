@@ -344,6 +344,36 @@ static bool editor_test_run_add_arg(yyjson_mut_doc *doc, yyjson_mut_val *args, c
     return arg != NULL && yyjson_mut_arr_append(args, arg);
 }
 
+static bool editor_test_run_validate_source_worlds(const slayer3d_game_data_runtime *runtime, char *error_buffer,
+                                                   int error_buffer_size)
+{
+    if (runtime == NULL)
+        return false;
+
+    for (int i = 0; i < runtime->brush_world_count; ++i)
+    {
+        const brush_world_runtime *world = &runtime->brush_worlds[i];
+        if (!world->editor_has_source_model)
+            continue;
+
+        slayer3d_game_data_editor_brush_source_diagnostics diagnostics;
+        const char *world_name = world->desc.name != NULL ? world->desc.name : "";
+        if (!slayer3d_game_data_validate_editor_brush_source_model(runtime, world_name, 1, &diagnostics, error_buffer,
+                                                                   error_buffer_size))
+        {
+            return false;
+        }
+        if (!diagnostics.structurally_valid)
+        {
+            set_errorf(error_buffer, error_buffer_size, "editor test run source model for '%s' is invalid: %s",
+                       world_name[0] != '\0' ? world_name : "<unnamed>",
+                       diagnostics.first_issue[0] != '\0' ? diagnostics.first_issue : "source integrity check failed");
+            return false;
+        }
+    }
+    return true;
+}
+
 bool slayer3d_game_data_export_editor_test_run_manifest_json(const slayer3d_game_data_runtime *runtime,
                                                              const slayer3d_game_data_editor_test_run_desc *desc,
                                                              char **out_json, size_t *out_size, char *error_buffer,
@@ -363,6 +393,8 @@ bool slayer3d_game_data_export_editor_test_run_manifest_json(const slayer3d_game
         set_error(error_buffer, error_buffer_size, "editor test run manifest requires a data asset path");
         return false;
     }
+    if (!editor_test_run_validate_source_worlds(runtime, error_buffer, error_buffer_size))
+        return false;
 
     const char *scene = desc->scene != NULL && desc->scene[0] != '\0' ? desc->scene : NULL;
     const char *player_start_name =

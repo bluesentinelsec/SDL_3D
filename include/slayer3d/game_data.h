@@ -2678,8 +2678,10 @@ extern "C"
      * runtime `editor_player_starts` collection. When this fragment is loaded
      * again, matching `editor_brush_sources` are compiled back into the runtime
      * brush world, making the fixed-coordinate source boxes the authoritative
-     * editable geometry for supported box brushes. The returned string is
-     * allocated with SDL_malloc and must be released with SDL_free().
+     * editable geometry for supported box brushes. Export fails when the target
+     * world is not source-backed or when source/compiled identity validation
+     * reports a blocking structural defect. The returned string is allocated
+     * with SDL_malloc and must be released with SDL_free().
      */
     bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_data_runtime *runtime,
                                                                 const char *world_name, char **out_json,
@@ -2751,9 +2753,10 @@ extern "C"
      * the runner data asset, resolved scene when known, player start when
      * provided, and a runner argument array excluding mount flags. Editor hosts
      * combine this with their current `--root`, `--pack`, or fused executable
-     * context to launch the generic runner without game-specific native code.
-     * The returned string is allocated with SDL_malloc and must be released
-     * with SDL_free().
+     * context to launch the generic runner without game-specific native code. If
+     * the runtime has source-backed brush worlds, their source/compiled identity
+     * must validate before a test-run manifest can be exported. The returned
+     * string is allocated with SDL_malloc and must be released with SDL_free().
      */
     bool slayer3d_game_data_export_editor_test_run_manifest_json(const slayer3d_game_data_runtime *runtime,
                                                                  const slayer3d_game_data_editor_test_run_desc *desc,

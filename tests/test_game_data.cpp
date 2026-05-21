@@ -17240,6 +17240,30 @@ TEST(GameDataRuntime, EditableLevelFragmentRejectsRuntimeOnlyBrushLayout)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditableLevelExportRejectsRuntimeOnlyBrushWorld)
+{
+    const std::filesystem::path dojo_path = brush_geometry_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    char *json = nullptr;
+    size_t json_size = 0u;
+    EXPECT_FALSE(slayer3d_game_data_export_editable_level_fragment_json(runtime, "brush.brush_geometry.showcase", &json,
+                                                                        &json_size, error, sizeof(error)));
+    EXPECT_EQ(json, nullptr);
+    EXPECT_EQ(json_size, 0u);
+    EXPECT_NE(std::string(error).find("brush world has no editor brush source model"), std::string::npos) << error;
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -18639,6 +18663,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
         runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
         << error;
     ASSERT_NE(export_json, nullptr);
+    const std::string first_export_json(export_json, export_size);
 
     yyjson_doc *doc = yyjson_read(export_json, export_size, 0);
     ASSERT_NE(doc, nullptr);
@@ -18701,6 +18726,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
         runtime, "brush.editor_shell.target", &second_export_json, &second_export_size, error, sizeof(error)))
         << error;
+    EXPECT_EQ(std::string(second_export_json, second_export_size), first_export_json);
     yyjson_doc *second_doc = yyjson_read(second_export_json, second_export_size, 0);
     ASSERT_NE(second_doc, nullptr);
     yyjson_val *second_root = yyjson_doc_get_root(second_doc);
