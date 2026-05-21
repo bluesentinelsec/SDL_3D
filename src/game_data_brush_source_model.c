@@ -636,6 +636,12 @@ bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_v
             free_editor_brush_source_model(world_runtime);
             return false;
         }
+        if (!source_box_candidate_valid(world_runtime, &source_boxes[i], -1, error_buffer, error_buffer_size))
+        {
+            free_editor_brush_source_box(&source_boxes[i]);
+            free_editor_brush_source_model(world_runtime);
+            return false;
+        }
         world_runtime->editor_source_box_count++;
     }
     return true;

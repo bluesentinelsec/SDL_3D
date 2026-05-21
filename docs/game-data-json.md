@@ -1125,8 +1125,9 @@ by transient compiled-surface indexes.
 `min` and `max` coordinate must remain aligned to that source-unit increment.
 For example, with `meters_per_unit: 0.001` and `snap_units: 100`, source edits
 are constrained to a 0.1 meter structural grid. The editor can still use larger
-placement grids, but malformed off-grid source coordinates are reported as
-source-model defects and rejected by source-backed mutation tools.
+placement grids, but malformed off-grid source coordinates are invalid source
+data: validation, editable-fragment import, and source-backed mutation tools all
+reject them.
 
 For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
 in-memory source model. Successful editor mutations synchronize that source

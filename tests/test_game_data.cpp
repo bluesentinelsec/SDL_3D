@@ -10057,6 +10057,55 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_FALSE(slayer3d_game_data_validate_file(
         (dir / "bad_editor_brush_source_snap_units.game.json").string().c_str(), nullptr, error, sizeof(error)));
     EXPECT_NE(std::string(error).find("positive snap_units"), std::string::npos) << error;
+
+    write_text(dir / "bad_editor_brush_source_off_snap.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Brush Source Off Snap" },
+  "world": { "name": "world.bad_editor_brush_source_off_snap", "kind": "fixed_screen" },
+  "brush_worlds": [
+    {
+      "name": "brush.bad_source_off_snap",
+      "materials": [{ "name": "mat.wall" }],
+      "brushes": [
+        {
+          "name": "brush.seed",
+          "faces": [
+            { "plane": { "normal": [ 1,  0,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [-1,  0,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  1,  0], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0, -1,  0], "distance":  0 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0,  1], "distance":  1 }, "material": "mat.wall" },
+            { "plane": { "normal": [ 0,  0, -1], "distance":  0 }, "material": "mat.wall" }
+          ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.bad_source_off_snap",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 100,
+      "boxes": [
+        {
+          "stable_id": "box.off_snap",
+          "kind": "box",
+          "material": "mat.wall",
+          "min": [0, 0, 0],
+          "max": [1050, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_editor_brush_source_off_snap.game.json").string().c_str(),
+                                                  nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("positive snap-aligned extent"), std::string::npos) << error;
     remove_test_dir(dir);
 }
 
@@ -18978,7 +19027,7 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
     slayer3d_game_session_destroy(session);
 }
 
-TEST(GameDataRuntime, EditableLevelFragmentReportsSourceSnapDiagnostics)
+TEST(GameDataRuntime, EditableLevelFragmentRejectsOffSnapSourceCoordinates)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
@@ -19031,24 +19080,14 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceSnapDiagnostics)
   ],
   "editor_player_starts": []
 })json";
-    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+    EXPECT_FALSE(slayer3d_game_data_load_editable_level_fragment_json(
         runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u,
-        "/tmp/source-snap-diagnostics.json", error, sizeof(error)))
-        << error;
+        "/tmp/source-snap-diagnostics.json", error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("not aligned to 100-unit source snap"), std::string::npos) << error;
 
-    slayer3d_game_data_editor_brush_source_diagnostics diagnostics{};
-    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
-                                                                      &diagnostics, error, sizeof(error)))
-        << error;
-    EXPECT_TRUE(diagnostics.has_source_model);
-    EXPECT_FALSE(diagnostics.structurally_valid);
-    EXPECT_EQ(diagnostics.source_box_count, 2);
-    EXPECT_EQ(diagnostics.source_snap_units, 100);
-    EXPECT_EQ(diagnostics.off_snap_count, 1);
-    EXPECT_EQ(diagnostics.positive_overlap_count, 0);
-    EXPECT_EQ(diagnostics.near_gap_count, 0);
-    EXPECT_NE(std::string(diagnostics.first_issue).find("not aligned to 100-unit source snap"), std::string::npos)
-        << diagnostics.first_issue;
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_GT(world.brush_count, 0);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

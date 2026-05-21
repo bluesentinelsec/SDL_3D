@@ -378,6 +378,23 @@ static bool editor_brush_source_box_has_positive_extent(yyjson_val *min_value, y
     return true;
 }
 
+static bool editor_brush_source_box_aligned_to_snap(yyjson_val *min_value, yyjson_val *max_value, int snap_units)
+{
+    if (snap_units <= 1)
+        return true;
+    if (!is_exact_int_vec3_array(min_value) || !is_exact_int_vec3_array(max_value))
+        return false;
+    for (size_t i = 0; i < 3u; ++i)
+    {
+        if ((yyjson_get_sint(yyjson_arr_get(min_value, i)) % snap_units) != 0 ||
+            (yyjson_get_sint(yyjson_arr_get(max_value, i)) % snap_units) != 0)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 static bool editor_brush_source_face_key_valid(const char *key)
 {
     static const char *const valid[] = {"px", "nx", "py", "ny", "pz", "nz"};
@@ -479,6 +496,8 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
         yyjson_val *meters_per_unit = obj_get(source, "meters_per_unit");
         yyjson_val *snap_units = obj_get(source, "snap_units");
         yyjson_val *boxes = obj_get(source, "boxes");
+        const int source_snap_units =
+            snap_units != NULL && yyjson_is_int(snap_units) ? (int)yyjson_get_int(snap_units) : 1;
         const char *coordinate_system = json_string(source, "coordinate_system");
         const char *source_world = json_string(source, "world");
         name_table material_names;
@@ -523,11 +542,14 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             const char *explicit_name = json_string(box, "name");
             const char *name = explicit_name != NULL ? explicit_name : stable_id;
             yyjson_val *contents = obj_get(box, "contents");
+            yyjson_val *min_value = obj_get(box, "min");
+            yyjson_val *max_value = obj_get(box, "max");
             ok = require_unique_name(ctx, &box_ids, "editor brush source stable id", stable_id, box_path) &&
                  require_unique_name(ctx, &box_names, "editor brush source name", name, box_path) &&
                  (kind == NULL || SDL_strcmp(kind, "box") == 0) && (prefab == NULL || prefab[0] != '\0') &&
                  material != NULL && material[0] != '\0' && name_table_contains(&material_names, material) &&
-                 editor_brush_source_box_has_positive_extent(obj_get(box, "min"), obj_get(box, "max")) &&
+                 editor_brush_source_box_has_positive_extent(min_value, max_value) &&
+                 editor_brush_source_box_aligned_to_snap(min_value, max_value, source_snap_units) &&
                  validate_brush_string_or_string_array(ctx, contents, box_path, "editor brush source contents",
                                                        brush_content_name_valid, false) &&
                  validate_editor_brush_source_face_materials(ctx, obj_get(box, "face_materials"), box_path,
@@ -536,7 +558,8 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             {
                 ok = validation_error(ctx, box_path,
                                       "editor brush source box requires stable_id, kind 'box', material ref, integer "
-                                      "min/max vec3 with positive extent, valid contents, and valid face_materials");
+                                      "min/max vec3 with positive snap-aligned extent, valid contents, and valid "
+                                      "face_materials");
             }
         }
         name_table_destroy(&box_names);
