@@ -2272,6 +2272,16 @@ extern "C"
         int vertex_contact_count;
         /** @brief Exact face contacts where only part of a structural source-box face is covered. */
         int partial_face_contact_count;
+        /** @brief Runtime brushes currently compiled from the source model. */
+        int runtime_brush_count;
+        /** @brief Runtime brushes that do not map exactly back to one source box. */
+        int runtime_source_mismatch_count;
+        /** @brief Visible compiled render-face metadata entries. */
+        int compiled_face_count;
+        /** @brief Compiled render faces missing source brush or face identity metadata. */
+        int compiled_face_missing_source_count;
+        /** @brief Compiled render faces whose source identity does not resolve to the source model. */
+        int compiled_face_unknown_source_count;
         /** @brief First source diagnostic issue or warning, or an empty string when none was found. */
         char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
     } slayer3d_game_data_editor_brush_source_diagnostics;
@@ -2286,6 +2296,12 @@ extern "C"
      * checks so gameplay volumes can overlap sealed architecture.
      * Source worlds may author `snap_units` to make off-grid source coordinates
      * a blocking structural defect.
+     *
+     * Source-backed worlds also validate compile identity: runtime brushes must
+     * map back to source boxes, and every visible compiled render face must carry
+     * source brush/face metadata that resolves to the source model. This keeps
+     * selection, save/open, diagnostics, and compiled rendering tied to the same
+     * structural truth.
      *
      * @p near_gap_units controls how many source units count as a suspicious
      * near miss between otherwise overlapping boxes. Pass 0 to use the default

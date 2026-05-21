@@ -16852,6 +16852,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                  "editor source model is structurally valid");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.overlaps", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.near_gaps", -1), 0);
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.source.runtime_brushes", 0), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.runtime_mismatches", -1), 0);
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.source.compiled_faces", 0), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.compiled_missing_source", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.compiled_unknown_source", -1), 0);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.leak.valid", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.message", ""),
                  "player-start reachable space leaks to outside");
@@ -17339,6 +17344,18 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxesCullInternalFaces)
     EXPECT_EQ(world.render_model->meshes[0].vertex_count, 60);
     EXPECT_STREQ(world.brushes[0].editor.stable_id, "source.box.left");
     EXPECT_STREQ(world.brushes[1].editor.stable_id, "source.box.right");
+
+    slayer3d_game_data_editor_brush_source_diagnostics source_diagnostics{};
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &source_diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(source_diagnostics.structurally_valid) << source_diagnostics.first_issue;
+    EXPECT_EQ(source_diagnostics.source_box_count, 2);
+    EXPECT_EQ(source_diagnostics.runtime_brush_count, 2);
+    EXPECT_EQ(source_diagnostics.runtime_source_mismatch_count, 0);
+    EXPECT_EQ(source_diagnostics.compiled_face_count, 10);
+    EXPECT_EQ(source_diagnostics.compiled_face_missing_source_count, 0);
+    EXPECT_EQ(source_diagnostics.compiled_face_unknown_source_count, 0);
 
     char *artifact_json = nullptr;
     size_t artifact_size = 0u;

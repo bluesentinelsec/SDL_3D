@@ -1642,7 +1642,12 @@
               "face_contact_count_key": "editor.source.face_contacts",
               "edge_contact_count_key": "editor.source.edge_contacts",
               "vertex_contact_count_key": "editor.source.vertex_contacts",
-              "partial_face_contact_count_key": "editor.source.partial_contacts"
+              "partial_face_contact_count_key": "editor.source.partial_contacts",
+              "runtime_brush_count_key": "editor.source.runtime_brushes",
+              "runtime_source_mismatch_count_key": "editor.source.runtime_mismatches",
+              "compiled_face_count_key": "editor.source.compiled_faces",
+              "compiled_face_missing_source_count_key": "editor.source.compiled_missing_source",
+              "compiled_face_unknown_source_count_key": "editor.source.compiled_unknown_source"
             }
           },
           {

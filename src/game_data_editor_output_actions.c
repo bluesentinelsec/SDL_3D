@@ -466,6 +466,14 @@ bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_r
     editor_set_int_output(scene_state, outputs, "vertex_contact_count_key", ok ? diagnostics.vertex_contact_count : 0);
     editor_set_int_output(scene_state, outputs, "partial_face_contact_count_key",
                           ok ? diagnostics.partial_face_contact_count : 0);
+    editor_set_int_output(scene_state, outputs, "runtime_brush_count_key", ok ? diagnostics.runtime_brush_count : 0);
+    editor_set_int_output(scene_state, outputs, "runtime_source_mismatch_count_key",
+                          ok ? diagnostics.runtime_source_mismatch_count : 0);
+    editor_set_int_output(scene_state, outputs, "compiled_face_count_key", ok ? diagnostics.compiled_face_count : 0);
+    editor_set_int_output(scene_state, outputs, "compiled_face_missing_source_count_key",
+                          ok ? diagnostics.compiled_face_missing_source_count : 0);
+    editor_set_int_output(scene_state, outputs, "compiled_face_unknown_source_count_key",
+                          ok ? diagnostics.compiled_face_unknown_source_count : 0);
     (void)publish_editor_brush_world_status(runtime, outputs, world_name, NULL, false);
     return true;
 }

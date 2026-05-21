@@ -1152,7 +1152,11 @@ reports off-snap coordinates, positive-volume overlaps, and tiny non-zero near
 gaps between boxes that otherwise overlap on the other two axes. Exact face
 contact is counted as structural adjacency. Off-snap source coordinates are
 blocking source-model defects. Overlaps and near-gaps are warning diagnostics
-while the editor foundation is still evolving.
+while the editor foundation is still evolving. The same pass also verifies that
+the compiled runtime brushes and visible compiled render faces still resolve
+back to source brush and face identities; source identity mismatches are
+blocking defects because selection, save/open, rendering, and diagnostics would
+otherwise be reading different worlds.
 
 Editable source validation requires a matching `editor_brush_sources` model.
 Missing source is a hard error for editor workflows so save/open, test-run,
@@ -1222,7 +1226,12 @@ missing.
     "face_contact_count_key": "editor.source.face_contacts",
     "edge_contact_count_key": "editor.source.edge_contacts",
     "vertex_contact_count_key": "editor.source.vertex_contacts",
-    "partial_face_contact_count_key": "editor.source.partial_contacts"
+    "partial_face_contact_count_key": "editor.source.partial_contacts",
+    "runtime_brush_count_key": "editor.source.runtime_brushes",
+    "runtime_source_mismatch_count_key": "editor.source.runtime_mismatches",
+    "compiled_face_count_key": "editor.source.compiled_faces",
+    "compiled_face_missing_source_count_key": "editor.source.compiled_missing_source",
+    "compiled_face_unknown_source_count_key": "editor.source.compiled_unknown_source"
   }
 }
 ```
