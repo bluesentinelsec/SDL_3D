@@ -1133,10 +1133,10 @@ again. This makes source boxes the durable editing truth and keeps generated
 `brush_worlds` as load-time/runtime derived data.
 
 Source-backed editor mutations validate candidate source boxes before they are
-committed. Exact snapped face, edge, or vertex contact is legal; positive-volume
-overlap between structural source boxes is rejected at the source-model boundary.
-This keeps placement, translate, and resize tools from introducing hidden
-runtime-only overlap states.
+committed. Exact snapped face, edge, or vertex contact is legal. Positive-volume
+overlap between structural source boxes is allowed in the editable source model
+and reported as a warning diagnostic; the brush compiler is responsible for
+removing hidden/internal faces from runtime render output.
 Structural checks consider solid, player/projectile clip, and sky source boxes
 as map-sealing architecture. Non-structural content such as trigger-only boxes
 may overlap structural brushes for gameplay volumes; those boxes do not report
@@ -1147,14 +1147,13 @@ Use `editor.brush_world.validate_source` or the native
 boxes before save or test-run. The pass runs on fixed source coordinates and
 reports off-snap coordinates, positive-volume overlaps, and tiny non-zero near
 gaps between boxes that otherwise overlap on the other two axes. Exact face
-contact is counted as structural adjacency. This is the first source-level
-correctness gate for watertight brush editing; future leak tracing can build on
-the same source model without relying on visual offsets.
+contact is counted as structural adjacency. Off-snap source coordinates are
+blocking source-model defects. Overlaps and near-gaps are warning diagnostics
+while the editor foundation is still evolving.
 
 The action form may set `allow_missing_source: true` when a workflow still needs
 to support legacy/runtime-only brush worlds. In that mode, worlds without an
-`editor_brush_sources` model are treated as valid for gating purposes while
-source-backed worlds still fail on overlaps and near gaps.
+`editor_brush_sources` model are treated as valid for gating purposes.
 
 Use `editor.brush_world.validate_enclosure` or
 `slayer3d_game_data_validate_editor_brush_source_enclosure()` to run the first
@@ -1162,9 +1161,10 @@ source-backed leak diagnostic. This pass derives an exact interval grid from
 the fixed source box coordinates, marks structural source boxes as solid, and
 flood-fills empty cells from an `editor_player_starts` marker. If the flood
 reaches the expanded outside boundary, the playable space leaks. The editor
-shell runs both validation actions before entering playable test-run mode so
-source defects block F5 instead of becoming game-runtime surprises. The `leak_point_key`
-output can feed an `editor.debug_overlay.markers` entry so the editor shows the
+shell runs both validation actions before entering playable test-run mode.
+During the current graybox-editor milestone, leak findings are warning-level:
+they are visible in the inspector and debug overlay, but they do not block F5.
+The `leak_point_key` output can feed an `editor.debug_overlay.markers` entry so the editor shows the
 first reachable outside-boundary cell directly in the 3D view. The candidate
 outputs identify the nearest source-box face on the same leak boundary axis,
 giving editor UI a second point to highlight while the user decides which
@@ -1263,25 +1263,26 @@ target actor's position, `yaw`, and `pitch` are applied before camera setup and
 before the first scene-enter signal runs.
 
 Use `editor.brush_world.create_box` to append a new axis-aligned convex box
-brush to a runtime brush world. The action is intended for first-pass editor
-blockout tools: floors, walls, ceilings, sky seals, platforms, and simple room pieces. It
-validates the target world and bounds at load time, resolves the material at
-runtime, rebuilds brush collision/render data atomically, then marks the world
-dirty only after the rebuild succeeds. If `name` is omitted, the runtime
-generates a unique brush name under the target world. Source-backed worlds
-commit a canonical source box first, then compile runtime brushes from the
-source model; runtime-only worlds append the derived brush directly. Created
-structural boxes receive stable editor ids, exact face/edge/vertex contact with
-existing structural brushes is allowed, and positive-volume overlap with an
-existing structural brush is rejected before the world is marked dirty. The editor shell dojo
-demonstrates the current blockout palette pattern: modal palette signals write
-scene-state selection strings, and the shared commit signal branches to
-prefab-specific `editor.brush_world.create_box` or
+brush to a brush world. For placement-preview commits in source-backed editor
+worlds, the action only commits the canonical source candidate produced by the
+live preview command; it does not recompute runtime bounds or use a second
+runtime-overlap path. The source model is the truth: validation runs against the
+source box, runtime brush geometry is compiled output, and the world is marked
+dirty only after source insertion and rebuild succeed. Generic non-preview
+creation can still append a direct box for tests and low-level tooling, but the
+editor floor/wall/ceiling/sky workflow uses source-backed prefab recipes.
+
+Created structural boxes receive stable editor ids, exact face/edge/vertex
+contact with existing structural brushes is allowed, and positive-volume overlap
+with an existing structural brush is rejected before the world is marked dirty.
+The editor shell dojo demonstrates the current blockout palette pattern: modal
+palette signals write scene-state selection strings, and the shared commit
+signal branches to source-backed `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
 `editor.brush_world.validate_source` reports exact face, edge, and vertex
 contacts separately, so editor tools can distinguish legal snapped contact from
-suspicious near gaps or invalid positive-volume overlap.
+warning-level near gaps or positive-volume overlap.
 
 `contents` is optional and accepts the same brush-content string or string array
 as authored brush JSON. If omitted, created boxes default to `solid`. Sky
@@ -1336,10 +1337,15 @@ to either a `box` ghost or a `player_start` marker. Box previews can use
 `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs between
 horizontal grid axes. A box preview must author exactly one bounds
 source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. For
-source-backed brush worlds, the preview uses the same source-box candidate
-validator as creation, so overlap and invalid-geometry messages match committed
-edits. The preview reuses the editor debug overlay's `command_preview` flag and
-color, so editor hosts do not need a second rendering path.
+source-backed brush worlds, the preview and commit both use the same source
+prefab command. Preview runs it in dry-run mode and publishes the exact source
+candidate bounds; commit applies that candidate. If preview succeeds and no
+other edit changes the source model before commit, the commit succeeds with the
+same geometry. Floor, wall, ceiling, and sky are recipes that emit snapped source
+boxes; runtime brush geometry is generated only after the source candidate
+passes validation. The preview reuses the editor debug overlay's
+`command_preview` flag and color, so editor hosts do not need a second rendering
+path.
 
 ```json
 {
@@ -1372,8 +1378,8 @@ color, so editor hosts do not need a second rendering path.
           "material": "mat.stone_wall",
           "axis_key": "editor.wall_axis",
           "axis": "z",
-          "grid_min": [0.0, 0.0, 0.0],
-          "grid_max": [1.0, 1.0, 1.0]
+          "grid_min": [0.0, 0.0, -0.0125],
+          "grid_max": [1.0, 1.0, 0.0125]
         },
         {
           "mode": "sky",

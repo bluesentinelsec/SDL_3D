@@ -1678,41 +1678,8 @@
               },
               {
                 "type": "branch",
-                "if": { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": true },
+                "if": { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": false },
                 "then": [
-                  {
-                    "type": "editor.player_start.apply",
-                    "name": "player_start.editor_shell",
-                    "message": "test run player start applied",
-                    "outputs": {
-                      "valid_key": "editor.test_run.enter.valid",
-                      "message_key": "editor.test_run.enter.message",
-                      "player_start_key": "editor.test_run.enter.player_start",
-                      "scene_key": "editor.test_run.enter.scene",
-                      "target_key": "editor.test_run.enter.target",
-                      "position_key": "editor.test_run.enter.position",
-                      "yaw_key": "editor.test_run.enter.yaw",
-                      "pitch_key": "editor.test_run.enter.pitch"
-                    }
-                  },
-                  {
-                    "type": "branch",
-                    "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
-                    "then": [
-                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" },
-                      { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
-                    ],
-                    "else": [
-                      {
-                        "type": "scene_state.set",
-                        "key": "editor.tool.last_action",
-                        "value": "player start required before playable test run"
-                      }
-                    ]
-                  }
-                ],
-                "else": [
-                  { "type": "scene_state.set", "key": "editor.test_run.enter.valid", "value": false },
                   {
                     "type": "editor.selection.select_brush",
                     "world": "brush.editor_shell.target",
@@ -1724,16 +1691,49 @@
                       "valid_key": "editor.leak.candidate_selected",
                       "message_key": "editor.leak.candidate_select_message"
                     }
-                  },
+                  }
+                ]
+              },
+              {
+                "type": "editor.player_start.apply",
+                "name": "player_start.editor_shell",
+                "message": "test run player start applied",
+                "outputs": {
+                  "valid_key": "editor.test_run.enter.valid",
+                  "message_key": "editor.test_run.enter.message",
+                  "player_start_key": "editor.test_run.enter.player_start",
+                  "scene_key": "editor.test_run.enter.scene",
+                  "target_key": "editor.test_run.enter.target",
+                  "position_key": "editor.test_run.enter.position",
+                  "yaw_key": "editor.test_run.enter.yaw",
+                  "pitch_key": "editor.test_run.enter.pitch"
+                }
+              },
+              {
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.test_run.enter.valid", "op": "==", "value": true },
+                "then": [
                   {
-                    "type": "scene_state.set",
-                    "key": "editor.test_run.enter.message",
-                    "value": "brush source model leaks to outside"
+                    "type": "branch",
+                    "if": { "type": "scene_state.compare", "key": "editor.leak.valid", "op": "==", "value": false },
+                    "then": [
+                      {
+                        "type": "scene_state.set",
+                        "key": "editor.tool.last_action",
+                        "value": "entered playable test run with leak warning"
+                      }
+                    ],
+                    "else": [
+                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "entered playable test run" }
+                    ]
                   },
+                  { "type": "scene.set", "scene": "scene.editor_shell.test_run" }
+                ],
+                "else": [
                   {
                     "type": "scene_state.set",
                     "key": "editor.tool.last_action",
-                    "value": "fix brush source leaks before playable test run"
+                    "value": "player start required before playable test run"
                   }
                 ]
               }
@@ -1743,7 +1743,7 @@
               {
                 "type": "scene_state.set",
                 "key": "editor.test_run.enter.message",
-                "value": "brush source model has overlaps or near gaps"
+                "value": "brush source model has blocking errors"
               },
               {
                 "type": "scene_state.set",
@@ -1836,6 +1836,27 @@
             { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
             { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
           ]
+        }
+      ]
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "editor.brush.target_cube",
+          "name": "brush.target.cube",
+          "prefab": "prefab.editor_shell.cube",
+          "material": "mat.editor.wall",
+          "face_materials": {
+            "ny": "mat.editor.floor"
+          },
+          "min": [0, 0, 0],
+          "max": [2000, 2000, 2000],
+          "contents": ["solid", "player_clip"]
         }
       ]
     }

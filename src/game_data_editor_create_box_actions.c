@@ -76,8 +76,46 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
 
     char brush_name[256];
     brush_name[0] = '\0';
-    const bool ok = error[0] == '\0' && slayer3d_game_data_create_box_brush(
-                                            runtime, &desc, brush_name, sizeof(brush_name), error, (int)sizeof(error));
+    bool ok = false;
+    bool source_command_applied = false;
+    if (position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0)
+    {
+        if (error[0] == '\0' && runtime != NULL && runtime->editor_placement_preview.has_source_candidate)
+        {
+            const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
+            brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, preview->world_name);
+            editor_brush_source_prefab_desc source_desc;
+            SDL_zero(source_desc);
+            source_desc.prefab = preview->mode;
+            source_desc.material = preview->material_name;
+            source_desc.contents = preview->contents;
+            editor_brush_source_prefab_result result;
+            ok = editor_brush_world_run_source_prefab_command(world_runtime, &source_desc, desc.brush_name,
+                                                              preview->source_min, preview->source_max, true, &result,
+                                                              error, (int)sizeof(error));
+            if (ok)
+            {
+                source_command_applied = true;
+                SDL_strlcpy(brush_name, result.brush_name, sizeof(brush_name));
+                desc.world_name = preview->world_name;
+                desc.material_name = preview->material_name;
+                desc.contents = preview->contents;
+                desc.min = result.bounds.min;
+                desc.max = result.bounds.max;
+                editor_brush_world_mark_dirty(world_runtime);
+            }
+        }
+        else if (error[0] == '\0')
+        {
+            set_error(error, (int)sizeof(error),
+                      "box brush placement requires a valid source-backed placement preview");
+        }
+    }
+    else
+    {
+        ok = error[0] == '\0' && slayer3d_game_data_create_box_brush(runtime, &desc, brush_name, sizeof(brush_name),
+                                                                     error, (int)sizeof(error));
+    }
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
     editor_set_string_output(scene_state, outputs, "message_key",
@@ -89,5 +127,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
     editor_set_vec3_output(scene_state, outputs, "bounds_max_key",
                            ok ? desc.max : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     (void)publish_editor_brush_world_status(runtime, outputs, desc.world_name, NULL, false);
+    if (source_command_applied)
+        (void)slayer3d_game_data_clear_active_editor_selection(runtime);
     return true;
 }

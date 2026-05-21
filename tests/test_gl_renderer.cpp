@@ -817,8 +817,8 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
       ],
       "brushes": [
 )json" << BrushVisibilityBoxJson("brush.front_marker", "mat.front", -0.5f, 0.5f, 0.5f, 1.5f, -2.5f, -2.0f)
-              << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f)
-              << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f)
+              << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, -0.25f, 0.75f)
+              << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.25f, 2.25f)
               << R"json(
       ]
     }
@@ -917,8 +917,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     runtime = nullptr;
 
     std::ostringstream override_game_json;
-    override_game_json
-        << R"json({
+    override_game_json << R"json({
   "schema": "slayer3d.game.v0",
   "metadata": { "name": "Brush Visibility Override Test" },
   "world": { "name": "world.visibility", "kind": "brush" },
@@ -933,9 +932,13 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
       ],
       "brushes": [
 )json" << BrushVisibilityBoxJson("brush.front_marker", "mat.front", -0.5f, 0.5f, 0.5f, 1.5f, -2.5f, -2.0f)
-        << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f, "always")
-        << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f, "always")
-        << R"json(
+                       << ","
+                       << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, -0.25f, 0.75f,
+                                                 "always")
+                       << ","
+                       << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.25f, 2.25f,
+                                                 "always")
+                       << R"json(
       ]
     }
   ],
@@ -993,8 +996,8 @@ TEST_F(GLRendererTest, BrushVisibilityDrawsFullyVisibleCompileChunks)
       "brushes": [
 )json" << BrushVisibilityBoxJson("brush.front_a", "mat.front", 0.1f, 0.3f, 0.5f, 1.5f, -2.5f, -2.0f)
               << "," << BrushVisibilityBoxJson("brush.front_b", "mat.front", 0.4f, 0.6f, 0.5f, 1.5f, -2.5f, -2.0f)
-              << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, 0.0f, 3.0f)
-              << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.0f, 2.0f)
+              << "," << BrushVisibilityBoxJson("brush.blocker", "mat.blocker", -2.0f, 2.0f, 0.0f, 2.0f, -0.25f, 0.75f)
+              << "," << BrushVisibilityBoxJson("brush.hidden", "mat.hidden", -1.0f, 1.0f, 0.5f, 1.5f, 1.25f, 2.25f)
               << R"json(
       ]
     }

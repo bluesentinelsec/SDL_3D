@@ -2260,7 +2260,7 @@ extern "C"
         int source_snap_units;
         /** @brief Source boxes whose min/max coordinates are not aligned to source_snap_units. */
         int off_snap_count;
-        /** @brief Positive-volume overlaps between structural source boxes. These are invalid. */
+        /** @brief Positive-volume overlaps between structural source boxes. These are compile-time warnings. */
         int positive_overlap_count;
         /** @brief Tiny non-zero gaps between otherwise adjacent structural source boxes. These indicate seams/leaks. */
         int near_gap_count;
@@ -2272,7 +2272,7 @@ extern "C"
         int vertex_contact_count;
         /** @brief Exact face contacts where only part of a structural source-box face is covered. */
         int partial_face_contact_count;
-        /** @brief First blocking issue, or an empty string when the source model is structurally valid. */
+        /** @brief First source diagnostic issue or warning, or an empty string when none was found. */
         char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
     } slayer3d_game_data_editor_brush_source_diagnostics;
 

@@ -448,6 +448,8 @@ bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_r
     const char *message = NULL;
     if (missing_allowed)
         message = error[0] != '\0' ? error : "brush world has no editor brush source model";
+    else if (valid && ok && diagnostics.first_issue[0] != '\0')
+        message = diagnostics.first_issue;
     else if (valid)
         message = json_string(action, "message", "editor brush source model is structurally valid");
     else if (ok && diagnostics.first_issue[0] != '\0')
