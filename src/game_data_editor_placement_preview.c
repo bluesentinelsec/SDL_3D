@@ -389,6 +389,49 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
     return anchor;
 }
 
+static bool editor_placement_preview_validate_source_box(const slayer3d_game_data_runtime *runtime,
+                                                         const editor_placement_preview_state *preview,
+                                                         char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || preview == NULL || SDL_strcmp(preview->kind, "box") != 0 || !preview->has_bounds ||
+        preview->world_name == NULL || preview->world_name[0] == '\0')
+    {
+        return true;
+    }
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, preview->world_name);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+        return true;
+
+    char generated_name[256];
+    if (!editor_brush_world_generate_brush_name(world_runtime, generated_name, sizeof(generated_name)))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to generate placement preview brush name");
+        return false;
+    }
+
+    slayer3d_game_data_create_box_brush_desc desc;
+    SDL_zero(desc);
+    desc.world_name = preview->world_name;
+    desc.brush_name = generated_name;
+    desc.material_name = preview->material_name;
+    desc.contents = preview->contents != 0u ? preview->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    desc.min = preview->bounds.min;
+    desc.max = preview->bounds.max;
+
+    editor_brush_source_box_runtime source_box;
+    if (!editor_brush_source_box_from_create_desc(world_runtime, &desc, generated_name, &source_box))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate placement preview source brush");
+        return false;
+    }
+
+    const bool ok = editor_brush_world_validate_source_box_candidate(world_runtime, &source_box, -1, error_buffer,
+                                                                     error_buffer_size);
+    free_editor_brush_source_box_runtime(&source_box);
+    return ok;
+}
+
 void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                      const slayer3d_game_data_editor_selection *hover_selection)
 {
@@ -439,6 +482,15 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
         preview->bounds =
             editor_placement_oriented_box_bounds(runtime, placement, preview_json, anchor, preview->axis, snap);
         preview->bounds = editor_placement_trim_wall_endpoint_overlaps(runtime, preview_json, preview);
+    }
+    char validation_error[256] = {0};
+    if (!editor_placement_preview_validate_source_box(runtime, preview, validation_error, sizeof(validation_error)))
+    {
+        clear_editor_placement_preview(runtime);
+        publish_editor_placement_preview(runtime, outputs, false, preview_json, NULL,
+                                         validation_error[0] != '\0' ? validation_error
+                                                                     : "placement preview is invalid");
+        return;
     }
     publish_editor_placement_preview(runtime, outputs, true, preview_json, preview,
                                      json_string(preview_json, "message", "placement preview"));

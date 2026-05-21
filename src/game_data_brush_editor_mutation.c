@@ -89,8 +89,7 @@ static bool editor_brush_world_stable_id_exists(const brush_world_runtime *world
 static bool editor_brush_world_box_stable_ids_available(const brush_world_runtime *world_runtime,
                                                         const char *brush_name);
 
-static bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer,
-                                                   size_t buffer_size)
+bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer, size_t buffer_size)
 {
     if (world_runtime == NULL || buffer == NULL || buffer_size == 0u)
         return false;

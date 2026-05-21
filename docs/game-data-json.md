@@ -1322,13 +1322,15 @@ walls, and ceilings from grid-boundary anchors with matching horizontal
 footprints instead of centering them around the snap point; this keeps adjacent
 tiles aligned without gaps. `contents` can also be authored on box previews; it
 is copied into `editor.brush_world.create_box` when committing with
-`"position_from": "placement_preview"`. Each preview entry maps a tool `mode` to either a
-`box` ghost or a `player_start` marker. Box
-previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
-between horizontal grid axes. A box preview must author exactly one bounds
-source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. The preview
-reuses the editor debug overlay's `command_preview` flag and color, so editor
-hosts do not need a second rendering path.
+`"position_from": "placement_preview"`. Each preview entry maps a tool `mode`
+to either a `box` ghost or a `player_start` marker. Box previews can use
+`axis_key` with `axis` `x` or `z` to rotate wall-like prefabs between
+horizontal grid axes. A box preview must author exactly one bounds
+source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. For
+source-backed brush worlds, the preview uses the same source-box candidate
+validator as creation, so overlap and invalid-geometry messages match committed
+edits. The preview reuses the editor debug overlay's `command_preview` flag and
+color, so editor hosts do not need a second rendering path.
 
 ```json
 {

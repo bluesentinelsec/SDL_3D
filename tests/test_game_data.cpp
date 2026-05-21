@@ -35,6 +35,9 @@ extern "C"
 #include "slayer3d/timer_pool.h"
 
     typedef struct brush_world_runtime brush_world_runtime;
+    yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
+    void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
+                                         const slayer3d_game_data_editor_selection *hover_selection);
     brush_world_runtime *find_brush_world_runtime_mutable(slayer3d_game_data_runtime *runtime, const char *name);
     int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
                                                               const char *brush_identity, int fallback_face_index,
@@ -17488,6 +17491,89 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateRejectsOverlapButAllow
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 2);
     EXPECT_STREQ(world.brushes[1].name, "brush.source.right");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentSourceBoxPlacementPreviewUsesSourceValidator)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.left",
+          "name": "brush.source.left",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-level.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    slayer3d_properties_set_string(scene_state, "editor.tool.mode", "floor");
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    hover.point = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    hover.world_name = "brush.editor_shell.target";
+    hover.material_name = "mat.editor.floor";
+    update_editor_placement_preview(runtime, editor, &hover);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", true));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.placement_preview.message", ""))
+                  .find("source brush"),
+              std::string::npos);
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.placement_preview.message", ""))
+                  .find("overlaps existing brush 'brush.source.left'"),
+              std::string::npos);
+
+    hover.point = slayer3d_vec3_make(8.0f, 0.0f, 0.0f);
+    update_editor_placement_preview(runtime, editor, &hover);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    const slayer3d_value *placement_min =
+        slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_EQ(placement_min->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(placement_min->as_vec3.x, 8.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

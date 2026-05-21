@@ -365,6 +365,13 @@ static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
     return true;
 }
 
+bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_box_runtime *box, int exclude_index,
+                                                      char *error_buffer, int error_buffer_size)
+{
+    return source_box_candidate_valid(world_runtime, box, exclude_index, error_buffer, error_buffer_size);
+}
+
 static bool source_box_overlaps_on_other_axes(const editor_brush_source_box_runtime *a,
                                               const editor_brush_source_box_runtime *b, int axis)
 {

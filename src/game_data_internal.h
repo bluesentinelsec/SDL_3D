@@ -1121,6 +1121,7 @@ void editor_set_float_output(slayer3d_properties *props, yyjson_val *outputs, co
 void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, slayer3d_vec3 value);
 bool publish_editor_brush_world_status(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, const char *world_name,
                                        const char *message, bool publish_result);
+bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer, size_t buffer_size);
 void free_brush_world_runtime(brush_world_runtime *world_runtime);
 void free_editor_player_starts_runtime(slayer3d_game_data_runtime *runtime);
 void free_editor_command_history(editor_command_history_state *history);
@@ -1151,6 +1152,9 @@ bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *w
 bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_runtime,
                                               const slayer3d_game_data_create_box_brush_desc *desc,
                                               const char *brush_name, editor_brush_source_box_runtime *out_box);
+bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_box_runtime *box, int exclude_index,
+                                                      char *error_buffer, int error_buffer_size);
 bool editor_brush_world_insert_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
                                                    const editor_brush_source_box_runtime *box, char *error_buffer,
                                                    int error_buffer_size);
