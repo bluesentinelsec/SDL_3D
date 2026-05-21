@@ -76,8 +76,23 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
 
     char brush_name[256];
     brush_name[0] = '\0';
-    const bool ok = error[0] == '\0' && slayer3d_game_data_create_box_brush(
-                                            runtime, &desc, brush_name, sizeof(brush_name), error, (int)sizeof(error));
+    bool ok = false;
+    if (error[0] == '\0' && position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0 &&
+        runtime != NULL && runtime->editor_placement_preview.has_source_candidate)
+    {
+        const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, preview->world_name);
+        ok = editor_brush_world_place_source_prefab_candidate(
+            world_runtime, desc.brush_name, preview->mode, preview->material_name, preview->contents,
+            preview->source_min, preview->source_max, brush_name, sizeof(brush_name), error, (int)sizeof(error));
+        if (ok)
+            editor_brush_world_mark_dirty(world_runtime);
+    }
+    else
+    {
+        ok = error[0] == '\0' && slayer3d_game_data_create_box_brush(runtime, &desc, brush_name, sizeof(brush_name),
+                                                                     error, (int)sizeof(error));
+    }
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     editor_set_bool_output(scene_state, outputs, "valid_key", ok);
     editor_set_string_output(scene_state, outputs, "message_key",

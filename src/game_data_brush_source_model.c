@@ -1373,6 +1373,113 @@ static const char *source_prefab_for_material(const char *material)
     return NULL;
 }
 
+static bool source_prefab_name_supported(const char *prefab)
+{
+    return prefab != NULL && (SDL_strcmp(prefab, "floor") == 0 || SDL_strcmp(prefab, "wall") == 0 ||
+                              SDL_strcmp(prefab, "ceiling") == 0 || SDL_strcmp(prefab, "sky") == 0);
+}
+
+static unsigned int source_prefab_default_contents(const char *prefab, unsigned int authored_contents)
+{
+    if (authored_contents != 0u)
+        return authored_contents;
+    if (prefab != NULL && SDL_strcmp(prefab, "sky") == 0)
+    {
+        return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP |
+               SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP;
+    }
+    return SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+}
+
+static slayer3d_vec3 source_prefab_oriented_offset(slayer3d_vec3 value, const char *axis)
+{
+    if (axis != NULL && SDL_strcmp(axis, "x") == 0)
+        return slayer3d_vec3_make(value.z, value.y, value.x);
+    return value;
+}
+
+static void source_prefab_set_axis_bounds(int *out_min, int *out_max, int a, int b)
+{
+    if (out_min != NULL)
+        *out_min = SDL_min(a, b);
+    if (out_max != NULL)
+        *out_max = SDL_max(a, b);
+}
+
+bool editor_brush_world_build_source_prefab_candidate(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_prefab_desc *desc,
+                                                      const char *candidate_name,
+                                                      editor_brush_source_box_runtime *out_box, char *error_buffer,
+                                                      int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || desc == NULL || out_box == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source prefab placement requires a source-backed brush world");
+        return false;
+    }
+
+    const char *material_prefab = source_prefab_for_material(desc->material);
+    const char *prefab = desc->prefab != NULL && desc->prefab[0] != '\0'
+                             ? desc->prefab
+                             : (material_prefab != NULL ? material_prefab : "");
+    if (!source_prefab_name_supported(prefab))
+    {
+        set_errorf(error_buffer, error_buffer_size, "unsupported source prefab '%s'",
+                   prefab != NULL && prefab[0] != '\0' ? prefab : "<empty>");
+        return false;
+    }
+    if (desc->material == NULL || desc->material[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "source prefab placement requires a material");
+        return false;
+    }
+    if (desc->use_grid_bounds && desc->grid_size <= 0.0f)
+    {
+        set_error(error_buffer, error_buffer_size, "source prefab placement requires a positive grid size");
+        return false;
+    }
+    if (candidate_name == NULL || candidate_name[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "source prefab placement requires a candidate name");
+        return false;
+    }
+
+    const slayer3d_vec3 recipe_min =
+        desc->use_grid_bounds ? slayer3d_vec3_scale(desc->grid_min, desc->grid_size) : desc->min;
+    const slayer3d_vec3 recipe_max =
+        desc->use_grid_bounds ? slayer3d_vec3_scale(desc->grid_max, desc->grid_size) : desc->max;
+    const slayer3d_vec3 oriented_min = source_prefab_oriented_offset(recipe_min, desc->axis);
+    const slayer3d_vec3 oriented_max = source_prefab_oriented_offset(recipe_max, desc->axis);
+
+    SDL_zero(*out_box);
+    if (!copy_source_string(&out_box->stable_id, candidate_name) ||
+        !copy_source_string(&out_box->name, candidate_name) || !copy_source_string(&out_box->prefab, prefab) ||
+        !copy_source_string(&out_box->material, desc->material))
+    {
+        free_editor_brush_source_box(out_box);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source prefab candidate");
+        return false;
+    }
+
+    source_prefab_set_axis_bounds(&out_box->min[0], &out_box->max[0],
+                                  source_units_from_meters(world_runtime, desc->anchor.x + oriented_min.x),
+                                  source_units_from_meters(world_runtime, desc->anchor.x + oriented_max.x));
+    source_prefab_set_axis_bounds(&out_box->min[1], &out_box->max[1],
+                                  source_units_from_meters(world_runtime, desc->anchor.y + oriented_min.y),
+                                  source_units_from_meters(world_runtime, desc->anchor.y + oriented_max.y));
+    source_prefab_set_axis_bounds(&out_box->min[2], &out_box->max[2],
+                                  source_units_from_meters(world_runtime, desc->anchor.z + oriented_min.z),
+                                  source_units_from_meters(world_runtime, desc->anchor.z + oriented_max.z));
+    out_box->contents = source_prefab_default_contents(prefab, desc->contents);
+    if (!source_box_extents_valid(out_box))
+    {
+        free_editor_brush_source_box(out_box);
+        set_error(error_buffer, error_buffer_size, "source prefab placement would create invalid geometry");
+        return false;
+    }
+    return true;
+}
+
 static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush, const char *material)
 {
     if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
@@ -1427,6 +1534,67 @@ slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_ru
                                     source_meters_from_units(world_runtime, box->max[1]),
                                     source_meters_from_units(world_runtime, box->max[2]));
     return bounds;
+}
+
+bool editor_brush_world_place_source_prefab_candidate(brush_world_runtime *world_runtime, const char *brush_name,
+                                                      const char *prefab, const char *material, unsigned int contents,
+                                                      const int min_values[3], const int max_values[3],
+                                                      char *out_brush_name, size_t out_brush_name_size,
+                                                      char *error_buffer, int error_buffer_size)
+{
+    if (out_brush_name != NULL && out_brush_name_size > 0u)
+        out_brush_name[0] = '\0';
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || min_values == NULL || max_values == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source prefab placement requires a source-backed brush world");
+        return false;
+    }
+    if (!source_prefab_name_supported(prefab))
+    {
+        set_errorf(error_buffer, error_buffer_size, "unsupported source prefab '%s'",
+                   prefab != NULL && prefab[0] != '\0' ? prefab : "<empty>");
+        return false;
+    }
+    if (material == NULL || material[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "source prefab placement requires a material");
+        return false;
+    }
+
+    char generated_name[256];
+    const char *name = brush_name;
+    if (name == NULL || name[0] == '\0')
+    {
+        if (!editor_brush_world_generate_brush_name(world_runtime, generated_name, sizeof(generated_name)))
+        {
+            set_error(error_buffer, error_buffer_size, "failed to generate source prefab brush name");
+            return false;
+        }
+        name = generated_name;
+    }
+
+    editor_brush_source_box_runtime source_box;
+    SDL_zero(source_box);
+    if (!copy_source_string(&source_box.stable_id, name) || !copy_source_string(&source_box.name, name) ||
+        !copy_source_string(&source_box.prefab, prefab) || !copy_source_string(&source_box.material, material))
+    {
+        free_editor_brush_source_box(&source_box);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source prefab brush");
+        return false;
+    }
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        source_box.min[axis] = min_values[axis];
+        source_box.max[axis] = max_values[axis];
+    }
+    source_box.contents = source_prefab_default_contents(prefab, contents);
+
+    const bool ok = editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
+                                                                  &source_box, error_buffer, error_buffer_size);
+    if (ok && out_brush_name != NULL && out_brush_name_size > 0u)
+        SDL_strlcpy(out_brush_name, name, out_brush_name_size);
+    free_editor_brush_source_box(&source_box);
+    return ok;
 }
 
 static bool source_box_from_runtime_brush(const brush_world_runtime *world_runtime,

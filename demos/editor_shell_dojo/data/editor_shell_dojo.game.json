@@ -1840,6 +1840,27 @@
       ]
     }
   ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "editor.brush.target_cube",
+          "name": "brush.target.cube",
+          "prefab": "prefab.editor_shell.cube",
+          "material": "mat.editor.wall",
+          "face_materials": {
+            "ny": "mat.editor.floor"
+          },
+          "min": [0, 0, 0],
+          "max": [2000, 2000, 2000],
+          "contents": ["solid", "player_clip"]
+        }
+      ]
+    }
+  ],
   "world": {
     "name": "world.editor_shell_dojo",
     "kind": "brush",
