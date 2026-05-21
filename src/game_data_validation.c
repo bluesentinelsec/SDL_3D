@@ -7535,10 +7535,14 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return false;
         yyjson_val *element = obj_get(action, "element");
         yyjson_val *element_from_state = obj_get(action, "element_from_state");
-        if ((element == NULL && element_from_state == NULL) || (element != NULL && element_from_state != NULL))
+        yyjson_val *element_stable_id = obj_get(action, "element_stable_id");
+        yyjson_val *element_stable_id_from_state = obj_get(action, "element_stable_id_from_state");
+        const int element_identity_count = (element != NULL ? 1 : 0) + (element_from_state != NULL ? 1 : 0) +
+                                           (element_stable_id != NULL ? 1 : 0) +
+                                           (element_stable_id_from_state != NULL ? 1 : 0);
+        if (element_identity_count != 1)
             return validation_error(ctx, json_path,
-                                    "editor.selection.select_brush requires exactly one of element or "
-                                    "element_from_state");
+                                    "editor.selection.select_brush requires exactly one brush identity field");
         if (element != NULL && (!yyjson_is_str(element) || yyjson_get_str(element)[0] == '\0'))
             return validation_error(ctx, json_path, "editor.selection.select_brush element must be non-empty");
         if (element_from_state != NULL &&
@@ -7547,16 +7551,38 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path,
                                     "editor.selection.select_brush element_from_state must be non-empty");
         }
+        if (element_stable_id != NULL &&
+            (!yyjson_is_str(element_stable_id) || yyjson_get_str(element_stable_id)[0] == '\0'))
+            return validation_error(ctx, json_path,
+                                    "editor.selection.select_brush element_stable_id must be non-empty");
+        if (element_stable_id_from_state != NULL &&
+            (!yyjson_is_str(element_stable_id_from_state) || yyjson_get_str(element_stable_id_from_state)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.selection.select_brush element_stable_id_from_state must be non-empty");
+        }
 
         yyjson_val *face = obj_get(action, "face");
         yyjson_val *face_from_state = obj_get(action, "face_from_state");
-        if (face != NULL && face_from_state != NULL)
+        yyjson_val *face_stable_id = obj_get(action, "face_stable_id");
+        yyjson_val *face_stable_id_from_state = obj_get(action, "face_stable_id_from_state");
+        const int face_identity_count = (face != NULL ? 1 : 0) + (face_from_state != NULL ? 1 : 0) +
+                                        (face_stable_id != NULL ? 1 : 0) + (face_stable_id_from_state != NULL ? 1 : 0);
+        if (face_identity_count > 1)
             return validation_error(ctx, json_path,
-                                    "editor.selection.select_brush accepts at most one of face or face_from_state");
+                                    "editor.selection.select_brush accepts at most one face identity field");
         if (face != NULL && (!yyjson_is_str(face) || yyjson_get_str(face)[0] == '\0'))
             return validation_error(ctx, json_path, "editor.selection.select_brush face must be non-empty");
         if (face_from_state != NULL && (!yyjson_is_str(face_from_state) || yyjson_get_str(face_from_state)[0] == '\0'))
             return validation_error(ctx, json_path, "editor.selection.select_brush face_from_state must be non-empty");
+        if (face_stable_id != NULL && (!yyjson_is_str(face_stable_id) || yyjson_get_str(face_stable_id)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.select_brush face_stable_id must be non-empty");
+        if (face_stable_id_from_state != NULL &&
+            (!yyjson_is_str(face_stable_id_from_state) || yyjson_get_str(face_stable_id_from_state)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.selection.select_brush face_stable_id_from_state must be non-empty");
+        }
         yyjson_val *message = obj_get(action, "message");
         if (message != NULL && !yyjson_is_str(message))
             return validation_error(ctx, json_path, "editor.selection.select_brush message must be a string");
@@ -8035,9 +8061,13 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         static const char *const output_keys[] = {"valid_key",
                                                   "message_key",
                                                   "box_count_key",
+                                                  "snap_units_key",
+                                                  "off_snap_count_key",
                                                   "overlap_count_key",
                                                   "near_gap_count_key",
                                                   "face_contact_count_key",
+                                                  "edge_contact_count_key",
+                                                  "vertex_contact_count_key",
                                                   "partial_face_contact_count_key",
                                                   "world_key",
                                                   "source_path_key",

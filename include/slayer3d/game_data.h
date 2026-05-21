@@ -2256,13 +2256,21 @@ extern "C"
         bool structurally_valid;
         /** @brief Number of source boxes inspected. */
         int source_box_count;
-        /** @brief Positive-volume overlaps between source boxes. These are invalid. */
+        /** @brief Source-coordinate snap unit for this source world. */
+        int source_snap_units;
+        /** @brief Source boxes whose min/max coordinates are not aligned to source_snap_units. */
+        int off_snap_count;
+        /** @brief Positive-volume overlaps between structural source boxes. These are invalid. */
         int positive_overlap_count;
-        /** @brief Tiny non-zero gaps between otherwise adjacent source boxes. These indicate seams/leaks. */
+        /** @brief Tiny non-zero gaps between otherwise adjacent structural source boxes. These indicate seams/leaks. */
         int near_gap_count;
-        /** @brief Exact face contacts between source boxes. */
+        /** @brief Exact face contacts between structural source boxes. */
         int face_contact_count;
-        /** @brief Exact face contacts where only part of a face is covered by the neighbor. */
+        /** @brief Exact edge contacts between structural source boxes. */
+        int edge_contact_count;
+        /** @brief Exact vertex contacts between structural source boxes. */
+        int vertex_contact_count;
+        /** @brief Exact face contacts where only part of a structural source-box face is covered. */
         int partial_face_contact_count;
         /** @brief First blocking issue, or an empty string when the source model is structurally valid. */
         char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
@@ -2274,6 +2282,10 @@ extern "C"
      * This pass operates on canonical `editor_brush_sources` integer/fixed
      * coordinates, not derived runtime triangles. It reports structural defects
      * that can create seams or z-fighting before the map is compiled for play.
+     * Non-structural content such as trigger-only boxes is ignored by topology
+     * checks so gameplay volumes can overlap sealed architecture.
+     * Source worlds may author `snap_units` to make off-grid source coordinates
+     * a blocking structural defect.
      *
      * @p near_gap_units controls how many source units count as a suspicious
      * near miss between otherwise overlapping boxes. Pass 0 to use the default
@@ -2296,7 +2308,7 @@ extern "C"
         int source_box_count;
         /** @brief Total source flood-grid cells inspected. */
         int grid_cell_count;
-        /** @brief Number of grid cells marked solid by source boxes. */
+        /** @brief Number of grid cells marked solid by structural source boxes. */
         int solid_cell_count;
         /** @brief Number of empty cells reachable from the player-start cell. */
         int visited_cell_count;
@@ -2326,8 +2338,8 @@ extern "C"
      * @brief Validate source-box playable-space closure from one editor player start.
      *
      * This pass derives an exact interval grid from fixed-coordinate
-     * `editor_brush_sources`, marks source boxes as solid, and flood-fills empty
-     * space from @p player_start_name. If reachable empty space reaches the
+     * `editor_brush_sources`, marks structural source boxes as solid, and
+     * flood-fills empty space from @p player_start_name. If reachable empty space reaches the
      * expanded outside boundary, the map is considered open/leaking for MVP
      * grid-prefab test-run workflows.
      *
@@ -2372,9 +2384,10 @@ extern "C"
      * compilation all succeed. Success marks the brush world dirty and
      * increments its editor revision. Structural box brushes may touch existing
      * structural brushes exactly, but positive-volume overlap is rejected.
-     * Runtime-created boxes receive stable editor metadata on the brush and
-     * generated faces. @p out_brush_name receives the final runtime brush name
-     * when non-NULL.
+     * Source-backed worlds commit a canonical source box first and rebuild
+     * runtime brushes from that source. Runtime-only worlds receive stable
+     * editor metadata on the brush and generated faces. @p out_brush_name
+     * receives the final runtime brush name when non-NULL.
      */
     bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,

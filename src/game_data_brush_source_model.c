@@ -10,11 +10,6 @@
 #include <limits.h>
 #include <stdlib.h>
 
-static int source_millimeters_from_meters(float value)
-{
-    return (int)SDL_lroundf(value * 1000.0f);
-}
-
 static int source_units_from_meters(const brush_world_runtime *world_runtime, float value)
 {
     const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
@@ -65,6 +60,11 @@ static void free_editor_brush_source_box(editor_brush_source_box_runtime *box)
     SDL_zero(*box);
 }
 
+void free_editor_brush_source_box_runtime(editor_brush_source_box_runtime *box)
+{
+    free_editor_brush_source_box(box);
+}
+
 void free_editor_brush_source_model(brush_world_runtime *world_runtime)
 {
     if (world_runtime == NULL)
@@ -76,6 +76,7 @@ void free_editor_brush_source_model(brush_world_runtime *world_runtime)
     world_runtime->editor_source_box_count = 0;
     world_runtime->editor_source_box_capacity = 0;
     world_runtime->editor_source_meters_per_unit = 0.001f;
+    world_runtime->editor_source_snap_units = 1;
     world_runtime->editor_has_source_model = false;
 }
 
@@ -88,6 +89,35 @@ static bool copy_source_string(char **field, const char *value)
         return true;
     *field = SDL_strdup(value);
     return *field != NULL;
+}
+
+bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime *source,
+                                          editor_brush_source_box_runtime *dest)
+{
+    if (source == NULL || dest == NULL)
+        return false;
+    SDL_zero(*dest);
+    if (!copy_source_string(&dest->stable_id, source->stable_id) || !copy_source_string(&dest->name, source->name) ||
+        !copy_source_string(&dest->prefab, source->prefab) || !copy_source_string(&dest->material, source->material))
+    {
+        free_editor_brush_source_box(dest);
+        return false;
+    }
+    for (int i = 0; i < 6; ++i)
+    {
+        if (!copy_source_string(&dest->face_materials[i], source->face_materials[i]))
+        {
+            free_editor_brush_source_box(dest);
+            return false;
+        }
+    }
+    for (int i = 0; i < 3; ++i)
+    {
+        dest->min[i] = source->min[i];
+        dest->max[i] = source->max[i];
+    }
+    dest->contents = source->contents;
+    return true;
 }
 
 static int source_box_face_index_from_key(const char *key)
@@ -135,22 +165,166 @@ static bool copy_source_face_materials(editor_brush_source_box_runtime *out_box,
     return true;
 }
 
-static int find_editor_source_box_index_by_name(const brush_world_runtime *world_runtime, const char *brush_name)
+static int find_editor_source_box_index_by_identity(const brush_world_runtime *world_runtime,
+                                                    const char *brush_identity)
 {
-    if (world_runtime == NULL || brush_name == NULL || brush_name[0] == '\0')
+    if (world_runtime == NULL || brush_identity == NULL || brush_identity[0] == '\0')
         return -1;
     for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
     {
         const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
-        if (box->name != NULL && SDL_strcmp(box->name, brush_name) == 0)
+        if ((box->name != NULL && SDL_strcmp(box->name, brush_identity) == 0) ||
+            (box->stable_id != NULL && SDL_strcmp(box->stable_id, brush_identity) == 0))
             return i;
     }
     return -1;
 }
 
+int editor_brush_world_find_source_box_index(const brush_world_runtime *world_runtime, const char *brush_identity)
+{
+    return find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+}
+
+static bool source_box_face_identity_matches(const editor_brush_source_box_runtime *box, int face_index,
+                                             const char *face_identity)
+{
+    if (box == NULL || face_index < 0 || face_index >= (int)SDL_arraysize(source_box_face_keys) ||
+        face_identity == NULL || face_identity[0] == '\0')
+    {
+        return false;
+    }
+
+    const char *face_key = source_box_face_keys[face_index];
+    if (SDL_strcmp(face_identity, face_key) == 0)
+        return true;
+
+    char stable_id[320];
+    if (box->stable_id != NULL && box->stable_id[0] != '\0')
+    {
+        SDL_snprintf(stable_id, sizeof(stable_id), "%s.face.%s", box->stable_id, face_key);
+        if (SDL_strcmp(face_identity, stable_id) == 0)
+            return true;
+    }
+    if (box->name != NULL && box->name[0] != '\0')
+    {
+        SDL_snprintf(stable_id, sizeof(stable_id), "%s.face.%s", box->name, face_key);
+        if (SDL_strcmp(face_identity, stable_id) == 0)
+            return true;
+    }
+    return false;
+}
+
+int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
+                                                          const char *brush_identity, int fallback_face_index,
+                                                          const char *face_identity)
+{
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+    if (source_index < 0)
+        return -1;
+    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    for (int i = 0; i < (int)SDL_arraysize(source_box_face_keys); ++i)
+    {
+        if (source_box_face_identity_matches(box, i, face_identity))
+            return i;
+    }
+    return fallback_face_index >= 0 && fallback_face_index < (int)SDL_arraysize(source_box_face_keys)
+               ? fallback_face_index
+               : -1;
+}
+
+static slayer3d_vec3 source_box_face_normal_for_index(int face_index)
+{
+    switch (face_index)
+    {
+    case 0:
+        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    case 1:
+        return slayer3d_vec3_make(-1.0f, 0.0f, 0.0f);
+    case 2:
+        return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    case 3:
+        return slayer3d_vec3_make(0.0f, -1.0f, 0.0f);
+    case 4:
+        return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    case 5:
+        return slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+    default:
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    }
+}
+
+bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_runtime *world_runtime,
+                                                            const char *brush_identity, int fallback_face_index,
+                                                            const char *face_identity, int *out_face_index,
+                                                            slayer3d_vec3 *out_normal)
+{
+    const int face_index = editor_brush_world_source_box_face_index_for_identity(world_runtime, brush_identity,
+                                                                                 fallback_face_index, face_identity);
+    if (out_face_index != NULL)
+        *out_face_index = face_index;
+    if (out_normal != NULL)
+        *out_normal = source_box_face_normal_for_index(face_index);
+    return face_index >= 0;
+}
+
+bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *world_runtime,
+                                                    const char *brush_identity,
+                                                    editor_brush_source_box_runtime *out_box, int *out_index,
+                                                    char *error_buffer, int error_buffer_size)
+{
+    if (out_box != NULL)
+        SDL_zero(*out_box);
+    if (out_index != NULL)
+        *out_index = -1;
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush lookup requires a source model");
+        return false;
+    }
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+    if (out_box != NULL &&
+        !copy_editor_brush_source_box_runtime(&world_runtime->editor_source_boxes[source_index], out_box))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to copy source brush");
+        return false;
+    }
+    if (out_index != NULL)
+        *out_index = source_index;
+    return true;
+}
+
 static bool source_box_extents_valid(const editor_brush_source_box_runtime *box)
 {
     return box != NULL && box->min[0] < box->max[0] && box->min[1] < box->max[1] && box->min[2] < box->max[2];
+}
+
+static int source_snap_units(const brush_world_runtime *world_runtime)
+{
+    return world_runtime != NULL && world_runtime->editor_source_snap_units > 0
+               ? world_runtime->editor_source_snap_units
+               : 1;
+}
+
+static bool source_coord_on_snap(int coord, int snap_units)
+{
+    return snap_units <= 1 || coord % snap_units == 0;
+}
+
+static bool source_box_coordinates_on_snap(const editor_brush_source_box_runtime *box, int snap_units)
+{
+    if (box == NULL)
+        return false;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (!source_coord_on_snap(box->min[axis], snap_units) || !source_coord_on_snap(box->max[axis], snap_units))
+            return false;
+    }
+    return true;
 }
 
 static bool source_intervals_overlap_positive(int a_min, int a_max, int b_min, int b_max)
@@ -185,6 +359,13 @@ static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
         set_error(error_buffer, error_buffer_size, "source brush edit would create invalid geometry");
         return false;
     }
+    const int snap_units = source_snap_units(world_runtime);
+    if (!source_box_coordinates_on_snap(candidate, snap_units))
+    {
+        set_errorf(error_buffer, error_buffer_size, "source brush '%s' is not aligned to %d-unit source snap",
+                   candidate->name != NULL ? candidate->name : "<unnamed>", snap_units);
+        return false;
+    }
 
     for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
     {
@@ -216,6 +397,13 @@ static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
     return true;
 }
 
+bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_box_runtime *box, int exclude_index,
+                                                      char *error_buffer, int error_buffer_size)
+{
+    return source_box_candidate_valid(world_runtime, box, exclude_index, error_buffer, error_buffer_size);
+}
+
 static bool source_box_overlaps_on_other_axes(const editor_brush_source_box_runtime *a,
                                               const editor_brush_source_box_runtime *b, int axis)
 {
@@ -245,6 +433,34 @@ static bool source_box_contact_fully_covers_face(const editor_brush_source_box_r
             return false;
     }
     return true;
+}
+
+static int source_box_contact_axis_count(const editor_brush_source_box_runtime *a,
+                                         const editor_brush_source_box_runtime *b)
+{
+    if (a == NULL || b == NULL)
+        return 0;
+    int contact_axis_count = 0;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (a->max[axis] == b->min[axis] || b->max[axis] == a->min[axis])
+            ++contact_axis_count;
+    }
+    return contact_axis_count;
+}
+
+static int source_box_overlap_axis_count(const editor_brush_source_box_runtime *a,
+                                         const editor_brush_source_box_runtime *b)
+{
+    if (a == NULL || b == NULL)
+        return 0;
+    int overlap_axis_count = 0;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (source_intervals_overlap_positive(a->min[axis], a->max[axis], b->min[axis], b->max[axis]))
+            ++overlap_axis_count;
+    }
+    return overlap_axis_count;
 }
 
 static void set_first_source_diagnostic_issue(slayer3d_game_data_editor_brush_source_diagnostics *diagnostics,
@@ -340,7 +556,7 @@ static bool editor_source_box_identifier_unique(const editor_brush_source_box_ru
 }
 
 bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_val *boxes, float meters_per_unit,
-                                    char *error_buffer, int error_buffer_size)
+                                    int snap_units, char *error_buffer, int error_buffer_size)
 {
     if (world_runtime == NULL || !yyjson_is_arr(boxes))
     {
@@ -361,6 +577,7 @@ bool load_editor_brush_source_boxes(brush_world_runtime *world_runtime, yyjson_v
     world_runtime->editor_source_boxes = source_boxes;
     world_runtime->editor_source_box_capacity = box_count;
     world_runtime->editor_source_meters_per_unit = meters_per_unit > 0.0f ? meters_per_unit : 0.001f;
+    world_runtime->editor_source_snap_units = snap_units > 0 ? snap_units : 1;
     world_runtime->editor_has_source_model = true;
     for (int i = 0; i < box_count; ++i)
     {
@@ -408,18 +625,46 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
     }
 
     const int gap_tolerance = near_gap_units > 0 ? near_gap_units : 1;
+    const int snap_units = source_snap_units(world_runtime);
+    out_diagnostics->source_snap_units = snap_units;
     out_diagnostics->source_box_count = world_runtime->editor_source_box_count;
     for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
     {
         const editor_brush_source_box_runtime *a = &world_runtime->editor_source_boxes[i];
+        if (!source_box_coordinates_on_snap(a, snap_units))
+        {
+            out_diagnostics->off_snap_count++;
+            if (out_diagnostics->first_issue[0] == '\0')
+            {
+                SDL_snprintf(out_diagnostics->first_issue, sizeof(out_diagnostics->first_issue),
+                             "source box '%s' is not aligned to %d-unit source snap",
+                             a->name != NULL ? a->name : "<unnamed>", snap_units);
+            }
+        }
         for (int j = i + 1; j < world_runtime->editor_source_box_count; ++j)
         {
             const editor_brush_source_box_runtime *b = &world_runtime->editor_source_boxes[j];
+            if (!source_box_contents_are_structural(a->contents) || !source_box_contents_are_structural(b->contents))
+                continue;
+
+            const int contact_axis_count = source_box_contact_axis_count(a, b);
+            const int overlap_axis_count = source_box_overlap_axis_count(a, b);
             if (source_box_positive_volume_overlap(a, b))
             {
                 out_diagnostics->positive_overlap_count++;
                 set_first_source_diagnostic_issue(out_diagnostics,
                                                   "source boxes '%s' and '%s' overlap with positive volume", a, b, 0);
+                continue;
+            }
+
+            if (contact_axis_count == 2 && overlap_axis_count == 1)
+            {
+                out_diagnostics->edge_contact_count++;
+                continue;
+            }
+            if (contact_axis_count == 3)
+            {
+                out_diagnostics->vertex_contact_count++;
                 continue;
             }
 
@@ -450,8 +695,9 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
         }
     }
 
-    out_diagnostics->structurally_valid =
-        out_diagnostics->positive_overlap_count == 0 && out_diagnostics->near_gap_count == 0;
+    out_diagnostics->structurally_valid = out_diagnostics->off_snap_count == 0 &&
+                                          out_diagnostics->positive_overlap_count == 0 &&
+                                          out_diagnostics->near_gap_count == 0;
     return true;
 }
 
@@ -613,6 +859,8 @@ static void source_enclosure_set_candidate_source_face(
     for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
     {
         const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
+        if (!source_box_contents_are_structural(box->contents))
+            continue;
         double candidate[3] = {source_clamp_double(leak_point_units[0], (double)box->min[0], (double)box->max[0]),
                                source_clamp_double(leak_point_units[1], (double)box->min[1], (double)box->max[1]),
                                source_clamp_double(leak_point_units[2], (double)box->min[2], (double)box->max[2])};
@@ -766,8 +1014,10 @@ bool slayer3d_game_data_validate_editor_brush_source_enclosure(
                 const int cell_index = source_grid_cell_index(x, y, z, dim_x, dim_y);
                 for (int box_index = 0; box_index < world_runtime->editor_source_box_count; ++box_index)
                 {
-                    if (source_cell_inside_box(axis_edges[0], axis_edges[1], axis_edges[2], x, y, z,
-                                               &world_runtime->editor_source_boxes[box_index]))
+                    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[box_index];
+                    if (!source_box_contents_are_structural(box->contents))
+                        continue;
+                    if (source_cell_inside_box(axis_edges[0], axis_edges[1], axis_edges[2], x, y, z, box))
                     {
                         solid[cell_index] = 1;
                         out_diagnostics->solid_cell_count++;
@@ -1097,10 +1347,8 @@ static const char *brush_face_material_name_for_source_box(const slayer3d_game_d
     return "";
 }
 
-static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush, const char *material)
+static const char *source_prefab_for_material(const char *material)
 {
-    if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
-        return brush->editor.prefab;
     if (material != NULL)
     {
         if (SDL_strstr(material, ".floor") != NULL)
@@ -1110,15 +1358,54 @@ static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush
         if (SDL_strstr(material, ".ceiling") != NULL)
             return "ceiling";
     }
+    return NULL;
+}
+
+static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush, const char *material)
+{
+    if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
+        return brush->editor.prefab;
+    const char *material_prefab = source_prefab_for_material(material);
+    if (material_prefab != NULL)
+        return material_prefab;
     return brush != NULL && brush->editor.prefab != NULL ? brush->editor.prefab : "box";
 }
 
-static bool source_box_from_runtime_brush(const slayer3d_game_data_brush_world *world,
+bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_runtime,
+                                              const slayer3d_game_data_create_box_brush_desc *desc,
+                                              const char *brush_name, editor_brush_source_box_runtime *out_box)
+{
+    if (world_runtime == NULL || desc == NULL || brush_name == NULL || brush_name[0] == '\0' || out_box == NULL)
+        return false;
+
+    SDL_zero(*out_box);
+    const char *material = desc->material_name != NULL ? desc->material_name : "";
+    const char *prefab = source_prefab_for_material(material);
+    if (prefab == NULL)
+        prefab = "editor.box";
+    if (!copy_source_string(&out_box->stable_id, brush_name) || !copy_source_string(&out_box->name, brush_name) ||
+        !copy_source_string(&out_box->prefab, prefab) || !copy_source_string(&out_box->material, material))
+    {
+        free_editor_brush_source_box(out_box);
+        return false;
+    }
+    out_box->min[0] = source_units_from_meters(world_runtime, desc->min.x);
+    out_box->min[1] = source_units_from_meters(world_runtime, desc->min.y);
+    out_box->min[2] = source_units_from_meters(world_runtime, desc->min.z);
+    out_box->max[0] = source_units_from_meters(world_runtime, desc->max.x);
+    out_box->max[1] = source_units_from_meters(world_runtime, desc->max.y);
+    out_box->max[2] = source_units_from_meters(world_runtime, desc->max.z);
+    out_box->contents = desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    return true;
+}
+
+static bool source_box_from_runtime_brush(const brush_world_runtime *world_runtime,
                                           const slayer3d_game_data_brush *brush,
                                           editor_brush_source_box_runtime *out_box)
 {
-    if (world == NULL || brush == NULL || out_box == NULL || !brush_can_sync_as_source_box(brush))
+    if (world_runtime == NULL || brush == NULL || out_box == NULL || !brush_can_sync_as_source_box(brush))
         return false;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
     const char *stable_id = brush->editor.stable_id != NULL ? brush->editor.stable_id : brush->name;
     const char *name = brush->name;
     const char *material = brush_material_name_for_source_box(world, brush);
@@ -1132,12 +1419,12 @@ static bool source_box_from_runtime_brush(const slayer3d_game_data_brush_world *
         free_editor_brush_source_box(out_box);
         return false;
     }
-    out_box->min[0] = source_millimeters_from_meters(brush->bounds.min.x);
-    out_box->min[1] = source_millimeters_from_meters(brush->bounds.min.y);
-    out_box->min[2] = source_millimeters_from_meters(brush->bounds.min.z);
-    out_box->max[0] = source_millimeters_from_meters(brush->bounds.max.x);
-    out_box->max[1] = source_millimeters_from_meters(brush->bounds.max.y);
-    out_box->max[2] = source_millimeters_from_meters(brush->bounds.max.z);
+    out_box->min[0] = source_units_from_meters(world_runtime, brush->bounds.min.x);
+    out_box->min[1] = source_units_from_meters(world_runtime, brush->bounds.min.y);
+    out_box->min[2] = source_units_from_meters(world_runtime, brush->bounds.min.z);
+    out_box->max[0] = source_units_from_meters(world_runtime, brush->bounds.max.x);
+    out_box->max[1] = source_units_from_meters(world_runtime, brush->bounds.max.y);
+    out_box->max[2] = source_units_from_meters(world_runtime, brush->bounds.max.z);
     out_box->contents = brush->contents != 0u ? brush->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
     for (int i = 0; i < brush->face_count && i < (int)SDL_arraysize(out_box->face_materials); ++i)
     {
@@ -1171,7 +1458,7 @@ bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runt
 
     for (int i = 0; i < world->brush_count; ++i)
     {
-        if (!source_box_from_runtime_brush(world, &world->brushes[i], &boxes[i]))
+        if (!source_box_from_runtime_brush(world_runtime, &world->brushes[i], &boxes[i]))
         {
             for (int j = 0; j <= i; ++j)
                 free_editor_brush_source_box(&boxes[j]);
@@ -1188,7 +1475,10 @@ bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runt
     world_runtime->editor_source_boxes = boxes;
     world_runtime->editor_source_box_count = world->brush_count;
     world_runtime->editor_source_box_capacity = world->brush_count;
-    world_runtime->editor_source_meters_per_unit = 0.001f;
+    if (world_runtime->editor_source_meters_per_unit <= 0.0f)
+        world_runtime->editor_source_meters_per_unit = 0.001f;
+    if (world_runtime->editor_source_snap_units <= 0)
+        world_runtime->editor_source_snap_units = 1;
     world_runtime->editor_has_source_model = true;
     return true;
 }
@@ -1204,10 +1494,32 @@ bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_
     }
 
     editor_brush_source_box_runtime inserted;
-    if (!source_box_from_runtime_brush(&world_runtime->desc, brush, &inserted))
+    if (!source_box_from_runtime_brush(world_runtime, brush, &inserted))
     {
         set_errorf(error_buffer, error_buffer_size, "brush '%s' cannot be represented as a source box",
                    brush->name != NULL ? brush->name : "<unnamed>");
+        return false;
+    }
+    const bool ok = editor_brush_world_insert_source_box_at_index(world_runtime, box_index, &inserted, error_buffer,
+                                                                  error_buffer_size);
+    free_editor_brush_source_box(&inserted);
+    return ok;
+}
+
+bool editor_brush_world_insert_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
+                                                   const editor_brush_source_box_runtime *box, char *error_buffer,
+                                                   int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || box == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush insertion requires a source model and brush");
+        return false;
+    }
+
+    editor_brush_source_box_runtime inserted;
+    if (!copy_editor_brush_source_box_runtime(box, &inserted))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to copy source brush insertion");
         return false;
     }
     if (!source_box_candidate_valid(world_runtime, &inserted, -1, error_buffer, error_buffer_size))
@@ -1312,7 +1624,7 @@ bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime,
         return false;
     }
 
-    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
     if (source_index < 0)
     {
         set_error(error_buffer, error_buffer_size, "source brush not found");
@@ -1360,7 +1672,7 @@ bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtim
         return false;
     }
 
-    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
     if (source_index < 0)
     {
         set_error(error_buffer, error_buffer_size, "source brush not found");
@@ -1442,7 +1754,7 @@ bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_
         return false;
     }
 
-    const int source_index = find_editor_source_box_index_by_name(world_runtime, brush_name);
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
     if (source_index < 0)
     {
         set_error(error_buffer, error_buffer_size, "source brush not found");

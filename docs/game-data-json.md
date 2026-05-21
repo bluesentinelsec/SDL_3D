@@ -741,18 +741,26 @@ runtime descriptor also exposes `compile_rendered_faces`, a source-to-render
 table for every visible compiled face. Each entry records the source brush,
 source face, material, render mesh index, and vertex range, so editor selection,
 diagnostics, and offline compilers can map optimized render output back to
-stable source brush/face IDs even after hidden internal faces are culled. The
+stable source brush/face IDs even after hidden internal faces are culled. When a
+source face is only partially covered by adjacent structural brushes, hidden
+face culling splits the remaining visible region into rectangular fragments
+instead of emitting the covered span. This keeps stacked floors, pits, and
+prefab-adjacent wall runs from producing duplicate coplanar render surfaces
+while preserving the original source face identity. The
 runtime descriptor's `compile_artifact_hash` is a deterministic hash of the
 compiled mesh/chunk metadata and can be used by tests, tools, and future offline
 cache invalidation. Tools can also call
 `slayer3d_game_data_export_brush_world_compile_artifact_json()` to write an
 inspection manifest using `schema: "slayer3d.brush_compile_artifact.v0"`. The
 manifest records a deterministic source hash for authored brush inputs, the
-compile policy, render mesh totals, visible source-face mappings, spatial chunk
-summaries, and visibility-grid metadata. It is intentionally a descriptor rather
-than a binary cache payload: use the source hash, policy, and compile artifact
-hash together to inspect, compare, and invalidate compiled artifacts before
-adding cache storage/loading.
+compile policy, source brush totals, render mesh totals, visible source-face
+mappings, spatial chunk summaries, and visibility-grid metadata. Source totals
+separate renderable brushes from non-renderable structural brushes such as
+`sky`, so tools can verify that sky seals are present for leak detection without
+being emitted into the opaque world mesh. It is intentionally a descriptor
+rather than a binary cache payload: use the source hash, policy, and compile
+artifact hash together to inspect, compare, and invalidate compiled artifacts
+before adding cache storage/loading.
 Native editor/offline compiler hosts can call
 `slayer3d_game_data_save_brush_world_compile_artifact_file()` to atomically save
 that manifest beside authored brush fragments, then use
@@ -1046,7 +1054,7 @@ debug overlay, inspector, and delete/resize tools.
 {
   "type": "editor.selection.select_brush",
   "world": "brush.editor_shell.target",
-  "element_from_state": "editor.leak.candidate",
+  "element_stable_id_from_state": "editor.leak.candidate_stable",
   "face_from_state": "editor.leak.candidate_face",
   "message": "selected leak candidate",
   "invalid_message": "no leak candidate to select",
@@ -1057,9 +1065,14 @@ debug overlay, inspector, and delete/resize tools.
 }
 ```
 
-`element` may be authored directly or read from `element_from_state`; exactly
-one is required. `face` and `face_from_state` are optional and accept the
-canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`. When the target
+Exactly one brush identity is required: `element`, `element_from_state`,
+`element_stable_id`, or `element_stable_id_from_state`. Prefer stable ids for
+diagnostics and repair commands, because source brush names may be edited while
+stable ids continue to identify the same authored brush. `face`,
+`face_from_state`, `face_stable_id`, and `face_stable_id_from_state` are
+optional; at most one may be supplied. `face` and `face_from_state` accept the
+canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`, while
+`face_stable_id` selects a face by its source/editor stable id. When the target
 cannot be resolved, the action clears the active selection, publishes
 `valid_key: false` when configured, and reports `invalid_message`.
 
@@ -1087,15 +1100,17 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 `editor_brush_sources` is the editor-owned source model for structurally correct
 brush editing. Editable fragments include it alongside `brush_worlds`; when a
 matching source world is present, Slayer3D compiles the source boxes into the
-runtime brush world during load/import. Coordinates are fixed millimeters so
-editor decisions round-trip without accumulating floating-point drift; runtime
-`brush_worlds` remain meter-based derived output for renderer, collision, and
-compatibility paths. Each source world references a brush world and stores
-stable source brush IDs, prefab metadata, material references, and integer
-`min`/`max` coordinates for box sources. `material` is the default material for
-all six generated faces. `face_materials` may override individual generated box
-faces with keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit
-`material`.
+runtime brush world during load/import. Coordinates are fixed integer source
+units so editor decisions round-trip without accumulating floating-point drift;
+`meters_per_unit` converts those source units to runtime meters. The default is
+millimeter precision (`meters_per_unit: 0.001`), but source-backed mutations and
+exports preserve the authored scale. Runtime `brush_worlds` remain meter-based
+derived output for renderer, collision, and compatibility paths. Each source
+world references a brush world and stores stable source brush IDs, prefab
+metadata, material references, and integer `min`/`max` coordinates for box
+sources. `material` is the default material for all six generated faces.
+`face_materials` may override individual generated box faces with keys `px`,
+`nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.
 
 Each source box must have a unique `stable_id` and a unique brush `name` within
 its source world. When `name` is omitted, it defaults to `stable_id`. The
@@ -1103,6 +1118,13 @@ runtime derives stable face ids from the brush stable id and canonical box face
 keys, for example `floor.spawn.001.face.px`. This keeps selection, painting,
 diagnostics, and undo/redo addressable by source brush/face identity instead of
 by transient compiled-surface indexes.
+
+`snap_units` is optional and defaults to `1`. When present, every source-box
+`min` and `max` coordinate must remain aligned to that source-unit increment.
+For example, with `meters_per_unit: 0.001` and `snap_units: 100`, source edits
+are constrained to a 0.1 meter structural grid. The editor can still use larger
+placement grids, but malformed off-grid source coordinates are reported as
+source-model defects and rejected by source-backed mutation tools.
 
 For source-backed editor worlds, the runtime keeps `editor_brush_sources` as an
 in-memory source model. Successful editor mutations synchronize that source
@@ -1115,15 +1137,19 @@ committed. Exact snapped face, edge, or vertex contact is legal; positive-volume
 overlap between structural source boxes is rejected at the source-model boundary.
 This keeps placement, translate, and resize tools from introducing hidden
 runtime-only overlap states.
+Structural checks consider solid, player/projectile clip, and sky source boxes
+as map-sealing architecture. Non-structural content such as trigger-only boxes
+may overlap structural brushes for gameplay volumes; those boxes do not report
+source-model overlap/gap/contact defects and do not seal leaks.
 
 Use `editor.brush_world.validate_source` or the native
 `slayer3d_game_data_validate_editor_brush_source_model()` API to inspect source
 boxes before save or test-run. The pass runs on fixed source coordinates and
-reports positive-volume overlaps plus tiny non-zero near gaps between boxes that
-otherwise overlap on the other two axes. Exact face contact is counted as
-structural adjacency. This is the first source-level correctness gate for
-watertight brush editing; future leak tracing can build on the same source model
-without relying on visual offsets.
+reports off-snap coordinates, positive-volume overlaps, and tiny non-zero near
+gaps between boxes that otherwise overlap on the other two axes. Exact face
+contact is counted as structural adjacency. This is the first source-level
+correctness gate for watertight brush editing; future leak tracing can build on
+the same source model without relying on visual offsets.
 
 The action form may set `allow_missing_source: true` when a workflow still needs
 to support legacy/runtime-only brush worlds. In that mode, worlds without an
@@ -1133,16 +1159,21 @@ source-backed worlds still fail on overlaps and near gaps.
 Use `editor.brush_world.validate_enclosure` or
 `slayer3d_game_data_validate_editor_brush_source_enclosure()` to run the first
 source-backed leak diagnostic. This pass derives an exact interval grid from
-the fixed source box coordinates, marks source boxes as solid, and flood-fills
-empty cells from an `editor_player_starts` marker. If the flood reaches the
-expanded outside boundary, the playable space leaks. The editor shell runs both
-validation actions before entering playable test-run mode so source defects
-block F5 instead of becoming game-runtime surprises. The `leak_point_key`
+the fixed source box coordinates, marks structural source boxes as solid, and
+flood-fills empty cells from an `editor_player_starts` marker. If the flood
+reaches the expanded outside boundary, the playable space leaks. The editor
+shell runs both validation actions before entering playable test-run mode so
+source defects block F5 instead of becoming game-runtime surprises. The `leak_point_key`
 output can feed an `editor.debug_overlay.markers` entry so the editor shows the
 first reachable outside-boundary cell directly in the 3D view. The candidate
 outputs identify the nearest source-box face on the same leak boundary axis,
 giving editor UI a second point to highlight while the user decides which
 missing or malformed brush should be repaired.
+Lowered pits and stacked room blockouts should be represented as non-overlapping
+source brushes: surrounding floor slabs, explicit vertical side-wall brushes,
+and a floor/sky/ceiling seal. The enclosure diagnostic treats that shape as
+watertight when all sides are present and reports a leak when one side wall is
+missing.
 
 ```json
 {
@@ -1181,9 +1212,13 @@ missing or malformed brush should be repaired.
     "valid_key": "editor.source.valid",
     "message_key": "editor.source.message",
     "box_count_key": "editor.source.boxes",
+    "snap_units_key": "editor.source.snap_units",
+    "off_snap_count_key": "editor.source.off_snap",
     "overlap_count_key": "editor.source.overlaps",
     "near_gap_count_key": "editor.source.near_gaps",
     "face_contact_count_key": "editor.source.face_contacts",
+    "edge_contact_count_key": "editor.source.edge_contacts",
+    "vertex_contact_count_key": "editor.source.vertex_contacts",
     "partial_face_contact_count_key": "editor.source.partial_contacts"
   }
 }
@@ -1233,16 +1268,20 @@ blockout tools: floors, walls, ceilings, sky seals, platforms, and simple room p
 validates the target world and bounds at load time, resolves the material at
 runtime, rebuilds brush collision/render data atomically, then marks the world
 dirty only after the rebuild succeeds. If `name` is omitted, the runtime
-generates a unique brush name under the target world. Runtime-created box
-brushes are structural editor source brushes: they receive stable editor ids for
-the brush and all six faces, exact face/edge/vertex contact with existing
-structural brushes is allowed, and positive-volume overlap with an existing
-structural brush is rejected before the world is marked dirty. The editor shell dojo
+generates a unique brush name under the target world. Source-backed worlds
+commit a canonical source box first, then compile runtime brushes from the
+source model; runtime-only worlds append the derived brush directly. Created
+structural boxes receive stable editor ids, exact face/edge/vertex contact with
+existing structural brushes is allowed, and positive-volume overlap with an
+existing structural brush is rejected before the world is marked dirty. The editor shell dojo
 demonstrates the current blockout palette pattern: modal palette signals write
 scene-state selection strings, and the shared commit signal branches to
 prefab-specific `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
+`editor.brush_world.validate_source` reports exact face, edge, and vertex
+contacts separately, so editor tools can distinguish legal snapped contact from
+suspicious near gaps or invalid positive-volume overlap.
 
 `contents` is optional and accepts the same brush-content string or string array
 as authored brush JSON. If omitted, created boxes default to `solid`. Sky
@@ -1292,13 +1331,15 @@ walls, and ceilings from grid-boundary anchors with matching horizontal
 footprints instead of centering them around the snap point; this keeps adjacent
 tiles aligned without gaps. `contents` can also be authored on box previews; it
 is copied into `editor.brush_world.create_box` when committing with
-`"position_from": "placement_preview"`. Each preview entry maps a tool `mode` to either a
-`box` ghost or a `player_start` marker. Box
-previews can use `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs
-between horizontal grid axes. A box preview must author exactly one bounds
-source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. The preview
-reuses the editor debug overlay's `command_preview` flag and color, so editor
-hosts do not need a second rendering path.
+`"position_from": "placement_preview"`. Each preview entry maps a tool `mode`
+to either a `box` ghost or a `player_start` marker. Box previews can use
+`axis_key` with `axis` `x` or `z` to rotate wall-like prefabs between
+horizontal grid axes. A box preview must author exactly one bounds
+source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. For
+source-backed brush worlds, the preview uses the same source-box candidate
+validator as creation, so overlap and invalid-geometry messages match committed
+edits. The preview reuses the editor debug overlay's `command_preview` flag and
+color, so editor hosts do not need a second rendering path.
 
 ```json
 {
@@ -1483,6 +1524,8 @@ shrink it.
     "active_key": "editor.command_preview.active",
     "valid_key": "editor.command_preview.valid",
     "message_key": "editor.command_preview.message",
+    "element_stable_id_key": "editor.command_preview.element_stable_id",
+    "face_stable_id_key": "editor.command_preview.face_stable_id",
     "bounds_min_key": "editor.command_preview.bounds_min",
     "bounds_max_key": "editor.command_preview.bounds_max"
   }
@@ -1507,6 +1550,10 @@ Successful brush-world mutations mark the affected runtime brush world dirty and
 increment its editor revision. Transaction outputs can publish `dirty_key`,
 `revision_key`, `saved_revision_key`, and `source_path_key` alongside the
 transaction payload so editor UI can show unsaved state without host-specific C.
+For editor source models, command previews and committed transaction records
+capture brush and face stable ids in addition to display names/indexes, so
+undo/redo and repair workflows continue to target the source brush even when the
+compiled/runtime brush representation is regenerated.
 
 ```json
 {
@@ -1519,7 +1566,9 @@ transaction payload so editor UI can show unsaved state without host-specific C.
     "message_key": "editor.transaction.message",
     "transaction_id_key": "editor.transaction.id",
     "undo_count_key": "editor.transaction.undo_count",
-    "redo_count_key": "editor.transaction.redo_count"
+    "redo_count_key": "editor.transaction.redo_count",
+    "element_stable_id_key": "editor.transaction.element_stable_id",
+    "face_stable_id_key": "editor.transaction.face_stable_id"
   },
   "actions": [
     {
@@ -1538,8 +1587,9 @@ Transaction payloads include `editor_transaction_valid`,
 `editor_transaction_event`, `editor_transaction_id`,
 `editor_transaction_id_text`, `editor_command`, `editor_command_target`, `editor_transaction_scene`,
 `editor_transaction_world`, `editor_transaction_element`,
+`editor_transaction_element_stable_id`,
 `editor_transaction_material`, `editor_transaction_previous_material`,
-`editor_transaction_face_index`, `editor_transaction_offset`,
+`editor_transaction_face_stable_id`, `editor_transaction_face_index`, `editor_transaction_offset`,
 `editor_transaction_undo_count`, `editor_transaction_redo_count`, and
 `editor_transaction_bounds_min`/`editor_transaction_bounds_max`.
 

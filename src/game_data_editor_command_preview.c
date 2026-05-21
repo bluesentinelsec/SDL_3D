@@ -44,6 +44,11 @@ static int find_editor_brush_material_index(const brush_world_runtime *world_run
     return -1;
 }
 
+static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)
+{
+    return metadata != NULL && metadata->stable_id != NULL ? metadata->stable_id : NULL;
+}
+
 static bool resolve_editor_paint_material(slayer3d_game_data_runtime *runtime,
                                           const slayer3d_game_data_editor_selection *selection,
                                           const char *material_name, const char **out_material_name,
@@ -207,6 +212,16 @@ void publish_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_
     editor_set_string_output(scene_state, outputs, "element_key",
                              valid && selection != NULL && selection->element_name != NULL ? selection->element_name
                                                                                            : "");
+    editor_set_string_output(scene_state, outputs, "element_stable_id_key",
+                             valid && selection != NULL && selection->element_editor != NULL &&
+                                     selection->element_editor->stable_id != NULL
+                                 ? selection->element_editor->stable_id
+                                 : "");
+    editor_set_string_output(scene_state, outputs, "face_stable_id_key",
+                             valid && selection != NULL && selection->face_editor != NULL &&
+                                     selection->face_editor->stable_id != NULL
+                                 ? selection->face_editor->stable_id
+                                 : "");
     editor_set_int_output(scene_state, outputs, "face_index_key",
                           valid && selection != NULL ? selection->face_index : -1);
     editor_set_vec3_output(scene_state, outputs, "bounds_min_key",
@@ -267,8 +282,10 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
     preview->target = target;
     preview->world_name = selection.world_name;
     preview->element_name = selection.element_name;
+    preview->element_stable_id = editor_metadata_stable_id(selection.element_editor);
     preview->material_name = paint_material_name != NULL ? paint_material_name : selection.material_name;
     preview->previous_material_name = selection.material_name;
+    preview->face_stable_id = editor_metadata_stable_id(selection.face_editor);
     preview->face_index = selection.face_index;
     preview->material_index = paint_material_index;
     preview->previous_material_index = -1;

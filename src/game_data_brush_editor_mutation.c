@@ -89,8 +89,7 @@ static bool editor_brush_world_stable_id_exists(const brush_world_runtime *world
 static bool editor_brush_world_box_stable_ids_available(const brush_world_runtime *world_runtime,
                                                         const char *brush_name);
 
-static bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer,
-                                                   size_t buffer_size)
+bool editor_brush_world_generate_brush_name(const brush_world_runtime *world_runtime, char *buffer, size_t buffer_size)
 {
     if (world_runtime == NULL || buffer == NULL || buffer_size == 0u)
         return false;
@@ -159,8 +158,11 @@ static slayer3d_game_data_brush *find_editor_mutable_brush(brush_world_runtime *
     for (int i = 0; i < world->brush_count; ++i)
     {
         slayer3d_game_data_brush *brush = (slayer3d_game_data_brush *)&world->brushes[i];
-        if (brush->name != NULL && SDL_strcmp(brush->name, brush_name) == 0)
+        if ((brush->name != NULL && SDL_strcmp(brush->name, brush_name) == 0) ||
+            editor_metadata_stable_id_matches(&brush->editor, brush_name))
+        {
             return brush;
+        }
     }
     return NULL;
 }
@@ -366,20 +368,19 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
         return false;
     }
 
-    slayer3d_game_data_brush new_brush;
-    if (!init_editor_box_brush(world_runtime, desc, brush_name, material_index, &new_brush))
-    {
-        set_error(error_buffer, error_buffer_size, "failed to allocate box brush");
-        return false;
-    }
-
     if (world_runtime->editor_has_source_model)
     {
-        char rebuild_error[256] = {0};
-        if (!editor_brush_world_insert_source_box_from_brush(world_runtime, world_runtime->editor_source_box_count,
-                                                             &new_brush, rebuild_error, sizeof(rebuild_error)))
+        editor_brush_source_box_runtime source_box;
+        if (!editor_brush_source_box_from_create_desc(world_runtime, desc, brush_name, &source_box))
         {
-            free_editor_runtime_brush(&new_brush);
+            set_error(error_buffer, error_buffer_size, "failed to allocate source box brush");
+            return false;
+        }
+        char rebuild_error[256] = {0};
+        if (!editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
+                                                           &source_box, rebuild_error, sizeof(rebuild_error)))
+        {
+            free_editor_brush_source_box_runtime(&source_box);
             if (rebuild_error[0] != '\0')
                 set_error(error_buffer, error_buffer_size, rebuild_error);
             else
@@ -388,10 +389,17 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
             return false;
         }
         if (out_brush_name != NULL && out_brush_name_size > 0u)
-            SDL_strlcpy(out_brush_name, new_brush.name != NULL ? new_brush.name : "", out_brush_name_size);
-        free_editor_runtime_brush(&new_brush);
+            SDL_strlcpy(out_brush_name, brush_name, out_brush_name_size);
+        free_editor_brush_source_box_runtime(&source_box);
         editor_brush_world_mark_dirty(world_runtime);
         return true;
+    }
+
+    slayer3d_game_data_brush new_brush;
+    if (!init_editor_box_brush(world_runtime, desc, brush_name, material_index, &new_brush))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate box brush");
+        return false;
     }
 
     slayer3d_game_data_brush_world *world = &world_runtime->desc;

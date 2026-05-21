@@ -609,12 +609,15 @@ static int brush_material_index_from_ref(const slayer3d_game_data_brush_material
 }
 
 static bool find_editor_brush_source_boxes(yyjson_val *root, const char *world_name, yyjson_val **out_boxes,
-                                           float *out_meters_per_unit, char *error_buffer, int error_buffer_size)
+                                           float *out_meters_per_unit, int *out_snap_units, char *error_buffer,
+                                           int error_buffer_size)
 {
     if (out_boxes != NULL)
         *out_boxes = NULL;
     if (out_meters_per_unit != NULL)
         *out_meters_per_unit = 0.001f;
+    if (out_snap_units != NULL)
+        *out_snap_units = 1;
     yyjson_val *sources = obj_get(root, "editor_brush_sources");
     if (!yyjson_is_arr(sources))
         return true;
@@ -639,6 +642,11 @@ static bool find_editor_brush_source_boxes(yyjson_val *root, const char *world_n
         {
             const float meters_per_unit = json_float(source, "meters_per_unit", 0.001f);
             *out_meters_per_unit = meters_per_unit > 0.0f ? meters_per_unit : 0.001f;
+        }
+        if (out_snap_units != NULL)
+        {
+            const int snap_units = json_int(source, "snap_units", 1);
+            *out_snap_units = snap_units > 0 ? snap_units : 1;
         }
         return true;
     }
@@ -671,9 +679,10 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
         yyjson_val *materials_json = obj_get(world_json, "materials");
         yyjson_val *source_boxes = NULL;
         float source_meters_per_unit = 0.001f;
+        int source_snap_units = 1;
         const char *world_name = json_string(world_json, "name", "");
-        if (!find_editor_brush_source_boxes(root, world_name, &source_boxes, &source_meters_per_unit, error_buffer,
-                                            error_buffer_size))
+        if (!find_editor_brush_source_boxes(root, world_name, &source_boxes, &source_meters_per_unit,
+                                            &source_snap_units, error_buffer, error_buffer_size))
         {
             return false;
         }
@@ -737,7 +746,8 @@ bool load_brush_worlds(slayer3d_game_data_runtime *runtime, yyjson_val *root, ch
         if (use_source_boxes)
         {
             if (!load_editor_brush_source_boxes(&runtime->brush_worlds[world_index], source_boxes,
-                                                source_meters_per_unit, error_buffer, error_buffer_size) ||
+                                                source_meters_per_unit, source_snap_units, error_buffer,
+                                                error_buffer_size) ||
                 !editor_brush_world_rebuild_from_source(&runtime->brush_worlds[world_index], error_buffer,
                                                         error_buffer_size))
             {
