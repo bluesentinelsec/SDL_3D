@@ -18,6 +18,14 @@ static int source_units_from_meters(const brush_world_runtime *world_runtime, fl
     return (int)SDL_lroundf(value / meters_per_unit);
 }
 
+static float source_meters_from_units(const brush_world_runtime *world_runtime, int value)
+{
+    const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
+                                      ? world_runtime->editor_source_meters_per_unit
+                                      : 0.001f;
+    return (float)value * meters_per_unit;
+}
+
 static const char *const source_box_face_keys[6] = {"px", "nx", "py", "ny", "pz", "nz"};
 
 static bool source_vec3i(yyjson_val *object, const char *key, int out_values[3])
@@ -388,7 +396,9 @@ static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
             source_box_contents_are_structural(existing->contents) &&
             source_box_positive_volume_overlap(candidate, existing))
         {
-            set_errorf(error_buffer, error_buffer_size, "source brush '%s' overlaps existing brush '%s'",
+            set_errorf(error_buffer, error_buffer_size,
+                       "source brush '%s' overlaps existing brush '%s' with positive volume; use an adjacent snapped "
+                       "cell or a source operation that trims, splits, or merges the candidate",
                        candidate->name != NULL ? candidate->name : "<unnamed>",
                        existing->name != NULL ? existing->name : "<unnamed>");
             return false;
@@ -1357,6 +1367,8 @@ static const char *source_prefab_for_material(const char *material)
             return "wall";
         if (SDL_strstr(material, ".ceiling") != NULL)
             return "ceiling";
+        if (SDL_strstr(material, ".sky") != NULL)
+            return "sky";
     }
     return NULL;
 }
@@ -1397,6 +1409,24 @@ bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_r
     out_box->max[2] = source_units_from_meters(world_runtime, desc->max.z);
     out_box->contents = desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
     return true;
+}
+
+slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_runtime *world_runtime,
+                                                            const editor_brush_source_box_runtime *box)
+{
+    slayer3d_bounding_box bounds;
+    bounds.min = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    bounds.max = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (box == NULL)
+        return bounds;
+
+    bounds.min = slayer3d_vec3_make(source_meters_from_units(world_runtime, box->min[0]),
+                                    source_meters_from_units(world_runtime, box->min[1]),
+                                    source_meters_from_units(world_runtime, box->min[2]));
+    bounds.max = slayer3d_vec3_make(source_meters_from_units(world_runtime, box->max[0]),
+                                    source_meters_from_units(world_runtime, box->max[1]),
+                                    source_meters_from_units(world_runtime, box->max[2]));
+    return bounds;
 }
 
 static bool source_box_from_runtime_brush(const brush_world_runtime *world_runtime,

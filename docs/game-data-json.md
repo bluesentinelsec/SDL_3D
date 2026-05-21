@@ -1338,8 +1338,14 @@ horizontal grid axes. A box preview must author exactly one bounds
 source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. For
 source-backed brush worlds, the preview uses the same source-box candidate
 validator as creation, so overlap and invalid-geometry messages match committed
-edits. The preview reuses the editor debug overlay's `command_preview` flag and
-color, so editor hosts do not need a second rendering path.
+edits. Wall previews in source-backed worlds are also normalized as source-box
+operations: endpoint contacts against existing structural source brushes may
+trim the wall span to the free snapped interval before validation, while true
+positive-volume intersections are rejected with source-model diagnostics. This
+keeps floor, wall, ceiling, and sky prefabs on the same durable fixed-grid model
+instead of relying on runtime brush-overlap hacks. The preview reuses the
+editor debug overlay's `command_preview` flag and color, so editor hosts do not
+need a second rendering path.
 
 ```json
 {
@@ -1372,8 +1378,8 @@ color, so editor hosts do not need a second rendering path.
           "material": "mat.stone_wall",
           "axis_key": "editor.wall_axis",
           "axis": "z",
-          "grid_min": [0.0, 0.0, 0.0],
-          "grid_max": [1.0, 1.0, 1.0]
+          "grid_min": [0.0, 0.0, -0.0125],
+          "grid_max": [1.0, 1.0, 0.0125]
         },
         {
           "mode": "sky",

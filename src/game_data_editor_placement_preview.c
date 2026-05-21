@@ -236,50 +236,7 @@ static slayer3d_bounding_box editor_placement_oriented_box_bounds(slayer3d_game_
     return bounds;
 }
 
-static float *editor_bounds_min_axis(slayer3d_bounding_box *bounds, int axis)
-{
-    if (axis == 0)
-        return &bounds->min.x;
-    if (axis == 1)
-        return &bounds->min.y;
-    return &bounds->min.z;
-}
-
-static float *editor_bounds_max_axis(slayer3d_bounding_box *bounds, int axis)
-{
-    if (axis == 0)
-        return &bounds->max.x;
-    if (axis == 1)
-        return &bounds->max.y;
-    return &bounds->max.z;
-}
-
-static float editor_bounds_axis_min(slayer3d_bounding_box bounds, int axis)
-{
-    if (axis == 0)
-        return bounds.min.x;
-    if (axis == 1)
-        return bounds.min.y;
-    return bounds.min.z;
-}
-
-static float editor_bounds_axis_max(slayer3d_bounding_box bounds, int axis)
-{
-    if (axis == 0)
-        return bounds.max.x;
-    if (axis == 1)
-        return bounds.max.y;
-    return bounds.max.z;
-}
-
-static bool editor_bounds_overlap_positive_volume(slayer3d_bounding_box a, slayer3d_bounding_box b)
-{
-    const float epsilon = 0.00001f;
-    return a.min.x < b.max.x - epsilon && b.min.x < a.max.x - epsilon && a.min.y < b.max.y - epsilon &&
-           b.min.y < a.max.y - epsilon && a.min.z < b.max.z - epsilon && b.min.z < a.max.z - epsilon;
-}
-
-static bool editor_preview_brush_contents_are_structural(unsigned int contents)
+static bool editor_source_contents_are_structural(unsigned int contents)
 {
     if (contents == 0u)
         contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
@@ -287,84 +244,107 @@ static bool editor_preview_brush_contents_are_structural(unsigned int contents)
                         SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP | SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY)) != 0u;
 }
 
-static bool editor_bounds_overlap_on_axis(slayer3d_bounding_box a, slayer3d_bounding_box b, int axis)
+static bool editor_source_intervals_overlap_positive(int a_min, int a_max, int b_min, int b_max)
 {
-    const float epsilon = 0.00001f;
-    return editor_bounds_axis_min(a, axis) < editor_bounds_axis_max(b, axis) - epsilon &&
-           editor_bounds_axis_min(b, axis) < editor_bounds_axis_max(a, axis) - epsilon;
+    return SDL_max(a_min, b_min) < SDL_min(a_max, b_max);
 }
 
-static bool editor_placement_trim_wall_overlap(slayer3d_bounding_box *bounds, slayer3d_bounding_box existing,
-                                               int run_axis, int thin_axis, float max_trim)
+static bool editor_source_boxes_overlap_positive(const editor_brush_source_box_runtime *a,
+                                                 const editor_brush_source_box_runtime *b)
 {
-    if (bounds == NULL || !editor_bounds_overlap_positive_volume(*bounds, existing))
+    return a != NULL && b != NULL &&
+           editor_source_intervals_overlap_positive(a->min[0], a->max[0], b->min[0], b->max[0]) &&
+           editor_source_intervals_overlap_positive(a->min[1], a->max[1], b->min[1], b->max[1]) &&
+           editor_source_intervals_overlap_positive(a->min[2], a->max[2], b->min[2], b->max[2]);
+}
+
+static int editor_source_box_extent(const editor_brush_source_box_runtime *box, int axis)
+{
+    return box != NULL && axis >= 0 && axis < 3 ? box->max[axis] - box->min[axis] : 0;
+}
+
+static bool editor_placement_adjust_wall_source_overlap(editor_brush_source_box_runtime *candidate,
+                                                        const editor_brush_source_box_runtime *existing, int run_axis,
+                                                        int thin_axis, int max_trim_units)
+{
+    if (candidate == NULL || existing == NULL || !editor_source_boxes_overlap_positive(candidate, existing))
         return true;
 
-    if (!editor_bounds_overlap_on_axis(*bounds, existing, 1) ||
-        !editor_bounds_overlap_on_axis(*bounds, existing, thin_axis))
-        return false;
-
-    const float candidate_min = editor_bounds_axis_min(*bounds, run_axis);
-    const float candidate_max = editor_bounds_axis_max(*bounds, run_axis);
-    const float existing_min = editor_bounds_axis_min(existing, run_axis);
-    const float existing_max = editor_bounds_axis_max(existing, run_axis);
-    const float overlap_min = SDL_max(candidate_min, existing_min);
-    const float overlap_max = SDL_min(candidate_max, existing_max);
-    const float overlap = overlap_max - overlap_min;
-    const float epsilon = 0.0001f;
-    if (overlap <= epsilon || overlap > max_trim + epsilon)
-        return false;
-
-    if (existing_min <= candidate_min + epsilon && existing_max > candidate_min + epsilon &&
-        existing_max < candidate_max - epsilon)
+    if (!editor_source_intervals_overlap_positive(candidate->min[1], candidate->max[1], existing->min[1],
+                                                  existing->max[1]) ||
+        !editor_source_intervals_overlap_positive(candidate->min[thin_axis], candidate->max[thin_axis],
+                                                  existing->min[thin_axis], existing->max[thin_axis]))
     {
-        *editor_bounds_min_axis(bounds, run_axis) = SDL_max(*editor_bounds_min_axis(bounds, run_axis), existing_max);
-        return *editor_bounds_min_axis(bounds, run_axis) < *editor_bounds_max_axis(bounds, run_axis) - epsilon;
+        return false;
     }
 
-    if (existing_max >= candidate_max - epsilon && existing_min < candidate_max - epsilon &&
-        existing_min > candidate_min + epsilon)
+    const int overlap_min = SDL_max(candidate->min[run_axis], existing->min[run_axis]);
+    const int overlap_max = SDL_min(candidate->max[run_axis], existing->max[run_axis]);
+    const int overlap = overlap_max - overlap_min;
+    if (overlap <= 0 || overlap > max_trim_units)
+        return false;
+
+    if (existing->min[run_axis] <= candidate->min[run_axis] && existing->max[run_axis] > candidate->min[run_axis] &&
+        existing->max[run_axis] < candidate->max[run_axis])
     {
-        *editor_bounds_max_axis(bounds, run_axis) = SDL_min(*editor_bounds_max_axis(bounds, run_axis), existing_min);
-        return *editor_bounds_min_axis(bounds, run_axis) < *editor_bounds_max_axis(bounds, run_axis) - epsilon;
+        candidate->min[run_axis] = existing->max[run_axis];
+        return candidate->min[run_axis] < candidate->max[run_axis];
+    }
+
+    if (existing->max[run_axis] >= candidate->max[run_axis] && existing->min[run_axis] < candidate->max[run_axis] &&
+        existing->min[run_axis] > candidate->min[run_axis])
+    {
+        candidate->max[run_axis] = existing->min[run_axis];
+        return candidate->min[run_axis] < candidate->max[run_axis];
     }
 
     return false;
 }
 
-static slayer3d_bounding_box editor_placement_trim_wall_endpoint_overlaps(slayer3d_game_data_runtime *runtime,
-                                                                          yyjson_val *preview_json,
-                                                                          const editor_placement_preview_state *preview)
+static bool editor_placement_fit_wall_source_candidate(const brush_world_runtime *world_runtime,
+                                                       editor_brush_source_box_runtime *candidate, char *error_buffer,
+                                                       int error_buffer_size)
 {
-    slayer3d_bounding_box bounds = preview != NULL ? preview->bounds
-                                                   : (slayer3d_bounding_box){slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                                                             slayer3d_vec3_make(0.0f, 0.0f, 0.0f)};
-    if (runtime == NULL || preview_json == NULL || preview == NULL || SDL_strcmp(preview->kind, "box") != 0 ||
-        SDL_strcmp(preview->mode, "wall") != 0 || preview->world_name == NULL)
+    if (world_runtime == NULL || candidate == NULL ||
+        SDL_strcmp(candidate->prefab != NULL ? candidate->prefab : "", "wall") != 0)
     {
-        return bounds;
+        return true;
     }
 
-    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, preview->world_name);
-    if (world_runtime == NULL)
-        return bounds;
-
-    const int thin_axis = preview->axis != NULL && SDL_strcmp(preview->axis, "x") == 0 ? 0 : 2;
+    const int x_extent = editor_source_box_extent(candidate, 0);
+    const int z_extent = editor_source_box_extent(candidate, 2);
+    const int thin_axis = x_extent <= z_extent ? 0 : 2;
     const int run_axis = thin_axis == 0 ? 2 : 0;
-    const float wall_thickness = editor_bounds_axis_max(bounds, thin_axis) - editor_bounds_axis_min(bounds, thin_axis);
-    const float max_trim = SDL_max(wall_thickness * 1.25f, 0.001f);
-    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
-    for (int i = 0; i < world->brush_count; ++i)
+    const int max_trim_units = SDL_max(editor_source_box_extent(candidate, thin_axis) * 2, 1);
+
+    bool adjusted = true;
+    while (adjusted)
     {
-        const slayer3d_game_data_brush *brush = &world->brushes[i];
-        if (brush == NULL || !brush->has_bounds || !editor_preview_brush_contents_are_structural(brush->contents))
-            continue;
-        if (!editor_bounds_overlap_positive_volume(bounds, brush->bounds))
-            continue;
-        if (!editor_placement_trim_wall_overlap(&bounds, brush->bounds, run_axis, thin_axis, max_trim))
-            return preview->bounds;
+        adjusted = false;
+        for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+        {
+            const editor_brush_source_box_runtime *existing = &world_runtime->editor_source_boxes[i];
+            if (!editor_source_contents_are_structural(existing->contents) ||
+                !editor_source_contents_are_structural(candidate->contents) ||
+                !editor_source_boxes_overlap_positive(candidate, existing))
+            {
+                continue;
+            }
+
+            const int before_min = candidate->min[run_axis];
+            const int before_max = candidate->max[run_axis];
+            if (!editor_placement_adjust_wall_source_overlap(candidate, existing, run_axis, thin_axis, max_trim_units))
+            {
+                set_errorf(error_buffer, error_buffer_size,
+                           "source wall candidate overlaps existing brush '%s' beyond an endpoint contact; use a "
+                           "free snapped cell or split the wall span",
+                           existing->name != NULL ? existing->name : "<unnamed>");
+                return false;
+            }
+            adjusted = adjusted || before_min != candidate->min[run_axis] || before_max != candidate->max[run_axis];
+        }
     }
-    return bounds;
+    return true;
 }
 
 static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
@@ -390,8 +370,8 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
 }
 
 static bool editor_placement_preview_validate_source_box(const slayer3d_game_data_runtime *runtime,
-                                                         const editor_placement_preview_state *preview,
-                                                         char *error_buffer, int error_buffer_size)
+                                                         editor_placement_preview_state *preview, char *error_buffer,
+                                                         int error_buffer_size)
 {
     if (runtime == NULL || preview == NULL || SDL_strcmp(preview->kind, "box") != 0 || !preview->has_bounds ||
         preview->world_name == NULL || preview->world_name[0] == '\0')
@@ -426,8 +406,16 @@ static bool editor_placement_preview_validate_source_box(const slayer3d_game_dat
         return false;
     }
 
+    if (!editor_placement_fit_wall_source_candidate(world_runtime, &source_box, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box_runtime(&source_box);
+        return false;
+    }
+
     const bool ok = editor_brush_world_validate_source_box_candidate(world_runtime, &source_box, -1, error_buffer,
                                                                      error_buffer_size);
+    if (ok)
+        preview->bounds = editor_brush_source_box_bounds_meters(world_runtime, &source_box);
     free_editor_brush_source_box_runtime(&source_box);
     return ok;
 }
@@ -481,7 +469,6 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
     {
         preview->bounds =
             editor_placement_oriented_box_bounds(runtime, placement, preview_json, anchor, preview->axis, snap);
-        preview->bounds = editor_placement_trim_wall_endpoint_overlaps(runtime, preview_json, preview);
     }
     char validation_error[256] = {0};
     if (!editor_placement_preview_validate_source_box(runtime, preview, validation_error, sizeof(validation_error)))

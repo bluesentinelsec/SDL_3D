@@ -1153,6 +1153,8 @@ bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *w
 bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_runtime,
                                               const slayer3d_game_data_create_box_brush_desc *desc,
                                               const char *brush_name, editor_brush_source_box_runtime *out_box);
+slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_runtime *world_runtime,
+                                                            const editor_brush_source_box_runtime *box);
 bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
                                                       const editor_brush_source_box_runtime *box, int exclude_index,
                                                       char *error_buffer, int error_buffer_size);

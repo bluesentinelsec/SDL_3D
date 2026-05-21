@@ -162,6 +162,10 @@ The following should be true during a good test drive:
   visible gaps while adjacent hallways can pass close to one another. Wall
   bottoms sit directly on the connected floor elevation; authored blockout
   seams should be watertight rather than relying on visual offsets.
+- Floor, wall, ceiling, and sky placements commit as canonical source-box
+  operations. In source-backed maps, wall spans can be trimmed to the available
+  snapped interval at endpoint contacts; true invalid intersections report a
+  source-model diagnostic instead of a vague runtime overlap failure.
 - In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
   cardinal axis from the camera direction. Orthographic placement keeps the
   explicit `R` wall-axis toggle for drafting control.
