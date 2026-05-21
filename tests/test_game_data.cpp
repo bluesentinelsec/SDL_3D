@@ -17883,6 +17883,78 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
     EXPECT_EQ(diagnostics.positive_overlap_count, 0);
     EXPECT_EQ(diagnostics.near_gap_count, 0);
     EXPECT_EQ(diagnostics.face_contact_count, 1);
+    EXPECT_EQ(diagnostics.edge_contact_count, 0);
+    EXPECT_EQ(diagnostics.vertex_contact_count, 0);
+    EXPECT_EQ(diagnostics.partial_face_contact_count, 0);
+    EXPECT_STREQ(diagnostics.first_issue, "");
+
+    const char edge_contact_boxes[] = R"json(
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, 0, 0],
+          "max": [8000, 200, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.002",
+          "name": "brush.source.box.002",
+          "kind": "box",
+          "prefab": "wall",
+          "material": "mat.editor.floor",
+          "min": [8000, 200, 0],
+          "max": [16000, 8200, 8000],
+          "contents": ["solid"]
+        })json";
+    ASSERT_TRUE(load_fragment(edge_contact_boxes)) << error;
+    SDL_zero(diagnostics);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.structurally_valid) << diagnostics.first_issue;
+    EXPECT_EQ(diagnostics.positive_overlap_count, 0);
+    EXPECT_EQ(diagnostics.near_gap_count, 0);
+    EXPECT_EQ(diagnostics.face_contact_count, 0);
+    EXPECT_EQ(diagnostics.edge_contact_count, 1);
+    EXPECT_EQ(diagnostics.vertex_contact_count, 0);
+    EXPECT_EQ(diagnostics.partial_face_contact_count, 0);
+    EXPECT_STREQ(diagnostics.first_issue, "");
+
+    const char vertex_contact_boxes[] = R"json(
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, 0, 0],
+          "max": [8000, 200, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.002",
+          "name": "brush.source.box.002",
+          "kind": "box",
+          "prefab": "wall",
+          "material": "mat.editor.floor",
+          "min": [8000, 200, 8000],
+          "max": [16000, 8200, 16000],
+          "contents": ["solid"]
+        })json";
+    ASSERT_TRUE(load_fragment(vertex_contact_boxes)) << error;
+    SDL_zero(diagnostics);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.structurally_valid) << diagnostics.first_issue;
+    EXPECT_EQ(diagnostics.positive_overlap_count, 0);
+    EXPECT_EQ(diagnostics.near_gap_count, 0);
+    EXPECT_EQ(diagnostics.face_contact_count, 0);
+    EXPECT_EQ(diagnostics.edge_contact_count, 0);
+    EXPECT_EQ(diagnostics.vertex_contact_count, 1);
     EXPECT_EQ(diagnostics.partial_face_contact_count, 0);
     EXPECT_STREQ(diagnostics.first_issue, "");
 
@@ -17915,6 +17987,8 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
     EXPECT_FALSE(diagnostics.structurally_valid);
     EXPECT_EQ(diagnostics.positive_overlap_count, 0);
     EXPECT_EQ(diagnostics.near_gap_count, 1);
+    EXPECT_EQ(diagnostics.edge_contact_count, 0);
+    EXPECT_EQ(diagnostics.vertex_contact_count, 0);
     EXPECT_NE(std::string(diagnostics.first_issue).find("near gap"), std::string::npos) << diagnostics.first_issue;
 
     const char overlap_boxes[] = R"json(
@@ -17946,6 +18020,8 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
     EXPECT_FALSE(diagnostics.structurally_valid);
     EXPECT_EQ(diagnostics.positive_overlap_count, 1);
     EXPECT_EQ(diagnostics.near_gap_count, 0);
+    EXPECT_EQ(diagnostics.edge_contact_count, 0);
+    EXPECT_EQ(diagnostics.vertex_contact_count, 0);
     EXPECT_NE(std::string(diagnostics.first_issue).find("overlap"), std::string::npos) << diagnostics.first_issue;
 
     slayer3d_game_data_destroy(runtime);

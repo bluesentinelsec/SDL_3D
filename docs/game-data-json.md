@@ -1199,6 +1199,8 @@ missing or malformed brush should be repaired.
     "overlap_count_key": "editor.source.overlaps",
     "near_gap_count_key": "editor.source.near_gaps",
     "face_contact_count_key": "editor.source.face_contacts",
+    "edge_contact_count_key": "editor.source.edge_contacts",
+    "vertex_contact_count_key": "editor.source.vertex_contacts",
     "partial_face_contact_count_key": "editor.source.partial_contacts"
   }
 }
@@ -1258,6 +1260,9 @@ scene-state selection strings, and the shared commit signal branches to
 prefab-specific `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
+`editor.brush_world.validate_source` reports exact face, edge, and vertex
+contacts separately, so editor tools can distinguish legal snapped contact from
+suspicious near gaps or invalid positive-volume overlap.
 
 `contents` is optional and accepts the same brush-content string or string array
 as authored brush JSON. If omitted, created boxes default to `solid`. Sky

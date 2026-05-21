@@ -396,6 +396,34 @@ static bool source_box_contact_fully_covers_face(const editor_brush_source_box_r
     return true;
 }
 
+static int source_box_contact_axis_count(const editor_brush_source_box_runtime *a,
+                                         const editor_brush_source_box_runtime *b)
+{
+    if (a == NULL || b == NULL)
+        return 0;
+    int contact_axis_count = 0;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (a->max[axis] == b->min[axis] || b->max[axis] == a->min[axis])
+            ++contact_axis_count;
+    }
+    return contact_axis_count;
+}
+
+static int source_box_overlap_axis_count(const editor_brush_source_box_runtime *a,
+                                         const editor_brush_source_box_runtime *b)
+{
+    if (a == NULL || b == NULL)
+        return 0;
+    int overlap_axis_count = 0;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (source_intervals_overlap_positive(a->min[axis], a->max[axis], b->min[axis], b->max[axis]))
+            ++overlap_axis_count;
+    }
+    return overlap_axis_count;
+}
+
 static void set_first_source_diagnostic_issue(slayer3d_game_data_editor_brush_source_diagnostics *diagnostics,
                                               const char *format, const editor_brush_source_box_runtime *a,
                                               const editor_brush_source_box_runtime *b, int value)
@@ -564,11 +592,24 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
         for (int j = i + 1; j < world_runtime->editor_source_box_count; ++j)
         {
             const editor_brush_source_box_runtime *b = &world_runtime->editor_source_boxes[j];
+            const int contact_axis_count = source_box_contact_axis_count(a, b);
+            const int overlap_axis_count = source_box_overlap_axis_count(a, b);
             if (source_box_positive_volume_overlap(a, b))
             {
                 out_diagnostics->positive_overlap_count++;
                 set_first_source_diagnostic_issue(out_diagnostics,
                                                   "source boxes '%s' and '%s' overlap with positive volume", a, b, 0);
+                continue;
+            }
+
+            if (contact_axis_count == 2 && overlap_axis_count == 1)
+            {
+                out_diagnostics->edge_contact_count++;
+                continue;
+            }
+            if (contact_axis_count == 3)
+            {
+                out_diagnostics->vertex_contact_count++;
                 continue;
             }
 

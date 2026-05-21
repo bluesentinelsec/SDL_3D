@@ -1641,6 +1641,8 @@
               "overlap_count_key": "editor.source.overlaps",
               "near_gap_count_key": "editor.source.near_gaps",
               "face_contact_count_key": "editor.source.face_contacts",
+              "edge_contact_count_key": "editor.source.edge_contacts",
+              "vertex_contact_count_key": "editor.source.vertex_contacts",
               "partial_face_contact_count_key": "editor.source.partial_contacts"
             }
           },

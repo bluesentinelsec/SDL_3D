@@ -462,6 +462,8 @@ bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_r
     editor_set_int_output(scene_state, outputs, "overlap_count_key", ok ? diagnostics.positive_overlap_count : 0);
     editor_set_int_output(scene_state, outputs, "near_gap_count_key", ok ? diagnostics.near_gap_count : 0);
     editor_set_int_output(scene_state, outputs, "face_contact_count_key", ok ? diagnostics.face_contact_count : 0);
+    editor_set_int_output(scene_state, outputs, "edge_contact_count_key", ok ? diagnostics.edge_contact_count : 0);
+    editor_set_int_output(scene_state, outputs, "vertex_contact_count_key", ok ? diagnostics.vertex_contact_count : 0);
     editor_set_int_output(scene_state, outputs, "partial_face_contact_count_key",
                           ok ? diagnostics.partial_face_contact_count : 0);
     (void)publish_editor_brush_world_status(runtime, outputs, world_name, NULL, false);

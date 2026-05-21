@@ -2262,6 +2262,10 @@ extern "C"
         int near_gap_count;
         /** @brief Exact face contacts between source boxes. */
         int face_contact_count;
+        /** @brief Exact edge contacts between source boxes. */
+        int edge_contact_count;
+        /** @brief Exact vertex contacts between source boxes. */
+        int vertex_contact_count;
         /** @brief Exact face contacts where only part of a face is covered by the neighbor. */
         int partial_face_contact_count;
         /** @brief First blocking issue, or an empty string when the source model is structurally valid. */

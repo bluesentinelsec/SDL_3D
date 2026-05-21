@@ -8064,6 +8064,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
                                                   "overlap_count_key",
                                                   "near_gap_count_key",
                                                   "face_contact_count_key",
+                                                  "edge_contact_count_key",
+                                                  "vertex_contact_count_key",
                                                   "partial_face_contact_count_key",
                                                   "world_key",
                                                   "source_path_key",
