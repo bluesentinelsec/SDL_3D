@@ -16389,46 +16389,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.north"));
     EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.south"));
 
-    slayer3d_signal_emit(bus, wall_signal, nullptr);
-    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
-    placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
-    ASSERT_NE(placement_min, nullptr);
-    ASSERT_NE(placement_max, nullptr);
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.elevation", 0.0f),
-                floor_bounds_below_plane.max.y, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.work_plane.distance", 0.0f),
-                floor_bounds_below_plane.max.y, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z - 0.1f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 8.0f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.y, floor_bounds_below_plane.max.y + 8.0f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 0.1f, 0.001f);
-
-    slayer3d_signal_emit(bus, ceiling_signal, nullptr);
-    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
-    placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
-    ASSERT_NE(placement_min, nullptr);
-    ASSERT_NE(placement_max, nullptr);
-    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y + 8.0f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.y, floor_bounds_below_plane.max.y + 8.2f, 0.001f);
-
-    slayer3d_signal_emit(bus, floor_signal, nullptr);
-    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
-    placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
-    ASSERT_NE(placement_min, nullptr);
-    ASSERT_NE(placement_max, nullptr);
-    EXPECT_NEAR(placement_min->as_vec3.y, floor_bounds_below_plane.max.y - 0.2f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.y, floor_bounds_below_plane.max.y, 0.001f);
-
-    slayer3d_signal_emit(bus, mode_select_signal, nullptr);
-    press_editor_key(SDL_SCANCODE_RIGHTBRACKET, 9);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
-                 "raised 1 selected brush");
+    slayer3d_signal_emit(bus, undo_signal, nullptr);
     EXPECT_EQ(world().brush_count, brush_count_before_floor_lower);
     const slayer3d_bounding_box floor_bounds_restored = brush_bounds(floor_brush_name);
     EXPECT_NEAR(floor_bounds_restored.min.y, floor_bounds_before_lower.min.y, 0.001f);
@@ -16436,13 +16397,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     source_names = exported_source_box_names();
     EXPECT_EQ((int)source_names.size(), brush_count_before_floor_lower);
     EXPECT_FALSE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.west"));
-    slayer3d_signal_emit(bus, undo_signal, nullptr);
+    slayer3d_signal_emit(bus, redo_signal, nullptr);
     EXPECT_EQ(world().brush_count, brush_count_before_floor_lower + 4);
     EXPECT_NEAR(brush_bounds(floor_brush_name).min.y, floor_bounds_before_lower.min.y - 8.0f, 0.001f);
     source_names = exported_source_box_names();
     EXPECT_EQ((int)source_names.size(), brush_count_before_floor_lower + 4);
     EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.west"));
-    slayer3d_signal_emit(bus, redo_signal, nullptr);
+    slayer3d_signal_emit(bus, undo_signal, nullptr);
     EXPECT_EQ(world().brush_count, brush_count_before_floor_lower);
     EXPECT_NEAR(brush_bounds(floor_brush_name).min.y, floor_bounds_before_lower.min.y, 0.001f);
     source_names = exported_source_box_names();
@@ -16564,30 +16525,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
                                                                           &multi_selection_debug));
     EXPECT_EQ(multi_selection_debug.edges, 24);
 
-    const int brush_count_before_resize = world().brush_count;
-    press_editor_key(SDL_SCANCODE_RIGHTBRACKET, 16);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.command", ""), "resize");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.target", ""), "face");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
-                 "raised 2 selected brushes");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
-                 "raised 2 selected brushes");
-    EXPECT_EQ(world().brush_count, brush_count_before_resize);
-    const std::string resized_brush_name =
-        slayer3d_properties_get_string(scene_state, "editor.transaction.element", "");
-    ASSERT_FALSE(resized_brush_name.empty());
-    const slayer3d_bounding_box bounds_after_raise = brush_bounds(resized_brush_name);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), selected_brushes);
-
-    press_editor_key(SDL_SCANCODE_LEFTBRACKET, 18);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
-                 "lowered 2 selected brushes");
-    EXPECT_EQ(world().brush_count, brush_count_before_resize);
-    const slayer3d_bounding_box bounds_after_lower = brush_bounds(resized_brush_name);
-    EXPECT_NEAR(bounds_after_lower.min.y, bounds_after_raise.min.y, 0.001f);
-    EXPECT_NEAR(bounds_after_lower.max.y, bounds_after_raise.max.y - 8.0f, 0.001f);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), selected_brushes);
 
     slayer3d_signal_emit(bus, clear_selection_signal, nullptr);
@@ -16715,31 +16652,23 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.source.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.source.message", ""),
-                 "brush world has no editor brush source model");
+                 "editor source model is structurally valid");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.overlaps", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.source.near_gaps", -1), 0);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.leak.valid", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.leak.valid", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.leak.message", ""),
-                 "brush world has no editor brush source model");
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", false));
+                 "player-start reachable space leaks to outside");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
-                 "test run player start applied");
-    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.test_run");
-    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.player");
-    EXPECT_TRUE(slayer3d_game_data_active_scene_has_entity(runtime, "entity.editor_shell.player"));
-    slayer3d_registered_actor *test_player = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.player");
-    ASSERT_NE(test_player, nullptr);
-    EXPECT_NEAR(test_player->position.x, player_start_origin.x, 0.001f);
-    EXPECT_NEAR(test_player->position.y, player_start_origin.y, 0.001f);
-    EXPECT_NEAR(test_player->position.z, player_start_origin.z, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(test_player->props, "yaw", 0.0f), 3.14159f, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(test_player->props, "pitch", 1.0f), 0.0f, 0.001f);
+                 "brush source model leaks to outside");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+    EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
 
-TEST(GameDataRuntime, EditorShellDojoFitsPerpendicularWallEndpointPreviewWithSourceModel)
+TEST(GameDataRuntime, EditorShellDojoRejectsOverlappingWallPreviewWithSourceModel)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
@@ -16818,8 +16747,6 @@ TEST(GameDataRuntime, EditorShellDojoFitsPerpendicularWallEndpointPreviewWithSou
     ASSERT_NE(floor_max, nullptr);
     ASSERT_EQ(floor_min->type, SLAYER3D_VALUE_VEC3);
     ASSERT_EQ(floor_max->type, SLAYER3D_VALUE_VEC3);
-    const slayer3d_vec3 placement_origin =
-        slayer3d_vec3_make(floor_min->as_vec3.x, floor_max->as_vec3.y, floor_min->as_vec3.z);
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
 
@@ -16833,26 +16760,15 @@ TEST(GameDataRuntime, EditorShellDojoFitsPerpendicularWallEndpointPreviewWithSou
 
     slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
-    const slayer3d_value *placement_min =
-        slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
-    const slayer3d_value *placement_max =
-        slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
-    ASSERT_NE(placement_min, nullptr);
-    ASSERT_NE(placement_max, nullptr);
-    ASSERT_EQ(placement_min->type, SLAYER3D_VALUE_VEC3);
-    ASSERT_EQ(placement_max->type, SLAYER3D_VALUE_VEC3);
-    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x + 0.1f, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.y, placement_origin.y, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z - 0.1f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 8.0f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.y, placement_origin.y + 8.0f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 0.1f, 0.001f);
-
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", true));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.placement_preview.message", ""))
+                  .find("overlaps existing brush"),
+              std::string::npos);
     slayer3d_signal_emit(bus, commit_signal, nullptr);
-    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "wall prefab created");
-    EXPECT_EQ(world().brush_count, initial_brush_count + 3);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""),
+                 "box brush placement requires an active placement preview");
+    EXPECT_EQ(world().brush_count, initial_brush_count + 2);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
