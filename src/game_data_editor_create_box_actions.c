@@ -77,6 +77,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
     char brush_name[256];
     brush_name[0] = '\0';
     bool ok = false;
+    bool source_command_applied = false;
     if (position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0)
     {
         if (error[0] == '\0' && runtime != NULL && runtime->editor_placement_preview.has_source_candidate)
@@ -94,6 +95,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
                                                               error, (int)sizeof(error));
             if (ok)
             {
+                source_command_applied = true;
                 SDL_strlcpy(brush_name, result.brush_name, sizeof(brush_name));
                 desc.world_name = preview->world_name;
                 desc.material_name = preview->material_name;
@@ -125,5 +127,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
     editor_set_vec3_output(scene_state, outputs, "bounds_max_key",
                            ok ? desc.max : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     (void)publish_editor_brush_world_status(runtime, outputs, desc.world_name, NULL, false);
+    if (source_command_applied)
+        (void)slayer3d_game_data_clear_active_editor_selection(runtime);
     return true;
 }

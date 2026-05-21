@@ -133,7 +133,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    source-box face associated with that leak boundary. The candidate brush face
    should also become the active selection, making the suspected source face
    obvious in the selection outline and inspector.
-10. In the playable scene, use `WASD` and mouse look to verify the player starts
+11. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
 ## Correctness Checks
@@ -163,9 +163,9 @@ The following should be true during a good test drive:
   bottoms sit directly on the connected floor elevation; authored blockout
   seams should be watertight rather than relying on visual offsets.
 - Floor, wall, ceiling, and sky placements commit as canonical source-box
-  operations. In source-backed maps, wall spans can be trimmed to the available
-  snapped interval at endpoint contacts; true invalid intersections report a
-  source-model diagnostic instead of a vague runtime overlap failure.
+  operations. Preview and commit use the same source candidate; valid previews
+  should commit with matching bounds, and true invalid intersections should
+  report a source-model diagnostic instead of a vague runtime overlap failure.
 - In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
   cardinal axis from the camera direction. Orthographic placement keeps the
   explicit `R` wall-axis toggle for drafting control.
