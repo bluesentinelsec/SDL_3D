@@ -18190,6 +18190,117 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditableLevelFragmentValidatesLoweredPitEnclosure)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto load_pit_fragment = [&](bool include_west_pit_wall) {
+        std::string fragment = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        { "stable_id": "room.floor.west", "name": "room.floor.west", "kind": "box", "prefab": "floor", "material": "mat.editor.floor", "min": [0, -200, 0], "max": [4000, 0, 16000], "contents": ["solid"] },
+        { "stable_id": "room.floor.east", "name": "room.floor.east", "kind": "box", "prefab": "floor", "material": "mat.editor.floor", "min": [12000, -200, 0], "max": [16000, 0, 16000], "contents": ["solid"] },
+        { "stable_id": "room.floor.north", "name": "room.floor.north", "kind": "box", "prefab": "floor", "material": "mat.editor.floor", "min": [4000, -200, 0], "max": [12000, 0, 4000], "contents": ["solid"] },
+        { "stable_id": "room.floor.south", "name": "room.floor.south", "kind": "box", "prefab": "floor", "material": "mat.editor.floor", "min": [4000, -200, 12000], "max": [12000, 0, 16000], "contents": ["solid"] },
+        { "stable_id": "pit.floor", "name": "pit.floor", "kind": "box", "prefab": "floor", "material": "mat.editor.floor", "min": [4200, -8200, 4200], "max": [11800, -8000, 11800], "contents": ["solid"] },
+)json";
+        if (include_west_pit_wall)
+        {
+            fragment +=
+                R"json(        { "stable_id": "pit.wall.west", "name": "pit.wall.west", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [4000, -8000, 4000], "max": [4200, 0, 12000], "contents": ["solid"] },
+)json";
+        }
+        fragment +=
+            R"json(        { "stable_id": "pit.wall.east", "name": "pit.wall.east", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [11800, -8000, 4000], "max": [12000, 0, 12000], "contents": ["solid"] },
+        { "stable_id": "pit.wall.north", "name": "pit.wall.north", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [4200, -8000, 4000], "max": [11800, 0, 4200], "contents": ["solid"] },
+        { "stable_id": "pit.wall.south", "name": "pit.wall.south", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [4200, -8000, 11800], "max": [11800, 0, 12000], "contents": ["solid"] },
+        { "stable_id": "room.wall.west", "name": "room.wall.west", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [-200, 0, 0], "max": [0, 8000, 16000], "contents": ["solid"] },
+        { "stable_id": "room.wall.east", "name": "room.wall.east", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [16000, 0, 0], "max": [16200, 8000, 16000], "contents": ["solid"] },
+        { "stable_id": "room.wall.north", "name": "room.wall.north", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [0, 0, -200], "max": [16000, 8000, 0], "contents": ["solid"] },
+        { "stable_id": "room.wall.south", "name": "room.wall.south", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [0, 0, 16000], "max": [16000, 8000, 16200], "contents": ["solid"] },
+        { "stable_id": "room.sky", "name": "room.sky", "kind": "box", "prefab": "sky", "material": "mat.editor.floor", "min": [0, 8000, 0], "max": [16000, 8200, 16000], "contents": ["sky", "player_clip", "projectile_clip"] }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+        SDL_zeroa(error);
+        return slayer3d_game_data_load_editable_level_fragment_json(
+            runtime, "brush.editor_shell.target", fragment.c_str(), fragment.size(), "/tmp/source-pit-enclosure.json",
+            error, sizeof(error));
+    };
+
+    slayer3d_game_data_place_player_start_desc start{};
+    start.name = "player_start.editor_shell";
+    start.scene = "scene.editor_shell.test_run";
+    start.target = "entity.editor_shell.player";
+    start.position = slayer3d_vec3_make(8.0f, -6.4f, 8.0f);
+    start.has_position = true;
+    start.yaw = 0.0f;
+    start.has_yaw = true;
+    start.pitch = 0.0f;
+    start.has_pitch = true;
+    start.apply_to_target = true;
+
+    ASSERT_TRUE(load_pit_fragment(true)) << error;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+
+    slayer3d_game_data_editor_brush_source_diagnostics source{};
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1, &source,
+                                                                      error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(source.structurally_valid) << source.first_issue;
+    EXPECT_EQ(source.positive_overlap_count, 0);
+    EXPECT_EQ(source.near_gap_count, 0);
+    EXPECT_GT(source.face_contact_count, 0);
+    EXPECT_GT(source.edge_contact_count, 0);
+    EXPECT_EQ(source.vertex_contact_count, 0);
+
+    slayer3d_game_data_editor_brush_enclosure_diagnostics enclosure{};
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_enclosure(
+        runtime, "brush.editor_shell.target", "player_start.editor_shell", 0, &enclosure, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(enclosure.enclosed) << enclosure.first_issue;
+    EXPECT_EQ(enclosure.open_boundary_cell_count, 0);
+    EXPECT_GT(enclosure.visited_cell_count, 0);
+
+    ASSERT_TRUE(load_pit_fragment(false)) << error;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+    SDL_zero(enclosure);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_enclosure(
+        runtime, "brush.editor_shell.target", "player_start.editor_shell", 0, &enclosure, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(enclosure.enclosed);
+    EXPECT_GT(enclosure.open_boundary_cell_count, 0);
+    EXPECT_NE(std::string(enclosure.first_issue).find("leaks to outside"), std::string::npos) << enclosure.first_issue;
+    EXPECT_STREQ(enclosure.first_leak_axis, "x");
+    EXPECT_STREQ(enclosure.first_leak_side, "negative");
+    EXPECT_STREQ(enclosure.candidate_source_face, "nx");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoBlocksPlayableTestRunOnInvalidSourceModel)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

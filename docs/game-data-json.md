@@ -1158,6 +1158,11 @@ first reachable outside-boundary cell directly in the 3D view. The candidate
 outputs identify the nearest source-box face on the same leak boundary axis,
 giving editor UI a second point to highlight while the user decides which
 missing or malformed brush should be repaired.
+Lowered pits and stacked room blockouts should be represented as non-overlapping
+source brushes: surrounding floor slabs, explicit vertical side-wall brushes,
+and a floor/sky/ceiling seal. The enclosure diagnostic treats that shape as
+watertight when all sides are present and reports a leak when one side wall is
+missing.
 
 ```json
 {
