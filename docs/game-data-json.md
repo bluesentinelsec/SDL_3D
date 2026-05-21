@@ -1105,7 +1105,9 @@ units so editor decisions round-trip without accumulating floating-point drift;
 `meters_per_unit` converts those source units to runtime meters. The default is
 millimeter precision (`meters_per_unit: 0.001`), but source-backed mutations and
 exports preserve the authored scale. Runtime `brush_worlds` remain meter-based
-derived output for renderer, collision, and compatibility paths. Each source
+compiled output for renderer and collision. Editable level fragments loaded by
+the editor must include matching `editor_brush_sources`; older runtime-only
+brush fragments are not migrated or treated as editable graybox source. Each source
 world references a brush world and stores stable source brush IDs, prefab
 metadata, material references, and integer `min`/`max` coordinates for box
 sources. `material` is the default material for all six generated faces.
@@ -1151,9 +1153,10 @@ contact is counted as structural adjacency. Off-snap source coordinates are
 blocking source-model defects. Overlaps and near-gaps are warning diagnostics
 while the editor foundation is still evolving.
 
-The action form may set `allow_missing_source: true` when a workflow still needs
-to support legacy/runtime-only brush worlds. In that mode, worlds without an
-`editor_brush_sources` model are treated as valid for gating purposes.
+Editable source validation requires a matching `editor_brush_sources` model.
+Missing source is a hard error for editor workflows so save/open, test-run,
+selection, diagnostics, and compiled output all use the same canonical source
+identity.
 
 Use `editor.brush_world.validate_enclosure` or
 `slayer3d_game_data_validate_editor_brush_source_enclosure()` to run the first
@@ -1206,7 +1209,6 @@ missing.
 {
   "type": "editor.brush_world.validate_source",
   "world": "brush.level.blockout",
-  "allow_missing_source": false,
   "near_gap_units": 1,
   "outputs": {
     "valid_key": "editor.source.valid",
@@ -1229,7 +1231,6 @@ missing.
   "type": "editor.brush_world.validate_enclosure",
   "world": "brush.level.blockout",
   "player_start": "player_start.level_01",
-  "allow_missing_source": false,
   "max_cells": 262144,
   "outputs": {
     "valid_key": "editor.leak.valid",

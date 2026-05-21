@@ -2704,13 +2704,14 @@ extern "C"
      * @brief Load an editable level fragment file into an existing editor runtime.
      *
      * The input must be a `slayer3d.fragment.v0` document containing a
-     * `brush_worlds` entry whose name matches @p world_name. The matching world
-     * replaces the runtime world in place; `editor_brush_sources`, when present,
-     * is the canonical fixed-coordinate editor source model for the same world
-     * and is compiled into runtime brushes during import. `editor_player_starts`
-     * from the fragment replaces the runtime player-start collection. On success
-     * both runtime collections are marked clean and @p path becomes their editor
-     * source path.
+     * `brush_worlds` entry whose name matches @p world_name and a matching
+     * `editor_brush_sources` entry. The matching world replaces the runtime
+     * world in place; `editor_brush_sources` is the canonical fixed-coordinate
+     * editor source model for the same world and is compiled into runtime
+     * brushes during import. Runtime-only brush fragments are rejected for
+     * editable graybox workflows. `editor_player_starts` from the fragment
+     * replaces the runtime player-start collection. On success both runtime
+     * collections are marked clean and @p path becomes their editor source path.
      */
     bool slayer3d_game_data_load_editable_level_fragment_file(slayer3d_game_data_runtime *runtime,
                                                               const char *world_name, const char *path,

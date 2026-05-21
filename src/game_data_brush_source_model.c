@@ -1697,50 +1697,6 @@ static bool source_box_from_runtime_brush(const brush_world_runtime *world_runti
     return true;
 }
 
-bool editor_brush_world_sync_source_from_runtime(brush_world_runtime *world_runtime, char *error_buffer,
-                                                 int error_buffer_size)
-{
-    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
-        return true;
-
-    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
-    editor_brush_source_box_runtime *boxes =
-        world->brush_count > 0
-            ? (editor_brush_source_box_runtime *)SDL_calloc((size_t)world->brush_count, sizeof(*boxes))
-            : NULL;
-    if (world->brush_count > 0 && boxes == NULL)
-    {
-        set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source sync");
-        return false;
-    }
-
-    for (int i = 0; i < world->brush_count; ++i)
-    {
-        if (!source_box_from_runtime_brush(world_runtime, &world->brushes[i], &boxes[i]))
-        {
-            for (int j = 0; j <= i; ++j)
-                free_editor_brush_source_box(&boxes[j]);
-            SDL_free(boxes);
-            set_errorf(error_buffer, error_buffer_size, "runtime brush '%s' cannot be represented as a source box",
-                       world->brushes[i].name != NULL ? world->brushes[i].name : "<unnamed>");
-            return false;
-        }
-    }
-
-    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
-        free_editor_brush_source_box(&world_runtime->editor_source_boxes[i]);
-    SDL_free(world_runtime->editor_source_boxes);
-    world_runtime->editor_source_boxes = boxes;
-    world_runtime->editor_source_box_count = world->brush_count;
-    world_runtime->editor_source_box_capacity = world->brush_count;
-    if (world_runtime->editor_source_meters_per_unit <= 0.0f)
-        world_runtime->editor_source_meters_per_unit = 0.001f;
-    if (world_runtime->editor_source_snap_units <= 0)
-        world_runtime->editor_source_snap_units = 1;
-    world_runtime->editor_has_source_model = true;
-    return true;
-}
-
 bool editor_brush_world_insert_source_box_from_brush(brush_world_runtime *world_runtime, int box_index,
                                                      const slayer3d_game_data_brush *brush, char *error_buffer,
                                                      int error_buffer_size)
