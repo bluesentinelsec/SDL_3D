@@ -17821,6 +17821,152 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxPrefabOperationsAllowGridCor
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoCommitsPrefabPreviewSourceCandidate)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.30, 0.31, 0.33, 1.0] },
+        { "name": "mat.editor.wall", "albedo": [0.50, 0.52, 0.56, 1.0] },
+        { "name": "mat.editor.ceiling", "albedo": [0.68, 0.69, 0.71, 1.0] },
+        { "name": "mat.editor.sky", "albedo": [0.20, 0.42, 0.78, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": []
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/source-preview-commit.json",
+        error, sizeof(error)))
+        << error;
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
+    ASSERT_GE(commit_signal, 0);
+
+    struct PrefabCase
+    {
+        const char *mode;
+        slayer3d_vec3 point;
+    };
+    const PrefabCase cases[] = {
+        {"floor", slayer3d_vec3_make(0.0f, 0.0f, 0.0f)},
+        {"wall", slayer3d_vec3_make(16.0f, 0.0f, 0.0f)},
+        {"ceiling", slayer3d_vec3_make(32.0f, 0.0f, 0.0f)},
+        {"sky", slayer3d_vec3_make(48.0f, 0.0f, 0.0f)},
+    };
+
+    auto export_source_prefab_for_name = [&](const char *brush_name) {
+        std::string prefab;
+        char *json = nullptr;
+        size_t json_size = 0u;
+        EXPECT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(runtime, "brush.editor_shell.target", &json,
+                                                                           &json_size, error, sizeof(error)))
+            << error;
+        if (json == nullptr)
+            return prefab;
+        yyjson_doc *doc = yyjson_read(json, json_size, 0);
+        EXPECT_NE(doc, nullptr);
+        if (doc != nullptr)
+        {
+            yyjson_val *root = yyjson_doc_get_root(doc);
+            yyjson_val *sources = yyjson_obj_get(root, "editor_brush_sources");
+            yyjson_val *source = yyjson_arr_get(sources, 0);
+            yyjson_val *boxes = source != nullptr ? yyjson_obj_get(source, "boxes") : nullptr;
+            const size_t count = yyjson_is_arr(boxes) ? yyjson_arr_size(boxes) : 0u;
+            for (size_t i = 0; i < count; ++i)
+            {
+                yyjson_val *box = yyjson_arr_get(boxes, i);
+                const char *name = yyjson_get_str(yyjson_obj_get(box, "name"));
+                if (name != nullptr && brush_name != nullptr && SDL_strcmp(name, brush_name) == 0)
+                {
+                    const char *box_prefab = yyjson_get_str(yyjson_obj_get(box, "prefab"));
+                    prefab = box_prefab != nullptr ? box_prefab : "";
+                    break;
+                }
+            }
+            yyjson_doc_free(doc);
+        }
+        SDL_free(json);
+        return prefab;
+    };
+
+    for (const PrefabCase &test_case : cases)
+    {
+        slayer3d_properties_set_string(scene_state, "editor.tool.mode", test_case.mode);
+        slayer3d_game_data_editor_selection hover{};
+        hover.hit = true;
+        hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+        hover.point = test_case.point;
+        hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+        hover.world_name = "brush.editor_shell.target";
+        hover.material_name = "";
+        update_editor_placement_preview(runtime, editor, &hover);
+        ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false))
+            << test_case.mode << ": "
+            << slayer3d_properties_get_string(scene_state, "editor.placement_preview.message", "");
+        const slayer3d_value *preview_min =
+            slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+        const slayer3d_value *preview_max =
+            slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
+        ASSERT_NE(preview_min, nullptr);
+        ASSERT_NE(preview_max, nullptr);
+        ASSERT_EQ(preview_min->type, SLAYER3D_VALUE_VEC3);
+        ASSERT_EQ(preview_max->type, SLAYER3D_VALUE_VEC3);
+        const slayer3d_vec3 expected_min = preview_min->as_vec3;
+        const slayer3d_vec3 expected_max = preview_max->as_vec3;
+
+        slayer3d_signal_emit(bus, commit_signal, nullptr);
+        ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false))
+            << test_case.mode << ": " << slayer3d_properties_get_string(scene_state, "editor.create.message", "");
+        const char *brush_name = slayer3d_properties_get_string(scene_state, "editor.create.brush", "");
+        ASSERT_STRNE(brush_name, "");
+        const slayer3d_value *created_min = slayer3d_properties_get_value(scene_state, "editor.create.bounds_min");
+        const slayer3d_value *created_max = slayer3d_properties_get_value(scene_state, "editor.create.bounds_max");
+        ASSERT_NE(created_min, nullptr);
+        ASSERT_NE(created_max, nullptr);
+        ASSERT_EQ(created_min->type, SLAYER3D_VALUE_VEC3);
+        ASSERT_EQ(created_max->type, SLAYER3D_VALUE_VEC3);
+        EXPECT_NEAR(created_min->as_vec3.x, expected_min.x, 0.001f) << test_case.mode;
+        EXPECT_NEAR(created_min->as_vec3.y, expected_min.y, 0.001f) << test_case.mode;
+        EXPECT_NEAR(created_min->as_vec3.z, expected_min.z, 0.001f) << test_case.mode;
+        EXPECT_NEAR(created_max->as_vec3.x, expected_max.x, 0.001f) << test_case.mode;
+        EXPECT_NEAR(created_max->as_vec3.y, expected_max.y, 0.001f) << test_case.mode;
+        EXPECT_NEAR(created_max->as_vec3.z, expected_max.z, 0.001f) << test_case.mode;
+        EXPECT_EQ(export_source_prefab_for_name(brush_name), test_case.mode);
+    }
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxTranslateRejectsOverlapButAllowsContact)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
