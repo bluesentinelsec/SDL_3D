@@ -246,8 +246,8 @@ static slayer3d_vec3 editor_placement_anchor(slayer3d_game_data_runtime *runtime
     return anchor;
 }
 
-static bool editor_placement_preview_validate_source_box(const slayer3d_game_data_runtime *runtime,
-                                                         yyjson_val *placement, yyjson_val *preview_json,
+static bool editor_placement_preview_validate_source_box(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
+                                                         yyjson_val *preview_json,
                                                          editor_placement_preview_state *preview, char *error_buffer,
                                                          int error_buffer_size)
 {
@@ -257,42 +257,28 @@ static bool editor_placement_preview_validate_source_box(const slayer3d_game_dat
         return true;
     }
 
-    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, preview->world_name);
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, preview->world_name);
     if (world_runtime == NULL || !world_runtime->editor_has_source_model)
     {
         set_error(error_buffer, error_buffer_size, "brush prefab placement requires a source-backed brush world");
         return false;
     }
 
-    char generated_name[256];
-    if (!editor_brush_world_generate_brush_name(world_runtime, generated_name, sizeof(generated_name)))
-    {
-        set_error(error_buffer, error_buffer_size, "failed to generate placement preview brush name");
-        return false;
-    }
-
     const editor_brush_source_prefab_desc desc =
-        editor_placement_source_prefab_desc((slayer3d_game_data_runtime *)runtime, placement, preview_json, preview);
-    editor_brush_source_box_runtime source_box;
-    if (!editor_brush_world_build_source_prefab_candidate(world_runtime, &desc, generated_name, &source_box,
-                                                          error_buffer, error_buffer_size))
-    {
-        return false;
-    }
-
-    const bool ok = editor_brush_world_validate_source_box_candidate(world_runtime, &source_box, -1, error_buffer,
-                                                                     error_buffer_size);
+        editor_placement_source_prefab_desc(runtime, placement, preview_json, preview);
+    editor_brush_source_prefab_result result;
+    const bool ok = editor_brush_world_run_source_prefab_command(world_runtime, &desc, NULL, NULL, NULL, false, &result,
+                                                                 error_buffer, error_buffer_size);
     if (ok)
     {
-        preview->bounds = editor_brush_source_box_bounds_meters(world_runtime, &source_box);
+        preview->bounds = result.bounds;
         preview->has_source_candidate = true;
         for (int axis = 0; axis < 3; ++axis)
         {
-            preview->source_min[axis] = source_box.min[axis];
-            preview->source_max[axis] = source_box.max[axis];
+            preview->source_min[axis] = result.source_min[axis];
+            preview->source_max[axis] = result.source_max[axis];
         }
     }
-    free_editor_brush_source_box_runtime(&source_box);
     return ok;
 }
 

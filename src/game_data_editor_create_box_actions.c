@@ -77,16 +77,37 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
     char brush_name[256];
     brush_name[0] = '\0';
     bool ok = false;
-    if (error[0] == '\0' && position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0 &&
-        runtime != NULL && runtime->editor_placement_preview.has_source_candidate)
+    if (position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0)
     {
-        const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
-        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, preview->world_name);
-        ok = editor_brush_world_place_source_prefab_candidate(
-            world_runtime, desc.brush_name, preview->mode, preview->material_name, preview->contents,
-            preview->source_min, preview->source_max, brush_name, sizeof(brush_name), error, (int)sizeof(error));
-        if (ok)
-            editor_brush_world_mark_dirty(world_runtime);
+        if (error[0] == '\0' && runtime != NULL && runtime->editor_placement_preview.has_source_candidate)
+        {
+            const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
+            brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, preview->world_name);
+            editor_brush_source_prefab_desc source_desc;
+            SDL_zero(source_desc);
+            source_desc.prefab = preview->mode;
+            source_desc.material = preview->material_name;
+            source_desc.contents = preview->contents;
+            editor_brush_source_prefab_result result;
+            ok = editor_brush_world_run_source_prefab_command(world_runtime, &source_desc, desc.brush_name,
+                                                              preview->source_min, preview->source_max, true, &result,
+                                                              error, (int)sizeof(error));
+            if (ok)
+            {
+                SDL_strlcpy(brush_name, result.brush_name, sizeof(brush_name));
+                desc.world_name = preview->world_name;
+                desc.material_name = preview->material_name;
+                desc.contents = preview->contents;
+                desc.min = result.bounds.min;
+                desc.max = result.bounds.max;
+                editor_brush_world_mark_dirty(world_runtime);
+            }
+        }
+        else if (error[0] == '\0')
+        {
+            set_error(error, (int)sizeof(error),
+                      "box brush placement requires a valid source-backed placement preview");
+        }
     }
     else
     {

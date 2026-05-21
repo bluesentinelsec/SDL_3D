@@ -1263,20 +1263,21 @@ target actor's position, `yaw`, and `pitch` are applied before camera setup and
 before the first scene-enter signal runs.
 
 Use `editor.brush_world.create_box` to append a new axis-aligned convex box
-brush to a runtime brush world. The action is intended for first-pass editor
-blockout tools: floors, walls, ceilings, sky seals, platforms, and simple room pieces. It
-validates the target world and bounds at load time, resolves the material at
-runtime, rebuilds brush collision/render data atomically, then marks the world
-dirty only after the rebuild succeeds. If `name` is omitted, the runtime
-generates a unique brush name under the target world. Source-backed worlds
-commit a canonical source box first, then compile runtime brushes from the
-source model; runtime-only worlds append the derived brush directly. Created
-structural boxes receive stable editor ids, exact face/edge/vertex contact with
-existing structural brushes is allowed, and positive-volume overlap with an
-existing structural brush is rejected before the world is marked dirty. The editor shell dojo
-demonstrates the current blockout palette pattern: modal palette signals write
-scene-state selection strings, and the shared commit signal branches to
-prefab-specific `editor.brush_world.create_box` or
+brush to a brush world. For placement-preview commits in source-backed editor
+worlds, the action only commits the canonical source candidate produced by the
+live preview command; it does not recompute runtime bounds or use a second
+runtime-overlap path. The source model is the truth: validation runs against the
+source box, runtime brush geometry is compiled output, and the world is marked
+dirty only after source insertion and rebuild succeed. Generic non-preview
+creation can still append a direct box for tests and low-level tooling, but the
+editor floor/wall/ceiling/sky workflow uses source-backed prefab recipes.
+
+Created structural boxes receive stable editor ids, exact face/edge/vertex
+contact with existing structural brushes is allowed, and positive-volume overlap
+with an existing structural brush is rejected before the world is marked dirty.
+The editor shell dojo demonstrates the current blockout palette pattern: modal
+palette signals write scene-state selection strings, and the shared commit
+signal branches to source-backed `editor.brush_world.create_box` or
 `editor.player_start.place` actions. That keeps the first editor workflow
 data-authored while a dedicated editor frontend is still evolving.
 `editor.brush_world.validate_source` reports exact face, edge, and vertex
@@ -1336,16 +1337,15 @@ to either a `box` ghost or a `player_start` marker. Box previews can use
 `axis_key` with `axis` `x` or `z` to rotate wall-like prefabs between
 horizontal grid axes. A box preview must author exactly one bounds
 source: fixed `min`/`max`, or grid-scaled `grid_min`/`grid_max`. For
-source-backed brush worlds, the preview uses the same source-box candidate
-validator as creation, so overlap and invalid-geometry messages match committed
-edits. Wall previews in source-backed worlds are also normalized as source-box
-operations: endpoint contacts against existing structural source brushes may
-trim the wall span to the free snapped interval before validation, while true
-positive-volume intersections are rejected with source-model diagnostics. This
-keeps floor, wall, ceiling, and sky prefabs on the same durable fixed-grid model
-instead of relying on runtime brush-overlap hacks. The preview reuses the
-editor debug overlay's `command_preview` flag and color, so editor hosts do not
-need a second rendering path.
+source-backed brush worlds, the preview and commit both use the same source
+prefab command. Preview runs it in dry-run mode and publishes the exact source
+candidate bounds; commit applies that candidate. If preview succeeds and no
+other edit changes the source model before commit, the commit succeeds with the
+same geometry. Floor, wall, ceiling, and sky are recipes that emit snapped source
+boxes; runtime brush geometry is generated only after the source candidate
+passes validation. The preview reuses the editor debug overlay's
+`command_preview` flag and color, so editor hosts do not need a second rendering
+path.
 
 ```json
 {

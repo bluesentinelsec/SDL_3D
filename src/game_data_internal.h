@@ -213,6 +213,15 @@ typedef struct editor_brush_source_prefab_desc
     float grid_size;
 } editor_brush_source_prefab_desc;
 
+typedef struct editor_brush_source_prefab_result
+{
+    bool valid;
+    char brush_name[256];
+    slayer3d_bounding_box bounds;
+    int source_min[3];
+    int source_max[3];
+} editor_brush_source_prefab_result;
+
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
 #define SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY 512
 
@@ -1173,19 +1182,14 @@ bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_r
                                               const char *brush_name, editor_brush_source_box_runtime *out_box);
 slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_runtime *world_runtime,
                                                             const editor_brush_source_box_runtime *box);
-bool editor_brush_world_build_source_prefab_candidate(const brush_world_runtime *world_runtime,
-                                                      const editor_brush_source_prefab_desc *desc,
-                                                      const char *candidate_name,
-                                                      editor_brush_source_box_runtime *out_box, char *error_buffer,
-                                                      int error_buffer_size);
 bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
                                                       const editor_brush_source_box_runtime *box, int exclude_index,
                                                       char *error_buffer, int error_buffer_size);
-bool editor_brush_world_place_source_prefab_candidate(brush_world_runtime *world_runtime, const char *brush_name,
-                                                      const char *prefab, const char *material, unsigned int contents,
-                                                      const int min_values[3], const int max_values[3],
-                                                      char *out_brush_name, size_t out_brush_name_size,
-                                                      char *error_buffer, int error_buffer_size);
+bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_runtime,
+                                                  const editor_brush_source_prefab_desc *desc, const char *brush_name,
+                                                  const int *source_min, const int *source_max, bool apply,
+                                                  editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                  int error_buffer_size);
 bool editor_brush_world_insert_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
                                                    const editor_brush_source_box_runtime *box, char *error_buffer,
                                                    int error_buffer_size);

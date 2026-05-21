@@ -1406,11 +1406,11 @@ static void source_prefab_set_axis_bounds(int *out_min, int *out_max, int a, int
         *out_max = SDL_max(a, b);
 }
 
-bool editor_brush_world_build_source_prefab_candidate(const brush_world_runtime *world_runtime,
-                                                      const editor_brush_source_prefab_desc *desc,
-                                                      const char *candidate_name,
-                                                      editor_brush_source_box_runtime *out_box, char *error_buffer,
-                                                      int error_buffer_size)
+static bool editor_brush_world_build_source_prefab_candidate(const brush_world_runtime *world_runtime,
+                                                             const editor_brush_source_prefab_desc *desc,
+                                                             const char *candidate_name,
+                                                             editor_brush_source_box_runtime *out_box,
+                                                             char *error_buffer, int error_buffer_size)
 {
     if (world_runtime == NULL || !world_runtime->editor_has_source_model || desc == NULL || out_box == NULL)
     {
@@ -1536,26 +1536,31 @@ slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_ru
     return bounds;
 }
 
-bool editor_brush_world_place_source_prefab_candidate(brush_world_runtime *world_runtime, const char *brush_name,
-                                                      const char *prefab, const char *material, unsigned int contents,
-                                                      const int min_values[3], const int max_values[3],
-                                                      char *out_brush_name, size_t out_brush_name_size,
-                                                      char *error_buffer, int error_buffer_size)
+bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_runtime,
+                                                  const editor_brush_source_prefab_desc *desc, const char *brush_name,
+                                                  const int *source_min, const int *source_max, bool apply,
+                                                  editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                  int error_buffer_size)
 {
-    if (out_brush_name != NULL && out_brush_name_size > 0u)
-        out_brush_name[0] = '\0';
-    if (world_runtime == NULL || !world_runtime->editor_has_source_model || min_values == NULL || max_values == NULL)
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || desc == NULL)
     {
         set_error(error_buffer, error_buffer_size, "source prefab placement requires a source-backed brush world");
         return false;
     }
+
+    const char *material_prefab = source_prefab_for_material(desc->material);
+    const char *prefab = desc->prefab != NULL && desc->prefab[0] != '\0'
+                             ? desc->prefab
+                             : (material_prefab != NULL ? material_prefab : "");
     if (!source_prefab_name_supported(prefab))
     {
         set_errorf(error_buffer, error_buffer_size, "unsupported source prefab '%s'",
                    prefab != NULL && prefab[0] != '\0' ? prefab : "<empty>");
         return false;
     }
-    if (material == NULL || material[0] == '\0')
+    if (desc->material == NULL || desc->material[0] == '\0')
     {
         set_error(error_buffer, error_buffer_size, "source prefab placement requires a material");
         return false;
@@ -1574,25 +1579,48 @@ bool editor_brush_world_place_source_prefab_candidate(brush_world_runtime *world
     }
 
     editor_brush_source_box_runtime source_box;
-    SDL_zero(source_box);
-    if (!copy_source_string(&source_box.stable_id, name) || !copy_source_string(&source_box.name, name) ||
-        !copy_source_string(&source_box.prefab, prefab) || !copy_source_string(&source_box.material, material))
+    if (source_min != NULL && source_max != NULL)
     {
-        free_editor_brush_source_box(&source_box);
-        set_error(error_buffer, error_buffer_size, "failed to allocate source prefab brush");
+        SDL_zero(source_box);
+        if (!copy_source_string(&source_box.stable_id, name) || !copy_source_string(&source_box.name, name) ||
+            !copy_source_string(&source_box.prefab, prefab) ||
+            !copy_source_string(&source_box.material, desc->material))
+        {
+            free_editor_brush_source_box(&source_box);
+            set_error(error_buffer, error_buffer_size, "failed to allocate source prefab brush");
+            return false;
+        }
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            source_box.min[axis] = source_min[axis];
+            source_box.max[axis] = source_max[axis];
+        }
+        source_box.contents = source_prefab_default_contents(prefab, desc->contents);
+    }
+    else if (!editor_brush_world_build_source_prefab_candidate(world_runtime, desc, name, &source_box, error_buffer,
+                                                               error_buffer_size))
+    {
         return false;
     }
-    for (int axis = 0; axis < 3; ++axis)
-    {
-        source_box.min[axis] = min_values[axis];
-        source_box.max[axis] = max_values[axis];
-    }
-    source_box.contents = source_prefab_default_contents(prefab, contents);
 
-    const bool ok = editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
-                                                                  &source_box, error_buffer, error_buffer_size);
-    if (ok && out_brush_name != NULL && out_brush_name_size > 0u)
-        SDL_strlcpy(out_brush_name, name, out_brush_name_size);
+    bool ok = editor_brush_world_validate_source_box_candidate(world_runtime, &source_box, -1, error_buffer,
+                                                               error_buffer_size);
+    if (ok && apply)
+    {
+        ok = editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
+                                                           &source_box, error_buffer, error_buffer_size);
+    }
+    if (ok && out_result != NULL)
+    {
+        out_result->valid = true;
+        SDL_strlcpy(out_result->brush_name, name, sizeof(out_result->brush_name));
+        out_result->bounds = editor_brush_source_box_bounds_meters(world_runtime, &source_box);
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            out_result->source_min[axis] = source_box.min[axis];
+            out_result->source_max[axis] = source_box.max[axis];
+        }
+    }
     free_editor_brush_source_box(&source_box);
     return ok;
 }
