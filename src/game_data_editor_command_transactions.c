@@ -1485,29 +1485,24 @@ static slayer3d_bounding_box editor_floor_fill_bounds(slayer3d_bounding_box floo
     slayer3d_bounding_box bounds = floor_bounds;
     bounds.min.y = low_y;
     bounds.max.y = high_y;
-    const float inset_x = SDL_min(thickness, SDL_max((floor_bounds.max.x - floor_bounds.min.x) * 0.5f, 0.001f));
-    const float inset_z = SDL_min(thickness, SDL_max((floor_bounds.max.z - floor_bounds.min.z) * 0.5f, 0.001f));
+    const float half_thickness = SDL_max(thickness * 0.5f, 0.001f);
     switch (side_index)
     {
     case 0:
-        bounds.min.x = floor_bounds.min.x;
-        bounds.max.x = floor_bounds.min.x + inset_x;
+        bounds.min.x = floor_bounds.min.x - half_thickness;
+        bounds.max.x = floor_bounds.min.x + half_thickness;
         break;
     case 1:
-        bounds.min.x = floor_bounds.max.x - inset_x;
-        bounds.max.x = floor_bounds.max.x;
+        bounds.min.x = floor_bounds.max.x - half_thickness;
+        bounds.max.x = floor_bounds.max.x + half_thickness;
         break;
     case 2:
-        bounds.min.x = floor_bounds.min.x + inset_x;
-        bounds.max.x = floor_bounds.max.x - inset_x;
-        bounds.min.z = floor_bounds.min.z;
-        bounds.max.z = floor_bounds.min.z + inset_z;
+        bounds.min.z = floor_bounds.min.z - half_thickness;
+        bounds.max.z = floor_bounds.min.z + half_thickness;
         break;
     default:
-        bounds.min.x = floor_bounds.min.x + inset_x;
-        bounds.max.x = floor_bounds.max.x - inset_x;
-        bounds.min.z = floor_bounds.max.z - inset_z;
-        bounds.max.z = floor_bounds.max.z;
+        bounds.min.z = floor_bounds.max.z - half_thickness;
+        bounds.max.z = floor_bounds.max.z + half_thickness;
         break;
     }
     return bounds;
