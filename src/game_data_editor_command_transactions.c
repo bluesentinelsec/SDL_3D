@@ -505,6 +505,10 @@ static int editor_brush_material_index_by_name(const brush_world_runtime *world_
 
 static bool rebuild_editor_brush_world(brush_world_runtime *world_runtime)
 {
+    if (world_runtime == NULL)
+        return false;
+    if (world_runtime->editor_has_source_model)
+        return editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
     return rebuild_brush_world_runtime_artifacts(world_runtime, NULL, 0) &&
            editor_brush_world_sync_source_from_runtime(world_runtime, NULL, 0);
 }
