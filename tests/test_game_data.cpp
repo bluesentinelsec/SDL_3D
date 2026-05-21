@@ -16314,6 +16314,47 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         slayer3d_input_process_event(input, &key);
         slayer3d_input_update(input, frame + 1U);
     };
+    auto exported_source_box_names = [&]() {
+        std::vector<std::string> names;
+        char *json = nullptr;
+        size_t json_size = 0u;
+        EXPECT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(runtime, "brush.editor_shell.target", &json,
+                                                                           &json_size, error, sizeof(error)))
+            << error;
+        if (json == nullptr)
+            return names;
+
+        yyjson_doc *doc = yyjson_read(json, json_size, 0);
+        EXPECT_NE(doc, nullptr);
+        if (doc != nullptr)
+        {
+            yyjson_val *root = yyjson_doc_get_root(doc);
+            yyjson_val *sources = yyjson_obj_get(root, "editor_brush_sources");
+            EXPECT_TRUE(yyjson_is_arr(sources));
+            yyjson_val *source = yyjson_arr_get(sources, 0);
+            yyjson_val *boxes = source != nullptr ? yyjson_obj_get(source, "boxes") : nullptr;
+            EXPECT_TRUE(yyjson_is_arr(boxes));
+            const size_t count = yyjson_is_arr(boxes) ? yyjson_arr_size(boxes) : 0u;
+            for (size_t i = 0; i < count; ++i)
+            {
+                yyjson_val *box = yyjson_arr_get(boxes, i);
+                const char *name = yyjson_get_str(yyjson_obj_get(box, "name"));
+                if (name != nullptr)
+                    names.emplace_back(name);
+            }
+            yyjson_doc_free(doc);
+        }
+        SDL_free(json);
+        return names;
+    };
+    auto source_box_name_exists = [](const std::vector<std::string> &names, const std::string &expected) {
+        for (const std::string &name : names)
+        {
+            if (name == expected)
+                return true;
+        }
+        return false;
+    };
 
     slayer3d_signal_emit(bus, mode_select_signal, nullptr);
     click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
@@ -16340,6 +16381,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(north_fill_bounds.min.z, floor_bounds_before_lower.min.z, 0.001f);
     EXPECT_NEAR(north_fill_bounds.max.z, floor_bounds_before_lower.min.z + 0.2f, 0.001f);
     EXPECT_NEAR(north_fill_bounds.max.y, floor_bounds_before_lower.max.y, 0.001f);
+    std::vector<std::string> source_names = exported_source_box_names();
+    EXPECT_EQ((int)source_names.size(), brush_count_before_floor_lower + 4);
+    EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name));
+    EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.west"));
+    EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.east"));
+    EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.north"));
+    EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.south"));
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -16385,12 +16433,21 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const slayer3d_bounding_box floor_bounds_restored = brush_bounds(floor_brush_name);
     EXPECT_NEAR(floor_bounds_restored.min.y, floor_bounds_before_lower.min.y, 0.001f);
     EXPECT_NEAR(floor_bounds_restored.max.y, floor_bounds_before_lower.max.y, 0.001f);
+    source_names = exported_source_box_names();
+    EXPECT_EQ((int)source_names.size(), brush_count_before_floor_lower);
+    EXPECT_FALSE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.west"));
     slayer3d_signal_emit(bus, undo_signal, nullptr);
     EXPECT_EQ(world().brush_count, brush_count_before_floor_lower + 4);
     EXPECT_NEAR(brush_bounds(floor_brush_name).min.y, floor_bounds_before_lower.min.y - 8.0f, 0.001f);
+    source_names = exported_source_box_names();
+    EXPECT_EQ((int)source_names.size(), brush_count_before_floor_lower + 4);
+    EXPECT_TRUE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.west"));
     slayer3d_signal_emit(bus, redo_signal, nullptr);
     EXPECT_EQ(world().brush_count, brush_count_before_floor_lower);
     EXPECT_NEAR(brush_bounds(floor_brush_name).min.y, floor_bounds_before_lower.min.y, 0.001f);
+    source_names = exported_source_box_names();
+    EXPECT_EQ((int)source_names.size(), brush_count_before_floor_lower);
+    EXPECT_FALSE(source_box_name_exists(source_names, floor_brush_name + ".auto_fill.n8000_p0.west"));
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
