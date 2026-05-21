@@ -17689,6 +17689,7 @@ TEST(GameDataRuntime, EditableLevelFragmentPreservesRuntimeSourceModelAfterEditi
     yyjson_val *new_max = yyjson_obj_get(yyjson_arr_get(boxes, 1), "max");
     ASSERT_TRUE(yyjson_is_arr(new_min));
     ASSERT_TRUE(yyjson_is_arr(new_max));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(yyjson_arr_get(boxes, 1), "prefab")), "floor");
     EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_min, 0)), 16);
     EXPECT_EQ(yyjson_get_int(yyjson_arr_get(new_max, 0)), 34);
     yyjson_doc_free(doc);

@@ -1148,6 +1148,9 @@ bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *w
                                                     const char *brush_identity,
                                                     editor_brush_source_box_runtime *out_box, int *out_index,
                                                     char *error_buffer, int error_buffer_size);
+bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_runtime,
+                                              const slayer3d_game_data_create_box_brush_desc *desc,
+                                              const char *brush_name, editor_brush_source_box_runtime *out_box);
 bool editor_brush_world_insert_source_box_at_index(brush_world_runtime *world_runtime, int box_index,
                                                    const editor_brush_source_box_runtime *box, char *error_buffer,
                                                    int error_buffer_size);

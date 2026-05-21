@@ -2332,8 +2332,8 @@ extern "C"
      * @brief Validate source-box playable-space closure from one editor player start.
      *
      * This pass derives an exact interval grid from fixed-coordinate
-     * `editor_brush_sources`, marks source boxes as solid, and flood-fills empty
-     * space from @p player_start_name. If reachable empty space reaches the
+     * `editor_brush_sources`, marks structural source boxes as solid, and
+     * flood-fills empty space from @p player_start_name. If reachable empty space reaches the
      * expanded outside boundary, the map is considered open/leaking for MVP
      * grid-prefab test-run workflows.
      *
@@ -2378,9 +2378,10 @@ extern "C"
      * compilation all succeed. Success marks the brush world dirty and
      * increments its editor revision. Structural box brushes may touch existing
      * structural brushes exactly, but positive-volume overlap is rejected.
-     * Runtime-created boxes receive stable editor metadata on the brush and
-     * generated faces. @p out_brush_name receives the final runtime brush name
-     * when non-NULL.
+     * Source-backed worlds commit a canonical source box first and rebuild
+     * runtime brushes from that source. Runtime-only worlds receive stable
+     * editor metadata on the brush and generated faces. @p out_brush_name
+     * receives the final runtime brush name when non-NULL.
      */
     bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
                                              const slayer3d_game_data_create_box_brush_desc *desc, char *out_brush_name,

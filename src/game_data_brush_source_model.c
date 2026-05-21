@@ -1294,10 +1294,8 @@ static const char *brush_face_material_name_for_source_box(const slayer3d_game_d
     return "";
 }
 
-static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush, const char *material)
+static const char *source_prefab_for_material(const char *material)
 {
-    if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
-        return brush->editor.prefab;
     if (material != NULL)
     {
         if (SDL_strstr(material, ".floor") != NULL)
@@ -1307,7 +1305,45 @@ static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush
         if (SDL_strstr(material, ".ceiling") != NULL)
             return "ceiling";
     }
+    return NULL;
+}
+
+static const char *source_prefab_for_brush(const slayer3d_game_data_brush *brush, const char *material)
+{
+    if (brush != NULL && brush->editor.prefab != NULL && SDL_strcmp(brush->editor.prefab, "editor.box") != 0)
+        return brush->editor.prefab;
+    const char *material_prefab = source_prefab_for_material(material);
+    if (material_prefab != NULL)
+        return material_prefab;
     return brush != NULL && brush->editor.prefab != NULL ? brush->editor.prefab : "box";
+}
+
+bool editor_brush_source_box_from_create_desc(const brush_world_runtime *world_runtime,
+                                              const slayer3d_game_data_create_box_brush_desc *desc,
+                                              const char *brush_name, editor_brush_source_box_runtime *out_box)
+{
+    if (world_runtime == NULL || desc == NULL || brush_name == NULL || brush_name[0] == '\0' || out_box == NULL)
+        return false;
+
+    SDL_zero(*out_box);
+    const char *material = desc->material_name != NULL ? desc->material_name : "";
+    const char *prefab = source_prefab_for_material(material);
+    if (prefab == NULL)
+        prefab = "editor.box";
+    if (!copy_source_string(&out_box->stable_id, brush_name) || !copy_source_string(&out_box->name, brush_name) ||
+        !copy_source_string(&out_box->prefab, prefab) || !copy_source_string(&out_box->material, material))
+    {
+        free_editor_brush_source_box(out_box);
+        return false;
+    }
+    out_box->min[0] = source_units_from_meters(world_runtime, desc->min.x);
+    out_box->min[1] = source_units_from_meters(world_runtime, desc->min.y);
+    out_box->min[2] = source_units_from_meters(world_runtime, desc->min.z);
+    out_box->max[0] = source_units_from_meters(world_runtime, desc->max.x);
+    out_box->max[1] = source_units_from_meters(world_runtime, desc->max.y);
+    out_box->max[2] = source_units_from_meters(world_runtime, desc->max.z);
+    out_box->contents = desc->contents != 0u ? desc->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    return true;
 }
 
 static bool source_box_from_runtime_brush(const brush_world_runtime *world_runtime,

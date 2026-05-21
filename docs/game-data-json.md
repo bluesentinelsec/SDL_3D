@@ -1259,11 +1259,12 @@ blockout tools: floors, walls, ceilings, sky seals, platforms, and simple room p
 validates the target world and bounds at load time, resolves the material at
 runtime, rebuilds brush collision/render data atomically, then marks the world
 dirty only after the rebuild succeeds. If `name` is omitted, the runtime
-generates a unique brush name under the target world. Runtime-created box
-brushes are structural editor source brushes: they receive stable editor ids for
-the brush and all six faces, exact face/edge/vertex contact with existing
-structural brushes is allowed, and positive-volume overlap with an existing
-structural brush is rejected before the world is marked dirty. The editor shell dojo
+generates a unique brush name under the target world. Source-backed worlds
+commit a canonical source box first, then compile runtime brushes from the
+source model; runtime-only worlds append the derived brush directly. Created
+structural boxes receive stable editor ids, exact face/edge/vertex contact with
+existing structural brushes is allowed, and positive-volume overlap with an
+existing structural brush is rejected before the world is marked dirty. The editor shell dojo
 demonstrates the current blockout palette pattern: modal palette signals write
 scene-state selection strings, and the shared commit signal branches to
 prefab-specific `editor.brush_world.create_box` or
