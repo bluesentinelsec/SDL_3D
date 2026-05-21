@@ -6,6 +6,7 @@
 #include "game_data_brush_internal.h"
 
 #include <SDL3/SDL_stdinc.h>
+#include <stdlib.h>
 
 #include "slayer3d/collision.h"
 #include "slayer3d/math.h"
