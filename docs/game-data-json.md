@@ -1130,6 +1130,10 @@ committed. Exact snapped face, edge, or vertex contact is legal; positive-volume
 overlap between structural source boxes is rejected at the source-model boundary.
 This keeps placement, translate, and resize tools from introducing hidden
 runtime-only overlap states.
+Structural checks consider solid, player/projectile clip, and sky source boxes
+as map-sealing architecture. Non-structural content such as trigger-only boxes
+may overlap structural brushes for gameplay volumes; those boxes do not report
+source-model overlap/gap/contact defects and do not seal leaks.
 
 Use `editor.brush_world.validate_source` or the native
 `slayer3d_game_data_validate_editor_brush_source_model()` API to inspect source
@@ -1148,11 +1152,11 @@ source-backed worlds still fail on overlaps and near gaps.
 Use `editor.brush_world.validate_enclosure` or
 `slayer3d_game_data_validate_editor_brush_source_enclosure()` to run the first
 source-backed leak diagnostic. This pass derives an exact interval grid from
-the fixed source box coordinates, marks source boxes as solid, and flood-fills
-empty cells from an `editor_player_starts` marker. If the flood reaches the
-expanded outside boundary, the playable space leaks. The editor shell runs both
-validation actions before entering playable test-run mode so source defects
-block F5 instead of becoming game-runtime surprises. The `leak_point_key`
+the fixed source box coordinates, marks structural source boxes as solid, and
+flood-fills empty cells from an `editor_player_starts` marker. If the flood
+reaches the expanded outside boundary, the playable space leaks. The editor
+shell runs both validation actions before entering playable test-run mode so
+source defects block F5 instead of becoming game-runtime surprises. The `leak_point_key`
 output can feed an `editor.debug_overlay.markers` entry so the editor shows the
 first reachable outside-boundary cell directly in the 3D view. The candidate
 outputs identify the nearest source-box face on the same leak boundary axis,

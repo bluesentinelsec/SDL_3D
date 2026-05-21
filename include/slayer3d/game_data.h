@@ -2256,17 +2256,17 @@ extern "C"
         bool structurally_valid;
         /** @brief Number of source boxes inspected. */
         int source_box_count;
-        /** @brief Positive-volume overlaps between source boxes. These are invalid. */
+        /** @brief Positive-volume overlaps between structural source boxes. These are invalid. */
         int positive_overlap_count;
-        /** @brief Tiny non-zero gaps between otherwise adjacent source boxes. These indicate seams/leaks. */
+        /** @brief Tiny non-zero gaps between otherwise adjacent structural source boxes. These indicate seams/leaks. */
         int near_gap_count;
-        /** @brief Exact face contacts between source boxes. */
+        /** @brief Exact face contacts between structural source boxes. */
         int face_contact_count;
-        /** @brief Exact edge contacts between source boxes. */
+        /** @brief Exact edge contacts between structural source boxes. */
         int edge_contact_count;
-        /** @brief Exact vertex contacts between source boxes. */
+        /** @brief Exact vertex contacts between structural source boxes. */
         int vertex_contact_count;
-        /** @brief Exact face contacts where only part of a face is covered by the neighbor. */
+        /** @brief Exact face contacts where only part of a structural source-box face is covered. */
         int partial_face_contact_count;
         /** @brief First blocking issue, or an empty string when the source model is structurally valid. */
         char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
@@ -2278,6 +2278,8 @@ extern "C"
      * This pass operates on canonical `editor_brush_sources` integer/fixed
      * coordinates, not derived runtime triangles. It reports structural defects
      * that can create seams or z-fighting before the map is compiled for play.
+     * Non-structural content such as trigger-only boxes is ignored by topology
+     * checks so gameplay volumes can overlap sealed architecture.
      *
      * @p near_gap_units controls how many source units count as a suspicious
      * near miss between otherwise overlapping boxes. Pass 0 to use the default
@@ -2300,7 +2302,7 @@ extern "C"
         int source_box_count;
         /** @brief Total source flood-grid cells inspected. */
         int grid_cell_count;
-        /** @brief Number of grid cells marked solid by source boxes. */
+        /** @brief Number of grid cells marked solid by structural source boxes. */
         int solid_cell_count;
         /** @brief Number of empty cells reachable from the player-start cell. */
         int visited_cell_count;

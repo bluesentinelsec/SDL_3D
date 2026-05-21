@@ -592,6 +592,9 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
         for (int j = i + 1; j < world_runtime->editor_source_box_count; ++j)
         {
             const editor_brush_source_box_runtime *b = &world_runtime->editor_source_boxes[j];
+            if (!source_box_contents_are_structural(a->contents) || !source_box_contents_are_structural(b->contents))
+                continue;
+
             const int contact_axis_count = source_box_contact_axis_count(a, b);
             const int overlap_axis_count = source_box_overlap_axis_count(a, b);
             if (source_box_positive_volume_overlap(a, b))
@@ -803,6 +806,8 @@ static void source_enclosure_set_candidate_source_face(
     for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
     {
         const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[i];
+        if (!source_box_contents_are_structural(box->contents))
+            continue;
         double candidate[3] = {source_clamp_double(leak_point_units[0], (double)box->min[0], (double)box->max[0]),
                                source_clamp_double(leak_point_units[1], (double)box->min[1], (double)box->max[1]),
                                source_clamp_double(leak_point_units[2], (double)box->min[2], (double)box->max[2])};
@@ -956,8 +961,10 @@ bool slayer3d_game_data_validate_editor_brush_source_enclosure(
                 const int cell_index = source_grid_cell_index(x, y, z, dim_x, dim_y);
                 for (int box_index = 0; box_index < world_runtime->editor_source_box_count; ++box_index)
                 {
-                    if (source_cell_inside_box(axis_edges[0], axis_edges[1], axis_edges[2], x, y, z,
-                                               &world_runtime->editor_source_boxes[box_index]))
+                    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[box_index];
+                    if (!source_box_contents_are_structural(box->contents))
+                        continue;
+                    if (source_cell_inside_box(axis_edges[0], axis_edges[1], axis_edges[2], x, y, z, box))
                     {
                         solid[cell_index] = 1;
                         out_diagnostics->solid_cell_count++;

@@ -17888,6 +17888,42 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceModelDiagnostics)
     EXPECT_EQ(diagnostics.partial_face_contact_count, 0);
     EXPECT_STREQ(diagnostics.first_issue, "");
 
+    const char trigger_overlap_boxes[] = R"json(
+        {
+          "stable_id": "source.box.001",
+          "name": "brush.source.box.001",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 0],
+          "max": [8000, 0, 8000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.trigger.001",
+          "name": "brush.source.trigger.001",
+          "kind": "box",
+          "prefab": "trigger",
+          "material": "mat.editor.floor",
+          "min": [1000, -400, 1000],
+          "max": [7000, 400, 7000],
+          "contents": ["trigger"]
+        })json";
+    ASSERT_TRUE(load_fragment(trigger_overlap_boxes)) << error;
+    SDL_zero(diagnostics);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.structurally_valid) << diagnostics.first_issue;
+    EXPECT_EQ(diagnostics.source_box_count, 2);
+    EXPECT_EQ(diagnostics.positive_overlap_count, 0);
+    EXPECT_EQ(diagnostics.near_gap_count, 0);
+    EXPECT_EQ(diagnostics.face_contact_count, 0);
+    EXPECT_EQ(diagnostics.edge_contact_count, 0);
+    EXPECT_EQ(diagnostics.vertex_contact_count, 0);
+    EXPECT_EQ(diagnostics.partial_face_contact_count, 0);
+    EXPECT_STREQ(diagnostics.first_issue, "");
+
     const char edge_contact_boxes[] = R"json(
         {
           "stable_id": "source.box.001",
@@ -18040,7 +18076,8 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
 
-    auto load_room_fragment = [&](bool include_east_wall, bool sky_ceiling = false) {
+    auto load_room_fragment = [&](bool include_east_wall, bool sky_ceiling = false,
+                                  bool include_trigger_east_wall = false) {
         const char *ceiling_prefab = sky_ceiling ? "sky" : "ceiling";
         const char *ceiling_contents = sky_ceiling ? "[\"sky\", \"player_clip\", \"projectile_clip\"]" : "[\"solid\"]";
         std::string fragment = R"json({
@@ -18071,6 +18108,12 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
         {
             fragment +=
                 R"json(        { "stable_id": "room.east", "name": "room.east", "kind": "box", "prefab": "wall", "material": "mat.editor.floor", "min": [8000, 0, 0], "max": [8200, 8000, 8000], "contents": ["solid"] },
+)json";
+        }
+        if (include_trigger_east_wall)
+        {
+            fragment +=
+                R"json(        { "stable_id": "room.east.trigger", "name": "room.east.trigger", "kind": "box", "prefab": "trigger", "material": "mat.editor.floor", "min": [8000, 0, 0], "max": [8200, 8000, 8000], "contents": ["trigger"] },
 )json";
         }
         fragment +=
@@ -18185,6 +18228,18 @@ TEST(GameDataRuntime, EditableLevelFragmentReportsSourceEnclosureDiagnostics)
     EXPECT_NE(std::string(enclosure.candidate_source_name).find("room."), std::string::npos)
         << enclosure.candidate_source_name;
     EXPECT_GT(enclosure.candidate_source_distance, 0.0f);
+
+    ASSERT_TRUE(load_room_fragment(false, false, true)) << error;
+    ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_enclosure(
+        runtime, "brush.editor_shell.target", "player_start.editor_shell", 0, &enclosure, error, sizeof(error)))
+        << error;
+    EXPECT_FALSE(enclosure.enclosed);
+    EXPECT_GT(enclosure.open_boundary_cell_count, 0);
+    EXPECT_NE(std::string(enclosure.first_issue).find("leaks to outside"), std::string::npos) << enclosure.first_issue;
+    EXPECT_STREQ(enclosure.first_leak_axis, "x");
+    EXPECT_STREQ(enclosure.first_leak_side, "positive");
+    EXPECT_STRNE(enclosure.candidate_source_name, "room.east.trigger");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
