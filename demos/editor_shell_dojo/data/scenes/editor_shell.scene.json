@@ -66,7 +66,6 @@
     "selection": {
       "mode": "click",
       "select_button": "LEFT",
-      "secondary_select_button": "RIGHT",
       "clear_on_miss": true,
       "trace": {
         "source": "camera_screen",
@@ -125,8 +124,7 @@
         "face_rendered_key": "editor.hover.face_rendered",
         "compiled_face_index_key": "editor.hover.compiled_face_index"
       },
-      "on_select": "signal.editor.pointer.primary",
-      "on_secondary_select": "signal.editor.delete_selected"
+      "on_select": "signal.editor.pointer.primary"
     },
     "placement": {
       "tool_key": "editor.tool.mode",
