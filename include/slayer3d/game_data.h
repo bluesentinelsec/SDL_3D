@@ -608,6 +608,8 @@ extern "C"
         bool source_hash_matches;
         /** @brief True when the manifest compile policy matches the current authored compile policy. */
         bool policy_matches;
+        /** @brief True when the manifest editor source-model metadata matches the current runtime world. */
+        bool source_model_matches;
         /** @brief True when the manifest compiled artifact hash matches the current runtime artifact. */
         bool compile_artifact_hash_matches;
         /** @brief True when all fields required for artifact reuse match. */
@@ -620,6 +622,14 @@ extern "C"
         Uint64 expected_compile_artifact_hash;
         /** @brief Compiled artifact hash stored in the manifest. */
         Uint64 artifact_compile_artifact_hash;
+        /** @brief True when the current runtime world was compiled from editor source boxes. */
+        bool expected_source_model_present;
+        /** @brief True when the manifest reports editor source boxes. */
+        bool artifact_source_model_present;
+        /** @brief Current runtime editor source box count, or 0 for runtime-only worlds. */
+        int expected_source_box_count;
+        /** @brief Editor source box count stored in the manifest, or 0 when absent. */
+        int artifact_source_box_count;
     } slayer3d_game_data_brush_compile_artifact_status;
 
     /** @brief Maximum bytes, including the NUL terminator, for brush compile artifact layout paths. */
@@ -2594,11 +2604,11 @@ extern "C"
      * The exported document uses `schema:
      * "slayer3d.brush_compile_artifact.v0"` and records a deterministic source
      * hash for authored brush inputs, the compile policy, the compiled-artifact
-     * hash, render mesh totals, spatial chunk metadata, and visibility-grid
-     * metadata. This is an inspection and cache-invalidation descriptor; it does
-     * not contain the binary mesh or collision payloads needed to load a compiled
-     * artifact directly. The returned string is allocated with SDL_malloc and
-     * must be released with SDL_free().
+     * hash, editor source-model metadata when present, render mesh totals,
+     * spatial chunk metadata, and visibility-grid metadata. This is an inspection
+     * and cache-invalidation descriptor; it does not contain the binary mesh or
+     * collision payloads needed to load a compiled artifact directly. The returned
+     * string is allocated with SDL_malloc and must be released with SDL_free().
      */
     bool slayer3d_game_data_export_brush_world_compile_artifact_json(const slayer3d_game_data_runtime *runtime,
                                                                      const char *world_name, char **out_json,
@@ -2612,8 +2622,10 @@ extern "C"
      * @ref slayer3d_game_data_export_brush_world_compile_artifact_json without
      * loading any binary cache payload. A return value of true means the manifest
      * was parsed and compared; inspect @p out_status->fresh to decide whether an
-     * offline artifact is reusable. Stale manifests are reported through
-     * @p out_status rather than treated as API errors.
+     * offline artifact is reusable. Source-backed editable worlds also compare
+     * editor source-model metadata so tooling can detect runtime-only or stale
+     * source-box manifests before trusting cached output. Stale manifests are
+     * reported through @p out_status rather than treated as API errors.
      */
     bool slayer3d_game_data_verify_brush_world_compile_artifact_json(
         const slayer3d_game_data_runtime *runtime, const char *world_name, const char *json, size_t json_size,

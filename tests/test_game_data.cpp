@@ -14687,6 +14687,12 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "sky_brush_count")), 0);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "renderable_brush_count")), 2);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(source, "nonrenderable_brush_count")), 0);
+    yyjson_val *editor_source_model = yyjson_obj_get(source, "editor_source_model");
+    ASSERT_TRUE(yyjson_is_obj(editor_source_model));
+    EXPECT_FALSE(yyjson_get_bool(yyjson_obj_get(editor_source_model, "present")));
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(editor_source_model, "box_count")), 0);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(editor_source_model, "snap_units")), 0);
+    EXPECT_DOUBLE_EQ(yyjson_get_real(yyjson_obj_get(editor_source_model, "meters_per_unit")), 0.0);
     yyjson_val *render = yyjson_obj_get(artifact_root, "render");
     ASSERT_NE(render, nullptr);
     EXPECT_EQ(yyjson_get_int(yyjson_obj_get(render, "face_count")), culled_world_a.compile_face_count);
@@ -14761,12 +14767,17 @@ TEST(GameDataRuntime, BrushCompileOptionsProduceDeterministicArtifacts)
     EXPECT_TRUE(artifact_status.world_matches);
     EXPECT_TRUE(artifact_status.source_hash_matches);
     EXPECT_TRUE(artifact_status.policy_matches);
+    EXPECT_TRUE(artifact_status.source_model_matches);
     EXPECT_TRUE(artifact_status.compile_artifact_hash_matches);
     EXPECT_TRUE(artifact_status.fresh);
     EXPECT_EQ(artifact_status.expected_source_hash, source_hash);
     EXPECT_EQ(artifact_status.artifact_source_hash, source_hash);
     EXPECT_EQ(artifact_status.expected_compile_artifact_hash, culled_world_a.compile_artifact_hash);
     EXPECT_EQ(artifact_status.artifact_compile_artifact_hash, culled_world_a.compile_artifact_hash);
+    EXPECT_FALSE(artifact_status.expected_source_model_present);
+    EXPECT_FALSE(artifact_status.artifact_source_model_present);
+    EXPECT_EQ(artifact_status.expected_source_box_count, 0);
+    EXPECT_EQ(artifact_status.artifact_source_box_count, 0);
     yyjson_doc_free(artifact_doc);
     SDL_free(artifact_json);
 
@@ -17191,6 +17202,64 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
     EXPECT_NEAR(resolved_normal.x, 0.0f, 0.001f);
     EXPECT_NEAR(resolved_normal.y, -1.0f, 0.001f);
     EXPECT_NEAR(resolved_normal.z, 0.0f, 0.001f);
+
+    char *artifact_json = nullptr;
+    size_t artifact_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_brush_world_compile_artifact_json(
+        runtime, "brush.editor_shell.target", &artifact_json, &artifact_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(artifact_json, nullptr);
+    yyjson_doc *artifact_doc = yyjson_read(artifact_json, artifact_size, YYJSON_READ_NOFLAG);
+    ASSERT_NE(artifact_doc, nullptr);
+    yyjson_val *artifact_root = yyjson_doc_get_root(artifact_doc);
+    ASSERT_NE(artifact_root, nullptr);
+    yyjson_val *source = yyjson_obj_get(artifact_root, "source");
+    ASSERT_TRUE(yyjson_is_obj(source));
+    yyjson_val *editor_source_model = yyjson_obj_get(source, "editor_source_model");
+    ASSERT_TRUE(yyjson_is_obj(editor_source_model));
+    EXPECT_TRUE(yyjson_get_bool(yyjson_obj_get(editor_source_model, "present")));
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(editor_source_model, "box_count")), 1);
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(editor_source_model, "snap_units")), 1);
+    EXPECT_NEAR(yyjson_get_real(yyjson_obj_get(editor_source_model, "meters_per_unit")), 0.001, 0.000001);
+    yyjson_doc_free(artifact_doc);
+
+    slayer3d_game_data_brush_compile_artifact_status artifact_status{};
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        runtime, "brush.editor_shell.target", artifact_json, artifact_size, &artifact_status, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_TRUE(artifact_status.source_hash_matches);
+    EXPECT_TRUE(artifact_status.policy_matches);
+    EXPECT_TRUE(artifact_status.source_model_matches);
+    EXPECT_TRUE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_TRUE(artifact_status.fresh);
+    EXPECT_TRUE(artifact_status.expected_source_model_present);
+    EXPECT_TRUE(artifact_status.artifact_source_model_present);
+    EXPECT_EQ(artifact_status.expected_source_box_count, 1);
+    EXPECT_EQ(artifact_status.artifact_source_box_count, 1);
+
+    std::string tampered_artifact(artifact_json, artifact_size);
+    SDL_free(artifact_json);
+    const std::string source_box_count_field = "\"box_count\": 1";
+    const size_t source_box_count_pos = tampered_artifact.find(source_box_count_field);
+    ASSERT_NE(source_box_count_pos, std::string::npos);
+    tampered_artifact.replace(source_box_count_pos, source_box_count_field.size(), "\"box_count\": 2");
+    ASSERT_TRUE(slayer3d_game_data_verify_brush_world_compile_artifact_json(
+        runtime, "brush.editor_shell.target", tampered_artifact.c_str(), tampered_artifact.size(), &artifact_status,
+        error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(artifact_status.schema_matches);
+    EXPECT_TRUE(artifact_status.world_matches);
+    EXPECT_TRUE(artifact_status.source_hash_matches);
+    EXPECT_TRUE(artifact_status.policy_matches);
+    EXPECT_FALSE(artifact_status.source_model_matches);
+    EXPECT_TRUE(artifact_status.compile_artifact_hash_matches);
+    EXPECT_FALSE(artifact_status.fresh);
+    EXPECT_TRUE(artifact_status.expected_source_model_present);
+    EXPECT_TRUE(artifact_status.artifact_source_model_present);
+    EXPECT_EQ(artifact_status.expected_source_box_count, 1);
+    EXPECT_EQ(artifact_status.artifact_source_box_count, 2);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

@@ -62,9 +62,25 @@ static bool artifact_brush_is_renderable(const slayer3d_game_data_brush *brush)
                                SLAYER3D_GAME_DATA_BRUSH_CONTENT_LAVA)) != 0u;
 }
 
-static bool artifact_export_add_source_summary(yyjson_mut_doc *doc, yyjson_mut_val *root,
-                                               const slayer3d_game_data_brush_world *world)
+static bool artifact_export_add_editor_source_model(yyjson_mut_doc *doc, yyjson_mut_val *source,
+                                                    const brush_world_runtime *world_runtime)
 {
+    const bool has_source_model = world_runtime != NULL && world_runtime->editor_has_source_model;
+    yyjson_mut_val *source_model = yyjson_mut_obj(doc);
+    return source_model != NULL && yyjson_mut_obj_add_val(doc, source, "editor_source_model", source_model) &&
+           yyjson_mut_obj_add_bool(doc, source_model, "present", has_source_model) &&
+           yyjson_mut_obj_add_int(doc, source_model, "box_count",
+                                  has_source_model ? world_runtime->editor_source_box_count : 0) &&
+           yyjson_mut_obj_add_int(doc, source_model, "snap_units",
+                                  has_source_model ? world_runtime->editor_source_snap_units : 0) &&
+           yyjson_mut_obj_add_real(doc, source_model, "meters_per_unit",
+                                   has_source_model ? world_runtime->editor_source_meters_per_unit : 0.0f);
+}
+
+static bool artifact_export_add_source_summary(yyjson_mut_doc *doc, yyjson_mut_val *root,
+                                               const brush_world_runtime *world_runtime)
+{
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
     yyjson_mut_val *source = yyjson_mut_obj(doc);
     const char *units = world->units != NULL ? world->units : "meters";
     int solid_brush_count = 0;
@@ -90,6 +106,7 @@ static bool artifact_export_add_source_summary(yyjson_mut_doc *doc, yyjson_mut_v
            yyjson_mut_obj_add_int(doc, source, "sky_brush_count", sky_brush_count) &&
            yyjson_mut_obj_add_int(doc, source, "renderable_brush_count", renderable_brush_count) &&
            yyjson_mut_obj_add_int(doc, source, "nonrenderable_brush_count", nonrenderable_brush_count) &&
+           artifact_export_add_editor_source_model(doc, source, world_runtime) &&
            yyjson_mut_obj_add_bool(doc, source, "has_bounds", world->has_bounds) &&
            (!world->has_bounds || artifact_export_add_bounds(doc, source, "bounds", world->bounds));
 }
@@ -393,7 +410,7 @@ bool slayer3d_game_data_export_brush_world_compile_artifact_json(const slayer3d_
               yyjson_mut_obj_add_uint(doc, root, "source_hash", source_hash) &&
               yyjson_mut_obj_add_uint(doc, root, "compile_artifact_hash", world->compile_artifact_hash) &&
               artifact_export_add_compile_policy(doc, root, world) &&
-              artifact_export_add_source_summary(doc, root, world) &&
+              artifact_export_add_source_summary(doc, root, world_runtime) &&
               artifact_export_add_render_summary(doc, root, world) && artifact_export_add_chunks(doc, root, world) &&
               artifact_export_add_visibility_grid(doc, root, &world_runtime->artifacts);
     size_t size = 0u;
@@ -424,6 +441,33 @@ static bool artifact_json_real_matches(yyjson_val *obj, const char *key, float e
 {
     yyjson_val *value = yyjson_obj_get(obj, key);
     return yyjson_is_num(value) && SDL_fabsf((float)yyjson_get_num(value) - expected) <= 0.0001f;
+}
+
+static bool artifact_json_editor_source_model_matches(const brush_world_runtime *world_runtime, yyjson_val *root,
+                                                      slayer3d_game_data_brush_compile_artifact_status *status)
+{
+    const bool expected_present = world_runtime != NULL && world_runtime->editor_has_source_model;
+    const int expected_count = expected_present ? world_runtime->editor_source_box_count : 0;
+    const int expected_snap_units = expected_present ? world_runtime->editor_source_snap_units : 0;
+    const float expected_meters_per_unit = expected_present ? world_runtime->editor_source_meters_per_unit : 0.0f;
+    status->expected_source_model_present = expected_present;
+    status->expected_source_box_count = expected_count;
+
+    yyjson_val *source = yyjson_obj_get(root, "source");
+    yyjson_val *source_model = yyjson_is_obj(source) ? yyjson_obj_get(source, "editor_source_model") : NULL;
+    if (!yyjson_is_obj(source_model))
+        return false;
+
+    yyjson_val *present_value = yyjson_obj_get(source_model, "present");
+    yyjson_val *box_count_value = yyjson_obj_get(source_model, "box_count");
+    yyjson_val *snap_units_value = yyjson_obj_get(source_model, "snap_units");
+    status->artifact_source_model_present = yyjson_is_bool(present_value) && yyjson_get_bool(present_value);
+    status->artifact_source_box_count = yyjson_is_int(box_count_value) ? (int)yyjson_get_int(box_count_value) : 0;
+
+    return yyjson_is_bool(present_value) && status->artifact_source_model_present == expected_present &&
+           yyjson_is_int(box_count_value) && status->artifact_source_box_count == expected_count &&
+           yyjson_is_int(snap_units_value) && (int)yyjson_get_int(snap_units_value) == expected_snap_units &&
+           artifact_json_real_matches(source_model, "meters_per_unit", expected_meters_per_unit);
 }
 
 bool slayer3d_game_data_verify_brush_world_compile_artifact_json(
@@ -477,9 +521,11 @@ bool slayer3d_game_data_verify_brush_world_compile_artifact_json(
         artifact_json_real_matches(policy, "chunk_cell_size_hint", world->compile_chunk_cell_size_hint) &&
         artifact_json_real_matches(policy, "chunk_cell_size", world->compile_chunk_cell_size) &&
         artifact_json_real_matches(policy, "visibility_cell_size", world->visibility_cell_size);
+    out_status->source_model_matches = artifact_json_editor_source_model_matches(world_runtime, root, out_status);
 
     out_status->fresh = out_status->schema_matches && out_status->world_matches && out_status->source_hash_matches &&
-                        out_status->policy_matches && out_status->compile_artifact_hash_matches;
+                        out_status->policy_matches && out_status->source_model_matches &&
+                        out_status->compile_artifact_hash_matches;
     yyjson_doc_free(doc);
     return true;
 }

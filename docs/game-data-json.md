@@ -753,14 +753,20 @@ cache invalidation. Tools can also call
 `slayer3d_game_data_export_brush_world_compile_artifact_json()` to write an
 inspection manifest using `schema: "slayer3d.brush_compile_artifact.v0"`. The
 manifest records a deterministic source hash for authored brush inputs, the
-compile policy, source brush totals, render mesh totals, visible source-face
-mappings, spatial chunk summaries, and visibility-grid metadata. Source totals
-separate renderable brushes from non-renderable structural brushes such as
-`sky`, so tools can verify that sky seals are present for leak detection without
-being emitted into the opaque world mesh. It is intentionally a descriptor
-rather than a binary cache payload: use the source hash, policy, and compile
-artifact hash together to inspect, compare, and invalidate compiled artifacts
-before adding cache storage/loading.
+compile policy, source brush totals, editor source-model metadata when present,
+render mesh totals, visible source-face mappings, spatial chunk summaries, and
+visibility-grid metadata. Source totals separate renderable brushes from
+non-renderable structural brushes such as `sky`, so tools can verify that sky
+seals are present for leak detection without being emitted into the opaque world
+mesh. For editor-authored worlds, the `source.editor_source_model` object records
+whether the runtime was compiled from source boxes, plus the source box count,
+snap units, and source units. Artifact verification treats mismatched
+source-model metadata as stale even when the source and compile hashes are
+otherwise present, which gives editors and offline compilers a direct guard
+against trusting runtime-only or stale compiled payloads. It is intentionally a
+descriptor rather than a binary cache payload: use the source hash, policy,
+source-model status, and compile artifact hash together to inspect, compare, and
+invalidate compiled artifacts before adding cache storage/loading.
 Native editor/offline compiler hosts can call
 `slayer3d_game_data_save_brush_world_compile_artifact_file()` to atomically save
 that manifest beside authored brush fragments, then use
