@@ -269,9 +269,6 @@
         "player_starts",
         "selection_bounds",
         "selection_face",
-        "trace_ray",
-        "face_normal",
-        "hit_marker",
         "command_preview",
         "markers"
       ],

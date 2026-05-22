@@ -66,10 +66,10 @@ SDL logging. The Issues tab is a placeholder for map findings such as leaks and
 validation warnings.
 
 The old number-key and `Tab` view switching shortcuts are intentionally
-unbound. The editor viewport uses relative mouse motion for mouse-look. Brush
-feedback is reticle-driven: the highlighted brush, hit marker, and placement
-preview should remain pinned to the screen center instead of following the last
-clicked selection.
+unbound. The editor viewport keeps the hardware cursor free for toolbar and
+panel interaction. Brush feedback is cursor-driven: the highlighted brush and
+placement preview should follow the OS cursor without drawing a second virtual
+hit cursor.
 
 ## Keybindings
 
@@ -193,17 +193,16 @@ The following should be true during a good test drive:
 - `M` opens the placeholder Material palette. `G` opens the Game Objects
   palette, and `Enter` selects Player Start for placement.
 - Placed player starts render as bright green cylinder markers in the editor
-  canvas, can be highlighted by hovering, and can be removed with right click.
+  canvas, can be highlighted by hovering, and can be removed after selection
+  with `Delete` or `Backspace`.
 - The top menu toolbar and second tool toolbar are visible above every view
   mode, and the editor viewport starts below them instead of rendering
   underneath the toolbar chrome.
 - The editor viewport displays a small label identifying the active 3D
   perspective view.
-- Brush picking and placement trace from the screen center. The highlighted
-  brush should be the brush under the crosshair; if no brush is hit, placement
-  falls back to the ground work plane. After clicking one brush, look away and
-  confirm the selection cursor follows the reticle rather than staying offset
-  on the previous brush.
+- Brush picking and placement trace from the hardware cursor. The highlighted
+  brush should be the brush under the cursor; if no brush is hit, placement
+  falls back to the ground work plane.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
   `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.

@@ -15971,9 +15971,9 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(debug.selection_edges, 12);
     EXPECT_EQ(debug.selection_face_edges, 4);
     EXPECT_EQ(debug.command_preview_edges, 12);
-    EXPECT_EQ(debug.rays, 1);
-    EXPECT_EQ(debug.normals, 1);
-    EXPECT_EQ(debug.markers, 3);
+    EXPECT_EQ(debug.rays, 0);
+    EXPECT_EQ(debug.normals, 0);
+    EXPECT_EQ(debug.markers, 0);
 
     struct RemovedInspectorText
     {
@@ -20644,7 +20644,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_flyby_debug, &flyby_debug));
     EXPECT_EQ(flyby_debug.selection_edges, 0);
-    EXPECT_GT(flyby_debug.hit_markers, 0);
+    EXPECT_EQ(flyby_debug.hit_markers, 0);
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.tool.mode", "select");
     slayer3d_properties_set_float(camera_actor->props, "yaw", start_yaw);
     slayer3d_properties_set_float(camera_actor->props, "pitch", -0.29566f);
