@@ -20543,7 +20543,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "flyby_3d");
     EXPECT_TRUE(visible_view_label("3D Perspective / Flyby"));
-    EXPECT_TRUE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
+    EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, false));
     EXPECT_FALSE(slayer3d_game_data_active_scene_mouse_capture(runtime, true));
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -20647,6 +20647,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     key.type = SDL_EVENT_KEY_UP;
     slayer3d_input_process_event(input, &key);
 
+    const float yaw_before_free_mouse = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.xrel = 60.0f;
@@ -20654,12 +20655,53 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     slayer3d_input_process_event(input, &motion);
     slayer3d_input_update(input, 17);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_NEAR(slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw), yaw_before_free_mouse, 0.0001f);
+
+    SDL_Event right_down{};
+    right_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    right_down.button.button = SDL_BUTTON_RIGHT;
+    slayer3d_input_process_event(input, &right_down);
+    motion.motion.xrel = 60.0f;
+    motion.motion.yrel = -15.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 18);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     const float yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);
-    EXPECT_GT(SDL_fabsf(yaw - start_yaw), 0.01f);
+    EXPECT_GT(SDL_fabsf(yaw - yaw_before_free_mouse), 0.01f);
     slayer3d_camera3d after{};
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.viewport", &after));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(after.target, before.target)), 0.01f);
+    right_down.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &right_down);
+    slayer3d_input_update(input, 19);
+
+    const slayer3d_vec3 before_pan = camera_actor->position;
+    SDL_Event middle_down{};
+    middle_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    middle_down.button.button = SDL_BUTTON_MIDDLE;
+    slayer3d_input_process_event(input, &middle_down);
+    motion.motion.xrel = 30.0f;
+    motion.motion.yrel = -20.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 20);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, before_pan)), 0.01f);
+    middle_down.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &middle_down);
+    slayer3d_input_update(input, 21);
+
+    const slayer3d_vec3 before_wheel = camera_actor->position;
+    SDL_Event wheel{};
+    wheel.type = SDL_EVENT_MOUSE_WHEEL;
+    wheel.wheel.y = 1.0f;
+    wheel.wheel.mouse_x = 640.0f;
+    wheel.wheel.mouse_y = 360.0f;
+    wheel.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
+    slayer3d_input_process_event(input, &wheel);
+    slayer3d_input_update(input, 22);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, before_wheel)), 0.01f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

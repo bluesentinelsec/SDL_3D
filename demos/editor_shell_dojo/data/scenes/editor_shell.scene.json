@@ -6,8 +6,6 @@
   "renders_world": true,
   "on_enter_signal": "signal.editor.scene.enter",
   "input": {
-    "mouse_capture": "unpaused",
-    "mouse_capture_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
     "actions": [
       "action.exit",
       "action.editor.tool.cycle",
@@ -47,6 +45,7 @@
       "action.editor.camera.up",
       "action.editor.camera.down",
       "action.editor.camera.look",
+      "action.editor.camera.pan",
       "action.editor.camera.fast"
     ]
   },
@@ -1480,7 +1479,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "3D editor: WASD move, mouse look, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, [ and ] height, Delete/Backspace remove.",
+        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, [ and ] height, Delete/Backspace remove.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.17,

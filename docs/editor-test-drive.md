@@ -98,7 +98,9 @@ shortcuts do not shadow camera movement.
 | `R` | palette closed | toggle wall axis for manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
-| mouse look | 3D flyby | rotate camera |
+| right mouse drag | 3D flyby | rotate camera without capturing the hardware cursor |
+| middle mouse drag | 3D flyby | pan camera left/right/up/down |
+| mouse wheel | 3D flyby | dolly camera forward/back |
 | `Q` / `E` | 3D flyby | move camera down/up |
 | `Left Shift` | 3D flyby | move faster |
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |

@@ -193,6 +193,10 @@
             "bindings": [{ "device": "mouse", "button": "RIGHT" }]
           },
           {
+            "name": "action.editor.camera.pan",
+            "bindings": [{ "device": "mouse", "button": "MIDDLE" }]
+          },
+          {
             "name": "action.editor.camera.fast",
             "bindings": [{ "device": "keyboard", "key": "LSHIFT" }]
           },
@@ -1830,6 +1834,8 @@
             "zoom_in": "action.editor.ortho.zoom.in",
             "zoom_out": "action.editor.ortho.zoom.out",
             "zoom_wheel": "action.editor.ortho.zoom.wheel",
+            "look": "action.editor.camera.look",
+            "mouse_pan": "action.editor.camera.pan",
             "fast": "action.editor.camera.fast"
           },
           "mode_key": "editor.view.mode",
@@ -1846,6 +1852,8 @@
           "orthographic_wheel_zoom_step": 0.12,
           "orthographic_min_size": 4.0,
           "orthographic_max_size": 256.0,
+          "mouse_pan_sensitivity": 0.012,
+          "perspective_wheel_zoom_step": 1.25,
           "mouse_sensitivity": 0.002,
           "pitch_min": -1.45,
           "pitch_max": 1.45
