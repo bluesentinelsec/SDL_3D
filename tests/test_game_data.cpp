@@ -15900,11 +15900,11 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         return capture.material;
     };
 
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.inspector.collapsed", false));
     press_key(SDL_SCANCODE_I, 4);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
-    const std::string expected_inspect_action =
-        std::string("inspect brush.target.cube face ").append(target_cube_left_face_stable_id);
-    EXPECT_EQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), expected_inspect_action);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.inspector.collapsed", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "inspector toggled");
 
     press_key(SDL_SCANCODE_C, 5);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
@@ -20355,6 +20355,14 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool tool_background = false;
         bool tool_buttons[7]{};
         bool tool_labels[7]{};
+        bool inspector_panel = false;
+        bool inspector_header = false;
+        bool inspector_tabs[3]{};
+        bool inspector_rows[4]{};
+        bool inspector_collapsed = false;
+        bool inspector_title = false;
+        bool inspector_tab_labels[3]{};
+        bool inspector_collapsed_label = false;
         bool old_sidebar = false;
         bool old_inspector = false;
     } toolbar_capture;
@@ -20366,9 +20374,33 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             capture->background = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar") == 0)
             capture->tool_background = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.panel") == 0)
+            capture->inspector_panel = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.header") == 0)
+            capture->inspector_header = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.collapsed") == 0)
+            capture->inspector_collapsed = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.sidebar") == 0)
             capture->old_sidebar = true;
         const std::string name(rect->name);
+        std::string inspector_prefix = "ui.editor_shell.left_inspector.";
+        if (name.rfind(inspector_prefix, 0) == 0)
+        {
+            if (name == "ui.editor_shell.left_inspector.map.tab")
+                capture->inspector_tabs[0] = true;
+            else if (name == "ui.editor_shell.left_inspector.entity.tab")
+                capture->inspector_tabs[1] = true;
+            else if (name == "ui.editor_shell.left_inspector.face.tab")
+                capture->inspector_tabs[2] = true;
+            else if (name == "ui.editor_shell.left_inspector.row.name")
+                capture->inspector_rows[0] = true;
+            else if (name == "ui.editor_shell.left_inspector.row.selection")
+                capture->inspector_rows[1] = true;
+            else if (name == "ui.editor_shell.left_inspector.row.brushes")
+                capture->inspector_rows[2] = true;
+            else if (name == "ui.editor_shell.left_inspector.row.status")
+                capture->inspector_rows[3] = true;
+        }
         std::string prefix = "ui.editor_shell.toolbar.";
         const std::string suffix = ".button";
         if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
@@ -20430,6 +20462,16 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         const std::string name(text->name);
         if (name == "ui.editor_shell.inspector")
             capture->old_inspector = true;
+        if (name == "ui.editor_shell.left_inspector.title")
+            capture->inspector_title = true;
+        if (name == "ui.editor_shell.left_inspector.collapsed.label")
+            capture->inspector_collapsed_label = true;
+        if (name == "ui.editor_shell.left_inspector.tab.map.label")
+            capture->inspector_tab_labels[0] = true;
+        else if (name == "ui.editor_shell.left_inspector.tab.entity.label")
+            capture->inspector_tab_labels[1] = true;
+        else if (name == "ui.editor_shell.left_inspector.tab.face.label")
+            capture->inspector_tab_labels[2] = true;
         std::string prefix = "ui.editor_shell.toolbar.";
         const std::string suffix = ".label";
         if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
@@ -20498,6 +20540,18 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         EXPECT_TRUE(toolbar_capture.tool_buttons[i]) << i;
         EXPECT_TRUE(toolbar_capture.tool_labels[i]) << i;
     }
+    EXPECT_TRUE(toolbar_capture.inspector_panel);
+    EXPECT_TRUE(toolbar_capture.inspector_header);
+    EXPECT_TRUE(toolbar_capture.inspector_title);
+    for (int i = 0; i < 3; ++i)
+    {
+        EXPECT_TRUE(toolbar_capture.inspector_tabs[i]) << i;
+        EXPECT_TRUE(toolbar_capture.inspector_tab_labels[i]) << i;
+    }
+    for (int i = 0; i < 4; ++i)
+        EXPECT_TRUE(toolbar_capture.inspector_rows[i]) << i;
+    EXPECT_FALSE(toolbar_capture.inspector_collapsed);
+    EXPECT_TRUE(toolbar_capture.inspector_collapsed_label);
     EXPECT_FALSE(toolbar_capture.old_sidebar);
     EXPECT_FALSE(toolbar_capture.old_inspector);
     slayer3d_signal_emit(bus, view_top_signal, nullptr);

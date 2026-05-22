@@ -35,7 +35,7 @@
             "bindings": []
           },
           {
-            "name": "action.editor.selection.inspect",
+            "name": "action.editor.inspector.toggle",
             "bindings": [{ "device": "keyboard", "key": "I" }]
           },
           {
@@ -248,7 +248,7 @@
     "signal.editor.scene.enter",
     "signal.editor.tool.cycle",
     "signal.editor.selection.clear",
-    "signal.editor.selection.inspect",
+    "signal.editor.inspector.toggle",
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.pointer.primary",
@@ -299,8 +299,8 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.selection.inspect",
-        "on_pressed": "signal.editor.selection.inspect"
+        "action": "action.editor.inspector.toggle",
+        "on_pressed": "signal.editor.inspector.toggle"
       },
       {
         "type": "sensor.input_pressed",
@@ -472,6 +472,8 @@
           { "type": "scene_state.set", "key": "editor.palette.brush.cursor", "value": "floor" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
+          { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Map" },
           { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
           { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
@@ -892,21 +894,10 @@
         ]
       },
       {
-        "signal": "signal.editor.selection.inspect",
+        "signal": "signal.editor.inspector.toggle",
         "actions": [
-          {
-            "type": "editor.selection.run",
-            "actions": [
-              {
-                "type": "scene_state.set",
-                "key": "editor.tool.last_action",
-                "value": "inspect {selection_element} face {selection_face_stable_id}"
-              }
-            ],
-            "else": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing selected" }
-            ]
-          }
+          { "type": "scene_state.toggle", "key": "editor.inspector.collapsed", "default": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector toggled" }
         ]
       },
       {

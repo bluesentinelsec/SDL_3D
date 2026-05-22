@@ -56,6 +56,11 @@ editor tool buttons: Select, Brush Tool, Clip Tool, Face Tool, Vertex Tool,
 Entity Tool, and Texture Tool. These are also visual placeholders; keyboard
 shortcuts still drive the active tools in this slice.
 
+The left Inspector panel is visible by default. It currently contains
+placeholder Map, Entity, and Face tabs so the editor has a stable destination
+for selection diagnostics and property editing in later slices. Press `I` to
+collapse or expand the panel.
+
 Use the number keys to switch layouts: `1` returns to the four-viewport layout,
 `2` opens the full-screen 3D flyby viewport, `3` opens top orthographic, `4`
 opens front orthographic, and `5` opens side orthographic. `Tab` remains a
@@ -84,6 +89,7 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | `B` | global editor | enter Brush Paint Mode and open or close the Brushes palette |
 | `M` | global editor | enter Texture Mode and open the Materials palette placeholder |
 | `G` | global editor | open the Game Objects palette |
+| `I` | global editor | collapse or expand the left Inspector panel |
 | `Space` | editor layout, palette closed | enter Select Mode |
 | arrow keys | palette open | move the active palette cursor |
 | `Enter` | palette open | select the highlighted palette item and close the palette |
@@ -153,8 +159,9 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed.
-- The old left-side debug/inspector window is no longer visible. Diagnostics
-  are expected to move into dedicated UI surfaces in later slices.
+- The old left-side debug dump is no longer visible. The new left Inspector
+  panel is visible with Map, Entity, and Face placeholder tabs, and `I`
+  collapses it to a small strip.
 - `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
   selections update the same data-authored mode and brush-setting state.
 - `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
