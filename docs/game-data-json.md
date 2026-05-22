@@ -1134,6 +1134,10 @@ in-memory source model. Successful editor mutations synchronize that source
 model before save/export, then reload compiles runtime brushes from the source
 again. This makes source boxes the durable editing truth and keeps generated
 `brush_worlds` as load-time/runtime derived data.
+When an editable fragment contains both `brush_worlds[].brushes` and a matching
+`editor_brush_sources` entry, the source model wins: imported runtime brushes
+are discarded and rebuilt from source, so stale compiled output cannot affect
+editor preview, collision, selection, save/open, or test-run behavior.
 
 Source-backed editor mutations validate candidate source boxes before they are
 committed. Exact snapped face, edge, or vertex contact is legal. Positive-volume
