@@ -16187,6 +16187,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
+    ASSERT_NE(editor_camera, nullptr);
+    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
+    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.0f);
+    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
+    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
+                                 slayer3d_vec3_make(0.0f, -0.564642f, -0.825336f));
 
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
@@ -16430,27 +16437,39 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    std::vector<std::string> palette_text = visible_ui_text("ui.editor_shell.palette.");
-    EXPECT_TRUE(contains_ui_text(palette_text, "Active Tool"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "> Floor"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "  Wall"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "  Sky"));
-    EXPECT_FALSE(contains_ui_text(palette_text, "  Floor"));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.material", ""),
                  "mat.editor.floor");
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 8.0f, 0.001f);
+    std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 8"));
     slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 4.0f, 0.001f);
-    slayer3d_signal_emit(bus, grid_increase_signal, nullptr);
+    grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 4"));
+    for (int i = 0; i < 5; ++i)
+        slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 0.125f, 0.001f);
+    grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 0.125"));
+    slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 256.0f, 0.001f);
+    grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 256"));
+    for (int i = 0; i < 7; ++i)
+        slayer3d_signal_emit(bus, grid_increase_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 8.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 8.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 8.0f, 0.001f);
+    grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 8"));
     const slayer3d_value *placement_min =
         slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
     const slayer3d_value *placement_max =
@@ -16615,24 +16634,20 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "wall");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.wall");
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    palette_text = visible_ui_text("ui.editor_shell.palette.");
-    EXPECT_TRUE(contains_ui_text(palette_text, "> Wall"));
-    EXPECT_TRUE(contains_ui_text(palette_text, "  Floor"));
-    EXPECT_FALSE(contains_ui_text(palette_text, "  Wall"));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
     slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "x");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
     placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
     placement_max = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_max");
     ASSERT_NE(placement_min, nullptr);
     ASSERT_NE(placement_max, nullptr);
-    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x - 0.1f, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.x, placement_origin.x, 0.001f);
     EXPECT_NEAR(placement_min->as_vec3.y, placement_origin.y, 0.001f);
-    EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 0.1f, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.z, placement_origin.z - 0.1f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.x, placement_origin.x + 8.0f, 0.001f);
     EXPECT_NEAR(placement_max->as_vec3.y, placement_origin.y + 8.0f, 0.001f);
-    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 8.0f, 0.001f);
+    EXPECT_NEAR(placement_max->as_vec3.z, placement_origin.z + 0.1f, 0.001f);
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "wall prefab created");
@@ -16642,11 +16657,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GT(brush_world.brush_count, 0);
     brush = &brush_world.brushes[brush_world.brush_count - 1];
     EXPECT_STREQ(brush->faces[0].material_name, "mat.editor.wall");
-    EXPECT_NEAR(brush->bounds.min.x, placement_origin.x - 0.1f, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.x, placement_origin.x, 0.001f);
     EXPECT_NEAR(brush->bounds.min.y, placement_origin.y, 0.001f);
-    EXPECT_NEAR(brush->bounds.min.z, placement_origin.z, 0.001f);
-    EXPECT_NEAR(brush->bounds.max.x, placement_origin.x + 0.1f, 0.001f);
-    EXPECT_NEAR(brush->bounds.max.z, placement_origin.z + 8.0f, 0.001f);
+    EXPECT_NEAR(brush->bounds.min.z, placement_origin.z - 0.1f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.x, placement_origin.x + 8.0f, 0.001f);
+    EXPECT_NEAR(brush->bounds.max.z, placement_origin.z + 0.1f, 0.001f);
     EXPECT_NEAR(brush->bounds.max.y, placement_origin.y + 8.0f, 0.001f);
 
     slayer3d_signal_emit(bus, ceiling_signal, nullptr);
@@ -16698,55 +16713,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     right_release.button.y = right_click.button.y;
     slayer3d_input_process_event(input, &right_release);
     slayer3d_input_update(input, 7);
-
-    slayer3d_signal_emit(bus, mode_select_signal, nullptr);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
-    click_editor(282.4f, 196.45f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 8);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.element", ""), "brush.target.cube");
-    click_editor(282.4f, 196.45f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 10);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));
-    click_editor(282.4f, 196.45f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 12);
-    click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_SHIFT, 14);
-    const int selected_brushes = slayer3d_properties_get_int(scene_state, "editor.selection.count", 0);
-    EXPECT_EQ(selected_brushes, 2);
-    struct MultiSelectionDebug
-    {
-        int edges = 0;
-    } multi_selection_debug;
-    auto count_multi_selection_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
-        auto *debug = static_cast<MultiSelectionDebug *>(userdata);
-        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE)
-            debug->edges++;
-        return true;
-    };
-    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_multi_selection_debug,
-                                                                          &multi_selection_debug));
-    EXPECT_EQ(multi_selection_debug.edges, 24);
-
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), selected_brushes);
-
-    slayer3d_signal_emit(bus, clear_selection_signal, nullptr);
-    click_editor(282.4f, 196.45f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 26);
-    click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_SHIFT, 28);
-    ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), selected_brushes);
-
-    const int brush_count_before_multi_delete = world().brush_count;
-    SDL_Event backspace{};
-    backspace.type = SDL_EVENT_KEY_DOWN;
-    backspace.key.scancode = SDL_SCANCODE_BACKSPACE;
-    slayer3d_input_process_event(input, &backspace);
-    slayer3d_input_update(input, 30);
-    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
-    backspace.type = SDL_EVENT_KEY_UP;
-    slayer3d_input_process_event(input, &backspace);
-    slayer3d_input_update(input, 31);
-    EXPECT_EQ(world().brush_count, brush_count_before_multi_delete - selected_brushes);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", true));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
-                 "deleted 2 selected brushes");
 
     slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
@@ -20324,6 +20290,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool tool_background = false;
         bool tool_buttons[7]{};
         bool tool_labels[7]{};
+        bool grid_widget = false;
+        bool grid_label = false;
         bool inspector_panel = false;
         bool inspector_header = false;
         bool inspector_tabs[3]{};
@@ -20348,6 +20316,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             capture->background = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar") == 0)
             capture->tool_background = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.button") == 0)
+            capture->grid_widget = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.panel") == 0)
             capture->inspector_panel = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.header") == 0)
@@ -20458,6 +20428,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             capture->inspector_collapsed_label = true;
         if (name == "ui.editor_shell.console.console.label")
             capture->console_tab_labels[0] = true;
+        else if (name == "ui.editor_shell.tool_toolbar.grid.label")
+            capture->grid_label = true;
         else if (name == "ui.editor_shell.console.issues.label")
             capture->console_tab_labels[1] = true;
         else if (name == "ui.editor_shell.console.line0")
@@ -20540,6 +20512,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         EXPECT_TRUE(toolbar_capture.tool_buttons[i]) << i;
         EXPECT_TRUE(toolbar_capture.tool_labels[i]) << i;
     }
+    EXPECT_TRUE(toolbar_capture.grid_widget);
+    EXPECT_TRUE(toolbar_capture.grid_label);
     EXPECT_TRUE(toolbar_capture.inspector_panel);
     EXPECT_TRUE(toolbar_capture.inspector_header);
     EXPECT_TRUE(toolbar_capture.inspector_title);

@@ -51,7 +51,9 @@ menus such as File > Save without changing the viewport layout.
 A second placeholder tool toolbar sits directly underneath it with the first
 editor tool buttons: Select, Brush Tool, Clip Tool, Face Tool, Vertex Tool,
 Entity Tool, and Texture Tool. These are also visual placeholders; keyboard
-shortcuts still drive the active tools in this slice.
+shortcuts still drive the active tools in this slice. The same toolbar also
+shows the current grid size so placement and future transform operations have
+an obvious snap reference.
 
 The left Inspector panel is visible by default. It currently contains
 placeholder Map, Entity, and Face tabs so the editor has a stable destination
@@ -92,7 +94,7 @@ shortcuts do not shadow camera movement.
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
-| `+` / `-` | palette closed | increase or decrease grid size |
+| `+` / `-` | palette closed | increase or decrease grid size through the fixed ladder: 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256 |
 | `R` | palette closed | toggle wall axis for manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
@@ -146,7 +148,7 @@ shortcuts do not shadow camera movement.
 The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
-  pressed.
+  pressed. The second toolbar's Grid widget should update to the same value.
 - The old left-side debug dump is no longer visible. The new left Inspector
   panel is visible with Map, Entity, and Face placeholder tabs, and `I`
   collapses it to a small strip.

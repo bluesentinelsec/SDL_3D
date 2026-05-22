@@ -510,14 +510,14 @@
             "key": "editor.grid.size",
             "default": 8.0,
             "direction": -1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
             "default": 8.0,
             "direction": -1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size decreased" }
         ]
@@ -530,14 +530,14 @@
             "key": "editor.grid.size",
             "default": 8.0,
             "direction": 1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
             "default": 8.0,
             "direction": 1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size increased" }
         ]

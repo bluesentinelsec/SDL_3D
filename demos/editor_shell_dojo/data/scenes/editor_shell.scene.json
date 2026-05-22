@@ -507,6 +507,16 @@
         "border_thickness": 1
       },
       {
+        "name": "ui.editor_shell.tool_toolbar.grid.button",
+        "x": 735,
+        "y": 45,
+        "w": 110,
+        "h": 28,
+        "color": [24, 34, 48, 245],
+        "border_color": [120, 165, 205, 235],
+        "border_thickness": 1
+      },
+      {
         "name": "ui.editor_shell.left_inspector.panel",
         "x": 12,
         "y": 92,
@@ -1064,6 +1074,17 @@
         "y": 54,
         "align": "center",
         "color": [220, 236, 255, 245],
+        "scale": 0.54
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.label",
+        "format": "Grid %.3g",
+        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 8.0 }],
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 54,
+        "align": "center",
+        "color": [230, 245, 255, 250],
         "scale": 0.54
       },
       {
