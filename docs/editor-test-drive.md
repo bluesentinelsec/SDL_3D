@@ -39,12 +39,9 @@ should use `slayer3d_editor new` or `slayer3d_editor open`.
 
 ## Default Layout
 
-The editor now starts in a classic four-viewport layout:
-
-- Top-left: 3D perspective preview.
-- Top-right: top/plan orthographic view for floor-plane placement.
-- Bottom-left: front orthographic view.
-- Bottom-right: side orthographic view.
+The editor now starts in a single 3D perspective/flyby viewport. Orthographic
+views are temporarily not exposed while the editor UX focuses on making the 3D
+workflow competent and predictable.
 
 A nonfunctional top toolbar sits above the viewports with the first top-level
 menus: File, Edit, Selection, Groups, Tools, View, Run, Debug, and Help.
@@ -61,36 +58,24 @@ placeholder Map, Entity, and Face tabs so the editor has a stable destination
 for selection diagnostics and property editing in later slices. Press `I` to
 collapse or expand the panel.
 
-A bottom console pane spans the editor width below the viewports. The Console
+A bottom console pane spans the editor width below the viewport. The Console
 tab shows recent editor messages and mirrors those messages to the terminal via
 SDL logging. The Issues tab is a placeholder for map findings such as leaks and
 validation warnings.
 
-Use the number keys to switch layouts: `1` returns to the four-viewport layout,
-`2` opens the full-screen 3D flyby viewport, `3` opens top orthographic, `4`
-opens front orthographic, and `5` opens side orthographic. `Tab` remains a
-quick toggle between the four-viewport layout and full-screen 3D flyby.
-
-The editor uses normal hardware cursor positioning in the four-viewport layout.
-In full-screen 3D flyby mode the runtime captures relative mouse motion for
-mouse-look, then releases it again when returning to orthographic editing.
-Flyby brush feedback is reticle-driven: the highlighted brush, hit marker, and
-placement preview should remain pinned to the screen center instead of following
-the last clicked selection.
+The old number-key and `Tab` view switching shortcuts are intentionally
+unbound. The editor viewport uses relative mouse motion for mouse-look. Brush
+feedback is reticle-driven: the highlighted brush, hit marker, and placement
+preview should remain pinned to the screen center instead of following the last
+clicked selection.
 
 ## Keybindings
 
-The number row is reserved for view selection. Tool and object selection should
-go through palettes so level-authoring shortcuts do not shadow view controls.
+Tool and object selection should go through palettes so level-authoring
+shortcuts do not shadow camera movement.
 
 | Key | Context | Behavior |
 | --- | --- | --- |
-| `1` | global editor | four-viewport layout |
-| `2` | global editor | full-screen 3D perspective / flyby view |
-| `3` | global editor | full-screen top orthographic view |
-| `4` | global editor | full-screen front orthographic view |
-| `5` | global editor | full-screen side orthographic view |
-| `Tab` | global editor | quick toggle between four-view layout and full-screen 3D flyby |
 | `B` | global editor | enter Brush Paint Mode and open or close the Brushes palette |
 | `M` | global editor | enter Texture Mode and open the Materials palette placeholder |
 | `G` | global editor | open the Game Objects palette |
@@ -102,15 +87,13 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 | mouse click | Brush/Game Object Mode | place the selected prefab at the snapped preview position |
 | mouse click | Select Mode | select or deselect the highlighted brush |
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
-| right click | orthographic view | delete the highlighted tile or game object |
+| right click | editor view | delete the highlighted tile or game object |
 | `[` and `]` | Select Mode | lower or raise selected brush height/elevation by one active grid step |
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size |
-| arrow keys | full-screen orthographic, palette closed | pan the active canvas |
-| `Z` / `X` or mouse wheel | orthographic view | zoom the active canvas in or out; in four-view layout, the mouse cursor must be over an orthographic pane |
-| `R` | palette closed | toggle wall axis for orthographic/manual wall placement |
+| `R` | palette closed | toggle wall axis for manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
 | mouse look | 3D flyby | rotate camera |
@@ -129,8 +112,8 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
 3. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
    ceiling tile.
 4. Press `B`, move to Sky with the arrow keys, press `Enter`, and place a sky
-   tile over an opening. The brush should seal leak validation while rendering
-   as the scene skybox in editor and test-run views.
+   tile over an opening. The brush should seal leak validation; sky rendering
+   will be revisited when a better editor skybox is authored.
 5. Press `G`, press `Enter` to select Player Start, and place it on the floor.
 6. Press `Space`, click a tile to select it, press `]`, and confirm the brush
    stretches upward while its bottom face stays anchored. Press `[` on a floor
@@ -167,7 +150,7 @@ The following should be true during a good test drive:
 - The old left-side debug dump is no longer visible. The new left Inspector
   panel is visible with Map, Entity, and Face placeholder tabs, and `I`
   collapses it to a small strip.
-- The bottom Console pane remains visible across view modes. It starts with
+- The bottom Console pane remains visible in the 3D editor view. It starts with
   `Editor ready`, appends common editor actions such as inspector toggles and
   saves, and prints the same messages to the terminal. The Issues tab is present
   as a placeholder for future map diagnostics.
@@ -182,8 +165,6 @@ The following should be true during a good test drive:
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling/sky brushes stay aligned to the larger
   blockout grid.
-- The bright green placement preview sits under the mouse in orthographic
-  views, using the containing grid cell rather than the nearest grid line.
 - Floor and ceiling prefabs share the same grid-cell footprint. Wall prefabs
   are thin grid-edge segments, so simple blockout maps can be tiled without
   visible gaps while adjacent hallways can pass close to one another. Wall
@@ -193,9 +174,8 @@ The following should be true during a good test drive:
   operations. Preview and commit use the same source candidate; valid previews
   should commit with matching bounds, and true invalid intersections should
   report a source-model diagnostic instead of a vague runtime overlap failure.
-- In full-screen 3D flyby mode, wall placement auto-rotates to the nearest
-  cardinal axis from the camera direction. Orthographic placement keeps the
-  explicit `R` wall-axis toggle for drafting control.
+- In 3D flyby mode, wall placement auto-rotates to the nearest cardinal axis
+  from the camera direction.
 - Floor, wall, ceiling, and sky previews share a connected-grid elevation. Hovering
   or working from a lowered floor or one of its side-wall fills should update
   the editor brush elevation and work plane so new floor, wall, and ceiling
@@ -210,25 +190,16 @@ The following should be true during a good test drive:
   palette, and `Enter` selects Player Start for placement.
 - Placed player starts render as bright green cylinder markers in the editor
   canvas, can be highlighted by hovering, and can be removed with right click.
-- The four-view layout appears on launch. Number keys switch between quad,
-  full-screen 3D, and full-screen orthographic views.
 - The top menu toolbar and second tool toolbar are visible above every view
-  mode, and the editor viewports start below them instead of rendering
+  mode, and the editor viewport starts below them instead of rendering
   underneath the toolbar chrome.
-- Each viewport displays a small label identifying the active view: 3D
-  perspective, top/XY, front/XZ, or side/YZ.
-- Full-screen orthographic views pan with the arrow keys and zoom with `Z`,
-  `X`, or the mouse wheel while keeping a visible work grid.
-- In the four-view layout, mouse wheel zoom works when the cursor is over the
-  top, front, or side orthographic pane. The 3D perspective pane does not
-  consume orthographic zoom.
-- Top/front/side orthographic views plot on their authored work planes;
-  perspective preview uses the 3D editor camera.
-- In full-screen 3D flyby mode, brush picking and placement trace from the
-  screen center. The highlighted brush should be the brush under the crosshair;
-  if no brush is hit, placement falls back to the ground work plane. After
-  clicking one brush, look away and confirm the selection cursor follows the
-  reticle rather than staying offset on the previous brush.
+- The editor viewport displays a small label identifying the active 3D
+  perspective view.
+- Brush picking and placement trace from the screen center. The highlighted
+  brush should be the brush under the crosshair; if no brush is hit, placement
+  falls back to the ground work plane. After clicking one brush, look away and
+  confirm the selection cursor follows the reticle rather than staying offset
+  on the previous brush.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
   `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.

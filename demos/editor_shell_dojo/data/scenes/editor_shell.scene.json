@@ -20,12 +20,6 @@
       "action.editor.export",
       "action.editor.test_run.prepare",
       "action.editor.test_run.enter",
-      "action.editor.view.toggle",
-      "action.editor.view.quad",
-      "action.editor.view.perspective",
-      "action.editor.view.top",
-      "action.editor.view.front",
-      "action.editor.view.side",
       "action.editor.ortho.pan.left",
       "action.editor.ortho.pan.right",
       "action.editor.ortho.pan.up",
@@ -58,15 +52,6 @@
   },
   "entities": ["entity.editor_shell.camera"],
   "world": {
-    "skybox": {
-      "pos_x": "image.editor_shell.skybox.px",
-      "neg_x": "image.editor_shell.skybox.nx",
-      "pos_y": "image.editor_shell.skybox.py",
-      "neg_y": "image.editor_shell.skybox.ny",
-      "pos_z": "image.editor_shell.skybox.pz",
-      "neg_z": "image.editor_shell.skybox.nz",
-      "size": 400.0
-    },
     "brush_worlds": [
       { "world": "brush.editor_shell.target", "position": [0.0, 0.0, 0.0] }
     ]
@@ -75,26 +60,7 @@
     {
       "name": "editor.perspective",
       "camera": "camera.editor_shell.viewport",
-      "rect": [0, 80, 640, 260],
-      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
-    },
-    {
-      "name": "editor.top_xy",
-      "camera": "camera.editor_shell.ortho_top",
-      "rect": [640, 80, 640, 260],
-      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
-    },
-    {
-      "name": "editor.front_xz",
-      "camera": "camera.editor_shell.ortho_front",
-      "rect": [0, 340, 640, 260],
-      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
-    },
-    {
-      "name": "editor.side_yz",
-      "camera": "camera.editor_shell.ortho_side",
-      "rect": [640, 340, 640, 260],
-      "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
+      "rect": [0, 80, 1280, 520]
     }
   ],
   "editor": {
@@ -109,89 +75,11 @@
         "viewports": [
           {
             "camera": "camera.editor_shell.viewport",
-            "rect": [0, 80, 640, 260],
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
-            "work_plane": {
-              "enabled": true,
-              "normal": [0.0, 1.0, 0.0],
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          },
-          {
-            "camera": "camera.editor_shell.viewport",
             "rect": [0, 80, 1280, 520],
             "screen": "center",
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
             "work_plane": {
               "enabled": true,
               "normal": [0.0, 1.0, 0.0],
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          },
-          {
-            "camera": "camera.editor_shell.ortho_top",
-            "rect": [640, 80, 640, 260],
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
-            "work_plane": {
-              "enabled": true,
-              "normal": [0.0, 1.0, 0.0],
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          },
-          {
-            "camera": "camera.editor_shell.ortho_front",
-            "rect": [0, 340, 640, 260],
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
-            "work_plane": {
-              "enabled": true,
-              "normal": [0.0, 0.0, 1.0],
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          },
-          {
-            "camera": "camera.editor_shell.ortho_side",
-            "rect": [640, 340, 640, 260],
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
-            "work_plane": {
-              "enabled": true,
-              "normal": [1.0, 0.0, 0.0],
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          },
-          {
-            "camera": "camera.editor_shell.ortho_top",
-            "rect": [0, 80, 1280, 520],
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
-            "work_plane": {
-              "enabled": true,
-              "normal": [0.0, 1.0, 0.0],
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          },
-          {
-            "camera": "camera.editor_shell.ortho_front",
-            "rect": [0, 80, 1280, 520],
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_front" },
-            "work_plane": {
-              "enabled": true,
-              "normal": [0.0, 0.0, 1.0],
-              "distance": 0.0,
-              "distance_key": "editor.work_plane.distance"
-            }
-          },
-          {
-            "camera": "camera.editor_shell.ortho_side",
-            "rect": [0, 80, 1280, 520],
-            "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_side" },
-            "work_plane": {
-              "enabled": true,
-              "normal": [1.0, 0.0, 0.0],
               "distance": 0.0,
               "distance_key": "editor.work_plane.distance"
             }
@@ -1399,55 +1287,7 @@
         "scale": 0.8
       },
       {
-        "name": "ui.editor_shell.view_label.quad.perspective",
-        "text": "3D Perspective",
-        "font": "font.editor_shell.ui",
-        "x": 0.49,
-        "y": 0.20,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 230],
-        "scale": 0.54,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
-      },
-      {
-        "name": "ui.editor_shell.view_label.quad.top",
-        "text": "Top / XY",
-        "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.20,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 230],
-        "scale": 0.54,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
-      },
-      {
-        "name": "ui.editor_shell.view_label.quad.front",
-        "text": "Front / XZ",
-        "font": "font.editor_shell.ui",
-        "x": 0.49,
-        "y": 0.64,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 230],
-        "scale": 0.54,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
-      },
-      {
-        "name": "ui.editor_shell.view_label.quad.side",
-        "text": "Side / YZ",
-        "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.64,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 230],
-        "scale": 0.54,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
-      },
-      {
-        "name": "ui.editor_shell.view_label.full.perspective",
+        "name": "ui.editor_shell.view_label.perspective",
         "text": "3D Perspective / Flyby",
         "font": "font.editor_shell.ui",
         "x": 0.98,
@@ -1455,44 +1295,7 @@
         "normalized": true,
         "align": "right",
         "color": [160, 220, 255, 235],
-        "scale": 0.6,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" }
-      },
-      {
-        "name": "ui.editor_shell.view_label.full.top",
-        "text": "Top / XY Orthographic",
-        "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.20,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 235],
-        "scale": 0.6,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" }
-      },
-      {
-        "name": "ui.editor_shell.view_label.full.front",
-        "text": "Front / XZ Orthographic",
-        "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.20,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 235],
-        "scale": 0.6,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_front" }
-      },
-      {
-        "name": "ui.editor_shell.view_label.full.side",
-        "text": "Side / YZ Orthographic",
-        "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.20,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 235],
-        "scale": 0.6,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_side" }
+        "scale": 0.6
       },
       {
         "name": "ui.editor_shell.palette.modal.title.brush",
@@ -1656,7 +1459,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "Views: 1 quad 2 3D 3 top 4 front 5 side, Tab toggles 3D. Ortho: arrows pan, Z/X or wheel zoom. Flyby: WASD move, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, [ and ] height, Delete/Backspace remove.",
+        "text": "3D editor: WASD move, mouse look, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, [ and ] height, Delete/Backspace remove.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.17,
