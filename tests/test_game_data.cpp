@@ -15772,7 +15772,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.x = 282.4f;
-    motion.motion.y = 196.45f;
+    motion.motion.y = 254.6f;
     motion.motion.xrel = 0.0f;
     motion.motion.yrel = 0.0f;
     SDL_Event click{};
@@ -15972,24 +15972,20 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(debug.normals, 1);
     EXPECT_EQ(debug.markers, 3);
 
-    struct InspectorText
+    struct RemovedInspectorText
     {
-        std::vector<std::string> values;
-    } inspector;
-    auto capture_inspector = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
-        auto *capture = static_cast<InspectorText *>(userdata);
+        bool found = false;
+    } removed_inspector;
+    auto capture_removed_inspector = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<RemovedInspectorText *>(userdata);
         if (std::string(text->name) == "ui.editor_shell.inspector")
-            capture->values.emplace_back(text->text != nullptr ? text->text : "");
+            capture->found = true;
         return true;
     };
     slayer3d_game_data_ui_metrics metrics{};
-    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_inspector, &inspector));
-    ASSERT_GE(inspector.values.size(), 13U);
-    EXPECT_EQ(inspector.values[0], "Editor Selection");
-    EXPECT_EQ(inspector.values[1], "Hit");
-    EXPECT_EQ(inspector.values[2], "true");
-    EXPECT_EQ(inspector.values[3], "World");
-    EXPECT_EQ(inspector.values[4], "brush.editor_shell.target");
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_removed_inspector,
+                                                                &removed_inspector));
+    EXPECT_FALSE(removed_inspector.found);
 
     press_key(SDL_SCANCODE_RETURN, 7);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
@@ -16156,7 +16152,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     SDL_Event miss_motion{};
     miss_motion.type = SDL_EVENT_MOUSE_MOTION;
     miss_motion.motion.x = 660.0f;
-    miss_motion.motion.y = 20.0f;
+    miss_motion.motion.y = 100.0f;
     SDL_Event miss_click{};
     miss_click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     miss_click.button.button = SDL_BUTTON_LEFT;
@@ -20356,6 +20352,11 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool background = false;
         bool buttons[9]{};
         bool labels[9]{};
+        bool tool_background = false;
+        bool tool_buttons[7]{};
+        bool tool_labels[7]{};
+        bool old_sidebar = false;
+        bool old_inspector = false;
     } toolbar_capture;
     auto capture_toolbar_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
         auto *capture = static_cast<ToolbarCapture *>(userdata);
@@ -20363,8 +20364,12 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             return true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.toolbar") == 0)
             capture->background = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar") == 0)
+            capture->tool_background = true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.sidebar") == 0)
+            capture->old_sidebar = true;
         const std::string name(rect->name);
-        const std::string prefix = "ui.editor_shell.toolbar.";
+        std::string prefix = "ui.editor_shell.toolbar.";
         const std::string suffix = ".button";
         if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
             name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
@@ -20392,6 +20397,29 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             if (index >= 0)
                 capture->buttons[index] = true;
         }
+        prefix = "ui.editor_shell.tool_toolbar.";
+        if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
+            name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
+        {
+            const std::string key = name.substr(prefix.size(), name.size() - prefix.size() - suffix.size());
+            int index = -1;
+            if (key == "select")
+                index = 0;
+            else if (key == "brush")
+                index = 1;
+            else if (key == "clip")
+                index = 2;
+            else if (key == "face")
+                index = 3;
+            else if (key == "vertex")
+                index = 4;
+            else if (key == "entity")
+                index = 5;
+            else if (key == "texture")
+                index = 6;
+            if (index >= 0)
+                capture->tool_buttons[index] = true;
+        }
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_toolbar_rect, &toolbar_capture));
@@ -20400,35 +20428,59 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         if (text == nullptr || text->name == nullptr || text->text == nullptr)
             return true;
         const std::string name(text->name);
-        const std::string prefix = "ui.editor_shell.toolbar.";
+        if (name == "ui.editor_shell.inspector")
+            capture->old_inspector = true;
+        std::string prefix = "ui.editor_shell.toolbar.";
         const std::string suffix = ".label";
-        if (name.rfind(prefix, 0) != 0 || name.size() <= prefix.size() + suffix.size() ||
-            name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0)
+        if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
+            name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
         {
-            return true;
+            const std::string key = name.substr(prefix.size(), name.size() - prefix.size() - suffix.size());
+            int index = -1;
+            if (key == "file")
+                index = 0;
+            else if (key == "edit")
+                index = 1;
+            else if (key == "selection")
+                index = 2;
+            else if (key == "groups")
+                index = 3;
+            else if (key == "tools")
+                index = 4;
+            else if (key == "view")
+                index = 5;
+            else if (key == "run")
+                index = 6;
+            else if (key == "debug")
+                index = 7;
+            else if (key == "help")
+                index = 8;
+            if (index >= 0)
+                capture->labels[index] = true;
         }
-        const std::string key = name.substr(prefix.size(), name.size() - prefix.size() - suffix.size());
-        int index = -1;
-        if (key == "file")
-            index = 0;
-        else if (key == "edit")
-            index = 1;
-        else if (key == "selection")
-            index = 2;
-        else if (key == "groups")
-            index = 3;
-        else if (key == "tools")
-            index = 4;
-        else if (key == "view")
-            index = 5;
-        else if (key == "run")
-            index = 6;
-        else if (key == "debug")
-            index = 7;
-        else if (key == "help")
-            index = 8;
-        if (index >= 0)
-            capture->labels[index] = true;
+        prefix = "ui.editor_shell.tool_toolbar.";
+        if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
+            name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
+        {
+            const std::string key = name.substr(prefix.size(), name.size() - prefix.size() - suffix.size());
+            int index = -1;
+            if (key == "select")
+                index = 0;
+            else if (key == "brush")
+                index = 1;
+            else if (key == "clip")
+                index = 2;
+            else if (key == "face")
+                index = 3;
+            else if (key == "vertex")
+                index = 4;
+            else if (key == "entity")
+                index = 5;
+            else if (key == "texture")
+                index = 6;
+            if (index >= 0)
+                capture->tool_labels[index] = true;
+        }
         return true;
     };
     slayer3d_game_data_ui_metrics toolbar_metrics{};
@@ -20440,6 +20492,14 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         EXPECT_TRUE(toolbar_capture.buttons[i]) << i;
         EXPECT_TRUE(toolbar_capture.labels[i]) << i;
     }
+    EXPECT_TRUE(toolbar_capture.tool_background);
+    for (int i = 0; i < 7; ++i)
+    {
+        EXPECT_TRUE(toolbar_capture.tool_buttons[i]) << i;
+        EXPECT_TRUE(toolbar_capture.tool_labels[i]) << i;
+    }
+    EXPECT_FALSE(toolbar_capture.old_sidebar);
+    EXPECT_FALSE(toolbar_capture.old_inspector);
     slayer3d_signal_emit(bus, view_top_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),

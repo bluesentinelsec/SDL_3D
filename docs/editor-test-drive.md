@@ -51,6 +51,11 @@ menus: File, Edit, Selection, Groups, Tools, View, Run, Debug, and Help.
 Those buttons are visual placeholders for now; later slices will wire them to
 menus such as File > Save without changing the viewport layout.
 
+A second placeholder tool toolbar sits directly underneath it with the first
+editor tool buttons: Select, Brush Tool, Clip Tool, Face Tool, Vertex Tool,
+Entity Tool, and Texture Tool. These are also visual placeholders; keyboard
+shortcuts still drive the active tools in this slice.
+
 Use the number keys to switch layouts: `1` returns to the four-viewport layout,
 `2` opens the full-screen 3D flyby viewport, `3` opens top orthographic, `4`
 opens front orthographic, and `5` opens side orthographic. `Tab` remains a
@@ -126,19 +131,19 @@ go through palettes so level-authoring shortcuts do not shadow view controls.
    connected grid instead of snapping back to the original world plane.
 8. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
-9. Press `Ctrl+S` or `Command+S` and confirm the inspector reports a successful save. The output
+9. Press `Ctrl+S` or `Command+S` and confirm the output
    file should contain `brush_worlds`, `editor_brush_sources`, and `editor_player_starts`.
 10. Press `F5`; the editor should validate the brush source model, then switch
    into the playable test scene using the current in-memory map and player
    start. Source overlaps, near-gaps, and reachable leaks are warning-level
-   diagnostics during this MVP iteration: the inspector should still report
-   them, but they should not block entering the playable test scene. Reachable
+   diagnostics during this MVP iteration: debug markers and scene-state
+   diagnostics should still be available, but they should not block entering
+   the playable test scene. Reachable
    leaks also draw a bright magenta diagnostic marker at the first
    outside-boundary cell so you have a concrete place to inspect, plus an
    orange candidate marker on the nearest source-box face associated with that
    leak boundary. The candidate brush face should also become the active
-   selection, making the suspected source face obvious in the selection outline
-   and inspector.
+   selection, making the suspected source face obvious in the selection outline.
 11. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
@@ -148,8 +153,8 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed.
-- The inspector reports explicit editor mode and brush settings: active prefab,
-  grid size, height, elevation, thickness, and material.
+- The old left-side debug/inspector window is no longer visible. Diagnostics
+  are expected to move into dedicated UI surfaces in later slices.
 - `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
   selections update the same data-authored mode and brush-setting state.
 - `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
@@ -191,8 +196,9 @@ The following should be true during a good test drive:
   canvas, can be highlighted by hovering, and can be removed with right click.
 - The four-view layout appears on launch. Number keys switch between quad,
   full-screen 3D, and full-screen orthographic views.
-- The top toolbar is visible above every view mode, and the editor viewports
-  start below it instead of rendering underneath the toolbar.
+- The top menu toolbar and second tool toolbar are visible above every view
+  mode, and the editor viewports start below them instead of rendering
+  underneath the toolbar chrome.
 - Each viewport displays a small label identifying the active view: 3D
   perspective, top/XY, front/XZ, or side/YZ.
 - Full-screen orthographic views pan with the arrow keys and zoom with `Z`,
