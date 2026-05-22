@@ -75,25 +75,25 @@
     {
       "name": "editor.perspective",
       "camera": "camera.editor_shell.viewport",
-      "rect": [0, 80, 640, 320],
+      "rect": [0, 80, 640, 260],
       "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
     },
     {
       "name": "editor.top_xy",
       "camera": "camera.editor_shell.ortho_top",
-      "rect": [640, 80, 640, 320],
+      "rect": [640, 80, 640, 260],
       "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
     },
     {
       "name": "editor.front_xz",
       "camera": "camera.editor_shell.ortho_front",
-      "rect": [0, 400, 640, 320],
+      "rect": [0, 340, 640, 260],
       "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
     },
     {
       "name": "editor.side_yz",
       "camera": "camera.editor_shell.ortho_side",
-      "rect": [640, 400, 640, 320],
+      "rect": [640, 340, 640, 260],
       "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" }
     }
   ],
@@ -109,7 +109,7 @@
         "viewports": [
           {
             "camera": "camera.editor_shell.viewport",
-            "rect": [0, 80, 640, 320],
+            "rect": [0, 80, 640, 260],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
             "work_plane": {
               "enabled": true,
@@ -120,7 +120,7 @@
           },
           {
             "camera": "camera.editor_shell.viewport",
-            "rect": [0, 80, 1280, 640],
+            "rect": [0, 80, 1280, 520],
             "screen": "center",
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
             "work_plane": {
@@ -132,7 +132,7 @@
           },
           {
             "camera": "camera.editor_shell.ortho_top",
-            "rect": [640, 80, 640, 320],
+            "rect": [640, 80, 640, 260],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
             "work_plane": {
               "enabled": true,
@@ -143,7 +143,7 @@
           },
           {
             "camera": "camera.editor_shell.ortho_front",
-            "rect": [0, 400, 640, 320],
+            "rect": [0, 340, 640, 260],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
             "work_plane": {
               "enabled": true,
@@ -154,7 +154,7 @@
           },
           {
             "camera": "camera.editor_shell.ortho_side",
-            "rect": [640, 400, 640, 320],
+            "rect": [640, 340, 640, 260],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
             "work_plane": {
               "enabled": true,
@@ -165,7 +165,7 @@
           },
           {
             "camera": "camera.editor_shell.ortho_top",
-            "rect": [0, 80, 1280, 640],
+            "rect": [0, 80, 1280, 520],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_top" },
             "work_plane": {
               "enabled": true,
@@ -176,7 +176,7 @@
           },
           {
             "camera": "camera.editor_shell.ortho_front",
-            "rect": [0, 80, 1280, 640],
+            "rect": [0, 80, 1280, 520],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_front" },
             "work_plane": {
               "enabled": true,
@@ -187,7 +187,7 @@
           },
           {
             "camera": "camera.editor_shell.ortho_side",
-            "rect": [0, 80, 1280, 640],
+            "rect": [0, 80, 1280, 520],
             "active_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "orthographic_side" },
             "work_plane": {
               "enabled": true,
@@ -729,9 +729,69 @@
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": true, "default": false }
       },
       {
+        "name": "ui.editor_shell.console.panel",
+        "x": 0,
+        "y": 600,
+        "w": 1280,
+        "h": 120,
+        "color": [6, 9, 14, 246],
+        "border_color": [72, 92, 120, 230],
+        "border_thickness": 1
+      },
+      {
+        "name": "ui.editor_shell.console.console.tab",
+        "x": 16,
+        "y": 608,
+        "w": 104,
+        "h": 28,
+        "color": [36, 48, 66, 242],
+        "border_color": [112, 180, 240, 255],
+        "border_thickness": 2
+      },
+      {
+        "name": "ui.editor_shell.console.issues.tab",
+        "x": 124,
+        "y": 608,
+        "w": 96,
+        "h": 28,
+        "color": [24, 31, 42, 235],
+        "border_color": [72, 94, 122, 230],
+        "border_thickness": 1
+      },
+      {
+        "name": "ui.editor_shell.console.line0.row",
+        "x": 18,
+        "y": 644,
+        "w": 1244,
+        "h": 18,
+        "color": [16, 22, 32, 225],
+        "border_color": [26, 34, 48, 200],
+        "border_thickness": 1
+      },
+      {
+        "name": "ui.editor_shell.console.line1.row",
+        "x": 18,
+        "y": 664,
+        "w": 1244,
+        "h": 18,
+        "color": [13, 18, 27, 220],
+        "border_color": [24, 31, 44, 190],
+        "border_thickness": 1
+      },
+      {
+        "name": "ui.editor_shell.console.line2.row",
+        "x": 18,
+        "y": 684,
+        "w": 1244,
+        "h": 18,
+        "color": [13, 18, 27, 220],
+        "border_color": [24, 31, 44, 190],
+        "border_thickness": 1
+      },
+      {
         "name": "ui.editor_shell.handoff.panel",
         "x": 18,
-        "y": 610,
+        "y": 494,
         "w": 1244,
         "h": 92,
         "color": [8, 10, 16, 210],
@@ -1268,6 +1328,66 @@
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": true, "default": false }
       },
       {
+        "name": "ui.editor_shell.console.console.label",
+        "text": "Console",
+        "font": "font.editor_shell.ui",
+        "x": 68,
+        "y": 617,
+        "align": "center",
+        "color": [235, 245, 255, 255],
+        "scale": 0.52
+      },
+      {
+        "name": "ui.editor_shell.console.issues.label",
+        "text": "Issues",
+        "font": "font.editor_shell.ui",
+        "x": 172,
+        "y": 617,
+        "align": "center",
+        "color": [195, 210, 228, 230],
+        "scale": 0.52
+      },
+      {
+        "name": "ui.editor_shell.console.issues.placeholder",
+        "text": "Issues tab will list map leaks and validation findings.",
+        "font": "font.editor_shell.ui",
+        "x": 1238,
+        "y": 617,
+        "align": "right",
+        "color": [142, 166, 196, 210],
+        "scale": 0.42
+      },
+      {
+        "name": "ui.editor_shell.console.line0",
+        "font": "font.editor_shell.ui",
+        "format": "> %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.console.line0", "default": "Editor ready" }],
+        "x": 30,
+        "y": 648,
+        "color": [220, 236, 255, 238],
+        "scale": 0.42
+      },
+      {
+        "name": "ui.editor_shell.console.line1",
+        "font": "font.editor_shell.ui",
+        "format": "  %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.console.line1", "default": "" }],
+        "x": 30,
+        "y": 668,
+        "color": [185, 204, 228, 218],
+        "scale": 0.42
+      },
+      {
+        "name": "ui.editor_shell.console.line2",
+        "font": "font.editor_shell.ui",
+        "format": "  %s",
+        "bindings": [{ "type": "scene_state", "key": "editor.console.line2", "default": "" }],
+        "x": 30,
+        "y": 688,
+        "color": [165, 184, 208, 205],
+        "scale": 0.42
+      },
+      {
         "name": "ui.editor_shell.title",
         "text": "Editor Shell Dojo",
         "font": "font.editor_shell.ui",
@@ -1496,7 +1616,7 @@
         "text": "Test Run Handoff",
         "font": "font.editor_shell.ui",
         "x": 34,
-        "y": 620,
+        "y": 504,
         "color": [160, 230, 230, 240],
         "scale": 0.56,
         "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
@@ -1507,7 +1627,7 @@
         "format": "Level: %s",
         "bindings": [{ "type": "scene_state", "key": "editor.save.path", "default": "none" }],
         "x": 34,
-        "y": 644,
+        "y": 528,
         "color": [220, 232, 245, 225],
         "scale": 0.46,
         "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
@@ -1518,7 +1638,7 @@
         "format": "Manifest: %s",
         "bindings": [{ "type": "scene_state", "key": "editor.test_run.path", "default": "none" }],
         "x": 34,
-        "y": 666,
+        "y": 550,
         "color": [220, 232, 245, 225],
         "scale": 0.46,
         "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
@@ -1529,7 +1649,7 @@
         "format": "Command: %s",
         "bindings": [{ "type": "scene_state", "key": "editor.test_run.command", "default": "none" }],
         "x": 34,
-        "y": 688,
+        "y": 572,
         "color": [235, 245, 255, 235],
         "scale": 0.42,
         "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }

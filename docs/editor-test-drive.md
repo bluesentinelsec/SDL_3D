@@ -61,6 +61,11 @@ placeholder Map, Entity, and Face tabs so the editor has a stable destination
 for selection diagnostics and property editing in later slices. Press `I` to
 collapse or expand the panel.
 
+A bottom console pane spans the editor width below the viewports. The Console
+tab shows recent editor messages and mirrors those messages to the terminal via
+SDL logging. The Issues tab is a placeholder for map findings such as leaks and
+validation warnings.
+
 Use the number keys to switch layouts: `1` returns to the four-viewport layout,
 `2` opens the full-screen 3D flyby viewport, `3` opens top orthographic, `4`
 opens front orthographic, and `5` opens side orthographic. `Tab` remains a
@@ -162,6 +167,10 @@ The following should be true during a good test drive:
 - The old left-side debug dump is no longer visible. The new left Inspector
   panel is visible with Map, Entity, and Face placeholder tabs, and `I`
   collapses it to a small strip.
+- The bottom Console pane remains visible across view modes. It starts with
+  `Editor ready`, appends common editor actions such as inspector toggles and
+  saves, and prints the same messages to the terminal. The Issues tab is present
+  as a placeholder for future map diagnostics.
 - `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
   selections update the same data-authored mode and brush-setting state.
 - `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
