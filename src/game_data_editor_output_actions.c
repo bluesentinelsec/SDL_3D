@@ -466,6 +466,31 @@ bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_r
     editor_set_int_output(scene_state, outputs, "vertex_contact_count_key", ok ? diagnostics.vertex_contact_count : 0);
     editor_set_int_output(scene_state, outputs, "partial_face_contact_count_key",
                           ok ? diagnostics.partial_face_contact_count : 0);
+    editor_set_int_output(scene_state, outputs, "runtime_brush_count_key", ok ? diagnostics.runtime_brush_count : 0);
+    editor_set_int_output(scene_state, outputs, "runtime_source_mismatch_count_key",
+                          ok ? diagnostics.runtime_source_mismatch_count : 0);
+    editor_set_int_output(scene_state, outputs, "compiled_face_count_key", ok ? diagnostics.compiled_face_count : 0);
+    editor_set_int_output(scene_state, outputs, "compiled_face_missing_source_count_key",
+                          ok ? diagnostics.compiled_face_missing_source_count : 0);
+    editor_set_int_output(scene_state, outputs, "compiled_face_unknown_source_count_key",
+                          ok ? diagnostics.compiled_face_unknown_source_count : 0);
+    editor_set_string_output(scene_state, outputs, "first_issue_kind_key", ok ? diagnostics.first_issue_kind : "");
+    editor_set_string_output(scene_state, outputs, "first_issue_source_name_key",
+                             ok ? diagnostics.first_issue_source_name : "");
+    editor_set_string_output(scene_state, outputs, "first_issue_source_stable_id_key",
+                             ok ? diagnostics.first_issue_source_stable_id : "");
+    editor_set_string_output(scene_state, outputs, "first_issue_related_source_name_key",
+                             ok ? diagnostics.first_issue_related_source_name : "");
+    editor_set_string_output(scene_state, outputs, "first_issue_related_source_stable_id_key",
+                             ok ? diagnostics.first_issue_related_source_stable_id : "");
+    editor_set_string_output(scene_state, outputs, "first_issue_source_face_key",
+                             ok ? diagnostics.first_issue_source_face : "");
+    editor_set_string_output(scene_state, outputs, "first_issue_runtime_brush_name_key",
+                             ok ? diagnostics.first_issue_runtime_brush_name : "");
+    editor_set_int_output(scene_state, outputs, "first_issue_runtime_brush_index_key",
+                          ok ? diagnostics.first_issue_runtime_brush_index : -1);
+    editor_set_int_output(scene_state, outputs, "first_issue_compiled_face_index_key",
+                          ok ? diagnostics.first_issue_compiled_face_index : -1);
     (void)publish_editor_brush_world_status(runtime, outputs, world_name, NULL, false);
     return true;
 }

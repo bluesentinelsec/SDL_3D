@@ -516,6 +516,204 @@ static void set_first_source_diagnostic_issue(slayer3d_game_data_editor_brush_so
                  b != NULL && b->name != NULL ? b->name : "<unnamed>", value);
 }
 
+static void set_first_source_diagnostic_context(slayer3d_game_data_editor_brush_source_diagnostics *diagnostics,
+                                                const char *kind, const editor_brush_source_box_runtime *source,
+                                                const editor_brush_source_box_runtime *related_source,
+                                                const char *source_face, const slayer3d_game_data_brush *runtime_brush,
+                                                int runtime_brush_index, int compiled_face_index)
+{
+    if (diagnostics == NULL || diagnostics->first_issue_kind[0] != '\0')
+        return;
+    SDL_strlcpy(diagnostics->first_issue_kind, kind != NULL ? kind : "", sizeof(diagnostics->first_issue_kind));
+    if (source != NULL)
+    {
+        SDL_strlcpy(diagnostics->first_issue_source_name, source->name != NULL ? source->name : "",
+                    sizeof(diagnostics->first_issue_source_name));
+        SDL_strlcpy(diagnostics->first_issue_source_stable_id, source->stable_id != NULL ? source->stable_id : "",
+                    sizeof(diagnostics->first_issue_source_stable_id));
+    }
+    if (related_source != NULL)
+    {
+        SDL_strlcpy(diagnostics->first_issue_related_source_name,
+                    related_source->name != NULL ? related_source->name : "",
+                    sizeof(diagnostics->first_issue_related_source_name));
+        SDL_strlcpy(diagnostics->first_issue_related_source_stable_id,
+                    related_source->stable_id != NULL ? related_source->stable_id : "",
+                    sizeof(diagnostics->first_issue_related_source_stable_id));
+    }
+    SDL_strlcpy(diagnostics->first_issue_source_face, source_face != NULL ? source_face : "",
+                sizeof(diagnostics->first_issue_source_face));
+    if (runtime_brush != NULL)
+    {
+        SDL_strlcpy(diagnostics->first_issue_runtime_brush_name, runtime_brush->name != NULL ? runtime_brush->name : "",
+                    sizeof(diagnostics->first_issue_runtime_brush_name));
+    }
+    diagnostics->first_issue_runtime_brush_index = runtime_brush_index;
+    diagnostics->first_issue_compiled_face_index = compiled_face_index;
+}
+
+static void set_first_source_diagnostic_text(slayer3d_game_data_editor_brush_source_diagnostics *diagnostics,
+                                             const char *text)
+{
+    if (diagnostics == NULL || diagnostics->first_issue[0] != '\0' || text == NULL)
+        return;
+    SDL_strlcpy(diagnostics->first_issue, text, sizeof(diagnostics->first_issue));
+}
+
+static int find_runtime_brush_index_by_source_identity(const slayer3d_game_data_brush_world *world,
+                                                       const char *brush_identity)
+{
+    if (world == NULL || brush_identity == NULL || brush_identity[0] == '\0')
+        return -1;
+    for (int i = 0; i < world->brush_count; ++i)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[i];
+        if ((brush->name != NULL && SDL_strcmp(brush->name, brush_identity) == 0) ||
+            (brush->editor.stable_id != NULL && SDL_strcmp(brush->editor.stable_id, brush_identity) == 0))
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static bool runtime_brush_matches_source_box(const brush_world_runtime *world_runtime,
+                                             const slayer3d_game_data_brush *brush,
+                                             const editor_brush_source_box_runtime *box)
+{
+    if (world_runtime == NULL || brush == NULL || box == NULL || !brush->has_bounds)
+        return false;
+    const int min_values[3] = {source_units_from_meters(world_runtime, brush->bounds.min.x),
+                               source_units_from_meters(world_runtime, brush->bounds.min.y),
+                               source_units_from_meters(world_runtime, brush->bounds.min.z)};
+    const int max_values[3] = {source_units_from_meters(world_runtime, brush->bounds.max.x),
+                               source_units_from_meters(world_runtime, brush->bounds.max.y),
+                               source_units_from_meters(world_runtime, brush->bounds.max.z)};
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (min_values[axis] != box->min[axis] || max_values[axis] != box->max[axis])
+            return false;
+    }
+    if (box->stable_id != NULL && box->stable_id[0] != '\0' &&
+        (brush->editor.stable_id == NULL || SDL_strcmp(brush->editor.stable_id, box->stable_id) != 0))
+    {
+        return false;
+    }
+    return true;
+}
+
+static void validate_source_runtime_brush_identity(const brush_world_runtime *world_runtime,
+                                                   slayer3d_game_data_editor_brush_source_diagnostics *diagnostics)
+{
+    if (world_runtime == NULL || diagnostics == NULL)
+        return;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    diagnostics->runtime_brush_count = world->brush_count;
+
+    for (int source_index = 0; source_index < world_runtime->editor_source_box_count; ++source_index)
+    {
+        const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+        const char *identity = box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
+        const int brush_index = find_runtime_brush_index_by_source_identity(world, identity);
+        if (brush_index < 0 || !runtime_brush_matches_source_box(world_runtime, &world->brushes[brush_index], box))
+        {
+            char message[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+            SDL_snprintf(message, sizeof(message), "source box '%s' has no matching compiled runtime brush",
+                         box->name != NULL ? box->name : "<unnamed>");
+            diagnostics->runtime_source_mismatch_count++;
+            set_first_source_diagnostic_text(diagnostics, message);
+            set_first_source_diagnostic_context(diagnostics, "runtime_source_mismatch", box, NULL, NULL, NULL, -1, -1);
+        }
+    }
+
+    for (int brush_index = 0; brush_index < world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &world->brushes[brush_index];
+        const char *identity = brush->editor.stable_id != NULL && brush->editor.stable_id[0] != '\0'
+                                   ? brush->editor.stable_id
+                                   : brush->name;
+        const int source_index = find_editor_source_box_index_by_identity(world_runtime, identity);
+        if (source_index < 0 ||
+            !runtime_brush_matches_source_box(world_runtime, brush, &world_runtime->editor_source_boxes[source_index]))
+        {
+            char message[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+            SDL_snprintf(message, sizeof(message), "runtime brush '%s' has no matching source box",
+                         brush->name != NULL ? brush->name : "<unnamed>");
+            diagnostics->runtime_source_mismatch_count++;
+            set_first_source_diagnostic_text(diagnostics, message);
+            set_first_source_diagnostic_context(diagnostics, "runtime_source_mismatch", NULL, NULL, NULL, brush,
+                                                brush_index, -1);
+        }
+    }
+}
+
+static void validate_source_compiled_face_identity(const brush_world_runtime *world_runtime,
+                                                   slayer3d_game_data_editor_brush_source_diagnostics *diagnostics)
+{
+    if (world_runtime == NULL || diagnostics == NULL)
+        return;
+    const slayer3d_game_data_brush_world *world = &world_runtime->desc;
+    diagnostics->compiled_face_count = world->compile_rendered_face_metadata_count;
+    if (world->compile_rendered_face_metadata_count > 0 && world->compile_rendered_faces == NULL)
+    {
+        diagnostics->compiled_face_missing_source_count += world->compile_rendered_face_metadata_count;
+        set_first_source_diagnostic_text(diagnostics, "compiled render-face metadata is missing");
+        set_first_source_diagnostic_context(diagnostics, "compiled_missing_source", NULL, NULL, NULL, NULL, -1, -1);
+        return;
+    }
+    for (int face_index = 0; face_index < world->compile_rendered_face_metadata_count; ++face_index)
+    {
+        const slayer3d_game_data_brush_compiled_face *compiled_face = &world->compile_rendered_faces[face_index];
+        if (compiled_face->source_brush_stable_id == NULL || compiled_face->source_brush_stable_id[0] == '\0' ||
+            compiled_face->source_face_stable_id == NULL || compiled_face->source_face_stable_id[0] == '\0')
+        {
+            diagnostics->compiled_face_missing_source_count++;
+            if (diagnostics->first_issue[0] == '\0')
+            {
+                SDL_snprintf(diagnostics->first_issue, sizeof(diagnostics->first_issue),
+                             "compiled face %d is missing source identity", face_index);
+            }
+            set_first_source_diagnostic_context(diagnostics, "compiled_missing_source", NULL, NULL, NULL, NULL, -1,
+                                                face_index);
+            continue;
+        }
+
+        const int source_index =
+            find_editor_source_box_index_by_identity(world_runtime, compiled_face->source_brush_stable_id);
+        const int source_face_index = source_index >= 0 ? editor_brush_world_source_box_face_index_for_identity(
+                                                              world_runtime, compiled_face->source_brush_stable_id, -1,
+                                                              compiled_face->source_face_stable_id)
+                                                        : -1;
+        const bool brush_index_valid =
+            compiled_face->brush_index >= 0 && compiled_face->brush_index < world->brush_count;
+        const bool face_index_valid = brush_index_valid && compiled_face->face_index >= 0 &&
+                                      compiled_face->face_index < world->brushes[compiled_face->brush_index].face_count;
+        const slayer3d_game_data_brush *brush = brush_index_valid ? &world->brushes[compiled_face->brush_index] : NULL;
+        const slayer3d_game_data_brush_face *face = face_index_valid ? &brush->faces[compiled_face->face_index] : NULL;
+        const bool brush_identity_matches =
+            brush != NULL && brush->editor.stable_id != NULL &&
+            SDL_strcmp(brush->editor.stable_id, compiled_face->source_brush_stable_id) == 0;
+        const bool face_identity_matches =
+            face != NULL && face->editor.stable_id != NULL &&
+            SDL_strcmp(face->editor.stable_id, compiled_face->source_face_stable_id) == 0;
+        if (source_index < 0 || source_face_index < 0 || !brush_index_valid || !face_index_valid ||
+            !brush_identity_matches || !face_identity_matches)
+        {
+            diagnostics->compiled_face_unknown_source_count++;
+            if (diagnostics->first_issue[0] == '\0')
+            {
+                SDL_snprintf(diagnostics->first_issue, sizeof(diagnostics->first_issue),
+                             "compiled face %d source identity does not resolve", face_index);
+            }
+            const editor_brush_source_box_runtime *source_box =
+                source_index >= 0 ? &world_runtime->editor_source_boxes[source_index] : NULL;
+            set_first_source_diagnostic_context(diagnostics, "compiled_unknown_source", source_box, NULL,
+                                                compiled_face->source_face_stable_id, brush, compiled_face->brush_index,
+                                                face_index);
+        }
+    }
+}
+
 static void copy_source_box_coordinates(const editor_brush_source_box_runtime *box, int out_min[3], int out_max[3])
 {
     if (box == NULL || out_min == NULL || out_max == NULL)
@@ -652,7 +850,11 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
     slayer3d_game_data_editor_brush_source_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size)
 {
     if (out_diagnostics != NULL)
+    {
         SDL_zero(*out_diagnostics);
+        out_diagnostics->first_issue_runtime_brush_index = -1;
+        out_diagnostics->first_issue_compiled_face_index = -1;
+    }
     if (out_diagnostics == NULL)
     {
         set_error(error_buffer, error_buffer_size, "editor brush source diagnostics output is required");
@@ -688,6 +890,7 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
                              "source box '%s' is not aligned to %d-unit source snap",
                              a->name != NULL ? a->name : "<unnamed>", snap_units);
             }
+            set_first_source_diagnostic_context(out_diagnostics, "off_snap", a, NULL, NULL, NULL, -1, -1);
         }
         for (int j = i + 1; j < world_runtime->editor_source_box_count; ++j)
         {
@@ -702,6 +905,7 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
                 out_diagnostics->positive_overlap_count++;
                 set_first_source_diagnostic_issue(out_diagnostics,
                                                   "source boxes '%s' and '%s' overlap with positive volume", a, b, 0);
+                set_first_source_diagnostic_context(out_diagnostics, "overlap", a, b, NULL, NULL, -1, -1);
                 continue;
             }
 
@@ -738,12 +942,18 @@ bool slayer3d_game_data_validate_editor_brush_source_model(
                     out_diagnostics->near_gap_count++;
                     set_first_source_diagnostic_issue(out_diagnostics,
                                                       "source boxes '%s' and '%s' have a %d-unit near gap", a, b, gap);
+                    set_first_source_diagnostic_context(out_diagnostics, "near_gap", a, b, NULL, NULL, -1, -1);
                 }
             }
         }
     }
 
-    out_diagnostics->structurally_valid = out_diagnostics->off_snap_count == 0;
+    validate_source_runtime_brush_identity(world_runtime, out_diagnostics);
+    validate_source_compiled_face_identity(world_runtime, out_diagnostics);
+    out_diagnostics->structurally_valid = out_diagnostics->off_snap_count == 0 &&
+                                          out_diagnostics->runtime_source_mismatch_count == 0 &&
+                                          out_diagnostics->compiled_face_missing_source_count == 0 &&
+                                          out_diagnostics->compiled_face_unknown_source_count == 0;
     return true;
 }
 

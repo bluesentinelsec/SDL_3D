@@ -1152,7 +1152,11 @@ reports off-snap coordinates, positive-volume overlaps, and tiny non-zero near
 gaps between boxes that otherwise overlap on the other two axes. Exact face
 contact is counted as structural adjacency. Off-snap source coordinates are
 blocking source-model defects. Overlaps and near-gaps are warning diagnostics
-while the editor foundation is still evolving.
+while the editor foundation is still evolving. The same pass also verifies that
+the compiled runtime brushes and visible compiled render faces still resolve
+back to source brush and face identities; source identity mismatches are
+blocking defects because selection, save/open, rendering, and diagnostics would
+otherwise be reading different worlds.
 
 Editable source validation requires a matching `editor_brush_sources` model.
 Missing source is a hard error for editor workflows so save/open, test-run,
@@ -1222,10 +1226,30 @@ missing.
     "face_contact_count_key": "editor.source.face_contacts",
     "edge_contact_count_key": "editor.source.edge_contacts",
     "vertex_contact_count_key": "editor.source.vertex_contacts",
-    "partial_face_contact_count_key": "editor.source.partial_contacts"
+    "partial_face_contact_count_key": "editor.source.partial_contacts",
+    "runtime_brush_count_key": "editor.source.runtime_brushes",
+    "runtime_source_mismatch_count_key": "editor.source.runtime_mismatches",
+    "compiled_face_count_key": "editor.source.compiled_faces",
+    "compiled_face_missing_source_count_key": "editor.source.compiled_missing_source",
+    "compiled_face_unknown_source_count_key": "editor.source.compiled_unknown_source",
+    "first_issue_kind_key": "editor.source.issue.kind",
+    "first_issue_source_name_key": "editor.source.issue.source",
+    "first_issue_source_stable_id_key": "editor.source.issue.source_id",
+    "first_issue_related_source_name_key": "editor.source.issue.related_source",
+    "first_issue_related_source_stable_id_key": "editor.source.issue.related_source_id",
+    "first_issue_source_face_key": "editor.source.issue.face",
+    "first_issue_runtime_brush_name_key": "editor.source.issue.runtime_brush",
+    "first_issue_runtime_brush_index_key": "editor.source.issue.runtime_index",
+    "first_issue_compiled_face_index_key": "editor.source.issue.compiled_face_index"
   }
 }
 ```
+
+The first-issue outputs are optional structured context for the human-readable
+message. `first_issue_kind` uses stable categories such as `off_snap`, `overlap`,
+`near_gap`, `runtime_source_mismatch`, `compiled_missing_source`, and
+`compiled_unknown_source`; source/runtime/compiled fields are empty or `-1` when
+they do not apply.
 
 ```json
 {
@@ -1627,6 +1651,9 @@ JSON. A successful native save marks both the selected brush world and
 player-start collection clean at their current revisions. This is the preferred
 first milestone save path for blockout editors because reloading one fragment
 restores floors, walls, ceilings, face materials, and player starts together.
+Editable-level export requires a source-backed brush world and runs
+source/compiled identity checks before writing JSON, so stale runtime-only brush
+data cannot become the saved level.
 
 ```json
 {
@@ -1668,11 +1695,12 @@ Use `editor.level.load` to replace an editor runtime's authored starter level
 with an editable fragment from disk. This is intended for editor hosts that pass
 `editor.input.path` at launch time. The fragment must use
 `schema: "slayer3d.fragment.v0"` and contain a `brush_worlds` entry whose name
-matches `world`; `editor_brush_sources`, when present, records the canonical
-editor source model for the same world and is compiled into runtime brushes on
-import, and `editor_player_starts` replaces the runtime player-start collection.
-Set `optional: true` when the same editor scene should also support new/blank
-sessions with no input file.
+matches `world`; `editor_brush_sources` records the canonical editor source
+model for the same world and is compiled into runtime brushes on import.
+Runtime-only editable fragments are rejected. Import validates source/compiled
+identity before replacing the live runtime world, and `editor_player_starts`
+replaces the runtime player-start collection. Set `optional: true` when the same
+editor scene should also support new/blank sessions with no input file.
 
 ```json
 {
@@ -1702,7 +1730,9 @@ For UI copy/paste affordances, `editor.test_run.prepare` and
 present in `outputs`, the action publishes a quoted runner command string.
 Authored editor shells should usually run `editor.level.save` immediately before
 test-run preparation so the runner sees the latest blockout fragment rather than
-the last manually saved revision.
+the last manually saved revision. If the runtime contains source-backed brush
+worlds, source/compiled identity must validate before the handoff manifest is
+exported.
 
 ```json
 {

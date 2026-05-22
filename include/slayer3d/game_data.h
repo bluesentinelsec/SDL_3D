@@ -2272,8 +2272,36 @@ extern "C"
         int vertex_contact_count;
         /** @brief Exact face contacts where only part of a structural source-box face is covered. */
         int partial_face_contact_count;
+        /** @brief Runtime brushes currently compiled from the source model. */
+        int runtime_brush_count;
+        /** @brief Runtime brushes that do not map exactly back to one source box. */
+        int runtime_source_mismatch_count;
+        /** @brief Visible compiled render-face metadata entries. */
+        int compiled_face_count;
+        /** @brief Compiled render faces missing source brush or face identity metadata. */
+        int compiled_face_missing_source_count;
+        /** @brief Compiled render faces whose source identity does not resolve to the source model. */
+        int compiled_face_unknown_source_count;
         /** @brief First source diagnostic issue or warning, or an empty string when none was found. */
         char first_issue[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Stable category for first_issue, or empty when no issue/warning was found. */
+        char first_issue_kind[64];
+        /** @brief Primary source brush name related to first_issue, or empty when not applicable. */
+        char first_issue_source_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Primary source brush stable id related to first_issue, or empty when not applicable. */
+        char first_issue_source_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Secondary source brush name related to first_issue, or empty when not applicable. */
+        char first_issue_related_source_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Secondary source brush stable id related to first_issue, or empty when not applicable. */
+        char first_issue_related_source_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Source face key or stable id related to first_issue, or empty when not applicable. */
+        char first_issue_source_face[64];
+        /** @brief Runtime brush name related to first_issue, or empty when not applicable. */
+        char first_issue_runtime_brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        /** @brief Runtime brush index related to first_issue, or -1 when not applicable. */
+        int first_issue_runtime_brush_index;
+        /** @brief Compiled render-face metadata index related to first_issue, or -1 when not applicable. */
+        int first_issue_compiled_face_index;
     } slayer3d_game_data_editor_brush_source_diagnostics;
 
     /**
@@ -2286,6 +2314,12 @@ extern "C"
      * checks so gameplay volumes can overlap sealed architecture.
      * Source worlds may author `snap_units` to make off-grid source coordinates
      * a blocking structural defect.
+     *
+     * Source-backed worlds also validate compile identity: runtime brushes must
+     * map back to source boxes, and every visible compiled render face must carry
+     * source brush/face metadata that resolves to the source model. This keeps
+     * selection, save/open, diagnostics, and compiled rendering tied to the same
+     * structural truth.
      *
      * @p near_gap_units controls how many source units count as a suspicious
      * near miss between otherwise overlapping boxes. Pass 0 to use the default
@@ -2662,8 +2696,10 @@ extern "C"
      * runtime `editor_player_starts` collection. When this fragment is loaded
      * again, matching `editor_brush_sources` are compiled back into the runtime
      * brush world, making the fixed-coordinate source boxes the authoritative
-     * editable geometry for supported box brushes. The returned string is
-     * allocated with SDL_malloc and must be released with SDL_free().
+     * editable geometry for supported box brushes. Export fails when the target
+     * world is not source-backed or when source/compiled identity validation
+     * reports a blocking structural defect. The returned string is allocated
+     * with SDL_malloc and must be released with SDL_free().
      */
     bool slayer3d_game_data_export_editable_level_fragment_json(const slayer3d_game_data_runtime *runtime,
                                                                 const char *world_name, char **out_json,
@@ -2735,9 +2771,10 @@ extern "C"
      * the runner data asset, resolved scene when known, player start when
      * provided, and a runner argument array excluding mount flags. Editor hosts
      * combine this with their current `--root`, `--pack`, or fused executable
-     * context to launch the generic runner without game-specific native code.
-     * The returned string is allocated with SDL_malloc and must be released
-     * with SDL_free().
+     * context to launch the generic runner without game-specific native code. If
+     * the runtime has source-backed brush worlds, their source/compiled identity
+     * must validate before a test-run manifest can be exported. The returned
+     * string is allocated with SDL_malloc and must be released with SDL_free().
      */
     bool slayer3d_game_data_export_editor_test_run_manifest_json(const slayer3d_game_data_runtime *runtime,
                                                                  const slayer3d_game_data_editor_test_run_desc *desc,
