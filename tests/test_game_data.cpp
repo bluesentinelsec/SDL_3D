@@ -20351,6 +20351,95 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, capture_text, &capture));
         return capture.found;
     };
+    struct ToolbarCapture
+    {
+        bool background = false;
+        bool buttons[9]{};
+        bool labels[9]{};
+    } toolbar_capture;
+    auto capture_toolbar_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+        auto *capture = static_cast<ToolbarCapture *>(userdata);
+        if (rect == nullptr || rect->name == nullptr)
+            return true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.toolbar") == 0)
+            capture->background = true;
+        const std::string name(rect->name);
+        const std::string prefix = "ui.editor_shell.toolbar.";
+        const std::string suffix = ".button";
+        if (name.rfind(prefix, 0) == 0 && name.size() > prefix.size() + suffix.size() &&
+            name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0)
+        {
+            const std::string key = name.substr(prefix.size(), name.size() - prefix.size() - suffix.size());
+            int index = -1;
+            if (key == "file")
+                index = 0;
+            else if (key == "edit")
+                index = 1;
+            else if (key == "selection")
+                index = 2;
+            else if (key == "groups")
+                index = 3;
+            else if (key == "tools")
+                index = 4;
+            else if (key == "view")
+                index = 5;
+            else if (key == "run")
+                index = 6;
+            else if (key == "debug")
+                index = 7;
+            else if (key == "help")
+                index = 8;
+            if (index >= 0)
+                capture->buttons[index] = true;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_toolbar_rect, &toolbar_capture));
+    auto capture_toolbar_text = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+        auto *capture = static_cast<ToolbarCapture *>(userdata);
+        if (text == nullptr || text->name == nullptr || text->text == nullptr)
+            return true;
+        const std::string name(text->name);
+        const std::string prefix = "ui.editor_shell.toolbar.";
+        const std::string suffix = ".label";
+        if (name.rfind(prefix, 0) != 0 || name.size() <= prefix.size() + suffix.size() ||
+            name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0)
+        {
+            return true;
+        }
+        const std::string key = name.substr(prefix.size(), name.size() - prefix.size() - suffix.size());
+        int index = -1;
+        if (key == "file")
+            index = 0;
+        else if (key == "edit")
+            index = 1;
+        else if (key == "selection")
+            index = 2;
+        else if (key == "groups")
+            index = 3;
+        else if (key == "tools")
+            index = 4;
+        else if (key == "view")
+            index = 5;
+        else if (key == "run")
+            index = 6;
+        else if (key == "debug")
+            index = 7;
+        else if (key == "help")
+            index = 8;
+        if (index >= 0)
+            capture->labels[index] = true;
+        return true;
+    };
+    slayer3d_game_data_ui_metrics toolbar_metrics{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &toolbar_metrics, capture_toolbar_text,
+                                                                &toolbar_capture));
+    EXPECT_TRUE(toolbar_capture.background);
+    for (int i = 0; i < 9; ++i)
+    {
+        EXPECT_TRUE(toolbar_capture.buttons[i]) << i;
+        EXPECT_TRUE(toolbar_capture.labels[i]) << i;
+    }
     slayer3d_signal_emit(bus, view_top_signal, nullptr);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.ortho_top");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),

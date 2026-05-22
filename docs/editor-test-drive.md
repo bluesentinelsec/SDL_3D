@@ -46,6 +46,11 @@ The editor now starts in a classic four-viewport layout:
 - Bottom-left: front orthographic view.
 - Bottom-right: side orthographic view.
 
+A nonfunctional top toolbar sits above the viewports with the first top-level
+menus: File, Edit, Selection, Groups, Tools, View, Run, Debug, and Help.
+Those buttons are visual placeholders for now; later slices will wire them to
+menus such as File > Save without changing the viewport layout.
+
 Use the number keys to switch layouts: `1` returns to the four-viewport layout,
 `2` opens the full-screen 3D flyby viewport, `3` opens top orthographic, `4`
 opens front orthographic, and `5` opens side orthographic. `Tab` remains a
@@ -186,6 +191,8 @@ The following should be true during a good test drive:
   canvas, can be highlighted by hovering, and can be removed with right click.
 - The four-view layout appears on launch. Number keys switch between quad,
   full-screen 3D, and full-screen orthographic views.
+- The top toolbar is visible above every view mode, and the editor viewports
+  start below it instead of rendering underneath the toolbar.
 - Each viewport displays a small label identifying the active view: 3D
   perspective, top/XY, front/XZ, or side/YZ.
 - Full-screen orthographic views pan with the arrow keys and zoom with `Z`,
