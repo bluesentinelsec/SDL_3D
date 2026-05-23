@@ -16551,6 +16551,19 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(brush->bounds.max.x, placement_origin.x + 8.0f, 0.001f);
     EXPECT_NEAR(brush->bounds.max.y, placement_origin.y, 0.001f);
     EXPECT_NEAR(brush->bounds.max.z, placement_origin.z + 8.0f, 0.001f);
+    const int brush_count_after_first_floor = world().brush_count;
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 7);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    release.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &release);
+    slayer3d_input_update(input, 8);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.create.message", ""))
+                  .find("already occupies this prefab cell"),
+              std::string::npos);
+    EXPECT_EQ(world().brush_count, brush_count_after_first_floor);
 
     auto press_editor_key = [&](SDL_Scancode scancode, Uint64 frame) {
         SDL_Event key{};
@@ -16606,12 +16619,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     };
 
     slayer3d_signal_emit(bus, mode_select_signal, nullptr);
-    click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 9);
     ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.element", ""), floor_brush_name.c_str());
     const int brush_count_before_floor_lower = world().brush_count;
     const slayer3d_bounding_box floor_bounds_before_lower = brush_bounds(floor_brush_name);
-    press_editor_key(SDL_SCANCODE_LEFTBRACKET, 7);
+    press_editor_key(SDL_SCANCODE_LEFTBRACKET, 11);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""),
                  "lowered 1 selected brush");
