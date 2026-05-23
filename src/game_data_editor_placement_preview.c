@@ -436,6 +436,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
                                                            json_float(placement, "default_grid_size", 16.0f));
         if (grid_size <= 0.0f)
             return true;
+        (void)slayer3d_game_data_clear_active_editor_selection(runtime);
         SDL_zero(*drag);
         drag->active = true;
         drag->scene = slayer3d_game_data_active_scene(runtime);

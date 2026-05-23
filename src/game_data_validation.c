@@ -8132,8 +8132,20 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         const char *player_start = json_string(action, "player_start");
         if (player_start == NULL || player_start[0] == '\0')
             return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure requires a player_start");
-        if (!require_ref(ctx, &names->editor_player_starts, "editor player start", player_start, json_path))
+        yyjson_val *allow_missing_player_start = obj_get(action, "allow_missing_player_start");
+        if (allow_missing_player_start != NULL && !yyjson_is_bool(allow_missing_player_start))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.brush_world.validate_enclosure allow_missing_player_start must be a "
+                                    "boolean");
+        }
+        const bool permits_missing_player_start =
+            allow_missing_player_start != NULL && yyjson_get_bool(allow_missing_player_start);
+        if (!permits_missing_player_start &&
+            !require_ref(ctx, &names->editor_player_starts, "editor player start", player_start, json_path))
+        {
             return false;
+        }
         yyjson_val *message = obj_get(action, "message");
         if (message != NULL && !yyjson_is_str(message))
             return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure message must be a string");
@@ -8300,8 +8312,19 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         if (!is_non_empty_string(action, "name"))
             return validation_error(ctx, json_path, "editor.player_start.apply requires a non-empty name");
         const char *name = json_string(action, "name");
-        if (!require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
+        yyjson_val *allow_missing_player_start = obj_get(action, "allow_missing_player_start");
+        if (allow_missing_player_start != NULL && !yyjson_is_bool(allow_missing_player_start))
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.player_start.apply allow_missing_player_start must be a boolean");
+        }
+        const bool permits_missing_player_start =
+            allow_missing_player_start != NULL && yyjson_get_bool(allow_missing_player_start);
+        if (!permits_missing_player_start &&
+            !require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
+        {
             return false;
+        }
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.player_start.apply outputs must be an object");

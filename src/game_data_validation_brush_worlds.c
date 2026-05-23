@@ -127,9 +127,9 @@ bool validate_brush_worlds(validation_context *ctx, yyjson_val *root, validation
             ok = validation_error(ctx, world_path, "brush world materials must be a non-empty array");
             goto done;
         }
-        if (!yyjson_is_arr(brushes) || yyjson_arr_size(brushes) <= 0)
+        if (!yyjson_is_arr(brushes))
         {
-            ok = validation_error(ctx, world_path, "brush world brushes must be a non-empty array");
+            ok = validation_error(ctx, world_path, "brush world brushes must be an array");
             goto done;
         }
 

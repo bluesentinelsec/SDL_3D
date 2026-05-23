@@ -120,35 +120,42 @@ shortcuts do not shadow camera movement.
 
 ## Suggested Pass
 
+The shell project intentionally starts empty: no starter cube and no default
+player-start marker. This keeps every visible brush and marker attributable to
+your current editing session.
+
 1. In Select Mode, drag left mouse in empty space and release. A new box brush
    should be created using the active `1` unit grid.
-2. Click the new brush, then use the arrow keys to nudge it by the active grid
+2. Click the new brush, then click empty space. The selection should clear
+   without creating a brush. Brush creation from the pointer requires a
+   left-button drag, not a plain click.
+3. Select the brush again, then use the arrow keys to nudge it by the active grid
    size. Use `PageUp` / `PageDown` or macOS `Fn+Up` / `Fn+Down` to move it
    vertically, and use `Home` / `End` or macOS `Fn+Left` / `Fn+Right` to rotate
    it in 90-degree Y-axis steps. Drag the selected brush with left mouse and
    confirm it moves on the same grid.
-3. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
-4. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
+4. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
+5. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
    needed, and place at least one wall.
-5. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
+6. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
    ceiling tile.
-6. Press `B`, move to Sky with the arrow keys, press `Enter`, and place a sky
+7. Press `B`, move to Sky with the arrow keys, press `Enter`, and place a sky
    tile over an opening. The brush should seal leak validation; sky rendering
    will be revisited when a better editor skybox is authored.
-7. Press `G`, press `Enter` to select Player Start, and place it on the floor.
-8. Press `Space`, click a tile to select it, press `]`, and confirm the brush
+8. Press `G`, press `Enter` to select Player Start, and place it on the floor.
+9. Press `Space`, click a tile to select it, press `]`, and confirm the brush
    stretches upward while its bottom face stays anchored. Press `[` on a floor
    slab at the default floor plane and confirm the floor slab can move below
    the plane; the editor should add side-wall fill brushes around the exposed
    height change.
-9. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
+10. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
    wall, and ceiling tiles. Their previews should stay on the lowered
    connected grid instead of snapping back to the original world plane.
-10. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
+11. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
-11. Press `Ctrl+S` or `Command+S` and confirm the output
+12. Press `Ctrl+S` or `Command+S` and confirm the output
    file should contain `brush_worlds`, `editor_brush_sources`, and `editor_player_starts`.
-12. Press `F5`; the editor should validate the brush source model, then switch
+13. Press `F5`; the editor should validate the brush source model, then switch
    into the playable test scene using the current in-memory map and player
    start. Source overlaps, near-gaps, and reachable leaks are warning-level
    diagnostics during this MVP iteration: debug markers and scene-state
@@ -159,7 +166,7 @@ shortcuts do not shadow camera movement.
    orange candidate marker on the nearest source-box face associated with that
    leak boundary. The candidate brush face should also become the active
    selection, making the suspected source face obvious in the selection outline.
-13. In the playable scene, use `WASD` and mouse look to verify the player starts
+14. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
 ## Correctness Checks
@@ -221,7 +228,8 @@ The following should be true during a good test drive:
 - Brush picking and placement trace from the hardware cursor. The highlighted
   brush should be the brush under the cursor; if no brush is hit, placement
   falls back to the ground work plane. In brush mode, the flashing preview
-  bounds should move as the cursor moves.
+  bounds should move as the cursor moves, but a plain click in empty space
+  should not commit a brush.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
   `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.

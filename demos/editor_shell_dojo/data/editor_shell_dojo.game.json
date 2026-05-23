@@ -985,8 +985,8 @@
             "if": {
               "type": "scene_state.compare",
               "key": "editor.tool.mode",
-              "op": "!=",
-              "value": "select",
+              "op": "==",
+              "value": "player_start",
               "default": "select"
             },
             "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
@@ -1530,6 +1530,7 @@
                 "type": "editor.brush_world.validate_enclosure",
                 "world": "brush.editor_shell.target",
                 "player_start": "player_start.editor_shell",
+                "allow_missing_player_start": true,
                 "message": "editor source enclosure is sealed",
                 "outputs": {
                   "valid_key": "editor.leak.valid",
@@ -1572,6 +1573,7 @@
               {
                 "type": "editor.player_start.apply",
                 "name": "player_start.editor_shell",
+                "allow_missing_player_start": true,
                 "message": "test run player start applied",
                 "outputs": {
                   "valid_key": "editor.test_run.enter.valid",
@@ -1631,16 +1633,7 @@
       }
     ]
   },
-  "editor_player_starts": [
-    {
-      "name": "player_start.editor_shell",
-      "scene": "scene.editor_shell.test_run",
-      "target": "entity.editor_shell.player",
-      "position": [0.0, 1.6, 4.0],
-      "yaw": 3.14159,
-      "pitch": 0.0
-    }
-  ],
+  "editor_player_starts": [],
   "brush_worlds": [
     {
       "name": "brush.editor_shell.target",
@@ -1687,32 +1680,7 @@
           }
         }
       ],
-      "brushes": [
-        {
-          "name": "brush.target.cube",
-          "contents": ["solid", "player_clip"],
-          "editor": {
-            "stable_id": "editor.brush.target_cube",
-            "display_name": "Selectable Cube",
-            "prefab": "prefab.editor_shell.cube"
-          },
-          "faces": [
-            { "plane": { "normal": [1, 0, 0], "distance": 2 }, "material": "mat.editor.wall" },
-            {
-              "plane": { "normal": [-1, 0, 0], "distance": 0 },
-              "material": "mat.editor.wall",
-              "editor": {
-                "stable_id": "editor.face.target_cube.left",
-                "display_name": "Left Face"
-              }
-            },
-            { "plane": { "normal": [0, 1, 0], "distance": 2 }, "material": "mat.editor.wall" },
-            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.editor.floor" },
-            { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
-            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
-          ]
-        }
-      ]
+      "brushes": []
     }
   ],
   "editor_brush_sources": [
@@ -1720,20 +1688,7 @@
       "world": "brush.editor_shell.target",
       "coordinate_system": "fixed_millimeters",
       "meters_per_unit": 0.001,
-      "boxes": [
-        {
-          "stable_id": "editor.brush.target_cube",
-          "name": "brush.target.cube",
-          "prefab": "prefab.editor_shell.cube",
-          "material": "mat.editor.wall",
-          "face_materials": {
-            "ny": "mat.editor.floor"
-          },
-          "min": [0, 0, 0],
-          "max": [2000, 2000, 2000],
-          "contents": ["solid", "player_clip"]
-        }
-      ]
+      "boxes": []
     }
   ],
   "world": {
