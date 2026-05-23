@@ -68,8 +68,8 @@ validation warnings.
 The old number-key and `Tab` view switching shortcuts are intentionally
 unbound. The editor viewport keeps the hardware cursor free for toolbar and
 panel interaction. Brush feedback is cursor-driven: the highlighted brush and
-placement preview should follow the OS cursor without drawing a second virtual
-hit cursor.
+flashing placement preview should follow the OS cursor without drawing a second
+virtual hit cursor.
 
 ## Keybindings
 
@@ -202,7 +202,8 @@ The following should be true during a good test drive:
   perspective view.
 - Brush picking and placement trace from the hardware cursor. The highlighted
   brush should be the brush under the cursor; if no brush is hit, placement
-  falls back to the ground work plane.
+  falls back to the ground work plane. In brush mode, the flashing preview
+  bounds should move as the cursor moves.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
   `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.

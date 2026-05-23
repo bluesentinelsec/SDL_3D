@@ -15771,8 +15771,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
 
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
-    motion.motion.x = 282.4f;
-    motion.motion.y = 254.6f;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
     motion.motion.xrel = 0.0f;
     motion.motion.yrel = 0.0f;
     SDL_Event click{};
@@ -16284,7 +16284,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.x = 660.0f;
-    motion.motion.y = 20.0f;
+    motion.motion.y = 360.0f;
     SDL_Event click{};
     click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     click.button.button = SDL_BUTTON_LEFT;
@@ -16500,13 +16500,43 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(
         slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_placement_preview, &placement_debug));
     EXPECT_EQ(placement_debug.edges, 24);
+    const slayer3d_vec3 original_preview_min = placement_min->as_vec3;
+    const slayer3d_value *placement_anchor =
+        slayer3d_properties_get_value(scene_state, "editor.placement_preview.anchor");
+    ASSERT_NE(placement_anchor, nullptr);
+    ASSERT_EQ(placement_anchor->type, SLAYER3D_VALUE_VEC3);
+    const slayer3d_vec3 original_preview_anchor = placement_anchor->as_vec3;
+    motion.motion.x = 1180.0f;
+    motion.motion.y = 580.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    placement_anchor = slayer3d_properties_get_value(scene_state, "editor.placement_preview.anchor");
+    ASSERT_NE(placement_anchor, nullptr);
+    ASSERT_EQ(placement_anchor->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(placement_anchor->as_vec3, original_preview_anchor)), 0.001f);
+    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_EQ(placement_min->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(placement_min->as_vec3, original_preview_min)), 0.001f);
+    motion.motion.x = click.button.x;
+    motion.motion.y = click.button.y;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    placement_min = slayer3d_properties_get_value(scene_state, "editor.placement_preview.bounds_min");
+    ASSERT_NE(placement_min, nullptr);
+    ASSERT_EQ(placement_min->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(placement_min->as_vec3.x, original_preview_min.x, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.y, original_preview_min.y, 0.001f);
+    EXPECT_NEAR(placement_min->as_vec3.z, original_preview_min.z, 0.001f);
     click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     slayer3d_input_process_event(input, &click);
-    slayer3d_input_update(input, 3);
+    slayer3d_input_update(input, 5);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     release.type = SDL_EVENT_MOUSE_BUTTON_UP;
     slayer3d_input_process_event(input, &release);
-    slayer3d_input_update(input, 4);
+    slayer3d_input_update(input, 6);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.create.message", ""), "floor prefab created");
     const std::string floor_brush_name = "brush.editor_shell.target.box." + std::to_string(initial_brush_count);

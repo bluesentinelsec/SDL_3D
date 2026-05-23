@@ -74,7 +74,6 @@
           {
             "camera": "camera.editor_shell.viewport",
             "rect": [0, 80, 1280, 520],
-            "screen": "center",
             "work_plane": {
               "enabled": true,
               "normal": [0.0, 1.0, 0.0],
