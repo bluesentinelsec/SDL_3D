@@ -16911,6 +16911,13 @@ TEST(GameDataRuntime, EditorShellDojoAllowsOverlappingWallPreviewWithSourceModel
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
+    ASSERT_NE(editor_camera, nullptr);
+    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
+    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.0f);
+    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
+    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
+                                 slayer3d_vec3_make(0.0f, -0.564642f, -0.825336f));
     const char empty_source_json[] = R"json({
   "schema": "slayer3d.fragment.v0",
   "brush_worlds": [
@@ -16956,7 +16963,7 @@ TEST(GameDataRuntime, EditorShellDojoAllowsOverlappingWallPreviewWithSourceModel
     SDL_Event motion{};
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.x = 660.0f;
-    motion.motion.y = 20.0f;
+    motion.motion.y = 360.0f;
     slayer3d_input_process_event(input, &motion);
     slayer3d_input_update(input, 1);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
@@ -16983,16 +16990,20 @@ TEST(GameDataRuntime, EditorShellDojoAllowsOverlappingWallPreviewWithSourceModel
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
 
     slayer3d_signal_emit(bus, wall_signal, nullptr);
-    slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "x");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
     EXPECT_EQ(world().brush_count, initial_brush_count + 2);
 
-    slayer3d_signal_emit(bus, wall_axis_signal, nullptr);
+    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
+    slayer3d_properties_set_float(editor_camera->props, "yaw", 1.5707963f);
+    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
+    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
+                                 slayer3d_vec3_make(0.825336f, -0.564642f, 0.0f));
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "x");
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.create.valid", false));
     EXPECT_EQ(world().brush_count, initial_brush_count + 3);
