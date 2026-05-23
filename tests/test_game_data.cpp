@@ -17133,6 +17133,8 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     motion.type = SDL_EVENT_MOUSE_MOTION;
     motion.motion.x = 660.0f;
     motion.motion.y = 360.0f;
+    motion.motion.xrel = 0.0f;
+    motion.motion.yrel = 0.0f;
     SDL_Event mouse{};
     mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     mouse.button.button = SDL_BUTTON_LEFT;
@@ -17142,13 +17144,23 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     slayer3d_input_process_event(input, &mouse);
     slayer3d_input_update(input, 1);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(world().brush_count, initial_brush_count);
+
+    mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
 
     motion.motion.x = 780.0f;
     motion.motion.y = 430.0f;
     motion.motion.xrel = 120.0f;
     motion.motion.yrel = 70.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 2);
+    slayer3d_input_update(input, 4);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "drag_box");
@@ -17157,7 +17169,7 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     mouse.button.x = motion.motion.x;
     mouse.button.y = motion.motion.y;
     slayer3d_input_process_event(input, &mouse);
-    slayer3d_input_update(input, 3);
+    slayer3d_input_update(input, 5);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     slayer3d_game_data_brush_world brush_world = world();
     ASSERT_EQ(brush_world.brush_count, initial_brush_count + 1);
@@ -17175,6 +17187,13 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     ASSERT_TRUE(slayer3d_game_data_select_editor_brush_action(runtime, yyjson_doc_get_root(select_doc)));
     yyjson_doc_free(select_doc);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.selection.dimension_x", 0.0f),
+                created_brush.bounds.max.x - created_brush.bounds.min.x, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.selection.dimension_y", 0.0f),
+                created_brush.bounds.max.y - created_brush.bounds.min.y, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.selection.dimension_z", 0.0f),
+                created_brush.bounds.max.z - created_brush.bounds.min.z, 0.001f);
+    EXPECT_STRNE(slayer3d_properties_get_string(scene_state, "editor.selection.element_stable_id", ""), "");
 
     const slayer3d_bounding_box before_drag_move = find_brush_bounds(created_name);
     mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
@@ -17182,20 +17201,20 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     mouse.button.x = motion.motion.x;
     mouse.button.y = motion.motion.y;
     slayer3d_input_process_event(input, &mouse);
-    slayer3d_input_update(input, 4);
+    slayer3d_input_update(input, 6);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     motion.motion.x = 820.0f;
     motion.motion.y = 430.0f;
     motion.motion.xrel = 40.0f;
     motion.motion.yrel = 0.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 5);
+    slayer3d_input_update(input, 7);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
     mouse.button.x = motion.motion.x;
     mouse.button.y = motion.motion.y;
     slayer3d_input_process_event(input, &mouse);
-    slayer3d_input_update(input, 6);
+    slayer3d_input_update(input, 8);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     const slayer3d_bounding_box after_drag_move = find_brush_bounds(created_name);
     const float drag_dx = after_drag_move.min.x - before_drag_move.min.x;
@@ -17207,7 +17226,7 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
 
     const slayer3d_bounding_box before_nudge = find_brush_bounds(created_name);
     SDL_Event key{};
-    Uint64 key_frame = 7;
+    Uint64 key_frame = 9;
     auto press_key = [&](SDL_Scancode scancode, SDL_Keymod modifiers = SDL_KMOD_NONE) {
         SDL_SetModState(modifiers);
         key.type = SDL_EVENT_KEY_DOWN;

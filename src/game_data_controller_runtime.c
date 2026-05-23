@@ -453,6 +453,42 @@ static void update_editor_camera_orthographic_controller(slayer3d_game_data_runt
     }
 }
 
+static bool editor_camera_hover_or_selection_pivot(slayer3d_game_data_runtime *runtime, bool prefer_selection,
+                                                   slayer3d_vec3 *out_pivot, slayer3d_bounding_box *out_bounds)
+{
+    if (runtime == NULL || out_pivot == NULL)
+        return false;
+
+    slayer3d_game_data_editor_selection selection;
+    if (prefer_selection && slayer3d_game_data_get_active_editor_selection(runtime, &selection) && selection.has_bounds)
+    {
+        *out_pivot = slayer3d_vec3_scale(slayer3d_vec3_add(selection.bounds.min, selection.bounds.max), 0.5f);
+        if (out_bounds != NULL)
+            *out_bounds = selection.bounds;
+        return true;
+    }
+
+    if (slayer3d_properties_get_bool(runtime->scene_state, "editor.hover.hit", false))
+    {
+        *out_pivot = slayer3d_properties_get_vec3(runtime->scene_state, "editor.hover.point",
+                                                  slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        if (out_bounds != NULL)
+        {
+            out_bounds->min = slayer3d_properties_get_vec3(runtime->scene_state, "editor.hover.bounds_min", *out_pivot);
+            out_bounds->max = slayer3d_properties_get_vec3(runtime->scene_state, "editor.hover.bounds_max", *out_pivot);
+        }
+        return true;
+    }
+
+    if (!slayer3d_game_data_get_active_editor_selection(runtime, &selection) || !selection.has_bounds)
+        return false;
+
+    *out_pivot = slayer3d_vec3_scale(slayer3d_vec3_add(selection.bounds.min, selection.bounds.max), 0.5f);
+    if (out_bounds != NULL)
+        *out_bounds = selection.bounds;
+    return true;
+}
+
 void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
                                      slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt)
 {
@@ -489,6 +525,13 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
     const int look_action = fps_controller_action_id(runtime, component, "look");
     const bool look_active =
         input != NULL && (look_action < 0 || fps_controller_action_value(runtime, input, look_action) > 0.0f);
+    const SDL_Keymod modifiers = SDL_GetModState();
+    const bool orbit_active = (modifiers & SDL_KMOD_ALT) != 0;
+    slayer3d_vec3 orbit_pivot = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const bool has_orbit_pivot =
+        orbit_active && editor_camera_hover_or_selection_pivot(runtime, false, &orbit_pivot, NULL);
+    const float orbit_radius =
+        has_orbit_pivot ? SDL_max(slayer3d_vec3_length(slayer3d_vec3_sub(actor->position, orbit_pivot)), 0.5f) : 0.0f;
     if (json_bool(component, "mouse_look", true) && look_active)
     {
         const float sensitivity = json_float(component, "mouse_sensitivity", 0.002f);
@@ -504,6 +547,26 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
         slayer3d_vec3_make(SDL_sinf(yaw) * cos_pitch, SDL_sinf(pitch), -SDL_cosf(yaw) * cos_pitch);
     const slayer3d_vec3 camera_right = slayer3d_vec3_make(SDL_cosf(yaw), 0.0f, SDL_sinf(yaw));
     const slayer3d_vec3 camera_up = slayer3d_vec3_normalize(slayer3d_vec3_cross(camera_right, camera_forward));
+
+    if (has_orbit_pivot && look_active &&
+        (SDL_fabsf(slayer3d_input_get_mouse_dx(input)) > 0.0f || SDL_fabsf(slayer3d_input_get_mouse_dy(input)) > 0.0f))
+    {
+        actor_set_position(actor, slayer3d_vec3_sub(orbit_pivot, slayer3d_vec3_scale(camera_forward, orbit_radius)));
+    }
+
+    const int frame_action = fps_controller_action_id(runtime, component, "frame_selected");
+    if (input != NULL && frame_action >= 0 && slayer3d_input_is_pressed(input, frame_action))
+    {
+        slayer3d_vec3 pivot;
+        slayer3d_bounding_box bounds;
+        if (editor_camera_hover_or_selection_pivot(runtime, true, &pivot, &bounds))
+        {
+            const slayer3d_vec3 extents = slayer3d_vec3_sub(bounds.max, bounds.min);
+            const float max_extent = SDL_max(SDL_max(extents.x, extents.y), extents.z);
+            const float distance = SDL_max(max_extent * 2.25f, 2.0f);
+            actor_set_position(actor, slayer3d_vec3_sub(pivot, slayer3d_vec3_scale(camera_forward, distance)));
+        }
+    }
 
     const int mouse_pan_action = fps_controller_action_id(runtime, component, "mouse_pan");
     if (input != NULL && mouse_pan_action >= 0 && fps_controller_action_value(runtime, input, mouse_pan_action) > 0.0f)

@@ -46,7 +46,8 @@
       "action.editor.camera.down",
       "action.editor.camera.look",
       "action.editor.camera.pan",
-      "action.editor.camera.fast"
+      "action.editor.camera.fast",
+      "action.editor.camera.frame_selected"
     ]
   },
   "entities": ["entity.editor_shell.camera"],
@@ -110,6 +111,12 @@
         "compiled_first_vertex_key": "editor.selection.compiled_first_vertex",
         "compiled_vertex_count_key": "editor.selection.compiled_vertex_count",
         "compiled_triangle_count_key": "editor.selection.compiled_triangle_count",
+        "bounds_min_key": "editor.selection.bounds_min",
+        "bounds_max_key": "editor.selection.bounds_max",
+        "dimensions_key": "editor.selection.dimensions",
+        "dimension_x_key": "editor.selection.dimension_x",
+        "dimension_y_key": "editor.selection.dimension_y",
+        "dimension_z_key": "editor.selection.dimension_z",
         "element_index_key": "editor.selection.element_index",
         "face_index_key": "editor.selection.face_index",
         "fraction_key": "editor.selection.fraction",
@@ -119,9 +126,18 @@
       "hover_outputs": {
         "hit_key": "editor.hover.hit",
         "element_key": "editor.hover.element",
+        "material_key": "editor.hover.material",
+        "element_stable_id_key": "editor.hover.element_stable_id",
         "face_stable_id_key": "editor.hover.face_stable_id",
         "face_rendered_key": "editor.hover.face_rendered",
-        "compiled_face_index_key": "editor.hover.compiled_face_index"
+        "compiled_face_index_key": "editor.hover.compiled_face_index",
+        "bounds_min_key": "editor.hover.bounds_min",
+        "bounds_max_key": "editor.hover.bounds_max",
+        "dimensions_key": "editor.hover.dimensions",
+        "dimension_x_key": "editor.hover.dimension_x",
+        "dimension_y_key": "editor.hover.dimension_y",
+        "dimension_z_key": "editor.hover.dimension_z",
+        "point_key": "editor.hover.point"
       },
       "on_select": "signal.editor.pointer.primary"
     },
@@ -631,6 +647,17 @@
         "name": "ui.editor_shell.left_inspector.row.status",
         "x": 24,
         "y": 276,
+        "w": 272,
+        "h": 26,
+        "color": [20, 26, 36, 228],
+        "border_color": [32, 40, 54, 210],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.id",
+        "x": 24,
+        "y": 306,
         "w": 272,
         "h": 26,
         "color": [20, 26, 36, 228],
@@ -1329,7 +1356,8 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.selection.value",
-        "text": "none",
+        "format": "%s",
+        "bindings": [{ "type": "scene_state", "key": "editor.selection.element", "default": "none" }],
         "font": "font.editor_shell.ui",
         "x": 284,
         "y": 223,
@@ -1340,7 +1368,7 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.brushes.label",
-        "text": "Brushes",
+        "text": "Hover",
         "font": "font.editor_shell.ui",
         "x": 34,
         "y": 253,
@@ -1350,7 +1378,8 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.brushes.value",
-        "text": "mock",
+        "format": "%s",
+        "bindings": [{ "type": "scene_state", "key": "editor.hover.element", "default": "none" }],
         "font": "font.editor_shell.ui",
         "x": 284,
         "y": 253,
@@ -1361,7 +1390,7 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.status.label",
-        "text": "Status",
+        "text": "Dims",
         "font": "font.editor_shell.ui",
         "x": 34,
         "y": 283,
@@ -1371,10 +1400,37 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.status.value",
-        "text": "ready",
+        "format": "%.2f x %.2f x %.2f",
+        "bindings": [
+          { "type": "scene_state", "key": "editor.hover.dimension_x", "default": 0.0 },
+          { "type": "scene_state", "key": "editor.hover.dimension_y", "default": 0.0 },
+          { "type": "scene_state", "key": "editor.hover.dimension_z", "default": 0.0 }
+        ],
         "font": "font.editor_shell.ui",
         "x": 284,
         "y": 283,
+        "align": "right",
+        "color": [230, 236, 246, 245],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.id.label",
+        "text": "Stable ID",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 313,
+        "color": [150, 185, 225, 235],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.id.value",
+        "format": "%s",
+        "bindings": [{ "type": "scene_state", "key": "editor.hover.element_stable_id", "default": "none" }],
+        "font": "font.editor_shell.ui",
+        "x": 284,
+        "y": 313,
         "align": "right",
         "color": [230, 236, 246, 245],
         "scale": 0.5,

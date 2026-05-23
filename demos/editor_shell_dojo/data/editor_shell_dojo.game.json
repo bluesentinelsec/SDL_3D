@@ -201,6 +201,10 @@
             "bindings": [{ "device": "keyboard", "key": "LSHIFT" }]
           },
           {
+            "name": "action.editor.camera.frame_selected",
+            "bindings": [{ "device": "keyboard", "key": "U", "modifiers": ["ctrl"] }]
+          },
+          {
             "name": "action.move.forward",
             "bindings": [{ "device": "keyboard", "key": "W" }]
           },
@@ -1792,7 +1796,8 @@
             "zoom_wheel": "action.editor.ortho.zoom.wheel",
             "look": "action.editor.camera.look",
             "mouse_pan": "action.editor.camera.pan",
-            "fast": "action.editor.camera.fast"
+            "fast": "action.editor.camera.fast",
+            "frame_selected": "action.editor.camera.frame_selected"
           },
           "mode_key": "editor.view.mode",
           "quad_mode": "quad_view",

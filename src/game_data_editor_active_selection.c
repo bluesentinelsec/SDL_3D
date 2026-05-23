@@ -764,6 +764,7 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
         drag->scene = slayer3d_game_data_active_scene(runtime);
         drag->start_point = hover_selection->point;
         drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
+        (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
         if (out_consumed != NULL)
             *out_consumed = true;
     }
@@ -773,7 +774,27 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
     if (out_consumed != NULL)
         *out_consumed = true;
 
-    if (hover_selection != NULL && hover_selection->hit)
+    const SDL_Keymod modifiers = SDL_GetModState();
+    const bool y_axis_lock = (modifiers & SDL_KMOD_ALT) != 0;
+    if (y_axis_lock)
+    {
+        float mouse_x = drag->start_mouse_x;
+        float mouse_y = drag->start_mouse_y;
+        (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+        const float units_per_pixel = drag->grid_size / 48.0f;
+        const slayer3d_vec3 desired = slayer3d_vec3_make(
+            0.0f, editor_snap_delta((drag->start_mouse_y - mouse_y) * units_per_pixel, drag->grid_size), 0.0f);
+        const slayer3d_vec3 incremental = slayer3d_vec3_sub(desired, drag->applied_offset);
+        if (slayer3d_vec3_length_squared(incremental) > 0.0000001f)
+        {
+            if (slayer3d_game_data_translate_selected_editor_brushes(runtime, incremental))
+            {
+                drag->applied_offset = desired;
+                drag->moved = true;
+            }
+        }
+    }
+    else if (hover_selection != NULL && hover_selection->hit)
     {
         const slayer3d_vec3 desired =
             slayer3d_vec3_make(editor_snap_delta(hover_selection->point.x - drag->start_point.x, drag->grid_size), 0.0f,
@@ -1134,6 +1155,18 @@ void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *o
     editor_set_int_output(scene_state, outputs, "compiled_triangle_count_key",
                           resolved.hit && resolved.compiled_face != NULL ? resolved.compiled_face->triangle_count : 0);
     editor_set_float_output(scene_state, outputs, "fraction_key", resolved.hit ? resolved.fraction : 1.0f);
+    const slayer3d_vec3 bounds_min =
+        resolved.hit && resolved.has_bounds ? resolved.bounds.min : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 bounds_max =
+        resolved.hit && resolved.has_bounds ? resolved.bounds.max : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 dimensions = resolved.hit && resolved.has_bounds ? slayer3d_vec3_sub(bounds_max, bounds_min)
+                                                                         : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    editor_set_vec3_output(scene_state, outputs, "bounds_min_key", bounds_min);
+    editor_set_vec3_output(scene_state, outputs, "bounds_max_key", bounds_max);
+    editor_set_vec3_output(scene_state, outputs, "dimensions_key", dimensions);
+    editor_set_float_output(scene_state, outputs, "dimension_x_key", dimensions.x);
+    editor_set_float_output(scene_state, outputs, "dimension_y_key", dimensions.y);
+    editor_set_float_output(scene_state, outputs, "dimension_z_key", dimensions.z);
     editor_set_vec3_output(scene_state, outputs, "point_key",
                            resolved.hit ? resolved.point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     editor_set_vec3_output(scene_state, outputs, "normal_key",

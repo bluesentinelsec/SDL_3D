@@ -463,8 +463,6 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         *out_consumed = true;
 
     editor_drag_update_current_cell(drag, hover_selection);
-    if (SDL_fabsf(slayer3d_input_get_mouse_dx(input)) > 0.0f || SDL_fabsf(slayer3d_input_get_mouse_dy(input)) > 0.0f)
-        drag->moved = true;
 
     editor_brush_source_prefab_result result;
     const bool valid = editor_drag_preview_source_box(runtime, drag_json, drag, &result);

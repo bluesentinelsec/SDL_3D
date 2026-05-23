@@ -58,7 +58,9 @@ an obvious snap reference.
 The left Inspector panel is visible by default. It currently contains
 placeholder Map, Entity, and Face tabs so the editor has a stable destination
 for selection diagnostics and property editing in later slices. Press `I` to
-collapse or expand the panel.
+collapse or expand the panel. Hovering a brush updates the Inspector with the
+brush name, dimensions, and stable ID; use the stable ID when reporting geometry
+issues because it persists through save/reopen.
 
 A bottom console pane spans the editor width below the viewport. The Console
 tab shows recent editor messages and mirrors those messages to the terminal via
@@ -90,14 +92,14 @@ shortcuts do not shadow camera movement.
 | arrow keys | palette open | move the active palette cursor |
 | `Enter` | palette open | select the highlighted palette item and close the palette |
 | `Esc` | palette open | close the palette without quitting |
-| left mouse drag | Select Mode, empty space | create a source-backed box brush on the active grid |
+| left mouse drag | Select Mode, empty space | create a source-backed box brush on the active grid; a single click only clears/changes selection |
 | left mouse drag | Select Mode, selected brush | move selected brushes with snap-to-grid |
+| `Alt`/`Option` + left mouse drag | Select Mode, selected brush | move selected brushes only on the Y axis with snap-to-grid |
 | arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on Z/X (`Up` moves +X, `Down` moves -X) |
 | `PageUp` / `PageDown` | Select Mode, brush selected | move selected brushes up/down on Y by the active grid size (`Fn+Up` / `Fn+Down` on many macOS keyboards) |
 | `Ctrl`/`Alt` + `Up`/`Down` | Select Mode, brush selected | move selected brushes up/down on Y by the active grid size on keyboards without Fn navigation keys |
 | `Home` / `End` | Select Mode, brush selected | rotate selected brushes around their center in 90-degree Y-axis steps (`Fn+Left` / `Fn+Right` on many macOS keyboards) |
 | `Ctrl`/`Alt` + `Left`/`Right` | Select Mode, brush selected | rotate selected brushes around their center in 90-degree Y-axis steps on keyboards without Fn navigation keys |
-| mouse click | Brush/Game Object Mode | place the selected prefab at the snapped preview position |
 | mouse click | Select Mode | select or deselect the highlighted brush |
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
@@ -109,10 +111,12 @@ shortcuts do not shadow camera movement.
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
 | right mouse drag | 3D flyby | rotate camera without capturing the hardware cursor |
+| `Alt`/`Option` + right mouse drag | 3D flyby | orbit around the hovered brush or work-plane point |
 | middle mouse drag | 3D flyby | pan camera left/right/up/down |
 | mouse wheel | 3D flyby | dolly camera forward/back |
 | `Q` / `E` | 3D flyby | move camera down/up |
 | `Left Shift` | 3D flyby | move faster |
+| `Ctrl+U` | 3D flyby | frame the selected or hovered brush in view |
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
 | `T` | palette closed | report that disk test-run manifest handoff is disabled for this MVP iteration |
 | `F5` | palette closed | enter the playable test scene from the placed player start |

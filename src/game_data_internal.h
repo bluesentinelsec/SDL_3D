@@ -211,6 +211,8 @@ typedef struct editor_drag_move_state
     slayer3d_vec3 start_point;
     slayer3d_vec3 applied_offset;
     float grid_size;
+    float start_mouse_x;
+    float start_mouse_y;
 } editor_drag_move_state;
 
 typedef struct editor_brush_source_box_runtime

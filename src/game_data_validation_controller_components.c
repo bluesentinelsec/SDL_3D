@@ -122,9 +122,9 @@ bool validate_editor_camera_component(validation_context *ctx, yyjson_val *compo
     if (!yyjson_is_obj(actions))
         return validation_error(ctx, path, "controller.editor_camera requires an actions object");
 
-    const char *action_keys[] = {"forward",  "back",      "left",     "right",     "up",        "down",
-                                 "look",     "mouse_pan", "fast",     "pan_left",  "pan_right", "pan_up",
-                                 "pan_down", "zoom_in",   "zoom_out", "zoom_wheel"};
+    const char *action_keys[] = {
+        "forward",  "back",      "left",   "right",    "up",      "down",     "look",       "mouse_pan",     "fast",
+        "pan_left", "pan_right", "pan_up", "pan_down", "zoom_in", "zoom_out", "zoom_wheel", "frame_selected"};
     bool has_action = false;
     for (size_t i = 0; i < SDL_arraysize(action_keys); ++i)
     {
