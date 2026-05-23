@@ -35,7 +35,7 @@
             "bindings": []
           },
           {
-            "name": "action.editor.selection.inspect",
+            "name": "action.editor.inspector.toggle",
             "bindings": [{ "device": "keyboard", "key": "I" }]
           },
           {
@@ -79,30 +79,6 @@
           {
             "name": "action.editor.test_run.enter",
             "bindings": [{ "device": "keyboard", "key": "F5" }]
-          },
-          {
-            "name": "action.editor.view.toggle",
-            "bindings": [{ "device": "keyboard", "key": "TAB" }]
-          },
-          {
-            "name": "action.editor.view.quad",
-            "bindings": [{ "device": "keyboard", "key": "1" }]
-          },
-          {
-            "name": "action.editor.view.perspective",
-            "bindings": [{ "device": "keyboard", "key": "2" }]
-          },
-          {
-            "name": "action.editor.view.top",
-            "bindings": [{ "device": "keyboard", "key": "3" }]
-          },
-          {
-            "name": "action.editor.view.front",
-            "bindings": [{ "device": "keyboard", "key": "4" }]
-          },
-          {
-            "name": "action.editor.view.side",
-            "bindings": [{ "device": "keyboard", "key": "5" }]
           },
           {
             "name": "action.editor.grid.decrease",
@@ -217,6 +193,10 @@
             "bindings": [{ "device": "mouse", "button": "RIGHT" }]
           },
           {
+            "name": "action.editor.camera.pan",
+            "bindings": [{ "device": "mouse", "button": "MIDDLE" }]
+          },
+          {
             "name": "action.editor.camera.fast",
             "bindings": [{ "device": "keyboard", "key": "LSHIFT" }]
           },
@@ -248,7 +228,7 @@
     "signal.editor.scene.enter",
     "signal.editor.tool.cycle",
     "signal.editor.selection.clear",
-    "signal.editor.selection.inspect",
+    "signal.editor.inspector.toggle",
     "signal.editor.command.preview",
     "signal.editor.command.commit",
     "signal.editor.pointer.primary",
@@ -262,12 +242,6 @@
     "signal.editor.tool.ceiling",
     "signal.editor.tool.sky",
     "signal.editor.tool.player_start",
-    "signal.editor.view.toggle",
-    "signal.editor.view.quad",
-    "signal.editor.view.perspective",
-    "signal.editor.view.top",
-    "signal.editor.view.front",
-    "signal.editor.view.side",
     "signal.editor.grid.decrease",
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
@@ -299,8 +273,8 @@
       },
       {
         "type": "sensor.input_pressed",
-        "action": "action.editor.selection.inspect",
-        "on_pressed": "signal.editor.selection.inspect"
+        "action": "action.editor.inspector.toggle",
+        "on_pressed": "signal.editor.inspector.toggle"
       },
       {
         "type": "sensor.input_pressed",
@@ -351,36 +325,6 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.test_run.enter",
         "on_pressed": "signal.editor.test_run.enter"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.view.toggle",
-        "on_pressed": "signal.editor.view.toggle"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.view.quad",
-        "on_pressed": "signal.editor.view.quad"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.view.perspective",
-        "on_pressed": "signal.editor.view.perspective"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.view.top",
-        "on_pressed": "signal.editor.view.top"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.view.front",
-        "on_pressed": "signal.editor.view.front"
-      },
-      {
-        "type": "sensor.input_pressed",
-        "action": "action.editor.view.side",
-        "on_pressed": "signal.editor.view.side"
       },
       {
         "type": "sensor.input_pressed",
@@ -472,10 +416,13 @@
           { "type": "scene_state.set", "key": "editor.palette.brush.cursor", "value": "floor" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
+          { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Map" },
+          { "type": "scene_state.set", "key": "editor.view.mode", "value": "flyby_3d" },
           { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" }
+          { "type": "scene_state.set", "key": "editor.placement.wall_axis", "value": "z" },
+          { "type": "console.write", "message": "Editor ready" }
         ]
       },
       {
@@ -560,83 +507,6 @@
         ]
       },
       {
-        "signal": "signal.editor.view.toggle",
-        "actions": [
-          {
-            "type": "scene_state.cycle",
-            "key": "editor.view.mode",
-            "default": "quad_view",
-            "values": ["quad_view", "flyby_3d"]
-          },
-          {
-            "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "quad_view", "default": "quad_view" },
-            "then": [
-              { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
-              { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
-              { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "four viewport editor layout" }
-            ],
-            "else": [
-              { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
-              { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
-              { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "3D flyby editor view" }
-            ]
-          }
-        ]
-      },
-      {
-        "signal": "signal.editor.view.quad",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "quad_view" },
-          { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
-          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
-          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "four viewport editor layout" }
-        ]
-      },
-      {
-        "signal": "signal.editor.view.perspective",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "flyby_3d" },
-          { "type": "camera.set", "camera": "camera.editor_shell.viewport" },
-          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
-          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "perspective editor view" }
-        ]
-      },
-      {
-        "signal": "signal.editor.view.top",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_top" },
-          { "type": "camera.set", "camera": "camera.editor_shell.ortho_top" },
-          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
-          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "top orthographic view" }
-        ]
-      },
-      {
-        "signal": "signal.editor.view.front",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_front" },
-          { "type": "camera.set", "camera": "camera.editor_shell.ortho_front" },
-          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 0.0, 1.0] },
-          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "front orthographic view" }
-        ]
-      },
-      {
-        "signal": "signal.editor.view.side",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.view.mode", "value": "orthographic_side" },
-          { "type": "camera.set", "camera": "camera.editor_shell.ortho_side" },
-          { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [1.0, 0.0, 0.0] },
-          { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "side orthographic view" }
-        ]
-      },
-      {
         "signal": "signal.editor.grid.decrease",
         "actions": [
           {
@@ -644,14 +514,14 @@
             "key": "editor.grid.size",
             "default": 8.0,
             "direction": -1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
             "default": 8.0,
             "direction": -1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size decreased" }
         ]
@@ -664,14 +534,14 @@
             "key": "editor.grid.size",
             "default": 8.0,
             "direction": 1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
             "default": 8.0,
             "direction": 1,
-            "values": [2.0, 4.0, 8.0, 16.0]
+            "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "grid size increased" }
         ]
@@ -892,21 +762,11 @@
         ]
       },
       {
-        "signal": "signal.editor.selection.inspect",
+        "signal": "signal.editor.inspector.toggle",
         "actions": [
-          {
-            "type": "editor.selection.run",
-            "actions": [
-              {
-                "type": "scene_state.set",
-                "key": "editor.tool.last_action",
-                "value": "inspect {selection_element} face {selection_face_stable_id}"
-              }
-            ],
-            "else": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "nothing selected" }
-            ]
-          }
+          { "type": "scene_state.toggle", "key": "editor.inspector.collapsed", "default": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "inspector toggled" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
@@ -1613,7 +1473,8 @@
                 "value": "save failed: {editor.save.message}"
               }
             ]
-          }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
@@ -1623,7 +1484,8 @@
           { "type": "scene_state.set", "key": "editor.test_run.saved", "value": false },
           { "type": "scene_state.set", "key": "editor.test_run.message", "value": "disk handoff disabled for MVP iteration" },
           { "type": "scene_state.set", "key": "editor.test_run.save_message", "value": "test-run manifest disabled" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "disk test-run handoff disabled" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "disk test-run handoff disabled" },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
@@ -1972,6 +1834,8 @@
             "zoom_in": "action.editor.ortho.zoom.in",
             "zoom_out": "action.editor.ortho.zoom.out",
             "zoom_wheel": "action.editor.ortho.zoom.wheel",
+            "look": "action.editor.camera.look",
+            "mouse_pan": "action.editor.camera.pan",
             "fast": "action.editor.camera.fast"
           },
           "mode_key": "editor.view.mode",
@@ -1988,6 +1852,8 @@
           "orthographic_wheel_zoom_step": 0.12,
           "orthographic_min_size": 4.0,
           "orthographic_max_size": 256.0,
+          "mouse_pan_sensitivity": 0.012,
+          "perspective_wheel_zoom_step": 1.25,
           "mouse_sensitivity": 0.002,
           "pitch_min": -1.45,
           "pitch_max": 1.45

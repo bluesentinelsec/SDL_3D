@@ -968,25 +968,14 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         return true;
     }
 
-    if (select_requested || secondary_select_requested)
-    {
-        clear_editor_selected_brushes(runtime);
-        if (hover_selection.hit)
-            runtime->editor_active_selection = hover_selection;
-        else if (json_bool(selection_json, "clear_on_miss", true))
-            init_editor_selection(&runtime->editor_active_selection);
-        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
-    }
-
     publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
     publish_editor_selected_brush_count(runtime);
-    if (secondary_select_requested && !emit_editor_selection_signal(runtime, selection_json, "on_secondary_select",
-                                                                    &runtime->editor_active_selection))
+    if (secondary_select_requested &&
+        !emit_editor_selection_signal(runtime, selection_json, "on_secondary_select", &hover_selection))
     {
         return false;
     }
-    if (select_requested &&
-        !emit_editor_selection_signal(runtime, selection_json, "on_select", &runtime->editor_active_selection))
+    if (select_requested && !emit_editor_selection_signal(runtime, selection_json, "on_select", &hover_selection))
     {
         return false;
     }

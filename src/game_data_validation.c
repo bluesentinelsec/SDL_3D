@@ -7527,6 +7527,35 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
             return validation_error(ctx, json_path, "scene_state.cycle direction must be a non-zero integer");
         return true;
     }
+    if (SDL_strcmp(type, "console.write") == 0)
+    {
+        yyjson_val *message = obj_get(action, "message");
+        yyjson_val *message_from_state = obj_get(action, "message_from_state");
+        const int message_fields = (message != NULL ? 1 : 0) + (message_from_state != NULL ? 1 : 0);
+        if (message_fields != 1)
+            return validation_error(ctx, json_path,
+                                    "console.write requires exactly one of message or message_from_state");
+        if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
+            return validation_error(ctx, json_path, "console.write message must be a non-empty string");
+        if (message_from_state != NULL &&
+            (!yyjson_is_str(message_from_state) || yyjson_get_str(message_from_state)[0] == '\0'))
+        {
+            return validation_error(ctx, json_path, "console.write message_from_state must be a non-empty string");
+        }
+        yyjson_val *line_key_prefix = obj_get(action, "line_key_prefix");
+        if (line_key_prefix != NULL && (!yyjson_is_str(line_key_prefix) || yyjson_get_str(line_key_prefix)[0] == '\0'))
+            return validation_error(ctx, json_path, "console.write line_key_prefix must be a non-empty string");
+        yyjson_val *count_key = obj_get(action, "count_key");
+        if (count_key != NULL && (!yyjson_is_str(count_key) || yyjson_get_str(count_key)[0] == '\0'))
+            return validation_error(ctx, json_path, "console.write count_key must be a non-empty string");
+        yyjson_val *line_count = obj_get(action, "line_count");
+        if (line_count != NULL &&
+            (!yyjson_is_int(line_count) || yyjson_get_int(line_count) < 1 || yyjson_get_int(line_count) > 8))
+        {
+            return validation_error(ctx, json_path, "console.write line_count must be an integer from 1 to 8");
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return true;
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)

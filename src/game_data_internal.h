@@ -218,6 +218,7 @@ typedef struct editor_brush_source_prefab_desc
 typedef struct editor_brush_source_prefab_result
 {
     bool valid;
+    bool no_op;
     char brush_name[256];
     slayer3d_bounding_box bounds;
     int source_min[3];

@@ -399,6 +399,49 @@ static void source_box_candidate_collect_warnings(const brush_world_runtime *wor
     }
 }
 
+static bool source_optional_string_equal(const char *a, const char *b)
+{
+    const bool a_empty = a == NULL || a[0] == '\0';
+    const bool b_empty = b == NULL || b[0] == '\0';
+    if (a_empty || b_empty)
+        return a_empty && b_empty;
+    return SDL_strcmp(a, b) == 0;
+}
+
+static bool source_box_matches_prefab_cell(const editor_brush_source_box_runtime *a,
+                                           const editor_brush_source_box_runtime *b)
+{
+    if (a == NULL || b == NULL || a->contents != b->contents || !source_optional_string_equal(a->prefab, b->prefab) ||
+        !source_optional_string_equal(a->material, b->material))
+    {
+        return false;
+    }
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (a->min[axis] != b->min[axis] || a->max[axis] != b->max[axis])
+            return false;
+    }
+    for (size_t i = 0; i < SDL_arraysize(a->face_materials); ++i)
+    {
+        if (!source_optional_string_equal(a->face_materials[i], b->face_materials[i]))
+            return false;
+    }
+    return true;
+}
+
+static int find_matching_source_prefab_cell(const brush_world_runtime *world_runtime,
+                                            const editor_brush_source_box_runtime *candidate)
+{
+    if (world_runtime == NULL || candidate == NULL)
+        return -1;
+    for (int i = 0; i < world_runtime->editor_source_box_count; ++i)
+    {
+        if (source_box_matches_prefab_cell(candidate, &world_runtime->editor_source_boxes[i]))
+            return i;
+    }
+    return -1;
+}
+
 static bool source_box_candidate_valid(const brush_world_runtime *world_runtime,
                                        const editor_brush_source_box_runtime *candidate, int exclude_index,
                                        char *error_buffer, int error_buffer_size)
@@ -1852,7 +1895,30 @@ bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_run
     bool ok = editor_brush_world_validate_source_box_candidate(world_runtime, &source_box, -1, error_buffer,
                                                                error_buffer_size);
     if (ok && out_result != NULL)
+    {
+        const int existing_index = find_matching_source_prefab_cell(world_runtime, &source_box);
+        if (existing_index >= 0)
+        {
+            const editor_brush_source_box_runtime *existing = &world_runtime->editor_source_boxes[existing_index];
+            out_result->valid = true;
+            out_result->no_op = true;
+            SDL_strlcpy(out_result->brush_name,
+                        existing->name != NULL && existing->name[0] != '\0' ? existing->name : name,
+                        sizeof(out_result->brush_name));
+            out_result->bounds = editor_brush_source_box_bounds_meters(world_runtime, existing);
+            for (int axis = 0; axis < 3; ++axis)
+            {
+                out_result->source_min[axis] = existing->min[axis];
+                out_result->source_max[axis] = existing->max[axis];
+            }
+            SDL_snprintf(out_result->warning, sizeof(out_result->warning),
+                         "source brush '%s' already occupies this prefab cell",
+                         out_result->brush_name[0] != '\0' ? out_result->brush_name : "<unnamed>");
+            free_editor_brush_source_box(&source_box);
+            return true;
+        }
         source_box_candidate_collect_warnings(world_runtime, &source_box, -1, out_result);
+    }
     if (ok && apply)
     {
         ok = editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
