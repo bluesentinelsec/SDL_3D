@@ -48,6 +48,9 @@ extern "C"
                                                                 slayer3d_vec3 *out_normal);
     bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                                  slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime,
+                                                              const char *brush_name, int quarter_turns,
+                                                              char *error_buffer, int error_buffer_size);
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
@@ -17146,29 +17149,47 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
 
     const slayer3d_bounding_box before_nudge = find_brush_bounds(created_name);
     SDL_Event key{};
-    key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_RIGHT;
-    slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 7);
-    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    key.type = SDL_EVENT_KEY_UP;
-    slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 8);
+    Uint64 key_frame = 7;
+    auto press_key = [&](SDL_Scancode scancode, SDL_Keymod modifiers = SDL_KMOD_NONE) {
+        SDL_SetModState(modifiers);
+        key.type = SDL_EVENT_KEY_DOWN;
+        key.key.scancode = scancode;
+        key.key.mod = modifiers;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, key_frame++);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        key.type = SDL_EVENT_KEY_UP;
+        slayer3d_input_process_event(input, &key);
+        SDL_SetModState(SDL_KMOD_NONE);
+        slayer3d_input_update(input, key_frame++);
+    };
+
+    press_key(SDL_SCANCODE_RIGHT);
     slayer3d_bounding_box after_nudge = find_brush_bounds(created_name);
     EXPECT_NEAR(after_nudge.min.z, before_nudge.min.z + 1.0f, 0.001f);
     EXPECT_NEAR(after_nudge.max.z, before_nudge.max.z + 1.0f, 0.001f);
 
-    key.type = SDL_EVENT_KEY_DOWN;
-    key.key.scancode = SDL_SCANCODE_PAGEUP;
-    slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 9);
-    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    key.type = SDL_EVENT_KEY_UP;
-    slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 10);
+    press_key(SDL_SCANCODE_PAGEUP);
     after_nudge = find_brush_bounds(created_name);
     EXPECT_NEAR(after_nudge.min.y, before_nudge.min.y + 1.0f, 0.001f);
     EXPECT_NEAR(after_nudge.max.y, before_nudge.max.y + 1.0f, 0.001f);
+
+    const slayer3d_bounding_box before_up = after_nudge;
+    press_key(SDL_SCANCODE_UP);
+    after_nudge = find_brush_bounds(created_name);
+    EXPECT_NEAR(after_nudge.min.x, before_up.min.x + 1.0f, 0.001f);
+    EXPECT_NEAR(after_nudge.max.x, before_up.max.x + 1.0f, 0.001f);
+
+    press_key(SDL_SCANCODE_DOWN);
+    after_nudge = find_brush_bounds(created_name);
+    EXPECT_NEAR(after_nudge.min.x, before_up.min.x, 0.001f);
+    EXPECT_NEAR(after_nudge.max.x, before_up.max.x, 0.001f);
+
+    const slayer3d_bounding_box before_vertical_modifier = after_nudge;
+    press_key(SDL_SCANCODE_UP, SDL_KMOD_CTRL);
+    after_nudge = find_brush_bounds(created_name);
+    EXPECT_NEAR(after_nudge.min.y, before_vertical_modifier.min.y + 1.0f, 0.001f);
+    EXPECT_NEAR(after_nudge.max.y, before_vertical_modifier.max.y + 1.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -19859,6 +19880,66 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
     ASSERT_TRUE(world.brushes[0].has_bounds);
     EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.1f, 0.001f);
     EXPECT_NEAR(world.brushes[0].bounds.max.x, 8.2f, 0.001f);
+
+    const char rotate_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 100,
+      "boxes": [
+        {
+          "stable_id": "source.box.rotate",
+          "name": "brush.source.box.rotate",
+          "kind": "box",
+          "prefab": "wall",
+          "material": "mat.editor.floor",
+          "min": [0, 0, 0],
+          "max": [4000, 1000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", rotate_json,
+                                                                     sizeof(rotate_json) - 1u,
+                                                                     "/tmp/source-rotate.json", error, sizeof(error)))
+        << error;
+    world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_rotate_source_box_y_quarter_turns(world_runtime, "source.box.rotate", 1, error,
+                                                                     sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, -2.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 6.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, 2.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 6.0f, 0.001f);
+
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_rotate_source_box_y_quarter_turns(world_runtime, "source.box.rotate", -1, error,
+                                                                     sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 4.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

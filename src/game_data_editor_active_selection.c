@@ -808,21 +808,48 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime)
     if (input == NULL || grid_size <= 0.0f)
         return true;
 
+    const SDL_Keymod modifiers = SDL_GetModState();
+    const bool transform_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) != 0;
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_HOME) ||
+        (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT)))
+    {
+        (void)slayer3d_game_data_rotate_selected_editor_brushes_y(runtime, 1);
+        return true;
+    }
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_END) ||
+        (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT)))
+    {
+        (void)slayer3d_game_data_rotate_selected_editor_brushes_y(runtime, -1);
+        return true;
+    }
+
     slayer3d_vec3 offset = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT))
-        offset.z = -grid_size;
-    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT))
-        offset.z = grid_size;
-    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_UP))
-        offset.x = -grid_size;
-    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN))
-        offset.x = grid_size;
-    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_PAGEUP) ||
-             slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_HOME))
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_PAGEUP) ||
+        (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_UP)))
+    {
         offset.y = grid_size;
+    }
     else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_PAGEDOWN) ||
-             slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_END))
+             (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN)))
+    {
         offset.y = -grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT) && !transform_modifier)
+    {
+        offset.z = -grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT) && !transform_modifier)
+    {
+        offset.z = grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_UP) && !transform_modifier)
+    {
+        offset.x = grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN) && !transform_modifier)
+    {
+        offset.x = -grid_size;
+    }
 
     if (slayer3d_vec3_length_squared(offset) <= 0.0000001f)
         return true;

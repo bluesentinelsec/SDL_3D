@@ -271,6 +271,7 @@ typedef struct editor_command_transaction_entry
     int material_index;
     int previous_material_index;
     slayer3d_vec3 offset;
+    int rotation_quarter_turns;
     bool has_bounds;
     slayer3d_bounding_box bounds;
     int brush_index;
@@ -1179,6 +1180,7 @@ bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtim
                                                        const int source_min[3], const int source_max[3],
                                                        editor_brush_source_prefab_result *out_result);
 bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
+bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, int quarter_turns);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
 void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
 void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);
@@ -1235,6 +1237,8 @@ bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_ru
                                                    char *error_buffer, int error_buffer_size);
 bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
+bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime, const char *brush_name,
+                                                          int quarter_turns, char *error_buffer, int error_buffer_size);
 int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
                                                           const char *brush_identity, int fallback_face_index,
                                                           const char *face_identity);

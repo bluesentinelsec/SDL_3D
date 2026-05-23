@@ -92,12 +92,14 @@ shortcuts do not shadow camera movement.
 | `Esc` | palette open | close the palette without quitting |
 | left mouse drag | Select Mode, empty space | create a source-backed box brush on the active grid |
 | left mouse drag | Select Mode, selected brush | move selected brushes with snap-to-grid |
-| arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on Z/X |
-| `PageUp` / `PageDown` | Select Mode, brush selected | move selected brushes up/down by the active grid size (`Fn+Up` / `Fn+Down` on many macOS keyboards) |
+| arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on Z/X (`Up` moves +X, `Down` moves -X) |
+| `PageUp` / `PageDown` | Select Mode, brush selected | move selected brushes up/down on Y by the active grid size (`Fn+Up` / `Fn+Down` on many macOS keyboards) |
+| `Ctrl`/`Alt` + `Up`/`Down` | Select Mode, brush selected | move selected brushes up/down on Y by the active grid size on keyboards without Fn navigation keys |
+| `Home` / `End` | Select Mode, brush selected | rotate selected brushes around their center in 90-degree Y-axis steps (`Fn+Left` / `Fn+Right` on many macOS keyboards) |
+| `Ctrl`/`Alt` + `Left`/`Right` | Select Mode, brush selected | rotate selected brushes around their center in 90-degree Y-axis steps on keyboards without Fn navigation keys |
 | mouse click | Brush/Game Object Mode | place the selected prefab at the snapped preview position |
 | mouse click | Select Mode | select or deselect the highlighted brush |
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
-| `[` and `]` | Select Mode | lower or raise selected brush height/elevation by one active grid step |
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
@@ -122,8 +124,9 @@ shortcuts do not shadow camera movement.
    should be created using the active `1` unit grid.
 2. Click the new brush, then use the arrow keys to nudge it by the active grid
    size. Use `PageUp` / `PageDown` or macOS `Fn+Up` / `Fn+Down` to move it
-   vertically. Drag the selected brush with left mouse and confirm it moves on
-   the same grid.
+   vertically, and use `Home` / `End` or macOS `Fn+Left` / `Fn+Right` to rotate
+   it in 90-degree Y-axis steps. Drag the selected brush with left mouse and
+   confirm it moves on the same grid.
 3. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
 4. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
    needed, and place at least one wall.
@@ -178,11 +181,9 @@ The following should be true during a good test drive:
 - `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
   selections update the same data-authored mode and brush-setting state.
 - `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
-  Mode owns brush selection and multi-selection. `[` and `]` resize generic
-  selected brushes by the active grid step. Thin floor slabs can move below the
-  default plane; the editor creates deterministic side-wall fill brushes for
-  the exposed vertical space and removes the matching fill segment when raised
-  back up.
+  Mode owns brush selection and multi-selection. Arrow-key movement, vertical
+  movement, and 90-degree Y-axis rotation all operate on source brushes by the
+  active grid step.
 - Game object placement uses its own tighter snap grid, so player starts can be
   placed precisely while floor/wall/ceiling/sky brushes stay aligned to the larger
   blockout grid.

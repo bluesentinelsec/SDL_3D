@@ -780,6 +780,56 @@ static void restore_source_box_coordinates(editor_brush_source_box_runtime *box,
     }
 }
 
+static int normalized_quarter_turns(int quarter_turns)
+{
+    int normalized = quarter_turns % 4;
+    if (normalized < 0)
+        normalized += 4;
+    return normalized;
+}
+
+static void rotate_source_box_face_materials_y_once(editor_brush_source_box_runtime *box)
+{
+    if (box == NULL)
+        return;
+
+    char *old_px = box->face_materials[0];
+    char *old_nx = box->face_materials[1];
+    char *old_pz = box->face_materials[4];
+    char *old_nz = box->face_materials[5];
+
+    box->face_materials[5] = old_px;
+    box->face_materials[4] = old_nx;
+    box->face_materials[0] = old_pz;
+    box->face_materials[1] = old_nz;
+}
+
+static bool rotate_source_coord_pair_y(int x, int z, int center_x2, int center_z2, int quarter_turns, int *out_x,
+                                       int *out_z)
+{
+    if (out_x == NULL || out_z == NULL)
+        return false;
+
+    int dx2 = 2 * x - center_x2;
+    int dz2 = 2 * z - center_z2;
+    for (int turn = 0; turn < quarter_turns; ++turn)
+    {
+        const int next_dx2 = dz2;
+        const int next_dz2 = -dx2;
+        dx2 = next_dx2;
+        dz2 = next_dz2;
+    }
+
+    const int rotated_x2 = center_x2 + dx2;
+    const int rotated_z2 = center_z2 + dz2;
+    if ((rotated_x2 % 2) != 0 || (rotated_z2 % 2) != 0)
+        return false;
+
+    *out_x = rotated_x2 / 2;
+    *out_z = rotated_z2 / 2;
+    return true;
+}
+
 static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_box_runtime *out_box, char *error_buffer,
                                          int error_buffer_size)
 {
@@ -2153,6 +2203,85 @@ bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime,
     if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
     {
         restore_source_box_coordinates(box, old_min, old_max);
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+    return true;
+}
+
+bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime, const char *brush_name,
+                                                          int quarter_turns, char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush rotation requires a source model");
+        return false;
+    }
+
+    const int normalized_turns = normalized_quarter_turns(quarter_turns);
+    if (normalized_turns == 0)
+        return true;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    int old_min[3];
+    int old_max[3];
+    copy_source_box_coordinates(box, old_min, old_max);
+
+    const int center_x2 = old_min[0] + old_max[0];
+    const int center_z2 = old_min[2] + old_max[2];
+    int new_min_x = INT_MAX;
+    int new_max_x = INT_MIN;
+    int new_min_z = INT_MAX;
+    int new_max_z = INT_MIN;
+    const int xs[2] = {old_min[0], old_max[0]};
+    const int zs[2] = {old_min[2], old_max[2]};
+    for (int xi = 0; xi < 2; ++xi)
+    {
+        for (int zi = 0; zi < 2; ++zi)
+        {
+            int rotated_x = 0;
+            int rotated_z = 0;
+            if (!rotate_source_coord_pair_y(xs[xi], zs[zi], center_x2, center_z2, normalized_turns, &rotated_x,
+                                            &rotated_z))
+            {
+                set_error(error_buffer, error_buffer_size,
+                          "source brush rotation would leave the brush off the integer source grid");
+                return false;
+            }
+            new_min_x = SDL_min(new_min_x, rotated_x);
+            new_max_x = SDL_max(new_max_x, rotated_x);
+            new_min_z = SDL_min(new_min_z, rotated_z);
+            new_max_z = SDL_max(new_max_z, rotated_z);
+        }
+    }
+
+    box->min[0] = new_min_x;
+    box->max[0] = new_max_x;
+    box->min[2] = new_min_z;
+    box->max[2] = new_max_z;
+    for (int turn = 0; turn < normalized_turns; ++turn)
+        rotate_source_box_face_materials_y_once(box);
+
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size))
+    {
+        restore_source_box_coordinates(box, old_min, old_max);
+        for (int turn = 0; turn < 4 - normalized_turns; ++turn)
+            rotate_source_box_face_materials_y_once(box);
+        return false;
+    }
+
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        restore_source_box_coordinates(box, old_min, old_max);
+        for (int turn = 0; turn < 4 - normalized_turns; ++turn)
+            rotate_source_box_face_materials_y_once(box);
         (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
         return false;
     }
