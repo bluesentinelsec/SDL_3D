@@ -51,7 +51,9 @@ menus such as File > Save without changing the viewport layout.
 A second placeholder tool toolbar sits directly underneath it with the first
 editor tool buttons: Select, Brush Tool, Clip Tool, Face Tool, Vertex Tool,
 Entity Tool, and Texture Tool. These are also visual placeholders; keyboard
-shortcuts still drive the active tools in this slice.
+shortcuts still drive the active tools in this slice. The same toolbar also
+shows the current grid size so placement and future transform operations have
+an obvious snap reference.
 
 The left Inspector panel is visible by default. It currently contains
 placeholder Map, Entity, and Face tabs so the editor has a stable destination
@@ -64,10 +66,10 @@ SDL logging. The Issues tab is a placeholder for map findings such as leaks and
 validation warnings.
 
 The old number-key and `Tab` view switching shortcuts are intentionally
-unbound. The editor viewport uses relative mouse motion for mouse-look. Brush
-feedback is reticle-driven: the highlighted brush, hit marker, and placement
-preview should remain pinned to the screen center instead of following the last
-clicked selection.
+unbound. The editor viewport keeps the hardware cursor free for toolbar and
+panel interaction. Brush feedback is cursor-driven: the highlighted brush and
+flashing placement preview should follow the OS cursor without drawing a second
+virtual hit cursor.
 
 ## Keybindings
 
@@ -92,11 +94,13 @@ shortcuts do not shadow camera movement.
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
-| `+` / `-` | palette closed | increase or decrease grid size |
+| `+` / `-` | palette closed | increase or decrease grid size through the fixed ladder: 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256 |
 | `R` | palette closed | toggle wall axis for manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
-| mouse look | 3D flyby | rotate camera |
+| right mouse drag | 3D flyby | rotate camera without capturing the hardware cursor |
+| middle mouse drag | 3D flyby | pan camera left/right/up/down |
+| mouse wheel | 3D flyby | dolly camera forward/back |
 | `Q` / `E` | 3D flyby | move camera down/up |
 | `Left Shift` | 3D flyby | move faster |
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
@@ -146,7 +150,7 @@ shortcuts do not shadow camera movement.
 The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
-  pressed.
+  pressed. The second toolbar's Grid widget should update to the same value.
 - The old left-side debug dump is no longer visible. The new left Inspector
   panel is visible with Map, Entity, and Face placeholder tabs, and `I`
   collapses it to a small strip.
@@ -189,17 +193,17 @@ The following should be true during a good test drive:
 - `M` opens the placeholder Material palette. `G` opens the Game Objects
   palette, and `Enter` selects Player Start for placement.
 - Placed player starts render as bright green cylinder markers in the editor
-  canvas, can be highlighted by hovering, and can be removed with right click.
+  canvas, can be highlighted by hovering, and can be removed after selection
+  with `Delete` or `Backspace`.
 - The top menu toolbar and second tool toolbar are visible above every view
   mode, and the editor viewport starts below them instead of rendering
   underneath the toolbar chrome.
 - The editor viewport displays a small label identifying the active 3D
   perspective view.
-- Brush picking and placement trace from the screen center. The highlighted
-  brush should be the brush under the crosshair; if no brush is hit, placement
-  falls back to the ground work plane. After clicking one brush, look away and
-  confirm the selection cursor follows the reticle rather than staying offset
-  on the previous brush.
+- Brush picking and placement trace from the hardware cursor. The highlighted
+  brush should be the brush under the cursor; if no brush is hit, placement
+  falls back to the ground work plane. In brush mode, the flashing preview
+  bounds should move as the cursor moves.
 - `Ctrl+S` and `Command+S` export JSON containing `brush_worlds`, `editor_brush_sources`, and
   `editor_player_starts`, then writes the same fragment to the CLI output path.
 - `T` does not write a test-run manifest during this MVP iteration.

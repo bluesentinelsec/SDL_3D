@@ -499,6 +499,34 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
     const float pitch_max = json_float(component, "pitch_max", 1.4f);
     pitch = editor_camera_clampf(pitch, SDL_min(pitch_min, pitch_max), SDL_max(pitch_min, pitch_max));
 
+    const float cos_pitch = SDL_cosf(pitch);
+    const slayer3d_vec3 camera_forward =
+        slayer3d_vec3_make(SDL_sinf(yaw) * cos_pitch, SDL_sinf(pitch), -SDL_cosf(yaw) * cos_pitch);
+    const slayer3d_vec3 camera_right = slayer3d_vec3_make(SDL_cosf(yaw), 0.0f, SDL_sinf(yaw));
+    const slayer3d_vec3 camera_up = slayer3d_vec3_normalize(slayer3d_vec3_cross(camera_right, camera_forward));
+
+    const int mouse_pan_action = fps_controller_action_id(runtime, component, "mouse_pan");
+    if (input != NULL && mouse_pan_action >= 0 && fps_controller_action_value(runtime, input, mouse_pan_action) > 0.0f)
+    {
+        const float pan_sensitivity = json_float(component, "mouse_pan_sensitivity", 0.012f);
+        const slayer3d_vec3 pan_delta =
+            slayer3d_vec3_scale(slayer3d_vec3_sub(slayer3d_vec3_scale(camera_right, slayer3d_input_get_mouse_dx(input)),
+                                                  slayer3d_vec3_scale(camera_up, slayer3d_input_get_mouse_dy(input))),
+                                pan_sensitivity);
+        if (slayer3d_vec3_length_squared(pan_delta) > 0.0000001f)
+            actor_set_position(actor, slayer3d_vec3_add(actor->position, pan_delta));
+    }
+
+    const float wheel_zoom =
+        fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "zoom_wheel"));
+    if (SDL_fabsf(wheel_zoom) > 0.0001f)
+    {
+        const float wheel_step = json_float(component, "perspective_wheel_zoom_step", 1.25f);
+        const slayer3d_vec3 dolly_delta = slayer3d_vec3_scale(camera_forward, wheel_zoom * wheel_step);
+        if (slayer3d_vec3_length_squared(dolly_delta) > 0.0000001f)
+            actor_set_position(actor, slayer3d_vec3_add(actor->position, dolly_delta));
+    }
+
     float forward =
         fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "forward")) -
         fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "back"));

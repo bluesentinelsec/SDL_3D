@@ -97,7 +97,7 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
                                                               error, (int)sizeof(error));
             if (ok)
             {
-                source_command_applied = true;
+                source_command_applied = !result.no_op;
                 SDL_strlcpy(brush_name, result.brush_name, sizeof(brush_name));
                 SDL_strlcpy(source_warning, result.warning, sizeof(source_warning));
                 desc.world_name = preview->world_name;
@@ -105,7 +105,8 @@ bool slayer3d_game_data_create_box_brush_action(slayer3d_game_data_runtime *runt
                 desc.contents = preview->contents;
                 desc.min = result.bounds.min;
                 desc.max = result.bounds.max;
-                editor_brush_world_mark_dirty(world_runtime);
+                if (!result.no_op)
+                    editor_brush_world_mark_dirty(world_runtime);
             }
         }
         else if (error[0] == '\0')

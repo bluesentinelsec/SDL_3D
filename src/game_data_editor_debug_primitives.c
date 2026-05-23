@@ -682,8 +682,8 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         editor_placement_preview_active_for_scene(runtime) && runtime->editor_placement_preview.has_bounds)
     {
         const editor_placement_preview_state *preview = &runtime->editor_placement_preview;
-        const slayer3d_color color =
-            editor_debug_color_or_default(desc->command_preview_color, (slayer3d_color){80, 255, 255, 220});
+        const slayer3d_color color = editor_debug_selection_flash_color(
+            editor_debug_color_or_default(desc->command_preview_color, (slayer3d_color){80, 255, 255, 220}));
         editor_debug_iteration_context context;
         SDL_zero(context);
         context.callback = callback;

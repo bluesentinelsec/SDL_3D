@@ -6,8 +6,6 @@
   "renders_world": true,
   "on_enter_signal": "signal.editor.scene.enter",
   "input": {
-    "mouse_capture": "unpaused",
-    "mouse_capture_if": { "type": "scene_state.compare", "key": "editor.view.mode", "op": "==", "value": "flyby_3d" },
     "actions": [
       "action.exit",
       "action.editor.tool.cycle",
@@ -47,6 +45,7 @@
       "action.editor.camera.up",
       "action.editor.camera.down",
       "action.editor.camera.look",
+      "action.editor.camera.pan",
       "action.editor.camera.fast"
     ]
   },
@@ -67,7 +66,6 @@
     "selection": {
       "mode": "click",
       "select_button": "LEFT",
-      "secondary_select_button": "RIGHT",
       "clear_on_miss": true,
       "trace": {
         "source": "camera_screen",
@@ -76,7 +74,6 @@
           {
             "camera": "camera.editor_shell.viewport",
             "rect": [0, 80, 1280, 520],
-            "screen": "center",
             "work_plane": {
               "enabled": true,
               "normal": [0.0, 1.0, 0.0],
@@ -126,8 +123,7 @@
         "face_rendered_key": "editor.hover.face_rendered",
         "compiled_face_index_key": "editor.hover.compiled_face_index"
       },
-      "on_select": "signal.editor.pointer.primary",
-      "on_secondary_select": "signal.editor.delete_selected"
+      "on_select": "signal.editor.pointer.primary"
     },
     "placement": {
       "tool_key": "editor.tool.mode",
@@ -272,9 +268,6 @@
         "player_starts",
         "selection_bounds",
         "selection_face",
-        "trace_ray",
-        "face_normal",
-        "hit_marker",
         "command_preview",
         "markers"
       ],
@@ -504,6 +497,16 @@
         "h": 28,
         "color": [32, 40, 54, 240],
         "border_color": [92, 130, 170, 230],
+        "border_thickness": 1
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.button",
+        "x": 735,
+        "y": 45,
+        "w": 110,
+        "h": 28,
+        "color": [24, 34, 48, 245],
+        "border_color": [120, 165, 205, 235],
         "border_thickness": 1
       },
       {
@@ -1067,6 +1070,17 @@
         "scale": 0.54
       },
       {
+        "name": "ui.editor_shell.tool_toolbar.grid.label",
+        "format": "Grid %.3g",
+        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 8.0 }],
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 54,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.54
+      },
+      {
         "name": "ui.editor_shell.left_inspector.title",
         "text": "Inspector",
         "font": "font.editor_shell.ui",
@@ -1459,7 +1473,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "3D editor: WASD move, mouse look, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, [ and ] height, Delete/Backspace remove.",
+        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush, M texture, G objects. Brush: +/- grid, Enter commit. Select: Shift-click multi, [ and ] height, Delete/Backspace remove.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.17,
