@@ -16381,8 +16381,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.floor");
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 16.0f, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.height", 0.0f), 16.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 1.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.height", 0.0f), 1.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.elevation", 1.0f), 0.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.thickness", 0.0f), 0.2f, 0.001f);
 
@@ -16433,17 +16433,29 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.material", ""),
                  "mat.editor.floor");
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 16.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 1.0f, 0.001f);
     std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 1"));
+    click_editor(790.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
+    grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
+    click_editor(790.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
+    slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
     slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 8.0f, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 8.0f, 0.001f);
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 8.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 1.0f, 0.001f);
+    slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 0.5f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 0.5f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 0.5f, 0.001f);
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
-    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 8"));
-    for (int i = 0; i < 6; ++i)
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 0.5"));
+    for (int i = 0; i < 2; ++i)
         slayer3d_signal_emit(bus, grid_decrease_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 0.125f, 0.001f);
@@ -16456,6 +16468,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 256"));
     for (int i = 0; i < 7; ++i)
         slayer3d_signal_emit(bus, grid_increase_signal, nullptr);
+    motion.motion.x = click.button.x;
+    motion.motion.y = click.button.y;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 6);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 8.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 8.0f, 0.001f);
@@ -17029,7 +17045,7 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 16.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 1.0f, 0.001f);
 
     auto world = [&]() {
         slayer3d_game_data_brush_world brush_world{};
@@ -17099,31 +17115,60 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     yyjson_doc_free(select_doc);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
 
+    const slayer3d_bounding_box before_drag_move = find_brush_bounds(created_name);
+    mouse.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    mouse.button.button = SDL_BUTTON_LEFT;
+    mouse.button.x = motion.motion.x;
+    mouse.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    motion.motion.x = 820.0f;
+    motion.motion.y = 430.0f;
+    motion.motion.xrel = 40.0f;
+    motion.motion.yrel = 0.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    mouse.button.x = motion.motion.x;
+    mouse.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &mouse);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    const slayer3d_bounding_box after_drag_move = find_brush_bounds(created_name);
+    const float drag_dx = after_drag_move.min.x - before_drag_move.min.x;
+    const float drag_dz = after_drag_move.min.z - before_drag_move.min.z;
+    EXPECT_GT(SDL_fabsf(drag_dx) + SDL_fabsf(drag_dz), 0.001f);
+    EXPECT_NEAR(drag_dx, SDL_roundf(drag_dx), 0.001f);
+    EXPECT_NEAR(drag_dz, SDL_roundf(drag_dz), 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "drag moved brush");
+
     const slayer3d_bounding_box before_nudge = find_brush_bounds(created_name);
     SDL_Event key{};
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_RIGHT;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 4);
+    slayer3d_input_update(input, 7);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     key.type = SDL_EVENT_KEY_UP;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 5);
+    slayer3d_input_update(input, 8);
     slayer3d_bounding_box after_nudge = find_brush_bounds(created_name);
-    EXPECT_NEAR(after_nudge.min.x, before_nudge.min.x + 16.0f, 0.001f);
-    EXPECT_NEAR(after_nudge.max.x, before_nudge.max.x + 16.0f, 0.001f);
+    EXPECT_NEAR(after_nudge.min.z, before_nudge.min.z + 1.0f, 0.001f);
+    EXPECT_NEAR(after_nudge.max.z, before_nudge.max.z + 1.0f, 0.001f);
 
     key.type = SDL_EVENT_KEY_DOWN;
     key.key.scancode = SDL_SCANCODE_PAGEUP;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 6);
+    slayer3d_input_update(input, 9);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     key.type = SDL_EVENT_KEY_UP;
     slayer3d_input_process_event(input, &key);
-    slayer3d_input_update(input, 7);
+    slayer3d_input_update(input, 10);
     after_nudge = find_brush_bounds(created_name);
-    EXPECT_NEAR(after_nudge.min.y, before_nudge.min.y + 16.0f, 0.001f);
-    EXPECT_NEAR(after_nudge.max.y, before_nudge.max.y + 16.0f, 0.001f);
+    EXPECT_NEAR(after_nudge.min.y, before_nudge.min.y + 1.0f, 0.001f);
+    EXPECT_NEAR(after_nudge.max.y, before_nudge.max.y + 1.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

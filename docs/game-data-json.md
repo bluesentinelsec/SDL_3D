@@ -1386,7 +1386,10 @@ passes validation. The preview reuses the editor debug overlay's
 path.
 `drag_create` optionally enables TrenchBroom-style select-mode brush creation:
 the editor dry-runs the same source-box command while the pointer is dragged in
-empty space, then commits that exact command on release.
+empty space, then commits that exact command on release. `grid_widget` can
+describe a small authored toolbar dropdown for selecting the active snap size.
+The widget writes both the general grid key and the brush grid key so previews,
+drag creation, selected-brush dragging, and arrow-key nudging stay in sync.
 
 ```json
 {
@@ -1395,8 +1398,8 @@ empty space, then commits that exact command on release.
       "tool_key": "editor.tool.mode",
       "snap_key": "editor.grid.size",
       "grid_size_key": "editor.grid.size",
-      "default_snap": 16.0,
-      "default_grid_size": 16.0,
+      "default_snap": 1.0,
+      "default_grid_size": 1.0,
       "drag_create": {
         "mode": "drag_box",
         "kind": "box",
@@ -1445,6 +1448,15 @@ empty space, then commits that exact command on release.
           "size": [0.5, 1.8, 0.5]
         }
       ]
+    },
+    "grid_widget": {
+      "grid_key": "editor.grid.size",
+      "brush_grid_key": "editor.brush.grid_size",
+      "open_key": "editor.grid.menu.open",
+      "button": { "x": 735, "y": 45, "w": 110, "h": 28 },
+      "popup": { "x": 735, "y": 76, "w": 110, "h": 288 },
+      "row_height": 24,
+      "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
     }
   }
 }

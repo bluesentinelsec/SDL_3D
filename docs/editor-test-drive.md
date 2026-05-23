@@ -71,7 +71,7 @@ panel interaction. Brush feedback is cursor-driven: the highlighted brush and
 flashing placement preview should follow the OS cursor without drawing a second
 virtual hit cursor.
 
-The editor starts in Select Mode with a `16` unit grid. In Select Mode, dragging
+The editor starts in Select Mode with a `1` unit grid. In Select Mode, dragging
 left mouse in empty space creates a source-backed box brush. The preview expands
 while dragging, and release commits the same validated source command.
 
@@ -91,17 +91,18 @@ shortcuts do not shadow camera movement.
 | `Enter` | palette open | select the highlighted palette item and close the palette |
 | `Esc` | palette open | close the palette without quitting |
 | left mouse drag | Select Mode, empty space | create a source-backed box brush on the active grid |
-| arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on X/Z |
+| left mouse drag | Select Mode, selected brush | move selected brushes with snap-to-grid |
+| arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on Z/X |
 | `PageUp` / `PageDown` | Select Mode, brush selected | move selected brushes up/down by the active grid size (`Fn+Up` / `Fn+Down` on many macOS keyboards) |
 | mouse click | Brush/Game Object Mode | place the selected prefab at the snapped preview position |
 | mouse click | Select Mode | select or deselect the highlighted brush |
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
-| right click | editor view | delete the highlighted tile or game object |
 | `[` and `]` | Select Mode | lower or raise selected brush height/elevation by one active grid step |
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
 | `Enter` | palette closed | commit the current preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size through the fixed ladder: 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256 |
+| Grid widget | second toolbar | click to open the grid-size list, then click a row to set the active grid |
 | `R` | palette closed | toggle wall axis for manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
@@ -118,10 +119,11 @@ shortcuts do not shadow camera movement.
 ## Suggested Pass
 
 1. In Select Mode, drag left mouse in empty space and release. A new box brush
-   should be created using the active `16` unit grid.
+   should be created using the active `1` unit grid.
 2. Click the new brush, then use the arrow keys to nudge it by the active grid
    size. Use `PageUp` / `PageDown` or macOS `Fn+Up` / `Fn+Down` to move it
-   vertically.
+   vertically. Drag the selected brush with left mouse and confirm it moves on
+   the same grid.
 3. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
 4. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
    needed, and place at least one wall.
@@ -163,7 +165,7 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed. The second toolbar's Grid widget should update to the same value.
-- The default grid size is `16`. Select Mode left-drag creation, brush-mode
+- The default grid size is `1`. Select Mode left-drag creation, selected-brush dragging, brush-mode
   placement previews, and selected-brush arrow-key movement should all use the
   same active grid value.
 - The old left-side debug dump is no longer visible. The new left Inspector

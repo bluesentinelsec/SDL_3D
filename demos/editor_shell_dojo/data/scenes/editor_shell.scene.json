@@ -133,8 +133,8 @@
       "work_plane_distance_key": "editor.work_plane.distance",
       "floor_material": "mat.editor.floor",
       "ceiling_material": "mat.editor.ceiling",
-      "default_snap": 16.0,
-      "default_grid_size": 16.0,
+      "default_snap": 1.0,
+      "default_grid_size": 1.0,
       "default_elevation": 0.0,
       "drag_create": {
         "mode": "drag_box",
@@ -218,6 +218,15 @@
           "message": "player start preview"
         }
       ]
+    },
+    "grid_widget": {
+      "grid_key": "editor.grid.size",
+      "brush_grid_key": "editor.brush.grid_size",
+      "open_key": "editor.grid.menu.open",
+      "button": { "x": 735, "y": 45, "w": 110, "h": 28 },
+      "popup": { "x": 735, "y": 76, "w": 110, "h": 288 },
+      "row_height": 24,
+      "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
     },
     "palette": {
       "selected_key": "editor.tool.mode",
@@ -518,6 +527,17 @@
         "color": [24, 34, 48, 245],
         "border_color": [120, 165, 205, 235],
         "border_thickness": 1
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.popup",
+        "x": 735,
+        "y": 76,
+        "w": 110,
+        "h": 288,
+        "color": [16, 22, 32, 248],
+        "border_color": [120, 165, 205, 245],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
       },
       {
         "name": "ui.editor_shell.left_inspector.panel",
@@ -1082,13 +1102,145 @@
       {
         "name": "ui.editor_shell.tool_toolbar.grid.label",
         "format": "Grid %.3g",
-        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 16.0 }],
+        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 1.0 }],
         "font": "font.editor_shell.ui",
         "x": 790,
         "y": 54,
         "align": "center",
         "color": [230, 245, 255, 250],
         "scale": 0.54
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.0",
+        "text": "Grid 0.125",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 85,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.1",
+        "text": "Grid 0.25",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 109,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.2",
+        "text": "Grid 0.5",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 133,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.3",
+        "text": "Grid 1",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 157,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.4",
+        "text": "Grid 2",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 181,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.5",
+        "text": "Grid 4",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 205,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.6",
+        "text": "Grid 8",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 229,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.7",
+        "text": "Grid 16",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 253,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.8",
+        "text": "Grid 32",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 277,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.9",
+        "text": "Grid 64",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 301,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.10",
+        "text": "Grid 128",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 325,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.11",
+        "text": "Grid 256",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 349,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
       },
       {
         "name": "ui.editor_shell.left_inspector.title",

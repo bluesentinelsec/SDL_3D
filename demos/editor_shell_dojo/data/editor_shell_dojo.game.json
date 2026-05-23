@@ -402,13 +402,13 @@
               "player_start_source_path_key": "editor.player_start.source_path"
             }
           },
-          { "type": "scene_state.set", "key": "editor.grid.size", "value": 16.0 },
+          { "type": "scene_state.set", "key": "editor.grid.size", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
           { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "floor" },
-          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 16.0 },
-          { "type": "scene_state.set", "key": "editor.brush.height", "value": 16.0 },
+          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.brush.height", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.brush.elevation", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.brush.thickness", "value": 0.2 },
           { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.floor" },
@@ -418,6 +418,7 @@
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Map" },
+          { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.view.mode", "value": "flyby_3d" },
           { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
@@ -512,14 +513,14 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.grid.size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": -1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": -1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
@@ -532,14 +533,14 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.grid.size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": 1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": 1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },

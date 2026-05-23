@@ -203,6 +203,16 @@ typedef struct editor_drag_create_state
     int source_max[3];
 } editor_drag_create_state;
 
+typedef struct editor_drag_move_state
+{
+    bool active;
+    bool moved;
+    const char *scene;
+    slayer3d_vec3 start_point;
+    slayer3d_vec3 applied_offset;
+    float grid_size;
+} editor_drag_move_state;
+
 typedef struct editor_brush_source_box_runtime
 {
     char *stable_id;
@@ -812,6 +822,7 @@ typedef struct slayer3d_game_data_runtime
     editor_command_preview_state editor_command_preview;
     editor_placement_preview_state editor_placement_preview;
     editor_drag_create_state editor_drag_create;
+    editor_drag_move_state editor_drag_move;
     editor_command_history_state editor_command_history;
     scene_activity_state activity;
     float current_dt;
