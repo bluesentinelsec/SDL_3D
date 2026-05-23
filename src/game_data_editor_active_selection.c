@@ -618,6 +618,38 @@ static bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime)
            SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "select") == 0;
 }
 
+static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_select(runtime))
+        return true;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    const float grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 16.0f);
+    if (input == NULL || grid_size <= 0.0f)
+        return true;
+
+    slayer3d_vec3 offset = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT))
+        offset.x = -grid_size;
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT))
+        offset.x = grid_size;
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_UP))
+        offset.z = -grid_size;
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN))
+        offset.z = grid_size;
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_PAGEUP) ||
+             slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_HOME))
+        offset.y = grid_size;
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_PAGEDOWN) ||
+             slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_END))
+        offset.y = -grid_size;
+
+    if (slayer3d_vec3_length_squared(offset) <= 0.0000001f)
+        return true;
+    (void)slayer3d_game_data_translate_selected_editor_brushes(runtime, offset);
+    return true;
+}
+
 static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)
 {
     return metadata != NULL && metadata->stable_id != NULL ? metadata->stable_id : "";
@@ -935,7 +967,19 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
-    update_editor_placement_preview(runtime, editor, &hover_selection);
+    bool drag_consumed = false;
+    if (!update_editor_drag_create(runtime, editor, &hover_selection, &drag_consumed))
+        return false;
+    if (!drag_consumed)
+        update_editor_placement_preview(runtime, editor, &hover_selection);
+    if (!editor_handle_grid_nudge(runtime))
+        return false;
+    if (drag_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);

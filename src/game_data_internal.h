@@ -188,6 +188,21 @@ typedef struct editor_placement_preview_state
     char source_warning[256];
 } editor_placement_preview_state;
 
+typedef struct editor_drag_create_state
+{
+    bool active;
+    bool moved;
+    const char *scene;
+    const char *world_name;
+    const char *material_name;
+    unsigned int contents;
+    float grid_size;
+    int start_cell[3];
+    int current_cell[3];
+    int source_min[3];
+    int source_max[3];
+} editor_drag_create_state;
+
 typedef struct editor_brush_source_box_runtime
 {
     char *stable_id;
@@ -796,6 +811,7 @@ typedef struct slayer3d_game_data_runtime
     const char *editor_selected_brush_scene;
     editor_command_preview_state editor_command_preview;
     editor_placement_preview_state editor_placement_preview;
+    editor_drag_create_state editor_drag_create;
     editor_command_history_state editor_command_history;
     scene_activity_state activity;
     float current_dt;
@@ -1142,9 +1158,16 @@ void clear_editor_command_preview(slayer3d_game_data_runtime *runtime);
 void clear_editor_placement_preview(slayer3d_game_data_runtime *runtime);
 void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                      const slayer3d_game_data_editor_selection *hover_selection);
+bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
+                               const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                               const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                       const char *material_name, unsigned int contents,
+                                                       const int source_min[3], const int source_max[3],
+                                                       editor_brush_source_prefab_result *out_result);
+bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
 void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
 void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);

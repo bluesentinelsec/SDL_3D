@@ -1384,6 +1384,9 @@ boxes; runtime brush geometry is generated only after the source candidate
 passes validation. The preview reuses the editor debug overlay's
 `command_preview` flag and color, so editor hosts do not need a second rendering
 path.
+`drag_create` optionally enables TrenchBroom-style select-mode brush creation:
+the editor dry-runs the same source-box command while the pointer is dragged in
+empty space, then commits that exact command on release.
 
 ```json
 {
@@ -1392,8 +1395,16 @@ path.
       "tool_key": "editor.tool.mode",
       "snap_key": "editor.grid.size",
       "grid_size_key": "editor.grid.size",
-      "default_snap": 8.0,
-      "default_grid_size": 8.0,
+      "default_snap": 16.0,
+      "default_grid_size": 16.0,
+      "drag_create": {
+        "mode": "drag_box",
+        "kind": "box",
+        "world": "brush.level.blockout",
+        "prefab": "editor.box",
+        "material": "mat.stone_floor",
+        "contents": ["solid"]
+      },
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "mode_key": "editor.placement_preview.mode",

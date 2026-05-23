@@ -7,6 +7,13 @@ void clear_editor_placement_preview(slayer3d_game_data_runtime *runtime)
     SDL_zero(runtime->editor_placement_preview);
 }
 
+static void clear_editor_drag_create(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    SDL_zero(runtime->editor_drag_create);
+}
+
 bool editor_placement_preview_active_for_scene(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || !runtime->editor_placement_preview.active)
@@ -26,6 +33,12 @@ static yyjson_val *find_editor_placement_preview_json(yyjson_val *placement, con
             return preview;
     }
     return NULL;
+}
+
+static yyjson_val *editor_drag_create_json(yyjson_val *placement)
+{
+    yyjson_val *drag = obj_get(placement, "drag_create");
+    return yyjson_is_obj(drag) ? drag : NULL;
 }
 
 static void publish_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool valid,
@@ -83,6 +96,110 @@ static float editor_placement_grid_size(slayer3d_game_data_runtime *runtime, yyj
                                              authored_grid_size);
     }
     return authored_grid_size;
+}
+
+static int editor_source_units_from_meters_public(const brush_world_runtime *world_runtime, float value)
+{
+    const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
+                                      ? world_runtime->editor_source_meters_per_unit
+                                      : 0.001f;
+    return (int)SDL_lroundf(value / meters_per_unit);
+}
+
+static int editor_drag_cell(float value, float grid_size)
+{
+    return (int)SDL_floorf(value / SDL_max(grid_size, 0.001f));
+}
+
+static void editor_drag_source_bounds(const brush_world_runtime *world_runtime, const editor_drag_create_state *drag,
+                                      int out_min[3], int out_max[3])
+{
+    const int min_cell[3] = {SDL_min(drag->start_cell[0], drag->current_cell[0]),
+                             SDL_min(drag->start_cell[1], drag->current_cell[1]),
+                             SDL_min(drag->start_cell[2], drag->current_cell[2])};
+    const int max_cell[3] = {SDL_max(drag->start_cell[0], drag->current_cell[0]) + 1,
+                             SDL_max(drag->start_cell[1], drag->current_cell[1]) + 1,
+                             SDL_max(drag->start_cell[2], drag->current_cell[2]) + 1};
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        out_min[axis] = editor_source_units_from_meters_public(world_runtime, (float)min_cell[axis] * drag->grid_size);
+        out_max[axis] = editor_source_units_from_meters_public(world_runtime, (float)max_cell[axis] * drag->grid_size);
+    }
+}
+
+static void editor_drag_update_current_cell(editor_drag_create_state *drag,
+                                            const slayer3d_game_data_editor_selection *hover_selection)
+{
+    if (drag == NULL || hover_selection == NULL || !hover_selection->hit)
+        return;
+    const int x = editor_drag_cell(hover_selection->point.x, drag->grid_size);
+    const int y = drag->start_cell[1];
+    const int z = editor_drag_cell(hover_selection->point.z, drag->grid_size);
+    if (drag->current_cell[0] != x || drag->current_cell[1] != y || drag->current_cell[2] != z)
+        drag->moved = true;
+    drag->current_cell[0] = x;
+    drag->current_cell[1] = y;
+    drag->current_cell[2] = z;
+}
+
+static bool editor_drag_preview_source_box(slayer3d_game_data_runtime *runtime, yyjson_val *drag_json,
+                                           editor_drag_create_state *drag,
+                                           editor_brush_source_prefab_result *out_result)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, drag->world_name);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+        return false;
+
+    editor_drag_source_bounds(world_runtime, drag, drag->source_min, drag->source_max);
+
+    editor_brush_source_prefab_desc desc;
+    SDL_zero(desc);
+    desc.prefab = json_string(drag_json, "prefab", "editor.box");
+    desc.material = drag->material_name;
+    desc.contents = drag->contents;
+
+    char error_buffer[256] = {0};
+    const bool ok =
+        editor_brush_world_run_source_prefab_command(world_runtime, &desc, NULL, drag->source_min, drag->source_max,
+                                                     false, out_result, error_buffer, sizeof(error_buffer));
+    if (!ok && out_result != NULL && error_buffer[0] != '\0')
+        SDL_strlcpy(out_result->warning, error_buffer, sizeof(out_result->warning));
+    return ok && (out_result == NULL || out_result->valid);
+}
+
+static void editor_drag_publish_preview(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
+                                        yyjson_val *drag_json, editor_drag_create_state *drag,
+                                        const editor_brush_source_prefab_result *result, const char *message,
+                                        bool valid)
+{
+    yyjson_val *outputs = obj_get(placement, "outputs");
+    editor_placement_preview_state *preview = &runtime->editor_placement_preview;
+    SDL_zero(*preview);
+    if (valid && drag != NULL && result != NULL)
+    {
+        preview->active = true;
+        preview->scene = slayer3d_game_data_active_scene(runtime);
+        preview->mode = json_string(drag_json, "mode", "drag_box");
+        preview->kind = json_string(drag_json, "kind", "box");
+        preview->axis = "xyz";
+        preview->world_name = drag->world_name;
+        preview->material_name = drag->material_name;
+        preview->contents = drag->contents;
+        preview->snap = drag->grid_size;
+        preview->has_bounds = true;
+        preview->bounds = result->bounds;
+        preview->has_source_candidate = true;
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            preview->source_min[axis] = drag->source_min[axis];
+            preview->source_max[axis] = drag->source_max[axis];
+        }
+        preview->source_positive_overlap_count = result->positive_overlap_count;
+        SDL_strlcpy(preview->source_warning, result->warning, sizeof(preview->source_warning));
+    }
+    publish_editor_placement_preview(runtime, outputs, valid, drag_json, valid ? preview : NULL, message);
 }
 
 static float editor_placement_elevation(slayer3d_game_data_runtime *runtime, yyjson_val *placement)
@@ -284,6 +401,102 @@ static bool editor_placement_preview_validate_source_box(slayer3d_game_data_runt
         }
     }
     return ok;
+}
+
+bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
+                               const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || editor == NULL)
+        return false;
+
+    const char *mode = scene_state_string(runtime, "editor.mode", "select");
+    if (SDL_strcmp(mode, "select") != 0)
+    {
+        clear_editor_drag_create(runtime);
+        return true;
+    }
+
+    yyjson_val *placement = obj_get(editor, "placement");
+    yyjson_val *drag_json = editor_drag_create_json(placement);
+    if (drag_json == NULL)
+        return true;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+    editor_drag_create_state *drag = &runtime->editor_drag_create;
+
+    if (!drag->active && left_pressed && hover_selection != NULL && hover_selection->hit &&
+        hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID)
+    {
+        const float grid_size = editor_placement_grid_size(runtime, placement, drag_json,
+                                                           json_float(placement, "default_grid_size", 16.0f));
+        if (grid_size <= 0.0f)
+            return true;
+        SDL_zero(*drag);
+        drag->active = true;
+        drag->scene = slayer3d_game_data_active_scene(runtime);
+        drag->world_name = json_string(drag_json, "world", "brush.editor_shell.target");
+        drag->material_name =
+            scene_state_string(runtime, json_string(drag_json, "material_key", "editor.brush.material"),
+                               json_string(drag_json, "material", "mat.editor.floor"));
+        drag->contents = brush_flags_from_json(obj_get(drag_json, "contents"), brush_content_flag_from_string,
+                                               SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
+        drag->grid_size = grid_size;
+        drag->start_cell[0] = editor_drag_cell(hover_selection->point.x, grid_size);
+        drag->start_cell[1] = editor_drag_cell(hover_selection->point.y, grid_size);
+        drag->start_cell[2] = editor_drag_cell(hover_selection->point.z, grid_size);
+        drag->current_cell[0] = drag->start_cell[0];
+        drag->current_cell[1] = drag->start_cell[1];
+        drag->current_cell[2] = drag->start_cell[2];
+        if (out_consumed != NULL)
+            *out_consumed = true;
+    }
+
+    if (!drag->active)
+        return true;
+    if (out_consumed != NULL)
+        *out_consumed = true;
+
+    editor_drag_update_current_cell(drag, hover_selection);
+    if (SDL_fabsf(slayer3d_input_get_mouse_dx(input)) > 0.0f || SDL_fabsf(slayer3d_input_get_mouse_dy(input)) > 0.0f)
+        drag->moved = true;
+
+    editor_brush_source_prefab_result result;
+    const bool valid = editor_drag_preview_source_box(runtime, drag_json, drag, &result);
+    const char *base_message = json_string(drag_json, "message", "drag brush preview");
+    char message[256];
+    if (valid && result.warning[0] != '\0')
+        SDL_snprintf(message, sizeof(message), "%s; %s", base_message, result.warning);
+    else if (!valid && result.warning[0] != '\0')
+        SDL_strlcpy(message, result.warning, sizeof(message));
+    else
+        SDL_strlcpy(message, base_message, sizeof(message));
+    editor_drag_publish_preview(runtime, placement, drag_json, drag, &result, message, valid);
+
+    if (left_released || !left_down)
+    {
+        const bool should_commit = valid && drag->moved;
+        if (should_commit)
+        {
+            editor_brush_source_prefab_result commit_result;
+            if (slayer3d_game_data_create_editor_source_box_brush(runtime, drag->world_name, drag->material_name,
+                                                                  drag->contents, drag->source_min, drag->source_max,
+                                                                  &commit_result) &&
+                runtime->scene_state != NULL)
+            {
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "drag brush created");
+            }
+        }
+        clear_editor_drag_create(runtime);
+        clear_editor_placement_preview(runtime);
+        publish_editor_placement_preview(runtime, obj_get(placement, "outputs"), false, drag_json, NULL,
+                                         should_commit ? "drag brush created" : "drag cancelled");
+    }
+    return true;
 }
 
 void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,

@@ -1664,8 +1664,9 @@ static const char *source_prefab_for_material(const char *material)
 
 static bool source_prefab_name_supported(const char *prefab)
 {
-    return prefab != NULL && (SDL_strcmp(prefab, "floor") == 0 || SDL_strcmp(prefab, "wall") == 0 ||
-                              SDL_strcmp(prefab, "ceiling") == 0 || SDL_strcmp(prefab, "sky") == 0);
+    return prefab != NULL &&
+           (SDL_strcmp(prefab, "floor") == 0 || SDL_strcmp(prefab, "wall") == 0 || SDL_strcmp(prefab, "ceiling") == 0 ||
+            SDL_strcmp(prefab, "sky") == 0 || SDL_strcmp(prefab, "box") == 0 || SDL_strcmp(prefab, "editor.box") == 0);
 }
 
 static unsigned int source_prefab_default_contents(const char *prefab, unsigned int authored_contents)

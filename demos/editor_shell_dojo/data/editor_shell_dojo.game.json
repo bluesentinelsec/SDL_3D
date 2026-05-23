@@ -402,13 +402,13 @@
               "player_start_source_path_key": "editor.player_start.source_path"
             }
           },
-          { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
+          { "type": "scene_state.set", "key": "editor.grid.size", "value": 16.0 },
           { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
           { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "floor" },
-          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 8.0 },
-          { "type": "scene_state.set", "key": "editor.brush.height", "value": 8.0 },
+          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 16.0 },
+          { "type": "scene_state.set", "key": "editor.brush.height", "value": 16.0 },
           { "type": "scene_state.set", "key": "editor.brush.elevation", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.brush.thickness", "value": 0.2 },
           { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.floor" },

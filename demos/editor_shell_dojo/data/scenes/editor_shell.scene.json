@@ -133,9 +133,19 @@
       "work_plane_distance_key": "editor.work_plane.distance",
       "floor_material": "mat.editor.floor",
       "ceiling_material": "mat.editor.ceiling",
-      "default_snap": 8.0,
-      "default_grid_size": 8.0,
+      "default_snap": 16.0,
+      "default_grid_size": 16.0,
       "default_elevation": 0.0,
+      "drag_create": {
+        "mode": "drag_box",
+        "kind": "box",
+        "world": "brush.editor_shell.target",
+        "prefab": "editor.box",
+        "material_key": "editor.brush.material",
+        "material": "mat.editor.floor",
+        "contents": ["solid"],
+        "message": "drag brush preview"
+      },
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "valid_key": "editor.placement_preview.valid",
@@ -218,7 +228,7 @@
           "kind": "box",
           "label": "Floor",
           "category": "blockout",
-          "description": "8m gray floor tile"
+          "description": "grid-sized gray floor tile"
         },
         {
           "mode": "wall",
@@ -234,7 +244,7 @@
           "kind": "box",
           "label": "Ceiling",
           "category": "blockout",
-          "description": "8m gray ceiling tile"
+          "description": "grid-sized gray ceiling tile"
         },
         {
           "mode": "sky",
@@ -1072,7 +1082,7 @@
       {
         "name": "ui.editor_shell.tool_toolbar.grid.label",
         "format": "Grid %.3g",
-        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 8.0 }],
+        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 16.0 }],
         "font": "font.editor_shell.ui",
         "x": 790,
         "y": 54,

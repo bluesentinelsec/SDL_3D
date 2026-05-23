@@ -71,6 +71,10 @@ panel interaction. Brush feedback is cursor-driven: the highlighted brush and
 flashing placement preview should follow the OS cursor without drawing a second
 virtual hit cursor.
 
+The editor starts in Select Mode with a `16` unit grid. In Select Mode, dragging
+left mouse in empty space creates a source-backed box brush. The preview expands
+while dragging, and release commits the same validated source command.
+
 ## Keybindings
 
 Tool and object selection should go through palettes so level-authoring
@@ -86,6 +90,9 @@ shortcuts do not shadow camera movement.
 | arrow keys | palette open | move the active palette cursor |
 | `Enter` | palette open | select the highlighted palette item and close the palette |
 | `Esc` | palette open | close the palette without quitting |
+| left mouse drag | Select Mode, empty space | create a source-backed box brush on the active grid |
+| arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on X/Z |
+| `PageUp` / `PageDown` | Select Mode, brush selected | move selected brushes up/down by the active grid size (`Fn+Up` / `Fn+Down` on many macOS keyboards) |
 | mouse click | Brush/Game Object Mode | place the selected prefab at the snapped preview position |
 | mouse click | Select Mode | select or deselect the highlighted brush |
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
@@ -110,28 +117,33 @@ shortcuts do not shadow camera movement.
 
 ## Suggested Pass
 
-1. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
-2. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
+1. In Select Mode, drag left mouse in empty space and release. A new box brush
+   should be created using the active `16` unit grid.
+2. Click the new brush, then use the arrow keys to nudge it by the active grid
+   size. Use `PageUp` / `PageDown` or macOS `Fn+Up` / `Fn+Down` to move it
+   vertically.
+3. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
+4. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
    needed, and place at least one wall.
-3. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
+5. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
    ceiling tile.
-4. Press `B`, move to Sky with the arrow keys, press `Enter`, and place a sky
+6. Press `B`, move to Sky with the arrow keys, press `Enter`, and place a sky
    tile over an opening. The brush should seal leak validation; sky rendering
    will be revisited when a better editor skybox is authored.
-5. Press `G`, press `Enter` to select Player Start, and place it on the floor.
-6. Press `Space`, click a tile to select it, press `]`, and confirm the brush
+7. Press `G`, press `Enter` to select Player Start, and place it on the floor.
+8. Press `Space`, click a tile to select it, press `]`, and confirm the brush
    stretches upward while its bottom face stays anchored. Press `[` on a floor
    slab at the default floor plane and confirm the floor slab can move below
    the plane; the editor should add side-wall fill brushes around the exposed
    height change.
-7. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
+9. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
    wall, and ceiling tiles. Their previews should stay on the lowered
    connected grid instead of snapping back to the original world plane.
-8. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
+10. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
-9. Press `Ctrl+S` or `Command+S` and confirm the output
+11. Press `Ctrl+S` or `Command+S` and confirm the output
    file should contain `brush_worlds`, `editor_brush_sources`, and `editor_player_starts`.
-10. Press `F5`; the editor should validate the brush source model, then switch
+12. Press `F5`; the editor should validate the brush source model, then switch
    into the playable test scene using the current in-memory map and player
    start. Source overlaps, near-gaps, and reachable leaks are warning-level
    diagnostics during this MVP iteration: debug markers and scene-state
@@ -142,7 +154,7 @@ shortcuts do not shadow camera movement.
    orange candidate marker on the nearest source-box face associated with that
    leak boundary. The candidate brush face should also become the active
    selection, making the suspected source face obvious in the selection outline.
-11. In the playable scene, use `WASD` and mouse look to verify the player starts
+13. In the playable scene, use `WASD` and mouse look to verify the player starts
    where you placed the marker and collides with the graybox geometry.
 
 ## Correctness Checks
@@ -151,6 +163,9 @@ The following should be true during a good test drive:
 
 - Placement previews snap to the active grid size and resize when `+` / `-` is
   pressed. The second toolbar's Grid widget should update to the same value.
+- The default grid size is `16`. Select Mode left-drag creation, brush-mode
+  placement previews, and selected-brush arrow-key movement should all use the
+  same active grid value.
 - The old left-side debug dump is no longer visible. The new left Inspector
   panel is visible with Map, Entity, and Face placeholder tabs, and `I`
   collapses it to a small strip.
