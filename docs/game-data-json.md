@@ -1109,11 +1109,21 @@ rebuild path for edited vertex sets: simple sloped/wedge-like solids can be
 validated as convex brushes, original face materials are preserved when the
 rebuilt face still maps to a canonical source face, and edits that would discard
 an input vertex or collapse the hull are rejected. The same source-model layer
-also exposes topology operation previews for add, delete, and merge/fuse vertex
-workflows. These operations produce validated convex runtime-brush output or a
-clear diagnostic. The apply path commits the same validated result back to
+also exposes topology operation previews for add, delete, merge/fuse, and
+snap-to-grid vertex workflows. Snap operations round source coordinates to the
+requested fixed source-unit grid, then run the same convex rebuild validation as
+every other source-vertex edit. These operations produce validated convex
+runtime-brush output or a clear diagnostic. The apply path commits the same
+validated result back to
 `editor_brush_sources` as a durable convex source brush, so save/reopen and
 test-run compilation preserve topology edits.
+
+`editor.vertex.snap_selected` snaps the currently selected vertex source
+brushes, or the selected brushes when no vertex handles are selected. By
+default it reads `editor.grid.size` and converts that world-unit grid into the
+source model's fixed units; `snap_units` can be authored for deterministic tool
+commands and tests. Optional output keys publish `valid`, `message`,
+`source_count`, `changed_count`, and `snap_units` values.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a

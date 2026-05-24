@@ -440,6 +440,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.vertex.selection.clear") == 0)
         return slayer3d_game_data_clear_editor_vertex_selection(runtime);
 
+    if (SDL_strcmp(type, "editor.vertex.snap_selected") == 0)
+        return slayer3d_game_data_snap_selected_editor_vertices(runtime, action);
+
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
         return slayer3d_game_data_select_editor_brush_action(runtime, action);
 

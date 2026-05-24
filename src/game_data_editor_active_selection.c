@@ -1583,6 +1583,177 @@ static bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runti
     return true;
 }
 
+typedef struct editor_source_snap_target
+{
+    brush_world_runtime *world_runtime;
+    int source_index;
+} editor_source_snap_target;
+
+static bool editor_add_source_snap_target(editor_source_snap_target *targets, int *target_count,
+                                          brush_world_runtime *world_runtime, int source_index)
+{
+    if (targets == NULL || target_count == NULL || world_runtime == NULL || source_index < 0)
+        return false;
+    for (int i = 0; i < *target_count; ++i)
+    {
+        if (targets[i].world_runtime == world_runtime && targets[i].source_index == source_index)
+            return true;
+    }
+    if (*target_count >= SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY)
+        return false;
+    targets[*target_count].world_runtime = world_runtime;
+    targets[*target_count].source_index = source_index;
+    ++(*target_count);
+    return true;
+}
+
+static int editor_collect_vertex_snap_targets(slayer3d_game_data_runtime *runtime, editor_source_snap_target *targets,
+                                              int target_capacity)
+{
+    if (runtime == NULL || targets == NULL || target_capacity <= 0 ||
+        !editor_selected_vertices_active_for_scene(runtime))
+        return 0;
+    int target_count = 0;
+    for (int i = 0; i < runtime->editor_selected_vertex_count; ++i)
+    {
+        const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[i];
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, selection->world_name);
+        if (world_runtime == NULL || selection->source_index < 0 ||
+            selection->source_index >= world_runtime->editor_source_box_count)
+        {
+            continue;
+        }
+        if (target_count >= target_capacity ||
+            !editor_add_source_snap_target(targets, &target_count, world_runtime, selection->source_index))
+            break;
+    }
+    return target_count;
+}
+
+static int editor_collect_brush_snap_targets(slayer3d_game_data_runtime *runtime, editor_source_snap_target *targets,
+                                             int target_capacity)
+{
+    if (runtime == NULL || targets == NULL || target_capacity <= 0 ||
+        !editor_selected_brushes_active_for_scene(runtime))
+        return 0;
+    int target_count = 0;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, selection.world_name);
+        const int source_index = editor_source_index_for_selection(world_runtime, &selection);
+        if (target_count >= target_capacity ||
+            !editor_add_source_snap_target(targets, &target_count, world_runtime, source_index))
+            break;
+    }
+    return target_count;
+}
+
+static int editor_snap_units_from_action(const brush_world_runtime *world_runtime,
+                                         const slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    const int authored_snap_units = json_int(action, "snap_units", 0);
+    if (authored_snap_units > 0)
+        return authored_snap_units;
+
+    const float fallback_grid = json_float(action, "default_grid", 1.0f);
+    float grid = json_float(action, "grid", fallback_grid);
+    const char *grid_key = json_string(action, "grid_key", "editor.grid.size");
+    if (runtime != NULL && grid_key != NULL && grid_key[0] != '\0')
+        grid = slayer3d_properties_get_float(runtime->scene_state, grid_key, grid);
+    return SDL_max(editor_source_units_from_meters(world_runtime, SDL_max(grid, 0.001f)), 1);
+}
+
+static void publish_editor_vertex_snap_result(slayer3d_game_data_runtime *runtime, yyjson_val *action, bool valid,
+                                              int source_count, int changed_count, int snap_units, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.snap.valid", valid);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.snap.source_count", source_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.snap.changed_count", changed_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.snap.snap_units", snap_units);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.snap.message", message != NULL ? message : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message != NULL ? message : "");
+
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (!yyjson_is_obj(outputs))
+        return;
+    const char *valid_key = json_string(outputs, "valid_key", NULL);
+    const char *message_key = json_string(outputs, "message_key", NULL);
+    const char *source_count_key = json_string(outputs, "source_count_key", NULL);
+    const char *changed_count_key = json_string(outputs, "changed_count_key", NULL);
+    const char *snap_units_key = json_string(outputs, "snap_units_key", NULL);
+    if (valid_key != NULL)
+        slayer3d_properties_set_bool(runtime->scene_state, valid_key, valid);
+    if (message_key != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, message_key, message != NULL ? message : "");
+    if (source_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, source_count_key, source_count);
+    if (changed_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, changed_count_key, changed_count);
+    if (snap_units_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, snap_units_key, snap_units);
+}
+
+bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    editor_source_snap_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    SDL_zeroa(targets);
+    int target_count = editor_collect_vertex_snap_targets(runtime, targets, SDL_arraysize(targets));
+    if (target_count <= 0)
+        target_count = editor_collect_brush_snap_targets(runtime, targets, SDL_arraysize(targets));
+    if (runtime == NULL || target_count <= 0)
+    {
+        publish_editor_vertex_snap_result(runtime, action, false, 0, 0, 0, "vertex snap requires a selection");
+        return true;
+    }
+
+    int total_changed = 0;
+    int last_snap_units = 0;
+    char error[256];
+    SDL_zeroa(error);
+    for (int i = 0; i < target_count; ++i)
+    {
+        brush_world_runtime *world_runtime = targets[i].world_runtime;
+        editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[targets[i].source_index];
+        const char *identity = box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
+        last_snap_units = editor_snap_units_from_action(world_runtime, runtime, action);
+        editor_brush_source_vertex_operation_desc desc;
+        SDL_zero(desc);
+        desc.brush_identity = identity;
+        desc.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP;
+        desc.snap_units = last_snap_units;
+        editor_brush_source_vertex_operation_result result;
+        SDL_zero(result);
+        if (!editor_brush_world_apply_source_vertex_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        {
+            char message[320];
+            SDL_snprintf(message, sizeof(message), "vertex snap blocked: %s",
+                         error[0] != '\0' ? error : "invalid source edit");
+            publish_editor_vertex_snap_result(runtime, action, false, target_count, total_changed, last_snap_units,
+                                              message);
+            editor_brush_source_free_runtime_brush(&result.brush);
+            return true;
+        }
+        total_changed += result.changed_count;
+        editor_brush_source_free_runtime_brush(&result.brush);
+    }
+
+    for (int i = 0; i < target_count; ++i)
+    {
+        editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
+        editor_refresh_selected_brushes_after_source_edit(runtime);
+    }
+
+    char message[160];
+    SDL_snprintf(message, sizeof(message), "snapped %d source brush%s to grid", target_count,
+                 target_count == 1 ? "" : "es");
+    publish_editor_vertex_snap_result(runtime, action, true, target_count, total_changed, last_snap_units, message);
+    return true;
+}
+
 static void editor_begin_vertex_drag(slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
                                      const slayer3d_game_data_editor_selection *hover_selection)
 {

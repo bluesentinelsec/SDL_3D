@@ -7560,6 +7560,37 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         return true;
     if (SDL_strcmp(type, "editor.vertex.selection.clear") == 0)
         return true;
+    if (SDL_strcmp(type, "editor.vertex.snap_selected") == 0)
+    {
+        yyjson_val *snap_units = obj_get(action, "snap_units");
+        if (snap_units != NULL && (!yyjson_is_int(snap_units) || yyjson_get_int(snap_units) <= 0))
+            return validation_error(ctx, json_path, "editor.vertex.snap_selected snap_units must be positive");
+        yyjson_val *grid = obj_get(action, "grid");
+        if (grid != NULL && (!yyjson_is_num(grid) || yyjson_get_num(grid) <= 0.0))
+            return validation_error(ctx, json_path, "editor.vertex.snap_selected grid must be positive");
+        yyjson_val *default_grid = obj_get(action, "default_grid");
+        if (default_grid != NULL && (!yyjson_is_num(default_grid) || yyjson_get_num(default_grid) <= 0.0))
+            return validation_error(ctx, json_path, "editor.vertex.snap_selected default_grid must be positive");
+        yyjson_val *grid_key = obj_get(action, "grid_key");
+        if (grid_key != NULL && (!yyjson_is_str(grid_key) || yyjson_get_str(grid_key)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.vertex.snap_selected grid_key must be non-empty");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.vertex.snap_selected outputs must be an object");
+        if (outputs != NULL)
+        {
+            const char *output_fields[] = {"valid_key", "message_key", "changed_count_key", "source_count_key",
+                                           "snap_units_key"};
+            for (int i = 0; i < (int)SDL_arraysize(output_fields); ++i)
+            {
+                yyjson_val *field = obj_get(outputs, output_fields[i]);
+                if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+                    return validation_error(ctx, json_path,
+                                            "editor.vertex.snap_selected output keys must be non-empty strings");
+            }
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
     {
         if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))

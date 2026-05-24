@@ -2236,6 +2236,48 @@ static bool source_vertex_operation_add(const brush_world_runtime *world_runtime
     return source_vertex_operation_append_unique(vertices, vertex_count, desc->coord, error_buffer, error_buffer_size);
 }
 
+static int source_snap_coord_to_units(int coord, int snap_units)
+{
+    if (snap_units <= 1)
+        return coord;
+    return (int)SDL_roundf((float)coord / (float)snap_units) * snap_units;
+}
+
+static bool source_vertex_operation_snap(const brush_world_runtime *world_runtime,
+                                         const editor_brush_source_vertex_operation_desc *desc,
+                                         int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                         int *vertex_count, int *out_changed_count, char *error_buffer,
+                                         int error_buffer_size)
+{
+    if (out_changed_count != NULL)
+        *out_changed_count = 0;
+    int base_vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    SDL_zeroa(base_vertices);
+    int base_vertex_count = 0;
+    if (!source_vertex_operation_base_vertices(world_runtime, desc->brush_identity, base_vertices, &base_vertex_count,
+                                               error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    const int snap_units = desc->snap_units > 0 ? desc->snap_units : source_snap_units(world_runtime);
+    *vertex_count = 0;
+    int changed_count = 0;
+    for (int i = 0; i < base_vertex_count; ++i)
+    {
+        int snapped[3] = {base_vertices[i][0], base_vertices[i][1], base_vertices[i][2]};
+        for (int axis = 0; axis < 3; ++axis)
+            snapped[axis] = source_snap_coord_to_units(snapped[axis], snap_units);
+        if (snapped[0] != base_vertices[i][0] || snapped[1] != base_vertices[i][1] || snapped[2] != base_vertices[i][2])
+            ++changed_count;
+        if (!source_vertex_operation_append_unique(vertices, vertex_count, snapped, error_buffer, error_buffer_size))
+            return false;
+    }
+    if (out_changed_count != NULL)
+        *out_changed_count = changed_count;
+    return true;
+}
+
 bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
                                                         const editor_brush_source_vertex_operation_desc *desc,
                                                         editor_brush_source_vertex_operation_result *out_result,
@@ -2254,6 +2296,7 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
     int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
     SDL_zeroa(vertices);
     int vertex_count = 0;
+    int changed_count = 0;
     bool ok = false;
     switch (desc->type)
     {
@@ -2267,6 +2310,10 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
     case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE:
         ok = source_vertex_operation_merge(world_runtime, desc, vertices, &vertex_count, error_buffer,
                                            error_buffer_size);
+        break;
+    case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP:
+        ok = source_vertex_operation_snap(world_runtime, desc, vertices, &vertex_count, &changed_count, error_buffer,
+                                          error_buffer_size);
         break;
     default:
         set_error(error_buffer, error_buffer_size, "unknown source vertex operation");
@@ -2289,6 +2336,7 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
 
     out_result->valid = true;
     out_result->vertex_count = vertex_count;
+    out_result->changed_count = changed_count;
     for (int i = 0; i < vertex_count; ++i)
     {
         out_result->vertices[i][0] = vertices[i][0];
