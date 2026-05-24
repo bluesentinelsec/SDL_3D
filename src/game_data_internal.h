@@ -209,6 +209,8 @@ typedef struct editor_drag_move_state
     bool moved;
     bool axis_lock_y;
     bool face_resize;
+    bool vertex_lasso;
+    bool lasso_additive;
     const char *scene;
     slayer3d_vec3 start_point;
     slayer3d_vec3 applied_offset;
@@ -216,6 +218,8 @@ typedef struct editor_drag_move_state
     float grid_size;
     float start_mouse_x;
     float start_mouse_y;
+    float current_mouse_x;
+    float current_mouse_y;
 } editor_drag_move_state;
 
 typedef struct editor_camera_orbit_state

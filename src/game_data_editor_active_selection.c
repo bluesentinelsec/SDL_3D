@@ -11,6 +11,7 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "game_data_brush_internal.h"
+#include "slayer3d/camera.h"
 #include "slayer3d/game.h"
 #include "slayer3d/math.h"
 
@@ -216,6 +217,45 @@ static bool editor_trace_select_viewport(const slayer3d_game_data_runtime *runti
         {
             return false;
         }
+        out_viewport->work_plane = obj_get(viewport, "work_plane");
+        return out_viewport->camera != NULL;
+    }
+    return false;
+}
+
+static bool editor_trace_select_viewport_at(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
+                                            float screen_x, float screen_y, editor_trace_viewport_config *out_viewport)
+{
+    if (runtime == NULL || trace == NULL || out_viewport == NULL)
+        return false;
+    yyjson_val *viewports = obj_get(trace, "viewports");
+    if (!yyjson_is_arr(viewports))
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(viewports); ++i)
+    {
+        yyjson_val *viewport = yyjson_arr_get(viewports, i);
+        yyjson_val *active_if = obj_get(viewport, "active_if");
+        if (active_if != NULL && !eval_data_condition(runtime, active_if, NULL))
+            continue;
+
+        float x = 0.0f;
+        float y = 0.0f;
+        float width = 0.0f;
+        float height = 0.0f;
+        if (!editor_trace_viewport_rect(viewport, &x, &y, &width, &height))
+            continue;
+        if (screen_x < x || screen_y < y || screen_x >= x + width || screen_y >= y + height)
+            continue;
+
+        SDL_zero(*out_viewport);
+        out_viewport->camera = json_string(viewport, "camera", NULL);
+        out_viewport->x = x;
+        out_viewport->y = y;
+        out_viewport->width = width;
+        out_viewport->height = height;
+        out_viewport->screen_x = screen_x - x;
+        out_viewport->screen_y = screen_y - y;
         out_viewport->work_plane = obj_get(viewport, "work_plane");
         return out_viewport->camera != NULL;
     }
@@ -489,6 +529,26 @@ static void clear_editor_selected_vertices(slayer3d_game_data_runtime *runtime)
     runtime->editor_selected_vertex_count = 0;
     runtime->editor_selected_vertex_scene = slayer3d_game_data_active_scene(runtime);
     publish_editor_selected_vertex_count(runtime);
+}
+
+static void publish_editor_vertex_lasso_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
+                                              int selected_count)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const bool active = drag != NULL && drag->active && drag->vertex_lasso;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.lasso.active", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.lasso.additive",
+                                 active ? drag->lasso_additive : false);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.vertex.lasso.start_x",
+                                  active ? drag->start_mouse_x : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.vertex.lasso.start_y",
+                                  active ? drag->start_mouse_y : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.vertex.lasso.end_x",
+                                  active ? drag->current_mouse_x : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.vertex.lasso.end_y",
+                                  active ? drag->current_mouse_y : 0.0f);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.lasso.selected_count", selected_count);
 }
 
 static void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
@@ -905,7 +965,7 @@ static int editor_source_vertex_shared_count(const brush_world_runtime *world_ru
                                              const int *selected_indices, int selected_count)
 {
     editor_brush_source_shared_vertex
-        shared[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY * SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
+        shared[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY * SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     int shared_count = 0;
     if (world_runtime == NULL || coord == NULL || selected_indices == NULL || selected_count <= 0 ||
         !editor_brush_world_find_shared_source_vertices(world_runtime, selected_indices, selected_count, shared,
@@ -1207,6 +1267,175 @@ static bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
+static bool editor_project_world_to_viewport(const slayer3d_camera3d *camera, const editor_trace_viewport_config *view,
+                                             slayer3d_vec3 point, float *out_x, float *out_y)
+{
+    if (camera == NULL || view == NULL || out_x == NULL || out_y == NULL || view->width <= 0.0f || view->height <= 0.0f)
+    {
+        return false;
+    }
+
+    slayer3d_mat4 view_matrix;
+    slayer3d_mat4 projection_matrix;
+    if (!slayer3d_camera3d_compute_matrices(camera, (int)SDL_roundf(view->width), (int)SDL_roundf(view->height), 0.01f,
+                                            1000.0f, &view_matrix, &projection_matrix))
+    {
+        return false;
+    }
+
+    const slayer3d_mat4 view_projection = slayer3d_mat4_multiply(projection_matrix, view_matrix);
+    const slayer3d_vec4 clip = slayer3d_mat4_transform_vec4(view_projection, slayer3d_vec4_from_vec3(point, 1.0f));
+    if (SDL_fabsf(clip.w) <= 0.000001f)
+        return false;
+
+    const float ndc_x = clip.x / clip.w;
+    const float ndc_y = clip.y / clip.w;
+    const float ndc_z = clip.z / clip.w;
+    if (ndc_z < -1.0f || ndc_z > 1.0f)
+        return false;
+
+    *out_x = (ndc_x + 1.0f) * 0.5f * view->width;
+    *out_y = (1.0f - ndc_y) * 0.5f * view->height;
+    return true;
+}
+
+static bool editor_lasso_contains_point(const editor_drag_move_state *drag, const editor_trace_viewport_config *view,
+                                        float screen_x, float screen_y)
+{
+    if (drag == NULL || view == NULL)
+        return false;
+    const float start_x = drag->start_mouse_x - view->x;
+    const float start_y = drag->start_mouse_y - view->y;
+    const float end_x = drag->current_mouse_x - view->x;
+    const float end_y = drag->current_mouse_y - view->y;
+    const float min_x = SDL_min(start_x, end_x);
+    const float max_x = SDL_max(start_x, end_x);
+    const float min_y = SDL_min(start_y, end_y);
+    const float max_y = SDL_max(start_y, end_y);
+    return screen_x >= min_x && screen_x <= max_x && screen_y >= min_y && screen_y <= max_y;
+}
+
+static int editor_select_vertices_in_lasso(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                           const editor_drag_move_state *drag)
+{
+    if (runtime == NULL || selection_json == NULL || drag == NULL || !editor_selected_brushes_active_for_scene(runtime))
+        return 0;
+
+    yyjson_val *trace = obj_get(selection_json, "trace");
+    editor_trace_viewport_config viewport;
+    if (!editor_trace_select_viewport_at(runtime, trace, drag->start_mouse_x, drag->start_mouse_y, &viewport))
+        return 0;
+
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, viewport.camera, &camera))
+        return 0;
+
+    if (!drag->lasso_additive)
+        clear_editor_selected_vertices(runtime);
+
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection.world_name);
+        const int source_index = editor_source_index_for_selection(world_runtime, &selection);
+        editor_brush_source_vertex_model model;
+        if (world_runtime == NULL || source_index < 0 ||
+            !editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, NULL, 0))
+        {
+            continue;
+        }
+
+        for (int v = 0; v < model.vertex_count; ++v)
+        {
+            const slayer3d_vec3 local = editor_source_vertex_meters(world_runtime, &model.vertices[v]);
+            const slayer3d_vec3 world = slayer3d_vec3_add(selection.world_position, local);
+            float screen_x = 0.0f;
+            float screen_y = 0.0f;
+            if (!editor_project_world_to_viewport(&camera, &viewport, world, &screen_x, &screen_y) ||
+                !editor_lasso_contains_point(drag, &viewport, screen_x, screen_y))
+            {
+                continue;
+            }
+            editor_source_vertex_selection candidate;
+            if (editor_source_vertex_selection_from_model(world_runtime, &model, v, &candidate))
+                (void)add_editor_selected_vertex(runtime, &candidate);
+        }
+    }
+
+    publish_editor_selected_vertex_count(runtime);
+    return runtime->editor_selected_vertex_count;
+}
+
+static bool editor_handle_vertex_lasso(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                       const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return true;
+
+    editor_drag_move_state *drag = &runtime->editor_drag_move;
+    if (!editor_mode_is_vertex(runtime))
+    {
+        if (drag->active && drag->vertex_lasso)
+            clear_editor_drag_move(runtime);
+        publish_editor_vertex_lasso_state(runtime, NULL, 0);
+        return true;
+    }
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return true;
+
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+    float mouse_x = drag->current_mouse_x;
+    float mouse_y = drag->current_mouse_y;
+    (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+
+    if (drag->active && drag->vertex_lasso)
+    {
+        drag->current_mouse_x = mouse_x;
+        drag->current_mouse_y = mouse_y;
+        publish_editor_vertex_lasso_state(runtime, drag, 0);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        if (left_released || !left_down)
+        {
+            const float dx = drag->current_mouse_x - drag->start_mouse_x;
+            const float dy = drag->current_mouse_y - drag->start_mouse_y;
+            const bool meaningful_drag = dx * dx + dy * dy >= 16.0f;
+            const int selected_count =
+                meaningful_drag ? editor_select_vertices_in_lasso(runtime, selection_json, drag) : 0;
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                           meaningful_drag ? "vertex lasso selected" : "vertex lasso canceled");
+            publish_editor_vertex_lasso_state(runtime, NULL, selected_count);
+            clear_editor_drag_move(runtime);
+        }
+        return true;
+    }
+
+    const bool selectable_hover = editor_selection_is_selectable_brush(hover_selection);
+    if (left_pressed && !selectable_hover)
+    {
+        SDL_zero(*drag);
+        drag->active = true;
+        drag->vertex_lasso = true;
+        drag->lasso_additive = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+        drag->scene = slayer3d_game_data_active_scene(runtime);
+        drag->start_mouse_x = mouse_x;
+        drag->start_mouse_y = mouse_y;
+        drag->current_mouse_x = mouse_x;
+        drag->current_mouse_y = mouse_y;
+        publish_editor_vertex_lasso_state(runtime, drag, 0);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+    }
+    return true;
+}
+
 typedef struct editor_vertex_bounds_accumulator
 {
     editor_source_box_bounds_update update;
@@ -1377,7 +1606,7 @@ static bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
         return true;
 
     editor_drag_move_state *drag = &runtime->editor_drag_move;
-    if (!drag->active || drag->face_resize)
+    if (!drag->active || drag->face_resize || drag->vertex_lasso)
         return true;
 
     slayer3d_input_manager *input = runtime_input(runtime);
@@ -2132,6 +2361,16 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
+    bool vertex_lasso_consumed = false;
+    if (!editor_handle_vertex_lasso(runtime, selection_json, &hover_selection, &vertex_lasso_consumed))
+        return false;
+    if (vertex_lasso_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        publish_editor_selected_vertex_count(runtime);
+        return true;
+    }
     bool vertex_drag_consumed = false;
     if (!editor_handle_vertex_drag(runtime, &hover_selection, &vertex_drag_consumed))
         return false;
