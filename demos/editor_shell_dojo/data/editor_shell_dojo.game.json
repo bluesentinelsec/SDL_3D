@@ -108,6 +108,10 @@
             "bindings": [{ "device": "keyboard", "key": "B" }]
           },
           {
+            "name": "action.editor.mode.face",
+            "bindings": []
+          },
+          {
             "name": "action.editor.palette.brush",
             "bindings": []
           },
@@ -259,6 +263,7 @@
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
     "signal.editor.mode.brush",
+    "signal.editor.mode.face",
     "signal.editor.mode.select",
     "signal.editor.mode.texture",
     "signal.editor.palette.brush",
@@ -368,6 +373,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.mode.brush",
         "on_pressed": "signal.editor.mode.brush"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.mode.face",
+        "on_pressed": "signal.editor.mode.face"
       },
       {
         "type": "sensor.input_pressed",
@@ -516,6 +526,14 @@
         ]
       },
       {
+        "signal": "signal.editor.mode.face",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "face" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "face" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "face tool" }
+        ]
+      },
+      {
         "signal": "signal.editor.mode.select",
         "actions": [
           { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
@@ -655,11 +673,17 @@
                 "else": [
                   {
                     "type": "branch",
-                    "if": { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
+                    "if": {
+                      "type": "any",
+                      "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
+                        { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" }
+                      ]
+                    },
                     "then": [
                       { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
                       { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-                      { "type": "editor.command.clear_preview", "message": "brush tool closed" },
+                      { "type": "editor.command.clear_preview", "message": "tool closed" },
                       { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
                     ],
                     "else": [

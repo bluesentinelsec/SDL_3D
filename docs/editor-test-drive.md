@@ -84,7 +84,7 @@ shortcuts do not shadow camera movement.
 
 | Key | Context | Behavior |
 | --- | --- | --- |
-| `B` | global editor | enter Brush Tool mode for face push/pull editing |
+| `B` | global editor | enter Brush Tool mode for brush creation |
 | `M` | global editor | enter Texture Mode and open the Materials palette placeholder |
 | `G` | global editor | open the Game Objects palette |
 | `I` | global editor | collapse or expand the left Inspector panel |
@@ -96,8 +96,8 @@ shortcuts do not shadow camera movement.
 | `Esc` | any mode with a selection | clear the selection |
 | left mouse drag | Select Mode, empty space | create a source-backed box brush on the active grid; a single click only clears/changes selection |
 | left mouse drag | Select Mode, selected brush | move selected brushes with snap-to-grid |
-| left mouse drag | Brush Tool, highlighted face | push or pull the highlighted source-brush face with snap-to-grid |
-| `Shift` + hover | Brush Tool, highlighted face | show the face as drag-ready with stronger yellow handle feedback |
+| left mouse drag | Face Tool, highlighted face | push or pull the highlighted source-brush face with snap-to-grid |
+| `Shift` + hover | Brush Tool, highlighted face | show the face outline as ready for a drawn-face brush operation |
 | `Alt`/`Option` + left mouse drag | Select Mode, selected brush | move selected brushes only on the Y axis with snap-to-grid |
 | arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on Z/X (`Up` moves +X, `Down` moves -X) |
 | `PageUp` / `PageDown` | Select Mode, brush selected | move selected brushes up/down on Y by the active grid size (`Fn+Up` / `Fn+Down` on many macOS keyboards) |
@@ -195,9 +195,12 @@ The following should be true during a good test drive:
   saves, and prints the same messages to the terminal. The Issues tab is present
   as a placeholder for future map diagnostics.
 - `B` enters Brush Tool mode. Hovered brush faces render with yellow face
-  outlines and vertex handles, and dragging a face previews/commits a source
-  face resize. The Prefabs toolbar widget owns floor/wall/ceiling/sky blockout
-  shapes and is intentionally separate from Brush Tool.
+  outlines and vertex handles as the first step toward TrenchBroom-style
+  face-based brush creation. The Prefabs toolbar widget owns
+  floor/wall/ceiling/sky blockout shapes and is intentionally separate from
+  Brush Tool.
+- Face Tool owns face push/pull editing. Dragging a highlighted face previews
+  and commits a source face resize with snap-to-grid.
 - `M` enters Texture Mode. Material palette selections update the same
   data-authored mode and brush-setting state.
 - `Space` enters Select Mode from editor layouts and the 3D flyby view. Select

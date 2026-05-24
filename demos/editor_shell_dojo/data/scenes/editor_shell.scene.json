@@ -253,6 +253,26 @@
       "default_cursor": "floor",
       "button": { "x": 206, "y": 45, "w": 92, "h": 28 }
     },
+    "tool_mode_buttons": [
+      {
+        "mode": "select",
+        "tool_mode": "select",
+        "message": "select mode",
+        "button": { "x": 12, "y": 45, "w": 78, "h": 28 }
+      },
+      {
+        "mode": "brush",
+        "tool_mode": "brush",
+        "message": "brush tool",
+        "button": { "x": 96, "y": 45, "w": 104, "h": 28 }
+      },
+      {
+        "mode": "face",
+        "tool_mode": "face",
+        "message": "face tool",
+        "button": { "x": 398, "y": 45, "w": 88, "h": 28 }
+      }
+    ],
     "palette": {
       "selected_key": "editor.tool.mode",
       "entries": [
@@ -552,6 +572,80 @@
         "color": [32, 40, 54, 240],
         "border_color": [92, 130, 170, 230],
         "border_thickness": 1
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.select.selected",
+        "x": 12,
+        "y": 45,
+        "w": 78,
+        "h": 28,
+        "color": [0, 0, 0, 0],
+        "border_color": [90, 255, 130, 255],
+        "border_thickness": 3,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "select", "default": "select" }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.brush.selected",
+        "x": 96,
+        "y": 45,
+        "w": 104,
+        "h": 28,
+        "color": [0, 0, 0, 0],
+        "border_color": [90, 255, 130, 255],
+        "border_thickness": 3,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "brush" }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.prefabs.selected",
+        "x": 206,
+        "y": 45,
+        "w": 92,
+        "h": 28,
+        "color": [0, 0, 0, 0],
+        "border_color": [90, 255, 130, 255],
+        "border_thickness": 3,
+        "visible_if": {
+          "type": "any",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" },
+            { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "wall" },
+            { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" },
+            { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "sky" }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.face.selected",
+        "x": 398,
+        "y": 45,
+        "w": 88,
+        "h": 28,
+        "color": [0, 0, 0, 0],
+        "border_color": [90, 255, 130, 255],
+        "border_thickness": 3,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "face" }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.entity.selected",
+        "x": 598,
+        "y": 45,
+        "w": 104,
+        "h": 28,
+        "color": [0, 0, 0, 0],
+        "border_color": [90, 255, 130, 255],
+        "border_thickness": 3,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "player_start" }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.texture.selected",
+        "x": 708,
+        "y": 45,
+        "w": 110,
+        "h": 28,
+        "color": [0, 0, 0, 0],
+        "border_color": [90, 255, 130, 255],
+        "border_thickness": 3,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "paint" }
       },
       {
         "name": "ui.editor_shell.tool_toolbar.grid.button",
