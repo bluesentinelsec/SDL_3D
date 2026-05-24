@@ -5,6 +5,7 @@
 
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_timer.h>
 
 typedef struct editor_debug_iteration_context
@@ -427,6 +428,28 @@ static bool emit_editor_debug_selection_face(const slayer3d_game_data_editor_deb
     {
         if (!emit_editor_debug_line(&context, corners[i], corners[(i + 1) % 4]))
             return false;
+    }
+    const slayer3d_vec3 normal = slayer3d_vec3_normalize(selection->normal);
+    slayer3d_vec3 tangent = slayer3d_vec3_sub(corners[1], corners[0]);
+    if (slayer3d_vec3_length_squared(tangent) <= 0.000001f)
+        tangent = slayer3d_vec3_cross(slayer3d_vec3_make(0.0f, 1.0f, 0.0f), normal);
+    tangent = slayer3d_vec3_normalize(tangent);
+    slayer3d_vec3 bitangent = slayer3d_vec3_normalize(slayer3d_vec3_cross(normal, tangent));
+    const float radius = 0.07f;
+    const int segments = 12;
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        slayer3d_vec3 previous = slayer3d_vec3_add(corners[corner], slayer3d_vec3_scale(tangent, radius));
+        for (int segment = 1; segment <= segments; ++segment)
+        {
+            const float angle = ((float)segment / (float)segments) * 6.28318530718f;
+            const slayer3d_vec3 offset = slayer3d_vec3_add(slayer3d_vec3_scale(tangent, SDL_cosf(angle) * radius),
+                                                           slayer3d_vec3_scale(bitangent, SDL_sinf(angle) * radius));
+            const slayer3d_vec3 current = slayer3d_vec3_add(corners[corner], offset);
+            if (!emit_editor_debug_line(&context, previous, current))
+                return false;
+            previous = current;
+        }
     }
     return true;
 }

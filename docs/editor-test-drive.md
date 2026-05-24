@@ -84,7 +84,7 @@ shortcuts do not shadow camera movement.
 
 | Key | Context | Behavior |
 | --- | --- | --- |
-| `B` | global editor | enter Brush Paint Mode and open or close the Brushes palette |
+| `B` | global editor | enter Brush Tool mode for face push/pull editing |
 | `M` | global editor | enter Texture Mode and open the Materials palette placeholder |
 | `G` | global editor | open the Game Objects palette |
 | `I` | global editor | collapse or expand the left Inspector panel |
@@ -92,8 +92,12 @@ shortcuts do not shadow camera movement.
 | arrow keys | palette open | move the active palette cursor |
 | `Enter` | palette open | select the highlighted palette item and close the palette |
 | `Esc` | palette open | close the palette without quitting |
+| `Esc` | Brush Tool, nothing selected | return to Select Mode |
+| `Esc` | any mode with a selection | clear the selection |
 | left mouse drag | Select Mode, empty space | create a source-backed box brush on the active grid; a single click only clears/changes selection |
 | left mouse drag | Select Mode, selected brush | move selected brushes with snap-to-grid |
+| left mouse drag | Brush Tool, highlighted face | push or pull the highlighted source-brush face with snap-to-grid |
+| `Shift` + hover | Brush Tool, highlighted face | show the face as drag-ready with stronger yellow handle feedback |
 | `Alt`/`Option` + left mouse drag | Select Mode, selected brush | move selected brushes only on the Y axis with snap-to-grid |
 | arrow keys | Select Mode, brush selected | move selected brushes by the active grid size on Z/X (`Up` moves +X, `Down` moves -X) |
 | `PageUp` / `PageDown` | Select Mode, brush selected | move selected brushes up/down on Y by the active grid size (`Fn+Up` / `Fn+Down` on many macOS keyboards) |
@@ -104,9 +108,10 @@ shortcuts do not shadow camera movement.
 | `Shift` + mouse click | Select Mode | add or remove the highlighted brush from the selected set |
 | `Delete` / `Backspace` | Select Mode | delete all selected brushes |
 | `Delete` / `Backspace` | other editor modes | delete the active highlighted tile or game object |
-| `Enter` | palette closed | commit the current preview placement |
+| `Enter` | palette closed | commit the current prefab preview placement |
 | `+` / `-` | palette closed | increase or decrease grid size through the fixed ladder: 0.125, 0.25, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256 |
 | Grid widget | second toolbar | click to open the grid-size list, then click a row to set the active grid |
+| Prefabs widget | second toolbar | open common blockout prefab shapes such as floor, wall, ceiling, and sky; future entries will include stairs, ramps, windows, arches, and doorways |
 | `R` | palette closed | toggle wall axis for manual wall placement |
 | `C` | palette closed | cycle tools for debug/testing |
 | `WASD` | 3D flyby | move camera |
@@ -120,7 +125,7 @@ shortcuts do not shadow camera movement.
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
 | `T` | palette closed | report that disk test-run manifest handoff is disabled for this MVP iteration |
 | `F5` | palette closed | enter the playable test scene from the placed player start |
-| `Esc` | palette closed | quit |
+| `Esc` | palette closed | clear selection or leave Brush Tool; it does not quit the editor |
 
 ## Suggested Pass
 
@@ -138,22 +143,22 @@ your current editing session.
    vertically, and use `Home` / `End` or macOS `Fn+Left` / `Fn+Right` to rotate
    it in 90-degree Y-axis steps. Drag the selected brush with left mouse and
    confirm it moves on the same grid.
-4. Press `B`, leave Floor selected, press `Enter`, and place a floor tile.
-5. Press `B`, move to Wall with the arrow keys, press `Enter`, press `R` if
-   needed, and place at least one wall.
-6. Press `B`, move to Ceiling with the arrow keys, press `Enter`, and place a
-   ceiling tile.
-7. Press `B`, move to Sky with the arrow keys, press `Enter`, and place a sky
-   tile over an opening. The brush should seal leak validation; sky rendering
-   will be revisited when a better editor skybox is authored.
+4. Click `Prefabs`, leave Floor selected, press `Enter`, and place a floor tile.
+5. Click `Prefabs`, move to Wall with the arrow keys, press `Enter`, press `R`
+   if needed, and place at least one wall.
+6. Click `Prefabs`, move to Ceiling with the arrow keys, press `Enter`, and
+   place a ceiling tile.
+7. Click `Prefabs`, move to Sky with the arrow keys, press `Enter`, and place a
+   sky tile over an opening. The brush should seal leak validation; sky
+   rendering will be revisited when a better editor skybox is authored.
 8. Press `G`, press `Enter` to select Player Start, and place it on the floor.
 9. Press `Space`, click a tile to select it, press `]`, and confirm the brush
    stretches upward while its bottom face stays anchored. Press `[` on a floor
    slab at the default floor plane and confirm the floor slab can move below
    the plane; the editor should add side-wall fill brushes around the exposed
    height change.
-10. Enter the lowered area, switch back to Brush Paint Mode, and place floor,
-   wall, and ceiling tiles. Their previews should stay on the lowered
+10. Enter the lowered area, choose prefabs again, and place floor, wall, and
+   ceiling tiles. Their previews should stay on the lowered
    connected grid instead of snapping back to the original world plane.
 11. Press `Delete` or `Backspace`; the tile should disappear. Shift-click
    multiple tiles to delete a set.
@@ -189,8 +194,12 @@ The following should be true during a good test drive:
   `Editor ready`, appends common editor actions such as inspector toggles and
   saves, and prints the same messages to the terminal. The Issues tab is present
   as a placeholder for future map diagnostics.
-- `B` enters Brush Paint Mode. `M` enters Texture Mode. Brush/material palette
-  selections update the same data-authored mode and brush-setting state.
+- `B` enters Brush Tool mode. Hovered brush faces render with yellow face
+  outlines and vertex handles, and dragging a face previews/commits a source
+  face resize. The Prefabs toolbar widget owns floor/wall/ceiling/sky blockout
+  shapes and is intentionally separate from Brush Tool.
+- `M` enters Texture Mode. Material palette selections update the same
+  data-authored mode and brush-setting state.
 - `Space` enters Select Mode from editor layouts and the 3D flyby view. Select
   Mode owns brush selection and multi-selection. Arrow-key movement, vertical
   movement, and 90-degree Y-axis rotation all operate on source brushes by the
@@ -216,9 +225,9 @@ The following should be true during a good test drive:
 - Right click / `Delete` removes the highlighted brush and `U` can undo the
   deletion.
 - Floor, wall, ceiling, and sky prefabs are distinct blockout brushes.
-- `B` opens a modal brush palette with floor, wall, ceiling, and sky cells. Arrow
-  keys move the highlighted cell, `Enter` selects the brush, and `Esc` closes
-  the modal without quitting the editor.
+- The `Prefabs` toolbar widget opens a modal prefab palette with floor, wall,
+  ceiling, and sky cells. Arrow keys move the highlighted cell, `Enter` selects
+  the prefab, and `Esc` closes the modal without quitting the editor.
 - `M` opens the placeholder Material palette. `G` opens the Game Objects
   palette, and `Enter` selects Player Start for placement.
 - Placed player starts render as bright green cylinder markers in the editor
