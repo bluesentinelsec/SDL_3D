@@ -7558,6 +7558,8 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
     }
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return true;
+    if (SDL_strcmp(type, "editor.vertex.selection.clear") == 0)
+        return true;
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
     {
         if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
@@ -7618,6 +7620,9 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         yyjson_val *invalid_message = obj_get(action, "invalid_message");
         if (invalid_message != NULL && !yyjson_is_str(invalid_message))
             return validation_error(ctx, json_path, "editor.selection.select_brush invalid_message must be a string");
+        yyjson_val *additive = obj_get(action, "additive");
+        if (additive != NULL && !yyjson_is_bool(additive))
+            return validation_error(ctx, json_path, "editor.selection.select_brush additive must be a boolean");
         yyjson_val *outputs = obj_get(action, "outputs");
         if (outputs != NULL && !yyjson_is_obj(outputs))
             return validation_error(ctx, json_path, "editor.selection.select_brush outputs must be an object");

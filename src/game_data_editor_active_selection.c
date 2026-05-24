@@ -420,6 +420,77 @@ static bool editor_selected_brushes_active_for_scene(const slayer3d_game_data_ru
            SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) == 0;
 }
 
+static void init_editor_source_vertex_selection(editor_source_vertex_selection *selection)
+{
+    if (selection == NULL)
+        return;
+    SDL_zero(*selection);
+    selection->source_index = -1;
+    selection->vertex_index = -1;
+}
+
+static bool editor_selected_vertices_active_for_scene(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    return runtime->editor_selected_vertex_scene != NULL && active_scene != NULL &&
+           SDL_strcmp(runtime->editor_selected_vertex_scene, active_scene) == 0;
+}
+
+static void publish_editor_selected_vertex_count(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const int count = editor_selected_vertices_active_for_scene(runtime) ? runtime->editor_selected_vertex_count : 0;
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.count", count);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.selection.multiple", count > 1);
+    if (count <= 0)
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.world", "");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.brush", "");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.brush_stable_id", "");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.vertex", "");
+        slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.index", -1);
+        slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.x", 0);
+        slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.y", 0);
+        slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.z", 0);
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.vertex.selection.coord",
+                                     slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        return;
+    }
+
+    const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[count - 1];
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
+                                      ? world_runtime->editor_source_meters_per_unit
+                                      : 0.001f;
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.world", selection->world_name);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.brush", selection->brush_name);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.brush_stable_id",
+                                   selection->brush_stable_id);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.selection.vertex", selection->vertex_stable_id);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.index", selection->vertex_index);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.x", selection->coord[0]);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.y", selection->coord[1]);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.selection.z", selection->coord[2]);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.vertex.selection.coord",
+                                 slayer3d_vec3_make((float)selection->coord[0] * meters_per_unit,
+                                                    (float)selection->coord[1] * meters_per_unit,
+                                                    (float)selection->coord[2] * meters_per_unit));
+}
+
+static void clear_editor_selected_vertices(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY; ++i)
+        init_editor_source_vertex_selection(&runtime->editor_selected_vertices[i]);
+    runtime->editor_selected_vertex_count = 0;
+    runtime->editor_selected_vertex_scene = slayer3d_game_data_active_scene(runtime);
+    publish_editor_selected_vertex_count(runtime);
+}
+
 static void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -433,6 +504,7 @@ static void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
         return;
+    clear_editor_selected_vertices(runtime);
     for (int i = 0; i < SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY; ++i)
         init_editor_selection(&runtime->editor_selected_brushes[i]);
     runtime->editor_selected_brush_count = 0;
@@ -774,6 +846,7 @@ static void clear_editor_vertex_hover_state(slayer3d_game_data_runtime *runtime)
     slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.hover.brush", "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.hover.brush_stable_id", "");
     slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.hover.vertex", "");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.hover.selected", false);
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.hover.index", -1);
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.hover.shared_count", 0);
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.hover.x", 0);
@@ -848,6 +921,178 @@ static int editor_source_vertex_shared_count(const brush_world_runtime *world_ru
     return 1;
 }
 
+static bool editor_source_vertex_selection_matches(const editor_source_vertex_selection *a,
+                                                   const editor_source_vertex_selection *b)
+{
+    return a != NULL && b != NULL && a->source_index == b->source_index && a->vertex_index == b->vertex_index &&
+           SDL_strcmp(a->world_name, b->world_name) == 0 && SDL_strcmp(a->brush_stable_id, b->brush_stable_id) == 0 &&
+           SDL_strcmp(a->vertex_stable_id, b->vertex_stable_id) == 0;
+}
+
+static int editor_selected_vertex_index(const slayer3d_game_data_runtime *runtime,
+                                        const editor_source_vertex_selection *selection)
+{
+    if (runtime == NULL || selection == NULL || !editor_selected_vertices_active_for_scene(runtime))
+        return -1;
+    for (int i = 0; i < runtime->editor_selected_vertex_count; ++i)
+    {
+        if (editor_source_vertex_selection_matches(&runtime->editor_selected_vertices[i], selection))
+            return i;
+    }
+    return -1;
+}
+
+static void remove_editor_selected_vertex_at(slayer3d_game_data_runtime *runtime, int index)
+{
+    if (runtime == NULL || index < 0 || index >= runtime->editor_selected_vertex_count)
+        return;
+    for (int i = index; i + 1 < runtime->editor_selected_vertex_count; ++i)
+        runtime->editor_selected_vertices[i] = runtime->editor_selected_vertices[i + 1];
+    runtime->editor_selected_vertex_count--;
+    init_editor_source_vertex_selection(&runtime->editor_selected_vertices[runtime->editor_selected_vertex_count]);
+}
+
+static bool add_editor_selected_vertex(slayer3d_game_data_runtime *runtime,
+                                       const editor_source_vertex_selection *selection)
+{
+    if (runtime == NULL || selection == NULL ||
+        runtime->editor_selected_vertex_count >= SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY)
+    {
+        return false;
+    }
+    if (!editor_selected_vertices_active_for_scene(runtime))
+        clear_editor_selected_vertices(runtime);
+    if (editor_selected_vertex_index(runtime, selection) >= 0)
+        return true;
+    runtime->editor_selected_vertices[runtime->editor_selected_vertex_count++] = *selection;
+    runtime->editor_selected_vertex_scene = slayer3d_game_data_active_scene(runtime);
+    return true;
+}
+
+static bool editor_coord_equal(const int a[3], const int b[3])
+{
+    return a != NULL && b != NULL && a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
+}
+
+static bool editor_source_vertex_selection_from_model(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_vertex_model *model, int vertex_index,
+                                                      editor_source_vertex_selection *out_selection)
+{
+    if (world_runtime == NULL || model == NULL || out_selection == NULL || vertex_index < 0 ||
+        vertex_index >= model->vertex_count)
+    {
+        return false;
+    }
+
+    init_editor_source_vertex_selection(out_selection);
+    const editor_brush_source_vertex *vertex = &model->vertices[vertex_index];
+    const editor_brush_source_box_runtime *box = NULL;
+    if (model->brush_index >= 0 && model->brush_index < world_runtime->editor_source_box_count)
+        box = &world_runtime->editor_source_boxes[model->brush_index];
+    SDL_strlcpy(out_selection->world_name, world_runtime->desc.name != NULL ? world_runtime->desc.name : "",
+                sizeof(out_selection->world_name));
+    SDL_strlcpy(out_selection->brush_name, box != NULL && box->name != NULL ? box->name : model->brush_stable_id,
+                sizeof(out_selection->brush_name));
+    SDL_strlcpy(out_selection->brush_stable_id, model->brush_stable_id, sizeof(out_selection->brush_stable_id));
+    SDL_strlcpy(out_selection->vertex_stable_id, vertex->stable_id, sizeof(out_selection->vertex_stable_id));
+    out_selection->source_index = model->brush_index;
+    out_selection->vertex_index = vertex->vertex_index;
+    out_selection->coord[0] = vertex->coord[0];
+    out_selection->coord[1] = vertex->coord[1];
+    out_selection->coord[2] = vertex->coord[2];
+    return true;
+}
+
+static bool editor_hover_source_vertex_selection(const slayer3d_game_data_runtime *runtime,
+                                                 const slayer3d_game_data_editor_selection *hover_selection,
+                                                 editor_source_vertex_selection *out_selection)
+{
+    if (out_selection != NULL)
+        init_editor_source_vertex_selection(out_selection);
+    if (runtime == NULL || out_selection == NULL || !editor_mode_is_vertex(runtime) ||
+        !editor_selection_is_selectable_brush(hover_selection))
+    {
+        return false;
+    }
+
+    slayer3d_game_data_editor_selection resolved = resolved_editor_selection(runtime, hover_selection);
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, resolved.world_name);
+    const int source_index = editor_source_index_for_selection(world_runtime, &resolved);
+    editor_brush_source_vertex_model model;
+    if (world_runtime == NULL || source_index < 0 ||
+        !editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, NULL, 0))
+    {
+        return false;
+    }
+
+    const slayer3d_vec3 local_point = slayer3d_vec3_sub(resolved.point, resolved.world_position);
+    int nearest_vertex = -1;
+    float nearest_distance_sq = FLT_MAX;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        const slayer3d_vec3 vertex = editor_source_vertex_meters(world_runtime, &model.vertices[i]);
+        const float distance_sq = slayer3d_vec3_length_squared(slayer3d_vec3_sub(vertex, local_point));
+        if (distance_sq < nearest_distance_sq)
+        {
+            nearest_distance_sq = distance_sq;
+            nearest_vertex = i;
+        }
+    }
+    return editor_source_vertex_selection_from_model(world_runtime, &model, nearest_vertex, out_selection);
+}
+
+static bool editor_add_shared_vertex_selection_group(slayer3d_game_data_runtime *runtime,
+                                                     const editor_source_vertex_selection *selection)
+{
+    if (runtime == NULL || selection == NULL)
+        return false;
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    if (world_runtime == NULL)
+        return false;
+
+    int selected_indices[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+    const int selected_count = editor_collect_selected_source_indices(
+        runtime, world_runtime, selection->source_index, selected_indices, SDL_arraysize(selected_indices));
+    bool added_any = false;
+    for (int i = 0; i < selected_count; ++i)
+    {
+        editor_brush_source_vertex_model model;
+        if (!editor_brush_source_box_build_vertex_model(world_runtime, selected_indices[i], &model, NULL, 0))
+            continue;
+        for (int v = 0; v < model.vertex_count; ++v)
+        {
+            if (!editor_coord_equal(model.vertices[v].coord, selection->coord))
+                continue;
+            editor_source_vertex_selection candidate;
+            if (editor_source_vertex_selection_from_model(world_runtime, &model, v, &candidate) &&
+                add_editor_selected_vertex(runtime, &candidate))
+            {
+                added_any = true;
+            }
+        }
+    }
+    return added_any;
+}
+
+static bool editor_remove_shared_vertex_selection_group(slayer3d_game_data_runtime *runtime,
+                                                        const editor_source_vertex_selection *selection)
+{
+    if (runtime == NULL || selection == NULL || !editor_selected_vertices_active_for_scene(runtime))
+        return false;
+    bool removed_any = false;
+    for (int i = runtime->editor_selected_vertex_count - 1; i >= 0; --i)
+    {
+        const editor_source_vertex_selection *candidate = &runtime->editor_selected_vertices[i];
+        if (SDL_strcmp(candidate->world_name, selection->world_name) == 0 &&
+            editor_coord_equal(candidate->coord, selection->coord))
+        {
+            remove_editor_selected_vertex_at(runtime, i);
+            removed_any = true;
+        }
+    }
+    return removed_any;
+}
+
 static void publish_editor_vertex_hover_state(slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_selection *hover_selection)
 {
@@ -907,6 +1152,55 @@ static void publish_editor_vertex_hover_state(slayer3d_game_data_runtime *runtim
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.hover.y", vertex->coord[1]);
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.hover.z", vertex->coord[2]);
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.vertex.hover.coord", coord_meters);
+    editor_source_vertex_selection hovered;
+    if (editor_source_vertex_selection_from_model(world_runtime, &model, nearest_vertex, &hovered))
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.hover.selected",
+                                     editor_selected_vertex_index(runtime, &hovered) >= 0);
+    }
+}
+
+static bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
+                                           const slayer3d_game_data_editor_selection *hover_selection,
+                                           bool select_requested, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || !editor_mode_is_vertex(runtime) || !select_requested)
+        return true;
+
+    editor_source_vertex_selection hovered;
+    if (!editor_hover_source_vertex_selection(runtime, hover_selection, &hovered))
+    {
+        if ((SDL_GetModState() & SDL_KMOD_SHIFT) == 0)
+            clear_editor_selected_vertices(runtime);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
+
+    const bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+    const bool already_selected = editor_selected_vertex_index(runtime, &hovered) >= 0;
+    if (shift && already_selected)
+    {
+        (void)editor_remove_shared_vertex_selection_group(runtime, &hovered);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex deselected");
+    }
+    else
+    {
+        if (!shift)
+            clear_editor_selected_vertices(runtime);
+        if (!editor_add_shared_vertex_selection_group(runtime, &hovered))
+            return false;
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                       shift ? "vertex added to selection" : "vertex selected");
+    }
+
+    publish_editor_selected_vertex_count(runtime);
+    publish_editor_vertex_hover_state(runtime, hover_selection);
+    if (out_consumed != NULL)
+        *out_consumed = true;
+    return true;
 }
 
 static void editor_set_face_drag_state(slayer3d_game_data_runtime *runtime, bool ready, bool dragging)
@@ -1449,6 +1743,7 @@ bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *r
     const char *face_from_state = json_string(action, "face_from_state", NULL);
     const char *face_stable_id = json_string(action, "face_stable_id", NULL);
     const char *face_stable_id_from_state = json_string(action, "face_stable_id_from_state", NULL);
+    const bool additive = json_bool(action, "additive", false);
     if (runtime != NULL && runtime->scene_state != NULL)
     {
         if ((brush_name == NULL || brush_name[0] == '\0') && brush_name_key != NULL && brush_name_key[0] != '\0')
@@ -1478,7 +1773,10 @@ bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *r
     yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
     if (ok)
     {
-        clear_editor_selected_brushes(runtime);
+        if (!additive)
+            clear_editor_selected_brushes(runtime);
+        else if (!editor_selected_brushes_active_for_scene(runtime))
+            clear_editor_selected_brushes(runtime);
         (void)add_editor_selected_brush(runtime, &selection);
         update_active_editor_selection_from_selected_brushes(runtime);
         publish_editor_selection(runtime, obj_get(selection_json, "outputs"), &runtime->editor_active_selection);
@@ -1605,6 +1903,19 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_brush_count(runtime);
         return true;
     }
+    const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
+    const bool secondary_select_requested =
+        editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
+    bool vertex_selection_consumed = false;
+    if (!editor_handle_vertex_selection(runtime, &hover_selection, select_requested, &vertex_selection_consumed))
+        return false;
+    if (vertex_selection_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        publish_editor_selected_vertex_count(runtime);
+        return true;
+    }
     bool face_drag_consumed = false;
     if (!editor_handle_face_drag(runtime, &hover_selection, &face_drag_consumed))
         return false;
@@ -1636,9 +1947,6 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_brush_count(runtime);
         return true;
     }
-    const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
-    const bool secondary_select_requested =
-        editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
     if (editor_mode_is_select(runtime))
     {
         if (select_requested)
@@ -1709,6 +2017,15 @@ bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime
     clear_editor_active_selection(runtime);
     yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
     publish_editor_selection(runtime, obj_get(selection_json, "outputs"), &runtime->editor_active_selection);
+    return true;
+}
+
+bool slayer3d_game_data_clear_editor_vertex_selection(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    clear_editor_selected_vertices(runtime);
+    publish_editor_selected_vertex_count(runtime);
     return true;
 }
 

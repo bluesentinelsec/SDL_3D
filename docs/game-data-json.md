@@ -1088,7 +1088,18 @@ optional; at most one may be supplied. `face` and `face_from_state` accept the
 canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`, while
 `face_stable_id` selects a face by its source/editor stable id. When the target
 cannot be resolved, the action clears the active selection, publishes
-`valid_key: false` when configured, and reports `invalid_message`.
+`valid_key: false` when configured, and reports `invalid_message`. Set
+`additive: true` to add a brush to the current selection instead of replacing
+it.
+
+Vertex mode publishes hover and selection scene-state under
+`editor.vertex.hover.*` and `editor.vertex.selection.*`. Hover data includes
+`hit`, `brush`, `brush_stable_id`, `vertex`, `index`, `shared_count`, and
+integer source coordinates `x`, `y`, and `z`. Left-clicking a vertex handle
+selects the vertex group at that shared source position across the currently
+selected brushes; Shift+left-click toggles that group. Use
+`editor.vertex.selection.clear` to clear only vertex handles while preserving
+the brush selection and current editor tool.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a

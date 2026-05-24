@@ -696,20 +696,28 @@ void seed_editor_shell_player_start(slayer3d_game_data_runtime *runtime)
     ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
 }
 
-void select_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
+void select_editor_shell_test_brush(slayer3d_game_data_runtime *runtime, const char *brush_name, bool additive = false)
 {
     ASSERT_NE(runtime, nullptr);
-    const char *json = R"json({
+    char json[512]{};
+    SDL_snprintf(json, sizeof(json), R"json({
           "type": "editor.selection.select_brush",
           "world": "brush.editor_shell.target",
-          "element": "brush.target.cube",
-          "face": "nx"
-        })json";
+          "element": "%s",
+          "face": "nx",
+          "additive": %s
+        })json",
+                 brush_name != nullptr ? brush_name : "", additive ? "true" : "false");
     yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), 0);
     ASSERT_NE(doc, nullptr);
     yyjson_val *root = yyjson_doc_get_root(doc);
     ASSERT_TRUE(slayer3d_game_data_select_editor_brush_action(runtime, root));
     yyjson_doc_free(doc);
+}
+
+void select_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
+{
+    select_editor_shell_test_brush(runtime, "brush.target.cube");
 }
 
 std::filesystem::path fps_template_data_path()
@@ -16400,11 +16408,125 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
     EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.vertex.hover.index", -1), 0);
     EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.vertex.hover.shared_count", 0), 1);
 
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0),
+              slayer3d_properties_get_int(scene_state, "editor.vertex.hover.shared_count", 0));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.selected", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex selected");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.vertex.selection.vertex", ""))
+                  .find("brush.target.cube.vertex."),
+              std::string::npos);
+
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_SetModState(SDL_KMOD_SHIFT);
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    SDL_SetModState(SDL_KMOD_NONE);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.selected", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex deselected");
+
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0), 0);
+
     slayer3d_signal_emit(bus, escape_signal, nullptr);
-    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 1);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeSelectsSharedPositionVertices)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+
+    slayer3d_game_data_create_box_brush_desc left{};
+    left.world_name = "brush.editor_shell.target";
+    left.brush_name = "brush.target.left_neighbor";
+    left.material_name = "mat.editor.wall";
+    left.min = slayer3d_vec3_make(-2.0f, 0.0f, 0.0f);
+    left.max = slayer3d_vec3_make(0.0f, 2.0f, 2.0f);
+    left.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &left, nullptr, 0, error, sizeof(error))) << error;
+
+    slayer3d_game_data_create_box_brush_desc right = left;
+    right.brush_name = "brush.target.right_neighbor";
+    right.min = slayer3d_vec3_make(2.0f, 0.0f, 0.0f);
+    right.max = slayer3d_vec3_make(4.0f, 2.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &right, nullptr, 0, error, sizeof(error))) << error;
+
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_brush(runtime, "brush.target.cube");
+    select_editor_shell_test_brush(runtime, "brush.target.left_neighbor", true);
+    select_editor_shell_test_brush(runtime, "brush.target.right_neighbor", true);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.hit", false));
+    const int shared_count = slayer3d_properties_get_int(scene_state, "editor.vertex.hover.shared_count", 0);
+    ASSERT_GE(shared_count, 2);
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0), shared_count);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.selection.multiple", false));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

@@ -332,6 +332,18 @@ typedef struct editor_brush_source_prefab_result
 
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
 #define SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY 512
+#define SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY 512
+
+typedef struct editor_source_vertex_selection
+{
+    char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    char vertex_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    int source_index;
+    int vertex_index;
+    int coord[3];
+} editor_source_vertex_selection;
 
 typedef struct editor_command_transaction_entry
 {
@@ -898,6 +910,9 @@ typedef struct slayer3d_game_data_runtime
     slayer3d_game_data_editor_selection editor_selected_brushes[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
     int editor_selected_brush_count;
     const char *editor_selected_brush_scene;
+    editor_source_vertex_selection editor_selected_vertices[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    int editor_selected_vertex_count;
+    const char *editor_selected_vertex_scene;
     editor_command_preview_state editor_command_preview;
     editor_placement_preview_state editor_placement_preview;
     editor_drag_create_state editor_drag_create;
@@ -1063,6 +1078,7 @@ bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actio
 bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
                                    const slayer3d_properties *payload);
 bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_clear_editor_vertex_selection(slayer3d_game_data_runtime *runtime);
 slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                               const slayer3d_game_data_editor_selection *selection);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
