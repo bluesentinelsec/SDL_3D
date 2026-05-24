@@ -1767,7 +1767,11 @@ bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_run
                      applied_count == 1 ? "moved 1 selected brush" : "moved %d selected brushes", applied_count);
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     }
-    (void)last_entry;
+    if (last_entry != NULL && runtime->editor_selected_brush_count > 0)
+    {
+        runtime->editor_active_selection = runtime->editor_selected_brushes[runtime->editor_selected_brush_count - 1];
+        runtime->editor_selection_scene = active_scene;
+    }
     return applied_count > 0;
 
 fail:

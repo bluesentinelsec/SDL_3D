@@ -202,7 +202,10 @@
           },
           {
             "name": "action.editor.camera.frame_selected",
-            "bindings": [{ "device": "keyboard", "key": "U", "modifiers": ["ctrl"] }]
+            "bindings": [
+              { "device": "keyboard", "key": "U", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "U", "modifiers": ["gui"] }
+            ]
           },
           {
             "name": "action.move.forward",

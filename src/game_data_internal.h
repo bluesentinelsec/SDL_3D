@@ -207,6 +207,7 @@ typedef struct editor_drag_move_state
 {
     bool active;
     bool moved;
+    bool axis_lock_y;
     const char *scene;
     slayer3d_vec3 start_point;
     slayer3d_vec3 applied_offset;
@@ -214,6 +215,13 @@ typedef struct editor_drag_move_state
     float start_mouse_x;
     float start_mouse_y;
 } editor_drag_move_state;
+
+typedef struct editor_camera_orbit_state
+{
+    bool active;
+    slayer3d_vec3 pivot;
+    float radius;
+} editor_camera_orbit_state;
 
 typedef struct editor_brush_source_box_runtime
 {
@@ -826,6 +834,7 @@ typedef struct slayer3d_game_data_runtime
     editor_placement_preview_state editor_placement_preview;
     editor_drag_create_state editor_drag_create;
     editor_drag_move_state editor_drag_move;
+    editor_camera_orbit_state editor_camera_orbit;
     editor_command_history_state editor_command_history;
     scene_activity_state activity;
     float current_dt;

@@ -648,10 +648,16 @@ static bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime
     const bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
     if (!editor_selection_is_selectable_brush(hover_selection))
     {
-        if (!shift)
+        if (hover_selection != NULL && hover_selection->hit &&
+            hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START)
+        {
             clear_editor_selected_brushes(runtime);
-        runtime->editor_active_selection = *hover_selection;
-        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+            runtime->editor_active_selection = *hover_selection;
+            runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+            return true;
+        }
+        if (!shift)
+            clear_editor_active_selection(runtime);
         return true;
     }
 
@@ -757,26 +763,39 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
     const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
     const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
     const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
-    if (!drag->active && left_pressed && editor_hover_is_selected_brush(runtime, hover_selection))
+    const SDL_Keymod modifiers = SDL_GetModState();
+    const bool y_axis_lock = (modifiers & SDL_KMOD_ALT) != 0;
+    const bool can_start_from_hover = editor_selection_is_selectable_brush(hover_selection);
+    const bool can_start_y_axis_drag =
+        y_axis_lock && editor_selected_brushes_active_for_scene(runtime) && runtime->editor_selected_brush_count > 0;
+    bool just_started_without_consuming_click = false;
+    if (!drag->active && left_pressed && (can_start_from_hover || can_start_y_axis_drag))
     {
+        const bool hover_was_selected =
+            can_start_from_hover && editor_hover_is_selected_brush(runtime, hover_selection);
+        const bool consume_start_click = hover_was_selected || can_start_y_axis_drag;
         SDL_zero(*drag);
         drag->active = true;
+        drag->axis_lock_y = y_axis_lock;
         drag->scene = slayer3d_game_data_active_scene(runtime);
-        drag->start_point = hover_selection->point;
+        const slayer3d_game_data_editor_selection resolved = resolved_editor_selection(
+            runtime, can_start_from_hover ? hover_selection : &runtime->editor_active_selection);
+        drag->start_point = resolved.hit ? resolved.point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
         drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
         (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
         if (out_consumed != NULL)
-            *out_consumed = true;
+            *out_consumed = consume_start_click;
+        just_started_without_consuming_click = !consume_start_click;
     }
 
     if (!drag->active)
         return true;
+    if (just_started_without_consuming_click)
+        return true;
     if (out_consumed != NULL)
         *out_consumed = true;
 
-    const SDL_Keymod modifiers = SDL_GetModState();
-    const bool y_axis_lock = (modifiers & SDL_KMOD_ALT) != 0;
-    if (y_axis_lock)
+    if (drag->axis_lock_y)
     {
         float mouse_x = drag->start_mouse_x;
         float mouse_y = drag->start_mouse_y;
@@ -791,6 +810,7 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
             {
                 drag->applied_offset = desired;
                 drag->moved = true;
+                update_active_editor_selection_from_selected_brushes(runtime);
             }
         }
     }
@@ -806,6 +826,7 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
             {
                 drag->applied_offset = desired;
                 drag->moved = true;
+                update_active_editor_selection_from_selected_brushes(runtime);
             }
         }
     }

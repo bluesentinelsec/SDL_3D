@@ -116,7 +116,7 @@ shortcuts do not shadow camera movement.
 | mouse wheel | 3D flyby | dolly camera forward/back |
 | `Q` / `E` | 3D flyby | move camera down/up |
 | `Left Shift` | 3D flyby | move faster |
-| `Ctrl+U` | 3D flyby | frame the selected or hovered brush in view |
+| `Ctrl+U` / `Command+U` | 3D flyby | frame the selected or hovered brush in view |
 | `Ctrl+S` / `Command+S` | palette closed | export editable level JSON in memory and save it to the CLI output path |
 | `T` | palette closed | report that disk test-run manifest handoff is disabled for this MVP iteration |
 | `F5` | palette closed | enter the playable test scene from the placed player start |
