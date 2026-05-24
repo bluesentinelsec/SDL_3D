@@ -1125,6 +1125,14 @@ source model's fixed units; `snap_units` can be authored for deterministic tool
 commands and tests. Optional output keys publish `valid`, `message`,
 `source_count`, `changed_count`, and `snap_units` values.
 
+`editor.vertex.delete_selected` deletes the selected vertex handles from their
+source brushes through the same convex rebuild validation path. Invalid deletes,
+such as edits that would collapse a brush or discard required hull vertices, are
+reported as diagnostics and leave the source model unchanged. Optional output
+keys publish `valid`, `message`, `source_count`, and `deleted_count` values.
+The editor shell routes Delete/Backspace to this action while vertex mode has an
+active vertex selection; brush deletion remains unchanged in select mode.
+
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
 test-run should place an existing actor, while the actor remains defined by the

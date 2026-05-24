@@ -1754,6 +1754,203 @@ bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime
     return true;
 }
 
+typedef struct editor_source_vertex_delete_target
+{
+    brush_world_runtime *world_runtime;
+    int source_index;
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    int vertex_index_count;
+} editor_source_vertex_delete_target;
+
+static editor_source_vertex_delete_target *editor_find_vertex_delete_target(editor_source_vertex_delete_target *targets,
+                                                                            int target_count,
+                                                                            brush_world_runtime *world_runtime,
+                                                                            int source_index)
+{
+    if (targets == NULL || world_runtime == NULL || source_index < 0)
+        return NULL;
+    for (int i = 0; i < target_count; ++i)
+    {
+        if (targets[i].world_runtime == world_runtime && targets[i].source_index == source_index)
+            return &targets[i];
+    }
+    return NULL;
+}
+
+static bool editor_vertex_delete_target_add_index(editor_source_vertex_delete_target *target, int vertex_index)
+{
+    if (target == NULL || vertex_index < 0)
+        return false;
+    for (int i = 0; i < target->vertex_index_count; ++i)
+    {
+        if (target->vertex_indices[i] == vertex_index)
+            return true;
+    }
+    if (target->vertex_index_count >= SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+        return false;
+    target->vertex_indices[target->vertex_index_count++] = vertex_index;
+    return true;
+}
+
+static int editor_collect_vertex_delete_targets(slayer3d_game_data_runtime *runtime,
+                                                editor_source_vertex_delete_target *targets, int target_capacity)
+{
+    if (runtime == NULL || targets == NULL || target_capacity <= 0 ||
+        !editor_selected_vertices_active_for_scene(runtime))
+    {
+        return 0;
+    }
+
+    int target_count = 0;
+    for (int i = 0; i < runtime->editor_selected_vertex_count; ++i)
+    {
+        const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[i];
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, selection->world_name);
+        if (world_runtime == NULL || selection->source_index < 0 ||
+            selection->source_index >= world_runtime->editor_source_box_count)
+        {
+            continue;
+        }
+        editor_source_vertex_delete_target *target =
+            editor_find_vertex_delete_target(targets, target_count, world_runtime, selection->source_index);
+        if (target == NULL)
+        {
+            if (target_count >= target_capacity)
+                break;
+            target = &targets[target_count++];
+            SDL_zero(*target);
+            target->world_runtime = world_runtime;
+            target->source_index = selection->source_index;
+        }
+        if (!editor_vertex_delete_target_add_index(target, selection->vertex_index))
+            break;
+    }
+    return target_count;
+}
+
+static const char *editor_source_delete_target_identity(const editor_source_vertex_delete_target *target)
+{
+    if (target == NULL || target->world_runtime == NULL || target->source_index < 0 ||
+        target->source_index >= target->world_runtime->editor_source_box_count)
+    {
+        return NULL;
+    }
+    const editor_brush_source_box_runtime *box = &target->world_runtime->editor_source_boxes[target->source_index];
+    return box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
+}
+
+static void publish_editor_vertex_delete_result(slayer3d_game_data_runtime *runtime, yyjson_val *action, bool valid,
+                                                int source_count, int deleted_count, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.delete.valid", valid);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.delete.source_count", source_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.delete.deleted_count", deleted_count);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.delete.message",
+                                   message != NULL ? message : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message != NULL ? message : "");
+
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (!yyjson_is_obj(outputs))
+        return;
+    const char *valid_key = json_string(outputs, "valid_key", NULL);
+    const char *message_key = json_string(outputs, "message_key", NULL);
+    const char *source_count_key = json_string(outputs, "source_count_key", NULL);
+    const char *deleted_count_key = json_string(outputs, "deleted_count_key", NULL);
+    if (valid_key != NULL)
+        slayer3d_properties_set_bool(runtime->scene_state, valid_key, valid);
+    if (message_key != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, message_key, message != NULL ? message : "");
+    if (source_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, source_count_key, source_count);
+    if (deleted_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, deleted_count_key, deleted_count);
+}
+
+bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    editor_source_vertex_delete_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    SDL_zeroa(targets);
+    const int target_count = editor_collect_vertex_delete_targets(runtime, targets, SDL_arraysize(targets));
+    if (runtime == NULL || target_count <= 0)
+    {
+        publish_editor_vertex_delete_result(runtime, action, false, 0, 0, "vertex delete requires a selection");
+        return true;
+    }
+
+    int total_deleted = 0;
+    char error[256];
+    SDL_zeroa(error);
+    for (int i = 0; i < target_count; ++i)
+    {
+        const char *identity = editor_source_delete_target_identity(&targets[i]);
+        editor_brush_source_vertex_operation_desc desc;
+        SDL_zero(desc);
+        desc.brush_identity = identity;
+        desc.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY;
+        desc.vertex_index_count = targets[i].vertex_index_count;
+        for (int v = 0; v < targets[i].vertex_index_count; ++v)
+            desc.vertex_indices[v] = targets[i].vertex_indices[v];
+
+        editor_brush_source_vertex_operation_result preview;
+        SDL_zero(preview);
+        if (!editor_brush_world_preview_source_vertex_operation(targets[i].world_runtime, &desc, &preview, error,
+                                                                sizeof(error)))
+        {
+            char message[320];
+            SDL_snprintf(message, sizeof(message), "vertex delete blocked: %s",
+                         error[0] != '\0' ? error : "invalid source edit");
+            publish_editor_vertex_delete_result(runtime, action, false, target_count, total_deleted, message);
+            editor_brush_source_free_runtime_brush(&preview.brush);
+            return true;
+        }
+        total_deleted += preview.changed_count;
+        editor_brush_source_free_runtime_brush(&preview.brush);
+    }
+
+    total_deleted = 0;
+    for (int i = 0; i < target_count; ++i)
+    {
+        const char *identity = editor_source_delete_target_identity(&targets[i]);
+        editor_brush_source_vertex_operation_desc desc;
+        SDL_zero(desc);
+        desc.brush_identity = identity;
+        desc.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY;
+        desc.vertex_index_count = targets[i].vertex_index_count;
+        for (int v = 0; v < targets[i].vertex_index_count; ++v)
+            desc.vertex_indices[v] = targets[i].vertex_indices[v];
+
+        editor_brush_source_vertex_operation_result result;
+        SDL_zero(result);
+        if (!editor_brush_world_apply_source_vertex_operation(targets[i].world_runtime, &desc, &result, error,
+                                                              sizeof(error)))
+        {
+            char message[320];
+            SDL_snprintf(message, sizeof(message), "vertex delete blocked: %s",
+                         error[0] != '\0' ? error : "invalid source edit");
+            publish_editor_vertex_delete_result(runtime, action, false, target_count, total_deleted, message);
+            editor_brush_source_free_runtime_brush(&result.brush);
+            return true;
+        }
+        total_deleted += result.changed_count;
+        editor_brush_source_free_runtime_brush(&result.brush);
+    }
+
+    for (int i = 0; i < target_count; ++i)
+    {
+        editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
+        editor_refresh_selected_brushes_after_source_edit(runtime);
+    }
+    clear_editor_selected_vertices(runtime);
+
+    char message[160];
+    SDL_snprintf(message, sizeof(message), "deleted %d selected source vert%s", total_deleted,
+                 total_deleted == 1 ? "ex" : "ices");
+    publish_editor_vertex_delete_result(runtime, action, true, target_count, total_deleted, message);
+    return true;
+}
+
 static void editor_begin_vertex_drag(slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
                                      const slayer3d_game_data_editor_selection *hover_selection)
 {

@@ -365,6 +365,7 @@ typedef enum editor_brush_source_vertex_operation_type
 {
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP,
 } editor_brush_source_vertex_operation_type;
@@ -375,6 +376,8 @@ typedef struct editor_brush_source_vertex_operation_desc
     editor_brush_source_vertex_operation_type type;
     int vertex_index;
     int target_vertex_index;
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    int vertex_index_count;
     int coord[3];
     int snap_units;
 } editor_brush_source_vertex_operation_desc;
@@ -1133,6 +1136,7 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
 bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                          const slayer3d_properties *payload);
 bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_clear_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,

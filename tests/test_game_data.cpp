@@ -101,6 +101,7 @@ extern "C"
     {
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP,
     } editor_brush_source_vertex_operation_type;
@@ -110,6 +111,8 @@ extern "C"
         editor_brush_source_vertex_operation_type type;
         int vertex_index;
         int target_vertex_index;
+        int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+        int vertex_index_count;
         int coord[3];
         int snap_units;
     } editor_brush_source_vertex_operation_desc;
@@ -16897,6 +16900,77 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeRejectsDegenerateVertexMove)
     EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""))
                   .find("vertex move blocked"),
               std::string::npos);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeDeleteSelectedVertexUsesSourceValidation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    const int delete_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.delete_selected");
+    ASSERT_GE(vertex_signal, 0);
+    ASSERT_GE(delete_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0), 1);
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    ASSERT_EQ(model.vertex_count, 8);
+
+    slayer3d_signal_emit(bus, delete_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.delete.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.delete.deleted_count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "deleted 1 selected source vertex");
+
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 7);
+    EXPECT_GT(model.face_count, 4);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

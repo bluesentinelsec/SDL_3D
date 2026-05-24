@@ -976,6 +976,39 @@
                   "type": "scene_state.compare",
                   "key": "editor.mode",
                   "op": "==",
+                  "value": "vertex",
+                  "default": "select"
+                },
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.vertex.selection.count",
+                  "op": ">",
+                  "value": 0,
+                  "default": 0
+                }
+              ]
+            },
+            "then": [
+              {
+                "type": "editor.vertex.delete_selected",
+                "outputs": {
+                  "valid_key": "editor.vertex.delete.valid",
+                  "message_key": "editor.vertex.delete.message",
+                  "source_count_key": "editor.vertex.delete.source_count",
+                  "deleted_count_key": "editor.vertex.delete.deleted_count"
+                }
+              }
+            ],
+            "else": [
+              {
+                "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.mode",
+                  "op": "==",
                   "value": "select",
                   "default": "select"
                 },
@@ -1112,6 +1145,8 @@
                   }
                 ]
               }
+            ]
+          }
             ]
           }
         ]
