@@ -234,6 +234,8 @@ typedef struct editor_brush_source_box_runtime
     char *face_materials[6];
     int min[3];
     int max[3];
+    int vertex_count;
+    int vertices[16][3];
     unsigned int contents;
 } editor_brush_source_box_runtime;
 
@@ -241,6 +243,7 @@ typedef struct editor_brush_source_box_runtime
 #define SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT 12
 #define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
 #define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_EDGE_CAPACITY 64
 #define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
 #define SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX 320
 
@@ -264,7 +267,7 @@ typedef struct editor_brush_source_face_ref
 {
     int brush_index;
     int face_index;
-    int vertex_indices[4];
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     int vertex_count;
     char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
 } editor_brush_source_face_ref;
@@ -274,11 +277,11 @@ typedef struct editor_brush_source_vertex_model
     int brush_index;
     char brush_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
     int vertex_count;
-    editor_brush_source_vertex vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
+    editor_brush_source_vertex vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     int edge_count;
-    editor_brush_source_edge edges[SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT];
+    editor_brush_source_edge edges[SLAYER3D_EDITOR_SOURCE_CONVEX_EDGE_CAPACITY];
     int face_count;
-    editor_brush_source_face_ref faces[SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT];
+    editor_brush_source_face_ref faces[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
 } editor_brush_source_vertex_model;
 
 typedef struct editor_brush_source_shared_vertex
@@ -374,6 +377,7 @@ typedef struct editor_brush_source_vertex_operation_result
 {
     bool valid;
     int vertex_count;
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
     int face_count;
     char diagnostic[256];
     slayer3d_game_data_brush brush;
@@ -1390,6 +1394,10 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
                                                         const editor_brush_source_vertex_operation_desc *desc,
                                                         editor_brush_source_vertex_operation_result *out_result,
                                                         char *error_buffer, int error_buffer_size);
+bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_vertex_operation_desc *desc,
+                                                      editor_brush_source_vertex_operation_result *out_result,
+                                                      char *error_buffer, int error_buffer_size);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);

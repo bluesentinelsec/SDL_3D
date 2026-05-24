@@ -395,6 +395,30 @@ static bool editor_brush_source_box_aligned_to_snap(yyjson_val *min_value, yyjso
     return true;
 }
 
+static bool editor_brush_source_vertices_valid(yyjson_val *vertices, int snap_units)
+{
+    if (!yyjson_is_arr(vertices))
+        return false;
+    const size_t count = yyjson_arr_size(vertices);
+    if (count < 4u || count > 16u)
+        return false;
+    for (size_t vertex = 0; vertex < count; ++vertex)
+    {
+        yyjson_val *coord = yyjson_arr_get(vertices, vertex);
+        if (!is_exact_int_vec3_array(coord))
+            return false;
+        if (snap_units > 1)
+        {
+            for (size_t axis = 0; axis < 3u; ++axis)
+            {
+                if ((yyjson_get_sint(yyjson_arr_get(coord, axis)) % snap_units) != 0)
+                    return false;
+            }
+        }
+    }
+    return true;
+}
+
 static bool editor_brush_source_face_key_valid(const char *key)
 {
     static const char *const valid[] = {"px", "nx", "py", "ny", "pz", "nz"};
@@ -544,12 +568,15 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             yyjson_val *contents = obj_get(box, "contents");
             yyjson_val *min_value = obj_get(box, "min");
             yyjson_val *max_value = obj_get(box, "max");
+            yyjson_val *vertices = obj_get(box, "vertices");
+            const bool is_convex = kind != NULL && SDL_strcmp(kind, "convex") == 0;
             ok = require_unique_name(ctx, &box_ids, "editor brush source stable id", stable_id, box_path) &&
                  require_unique_name(ctx, &box_names, "editor brush source name", name, box_path) &&
-                 (kind == NULL || SDL_strcmp(kind, "box") == 0) && (prefab == NULL || prefab[0] != '\0') &&
+                 (kind == NULL || SDL_strcmp(kind, "box") == 0 || is_convex) && (prefab == NULL || prefab[0] != '\0') &&
                  material != NULL && material[0] != '\0' && name_table_contains(&material_names, material) &&
-                 editor_brush_source_box_has_positive_extent(min_value, max_value) &&
-                 editor_brush_source_box_aligned_to_snap(min_value, max_value, source_snap_units) &&
+                 (is_convex ? editor_brush_source_vertices_valid(vertices, source_snap_units)
+                            : (editor_brush_source_box_has_positive_extent(min_value, max_value) &&
+                               editor_brush_source_box_aligned_to_snap(min_value, max_value, source_snap_units))) &&
                  validate_brush_string_or_string_array(ctx, contents, box_path, "editor brush source contents",
                                                        brush_content_name_valid, false) &&
                  validate_editor_brush_source_face_materials(ctx, obj_get(box, "face_materials"), box_path,
@@ -557,9 +584,9 @@ bool validate_editor_brush_sources(validation_context *ctx, yyjson_val *root, va
             if (!ok && !ctx->failed)
             {
                 ok = validation_error(ctx, box_path,
-                                      "editor brush source box requires stable_id, kind 'box', material ref, integer "
-                                      "min/max vec3 with positive snap-aligned extent, valid contents, and valid "
-                                      "face_materials");
+                                      "editor brush source requires stable_id, kind 'box' or 'convex', material ref, "
+                                      "integer min/max vec3 for boxes or convex vertices with positive snap-aligned "
+                                      "extent, valid contents, and valid face_materials");
             }
         }
         name_table_destroy(&box_names);

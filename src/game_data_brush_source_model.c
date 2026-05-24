@@ -56,6 +56,20 @@ static bool source_vec3i(yyjson_val *object, const char *key, int out_values[3])
     return true;
 }
 
+static bool source_vec3i_value(yyjson_val *value, int out_values[3])
+{
+    if (out_values == NULL || !yyjson_is_arr(value) || yyjson_arr_size(value) < 3u)
+        return false;
+    for (int i = 0; i < 3; ++i)
+    {
+        yyjson_val *entry = yyjson_arr_get(value, (size_t)i);
+        if (!yyjson_is_int(entry))
+            return false;
+        out_values[i] = (int)yyjson_get_int(entry);
+    }
+    return true;
+}
+
 static int source_material_index_by_name(const slayer3d_game_data_brush_world *world, const char *material_name)
 {
     if (world == NULL || material_name == NULL || material_name[0] == '\0')
@@ -136,6 +150,13 @@ bool copy_editor_brush_source_box_runtime(const editor_brush_source_box_runtime 
     {
         dest->min[i] = source->min[i];
         dest->max[i] = source->max[i];
+    }
+    dest->vertex_count = source->vertex_count;
+    for (int i = 0; i < source->vertex_count && i < SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY; ++i)
+    {
+        dest->vertices[i][0] = source->vertices[i][0];
+        dest->vertices[i][1] = source->vertices[i][1];
+        dest->vertices[i][2] = source->vertices[i][2];
     }
     dest->contents = source->contents;
     return true;
@@ -235,6 +256,29 @@ static bool source_box_face_identity_matches(const editor_brush_source_box_runti
     return false;
 }
 
+static int source_convex_rebuilt_face_index_for_identity(const editor_brush_source_box_runtime *box,
+                                                         const char *face_identity)
+{
+    if (box == NULL || box->vertex_count <= 0 || face_identity == NULL || face_identity[0] == '\0')
+        return -1;
+    const char *ids[2] = {box->stable_id, box->name};
+    for (size_t i = 0; i < SDL_arraysize(ids); ++i)
+    {
+        if (ids[i] == NULL || ids[i][0] == '\0')
+            continue;
+        char prefix[320];
+        SDL_snprintf(prefix, sizeof(prefix), "%s.face.rebuilt.", ids[i]);
+        const size_t prefix_len = SDL_strlen(prefix);
+        if (SDL_strncmp(face_identity, prefix, prefix_len) != 0)
+            continue;
+        char *end = NULL;
+        const long parsed = SDL_strtol(face_identity + prefix_len, &end, 10);
+        if (end != NULL && *end == '\0' && parsed >= 0 && parsed < SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY)
+            return (int)parsed;
+    }
+    return -1;
+}
+
 int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
                                                           const char *brush_identity, int fallback_face_index,
                                                           const char *face_identity)
@@ -248,6 +292,9 @@ int editor_brush_world_source_box_face_index_for_identity(const brush_world_runt
         if (source_box_face_identity_matches(box, i, face_identity))
             return i;
     }
+    const int rebuilt_face_index = source_convex_rebuilt_face_index_for_identity(box, face_identity);
+    if (rebuilt_face_index >= 0)
+        return rebuilt_face_index;
     return fallback_face_index >= 0 && fallback_face_index < (int)SDL_arraysize(source_box_face_keys)
                ? fallback_face_index
                : -1;
@@ -340,12 +387,39 @@ static bool source_box_coordinates_on_snap(const editor_brush_source_box_runtime
 {
     if (box == NULL)
         return false;
+    for (int vertex = 0; vertex < box->vertex_count; ++vertex)
+    {
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            if (!source_coord_on_snap(box->vertices[vertex][axis], snap_units))
+                return false;
+        }
+    }
     for (int axis = 0; axis < 3; ++axis)
     {
         if (!source_coord_on_snap(box->min[axis], snap_units) || !source_coord_on_snap(box->max[axis], snap_units))
             return false;
     }
     return true;
+}
+
+static void source_box_update_bounds_from_vertices(editor_brush_source_box_runtime *box)
+{
+    if (box == NULL || box->vertex_count <= 0)
+        return;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        box->min[axis] = box->vertices[0][axis];
+        box->max[axis] = box->vertices[0][axis];
+    }
+    for (int vertex = 1; vertex < box->vertex_count; ++vertex)
+    {
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            box->min[axis] = SDL_min(box->min[axis], box->vertices[vertex][axis]);
+            box->max[axis] = SDL_max(box->max[axis], box->vertices[vertex][axis]);
+        }
+    }
 }
 
 static bool source_intervals_overlap_positive(int a_min, int a_max, int b_min, int b_max)
@@ -843,6 +917,38 @@ static bool rotate_source_coord_pair_y(int x, int z, int center_x2, int center_z
     return true;
 }
 
+static bool load_editor_brush_source_vertices(yyjson_val *vertices, editor_brush_source_box_runtime *out_box,
+                                              char *error_buffer, int error_buffer_size)
+{
+    if (out_box == NULL)
+        return false;
+    if (vertices == NULL)
+        return true;
+    if (!yyjson_is_arr(vertices))
+    {
+        set_error(error_buffer, error_buffer_size, "editor brush source convex vertices must be an array");
+        return false;
+    }
+    const int vertex_count = (int)yyjson_arr_size(vertices);
+    if (vertex_count < 4 || vertex_count > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_error(error_buffer, error_buffer_size,
+                  "editor brush source convex vertices must contain 4..16 integer vec3 entries");
+        return false;
+    }
+    for (int i = 0; i < vertex_count; ++i)
+    {
+        if (!source_vec3i_value(yyjson_arr_get(vertices, (size_t)i), out_box->vertices[i]))
+        {
+            set_error(error_buffer, error_buffer_size, "editor brush source convex vertices must be integer vec3s");
+            return false;
+        }
+    }
+    out_box->vertex_count = vertex_count;
+    source_box_update_bounds_from_vertices(out_box);
+    return true;
+}
+
 static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_box_runtime *out_box, char *error_buffer,
                                          int error_buffer_size)
 {
@@ -851,12 +957,13 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
 
     const char *stable_id = json_string(box, "stable_id", NULL);
     const char *name = json_string(box, "name", stable_id);
-    const char *prefab = json_string(box, "prefab", "box");
+    const char *kind = json_string(box, "kind", "box");
+    const bool is_convex = kind != NULL && SDL_strcmp(kind, "convex") == 0;
+    const char *prefab = json_string(box, "prefab", is_convex ? "convex" : "box");
     const char *material = json_string(box, "material", NULL);
     SDL_zero(*out_box);
     if (stable_id == NULL || stable_id[0] == '\0' || name == NULL || name[0] == '\0' || material == NULL ||
-        material[0] == '\0' || !source_vec3i(box, "min", out_box->min) || !source_vec3i(box, "max", out_box->max) ||
-        out_box->min[0] >= out_box->max[0] || out_box->min[1] >= out_box->max[1] || out_box->min[2] >= out_box->max[2])
+        material[0] == '\0' || !(SDL_strcmp(kind, "box") == 0 || is_convex))
     {
         set_errorf(error_buffer, error_buffer_size, "invalid editor brush source box '%s'",
                    stable_id != NULL ? stable_id : "<unnamed>");
@@ -869,6 +976,28 @@ static bool load_editor_brush_source_box(yyjson_val *box, editor_brush_source_bo
         free_editor_brush_source_box(out_box);
         if (error_buffer != NULL && error_buffer_size > 0 && error_buffer[0] == '\0')
             set_error(error_buffer, error_buffer_size, "failed to allocate editor brush source box");
+        return false;
+    }
+    if (is_convex)
+    {
+        if (!load_editor_brush_source_vertices(obj_get(box, "vertices"), out_box, error_buffer, error_buffer_size))
+        {
+            free_editor_brush_source_box(out_box);
+            return false;
+        }
+    }
+    else if (!source_vec3i(box, "min", out_box->min) || !source_vec3i(box, "max", out_box->max))
+    {
+        free_editor_brush_source_box(out_box);
+        set_errorf(error_buffer, error_buffer_size, "invalid editor brush source box '%s'",
+                   stable_id != NULL ? stable_id : "<unnamed>");
+        return false;
+    }
+    if (out_box->min[0] >= out_box->max[0] || out_box->min[1] >= out_box->max[1] || out_box->min[2] >= out_box->max[2])
+    {
+        free_editor_brush_source_box(out_box);
+        set_errorf(error_buffer, error_buffer_size, "invalid editor brush source box '%s'",
+                   stable_id != NULL ? stable_id : "<unnamed>");
         return false;
     }
     out_box->contents = brush_flags_from_json(obj_get(box, "contents"), brush_content_flag_from_string,
@@ -1534,6 +1663,12 @@ static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime
 {
     if (world_runtime == NULL || box == NULL || out_brush == NULL)
         return false;
+    if (box->vertex_count > 0)
+    {
+        return editor_brush_world_build_source_convex_brush_from_vertices(
+            world_runtime, box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name,
+            box->vertices, box->vertex_count, out_brush, error_buffer, error_buffer_size);
+    }
     const int material_index = source_material_index_by_name(&world_runtime->desc, box->material);
     int face_material_indices[6] = {-1, -1, -1, -1, -1, -1};
     const float meters_per_unit =
@@ -1909,6 +2044,13 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(
         const source_convex_plane *plane = &planes[face_index];
         const char *material_name = source_convex_face_material(box, plane->source_face_index);
         const int material_index = source_material_index_by_name(&world_runtime->desc, material_name);
+        if (material_index < 0)
+        {
+            free_source_runtime_brush(out_brush);
+            set_errorf(error_buffer, error_buffer_size, "invalid editor brush source face material '%s'",
+                       material_name != NULL ? material_name : "<null>");
+            return false;
+        }
         init_source_box_face(&faces[face_index], plane->normal, plane->distance, material_index, material_name);
 
         char face_stable_id[320];
@@ -2147,9 +2289,96 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
 
     out_result->valid = true;
     out_result->vertex_count = vertex_count;
+    for (int i = 0; i < vertex_count; ++i)
+    {
+        out_result->vertices[i][0] = vertices[i][0];
+        out_result->vertices[i][1] = vertices[i][1];
+        out_result->vertices[i][2] = vertices[i][2];
+    }
     out_result->face_count = rebuilt.face_count;
     out_result->brush = rebuilt;
     SDL_snprintf(out_result->diagnostic, sizeof(out_result->diagnostic), "source vertex operation valid");
+    return true;
+}
+
+bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_vertex_operation_desc *desc,
+                                                      editor_brush_source_vertex_operation_result *out_result,
+                                                      char *error_buffer, int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || desc == NULL ||
+        desc->brush_identity == NULL || desc->brush_identity[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex operation requires a source brush");
+        return false;
+    }
+
+    editor_brush_source_vertex_operation_result preview;
+    if (!editor_brush_world_preview_source_vertex_operation(world_runtime, desc, &preview, error_buffer,
+                                                            error_buffer_size))
+    {
+        if (out_result != NULL)
+            *out_result = preview;
+        return false;
+    }
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
+    if (source_index < 0)
+    {
+        editor_brush_source_free_runtime_brush(&preview.brush);
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    editor_brush_source_box_runtime old_box;
+    if (!copy_editor_brush_source_box_runtime(&world_runtime->editor_source_boxes[source_index], &old_box))
+    {
+        editor_brush_source_free_runtime_brush(&preview.brush);
+        set_error(error_buffer, error_buffer_size, "failed to copy source brush rollback state");
+        return false;
+    }
+
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    box->vertex_count = preview.vertex_count;
+    for (int i = 0; i < preview.vertex_count; ++i)
+    {
+        box->vertices[i][0] = preview.vertices[i][0];
+        box->vertices[i][1] = preview.vertices[i][1];
+        box->vertices[i][2] = preview.vertices[i][2];
+    }
+    source_box_update_bounds_from_vertices(box);
+    if (box->prefab == NULL || SDL_strcmp(box->prefab, "box") == 0 || SDL_strcmp(box->prefab, "editor.box") == 0)
+    {
+        char *old_prefab = box->prefab;
+        box->prefab = SDL_strdup("convex");
+        if (box->prefab == NULL)
+        {
+            box->prefab = old_prefab;
+            free_editor_brush_source_box(&old_box);
+            editor_brush_source_free_runtime_brush(&preview.brush);
+            set_error(error_buffer, error_buffer_size, "failed to allocate source convex prefab metadata");
+            return false;
+        }
+        SDL_free(old_prefab);
+    }
+
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
+        !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(box);
+        *box = old_box;
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        editor_brush_source_free_runtime_brush(&preview.brush);
+        return false;
+    }
+
+    free_editor_brush_source_box(&old_box);
+    if (out_result != NULL)
+        *out_result = preview;
+    else
+        editor_brush_source_free_runtime_brush(&preview.brush);
     return true;
 }
 

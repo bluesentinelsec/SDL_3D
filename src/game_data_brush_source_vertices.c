@@ -206,10 +206,167 @@ static void source_box_fill_vertices(const editor_brush_source_box_runtime *box,
 }
 
 static void source_stable_id(char *buffer, size_t buffer_size, const char *brush_id, const char *kind,
+                             const char *label);
+
+static slayer3d_vec3 source_convex_vertex_point(const editor_brush_source_box_runtime *box, int vertex,
+                                                float meters_per_unit)
+{
+    return slayer3d_vec3_make((float)box->vertices[vertex][0] * meters_per_unit,
+                              (float)box->vertices[vertex][1] * meters_per_unit,
+                              (float)box->vertices[vertex][2] * meters_per_unit);
+}
+
+static bool source_model_add_edge(editor_brush_source_vertex_model *model, int a, int b, const char *brush_id)
+{
+    if (model == NULL || a == b)
+        return true;
+    const int min_index = SDL_min(a, b);
+    const int max_index = SDL_max(a, b);
+    for (int i = 0; i < model->edge_count; ++i)
+    {
+        if (model->edges[i].vertex_indices[0] == min_index && model->edges[i].vertex_indices[1] == max_index)
+            return true;
+    }
+    if (model->edge_count >= SLAYER3D_EDITOR_SOURCE_CONVEX_EDGE_CAPACITY)
+        return false;
+    editor_brush_source_edge *edge = &model->edges[model->edge_count];
+    edge->brush_index = model->brush_index;
+    edge->edge_index = model->edge_count;
+    edge->vertex_indices[0] = min_index;
+    edge->vertex_indices[1] = max_index;
+    char label[32];
+    SDL_snprintf(label, sizeof(label), "%d.%d", min_index, max_index);
+    source_stable_id(edge->stable_id, sizeof(edge->stable_id), brush_id, "edge", label);
+    model->edge_count++;
+    return true;
+}
+
+static bool source_face_basis(slayer3d_vec3 normal, slayer3d_vec3 *out_u, slayer3d_vec3 *out_v)
+{
+    if (out_u == NULL || out_v == NULL)
+        return false;
+    const slayer3d_vec3 normalized = slayer3d_vec3_normalize(normal);
+    const slayer3d_vec3 reference =
+        SDL_fabsf(normalized.y) < 0.99f ? slayer3d_vec3_make(0.0f, 1.0f, 0.0f) : slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    slayer3d_vec3 u = slayer3d_vec3_cross(reference, normalized);
+    if (slayer3d_vec3_length_squared(u) <= 0.000001f)
+        u = slayer3d_vec3_cross(slayer3d_vec3_make(0.0f, 0.0f, 1.0f), normalized);
+    if (slayer3d_vec3_length_squared(u) <= 0.000001f)
+        return false;
+    *out_u = slayer3d_vec3_normalize(u);
+    *out_v = slayer3d_vec3_normalize(slayer3d_vec3_cross(normalized, *out_u));
+    return true;
+}
+
+static bool source_model_add_face_perimeter_edges(editor_brush_source_vertex_model *model,
+                                                  const editor_brush_source_box_runtime *box,
+                                                  const slayer3d_game_data_brush_face *face,
+                                                  const editor_brush_source_face_ref *face_ref, const char *brush_id,
+                                                  float meters_per_unit)
+{
+    if (model == NULL || box == NULL || face == NULL || face_ref == NULL || face_ref->vertex_count < 3)
+        return true;
+
+    slayer3d_vec3 basis_u;
+    slayer3d_vec3 basis_v;
+    if (!source_face_basis(face->normal, &basis_u, &basis_v))
+        return false;
+
+    slayer3d_vec3 center = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < face_ref->vertex_count; ++i)
+        center =
+            slayer3d_vec3_add(center, source_convex_vertex_point(box, face_ref->vertex_indices[i], meters_per_unit));
+    center = slayer3d_vec3_scale(center, 1.0f / (float)face_ref->vertex_count);
+
+    int ordered[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    float angles[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    for (int i = 0; i < face_ref->vertex_count; ++i)
+    {
+        const int vertex = face_ref->vertex_indices[i];
+        const slayer3d_vec3 delta = slayer3d_vec3_sub(source_convex_vertex_point(box, vertex, meters_per_unit), center);
+        const float angle = SDL_atan2f(slayer3d_vec3_dot(delta, basis_v), slayer3d_vec3_dot(delta, basis_u));
+        int insert = i;
+        while (insert > 0 && angle < angles[insert - 1])
+        {
+            angles[insert] = angles[insert - 1];
+            ordered[insert] = ordered[insert - 1];
+            --insert;
+        }
+        angles[insert] = angle;
+        ordered[insert] = vertex;
+    }
+
+    for (int i = 0; i < face_ref->vertex_count; ++i)
+    {
+        if (!source_model_add_edge(model, ordered[i], ordered[(i + 1) % face_ref->vertex_count], brush_id))
+            return false;
+    }
+    return true;
+}
+
+static void source_stable_id(char *buffer, size_t buffer_size, const char *brush_id, const char *kind,
                              const char *label)
 {
     SDL_snprintf(buffer, buffer_size, "%s.%s.%s", brush_id != NULL ? brush_id : "<unnamed>",
                  kind != NULL ? kind : "element", label != NULL ? label : "unknown");
+}
+
+static bool editor_brush_source_convex_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
+                                                          const editor_brush_source_box_runtime *box,
+                                                          editor_brush_source_vertex_model *out_model,
+                                                          char *error_buffer, int error_buffer_size)
+{
+    const char *brush_id = source_box_identity(box);
+    const float meters_per_unit =
+        world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit : 0.001f;
+    slayer3d_game_data_brush brush;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(
+            world_runtime, brush_id, box->vertices, box->vertex_count, &brush, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    out_model->brush_index = source_index;
+    SDL_snprintf(out_model->brush_stable_id, sizeof(out_model->brush_stable_id), "%s", brush_id);
+    out_model->vertex_count = box->vertex_count;
+    for (int vertex = 0; vertex < out_model->vertex_count; ++vertex)
+    {
+        editor_brush_source_vertex *out_vertex = &out_model->vertices[vertex];
+        out_vertex->brush_index = source_index;
+        out_vertex->vertex_index = vertex;
+        out_vertex->coord[0] = box->vertices[vertex][0];
+        out_vertex->coord[1] = box->vertices[vertex][1];
+        out_vertex->coord[2] = box->vertices[vertex][2];
+        char label[32];
+        SDL_snprintf(label, sizeof(label), "%d", vertex);
+        source_stable_id(out_vertex->stable_id, sizeof(out_vertex->stable_id), brush_id, "vertex", label);
+    }
+
+    out_model->face_count = brush.face_count;
+    for (int face = 0; face < brush.face_count && face < SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY; ++face)
+    {
+        const slayer3d_game_data_brush_face *runtime_face = &brush.faces[face];
+        editor_brush_source_face_ref *out_face = &out_model->faces[face];
+        out_face->brush_index = source_index;
+        out_face->face_index = face;
+        for (int vertex = 0; vertex < box->vertex_count; ++vertex)
+        {
+            const slayer3d_vec3 point = source_convex_vertex_point(box, vertex, meters_per_unit);
+            if (SDL_fabsf(slayer3d_vec3_dot(runtime_face->normal, point) - runtime_face->distance) <= 0.001f)
+                out_face->vertex_indices[out_face->vertex_count++] = vertex;
+        }
+        char label[32];
+        SDL_snprintf(label, sizeof(label), "%d", face);
+        source_stable_id(out_face->stable_id, sizeof(out_face->stable_id), brush_id, "face", label);
+        if (!source_model_add_face_perimeter_edges(out_model, box, runtime_face, out_face, brush_id, meters_per_unit))
+        {
+            editor_brush_source_free_runtime_brush(&brush);
+            set_error(error_buffer, error_buffer_size, "source convex vertex model exceeded edge capacity");
+            return false;
+        }
+    }
+    editor_brush_source_free_runtime_brush(&brush);
+    return true;
 }
 
 bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
@@ -226,6 +383,10 @@ bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world
     }
 
     const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    if (box->vertex_count > 0)
+        return editor_brush_source_convex_build_vertex_model(world_runtime, source_index, box, out_model, error_buffer,
+                                                             error_buffer_size);
+
     const char *brush_id = source_box_identity(box);
     int raw_vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3];
     source_box_fill_vertices(box, raw_vertices);

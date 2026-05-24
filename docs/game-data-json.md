@@ -1111,8 +1111,9 @@ rebuilt face still maps to a canonical source face, and edits that would discard
 an input vertex or collapse the hull are rejected. The same source-model layer
 also exposes topology operation previews for add, delete, and merge/fuse vertex
 workflows. These operations produce validated convex runtime-brush output or a
-clear diagnostic without mutating source truth; later editor slices can commit
-that output once arbitrary convex source persistence is enabled.
+clear diagnostic. The apply path commits the same validated result back to
+`editor_brush_sources` as a durable convex source brush, so save/reopen and
+test-run compilation preserve topology edits.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
@@ -1137,9 +1138,10 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 
 `editor_brush_sources` is the editor-owned source model for structurally correct
 brush editing. Editable fragments include it alongside `brush_worlds`; when a
-matching source world is present, Slayer3D compiles the source boxes into the
-runtime brush world during load/import. Coordinates are fixed integer source
-units so editor decisions round-trip without accumulating floating-point drift;
+matching source world is present, Slayer3D compiles source boxes and convex
+source brushes into the runtime brush world during load/import. Coordinates are
+fixed integer source units so editor decisions round-trip without accumulating
+floating-point drift;
 `meters_per_unit` converts those source units to runtime meters. The default is
 millimeter precision (`meters_per_unit: 0.001`), but source-backed mutations and
 exports preserve the authored scale. Runtime `brush_worlds` remain meter-based
@@ -1147,8 +1149,10 @@ compiled output for renderer and collision. Editable level fragments loaded by
 the editor must include matching `editor_brush_sources`; older runtime-only
 brush fragments are not migrated or treated as editable graybox source. Each source
 world references a brush world and stores stable source brush IDs, prefab
-metadata, material references, and integer `min`/`max` coordinates for box
-sources. `material` is the default material for all six generated faces.
+metadata, material references, and either integer `min`/`max` coordinates for
+`kind: "box"` sources or integer `vertices` for `kind: "convex"` sources.
+Convex sources are used after topology edits add, remove, or merge vertices.
+`material` is the default material for generated faces.
 `face_materials` may override individual generated box faces with keys `px`,
 `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.
 
