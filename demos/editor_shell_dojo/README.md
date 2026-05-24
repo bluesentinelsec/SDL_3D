@@ -33,5 +33,6 @@ The equivalent raw runner command remains useful for data/runtime debugging:
 ./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --state editor.command=open --state editor.input.path=/tmp/slayer3d-editor-level.fragment.json --state editor.save.path=/tmp/slayer3d-editor-level.fragment.json
 ```
 
-See [docs/editor-test-drive.md](../../docs/editor-test-drive.md) for the current
-keybindings and manual validation checklist.
+The editor UI exposes the current keybindings in its in-scene help text. Keep
+this dojo README focused on launch/save behavior so editor workflow details can
+evolve in the authored data and engine tests.

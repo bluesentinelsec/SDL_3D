@@ -46,7 +46,8 @@ static bool editor_debug_flag_name_valid(const char *value)
                              SDL_strcmp(value, "command_preview") == 0 || SDL_strcmp(value, "work_plane_grid") == 0 ||
                              SDL_strcmp(value, "grid") == 0 || SDL_strcmp(value, "player_starts") == 0 ||
                              SDL_strcmp(value, "game_objects") == 0 || SDL_strcmp(value, "markers") == 0 ||
-                             SDL_strcmp(value, "diagnostic_markers") == 0 || SDL_strcmp(value, "selection_face") == 0);
+                             SDL_strcmp(value, "diagnostic_markers") == 0 || SDL_strcmp(value, "selection_face") == 0 ||
+                             SDL_strcmp(value, "vertex_handles") == 0);
 }
 
 static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,
@@ -654,9 +655,9 @@ bool validate_scene_editor_tooling(validation_context *ctx, yyjson_val *scene_ro
         if (!validate_data_condition(ctx, obj_get(overlay, "hover_selection_if"), hover_selection_path, names))
             return false;
         static const char *const color_keys[] = {
-            "world_bounds_color",    "selection_bounds_color", "selection_face_color",
-            "trace_color",           "face_normal_color",      "hit_marker_color",
-            "command_preview_color", "work_plane_grid_color",  "player_start_color"};
+            "world_bounds_color", "selection_bounds_color", "selection_face_color",  "trace_color",
+            "face_normal_color",  "hit_marker_color",       "command_preview_color", "work_plane_grid_color",
+            "player_start_color", "vertex_handle_color"};
         for (size_t i = 0; i < SDL_arraysize(color_keys); ++i)
         {
             yyjson_val *color = obj_get(overlay, color_keys[i]);

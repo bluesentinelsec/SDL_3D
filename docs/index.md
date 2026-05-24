@@ -18,8 +18,6 @@ data-authored games running on a generic SDL-powered runtime.
   actors, input, logic, arcade shooter primitives, networking, and validation.
 - [Gameplay Lua API](game-data-lua.md): Lua adapter model and runtime helper
   surface.
-- [Editor Test Drive](editor-test-drive.md): current graybox editor workflow,
-  controls, save/test-run loop, and correctness checks.
 - [Standard Options Package](standard-options.md): reusable display, audio,
   keyboard, mouse, and gamepad options screens.
 - [Storage](storage.md): `user://` and `cache://` writable data policy.

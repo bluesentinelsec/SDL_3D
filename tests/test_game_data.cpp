@@ -16304,6 +16304,112 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
+    ASSERT_GE(vertex_signal, 0);
+    ASSERT_GE(escape_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "vertex");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex tool");
+
+    auto visible_ui_rect = [&](const char *name) {
+        struct RectNameCapture
+        {
+            const slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
+            bool found = false;
+        } capture{runtime, name, false};
+        auto capture_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<RectNameCapture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                SDL_strcmp(rect->name, capture->name) != 0)
+            {
+                return true;
+            }
+            if (slayer3d_game_data_ui_rect_is_visible(capture->runtime, rect, nullptr))
+            {
+                capture->found = true;
+                return false;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &capture));
+        return capture.found;
+    };
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.vertex.selected"));
+
+    struct VertexDebugCapture
+    {
+        int handles = 0;
+        bool saw_vertex_id = false;
+    } vertex_debug;
+    auto capture_vertex_handles = [](void *userdata,
+                                     const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<VertexDebugCapture *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE)
+        {
+            capture->handles++;
+            if (primitive->element_name != nullptr &&
+                std::string(primitive->element_name).find("brush.target.cube.vertex.") == 0)
+            {
+                capture->saw_vertex_id = true;
+            }
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_vertex_handles, &vertex_debug));
+    EXPECT_GE(vertex_debug.handles, 8);
+    EXPECT_TRUE(vertex_debug.saw_vertex_id);
+
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.hit", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.vertex.hover.brush", ""), "brush.target.cube");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.vertex.hover.vertex", ""))
+                  .find("brush.target.cube.vertex."),
+              std::string::npos);
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.vertex.hover.index", -1), 0);
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.vertex.hover.shared_count", 0), 1);
+
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 0);
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

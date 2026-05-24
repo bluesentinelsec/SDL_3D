@@ -857,7 +857,8 @@ sector/brush, material, face indexes, hit point, hit normal, bounds, and
 runtime-owned editor metadata pointers. Debug overlays should consume
 `slayer3d_game_data_for_each_editor_debug_primitive()` or
 `slayer3d_game_data_draw_editor_debug_primitives()` for world bounds, selected
-bounds, trace rays, hit markers, and face normals. These helpers are
+bounds, trace rays, hit markers, face normals, source face outlines, and source
+vertex handles. These helpers are
 renderer-agnostic/data-driven editor substrate; authored gameplay JSON does
 not need to contain one-off debug actors for selection visualization.
 
@@ -967,6 +968,13 @@ selected face remains visible in tooling even when the compiler culls that face
 from the optimized runtime render mesh as an internal hidden surface. Override
 `selection_face_color` when the default green outline does not fit the editor
 theme.
+
+`vertex_handles` draws reusable handle markers for each vertex of selected
+source brushes while an editor is in a vertex-editing mode. The handles are
+emitted from the source brush topology rather than compiled render triangles, so
+they remain stable when the brush compiler removes hidden/internal faces.
+Override `vertex_handle_color` when the default flashing yellow does not fit the
+editor theme.
 
 `editor.debug_overlay.hover_selection_if` can be used when the overlay should
 draw the live hover trace instead of the last clicked active selection. Full
