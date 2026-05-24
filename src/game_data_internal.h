@@ -188,6 +188,41 @@ typedef struct editor_placement_preview_state
     char source_warning[256];
 } editor_placement_preview_state;
 
+typedef struct editor_drag_create_state
+{
+    bool active;
+    bool moved;
+    const char *scene;
+    const char *world_name;
+    const char *material_name;
+    unsigned int contents;
+    float grid_size;
+    int start_cell[3];
+    int current_cell[3];
+    int source_min[3];
+    int source_max[3];
+} editor_drag_create_state;
+
+typedef struct editor_drag_move_state
+{
+    bool active;
+    bool moved;
+    bool axis_lock_y;
+    const char *scene;
+    slayer3d_vec3 start_point;
+    slayer3d_vec3 applied_offset;
+    float grid_size;
+    float start_mouse_x;
+    float start_mouse_y;
+} editor_drag_move_state;
+
+typedef struct editor_camera_orbit_state
+{
+    bool active;
+    slayer3d_vec3 pivot;
+    float radius;
+} editor_camera_orbit_state;
+
 typedef struct editor_brush_source_box_runtime
 {
     char *stable_id;
@@ -246,6 +281,7 @@ typedef struct editor_command_transaction_entry
     int material_index;
     int previous_material_index;
     slayer3d_vec3 offset;
+    int rotation_quarter_turns;
     bool has_bounds;
     slayer3d_bounding_box bounds;
     int brush_index;
@@ -796,6 +832,9 @@ typedef struct slayer3d_game_data_runtime
     const char *editor_selected_brush_scene;
     editor_command_preview_state editor_command_preview;
     editor_placement_preview_state editor_placement_preview;
+    editor_drag_create_state editor_drag_create;
+    editor_drag_move_state editor_drag_move;
+    editor_camera_orbit_state editor_camera_orbit;
     editor_command_history_state editor_command_history;
     scene_activity_state activity;
     float current_dt;
@@ -1142,9 +1181,17 @@ void clear_editor_command_preview(slayer3d_game_data_runtime *runtime);
 void clear_editor_placement_preview(slayer3d_game_data_runtime *runtime);
 void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                      const slayer3d_game_data_editor_selection *hover_selection);
+bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
+                               const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                               const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                       const char *material_name, unsigned int contents,
+                                                       const int source_min[3], const int source_max[3],
+                                                       editor_brush_source_prefab_result *out_result);
+bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
+bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, int quarter_turns);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
 void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
 void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);
@@ -1201,6 +1248,8 @@ bool editor_brush_world_remove_source_box_at_index(brush_world_runtime *world_ru
                                                    char *error_buffer, int error_buffer_size);
 bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
+bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime, const char *brush_name,
+                                                          int quarter_turns, char *error_buffer, int error_buffer_size);
 int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
                                                           const char *brush_identity, int fallback_face_index,
                                                           const char *face_identity);

@@ -460,6 +460,87 @@ static bool editor_selection_button_requested(const slayer3d_game_data_runtime *
     return button != 0 && slayer3d_input_get_pressed_mouse_button(input) == button;
 }
 
+static bool editor_mouse_in_rect(float mouse_x, float mouse_y, yyjson_val *rect)
+{
+    if (!yyjson_is_obj(rect))
+        return false;
+    const float x = json_float(rect, "x", 0.0f);
+    const float y = json_float(rect, "y", 0.0f);
+    const float w = json_float(rect, "w", 0.0f);
+    const float h = json_float(rect, "h", 0.0f);
+    return w > 0.0f && h > 0.0f && mouse_x >= x && mouse_y >= y && mouse_x < x + w && mouse_y < y + h;
+}
+
+static void editor_set_grid_value(slayer3d_game_data_runtime *runtime, yyjson_val *widget, float value)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const char *grid_key = json_string(widget, "grid_key", "editor.grid.size");
+    const char *brush_grid_key = json_string(widget, "brush_grid_key", "editor.brush.grid_size");
+    slayer3d_properties_set_float(runtime->scene_state, grid_key, value);
+    if (brush_grid_key != NULL && brush_grid_key[0] != '\0')
+        slayer3d_properties_set_float(runtime->scene_state, brush_grid_key, value);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "grid size selected");
+}
+
+static bool editor_handle_grid_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    yyjson_val *widget = obj_get(editor, "grid_widget");
+    yyjson_val *values = obj_get(widget, "values");
+    if (runtime == NULL || runtime->scene_state == NULL || !yyjson_is_obj(widget) || !yyjson_is_arr(values))
+        return true;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    if (input == NULL || !slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+        return true;
+
+    const char *open_key = json_string(widget, "open_key", "editor.grid.menu.open");
+    const bool opened = slayer3d_properties_get_bool(runtime->scene_state, open_key, false);
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool over_button = editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button"));
+    const bool over_popup = editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "popup"));
+    if (!left_pressed)
+    {
+        if (out_consumed != NULL)
+            *out_consumed = over_button || (opened && over_popup);
+        return true;
+    }
+
+    if (over_button)
+    {
+        slayer3d_properties_set_bool(runtime->scene_state, open_key, !opened);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
+
+    if (opened && over_popup)
+    {
+        yyjson_val *popup = obj_get(widget, "popup");
+        const float y = json_float(popup, "y", 0.0f);
+        const float row_height = SDL_max(json_float(widget, "row_height", 24.0f), 1.0f);
+        const int index = (int)SDL_floorf((mouse_y - y) / row_height);
+        if (index >= 0 && index < (int)yyjson_arr_size(values))
+        {
+            yyjson_val *value = yyjson_arr_get(values, (size_t)index);
+            if (yyjson_is_num(value))
+                editor_set_grid_value(runtime, widget, (float)yyjson_get_num(value));
+        }
+        slayer3d_properties_set_bool(runtime->scene_state, open_key, false);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
+
+    if (opened)
+        slayer3d_properties_set_bool(runtime->scene_state, open_key, false);
+    return true;
+}
+
 slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                               const slayer3d_game_data_editor_selection *selection);
 
@@ -567,10 +648,16 @@ static bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime
     const bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
     if (!editor_selection_is_selectable_brush(hover_selection))
     {
-        if (!shift)
+        if (hover_selection != NULL && hover_selection->hit &&
+            hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_EDITOR_PLAYER_START)
+        {
             clear_editor_selected_brushes(runtime);
-        runtime->editor_active_selection = *hover_selection;
-        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+            runtime->editor_active_selection = *hover_selection;
+            runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+            return true;
+        }
+        if (!shift)
+            clear_editor_active_selection(runtime);
         return true;
     }
 
@@ -616,6 +703,200 @@ static bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime)
 {
     return runtime != NULL && runtime->scene_state != NULL &&
            SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "select") == 0;
+}
+
+static bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,
+                                           const char *element_name)
+{
+    return selection != NULL && selection->hit && selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD &&
+           selection->world_name != NULL && selection->element_name != NULL && world_name != NULL &&
+           element_name != NULL && SDL_strcmp(selection->world_name, world_name) == 0 &&
+           SDL_strcmp(selection->element_name, element_name) == 0;
+}
+
+static bool editor_hover_is_selected_brush(const slayer3d_game_data_runtime *runtime,
+                                           const slayer3d_game_data_editor_selection *hover_selection)
+{
+    if (runtime == NULL || hover_selection == NULL ||
+        hover_selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
+        return false;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        if (editor_selection_matches_brush(&runtime->editor_selected_brushes[i], hover_selection->world_name,
+                                           hover_selection->element_name))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static float editor_snap_delta(float delta, float grid_size)
+{
+    const float grid = SDL_max(grid_size, 0.001f);
+    return SDL_roundf(delta / grid) * grid;
+}
+
+static void clear_editor_drag_move(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    SDL_zero(runtime->editor_drag_move);
+}
+
+static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
+                                    const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_select(runtime))
+    {
+        clear_editor_drag_move(runtime);
+        return true;
+    }
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return true;
+
+    editor_drag_move_state *drag = &runtime->editor_drag_move;
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+    const SDL_Keymod modifiers = SDL_GetModState();
+    const bool y_axis_lock = (modifiers & SDL_KMOD_ALT) != 0;
+    const bool can_start_from_hover = editor_selection_is_selectable_brush(hover_selection);
+    const bool can_start_y_axis_drag =
+        y_axis_lock && editor_selected_brushes_active_for_scene(runtime) && runtime->editor_selected_brush_count > 0;
+    bool just_started_without_consuming_click = false;
+    if (!drag->active && left_pressed && (can_start_from_hover || can_start_y_axis_drag))
+    {
+        const bool hover_was_selected =
+            can_start_from_hover && editor_hover_is_selected_brush(runtime, hover_selection);
+        const bool consume_start_click = hover_was_selected || can_start_y_axis_drag;
+        SDL_zero(*drag);
+        drag->active = true;
+        drag->axis_lock_y = y_axis_lock;
+        drag->scene = slayer3d_game_data_active_scene(runtime);
+        const slayer3d_game_data_editor_selection resolved = resolved_editor_selection(
+            runtime, can_start_from_hover ? hover_selection : &runtime->editor_active_selection);
+        drag->start_point = resolved.hit ? resolved.point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
+        (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
+        if (out_consumed != NULL)
+            *out_consumed = consume_start_click;
+        just_started_without_consuming_click = !consume_start_click;
+    }
+
+    if (!drag->active)
+        return true;
+    if (just_started_without_consuming_click)
+        return true;
+    if (out_consumed != NULL)
+        *out_consumed = true;
+
+    if (drag->axis_lock_y)
+    {
+        float mouse_x = drag->start_mouse_x;
+        float mouse_y = drag->start_mouse_y;
+        (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+        const float units_per_pixel = drag->grid_size / 48.0f;
+        const slayer3d_vec3 desired = slayer3d_vec3_make(
+            0.0f, editor_snap_delta((drag->start_mouse_y - mouse_y) * units_per_pixel, drag->grid_size), 0.0f);
+        const slayer3d_vec3 incremental = slayer3d_vec3_sub(desired, drag->applied_offset);
+        if (slayer3d_vec3_length_squared(incremental) > 0.0000001f)
+        {
+            if (slayer3d_game_data_translate_selected_editor_brushes(runtime, incremental))
+            {
+                drag->applied_offset = desired;
+                drag->moved = true;
+                update_active_editor_selection_from_selected_brushes(runtime);
+            }
+        }
+    }
+    else if (hover_selection != NULL && hover_selection->hit)
+    {
+        const slayer3d_vec3 desired =
+            slayer3d_vec3_make(editor_snap_delta(hover_selection->point.x - drag->start_point.x, drag->grid_size), 0.0f,
+                               editor_snap_delta(hover_selection->point.z - drag->start_point.z, drag->grid_size));
+        const slayer3d_vec3 incremental = slayer3d_vec3_sub(desired, drag->applied_offset);
+        if (slayer3d_vec3_length_squared(incremental) > 0.0000001f)
+        {
+            if (slayer3d_game_data_translate_selected_editor_brushes(runtime, incremental))
+            {
+                drag->applied_offset = desired;
+                drag->moved = true;
+                update_active_editor_selection_from_selected_brushes(runtime);
+            }
+        }
+    }
+
+    if (left_released || !left_down)
+    {
+        if (runtime->scene_state != NULL && drag->moved)
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "drag moved brush");
+        clear_editor_drag_move(runtime);
+    }
+    return true;
+}
+
+static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_select(runtime))
+        return true;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    const float grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 16.0f);
+    if (input == NULL || grid_size <= 0.0f)
+        return true;
+
+    const SDL_Keymod modifiers = SDL_GetModState();
+    const bool transform_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) != 0;
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_HOME) ||
+        (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT)))
+    {
+        (void)slayer3d_game_data_rotate_selected_editor_brushes_y(runtime, 1);
+        return true;
+    }
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_END) ||
+        (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT)))
+    {
+        (void)slayer3d_game_data_rotate_selected_editor_brushes_y(runtime, -1);
+        return true;
+    }
+
+    slayer3d_vec3 offset = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_PAGEUP) ||
+        (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_UP)))
+    {
+        offset.y = grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_PAGEDOWN) ||
+             (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN)))
+    {
+        offset.y = -grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT) && !transform_modifier)
+    {
+        offset.z = -grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT) && !transform_modifier)
+    {
+        offset.z = grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_UP) && !transform_modifier)
+    {
+        offset.x = grid_size;
+    }
+    else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN) && !transform_modifier)
+    {
+        offset.x = -grid_size;
+    }
+
+    if (slayer3d_vec3_length_squared(offset) <= 0.0000001f)
+        return true;
+    (void)slayer3d_game_data_translate_selected_editor_brushes(runtime, offset);
+    return true;
 }
 
 static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)
@@ -895,6 +1176,18 @@ void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *o
     editor_set_int_output(scene_state, outputs, "compiled_triangle_count_key",
                           resolved.hit && resolved.compiled_face != NULL ? resolved.compiled_face->triangle_count : 0);
     editor_set_float_output(scene_state, outputs, "fraction_key", resolved.hit ? resolved.fraction : 1.0f);
+    const slayer3d_vec3 bounds_min =
+        resolved.hit && resolved.has_bounds ? resolved.bounds.min : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 bounds_max =
+        resolved.hit && resolved.has_bounds ? resolved.bounds.max : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 dimensions = resolved.hit && resolved.has_bounds ? slayer3d_vec3_sub(bounds_max, bounds_min)
+                                                                         : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    editor_set_vec3_output(scene_state, outputs, "bounds_min_key", bounds_min);
+    editor_set_vec3_output(scene_state, outputs, "bounds_max_key", bounds_max);
+    editor_set_vec3_output(scene_state, outputs, "dimensions_key", dimensions);
+    editor_set_float_output(scene_state, outputs, "dimension_x_key", dimensions.x);
+    editor_set_float_output(scene_state, outputs, "dimension_y_key", dimensions.y);
+    editor_set_float_output(scene_state, outputs, "dimension_z_key", dimensions.z);
     editor_set_vec3_output(scene_state, outputs, "point_key",
                            resolved.hit ? resolved.point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     editor_set_vec3_output(scene_state, outputs, "normal_key",
@@ -935,7 +1228,37 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
-    update_editor_placement_preview(runtime, editor, &hover_selection);
+    bool ui_consumed = false;
+    if (!editor_handle_grid_widget(runtime, editor, &ui_consumed))
+        return false;
+    if (ui_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
+    bool drag_move_consumed = false;
+    if (!editor_handle_drag_move(runtime, &hover_selection, &drag_move_consumed))
+        return false;
+    if (drag_move_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
+    bool drag_consumed = false;
+    if (!update_editor_drag_create(runtime, editor, &hover_selection, &drag_consumed))
+        return false;
+    if (!drag_consumed)
+        update_editor_placement_preview(runtime, editor, &hover_selection);
+    if (!editor_handle_grid_nudge(runtime))
+        return false;
+    if (drag_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);

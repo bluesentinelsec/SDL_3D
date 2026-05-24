@@ -397,6 +397,18 @@ extern "C"
      */
     Uint8 slayer3d_input_get_pressed_mouse_button(const slayer3d_input_manager *input);
 
+    /** @brief Return true if the scancode was pressed during the current input tick. */
+    bool slayer3d_input_is_scancode_pressed(const slayer3d_input_manager *input, SDL_Scancode scancode);
+
+    /** @brief Return true if the mouse button is currently held down. */
+    bool slayer3d_input_is_mouse_button_down(const slayer3d_input_manager *input, Uint8 button);
+
+    /** @brief Return true if the mouse button was pressed during the current input tick. */
+    bool slayer3d_input_is_mouse_button_pressed(const slayer3d_input_manager *input, Uint8 button);
+
+    /** @brief Return true if the mouse button was released during the current input tick. */
+    bool slayer3d_input_is_mouse_button_released(const slayer3d_input_manager *input, Uint8 button);
+
     /**
      * @brief Return true if any button-like input or action was pressed this tick.
      *

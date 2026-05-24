@@ -393,12 +393,32 @@ TEST(Input, MouseButtonPressAndRelease)
     EXPECT_TRUE(slayer3d_input_is_pressed(input.input, fire));
     EXPECT_TRUE(slayer3d_input_is_held(input.input, fire));
     EXPECT_EQ(slayer3d_input_get_pressed_mouse_button(input.input), SDL_BUTTON_LEFT);
+    EXPECT_TRUE(slayer3d_input_is_mouse_button_pressed(input.input, SDL_BUTTON_LEFT));
+    EXPECT_TRUE(slayer3d_input_is_mouse_button_down(input.input, SDL_BUTTON_LEFT));
+    EXPECT_FALSE(slayer3d_input_is_mouse_button_released(input.input, SDL_BUTTON_LEFT));
 
     push_mouse_button(input.input, SDL_EVENT_MOUSE_BUTTON_UP, SDL_BUTTON_LEFT);
     slayer3d_input_update(input.input, 2);
     EXPECT_TRUE(slayer3d_input_is_released(input.input, fire));
     EXPECT_FALSE(slayer3d_input_is_held(input.input, fire));
     EXPECT_EQ(slayer3d_input_get_pressed_mouse_button(input.input), 0);
+    EXPECT_FALSE(slayer3d_input_is_mouse_button_pressed(input.input, SDL_BUTTON_LEFT));
+    EXPECT_FALSE(slayer3d_input_is_mouse_button_down(input.input, SDL_BUTTON_LEFT));
+    EXPECT_TRUE(slayer3d_input_is_mouse_button_released(input.input, SDL_BUTTON_LEFT));
+}
+
+TEST(Input, ReportsRawScancodePressed)
+{
+    InputPtr input;
+
+    push_key(input.input, SDL_EVENT_KEY_DOWN, SDL_SCANCODE_RIGHT);
+    slayer3d_input_update(input.input, 1);
+
+    EXPECT_TRUE(slayer3d_input_is_scancode_pressed(input.input, SDL_SCANCODE_RIGHT));
+    EXPECT_FALSE(slayer3d_input_is_scancode_pressed(input.input, SDL_SCANCODE_LEFT));
+
+    slayer3d_input_update(input.input, 2);
+    EXPECT_FALSE(slayer3d_input_is_scancode_pressed(input.input, SDL_SCANCODE_RIGHT));
 }
 
 TEST(Input, GamepadButtonPressAndRelease)

@@ -22,6 +22,10 @@ typedef struct editor_debug_iteration_context
 static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
+static bool emit_editor_overlapping_source_brush_bounds(const slayer3d_game_data_runtime *runtime,
+                                                        const slayer3d_game_data_editor_debug_desc *desc,
+                                                        slayer3d_game_data_editor_debug_primitive_fn callback,
+                                                        void *userdata);
 static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
@@ -195,6 +199,8 @@ bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_ga
         return false;
     if (!emit_editor_selected_brush_bounds(runtime, &desc, callback, userdata))
         return false;
+    if (!emit_editor_overlapping_source_brush_bounds(runtime, &desc, callback, userdata))
+        return false;
 
     return emit_editor_debug_overlay_markers(runtime, &desc, callback, userdata);
 }
@@ -219,6 +225,28 @@ static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, sl
             return false;
     }
     return true;
+}
+
+static bool editor_source_box_contents_are_structural(unsigned int contents)
+{
+    if (contents == 0u)
+        contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    return (contents & (SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP |
+                        SLAYER3D_GAME_DATA_BRUSH_CONTENT_PROJECTILE_CLIP | SLAYER3D_GAME_DATA_BRUSH_CONTENT_SKY)) != 0u;
+}
+
+static bool editor_source_intervals_overlap_positive(int a_min, int a_max, int b_min, int b_max)
+{
+    return SDL_max(a_min, b_min) < SDL_min(a_max, b_max);
+}
+
+static bool editor_source_boxes_overlap_positive(const editor_brush_source_box_runtime *a,
+                                                 const editor_brush_source_box_runtime *b)
+{
+    return a != NULL && b != NULL &&
+           editor_source_intervals_overlap_positive(a->min[0], a->max[0], b->min[0], b->max[0]) &&
+           editor_source_intervals_overlap_positive(a->min[1], a->max[1], b->min[1], b->max[1]) &&
+           editor_source_intervals_overlap_positive(a->min[2], a->max[2], b->min[2], b->max[2]);
 }
 
 static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *runtime,
@@ -263,6 +291,61 @@ static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *
         context.face_index = selection.face_index;
         if (!emit_editor_debug_bounds(&context, selection.bounds))
             return false;
+    }
+    return true;
+}
+
+static bool emit_editor_overlapping_source_brush_bounds(const slayer3d_game_data_runtime *runtime,
+                                                        const slayer3d_game_data_editor_debug_desc *desc,
+                                                        slayer3d_game_data_editor_debug_primitive_fn callback,
+                                                        void *userdata)
+{
+    if (runtime == NULL || desc == NULL || callback == NULL)
+        return true;
+    const unsigned int flags = desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS) == 0u)
+        return true;
+
+    for (int world_index = 0; world_index < runtime->brush_world_count; ++world_index)
+    {
+        const brush_world_runtime *world = &runtime->brush_worlds[world_index];
+        if (!world->editor_has_source_model || world->editor_source_box_count <= 1)
+            continue;
+
+        for (int a = 0; a < world->editor_source_box_count; ++a)
+        {
+            const editor_brush_source_box_runtime *box = &world->editor_source_boxes[a];
+            if (!editor_source_box_contents_are_structural(box->contents))
+                continue;
+
+            bool overlaps = false;
+            for (int b = 0; b < world->editor_source_box_count; ++b)
+            {
+                if (a == b)
+                    continue;
+                const editor_brush_source_box_runtime *other = &world->editor_source_boxes[b];
+                if (editor_source_box_contents_are_structural(other->contents) &&
+                    editor_source_boxes_overlap_positive(box, other))
+                {
+                    overlaps = true;
+                    break;
+                }
+            }
+            if (!overlaps)
+                continue;
+
+            editor_debug_iteration_context context;
+            SDL_zero(context);
+            context.callback = callback;
+            context.userdata = userdata;
+            context.color = editor_debug_selection_flash_color((slayer3d_color){255, 48, 48, 255});
+            context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE;
+            context.world_name = world->desc.name;
+            context.element_name = box->name != NULL ? box->name : box->stable_id;
+            context.face_index = -1;
+            if (!emit_editor_debug_bounds(&context, editor_brush_source_box_bounds_meters(world, box)))
+                return false;
+        }
     }
     return true;
 }

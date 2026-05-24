@@ -201,6 +201,13 @@
             "bindings": [{ "device": "keyboard", "key": "LSHIFT" }]
           },
           {
+            "name": "action.editor.camera.frame_selected",
+            "bindings": [
+              { "device": "keyboard", "key": "U", "modifiers": ["ctrl"] },
+              { "device": "keyboard", "key": "U", "modifiers": ["gui"] }
+            ]
+          },
+          {
             "name": "action.move.forward",
             "bindings": [{ "device": "keyboard", "key": "W" }]
           },
@@ -402,13 +409,13 @@
               "player_start_source_path_key": "editor.player_start.source_path"
             }
           },
-          { "type": "scene_state.set", "key": "editor.grid.size", "value": 8.0 },
+          { "type": "scene_state.set", "key": "editor.grid.size", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
           { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "floor" },
-          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 8.0 },
-          { "type": "scene_state.set", "key": "editor.brush.height", "value": 8.0 },
+          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.brush.height", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.brush.elevation", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.brush.thickness", "value": 0.2 },
           { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.floor" },
@@ -418,6 +425,7 @@
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Map" },
+          { "type": "scene_state.set", "key": "editor.grid.menu.open", "value": false },
           { "type": "scene_state.set", "key": "editor.view.mode", "value": "flyby_3d" },
           { "type": "scene_state.set", "key": "editor.work_plane.normal", "value": [0.0, 1.0, 0.0] },
           { "type": "scene_state.set", "key": "editor.work_plane.distance", "value": 0.0 },
@@ -512,14 +520,14 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.grid.size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": -1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": -1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
@@ -532,14 +540,14 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.grid.size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": 1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
-            "default": 8.0,
+            "default": 1.0,
             "direction": 1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
@@ -984,8 +992,8 @@
             "if": {
               "type": "scene_state.compare",
               "key": "editor.tool.mode",
-              "op": "!=",
-              "value": "select",
+              "op": "==",
+              "value": "player_start",
               "default": "select"
             },
             "then": [{ "type": "signal.emit", "signal": "signal.editor.command.commit" }]
@@ -1529,6 +1537,7 @@
                 "type": "editor.brush_world.validate_enclosure",
                 "world": "brush.editor_shell.target",
                 "player_start": "player_start.editor_shell",
+                "allow_missing_player_start": true,
                 "message": "editor source enclosure is sealed",
                 "outputs": {
                   "valid_key": "editor.leak.valid",
@@ -1571,6 +1580,7 @@
               {
                 "type": "editor.player_start.apply",
                 "name": "player_start.editor_shell",
+                "allow_missing_player_start": true,
                 "message": "test run player start applied",
                 "outputs": {
                   "valid_key": "editor.test_run.enter.valid",
@@ -1630,16 +1640,7 @@
       }
     ]
   },
-  "editor_player_starts": [
-    {
-      "name": "player_start.editor_shell",
-      "scene": "scene.editor_shell.test_run",
-      "target": "entity.editor_shell.player",
-      "position": [0.0, 1.6, 4.0],
-      "yaw": 3.14159,
-      "pitch": 0.0
-    }
-  ],
+  "editor_player_starts": [],
   "brush_worlds": [
     {
       "name": "brush.editor_shell.target",
@@ -1686,32 +1687,7 @@
           }
         }
       ],
-      "brushes": [
-        {
-          "name": "brush.target.cube",
-          "contents": ["solid", "player_clip"],
-          "editor": {
-            "stable_id": "editor.brush.target_cube",
-            "display_name": "Selectable Cube",
-            "prefab": "prefab.editor_shell.cube"
-          },
-          "faces": [
-            { "plane": { "normal": [1, 0, 0], "distance": 2 }, "material": "mat.editor.wall" },
-            {
-              "plane": { "normal": [-1, 0, 0], "distance": 0 },
-              "material": "mat.editor.wall",
-              "editor": {
-                "stable_id": "editor.face.target_cube.left",
-                "display_name": "Left Face"
-              }
-            },
-            { "plane": { "normal": [0, 1, 0], "distance": 2 }, "material": "mat.editor.wall" },
-            { "plane": { "normal": [0, -1, 0], "distance": 0 }, "material": "mat.editor.floor" },
-            { "plane": { "normal": [0, 0, 1], "distance": 2 }, "material": "mat.editor.wall" },
-            { "plane": { "normal": [0, 0, -1], "distance": 0 }, "material": "mat.editor.wall" }
-          ]
-        }
-      ]
+      "brushes": []
     }
   ],
   "editor_brush_sources": [
@@ -1719,20 +1695,7 @@
       "world": "brush.editor_shell.target",
       "coordinate_system": "fixed_millimeters",
       "meters_per_unit": 0.001,
-      "boxes": [
-        {
-          "stable_id": "editor.brush.target_cube",
-          "name": "brush.target.cube",
-          "prefab": "prefab.editor_shell.cube",
-          "material": "mat.editor.wall",
-          "face_materials": {
-            "ny": "mat.editor.floor"
-          },
-          "min": [0, 0, 0],
-          "max": [2000, 2000, 2000],
-          "contents": ["solid", "player_clip"]
-        }
-      ]
+      "boxes": []
     }
   ],
   "world": {
@@ -1836,7 +1799,8 @@
             "zoom_wheel": "action.editor.ortho.zoom.wheel",
             "look": "action.editor.camera.look",
             "mouse_pan": "action.editor.camera.pan",
-            "fast": "action.editor.camera.fast"
+            "fast": "action.editor.camera.fast",
+            "frame_selected": "action.editor.camera.frame_selected"
           },
           "mode_key": "editor.view.mode",
           "quad_mode": "quad_view",

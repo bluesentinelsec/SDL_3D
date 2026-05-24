@@ -90,6 +90,7 @@ struct slayer3d_input_manager
     bool prev_held[SLAYER3D_INPUT_MAX_ACTIONS];
     SDL_Scancode pressed_scancode;
     Uint8 pressed_mouse_button;
+    Uint8 released_mouse_button;
     SDL_GamepadButton pressed_gamepad_button;
     char pending_text_input[SLAYER3D_INPUT_TEXT_MAX];
     char current_text_input[SLAYER3D_INPUT_TEXT_MAX];
@@ -791,6 +792,23 @@ static Uint8 slayer3d_input_first_pressed_mouse_button(const slayer3d_input_mana
     return 0;
 }
 
+static Uint8 slayer3d_input_first_released_mouse_button(const slayer3d_input_manager *input)
+{
+    if (input == NULL)
+    {
+        return 0;
+    }
+
+    for (int i = 0; i < SLAYER3D_INPUT_MAX_MOUSE_BUTTONS; ++i)
+    {
+        if (input->mouse_released_this_frame[i])
+        {
+            return (Uint8)i;
+        }
+    }
+    return 0;
+}
+
 static bool slayer3d_demo_recorder_append(slayer3d_demo_recorder *recorder, const slayer3d_input_snapshot *snapshot)
 {
     slayer3d_input_snapshot *grown;
@@ -1420,6 +1438,7 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
             input->has_mouse_position = false;
             input->pressed_scancode = SDL_SCANCODE_UNKNOWN;
             input->pressed_mouse_button = 0;
+            input->released_mouse_button = 0;
             input->pressed_gamepad_button = SDL_GAMEPAD_BUTTON_INVALID;
             input->current_text_input[0] = '\0';
             SDL_memset(input->prev_held, 0, sizeof(input->prev_held));
@@ -1451,6 +1470,7 @@ const slayer3d_input_snapshot *slayer3d_input_update(slayer3d_input_manager *inp
     next.any_pressed = slayer3d_input_physical_any_pressed(input);
     input->pressed_scancode = slayer3d_input_first_pressed_scancode(input);
     input->pressed_mouse_button = slayer3d_input_first_pressed_mouse_button(input);
+    input->released_mouse_button = slayer3d_input_first_released_mouse_button(input);
     input->pressed_gamepad_button = slayer3d_input_first_pressed_gamepad_button(input);
     SDL_strlcpy(input->current_text_input, input->pending_text_input, sizeof(input->current_text_input));
 
@@ -1531,6 +1551,26 @@ SDL_GamepadButton slayer3d_input_get_pressed_gamepad_button(const slayer3d_input
 Uint8 slayer3d_input_get_pressed_mouse_button(const slayer3d_input_manager *input)
 {
     return input != NULL ? input->pressed_mouse_button : 0;
+}
+
+bool slayer3d_input_is_scancode_pressed(const slayer3d_input_manager *input, SDL_Scancode scancode)
+{
+    return input != NULL && scancode >= 0 && scancode < SDL_SCANCODE_COUNT && input->pressed_scancode == scancode;
+}
+
+bool slayer3d_input_is_mouse_button_down(const slayer3d_input_manager *input, Uint8 button)
+{
+    return input != NULL && slayer3d_input_mouse_button_valid(button) && input->mouse_down[button];
+}
+
+bool slayer3d_input_is_mouse_button_pressed(const slayer3d_input_manager *input, Uint8 button)
+{
+    return input != NULL && slayer3d_input_mouse_button_valid(button) && input->pressed_mouse_button == button;
+}
+
+bool slayer3d_input_is_mouse_button_released(const slayer3d_input_manager *input, Uint8 button)
+{
+    return input != NULL && slayer3d_input_mouse_button_valid(button) && input->released_mouse_button == button;
 }
 
 bool slayer3d_input_any_pressed(const slayer3d_input_manager *input)

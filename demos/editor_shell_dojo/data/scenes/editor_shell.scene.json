@@ -46,7 +46,8 @@
       "action.editor.camera.down",
       "action.editor.camera.look",
       "action.editor.camera.pan",
-      "action.editor.camera.fast"
+      "action.editor.camera.fast",
+      "action.editor.camera.frame_selected"
     ]
   },
   "entities": ["entity.editor_shell.camera"],
@@ -110,6 +111,12 @@
         "compiled_first_vertex_key": "editor.selection.compiled_first_vertex",
         "compiled_vertex_count_key": "editor.selection.compiled_vertex_count",
         "compiled_triangle_count_key": "editor.selection.compiled_triangle_count",
+        "bounds_min_key": "editor.selection.bounds_min",
+        "bounds_max_key": "editor.selection.bounds_max",
+        "dimensions_key": "editor.selection.dimensions",
+        "dimension_x_key": "editor.selection.dimension_x",
+        "dimension_y_key": "editor.selection.dimension_y",
+        "dimension_z_key": "editor.selection.dimension_z",
         "element_index_key": "editor.selection.element_index",
         "face_index_key": "editor.selection.face_index",
         "fraction_key": "editor.selection.fraction",
@@ -119,9 +126,18 @@
       "hover_outputs": {
         "hit_key": "editor.hover.hit",
         "element_key": "editor.hover.element",
+        "material_key": "editor.hover.material",
+        "element_stable_id_key": "editor.hover.element_stable_id",
         "face_stable_id_key": "editor.hover.face_stable_id",
         "face_rendered_key": "editor.hover.face_rendered",
-        "compiled_face_index_key": "editor.hover.compiled_face_index"
+        "compiled_face_index_key": "editor.hover.compiled_face_index",
+        "bounds_min_key": "editor.hover.bounds_min",
+        "bounds_max_key": "editor.hover.bounds_max",
+        "dimensions_key": "editor.hover.dimensions",
+        "dimension_x_key": "editor.hover.dimension_x",
+        "dimension_y_key": "editor.hover.dimension_y",
+        "dimension_z_key": "editor.hover.dimension_z",
+        "point_key": "editor.hover.point"
       },
       "on_select": "signal.editor.pointer.primary"
     },
@@ -133,9 +149,19 @@
       "work_plane_distance_key": "editor.work_plane.distance",
       "floor_material": "mat.editor.floor",
       "ceiling_material": "mat.editor.ceiling",
-      "default_snap": 8.0,
-      "default_grid_size": 8.0,
+      "default_snap": 1.0,
+      "default_grid_size": 1.0,
       "default_elevation": 0.0,
+      "drag_create": {
+        "mode": "drag_box",
+        "kind": "box",
+        "world": "brush.editor_shell.target",
+        "prefab": "editor.box",
+        "material_key": "editor.brush.material",
+        "material": "mat.editor.floor",
+        "contents": ["solid"],
+        "message": "drag brush preview"
+      },
       "outputs": {
         "active_key": "editor.placement_preview.active",
         "valid_key": "editor.placement_preview.valid",
@@ -209,6 +235,15 @@
         }
       ]
     },
+    "grid_widget": {
+      "grid_key": "editor.grid.size",
+      "brush_grid_key": "editor.brush.grid_size",
+      "open_key": "editor.grid.menu.open",
+      "button": { "x": 735, "y": 45, "w": 110, "h": 28 },
+      "popup": { "x": 735, "y": 76, "w": 110, "h": 288 },
+      "row_height": 24,
+      "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
+    },
     "palette": {
       "selected_key": "editor.tool.mode",
       "entries": [
@@ -218,7 +253,7 @@
           "kind": "box",
           "label": "Floor",
           "category": "blockout",
-          "description": "8m gray floor tile"
+          "description": "grid-sized gray floor tile"
         },
         {
           "mode": "wall",
@@ -234,7 +269,7 @@
           "kind": "box",
           "label": "Ceiling",
           "category": "blockout",
-          "description": "8m gray ceiling tile"
+          "description": "grid-sized gray ceiling tile"
         },
         {
           "mode": "sky",
@@ -510,6 +545,17 @@
         "border_thickness": 1
       },
       {
+        "name": "ui.editor_shell.tool_toolbar.grid.popup",
+        "x": 735,
+        "y": 76,
+        "w": 110,
+        "h": 288,
+        "color": [16, 22, 32, 248],
+        "border_color": [120, 165, 205, 245],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
         "name": "ui.editor_shell.left_inspector.panel",
         "x": 12,
         "y": 92,
@@ -601,6 +647,17 @@
         "name": "ui.editor_shell.left_inspector.row.status",
         "x": 24,
         "y": 276,
+        "w": 272,
+        "h": 26,
+        "color": [20, 26, 36, 228],
+        "border_color": [32, 40, 54, 210],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.id",
+        "x": 24,
+        "y": 306,
         "w": 272,
         "h": 26,
         "color": [20, 26, 36, 228],
@@ -1072,13 +1129,145 @@
       {
         "name": "ui.editor_shell.tool_toolbar.grid.label",
         "format": "Grid %.3g",
-        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 8.0 }],
+        "bindings": [{ "type": "scene_state", "key": "editor.grid.size", "default": 1.0 }],
         "font": "font.editor_shell.ui",
         "x": 790,
         "y": 54,
         "align": "center",
         "color": [230, 245, 255, 250],
         "scale": 0.54
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.0",
+        "text": "Grid 0.125",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 85,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.1",
+        "text": "Grid 0.25",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 109,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.2",
+        "text": "Grid 0.5",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 133,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.3",
+        "text": "Grid 1",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 157,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.4",
+        "text": "Grid 2",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 181,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.5",
+        "text": "Grid 4",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 205,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.6",
+        "text": "Grid 8",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 229,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.7",
+        "text": "Grid 16",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 253,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.8",
+        "text": "Grid 32",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 277,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.9",
+        "text": "Grid 64",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 301,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.10",
+        "text": "Grid 128",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 325,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.tool_toolbar.grid.option.11",
+        "text": "Grid 256",
+        "font": "font.editor_shell.ui",
+        "x": 790,
+        "y": 349,
+        "align": "center",
+        "color": [230, 245, 255, 250],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.grid.menu.open", "op": "==", "value": true, "default": false }
       },
       {
         "name": "ui.editor_shell.left_inspector.title",
@@ -1167,7 +1356,8 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.selection.value",
-        "text": "none",
+        "format": "%s",
+        "bindings": [{ "type": "scene_state", "key": "editor.selection.element", "default": "none" }],
         "font": "font.editor_shell.ui",
         "x": 284,
         "y": 223,
@@ -1178,7 +1368,7 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.brushes.label",
-        "text": "Brushes",
+        "text": "Hover",
         "font": "font.editor_shell.ui",
         "x": 34,
         "y": 253,
@@ -1188,7 +1378,8 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.brushes.value",
-        "text": "mock",
+        "format": "%s",
+        "bindings": [{ "type": "scene_state", "key": "editor.hover.element", "default": "none" }],
         "font": "font.editor_shell.ui",
         "x": 284,
         "y": 253,
@@ -1199,7 +1390,7 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.status.label",
-        "text": "Status",
+        "text": "Dims",
         "font": "font.editor_shell.ui",
         "x": 34,
         "y": 283,
@@ -1209,10 +1400,37 @@
       },
       {
         "name": "ui.editor_shell.left_inspector.row.status.value",
-        "text": "ready",
+        "format": "%.2f x %.2f x %.2f",
+        "bindings": [
+          { "type": "scene_state", "key": "editor.hover.dimension_x", "default": 0.0 },
+          { "type": "scene_state", "key": "editor.hover.dimension_y", "default": 0.0 },
+          { "type": "scene_state", "key": "editor.hover.dimension_z", "default": 0.0 }
+        ],
         "font": "font.editor_shell.ui",
         "x": 284,
         "y": 283,
+        "align": "right",
+        "color": [230, 236, 246, 245],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.id.label",
+        "text": "Stable ID",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 313,
+        "color": [150, 185, 225, 235],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.id.value",
+        "format": "%s",
+        "bindings": [{ "type": "scene_state", "key": "editor.hover.element_stable_id", "default": "none" }],
+        "font": "font.editor_shell.ui",
+        "x": 284,
+        "y": 313,
         "align": "right",
         "color": [230, 236, 246, 245],
         "scale": 0.5,
