@@ -103,6 +103,7 @@ extern "C"
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE_MANY_TO_TARGET,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP,
     } editor_brush_source_vertex_operation_type;
     typedef struct editor_brush_source_vertex_operation_desc
@@ -175,6 +176,8 @@ extern "C"
                                                         int error_buffer_size);
     bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
     bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+    bool slayer3d_game_data_merge_selected_editor_vertices_to_hover(slayer3d_game_data_runtime *runtime,
+                                                                    yyjson_val *action);
 }
 
 namespace
@@ -9707,6 +9710,31 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     EXPECT_NE(std::string(error).find("editor.vertex.snap_selected snap_units must be positive"), std::string::npos)
         << error;
 
+    write_text(dir / "bad_vertex_merge_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Vertex Merge Action" },
+  "world": { "name": "world.bad_editor_vertex_merge_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.merge"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.merge",
+        "actions": [
+          { "type": "editor.vertex.merge_selected_to_hover", "target_vertex_index": -1 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_vertex_merge_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.vertex.merge_selected_to_hover target_vertex_index must be non-negative"),
+              std::string::npos)
+        << error;
+
     write_text(dir / "bad_preview_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -16968,6 +16996,91 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeDeleteSelectedVertexUsesSourceVal
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
                  "deleted 1 selected source vertex");
 
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 7);
+    EXPECT_GT(model.face_count, 4);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorVertexMergeSelectedToTargetUsesSourceValidation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    const int selected_index = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.index", -1);
+    ASSERT_GE(selected_index, 0);
+    const int target_index = selected_index ^ 1;
+
+    char merge_json[512];
+    SDL_snprintf(merge_json, sizeof(merge_json),
+                 R"json({
+  "world": "brush.editor_shell.target",
+  "brush_stable_id": "source.box.brush.target.cube",
+  "target_vertex_index": %d,
+  "outputs": {
+    "valid_key": "test.merge.valid",
+    "message_key": "test.merge.message",
+    "merged_count_key": "test.merge.count"
+  }
+})json",
+                 target_index);
+    yyjson_doc *merge_doc = yyjson_read(merge_json, SDL_strlen(merge_json), YYJSON_READ_NOFLAG);
+    ASSERT_NE(merge_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_merge_selected_editor_vertices_to_hover(runtime, yyjson_doc_get_root(merge_doc)));
+    yyjson_doc_free(merge_doc);
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.merge.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.merge.count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "merged 1 selected source vertex");
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
     ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
     EXPECT_EQ(model.vertex_count, 7);
     EXPECT_GT(model.face_count, 4);

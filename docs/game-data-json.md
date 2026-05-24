@@ -1133,6 +1133,13 @@ keys publish `valid`, `message`, `source_count`, and `deleted_count` values.
 The editor shell routes Delete/Backspace to this action while vertex mode has an
 active vertex selection; brush deletion remains unchanged in select mode.
 
+`editor.vertex.merge_selected_to_hover` fuses selected source vertices into the
+currently hovered vertex, or into an authored `target_vertex_index` when a tool
+command needs deterministic targeting. Only selected vertices from the same
+source brush as the target are merged, and the resulting convex source brush is
+validated before commit. Optional output keys publish `valid`, `message`, and
+`merged_count` values.
+
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
 test-run should place an existing actor, while the actor remains defined by the

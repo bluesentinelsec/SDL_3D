@@ -7578,6 +7578,39 @@ static bool validate_one_action(validation_context *ctx, yyjson_val *action, con
         }
         return true;
     }
+    if (SDL_strcmp(type, "editor.vertex.merge_selected_to_hover") == 0)
+    {
+        yyjson_val *target_vertex_index = obj_get(action, "target_vertex_index");
+        if (target_vertex_index != NULL &&
+            (!yyjson_is_int(target_vertex_index) || yyjson_get_int(target_vertex_index) < 0))
+            return validation_error(ctx, json_path,
+                                    "editor.vertex.merge_selected_to_hover target_vertex_index must be non-negative");
+        yyjson_val *world = obj_get(action, "world");
+        if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover world must be non-empty");
+        yyjson_val *brush = obj_get(action, "brush");
+        if (brush != NULL && (!yyjson_is_str(brush) || yyjson_get_str(brush)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover brush must be non-empty");
+        yyjson_val *brush_stable_id = obj_get(action, "brush_stable_id");
+        if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
+            return validation_error(ctx, json_path,
+                                    "editor.vertex.merge_selected_to_hover brush_stable_id must be non-empty");
+        yyjson_val *outputs = obj_get(action, "outputs");
+        if (outputs != NULL && !yyjson_is_obj(outputs))
+            return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover outputs must be an object");
+        if (outputs != NULL)
+        {
+            const char *output_fields[] = {"valid_key", "message_key", "merged_count_key"};
+            for (int i = 0; i < (int)SDL_arraysize(output_fields); ++i)
+            {
+                yyjson_val *field = obj_get(outputs, output_fields[i]);
+                if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+                    return validation_error(
+                        ctx, json_path, "editor.vertex.merge_selected_to_hover output keys must be non-empty strings");
+            }
+        }
+        return true;
+    }
     if (SDL_strcmp(type, "editor.vertex.snap_selected") == 0)
     {
         yyjson_val *snap_units = obj_get(action, "snap_units");

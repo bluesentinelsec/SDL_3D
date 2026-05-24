@@ -2215,6 +2215,63 @@ static bool source_vertex_operation_delete(const brush_world_runtime *world_runt
     return true;
 }
 
+static bool source_vertex_operation_desc_has_index(const editor_brush_source_vertex_operation_desc *desc, int index);
+
+static bool source_vertex_operation_merge_many_to_target(const brush_world_runtime *world_runtime,
+                                                         const editor_brush_source_vertex_operation_desc *desc,
+                                                         int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                                         int *vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || desc == NULL || vertices == NULL || vertex_count == NULL)
+        return false;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
+    editor_brush_source_vertex_model model;
+    if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model,
+                                                                        error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (desc->target_vertex_index < 0 || desc->target_vertex_index >= model.vertex_count)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex merge target index out of range");
+        return false;
+    }
+    if (desc->vertex_index_count <= 0 || desc->vertex_index_count > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex merge requires at least one vertex");
+        return false;
+    }
+    for (int i = 0; i < desc->vertex_index_count; ++i)
+    {
+        const int vertex_index = desc->vertex_indices[i];
+        if (vertex_index < 0 || vertex_index >= model.vertex_count)
+        {
+            set_error(error_buffer, error_buffer_size, "source vertex merge index out of range");
+            return false;
+        }
+        for (int j = i + 1; j < desc->vertex_index_count; ++j)
+        {
+            if (desc->vertex_indices[j] == vertex_index)
+            {
+                set_error(error_buffer, error_buffer_size, "source vertex merge indices must be unique");
+                return false;
+            }
+        }
+    }
+
+    *vertex_count = 0;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        const int *coord = source_vertex_operation_desc_has_index(desc, i)
+                               ? model.vertices[desc->target_vertex_index].coord
+                               : model.vertices[i].coord;
+        if (!source_vertex_operation_append_unique(vertices, vertex_count, coord, error_buffer, error_buffer_size))
+            return false;
+    }
+    return true;
+}
+
 static bool source_vertex_operation_desc_has_index(const editor_brush_source_vertex_operation_desc *desc, int index)
 {
     if (desc == NULL || index < 0)
@@ -2382,6 +2439,11 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
         ok = source_vertex_operation_merge(world_runtime, desc, vertices, &vertex_count, error_buffer,
                                            error_buffer_size);
         changed_count = ok ? 1 : 0;
+        break;
+    case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE_MANY_TO_TARGET:
+        ok = source_vertex_operation_merge_many_to_target(world_runtime, desc, vertices, &vertex_count, error_buffer,
+                                                          error_buffer_size);
+        changed_count = ok ? desc->vertex_index_count : 0;
         break;
     case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP:
         ok = source_vertex_operation_snap(world_runtime, desc, vertices, &vertex_count, &changed_count, error_buffer,

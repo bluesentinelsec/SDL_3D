@@ -367,6 +367,7 @@ typedef enum editor_brush_source_vertex_operation_type
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE_MANY_TO_TARGET,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP,
 } editor_brush_source_vertex_operation_type;
 
@@ -1137,6 +1138,8 @@ bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runt
                                                          const slayer3d_properties *payload);
 bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_merge_selected_editor_vertices_to_hover(slayer3d_game_data_runtime *runtime,
+                                                                yyjson_val *action);
 bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_clear_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
