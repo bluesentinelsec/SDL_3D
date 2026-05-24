@@ -36,7 +36,7 @@ typedef struct source_convex_plane
 {
     slayer3d_vec3 normal;
     float distance;
-    int vertex_indices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     int vertex_count;
     int source_face_index;
 } source_convex_plane;
@@ -1625,7 +1625,7 @@ static slayer3d_vec3 source_convex_vertex_meters(const brush_world_runtime *worl
                               source_meters_from_units(world_runtime, vertex[2]));
 }
 
-static bool source_convex_vertices_duplicate(const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3],
+static bool source_convex_vertices_duplicate(const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
                                              int vertex_count)
 {
     for (int a = 0; a < vertex_count; ++a)
@@ -1643,7 +1643,7 @@ static bool source_convex_vertices_duplicate(const int vertices[SLAYER3D_EDITOR_
 }
 
 static void source_convex_bounds_meters(const brush_world_runtime *world_runtime,
-                                        const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3],
+                                        const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
                                         int vertex_count, slayer3d_bounding_box *out_bounds)
 {
     if (out_bounds == NULL)
@@ -1713,7 +1713,7 @@ static int source_convex_plane_source_face(const source_convex_plane *plane)
 }
 
 static bool source_convex_add_plane(source_convex_plane *planes, int *plane_count, int plane_capacity,
-                                    const slayer3d_vec3 points[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT],
+                                    const slayer3d_vec3 points[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY],
                                     int vertex_count, int a, int b, int c)
 {
     const slayer3d_vec3 ab = slayer3d_vec3_sub(points[b], points[a]);
@@ -1763,14 +1763,14 @@ static bool source_convex_add_plane(source_convex_plane *planes, int *plane_coun
 }
 
 static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
-                                       const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int vertex_count,
-                                       source_convex_plane *planes, int plane_capacity, int *out_plane_count,
-                                       char *error_buffer, int error_buffer_size)
+                                       const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                       int vertex_count, source_convex_plane *planes, int plane_capacity,
+                                       int *out_plane_count, char *error_buffer, int error_buffer_size)
 {
     if (out_plane_count != NULL)
         *out_plane_count = 0;
     if (world_runtime == NULL || vertices == NULL || planes == NULL || out_plane_count == NULL || vertex_count < 4 ||
-        vertex_count > SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT)
+        vertex_count > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
     {
         set_error(error_buffer, error_buffer_size, "source vertex rebuild requires at least four vertices");
         return false;
@@ -1781,7 +1781,7 @@ static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
         return false;
     }
 
-    slayer3d_vec3 points[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
+    slayer3d_vec3 points[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     for (int vertex = 0; vertex < vertex_count; ++vertex)
     {
         if (!source_convex_vertex_on_snap(world_runtime, vertices[vertex]))
@@ -1853,7 +1853,7 @@ static const char *source_convex_face_material(const editor_brush_source_box_run
 
 bool editor_brush_world_build_source_convex_brush_from_vertices(
     const brush_world_runtime *world_runtime, const char *brush_identity,
-    const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int vertex_count,
+    const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3], int vertex_count,
     slayer3d_game_data_brush *out_brush, char *error_buffer, int error_buffer_size)
 {
     if (out_brush != NULL)
@@ -1873,7 +1873,7 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(
     }
     const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
 
-    source_convex_plane planes[SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT * 2];
+    source_convex_plane planes[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
     SDL_zeroa(planes);
     int plane_count = 0;
     if (!source_convex_build_planes(world_runtime, vertices, vertex_count, planes, (int)SDL_arraysize(planes),
@@ -1930,6 +1930,226 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(
             return false;
         }
     }
+    return true;
+}
+
+static void source_vertex_operation_set_failure(editor_brush_source_vertex_operation_result *result,
+                                                const char *message)
+{
+    if (result == NULL)
+        return;
+    result->valid = false;
+    SDL_strlcpy(result->diagnostic, message != NULL ? message : "invalid source vertex operation",
+                sizeof(result->diagnostic));
+}
+
+static bool source_vertex_operation_append_unique(int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                                  int *vertex_count, const int coord[3], char *error_buffer,
+                                                  int error_buffer_size)
+{
+    if (vertices == NULL || vertex_count == NULL || coord == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex operation requires vertices");
+        return false;
+    }
+    for (int i = 0; i < *vertex_count; ++i)
+    {
+        if (vertices[i][0] == coord[0] && vertices[i][1] == coord[1] && vertices[i][2] == coord[2])
+            return true;
+    }
+    if (*vertex_count >= SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex operation exceeded convex vertex capacity");
+        return false;
+    }
+    vertices[*vertex_count][0] = coord[0];
+    vertices[*vertex_count][1] = coord[1];
+    vertices[*vertex_count][2] = coord[2];
+    ++(*vertex_count);
+    return true;
+}
+
+static bool source_vertex_operation_base_vertices(const brush_world_runtime *world_runtime, const char *brush_identity,
+                                                  int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                                  int *out_vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (out_vertex_count != NULL)
+        *out_vertex_count = 0;
+    if (world_runtime == NULL || brush_identity == NULL || vertices == NULL || out_vertex_count == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex operation requires a source brush");
+        return false;
+    }
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    editor_brush_source_vertex_model model;
+    if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
+                                                    error_buffer_size))
+    {
+        return false;
+    }
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        if (!source_vertex_operation_append_unique(vertices, out_vertex_count, model.vertices[i].coord, error_buffer,
+                                                   error_buffer_size))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool source_vertex_operation_merge(const brush_world_runtime *world_runtime,
+                                          const editor_brush_source_vertex_operation_desc *desc,
+                                          int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                          int *vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || desc == NULL || vertices == NULL || vertex_count == NULL)
+        return false;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
+    editor_brush_source_vertex_model model;
+    if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model,
+                                                                        error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (desc->vertex_index < 0 || desc->vertex_index >= model.vertex_count || desc->target_vertex_index < 0 ||
+        desc->target_vertex_index >= model.vertex_count)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex merge index out of range");
+        return false;
+    }
+
+    *vertex_count = 0;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        const int *coord =
+            i == desc->vertex_index ? model.vertices[desc->target_vertex_index].coord : model.vertices[i].coord;
+        if (!source_vertex_operation_append_unique(vertices, vertex_count, coord, error_buffer, error_buffer_size))
+            return false;
+    }
+    return true;
+}
+
+static bool source_vertex_operation_delete(const brush_world_runtime *world_runtime,
+                                           const editor_brush_source_vertex_operation_desc *desc,
+                                           int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                           int *vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || desc == NULL || vertices == NULL || vertex_count == NULL)
+        return false;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
+    editor_brush_source_vertex_model model;
+    if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model,
+                                                                        error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (desc->vertex_index < 0 || desc->vertex_index >= model.vertex_count)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex delete index out of range");
+        return false;
+    }
+
+    *vertex_count = 0;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        if (i == desc->vertex_index)
+            continue;
+        if (!source_vertex_operation_append_unique(vertices, vertex_count, model.vertices[i].coord, error_buffer,
+                                                   error_buffer_size))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool source_vertex_operation_add(const brush_world_runtime *world_runtime,
+                                        const editor_brush_source_vertex_operation_desc *desc,
+                                        int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                        int *vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (!source_vertex_operation_base_vertices(world_runtime, desc->brush_identity, vertices, vertex_count,
+                                               error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    for (int i = 0; i < *vertex_count; ++i)
+    {
+        if (vertices[i][0] == desc->coord[0] && vertices[i][1] == desc->coord[1] && vertices[i][2] == desc->coord[2])
+        {
+            set_error(error_buffer, error_buffer_size, "source vertex add coordinate already exists");
+            return false;
+        }
+    }
+    return source_vertex_operation_append_unique(vertices, vertex_count, desc->coord, error_buffer, error_buffer_size);
+}
+
+bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
+                                                        const editor_brush_source_vertex_operation_desc *desc,
+                                                        editor_brush_source_vertex_operation_result *out_result,
+                                                        char *error_buffer, int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || desc == NULL || out_result == NULL ||
+        desc->brush_identity == NULL || desc->brush_identity[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex operation requires a source brush");
+        source_vertex_operation_set_failure(out_result, "source vertex operation requires a source brush");
+        return false;
+    }
+
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    SDL_zeroa(vertices);
+    int vertex_count = 0;
+    bool ok = false;
+    switch (desc->type)
+    {
+    case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD:
+        ok = source_vertex_operation_add(world_runtime, desc, vertices, &vertex_count, error_buffer, error_buffer_size);
+        break;
+    case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE:
+        ok = source_vertex_operation_delete(world_runtime, desc, vertices, &vertex_count, error_buffer,
+                                            error_buffer_size);
+        break;
+    case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE:
+        ok = source_vertex_operation_merge(world_runtime, desc, vertices, &vertex_count, error_buffer,
+                                           error_buffer_size);
+        break;
+    default:
+        set_error(error_buffer, error_buffer_size, "unknown source vertex operation");
+        ok = false;
+        break;
+    }
+    if (!ok)
+    {
+        source_vertex_operation_set_failure(out_result, error_buffer != NULL ? error_buffer : "invalid operation");
+        return false;
+    }
+
+    slayer3d_game_data_brush rebuilt;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(
+            world_runtime, desc->brush_identity, vertices, vertex_count, &rebuilt, error_buffer, error_buffer_size))
+    {
+        source_vertex_operation_set_failure(out_result, error_buffer != NULL ? error_buffer : "invalid operation");
+        return false;
+    }
+
+    out_result->valid = true;
+    out_result->vertex_count = vertex_count;
+    out_result->face_count = rebuilt.face_count;
+    out_result->brush = rebuilt;
+    SDL_snprintf(out_result->diagnostic, sizeof(out_result->diagnostic), "source vertex operation valid");
     return true;
 }
 

@@ -1108,7 +1108,11 @@ runtime brush geometry is rebuilt. The source model also has a convex plane
 rebuild path for edited vertex sets: simple sloped/wedge-like solids can be
 validated as convex brushes, original face materials are preserved when the
 rebuilt face still maps to a canonical source face, and edits that would discard
-an input vertex or collapse the hull are rejected.
+an input vertex or collapse the hull are rejected. The same source-model layer
+also exposes topology operation previews for add, delete, and merge/fuse vertex
+workflows. These operations produce validated convex runtime-brush output or a
+clear diagnostic without mutating source truth; later editor slices can commit
+that output once arbitrary convex source persistence is enabled.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a

@@ -240,6 +240,8 @@ typedef struct editor_brush_source_box_runtime
 #define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8
 #define SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT 12
 #define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
 #define SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX 320
 
 typedef struct editor_brush_source_vertex
@@ -351,6 +353,31 @@ typedef struct editor_source_box_bounds_update
     int min[3];
     int max[3];
 } editor_source_box_bounds_update;
+
+typedef enum editor_brush_source_vertex_operation_type
+{
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
+} editor_brush_source_vertex_operation_type;
+
+typedef struct editor_brush_source_vertex_operation_desc
+{
+    const char *brush_identity;
+    editor_brush_source_vertex_operation_type type;
+    int vertex_index;
+    int target_vertex_index;
+    int coord[3];
+} editor_brush_source_vertex_operation_desc;
+
+typedef struct editor_brush_source_vertex_operation_result
+{
+    bool valid;
+    int vertex_count;
+    int face_count;
+    char diagnostic[256];
+    slayer3d_game_data_brush brush;
+} editor_brush_source_vertex_operation_result;
 
 typedef struct editor_command_transaction_entry
 {
@@ -1356,9 +1383,13 @@ bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *worl
                                                        char *error_buffer, int error_buffer_size);
 bool editor_brush_world_build_source_convex_brush_from_vertices(
     const brush_world_runtime *world_runtime, const char *brush_identity,
-    const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int vertex_count,
+    const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3], int vertex_count,
     slayer3d_game_data_brush *out_brush, char *error_buffer, int error_buffer_size);
 void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
+bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
+                                                        const editor_brush_source_vertex_operation_desc *desc,
+                                                        editor_brush_source_vertex_operation_result *out_result,
+                                                        char *error_buffer, int error_buffer_size);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);
