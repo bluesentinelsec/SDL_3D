@@ -1104,7 +1104,11 @@ arrow-key nudges and left-dragging selected handles move selected vertices on
 the current editor grid. Ctrl/Alt plus vertical movement constrains edits to
 the world Y axis. Edits are applied through the source-brush validation path, so
 off-grid, zero-volume, or otherwise invalid convex-box edits are rejected before
-runtime brush geometry is rebuilt.
+runtime brush geometry is rebuilt. The source model also has a convex plane
+rebuild path for edited vertex sets: simple sloped/wedge-like solids can be
+validated as convex brushes, original face materials are preserved when the
+rebuilt face still maps to a canonical source face, and edits that would discard
+an input vertex or collapse the hull are rejected.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a

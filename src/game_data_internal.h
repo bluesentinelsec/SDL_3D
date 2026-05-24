@@ -1354,6 +1354,11 @@ bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtim
 bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *world_runtime,
                                                        const editor_source_box_bounds_update *updates, int update_count,
                                                        char *error_buffer, int error_buffer_size);
+bool editor_brush_world_build_source_convex_brush_from_vertices(
+    const brush_world_runtime *world_runtime, const char *brush_identity,
+    const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int vertex_count,
+    slayer3d_game_data_brush *out_brush, char *error_buffer, int error_buffer_size);
+void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);

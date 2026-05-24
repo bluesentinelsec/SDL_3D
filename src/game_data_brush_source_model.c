@@ -28,6 +28,19 @@ static float source_meters_from_units(const brush_world_runtime *world_runtime, 
 
 static const char *const source_box_face_keys[6] = {"px", "nx", "py", "ny", "pz", "nz"};
 
+static const int source_box_face_vertices[6][4] = {
+    {1, 2, 6, 5}, {0, 4, 7, 3}, {2, 3, 7, 6}, {0, 1, 5, 4}, {4, 5, 6, 7}, {0, 3, 2, 1},
+};
+
+typedef struct source_convex_plane
+{
+    slayer3d_vec3 normal;
+    float distance;
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
+    int vertex_count;
+    int source_face_index;
+} source_convex_plane;
+
 static bool source_vec3i(yyjson_val *object, const char *key, int out_values[3])
 {
     yyjson_val *value = obj_get(object, key);
@@ -1489,6 +1502,11 @@ static void free_source_runtime_brush(slayer3d_game_data_brush *brush)
     SDL_zero(*brush);
 }
 
+void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush)
+{
+    free_source_runtime_brush(brush);
+}
+
 static void free_source_runtime_brushes(slayer3d_game_data_brush *brushes, int brush_count)
 {
     if (brushes == NULL)
@@ -1583,6 +1601,332 @@ static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime
         {
             free_source_runtime_brush(out_brush);
             set_error(error_buffer, error_buffer_size, "failed to allocate editor source face metadata");
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool source_convex_vertex_on_snap(const brush_world_runtime *world_runtime, const int vertex[3])
+{
+    const int snap = source_snap_units(world_runtime);
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (!source_coord_on_snap(vertex[axis], snap))
+            return false;
+    }
+    return true;
+}
+
+static slayer3d_vec3 source_convex_vertex_meters(const brush_world_runtime *world_runtime, const int vertex[3])
+{
+    return slayer3d_vec3_make(source_meters_from_units(world_runtime, vertex[0]),
+                              source_meters_from_units(world_runtime, vertex[1]),
+                              source_meters_from_units(world_runtime, vertex[2]));
+}
+
+static bool source_convex_vertices_duplicate(const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3],
+                                             int vertex_count)
+{
+    for (int a = 0; a < vertex_count; ++a)
+    {
+        for (int b = a + 1; b < vertex_count; ++b)
+        {
+            if (vertices[a][0] == vertices[b][0] && vertices[a][1] == vertices[b][1] &&
+                vertices[a][2] == vertices[b][2])
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+static void source_convex_bounds_meters(const brush_world_runtime *world_runtime,
+                                        const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3],
+                                        int vertex_count, slayer3d_bounding_box *out_bounds)
+{
+    if (out_bounds == NULL)
+        return;
+    out_bounds->min = source_convex_vertex_meters(world_runtime, vertices[0]);
+    out_bounds->max = out_bounds->min;
+    for (int vertex = 1; vertex < vertex_count; ++vertex)
+    {
+        const slayer3d_vec3 point = source_convex_vertex_meters(world_runtime, vertices[vertex]);
+        out_bounds->min.x = SDL_min(out_bounds->min.x, point.x);
+        out_bounds->min.y = SDL_min(out_bounds->min.y, point.y);
+        out_bounds->min.z = SDL_min(out_bounds->min.z, point.z);
+        out_bounds->max.x = SDL_max(out_bounds->max.x, point.x);
+        out_bounds->max.y = SDL_max(out_bounds->max.y, point.y);
+        out_bounds->max.z = SDL_max(out_bounds->max.z, point.z);
+    }
+}
+
+static bool source_convex_plane_matches(const source_convex_plane *a, slayer3d_vec3 normal, float distance)
+{
+    return a != NULL && SDL_fabsf(slayer3d_vec3_dot(a->normal, normal) - 1.0f) <= 0.0005f &&
+           SDL_fabsf(a->distance - distance) <= 0.001f;
+}
+
+static bool source_convex_plane_recorded(const source_convex_plane *planes, int plane_count, slayer3d_vec3 normal,
+                                         float distance)
+{
+    for (int i = 0; i < plane_count; ++i)
+    {
+        if (source_convex_plane_matches(&planes[i], normal, distance))
+            return true;
+    }
+    return false;
+}
+
+static bool source_convex_face_contains_vertex(int face_index, int vertex_index)
+{
+    if (face_index < 0 || face_index >= (int)SDL_arraysize(source_box_face_vertices))
+        return false;
+    for (int i = 0; i < 4; ++i)
+    {
+        if (source_box_face_vertices[face_index][i] == vertex_index)
+            return true;
+    }
+    return false;
+}
+
+static int source_convex_plane_source_face(const source_convex_plane *plane)
+{
+    if (plane == NULL || plane->vertex_count < 3)
+        return -1;
+    for (int face = 0; face < (int)SDL_arraysize(source_box_face_vertices); ++face)
+    {
+        bool all_on_face = true;
+        for (int i = 0; i < plane->vertex_count; ++i)
+        {
+            if (!source_convex_face_contains_vertex(face, plane->vertex_indices[i]))
+            {
+                all_on_face = false;
+                break;
+            }
+        }
+        if (all_on_face)
+            return face;
+    }
+    return -1;
+}
+
+static bool source_convex_add_plane(source_convex_plane *planes, int *plane_count, int plane_capacity,
+                                    const slayer3d_vec3 points[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT],
+                                    int vertex_count, int a, int b, int c)
+{
+    const slayer3d_vec3 ab = slayer3d_vec3_sub(points[b], points[a]);
+    const slayer3d_vec3 ac = slayer3d_vec3_sub(points[c], points[a]);
+    slayer3d_vec3 normal = slayer3d_vec3_cross(ab, ac);
+    if (slayer3d_vec3_length_squared(normal) <= 0.000001f)
+        return true;
+    normal = slayer3d_vec3_normalize(normal);
+    float distance = slayer3d_vec3_dot(normal, points[a]);
+
+    int positive = 0;
+    int negative = 0;
+    for (int vertex = 0; vertex < vertex_count; ++vertex)
+    {
+        const float signed_distance = slayer3d_vec3_dot(normal, points[vertex]) - distance;
+        if (signed_distance > 0.0005f)
+            ++positive;
+        else if (signed_distance < -0.0005f)
+            ++negative;
+    }
+    if (positive > 0 && negative > 0)
+        return true;
+    if (positive > 0)
+    {
+        normal = slayer3d_vec3_scale(normal, -1.0f);
+        distance = -distance;
+    }
+    if (source_convex_plane_recorded(planes, *plane_count, normal, distance))
+        return true;
+    if (*plane_count >= plane_capacity)
+        return false;
+
+    source_convex_plane *plane = &planes[*plane_count];
+    SDL_zero(*plane);
+    plane->normal = normal;
+    plane->distance = distance;
+    for (int vertex = 0; vertex < vertex_count; ++vertex)
+    {
+        if (SDL_fabsf(slayer3d_vec3_dot(normal, points[vertex]) - distance) <= 0.001f)
+            plane->vertex_indices[plane->vertex_count++] = vertex;
+    }
+    if (plane->vertex_count < 3)
+        return true;
+    plane->source_face_index = source_convex_plane_source_face(plane);
+    ++(*plane_count);
+    return true;
+}
+
+static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
+                                       const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int vertex_count,
+                                       source_convex_plane *planes, int plane_capacity, int *out_plane_count,
+                                       char *error_buffer, int error_buffer_size)
+{
+    if (out_plane_count != NULL)
+        *out_plane_count = 0;
+    if (world_runtime == NULL || vertices == NULL || planes == NULL || out_plane_count == NULL || vertex_count < 4 ||
+        vertex_count > SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex rebuild requires at least four vertices");
+        return false;
+    }
+    if (source_convex_vertices_duplicate(vertices, vertex_count))
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex rebuild contains duplicate vertices");
+        return false;
+    }
+
+    slayer3d_vec3 points[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
+    for (int vertex = 0; vertex < vertex_count; ++vertex)
+    {
+        if (!source_convex_vertex_on_snap(world_runtime, vertices[vertex]))
+        {
+            set_error(error_buffer, error_buffer_size, "source vertex rebuild contains off-grid vertices");
+            return false;
+        }
+        points[vertex] = source_convex_vertex_meters(world_runtime, vertices[vertex]);
+    }
+
+    int plane_count = 0;
+    for (int a = 0; a < vertex_count; ++a)
+    {
+        for (int b = a + 1; b < vertex_count; ++b)
+        {
+            for (int c = b + 1; c < vertex_count; ++c)
+            {
+                if (!source_convex_add_plane(planes, &plane_count, plane_capacity, points, vertex_count, a, b, c))
+                {
+                    set_error(error_buffer, error_buffer_size, "source vertex rebuild exceeded face capacity");
+                    return false;
+                }
+            }
+        }
+    }
+    if (plane_count < 4)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex rebuild would create zero-volume geometry");
+        return false;
+    }
+
+    for (int vertex = 0; vertex < vertex_count; ++vertex)
+    {
+        int incident_planes = 0;
+        for (int plane = 0; plane < plane_count; ++plane)
+        {
+            for (int i = 0; i < planes[plane].vertex_count; ++i)
+            {
+                if (planes[plane].vertex_indices[i] == vertex)
+                {
+                    ++incident_planes;
+                    break;
+                }
+            }
+        }
+        if (incident_planes < 3)
+        {
+            set_error(error_buffer, error_buffer_size,
+                      "source vertex rebuild would discard a vertex outside the convex hull");
+            return false;
+        }
+    }
+
+    *out_plane_count = plane_count;
+    return true;
+}
+
+static const char *source_convex_face_material(const editor_brush_source_box_runtime *box, int source_face_index)
+{
+    if (box == NULL)
+        return "";
+    if (source_face_index >= 0 && source_face_index < (int)SDL_arraysize(box->face_materials) &&
+        box->face_materials[source_face_index] != NULL && box->face_materials[source_face_index][0] != '\0')
+    {
+        return box->face_materials[source_face_index];
+    }
+    return box->material != NULL ? box->material : "";
+}
+
+bool editor_brush_world_build_source_convex_brush_from_vertices(
+    const brush_world_runtime *world_runtime, const char *brush_identity,
+    const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int vertex_count,
+    slayer3d_game_data_brush *out_brush, char *error_buffer, int error_buffer_size)
+{
+    if (out_brush != NULL)
+        SDL_zero(*out_brush);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || brush_identity == NULL ||
+        brush_identity[0] == '\0' || vertices == NULL || out_brush == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex rebuild requires a source brush");
+        return false;
+    }
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+
+    source_convex_plane planes[SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT * 2];
+    SDL_zeroa(planes);
+    int plane_count = 0;
+    if (!source_convex_build_planes(world_runtime, vertices, vertex_count, planes, (int)SDL_arraysize(planes),
+                                    &plane_count, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    slayer3d_game_data_brush_face *faces =
+        (slayer3d_game_data_brush_face *)SDL_calloc((size_t)plane_count, sizeof(*faces));
+    if (faces == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate rebuilt source brush faces");
+        return false;
+    }
+
+    out_brush->name = SDL_strdup(box->name != NULL ? box->name : "");
+    out_brush->contents = box->contents != 0u ? box->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+    out_brush->face_count = plane_count;
+    out_brush->faces = faces;
+    out_brush->has_bounds = true;
+    source_convex_bounds_meters(world_runtime, vertices, vertex_count, &out_brush->bounds);
+    if (out_brush->name == NULL || !set_source_brush_metadata_string(&out_brush->editor.stable_id, box->stable_id) ||
+        !set_source_brush_metadata_string(&out_brush->editor.prefab, box->prefab))
+    {
+        free_source_runtime_brush(out_brush);
+        set_error(error_buffer, error_buffer_size, "failed to allocate rebuilt source brush metadata");
+        return false;
+    }
+
+    for (int face_index = 0; face_index < plane_count; ++face_index)
+    {
+        const source_convex_plane *plane = &planes[face_index];
+        const char *material_name = source_convex_face_material(box, plane->source_face_index);
+        const int material_index = source_material_index_by_name(&world_runtime->desc, material_name);
+        init_source_box_face(&faces[face_index], plane->normal, plane->distance, material_index, material_name);
+
+        char face_stable_id[320];
+        if (plane->source_face_index >= 0)
+        {
+            SDL_snprintf(face_stable_id, sizeof(face_stable_id), "%s.face.%s",
+                         box->stable_id != NULL ? box->stable_id : box->name,
+                         source_box_face_keys[plane->source_face_index]);
+        }
+        else
+        {
+            SDL_snprintf(face_stable_id, sizeof(face_stable_id), "%s.face.rebuilt.%d",
+                         box->stable_id != NULL ? box->stable_id : box->name, face_index);
+        }
+        if (!set_source_brush_metadata_string(&faces[face_index].editor.stable_id, face_stable_id))
+        {
+            free_source_runtime_brush(out_brush);
+            set_error(error_buffer, error_buffer_size, "failed to allocate rebuilt source face metadata");
             return false;
         }
     }
