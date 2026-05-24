@@ -14354,7 +14354,7 @@ TEST(GameDataRuntime, WorldModelInterfaceEnumeratesQueriesAndTracesSectorAndBrus
         slayer3d_game_data_for_each_editor_debug_primitive(runtime, &debug_desc, capture_editor_debug, &debug_capture));
     EXPECT_EQ(debug_capture.world_edges, 24);
     EXPECT_EQ(debug_capture.selection_edges, 12);
-    EXPECT_EQ(debug_capture.selection_face_edges, 4);
+    EXPECT_EQ(debug_capture.selection_face_edges, 52);
     EXPECT_EQ(debug_capture.rays, 1);
     EXPECT_EQ(debug_capture.normals, 1);
     EXPECT_EQ(debug_capture.markers, 3);
@@ -15850,9 +15850,11 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_NE(bus, nullptr);
     const int preview_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.preview");
     const int clear_selection_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.selection.clear");
+    const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
     const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
     ASSERT_GE(preview_signal, 0);
     ASSERT_GE(clear_selection_signal, 0);
+    ASSERT_GE(escape_signal, 0);
     ASSERT_GE(mode_select_signal, 0);
     const char *target_cube_left_face_stable_id = "brush.target.cube.face.nx";
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
@@ -16025,7 +16027,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(debug.grid_lines, 1026);
     EXPECT_EQ(debug.world_edges, 12);
     EXPECT_EQ(debug.selection_edges, 12);
-    EXPECT_EQ(debug.selection_face_edges, 4);
+    EXPECT_EQ(debug.selection_face_edges, 52);
     EXPECT_EQ(debug.command_preview_edges, 12);
     EXPECT_EQ(debug.rays, 0);
     EXPECT_EQ(debug.normals, 0);
@@ -16257,7 +16259,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int grid_increase_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.grid.increase");
     const int wall_axis_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.wall_axis.toggle");
     const int clear_selection_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.selection.clear");
+    const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
     const int mode_brush_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.brush");
+    const int mode_face_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.face");
     const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
     const int mode_texture_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.texture");
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
@@ -16279,7 +16283,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(grid_increase_signal, 0);
     ASSERT_GE(wall_axis_signal, 0);
     ASSERT_GE(clear_selection_signal, 0);
+    ASSERT_GE(escape_signal, 0);
     ASSERT_GE(mode_brush_signal, 0);
+    ASSERT_GE(mode_face_signal, 0);
     ASSERT_GE(mode_select_signal, 0);
     ASSERT_GE(mode_texture_signal, 0);
     ASSERT_GE(commit_signal, 0);
@@ -16427,6 +16433,30 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         }
         return false;
     };
+    auto visible_ui_rect = [&](const char *name) {
+        struct RectNameCapture
+        {
+            const slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
+            bool found = false;
+        } capture{runtime, name, false};
+        auto capture_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<RectNameCapture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                SDL_strcmp(rect->name, capture->name) != 0)
+            {
+                return true;
+            }
+            if (slayer3d_game_data_ui_rect_is_visible(capture->runtime, rect, nullptr))
+            {
+                capture->found = true;
+                return false;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &capture));
+        return capture.found;
+    };
     const int initial_brush_count = world().brush_count;
     EXPECT_EQ(initial_brush_count, 0);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
@@ -16439,7 +16469,22 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     slayer3d_signal_emit(bus, mode_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush paint mode");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush tool");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.brush.selected"));
+    EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
+    EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.brush.selected"));
+    slayer3d_signal_emit(bus, mode_face_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "face");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "face");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.face.selected"));
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
     slayer3d_signal_emit(bus, mode_texture_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "texture");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
@@ -16450,10 +16495,10 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     slayer3d_signal_emit(bus, palette_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "brush");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "floor");
     std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
-    EXPECT_TRUE(contains_ui_text(modal_text, "Brushes"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Prefabs"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Floor"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Sky"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Selected: floor"));
@@ -16464,7 +16509,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "wall");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "prefab");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "wall");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.wall");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.selected", ""), "wall");
@@ -16475,7 +16520,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 
     slayer3d_signal_emit(bus, floor_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "floor");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "prefab");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "floor prefab selected");
@@ -16487,11 +16532,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 1.0f, 0.001f);
     std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 1"));
-    click_editor(790.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
+    click_editor(890.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
-    click_editor(790.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    click_editor(890.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
@@ -20981,7 +21026,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                  "");
 
     slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
-    slayer3d_properties_set_string(mutable_scene_state, "editor.mode", "brush");
+    slayer3d_properties_set_string(mutable_scene_state, "editor.mode", "prefab");
     slayer3d_properties_set_string(mutable_scene_state, "editor.tool.mode", "wall");
     slayer3d_properties_set_string(mutable_scene_state, "editor.placement.wall_axis", "x");
     slayer3d_properties_set_float(camera_actor->props, "yaw", 0.0f);
@@ -21007,7 +21052,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     slayer3d_properties_set_float(camera_actor->props, "yaw", start_yaw);
     slayer3d_properties_set_float(camera_actor->props, "pitch", -0.29566f);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
-    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.mode", "brush");
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.mode", "prefab");
     EXPECT_TRUE(press_editor_key(SDL_SCANCODE_SPACE, mode_select_action, 7));
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.tool.mode", ""),
@@ -21037,7 +21082,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     slayer3d_signal_emit(bus, clear_selection_signal, nullptr);
 
     slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.tool.mode", "floor");
-    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.mode", "brush");
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.mode", "prefab");
     slayer3d_properties_set_float(camera_actor->props, "yaw", -1.0f);
     slayer3d_properties_set_float(camera_actor->props, "pitch", -0.25f);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));

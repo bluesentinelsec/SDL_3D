@@ -705,6 +705,18 @@ static bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime)
            SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "select") == 0;
 }
 
+static bool editor_mode_is_brush(const slayer3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "brush") == 0;
+}
+
+static bool editor_mode_is_face(const slayer3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "face") == 0;
+}
+
 static bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,
                                            const char *element_name)
 {
@@ -742,6 +754,193 @@ static void clear_editor_drag_move(slayer3d_game_data_runtime *runtime)
     if (runtime == NULL)
         return;
     SDL_zero(runtime->editor_drag_move);
+}
+
+static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata);
+
+static void editor_set_face_drag_state(slayer3d_game_data_runtime *runtime, bool ready, bool dragging)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.face.drag.ready", ready);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.face.drag.active", dragging);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.face.drag.shift",
+                                 (SDL_GetModState() & SDL_KMOD_SHIFT) != 0);
+}
+
+static void editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
+                                           const slayer3d_game_data_editor_selection *selection, float distance)
+{
+    if (runtime == NULL || selection == NULL || !selection->hit || selection->face_index < 0)
+        return;
+
+    editor_command_preview_state *preview = &runtime->editor_command_preview;
+    SDL_zero(*preview);
+    preview->active = true;
+    preview->scene = slayer3d_game_data_active_scene(runtime);
+    preview->command = "resize";
+    preview->target = "face";
+    preview->world_name = selection->world_name;
+    preview->element_name = selection->element_name;
+    preview->element_stable_id = editor_metadata_stable_id(selection->element_editor);
+    preview->material_name = selection->material_name;
+    preview->previous_material_name = selection->material_name;
+    preview->face_stable_id = editor_metadata_stable_id(selection->face_editor);
+    preview->face_index = selection->face_index;
+    preview->material_index = -1;
+    preview->previous_material_index = -1;
+    preview->offset = slayer3d_vec3_scale(slayer3d_vec3_normalize(selection->normal), distance);
+    preview->has_bounds = selection->has_bounds;
+    preview->bounds = selection->has_bounds
+                          ? editor_resized_preview_bounds(selection->bounds, selection->normal, distance)
+                          : (slayer3d_bounding_box){selection->point, selection->point};
+}
+
+static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
+                                    const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_face(runtime))
+    {
+        editor_set_face_drag_state(runtime, false, false);
+        return true;
+    }
+
+    const bool can_resize_face = editor_selection_is_selectable_brush(hover_selection) &&
+                                 hover_selection->face_index >= 0 && hover_selection->has_bounds;
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+    {
+        editor_set_face_drag_state(runtime, can_resize_face, false);
+        return true;
+    }
+
+    editor_drag_move_state *drag = &runtime->editor_drag_move;
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+
+    if (!drag->active && left_pressed && can_resize_face)
+    {
+        SDL_zero(*drag);
+        drag->active = true;
+        drag->face_resize = true;
+        drag->scene = slayer3d_game_data_active_scene(runtime);
+        drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
+        drag->face_selection = resolved_editor_selection(runtime, hover_selection);
+        (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
+        runtime->editor_active_selection = drag->face_selection;
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+        if (out_consumed != NULL)
+            *out_consumed = true;
+    }
+
+    if (!drag->active || !drag->face_resize)
+    {
+        editor_set_face_drag_state(runtime, can_resize_face, false);
+        return true;
+    }
+
+    if (out_consumed != NULL)
+        *out_consumed = true;
+
+    float mouse_x = drag->start_mouse_x;
+    float mouse_y = drag->start_mouse_y;
+    (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+    const float units_per_pixel = SDL_max(drag->grid_size, 0.001f) / 48.0f;
+    const float distance = editor_snap_delta((mouse_y - drag->start_mouse_y) * units_per_pixel, drag->grid_size);
+    if (SDL_fabsf(distance) > 0.000001f)
+    {
+        editor_set_face_resize_preview(runtime, &drag->face_selection, distance);
+        drag->moved = true;
+    }
+    editor_set_face_drag_state(runtime, true, true);
+
+    if (left_released || !left_down)
+    {
+        if (drag->moved)
+        {
+            (void)slayer3d_game_data_commit_editor_command(runtime, NULL, NULL);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "brush face resized");
+        }
+        else
+        {
+            clear_editor_command_preview(runtime);
+        }
+        clear_editor_drag_move(runtime);
+        editor_set_face_drag_state(runtime, can_resize_face, false);
+    }
+    return true;
+}
+
+static bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    yyjson_val *widget = obj_get(editor, "prefabs_widget");
+    if (runtime == NULL || runtime->scene_state == NULL || !yyjson_is_obj(widget))
+        return true;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    if (input == NULL || !slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+        return true;
+
+    const bool over_button = editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button"));
+    if (out_consumed != NULL)
+        *out_consumed = over_button;
+    if (!over_button || !slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT))
+        return true;
+
+    const char *active_key = json_string(widget, "active_key", "editor.palette.active");
+    const char *cursor_key = json_string(widget, "cursor_key", "editor.palette.brush.cursor");
+    const char *active_value = json_string(widget, "active_value", "brush");
+    const char *default_cursor = json_string(widget, "default_cursor", "floor");
+    slayer3d_properties_set_string(runtime->scene_state, active_key, active_value);
+    slayer3d_properties_set_string(runtime->scene_state, cursor_key, default_cursor);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "prefabs palette opened");
+    return true;
+}
+
+static bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    yyjson_val *buttons = obj_get(editor, "tool_mode_buttons");
+    if (runtime == NULL || runtime->scene_state == NULL || !yyjson_is_arr(buttons))
+        return true;
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    float mouse_x = 0.0f;
+    float mouse_y = 0.0f;
+    if (input == NULL || !slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+        return true;
+
+    const bool clicked = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    for (size_t i = 0, count = yyjson_arr_size(buttons); i < count; ++i)
+    {
+        yyjson_val *button = yyjson_arr_get(buttons, i);
+        if (!yyjson_is_obj(button) || !editor_mouse_in_rect(mouse_x, mouse_y, obj_get(button, "button")))
+            continue;
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        if (!clicked)
+            return true;
+
+        const char *mode = json_string(button, "mode", NULL);
+        const char *tool_mode = json_string(button, "tool_mode", mode);
+        if (mode == NULL || mode[0] == '\0' || tool_mode == NULL || tool_mode[0] == '\0')
+            return true;
+        slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                       json_string(button, "message", "tool mode"));
+        clear_editor_command_preview(runtime);
+        return true;
+    }
+    return true;
 }
 
 static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
@@ -1237,6 +1436,31 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_brush_count(runtime);
         return true;
     }
+    if (!editor_handle_prefabs_widget(runtime, editor, &ui_consumed))
+        return false;
+    if (ui_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
+    if (!editor_handle_tool_mode_buttons(runtime, editor, &ui_consumed))
+        return false;
+    if (ui_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
+    bool face_drag_consumed = false;
+    if (!editor_handle_face_drag(runtime, &hover_selection, &face_drag_consumed))
+        return false;
+    if (face_drag_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     bool drag_move_consumed = false;
     if (!editor_handle_drag_move(runtime, &hover_selection, &drag_move_consumed))
         return false;
@@ -1291,6 +1515,11 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         return true;
     }
 
+    if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime)) && hover_selection.hit)
+    {
+        runtime->editor_active_selection = hover_selection;
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+    }
     publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
     publish_editor_selected_brush_count(runtime);
     if (secondary_select_requested &&

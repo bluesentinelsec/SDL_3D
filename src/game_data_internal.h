@@ -208,9 +208,11 @@ typedef struct editor_drag_move_state
     bool active;
     bool moved;
     bool axis_lock_y;
+    bool face_resize;
     const char *scene;
     slayer3d_vec3 start_point;
     slayer3d_vec3 applied_offset;
+    slayer3d_game_data_editor_selection face_selection;
     float grid_size;
     float start_mouse_x;
     float start_mouse_y;
