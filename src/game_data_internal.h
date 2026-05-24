@@ -345,6 +345,13 @@ typedef struct editor_source_vertex_selection
     int coord[3];
 } editor_source_vertex_selection;
 
+typedef struct editor_source_box_bounds_update
+{
+    int source_index;
+    int min[3];
+    int max[3];
+} editor_source_box_bounds_update;
+
 typedef struct editor_command_transaction_entry
 {
     int id;
@@ -1344,6 +1351,9 @@ bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_ru
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size);
+bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *world_runtime,
+                                                       const editor_source_box_bounds_update *updates, int update_count,
+                                                       char *error_buffer, int error_buffer_size);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);

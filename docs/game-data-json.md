@@ -1099,7 +1099,12 @@ integer source coordinates `x`, `y`, and `z`. Left-clicking a vertex handle
 selects the vertex group at that shared source position across the currently
 selected brushes; Shift+left-click toggles that group. Use
 `editor.vertex.selection.clear` to clear only vertex handles while preserving
-the brush selection and current editor tool.
+the brush selection and current editor tool. While vertex mode is active,
+arrow-key nudges and left-dragging selected handles move selected vertices on
+the current editor grid. Ctrl/Alt plus vertical movement constrains edits to
+the world Y axis. Edits are applied through the source-brush validation path, so
+off-grid, zero-volume, or otherwise invalid convex-box edits are rejected before
+runtime brush geometry is rebuilt.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a

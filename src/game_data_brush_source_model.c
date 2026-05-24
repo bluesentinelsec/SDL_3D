@@ -2359,6 +2359,92 @@ bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtim
     return true;
 }
 
+bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *world_runtime,
+                                                       const editor_source_box_bounds_update *updates, int update_count,
+                                                       char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush edit requires a source model");
+        return false;
+    }
+    if (updates == NULL || update_count <= 0)
+        return true;
+
+    int *old_min = (int *)SDL_calloc((size_t)update_count * 3u, sizeof(*old_min));
+    int *old_max = (int *)SDL_calloc((size_t)update_count * 3u, sizeof(*old_max));
+    if (old_min == NULL || old_max == NULL)
+    {
+        SDL_free(old_min);
+        SDL_free(old_max);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush edit rollback");
+        return false;
+    }
+
+    bool ok = true;
+    int applied_count = 0;
+    for (int i = 0; ok && i < update_count; ++i)
+    {
+        const int source_index = updates[i].source_index;
+        if (source_index < 0 || source_index >= world_runtime->editor_source_box_count)
+        {
+            set_error(error_buffer, error_buffer_size, "source brush index out of range");
+            ok = false;
+            break;
+        }
+        for (int previous = 0; previous < i; ++previous)
+        {
+            if (updates[previous].source_index == source_index)
+            {
+                set_error(error_buffer, error_buffer_size, "source brush edit contains duplicate source indices");
+                ok = false;
+                break;
+            }
+        }
+        if (!ok)
+            break;
+        editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+        copy_source_box_coordinates(box, &old_min[i * 3], &old_max[i * 3]);
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            box->min[axis] = updates[i].min[axis];
+            box->max[axis] = updates[i].max[axis];
+        }
+        applied_count++;
+    }
+
+    for (int i = 0; ok && i < update_count; ++i)
+    {
+        const int source_index = updates[i].source_index;
+        if (!source_box_candidate_valid(world_runtime, &world_runtime->editor_source_boxes[source_index], source_index,
+                                        error_buffer, error_buffer_size))
+        {
+            ok = false;
+        }
+    }
+
+    if (ok && !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+        ok = false;
+
+    if (!ok)
+    {
+        for (int i = 0; i < applied_count; ++i)
+        {
+            const int source_index = updates[i].source_index;
+            if (source_index >= 0 && source_index < world_runtime->editor_source_box_count)
+            {
+                restore_source_box_coordinates(&world_runtime->editor_source_boxes[source_index], &old_min[i * 3],
+                                               &old_max[i * 3]);
+            }
+        }
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+    }
+
+    SDL_free(old_min);
+    SDL_free(old_max);
+    return ok;
+}
+
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size)
