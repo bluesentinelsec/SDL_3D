@@ -130,6 +130,7 @@ bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable
                                      const char *json_path);
 bool validation_mouse_button_name_valid(const char *name);
 bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path, validation_names *names);
+bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path, validation_names *names);
 bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path,
                            validation_names *names);
 bool validate_network_port_value(validation_context *ctx, yyjson_val *value, const char *json_path, const char *label);
