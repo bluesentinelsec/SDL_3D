@@ -226,6 +226,7 @@ target_sources(
         src/game_data_validation_persistence.c
         src/game_data_validation_render.c
         src/game_data_validation_render_components.c
+        src/game_data_validation_scenes.c
         src/game_data_validation_scene_editor.c
         src/game_data_validation_sectors.c
         src/game_data_validation_ui.c

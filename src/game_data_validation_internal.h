@@ -186,6 +186,7 @@ bool validate_render_effects(validation_context *ctx, yyjson_val *root, validati
 bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_transitions(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_render_settings(validation_context *ctx, yyjson_val *root);
+bool validate_scenes(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool ui_metric_name_valid(const char *metric);
 bool validate_ui_panels(validation_context *ctx, yyjson_val *panels, const char *path, validation_names *names);
 bool validate_ui_inspectors(validation_context *ctx, yyjson_val *inspectors, const char *path, validation_names *names);
