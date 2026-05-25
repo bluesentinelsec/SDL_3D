@@ -1,0 +1,410 @@
+/**
+ * @file game_data_validation_ui.c
+ * @brief UI validation for JSON-authored game data.
+ */
+
+#include "game_data_validation_internal.h"
+
+#include <SDL3/SDL_stdinc.h>
+
+static yyjson_val *obj_get(yyjson_val *object, const char *key)
+{
+    return validation_obj_get(object, key);
+}
+
+static const char *json_string(yyjson_val *object, const char *key)
+{
+    return validation_json_string(object, key);
+}
+
+static bool is_non_empty_string(yyjson_val *object, const char *key)
+{
+    const char *value = json_string(object, key);
+    return value != NULL && value[0] != '\0';
+}
+
+bool ui_metric_name_valid(const char *metric)
+{
+    if (metric == NULL || metric[0] == '\0')
+        return false;
+
+    static const char *const metrics[] = {
+        "fps",
+        "frame",
+        "paused",
+        "perf.frame_ms",
+        "perf.update_cpu_ms",
+        "perf.render_cpu_ms",
+        "render.model_mesh_submissions_per_frame",
+        "render.model_mesh_draws_per_frame",
+        "render.model_triangles_per_frame",
+        "render.geometry_draw_calls_per_frame",
+        "render.static_mesh_instanced_draw_calls_per_frame",
+        "render.static_mesh_instances_batched_per_frame",
+        "render.static_mesh_draw_calls_saved_per_frame",
+        "render.procedural_lod_candidates_per_frame",
+        "render.procedural_lod_reduced_per_frame",
+        "render.procedural_lod_authored_triangles_per_frame",
+        "render.procedural_lod_resolved_triangles_per_frame",
+        "render.procedural_lod_triangles_saved_per_frame",
+        "render.model_lod_candidates_per_frame",
+        "render.model_lod_culled_per_frame",
+        "render.model_lod_triangles_saved_per_frame",
+        "render.depth_prepass_draws_per_frame",
+        "render.depth_prepass_triangles_per_frame",
+        "render.depth_prepass_samples_per_frame",
+        "render.geometry_samples_per_frame",
+        "render.light_candidates_per_frame",
+        "render.lights_selected_per_frame",
+        "render.light_selection_draws_per_frame",
+        "render.light_selection_ratio",
+        "render.world_scale",
+        "render.world_width",
+        "render.world_height",
+        "render.window_pixel_width",
+        "render.window_pixel_height",
+        "render.window_pixel_density",
+        "brush.trace_count",
+        "brush.world_instance_count",
+        "brush.world_bounds_reject_count",
+        "brush.brush_count",
+        "brush.contents_reject_count",
+        "brush.bounds_reject_count",
+        "brush.collision_candidate_count",
+        "brush.hit_count",
+        "brush.render_mesh_submissions",
+        "brush.render_mesh_culled",
+        "brush.render_mesh_draws",
+        "brush.render_triangles_submitted",
+        "brush.compile_face_count",
+        "brush.compile_rendered_face_count",
+        "brush.compile_culled_face_count",
+        "brush.compile_triangle_count",
+        "brush.compile_chunk_count",
+        "brush.collision_chunk_count",
+        "brush.collision_chunk_reject_count",
+        "brush.render_chunk_draws",
+        "brush.render_chunk_brushes_drawn",
+        "brush.frustum_brush_candidates",
+        "brush.frustum_brush_culled",
+        "brush.frustum_triangles_culled",
+        "brush.visibility_brush_candidates",
+        "brush.visibility_brush_visible",
+        "brush.visibility_brush_occluded",
+        "brush.visibility_triangles_culled",
+        "brush.visibility_grid_cache_hits",
+        "brush.visibility_grid_cache_misses",
+    };
+
+    for (size_t i = 0; i < SDL_arraysize(metrics); ++i)
+    {
+        if (SDL_strcmp(metric, metrics[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool is_json_scalar(yyjson_val *value)
+{
+    return yyjson_is_str(value) || yyjson_is_int(value) || yyjson_is_real(value) || yyjson_is_bool(value);
+}
+
+bool validate_ui_tool_color(validation_context *ctx, yyjson_val *object, const char *key, const char *path)
+{
+    yyjson_val *value = obj_get(object, key);
+    if (value != NULL && !is_exact_vec3_or_vec4_array(value))
+        return validation_error(ctx, path, "UI tooling %s must be a vec3 or vec4 color", key);
+    return true;
+}
+
+bool validate_ui_tool_binding(validation_context *ctx, yyjson_val *binding, const char *path, validation_names *names)
+{
+    if (!yyjson_is_obj(binding))
+        return validation_error(ctx, path, "UI tooling binding must be an object");
+    const char *type = json_string(binding, "type");
+    if (SDL_strcmp(type != NULL ? type : "", "scene_state") == 0)
+    {
+        if (!is_non_empty_string(binding, "key"))
+            return validation_error(ctx, path, "UI tooling scene_state binding requires a non-empty key");
+    }
+    else if (SDL_strcmp(type != NULL ? type : "", "property") == 0)
+    {
+        if (!require_ref(ctx, &names->entities, "entity", json_string(binding, "entity"), path))
+            return false;
+        if (!is_non_empty_string(binding, "key"))
+            return validation_error(ctx, path, "UI tooling property binding requires a non-empty key");
+    }
+    else if (SDL_strcmp(type != NULL ? type : "", "metric") == 0)
+    {
+        const char *metric = json_string(binding, "metric");
+        if (!ui_metric_name_valid(metric))
+            return validation_error(ctx, path, "unsupported UI tooling metric '%s'",
+                                    metric != NULL ? metric : "<missing>");
+    }
+    else
+    {
+        return validation_error(ctx, path, "unsupported UI tooling binding type '%s'",
+                                type != NULL ? type : "<missing>");
+    }
+
+    yyjson_val *fallback = obj_get(binding, "default");
+    if (fallback != NULL && !is_json_scalar(fallback))
+        return validation_error(ctx, path, "UI tooling binding default must be scalar");
+    return true;
+}
+
+bool validate_ui_panels(validation_context *ctx, yyjson_val *panels, const char *path, validation_names *names)
+{
+    if (panels == NULL)
+        return true;
+    if (!yyjson_is_arr(panels))
+        return validation_error(ctx, path, "UI panels must be an array");
+    for (size_t i = 0; i < yyjson_arr_size(panels); ++i)
+    {
+        char panel_path[PATH_BUFFER_SIZE];
+        format_path(panel_path, sizeof(panel_path), "%s[%zu]", path, i);
+        yyjson_val *panel = yyjson_arr_get(panels, i);
+        if (!yyjson_is_obj(panel))
+            return validation_error(ctx, panel_path, "UI panel entries must be objects");
+        if (!is_non_empty_string(panel, "name"))
+            return validation_error(ctx, panel_path, "UI panel requires a non-empty name");
+        yyjson_val *width = obj_get(panel, "w");
+        if (width == NULL)
+            width = obj_get(panel, "width");
+        yyjson_val *height = obj_get(panel, "h");
+        if (height == NULL)
+            height = obj_get(panel, "height");
+        if (!yyjson_is_num(width) || yyjson_get_num(width) <= 0.0)
+            return validation_error(ctx, panel_path, "UI panel width must be positive");
+        if (!yyjson_is_num(height) || yyjson_get_num(height) <= 0.0)
+            return validation_error(ctx, panel_path, "UI panel height must be positive");
+        yyjson_val *border = obj_get(panel, "border_thickness");
+        if (border != NULL && (!yyjson_is_num(border) || yyjson_get_num(border) < 0.0))
+            return validation_error(ctx, panel_path, "UI panel border_thickness must be non-negative");
+        if (!validate_ui_tool_color(ctx, panel, "color", panel_path) ||
+            !validate_ui_tool_color(ctx, panel, "border_color", panel_path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", panel_path);
+        if (!validate_data_condition(ctx, obj_get(panel, "visible_if"), condition_path, names))
+            return false;
+    }
+    return true;
+}
+
+bool validate_ui_inspectors(validation_context *ctx, yyjson_val *inspectors, const char *path, validation_names *names)
+{
+    if (inspectors == NULL)
+        return true;
+    if (!yyjson_is_arr(inspectors))
+        return validation_error(ctx, path, "UI inspectors must be an array");
+    for (size_t i = 0; i < yyjson_arr_size(inspectors); ++i)
+    {
+        char inspector_path[PATH_BUFFER_SIZE];
+        format_path(inspector_path, sizeof(inspector_path), "%s[%zu]", path, i);
+        yyjson_val *inspector = yyjson_arr_get(inspectors, i);
+        if (!yyjson_is_obj(inspector))
+            return validation_error(ctx, inspector_path, "UI inspector entries must be objects");
+        if (!is_non_empty_string(inspector, "name"))
+            return validation_error(ctx, inspector_path, "UI inspector requires a non-empty name");
+        if (json_string(inspector, "font") != NULL &&
+            !require_ref(ctx, &names->fonts, "font asset", json_string(inspector, "font"), inspector_path))
+            return false;
+        yyjson_val *width = obj_get(inspector, "w");
+        if (width == NULL)
+            width = obj_get(inspector, "width");
+        if (width != NULL && (!yyjson_is_num(width) || yyjson_get_num(width) <= 0.0))
+            return validation_error(ctx, inspector_path, "UI inspector width must be positive");
+        yyjson_val *row_height = obj_get(inspector, "row_height");
+        if (row_height != NULL && (!yyjson_is_num(row_height) || yyjson_get_num(row_height) <= 0.0))
+            return validation_error(ctx, inspector_path, "UI inspector row_height must be positive");
+        yyjson_val *rows = obj_get(inspector, "rows");
+        if (!yyjson_is_arr(rows))
+            return validation_error(ctx, inspector_path, "UI inspector requires a rows array");
+        if (!validate_ui_tool_color(ctx, inspector, "background_color", inspector_path) ||
+            !validate_ui_tool_color(ctx, inspector, "row_color", inspector_path) ||
+            !validate_ui_tool_color(ctx, inspector, "title_color", inspector_path) ||
+            !validate_ui_tool_color(ctx, inspector, "label_color", inspector_path) ||
+            !validate_ui_tool_color(ctx, inspector, "value_color", inspector_path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", inspector_path);
+        if (!validate_data_condition(ctx, obj_get(inspector, "visible_if"), condition_path, names))
+            return false;
+        for (size_t row_index = 0; row_index < yyjson_arr_size(rows); ++row_index)
+        {
+            char row_path[PATH_BUFFER_SIZE];
+            format_path(row_path, sizeof(row_path), "%s.rows[%zu]", inspector_path, row_index);
+            yyjson_val *row = yyjson_arr_get(rows, row_index);
+            if (!yyjson_is_obj(row))
+                return validation_error(ctx, row_path, "UI inspector rows must be objects");
+            if (!is_non_empty_string(row, "label"))
+                return validation_error(ctx, row_path, "UI inspector row requires a non-empty label");
+            yyjson_val *binding = obj_get(row, "binding");
+            yyjson_val *value = obj_get(row, "value");
+            if ((binding == NULL) == (value == NULL))
+                return validation_error(ctx, row_path, "UI inspector row requires exactly one of binding or value");
+            if (binding != NULL)
+            {
+                char binding_path[PATH_BUFFER_SIZE];
+                format_path(binding_path, sizeof(binding_path), "%s.binding", row_path);
+                if (!validate_ui_tool_binding(ctx, binding, binding_path, names))
+                    return false;
+            }
+            else if (!is_json_scalar(value))
+            {
+                return validation_error(ctx, row_path, "UI inspector row value must be scalar");
+            }
+            yyjson_val *empty = obj_get(row, "empty");
+            if (empty != NULL && !yyjson_is_str(empty))
+                return validation_error(ctx, row_path, "UI inspector row empty value must be a string");
+        }
+    }
+    return true;
+}
+
+bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *names)
+{
+    yyjson_val *ui = obj_get(root, "ui");
+    yyjson_val *texts = obj_get(ui, "text");
+    yyjson_val *images = obj_get(ui, "images");
+    yyjson_val *rects = obj_get(ui, "rects");
+    yyjson_val *menus = obj_get(ui, "menus");
+    yyjson_val *panels = obj_get(ui, "panels");
+    yyjson_val *inspectors = obj_get(ui, "inspectors");
+    if (texts == NULL && images == NULL && rects == NULL && menus == NULL && panels == NULL && inspectors == NULL)
+        return true;
+    if (texts != NULL && !yyjson_is_arr(texts))
+        return validation_error(ctx, "$.ui.text", "UI text must be an array");
+    if (images != NULL && !yyjson_is_arr(images))
+        return validation_error(ctx, "$.ui.images", "UI images must be an array");
+    if (rects != NULL && !yyjson_is_arr(rects))
+        return validation_error(ctx, "$.ui.rects", "UI rectangles must be an array");
+    if (menus != NULL && !yyjson_is_arr(menus))
+        return validation_error(ctx, "$.ui.menus", "UI menus must be an array");
+    if (!validate_ui_panels(ctx, panels, "$.ui.panels", names) ||
+        !validate_ui_inspectors(ctx, inspectors, "$.ui.inspectors", names))
+        return false;
+
+    for (size_t i = 0; i < yyjson_arr_size(texts); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.ui.text[%zu]", i);
+        yyjson_val *text = yyjson_arr_get(texts, i);
+        if (!yyjson_is_obj(text))
+            return validation_error(ctx, path, "UI text entries must be objects");
+        if (json_string(text, "font") != NULL &&
+            !require_ref(ctx, &names->fonts, "font asset", json_string(text, "font"), path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+        if (!validate_data_condition(ctx, obj_get(text, "visible_if"), condition_path, names))
+            return false;
+
+        yyjson_val *bindings = obj_get(text, "bindings");
+        for (size_t b = 0; yyjson_is_arr(bindings) && b < yyjson_arr_size(bindings); ++b)
+        {
+            char binding_path[PATH_BUFFER_SIZE];
+            format_path(binding_path, sizeof(binding_path), "%s.bindings[%zu]", path, b);
+            yyjson_val *binding = yyjson_arr_get(bindings, b);
+            const char *type = json_string(binding, "type");
+            if (SDL_strcmp(type != NULL ? type : "", "property") == 0)
+            {
+                if (!require_ref(ctx, &names->entities, "entity", json_string(binding, "entity"), binding_path))
+                    return false;
+                if (!is_non_empty_string(binding, "key"))
+                    return validation_error(ctx, binding_path, "UI property binding requires a non-empty key");
+            }
+            else if (SDL_strcmp(type != NULL ? type : "", "metric") == 0)
+            {
+                const char *metric = json_string(binding, "metric");
+                if (!ui_metric_name_valid(metric))
+                    return validation_error(ctx, binding_path, "unsupported UI metric '%s'",
+                                            metric != NULL ? metric : "<missing>");
+            }
+            else
+            {
+                if (SDL_strcmp(type != NULL ? type : "", "scene_state") != 0)
+                    return validation_error(ctx, binding_path, "unsupported UI binding type '%s'",
+                                            type != NULL ? type : "<missing>");
+                if (!is_non_empty_string(binding, "key"))
+                    return validation_error(ctx, binding_path, "UI scene_state binding requires a non-empty key");
+            }
+        }
+    }
+
+    for (size_t i = 0; yyjson_is_arr(images) && i < yyjson_arr_size(images); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.ui.images[%zu]", i);
+        yyjson_val *image = yyjson_arr_get(images, i);
+        if (!yyjson_is_obj(image))
+            return validation_error(ctx, path, "UI image entries must be objects");
+        if (!is_non_empty_string(image, "name"))
+            return validation_error(ctx, path, "UI image requires a non-empty name");
+        if (!require_ref(ctx, &names->images, "image asset", json_string(image, "image"), path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+        if (!validate_data_condition(ctx, obj_get(image, "visible_if"), condition_path, names))
+            return false;
+    }
+
+    for (size_t i = 0; yyjson_is_arr(rects) && i < yyjson_arr_size(rects); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.ui.rects[%zu]", i);
+        yyjson_val *rect = yyjson_arr_get(rects, i);
+        if (!yyjson_is_obj(rect))
+            return validation_error(ctx, path, "UI rectangle entries must be objects");
+        if (!is_non_empty_string(rect, "name"))
+            return validation_error(ctx, path, "UI rectangle requires a non-empty name");
+        yyjson_val *alpha_source = obj_get(rect, "alpha_source");
+        if (alpha_source != NULL)
+        {
+            if (!yyjson_is_obj(alpha_source))
+                return validation_error(ctx, path, "UI rectangle alpha_source must be an object");
+            if (!require_ref(ctx, &names->entities, "entity", json_string(alpha_source, "target"), path))
+                return false;
+            if (!is_non_empty_string(alpha_source, "key"))
+                return validation_error(ctx, path, "UI rectangle alpha_source requires a non-empty key");
+            yyjson_val *min_value = obj_get(alpha_source, "min");
+            yyjson_val *max_value = obj_get(alpha_source, "max");
+            if (min_value != NULL && !yyjson_is_num(min_value))
+                return validation_error(ctx, path, "UI rectangle alpha_source min must be numeric");
+            if (max_value != NULL && !yyjson_is_num(max_value))
+                return validation_error(ctx, path, "UI rectangle alpha_source max must be numeric");
+            if (yyjson_is_num(min_value) && yyjson_is_num(max_value) &&
+                yyjson_get_real(max_value) < yyjson_get_real(min_value))
+                return validation_error(ctx, path, "UI rectangle alpha_source max must be >= min");
+        }
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+        if (!validate_data_condition(ctx, obj_get(rect, "visible_if"), condition_path, names))
+            return false;
+    }
+
+    for (size_t i = 0; yyjson_is_arr(menus) && i < yyjson_arr_size(menus); ++i)
+    {
+        char path[PATH_BUFFER_SIZE];
+        format_path(path, sizeof(path), "$.ui.menus[%zu]", i);
+        yyjson_val *menu = yyjson_arr_get(menus, i);
+        if (!yyjson_is_obj(menu))
+            return validation_error(ctx, path, "UI menu presenters must be objects");
+        if (!is_non_empty_string(menu, "name"))
+            return validation_error(ctx, path, "UI menu presenter requires a non-empty name");
+        if (!is_non_empty_string(menu, "menu"))
+            return validation_error(ctx, path, "UI menu presenter requires a menu reference");
+        if (!require_ref(ctx, &names->fonts, "font asset", json_string(menu, "font"), path))
+            return false;
+        yyjson_val *cursor = obj_get(menu, "cursor");
+        if (yyjson_is_obj(cursor) && json_string(cursor, "font") != NULL &&
+            !require_ref(ctx, &names->fonts, "font asset", json_string(cursor, "font"), path))
+            return false;
+        char condition_path[PATH_BUFFER_SIZE];
+        format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+        if (!validate_data_condition(ctx, obj_get(menu, "visible_if"), condition_path, names))
+            return false;
+    }
+    return true;
+}
