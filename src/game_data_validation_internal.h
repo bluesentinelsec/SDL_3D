@@ -88,6 +88,12 @@ const char *validation_json_string(yyjson_val *object, const char *key);
 
 void format_path(char *buffer, size_t buffer_size, const char *format, ...);
 bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
+void validation_resolve_source_location(const validation_context *ctx, const char *json_path, char *source_buffer,
+                                        size_t source_buffer_size, char *path_buffer, size_t path_buffer_size);
+char *validation_path_dirname(const char *path);
+char *validation_path_join(const char *base_dir, const char *path);
+const char *validation_asset_path_without_scheme(const char *path);
+bool validate_imports(validation_context *ctx, yyjson_val *root);
 
 void name_table_destroy(name_table *table);
 bool name_table_contains(const name_table *table, const char *name);
