@@ -93,6 +93,7 @@ void name_table_destroy(name_table *table);
 bool name_table_contains(const name_table *table, const char *name);
 bool require_unique_name(validation_context *ctx, name_table *table, const char *kind, const char *name,
                          const char *json_path);
+bool note_name(name_table *table, const char *name, const char *json_path);
 bool require_ref(validation_context *ctx, const name_table *table, const char *kind, const char *name,
                  const char *json_path);
 bool require_actor_ref(validation_context *ctx, const validation_names *names, const char *name, const char *json_path);
@@ -119,6 +120,12 @@ bool validate_grid_pickup_layers(validation_context *ctx, yyjson_val *root, vali
 bool validate_storage(validation_context *ctx, yyjson_val *root);
 bool validate_persistence(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_haptics(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_app_refs(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_update_phases(validation_context *ctx, yyjson_val *phases, const char *json_path,
+                            validation_names *names);
+bool validate_presentation(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_cameras(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_world_metadata(validation_context *ctx, yyjson_val *root);
 bool is_single_byte_string(yyjson_val *value);
 
 bool is_vec_array(yyjson_val *value, size_t min_count);
