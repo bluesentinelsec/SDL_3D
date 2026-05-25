@@ -14,6 +14,7 @@
 #include <SDL3/SDL_video.h>
 
 #include "gl_funcs.h"
+#include "gl_renderer_programs.h"
 #include "gl_renderer_shaders.h"
 #include "render_context_internal.h"
 #include "slayer3d/lighting.h"
@@ -475,161 +476,9 @@ static const unsigned int k_cube_indices[] = {
     0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5, 4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4,
 };
 
-static GLuint compile_shader(slayer3d_gl_funcs *gl, GLenum type, const char *version, const char *body)
-{
-    GLuint s = gl->CreateShader(type);
-    const char *srcs[2] = {version, body};
-    gl->ShaderSource(s, 2, srcs, NULL);
-    gl->CompileShader(s);
-
-    GLint ok = 0;
-    gl->GetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok)
-    {
-        char buf[1024];
-        gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
-        gl->DeleteShader(s);
-        return 0;
-    }
-    return s;
-}
-
-static GLuint compile_shader_multi(slayer3d_gl_funcs *gl, GLenum type, int count, const char **srcs)
-{
-    GLuint s = gl->CreateShader(type);
-    gl->ShaderSource(s, count, srcs, NULL);
-    gl->CompileShader(s);
-
-    GLint ok = 0;
-    gl->GetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok)
-    {
-        char buf[1024];
-        gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
-        gl->DeleteShader(s);
-        return 0;
-    }
-    return s;
-}
-
-static GLuint link_program(slayer3d_gl_funcs *gl, GLuint vert, GLuint frag)
-{
-    GLuint p = gl->CreateProgram();
-    gl->AttachShader(p, vert);
-    gl->AttachShader(p, frag);
-    gl->LinkProgram(p);
-
-    GLint ok = 0;
-    gl->GetProgramiv(p, GL_LINK_STATUS, &ok);
-    if (!ok)
-    {
-        char buf[1024];
-        gl->GetProgramInfoLog(p, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL program link error: %s", buf);
-        gl->DeleteProgram(p);
-        return 0;
-    }
-    return p;
-}
-
-static GLuint build_program(slayer3d_gl_funcs *gl, const char *version, const char *vert_body, const char *frag_body)
-{
-    GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version, vert_body);
-    if (!vs)
-        return 0;
-    GLuint fs = compile_shader(gl, GL_FRAGMENT_SHADER, version, frag_body);
-    if (!fs)
-    {
-        gl->DeleteShader(vs);
-        return 0;
-    }
-    GLuint prog = link_program(gl, vs, fs);
-    gl->DeleteShader(vs);
-    gl->DeleteShader(fs);
-    return prog;
-}
-
 static const char *gl_version_prefix_for_context(const slayer3d_gl_context *ctx)
 {
     return (ctx != NULL && ctx->is_es) ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
-}
-
-static bool shader_source_has_version_prefix(const char *source)
-{
-    if (source == NULL)
-        return false;
-    while (*source != '\0' && (*source == ' ' || *source == '\t' || *source == '\r' || *source == '\n'))
-        ++source;
-    return SDL_strncmp(source, "#version", 8) == 0;
-}
-
-static GLuint compile_shader_source(slayer3d_gl_funcs *gl, GLenum type, const char *version, const char *source)
-{
-    GLuint shader;
-    const char *srcs[2];
-    int count = 0;
-
-    if (source == NULL || source[0] == '\0')
-        return 0;
-
-    shader = gl->CreateShader(type);
-    if (!shader)
-        return 0;
-
-    if (shader_source_has_version_prefix(source))
-    {
-        srcs[0] = source;
-        count = 1;
-    }
-    else if (version != NULL)
-    {
-        srcs[0] = version;
-        srcs[1] = source;
-        count = 2;
-    }
-    else
-    {
-        srcs[0] = source;
-        count = 1;
-    }
-
-    gl->ShaderSource(shader, count, srcs, NULL);
-    gl->CompileShader(shader);
-
-    GLint compiled = 0;
-    gl->GetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-    if (!compiled)
-    {
-        char buf[1024];
-        GLsizei len = 0;
-        gl->GetShaderInfoLog(shader, (GLsizei)sizeof(buf), &len, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
-        gl->DeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
-
-static GLuint build_program_from_sources(slayer3d_gl_funcs *gl, const char *version, const char *default_vert_source,
-                                         const char *vertex_source, const char *fragment_source)
-{
-    GLuint vs = compile_shader_source(gl, GL_VERTEX_SHADER, version,
-                                      (vertex_source != NULL && vertex_source[0] != '\0') ? vertex_source
-                                                                                          : default_vert_source);
-    if (!vs)
-        return 0;
-    GLuint fs = compile_shader_source(gl, GL_FRAGMENT_SHADER, version, fragment_source);
-    if (!fs)
-    {
-        gl->DeleteShader(vs);
-        return 0;
-    }
-    GLuint prog = link_program(gl, vs, fs);
-    gl->DeleteShader(vs);
-    gl->DeleteShader(fs);
-    return prog;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1278,8 +1127,8 @@ static slayer3d_custom_shader_cache_entry *custom_shader_lookup_or_create(slayer
         }
     }
     entry->lit = lit;
-    entry->program =
-        build_program_from_sources(gl, version, default_vertex, entry->vertex_source, entry->fragment_source);
+    entry->program = slayer3d_gl_build_program_from_sources(gl, version, default_vertex, entry->vertex_source,
+                                                            entry->fragment_source);
     if (entry->program == 0)
     {
         SDL_free(entry->vertex_source);
@@ -3055,7 +2904,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     gl->Enable(GL_DEPTH_TEST);
 
     /* ---- Step 1: Equirect -> Cubemap (512) ---- */
-    GLuint eq_prog = build_program(gl, ver, k_cube_vert, k_equirect_to_cube_frag);
+    GLuint eq_prog = slayer3d_gl_build_program(gl, ver, k_cube_vert, k_equirect_to_cube_frag);
     GLuint env_cubemap;
     gl->GenTextures(1, &env_cubemap);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, env_cubemap);
@@ -3090,7 +2939,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: equirect -> cubemap done");
 
     /* ---- Step 2: Irradiance convolution (32x32) ---- */
-    GLuint irr_prog = build_program(gl, ver, k_cube_vert, k_irradiance_frag);
+    GLuint irr_prog = slayer3d_gl_build_program(gl, ver, k_cube_vert, k_irradiance_frag);
     gl->GenTextures(1, &ctx->ibl_irradiance_map);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
     for (int i = 0; i < 6; i++)
@@ -3120,7 +2969,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: irradiance done");
 
     /* ---- Step 3: Prefilter (128, 5 mip levels) ---- */
-    GLuint pf_prog = build_program(gl, ver, k_cube_vert, k_prefilter_frag);
+    GLuint pf_prog = slayer3d_gl_build_program(gl, ver, k_cube_vert, k_prefilter_frag);
     gl->GenTextures(1, &ctx->ibl_prefilter_map);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
     for (int i = 0; i < 6; i++)
@@ -3157,7 +3006,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: prefilter done");
 
     /* ---- Step 4: BRDF LUT (512x512) ---- */
-    GLuint brdf_prog = build_program(gl, ver, k_brdf_vert, k_brdf_frag);
+    GLuint brdf_prog = slayer3d_gl_build_program(gl, ver, k_brdf_vert, k_brdf_frag);
     gl->GenTextures(1, &ctx->ibl_brdf_lut);
     gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
     gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, NULL);
@@ -3258,19 +3107,19 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     /* Compile shader programs. */
     /* PBR frag is split into chunks to stay under C99 string length limits. */
     {
-        GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
+        GLuint vs = slayer3d_gl_compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
         const char *frag_srcs[5] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main, k_pbr_frag_shadow_post,
                                     k_pbr_frag_light_post};
-        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 5, frag_srcs) : 0;
-        ctx->pbr_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
+        GLuint fs = vs ? slayer3d_gl_compile_shader_multi(gl, GL_FRAGMENT_SHADER, 5, frag_srcs) : 0;
+        ctx->pbr_program = (vs && fs) ? slayer3d_gl_link_program(gl, vs, fs) : 0;
         if (vs)
             gl->DeleteShader(vs);
         if (fs)
             gl->DeleteShader(fs);
     }
-    ctx->unlit_program = build_program(gl, version_prefix, k_unlit_vert, k_unlit_frag);
-    ctx->copy_program = build_program(gl, version_prefix, k_fullscreen_vert, k_copy_frag);
-    ctx->transition_program = build_program(gl, version_prefix, k_fullscreen_vert, k_transition_frag);
+    ctx->unlit_program = slayer3d_gl_build_program(gl, version_prefix, k_unlit_vert, k_unlit_frag);
+    ctx->copy_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_copy_frag);
+    ctx->transition_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_transition_frag);
 
     if (!ctx->pbr_program || !ctx->unlit_program || !ctx->copy_program || !ctx->transition_program)
     {
@@ -3481,7 +3330,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     gl->BindVertexArray(0);
 
     /* Compile shadow program. */
-    ctx->shadow_program = build_program(gl, version_prefix, k_shadow_vert, k_shadow_frag);
+    ctx->shadow_program = slayer3d_gl_build_program(gl, version_prefix, k_shadow_vert, k_shadow_frag);
     if (ctx->shadow_program)
     {
         ctx->shadow_light_vp_loc = gl->GetUniformLocation(ctx->shadow_program, "uLightVP");
@@ -3518,7 +3367,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     }
 
-    ctx->point_shadow_program = build_program(gl, version_prefix, k_point_shadow_vert, k_point_shadow_frag);
+    ctx->point_shadow_program = slayer3d_gl_build_program(gl, version_prefix, k_point_shadow_vert, k_point_shadow_frag);
     if (ctx->point_shadow_program)
     {
         ctx->point_shadow_model_loc = gl->GetUniformLocation(ctx->point_shadow_program, "model");
@@ -3588,9 +3437,9 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     }
 
     /* ---- Post-process shaders ---- */
-    ctx->bloom_program = build_program(gl, version_prefix, k_fullscreen_vert, k_bloom_threshold_frag);
-    ctx->bloom_blur_program = build_program(gl, version_prefix, k_fullscreen_vert, k_blur_frag);
-    ctx->composite_program = build_program(gl, version_prefix, k_fullscreen_vert, k_composite_frag);
+    ctx->bloom_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_bloom_threshold_frag);
+    ctx->bloom_blur_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_blur_frag);
+    ctx->composite_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_composite_frag);
     if (!ctx->bloom_program || !ctx->bloom_blur_program || !ctx->composite_program)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: post-process shader compilation failed");
@@ -3609,10 +3458,10 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
 
     /* ---- Retro profile shader ---- */
     {
-        GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_fullscreen_vert);
+        GLuint vs = slayer3d_gl_compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_fullscreen_vert);
         const char *frag_srcs[3] = {version_prefix, k_retro_frag_helpers, k_retro_frag_main};
-        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 3, frag_srcs) : 0;
-        ctx->retro_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
+        GLuint fs = vs ? slayer3d_gl_compile_shader_multi(gl, GL_FRAGMENT_SHADER, 3, frag_srcs) : 0;
+        ctx->retro_program = (vs && fs) ? slayer3d_gl_link_program(gl, vs, fs) : 0;
         if (vs)
             gl->DeleteShader(vs);
         if (fs)
@@ -3630,7 +3479,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     ctx->retro_output_resolution_loc = gl->GetUniformLocation(ctx->retro_program, "uOutputResolution");
 
     /* ---- SSAO shader ---- */
-    ctx->ssao_program = build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
+    ctx->ssao_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
     if (!ctx->ssao_program)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: SSAO shader compilation failed");

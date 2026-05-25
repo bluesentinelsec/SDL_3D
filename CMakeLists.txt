@@ -240,6 +240,7 @@ target_sources(
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c
+        src/gl_renderer_programs.c
         src/gl_renderer_shaders.c
         src/image.c
         src/input.c
