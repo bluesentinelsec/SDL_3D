@@ -72,32 +72,37 @@ static void source_vertex_publish_error(const editor_brush_source_vertex_diagnos
               diagnostics->first_issue[0] != '\0' ? diagnostics->first_issue : "invalid source brush vertices");
 }
 
-static void source_vertices_bounds(const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int out_min[3],
-                                   int out_max[3])
+static const int *source_vertex_coord_at(const int *vertices, int vertex)
+{
+    return &vertices[vertex * 3];
+}
+
+static void source_vertices_bounds(const int *vertices, int out_min[3], int out_max[3])
 {
     for (int axis = 0; axis < 3; ++axis)
     {
-        out_min[axis] = vertices[0][axis];
-        out_max[axis] = vertices[0][axis];
+        out_min[axis] = source_vertex_coord_at(vertices, 0)[axis];
+        out_max[axis] = source_vertex_coord_at(vertices, 0)[axis];
     }
     for (int vertex = 1; vertex < SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT; ++vertex)
     {
         for (int axis = 0; axis < 3; ++axis)
         {
-            out_min[axis] = SDL_min(out_min[axis], vertices[vertex][axis]);
-            out_max[axis] = SDL_max(out_max[axis], vertices[vertex][axis]);
+            out_min[axis] = SDL_min(out_min[axis], source_vertex_coord_at(vertices, vertex)[axis]);
+            out_max[axis] = SDL_max(out_max[axis], source_vertex_coord_at(vertices, vertex)[axis]);
         }
     }
 }
 
-static bool source_vertices_have_duplicate(const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3])
+static bool source_vertices_have_duplicate(const int *vertices)
 {
     for (int a = 0; a < SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT; ++a)
     {
         for (int b = a + 1; b < SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT; ++b)
         {
-            if (vertices[a][0] == vertices[b][0] && vertices[a][1] == vertices[b][1] &&
-                vertices[a][2] == vertices[b][2])
+            const int *a_coord = source_vertex_coord_at(vertices, a);
+            const int *b_coord = source_vertex_coord_at(vertices, b);
+            if (a_coord[0] == b_coord[0] && a_coord[1] == b_coord[1] && a_coord[2] == b_coord[2])
             {
                 return true;
             }
@@ -118,7 +123,7 @@ static bool source_vertex_matches_expected_corner(const int vertex[3], const int
     return true;
 }
 
-bool editor_brush_source_validate_box_vertex_topology(const editor_brush_source_coord *vertices, int snap_units,
+bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
                                                       editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                       char *error_buffer, int error_buffer_size)
 {
@@ -147,7 +152,7 @@ bool editor_brush_source_validate_box_vertex_topology(const editor_brush_source_
     {
         for (int axis = 0; axis < 3; ++axis)
         {
-            if (!source_vertex_coord_on_snap(vertices[vertex][axis], snap_units))
+            if (!source_vertex_coord_on_snap(source_vertex_coord_at(vertices, vertex)[axis], snap_units))
             {
                 diagnostics.valid = false;
                 diagnostics.off_snap_count++;
@@ -179,7 +184,8 @@ bool editor_brush_source_validate_box_vertex_topology(const editor_brush_source_
 
     for (int vertex = 0; vertex < SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT; ++vertex)
     {
-        if (!source_vertex_matches_expected_corner(vertices[vertex], min, max, source_box_vertex_signs[vertex]))
+        if (!source_vertex_matches_expected_corner(source_vertex_coord_at(vertices, vertex), min, max,
+                                                   source_box_vertex_signs[vertex]))
         {
             diagnostics.valid = false;
             diagnostics.concave_count++;
@@ -320,7 +326,7 @@ static bool editor_brush_source_convex_build_vertex_model(const brush_world_runt
         world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit : 0.001f;
     slayer3d_game_data_brush brush;
     if (!editor_brush_world_build_source_convex_brush_from_vertices(
-            world_runtime, brush_id, box->vertices, box->vertex_count, &brush, error_buffer, error_buffer_size))
+            world_runtime, brush_id, &box->vertices[0][0], box->vertex_count, &brush, error_buffer, error_buffer_size))
     {
         return false;
     }
@@ -389,8 +395,8 @@ bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world
     const char *brush_id = source_box_identity(box);
     editor_brush_source_coord raw_vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
     source_box_fill_vertices(box, raw_vertices);
-    if (!editor_brush_source_validate_box_vertex_topology(raw_vertices, source_vertex_snap_units(world_runtime), NULL,
-                                                          error_buffer, error_buffer_size))
+    if (!editor_brush_source_validate_box_vertex_topology(&raw_vertices[0][0], source_vertex_snap_units(world_runtime),
+                                                          NULL, error_buffer, error_buffer_size))
     {
         return false;
     }

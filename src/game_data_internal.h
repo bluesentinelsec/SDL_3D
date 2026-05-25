@@ -1405,8 +1405,7 @@ bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *worl
                                                        const editor_source_box_bounds_update *updates, int update_count,
                                                        char *error_buffer, int error_buffer_size);
 bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_world_runtime *world_runtime,
-                                                                const char *brush_identity,
-                                                                const editor_brush_source_coord *vertices,
+                                                                const char *brush_identity, const int *vertices,
                                                                 int vertex_count, slayer3d_game_data_brush *out_brush,
                                                                 char *error_buffer, int error_buffer_size);
 void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
@@ -1421,7 +1420,7 @@ bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);
-bool editor_brush_source_validate_box_vertex_topology(const editor_brush_source_coord *vertices, int snap_units,
+bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
                                                       editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                       char *error_buffer, int error_buffer_size);
 bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,

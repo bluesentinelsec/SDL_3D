@@ -146,10 +146,11 @@ extern "C"
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
-    bool editor_brush_world_build_source_convex_brush_from_vertices(
-        const brush_world_runtime *world_runtime, const char *brush_identity,
-        const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3], int vertex_count,
-        slayer3d_game_data_brush *out_brush, char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_world_runtime *world_runtime,
+                                                                    const char *brush_identity, const int *vertices,
+                                                                    int vertex_count,
+                                                                    slayer3d_game_data_brush *out_brush,
+                                                                    char *error_buffer, int error_buffer_size);
     void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
     bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
                                                             const editor_brush_source_vertex_operation_desc *desc,
@@ -159,9 +160,9 @@ extern "C"
                                                           const editor_brush_source_vertex_operation_desc *desc,
                                                           editor_brush_source_vertex_operation_result *out_result,
                                                           char *error_buffer, int error_buffer_size);
-    bool editor_brush_source_validate_box_vertex_topology(
-        const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3], int snap_units,
-        editor_brush_source_vertex_diagnostics *out_diagnostics, char *error_buffer, int error_buffer_size);
+    bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
+                                                          editor_brush_source_vertex_diagnostics *out_diagnostics,
+                                                          char *error_buffer, int error_buffer_size);
     bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
                                                     editor_brush_source_vertex_model *out_model, char *error_buffer,
                                                     int error_buffer_size);
@@ -19089,7 +19090,8 @@ TEST(GameDataRuntime, EditorBrushSourceVertexTopologyRejectsDegenerateAndConcave
     };
     char error[512]{};
     editor_brush_source_vertex_diagnostics diagnostics{};
-    ASSERT_TRUE(editor_brush_source_validate_box_vertex_topology(vertices, 1, &diagnostics, error, sizeof(error)))
+    ASSERT_TRUE(
+        editor_brush_source_validate_box_vertex_topology(&vertices[0][0], 1, &diagnostics, error, sizeof(error)))
         << error;
     EXPECT_TRUE(diagnostics.valid);
     EXPECT_EQ(diagnostics.degenerate_count, 0);
@@ -19099,7 +19101,8 @@ TEST(GameDataRuntime, EditorBrushSourceVertexTopologyRejectsDegenerateAndConcave
     SDL_memcpy(degenerate, vertices, sizeof(vertices));
     degenerate[1][0] = 0;
     SDL_zeroa(error);
-    EXPECT_FALSE(editor_brush_source_validate_box_vertex_topology(degenerate, 1, &diagnostics, error, sizeof(error)));
+    EXPECT_FALSE(
+        editor_brush_source_validate_box_vertex_topology(&degenerate[0][0], 1, &diagnostics, error, sizeof(error)));
     EXPECT_FALSE(diagnostics.valid);
     EXPECT_GT(diagnostics.degenerate_count, 0);
     EXPECT_NE(std::string(error).find("duplicate vertices"), std::string::npos) << error;
@@ -19110,7 +19113,8 @@ TEST(GameDataRuntime, EditorBrushSourceVertexTopologyRejectsDegenerateAndConcave
     concave[6][1] = 800;
     concave[6][2] = 800;
     SDL_zeroa(error);
-    EXPECT_FALSE(editor_brush_source_validate_box_vertex_topology(concave, 1, &diagnostics, error, sizeof(error)));
+    EXPECT_FALSE(
+        editor_brush_source_validate_box_vertex_topology(&concave[0][0], 1, &diagnostics, error, sizeof(error)));
     EXPECT_FALSE(diagnostics.valid);
     EXPECT_GT(diagnostics.concave_count, 0);
     EXPECT_NE(std::string(error).find("convex canonical box"), std::string::npos) << error;
@@ -19124,7 +19128,8 @@ TEST(GameDataRuntime, EditorBrushSourceVertexTopologyRejectsOffGridCoordinates)
     };
     char error[512]{};
     editor_brush_source_vertex_diagnostics diagnostics{};
-    EXPECT_FALSE(editor_brush_source_validate_box_vertex_topology(vertices, 10, &diagnostics, error, sizeof(error)));
+    EXPECT_FALSE(
+        editor_brush_source_validate_box_vertex_topology(&vertices[0][0], 10, &diagnostics, error, sizeof(error)));
     EXPECT_FALSE(diagnostics.valid);
     EXPECT_GT(diagnostics.off_snap_count, 0);
     EXPECT_EQ(diagnostics.degenerate_count, 0);
@@ -19190,9 +19195,9 @@ TEST(GameDataRuntime, EditorBrushSourceVertexRebuildCreatesSlopedConvexBrushAndP
         {0, 0, 8000}, {8000, 0, 8000}, {8000, 4000, 8000}, {0, 8000, 8000},
     };
     slayer3d_game_data_brush brush{};
-    ASSERT_TRUE(editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, "source.box.slope", vertices,
-                                                                           SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT,
-                                                                           &brush, error, sizeof(error)))
+    ASSERT_TRUE(editor_brush_world_build_source_convex_brush_from_vertices(
+        world_runtime, "source.box.slope", &vertices[0][0], SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT, &brush, error,
+        sizeof(error)))
         << error;
     EXPECT_EQ(brush.face_count, 6);
     EXPECT_TRUE(brush.has_bounds);
@@ -19273,7 +19278,7 @@ TEST(GameDataRuntime, EditorBrushSourceVertexRebuildRejectsConcaveVertexCollapse
     };
     slayer3d_game_data_brush brush{};
     EXPECT_FALSE(editor_brush_world_build_source_convex_brush_from_vertices(
-        world_runtime, "source.box.invalid", vertices, SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT, &brush, error,
+        world_runtime, "source.box.invalid", &vertices[0][0], SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT, &brush, error,
         sizeof(error)));
     EXPECT_NE(std::string(error).find("discard a vertex"), std::string::npos) << error;
     editor_brush_source_free_runtime_brush(&brush);

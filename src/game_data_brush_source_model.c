@@ -1667,7 +1667,7 @@ static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime
     {
         return editor_brush_world_build_source_convex_brush_from_vertices(
             world_runtime, box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name,
-            box->vertices, box->vertex_count, out_brush, error_buffer, error_buffer_size);
+            &box->vertices[0][0], box->vertex_count, out_brush, error_buffer, error_buffer_size);
     }
     const int material_index = source_material_index_by_name(&world_runtime->desc, box->material);
     int face_material_indices[6] = {-1, -1, -1, -1, -1, -1};
@@ -1760,15 +1760,20 @@ static slayer3d_vec3 source_convex_vertex_meters(const brush_world_runtime *worl
                               source_meters_from_units(world_runtime, vertex[2]));
 }
 
-static bool source_convex_vertices_duplicate(const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
-                                             int vertex_count)
+static const int *source_convex_vertex_at(const int *vertices, int vertex)
+{
+    return &vertices[vertex * 3];
+}
+
+static bool source_convex_vertices_duplicate(const int *vertices, int vertex_count)
 {
     for (int a = 0; a < vertex_count; ++a)
     {
         for (int b = a + 1; b < vertex_count; ++b)
         {
-            if (vertices[a][0] == vertices[b][0] && vertices[a][1] == vertices[b][1] &&
-                vertices[a][2] == vertices[b][2])
+            const int *a_coord = source_convex_vertex_at(vertices, a);
+            const int *b_coord = source_convex_vertex_at(vertices, b);
+            if (a_coord[0] == b_coord[0] && a_coord[1] == b_coord[1] && a_coord[2] == b_coord[2])
             {
                 return true;
             }
@@ -1777,17 +1782,17 @@ static bool source_convex_vertices_duplicate(const int vertices[SLAYER3D_EDITOR_
     return false;
 }
 
-static void source_convex_bounds_meters(const brush_world_runtime *world_runtime,
-                                        const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
-                                        int vertex_count, slayer3d_bounding_box *out_bounds)
+static void source_convex_bounds_meters(const brush_world_runtime *world_runtime, const int *vertices, int vertex_count,
+                                        slayer3d_bounding_box *out_bounds)
 {
     if (out_bounds == NULL)
         return;
-    out_bounds->min = source_convex_vertex_meters(world_runtime, vertices[0]);
+    out_bounds->min = source_convex_vertex_meters(world_runtime, source_convex_vertex_at(vertices, 0));
     out_bounds->max = out_bounds->min;
     for (int vertex = 1; vertex < vertex_count; ++vertex)
     {
-        const slayer3d_vec3 point = source_convex_vertex_meters(world_runtime, vertices[vertex]);
+        const slayer3d_vec3 point =
+            source_convex_vertex_meters(world_runtime, source_convex_vertex_at(vertices, vertex));
         out_bounds->min.x = SDL_min(out_bounds->min.x, point.x);
         out_bounds->min.y = SDL_min(out_bounds->min.y, point.y);
         out_bounds->min.z = SDL_min(out_bounds->min.z, point.z);
@@ -1897,10 +1902,9 @@ static bool source_convex_add_plane(source_convex_plane *planes, int *plane_coun
     return true;
 }
 
-static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
-                                       const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
-                                       int vertex_count, source_convex_plane *planes, int plane_capacity,
-                                       int *out_plane_count, char *error_buffer, int error_buffer_size)
+static bool source_convex_build_planes(const brush_world_runtime *world_runtime, const int *vertices, int vertex_count,
+                                       source_convex_plane *planes, int plane_capacity, int *out_plane_count,
+                                       char *error_buffer, int error_buffer_size)
 {
     if (out_plane_count != NULL)
         *out_plane_count = 0;
@@ -1919,12 +1923,13 @@ static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
     slayer3d_vec3 points[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     for (int vertex = 0; vertex < vertex_count; ++vertex)
     {
-        if (!source_convex_vertex_on_snap(world_runtime, vertices[vertex]))
+        const int *coord = source_convex_vertex_at(vertices, vertex);
+        if (!source_convex_vertex_on_snap(world_runtime, coord))
         {
             set_error(error_buffer, error_buffer_size, "source vertex rebuild contains off-grid vertices");
             return false;
         }
-        points[vertex] = source_convex_vertex_meters(world_runtime, vertices[vertex]);
+        points[vertex] = source_convex_vertex_meters(world_runtime, coord);
     }
 
     int plane_count = 0;
@@ -1987,8 +1992,7 @@ static const char *source_convex_face_material(const editor_brush_source_box_run
 }
 
 bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_world_runtime *world_runtime,
-                                                                const char *brush_identity,
-                                                                const editor_brush_source_coord *vertices,
+                                                                const char *brush_identity, const int *vertices,
                                                                 int vertex_count, slayer3d_game_data_brush *out_brush,
                                                                 char *error_buffer, int error_buffer_size)
 {
@@ -2462,8 +2466,9 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
     }
 
     slayer3d_game_data_brush rebuilt;
-    if (!editor_brush_world_build_source_convex_brush_from_vertices(
-            world_runtime, desc->brush_identity, vertices, vertex_count, &rebuilt, error_buffer, error_buffer_size))
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, desc->brush_identity,
+                                                                    &vertices[0][0], vertex_count, &rebuilt,
+                                                                    error_buffer, error_buffer_size))
     {
         source_vertex_operation_set_failure(out_result, error_buffer != NULL ? error_buffer : "invalid operation");
         return false;
