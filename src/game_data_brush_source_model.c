@@ -1986,10 +1986,11 @@ static const char *source_convex_face_material(const editor_brush_source_box_run
     return box->material != NULL ? box->material : "";
 }
 
-bool editor_brush_world_build_source_convex_brush_from_vertices(
-    const brush_world_runtime *world_runtime, const char *brush_identity,
-    const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3], int vertex_count,
-    slayer3d_game_data_brush *out_brush, char *error_buffer, int error_buffer_size)
+bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_world_runtime *world_runtime,
+                                                                const char *brush_identity,
+                                                                const editor_brush_source_coord *vertices,
+                                                                int vertex_count, slayer3d_game_data_brush *out_brush,
+                                                                char *error_buffer, int error_buffer_size)
 {
     if (out_brush != NULL)
         SDL_zero(*out_brush);
@@ -2461,10 +2462,8 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
     }
 
     slayer3d_game_data_brush rebuilt;
-    const int (*validated_vertices)[3] = (const int (*)[3])(const void *)vertices;
-    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, desc->brush_identity,
-                                                                    validated_vertices, vertex_count, &rebuilt,
-                                                                    error_buffer, error_buffer_size))
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(
+            world_runtime, desc->brush_identity, vertices, vertex_count, &rebuilt, error_buffer, error_buffer_size))
     {
         source_vertex_operation_set_failure(out_result, error_buffer != NULL ? error_buffer : "invalid operation");
         return false;

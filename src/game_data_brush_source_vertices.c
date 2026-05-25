@@ -118,8 +118,7 @@ static bool source_vertex_matches_expected_corner(const int vertex[3], const int
     return true;
 }
 
-bool editor_brush_source_validate_box_vertex_topology(const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3],
-                                                      int snap_units,
+bool editor_brush_source_validate_box_vertex_topology(const editor_brush_source_coord *vertices, int snap_units,
                                                       editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                       char *error_buffer, int error_buffer_size)
 {
@@ -388,11 +387,10 @@ bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world
                                                              error_buffer_size);
 
     const char *brush_id = source_box_identity(box);
-    int raw_vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3];
+    editor_brush_source_coord raw_vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT];
     source_box_fill_vertices(box, raw_vertices);
-    const int (*validated_vertices)[3] = (const int (*)[3])(const void *)raw_vertices;
-    if (!editor_brush_source_validate_box_vertex_topology(validated_vertices, source_vertex_snap_units(world_runtime),
-                                                          NULL, error_buffer, error_buffer_size))
+    if (!editor_brush_source_validate_box_vertex_topology(raw_vertices, source_vertex_snap_units(world_runtime), NULL,
+                                                          error_buffer, error_buffer_size))
     {
         return false;
     }
@@ -507,7 +505,7 @@ static bool source_vertex_coord_equal(const int a[3], const int b[3])
     return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
 }
 
-static bool source_shared_vertex_recorded(int (*coords)[3], int count, const int coord[3])
+static bool source_shared_vertex_recorded(editor_brush_source_coord *coords, int count, const int coord[3])
 {
     for (int i = 0; i < count; ++i)
     {
@@ -559,8 +557,8 @@ bool editor_brush_world_find_shared_source_vertices(const brush_world_runtime *w
 
     editor_brush_source_vertex_model *models =
         (editor_brush_source_vertex_model *)SDL_calloc((size_t)selected_count, sizeof(*models));
-    int (*recorded_coords)[3] = (int (*)[3])SDL_calloc((size_t)selected_count * SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT,
-                                                       sizeof(*recorded_coords));
+    editor_brush_source_coord *recorded_coords = (editor_brush_source_coord *)SDL_calloc(
+        (size_t)selected_count * SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT, sizeof(*recorded_coords));
     if (models == NULL || recorded_coords == NULL)
     {
         SDL_free(models);
