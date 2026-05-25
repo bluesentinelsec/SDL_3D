@@ -109,6 +109,7 @@ bool validate_interactable_component(validation_context *ctx, yyjson_val *compon
                                      validation_names *names);
 bool validate_projectile_fire_shape(validation_context *ctx, yyjson_val *value, const char *path,
                                     validation_names *names, bool require_target);
+bool validate_components(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_val *root, validation_names *names);
 
 void name_table_destroy(name_table *table);
