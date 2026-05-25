@@ -1303,12 +1303,25 @@ slayer3d_game_data_sector_level_variant sector_level_variant_from_string(const c
 slayer3d_bounding_box translated_bounds(slayer3d_bounding_box bounds, slayer3d_vec3 position);
 bool model_bounds(const slayer3d_model *model, slayer3d_bounding_box *out_bounds);
 yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
+typedef struct editor_trace_viewport_config
+{
+    const char *camera;
+    float x;
+    float y;
+    float width;
+    float height;
+    float screen_x;
+    float screen_y;
+    yyjson_val *work_plane;
+} editor_trace_viewport_config;
 void init_editor_selection(slayer3d_game_data_editor_selection *selection);
 bool editor_selection_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_command_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_placement_preview_active_for_scene(const slayer3d_game_data_runtime *runtime);
 bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                  slayer3d_game_data_world_trace_desc *out_trace);
+bool editor_trace_select_viewport_at(const slayer3d_game_data_runtime *runtime, yyjson_val *trace, float screen_x,
+                                     float screen_y, editor_trace_viewport_config *out_viewport);
 bool editor_work_plane_desc_from_trace_json(const slayer3d_game_data_runtime *runtime, yyjson_val *trace,
                                             slayer3d_vec3 *out_normal, float *out_distance);
 bool pick_editor_player_start(const slayer3d_game_data_runtime *runtime,
