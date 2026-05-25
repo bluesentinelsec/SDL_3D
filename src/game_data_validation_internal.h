@@ -106,6 +106,17 @@ bool require_unique_editor_stable_id(validation_context *ctx, name_table *stable
                                      const char *json_path);
 bool validation_mouse_button_name_valid(const char *name);
 bool validate_data_condition(validation_context *ctx, yyjson_val *condition, const char *path, validation_names *names);
+bool collect_input_actions(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_input_assignment_sets(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_grid_maps(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_grid_pickup_layers(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_input_bindings(validation_context *ctx, yyjson_val *root);
+bool validate_input_assignment_sets(validation_context *ctx, yyjson_val *root);
+bool validate_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_grid_maps(validation_context *ctx, yyjson_val *root);
+bool validate_grid_pickup_layers(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool is_single_byte_string(yyjson_val *value);
 
 bool is_vec_array(yyjson_val *value, size_t min_count);
 bool is_exact_vec_array(yyjson_val *value, size_t count);
