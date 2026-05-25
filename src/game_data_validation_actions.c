@@ -788,14 +788,9 @@ static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val
            validate_optional_signal_field(ctx, action, json_path, names, "on_hit");
 }
 
-bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path, validation_names *names)
+static bool validate_known_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                  validation_names *names, const char *type)
 {
-    if (!yyjson_is_obj(action))
-        return validation_error(ctx, json_path, "logic action must be an object");
-    const char *type = json_string(action, "type");
-    if (type == NULL || type[0] == '\0')
-        return validation_error(ctx, json_path, "logic action requires a non-empty type");
-
     if (SDL_strcmp(type, "signal.emit") == 0)
         return require_ref(ctx, &names->signals, "signal", json_string(action, "signal"), json_path);
     if (SDL_strcmp(type, "timer.start") == 0)
@@ -2609,6 +2604,149 @@ bool validate_one_action(validation_context *ctx, yyjson_val *action, const char
     }
 
     return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);
+}
+
+typedef enum action_validation_rule_match
+{
+    ACTION_RULE_EXACT,
+    ACTION_RULE_PREFIX
+} action_validation_rule_match;
+
+typedef struct action_validation_rule
+{
+    const char *name;
+    action_validation_rule_match match;
+} action_validation_rule;
+
+static bool action_rule_matches(const action_validation_rule *rule, const char *type)
+{
+    if (rule->match == ACTION_RULE_PREFIX)
+        return SDL_strncmp(type, rule->name, SDL_strlen(rule->name)) == 0;
+    return SDL_strcmp(type, rule->name) == 0;
+}
+
+static const action_validation_rule *find_action_validation_rule(const char *type)
+{
+    static const action_validation_rule rules[] = {
+        {"signal.emit", ACTION_RULE_EXACT},
+        {"timer.start", ACTION_RULE_EXACT},
+        {"property.set", ACTION_RULE_EXACT},
+        {"property.add", ACTION_RULE_EXACT},
+        {"property.snapshot", ACTION_RULE_EXACT},
+        {"property.restore_snapshot", ACTION_RULE_EXACT},
+        {"property.animate", ACTION_RULE_EXACT},
+        {"property.reset_defaults", ACTION_RULE_EXACT},
+        {"debug.write_actor_properties", ACTION_RULE_EXACT},
+        {"actor.spawn", ACTION_RULE_EXACT},
+        {"actor.despawn", ACTION_RULE_EXACT},
+        {"actor.despawn_by_tag", ACTION_RULE_EXACT},
+        {"combat.damage", ACTION_RULE_EXACT},
+        {"combat.heal", ACTION_RULE_EXACT},
+        {"combat.kill", ACTION_RULE_EXACT},
+        {"combat.revive", ACTION_RULE_EXACT},
+        {"resource.add", ACTION_RULE_EXACT},
+        {"resource.consume", ACTION_RULE_EXACT},
+        {"resource.set", ACTION_RULE_EXACT},
+        {"pickup.collect", ACTION_RULE_EXACT},
+        {"resource.station.use", ACTION_RULE_EXACT},
+        {"status_effect.apply", ACTION_RULE_EXACT},
+        {"weapon.reload", ACTION_RULE_EXACT},
+        {"weapon.hitscan", ACTION_RULE_EXACT},
+        {"interaction.use", ACTION_RULE_EXACT},
+        {"effect.explosion", ACTION_RULE_EXACT},
+        {"noise.emit", ACTION_RULE_EXACT},
+        {"sector_door.open", ACTION_RULE_EXACT},
+        {"sector_door.close", ACTION_RULE_EXACT},
+        {"sector_door.toggle", ACTION_RULE_EXACT},
+        {"sector_door.interact", ACTION_RULE_EXACT},
+        {"sector_lighting.set", ACTION_RULE_EXACT},
+        {"projectile.fire", ACTION_RULE_EXACT},
+        {"controller.fps.launch", ACTION_RULE_EXACT},
+        {"controller.fps.teleport", ACTION_RULE_EXACT},
+        {"controller.fps.push", ACTION_RULE_EXACT},
+        {"controller.fps_sector.launch", ACTION_RULE_EXACT},
+        {"controller.fps_sector.teleport", ACTION_RULE_EXACT},
+        {"grid.spawn_from_glyphs", ACTION_RULE_EXACT},
+        {"grid.spawn_runs_from_glyphs", ACTION_RULE_EXACT},
+        {"grid.pickup_layer.reset", ACTION_RULE_EXACT},
+        {"input.reset_bindings", ACTION_RULE_EXACT},
+        {"input.apply_profile", ACTION_RULE_EXACT},
+        {"input.apply_active_profile", ACTION_RULE_EXACT},
+        {"input.clear_network_input_overrides", ACTION_RULE_EXACT},
+        {"scene_state.set", ACTION_RULE_EXACT},
+        {"scene_state.toggle", ACTION_RULE_EXACT},
+        {"scene_state.cycle", ACTION_RULE_EXACT},
+        {"console.write", ACTION_RULE_EXACT},
+        {"editor.selection.clear", ACTION_RULE_EXACT},
+        {"editor.vertex.selection.clear", ACTION_RULE_EXACT},
+        {"editor.vertex.delete_selected", ACTION_RULE_EXACT},
+        {"editor.vertex.merge_selected_to_hover", ACTION_RULE_EXACT},
+        {"editor.vertex.add_to_source", ACTION_RULE_EXACT},
+        {"editor.vertex.validate_source", ACTION_RULE_EXACT},
+        {"editor.vertex.snap_selected", ACTION_RULE_EXACT},
+        {"editor.selection.select_brush", ACTION_RULE_EXACT},
+        {"editor.selection.delete_selected", ACTION_RULE_EXACT},
+        {"editor.selection.resize_y", ACTION_RULE_EXACT},
+        {"editor.selection.run", ACTION_RULE_EXACT},
+        {"editor.command.preview", ACTION_RULE_EXACT},
+        {"editor.command.clear_preview", ACTION_RULE_EXACT},
+        {"editor.command.commit", ACTION_RULE_EXACT},
+        {"editor.command.undo", ACTION_RULE_EXACT},
+        {"editor.command.redo", ACTION_RULE_EXACT},
+        {"editor.brush_world.export", ACTION_RULE_EXACT},
+        {"editor.level.export", ACTION_RULE_EXACT},
+        {"editor.level.save", ACTION_RULE_EXACT},
+        {"editor.level.load", ACTION_RULE_EXACT},
+        {"editor.test_run.prepare", ACTION_RULE_EXACT},
+        {"editor.test_run.save_manifest", ACTION_RULE_EXACT},
+        {"editor.brush_world.status", ACTION_RULE_EXACT},
+        {"editor.brush_world.validate_source", ACTION_RULE_EXACT},
+        {"editor.brush_world.validate_enclosure", ACTION_RULE_EXACT},
+        {"editor.brush_world.create_box", ACTION_RULE_EXACT},
+        {"editor.player_start.place", ACTION_RULE_EXACT},
+        {"editor.player_start.apply", ACTION_RULE_EXACT},
+        {"editor.player_start.delete", ACTION_RULE_EXACT},
+        {"network.direct_connect.start", ACTION_RULE_EXACT},
+        {"network.direct_connect.cancel", ACTION_RULE_EXACT},
+        {"network.direct_connect.observe", ACTION_RULE_EXACT},
+        {"network.host.start", ACTION_RULE_EXACT},
+        {"network.host.cancel", ACTION_RULE_EXACT},
+        {"network.host.observe", ACTION_RULE_EXACT},
+        {"network.discovery.start", ACTION_RULE_EXACT},
+        {"network.discovery.refresh", ACTION_RULE_EXACT},
+        {"network.discovery.observe", ACTION_RULE_EXACT},
+        {"network.discovery.cancel", ACTION_RULE_EXACT},
+        {"network.discovery.connect_selected", ACTION_RULE_EXACT},
+        {"ui.animate", ACTION_RULE_EXACT},
+        {"audio.", ACTION_RULE_PREFIX},
+        {"persistence.load", ACTION_RULE_EXACT},
+        {"persistence.save", ACTION_RULE_EXACT},
+        {"entity.set_active", ACTION_RULE_EXACT},
+        {"transform.set_position", ACTION_RULE_EXACT},
+        {"camera.toggle", ACTION_RULE_EXACT},
+        {"camera.set", ACTION_RULE_EXACT},
+        {"scene.set", ACTION_RULE_EXACT},
+        {"adapter.invoke", ACTION_RULE_EXACT},
+        {"branch", ACTION_RULE_EXACT},
+    };
+    for (size_t i = 0; i < SDL_arraysize(rules); ++i)
+    {
+        if (action_rule_matches(&rules[i], type))
+            return &rules[i];
+    }
+    return NULL;
+}
+
+bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path, validation_names *names)
+{
+    if (!yyjson_is_obj(action))
+        return validation_error(ctx, json_path, "logic action must be an object");
+    const char *type = json_string(action, "type");
+    if (type == NULL || type[0] == '\0')
+        return validation_error(ctx, json_path, "logic action requires a non-empty type");
+    if (find_action_validation_rule(type) == NULL)
+        return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);
+    return validate_known_action(ctx, action, json_path, names, type);
 }
 
 bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path, validation_names *names)
