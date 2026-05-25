@@ -154,6 +154,10 @@ bool collect_sector_platforms(validation_context *ctx, yyjson_val *root, validat
 bool collect_input_actions(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_assignment_sets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_timers(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_adapters(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_scripts(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_sensors(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_grid_maps(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_grid_pickup_layers(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_input_bindings(validation_context *ctx, yyjson_val *root);
@@ -170,6 +174,8 @@ bool sector_level_has_sector_index(yyjson_val *root, const char *level_name, int
 bool validate_storage(validation_context *ctx, yyjson_val *root);
 bool validate_persistence(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_haptics(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_logic(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_adapters(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_app_refs(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_update_phases(validation_context *ctx, yyjson_val *phases, const char *json_path,
                             validation_names *names);
