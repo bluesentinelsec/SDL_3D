@@ -2461,8 +2461,10 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
     }
 
     slayer3d_game_data_brush rebuilt;
-    if (!editor_brush_world_build_source_convex_brush_from_vertices(
-            world_runtime, desc->brush_identity, vertices, vertex_count, &rebuilt, error_buffer, error_buffer_size))
+    const int (*validated_vertices)[3] = (const int (*)[3])(const void *)vertices;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, desc->brush_identity,
+                                                                    validated_vertices, vertex_count, &rebuilt,
+                                                                    error_buffer, error_buffer_size))
     {
         source_vertex_operation_set_failure(out_result, error_buffer != NULL ? error_buffer : "invalid operation");
         return false;

@@ -390,8 +390,9 @@ bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world
     const char *brush_id = source_box_identity(box);
     int raw_vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3];
     source_box_fill_vertices(box, raw_vertices);
-    if (!editor_brush_source_validate_box_vertex_topology(raw_vertices, source_vertex_snap_units(world_runtime), NULL,
-                                                          error_buffer, error_buffer_size))
+    const int (*validated_vertices)[3] = (const int (*)[3])(const void *)raw_vertices;
+    if (!editor_brush_source_validate_box_vertex_topology(validated_vertices, source_vertex_snap_units(world_runtime),
+                                                          NULL, error_buffer, error_buffer_size))
     {
         return false;
     }
@@ -506,7 +507,7 @@ static bool source_vertex_coord_equal(const int a[3], const int b[3])
     return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
 }
 
-static bool source_shared_vertex_recorded(const int (*coords)[3], int count, const int coord[3])
+static bool source_shared_vertex_recorded(int (*coords)[3], int count, const int coord[3])
 {
     for (int i = 0; i < count; ++i)
     {
