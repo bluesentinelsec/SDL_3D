@@ -1138,7 +1138,8 @@ currently hovered vertex, or into an authored `target_vertex_index` when a tool
 command needs deterministic targeting. Only selected vertices from the same
 source brush as the target are merged, and the resulting convex source brush is
 validated before commit. Optional output keys publish `valid`, `message`, and
-`merged_count` values.
+`merged_count` values. Vertex-mode dragging uses the same command path when a
+selected vertex is dragged onto a different hovered vertex.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a

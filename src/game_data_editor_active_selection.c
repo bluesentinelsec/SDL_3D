@@ -2114,6 +2114,25 @@ bool slayer3d_game_data_merge_selected_editor_vertices_to_hover(slayer3d_game_da
     return true;
 }
 
+static bool editor_try_merge_selected_vertices_to_hover(slayer3d_game_data_runtime *runtime,
+                                                        const slayer3d_game_data_editor_selection *hover_selection)
+{
+    if (runtime == NULL || hover_selection == NULL || !editor_selected_vertices_active_for_scene(runtime) ||
+        runtime->editor_selected_vertex_count <= 0)
+    {
+        return false;
+    }
+
+    editor_source_vertex_selection target;
+    init_editor_source_vertex_selection(&target);
+    if (!editor_hover_source_vertex_selection(runtime, hover_selection, &target))
+        return false;
+    if (editor_selected_vertex_index(runtime, &target) >= 0)
+        return false;
+
+    return slayer3d_game_data_merge_selected_editor_vertices_to_hover(runtime, NULL);
+}
+
 static void editor_begin_vertex_drag(slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
                                      const slayer3d_game_data_editor_selection *hover_selection)
 {
@@ -2148,6 +2167,11 @@ static bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
 
     const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
     const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+    float mouse_x = drag->current_mouse_x;
+    float mouse_y = drag->current_mouse_y;
+    (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+    drag->current_mouse_x = mouse_x;
+    drag->current_mouse_y = mouse_y;
     if (left_down)
     {
         const SDL_Keymod modifiers = SDL_GetModState();
@@ -2155,9 +2179,6 @@ static bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
         slayer3d_vec3 desired = drag->applied_offset;
         if (y_axis_lock)
         {
-            float mouse_x = drag->start_mouse_x;
-            float mouse_y = drag->start_mouse_y;
-            (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
             const float units_per_pixel = SDL_max(drag->grid_size, 0.001f) / 48.0f;
             desired = slayer3d_vec3_make(
                 0.0f, editor_snap_delta((drag->start_mouse_y - mouse_y) * units_per_pixel, drag->grid_size), 0.0f);
@@ -2179,7 +2200,14 @@ static bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
     }
 
     if (left_released || !left_down)
+    {
+        const float dx = drag->current_mouse_x - drag->start_mouse_x;
+        const float dy = drag->current_mouse_y - drag->start_mouse_y;
+        const bool meaningful_drag = dx * dx + dy * dy >= 16.0f;
+        if (meaningful_drag)
+            (void)editor_try_merge_selected_vertices_to_hover(runtime, hover_selection);
         clear_editor_drag_move(runtime);
+    }
     return true;
 }
 
