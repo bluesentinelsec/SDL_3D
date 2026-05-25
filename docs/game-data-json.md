@@ -1152,6 +1152,17 @@ face away from an existing vertex handle runs the same add command with a
 grid-snapped point one active-grid step along the face normal, then selects the
 new handle.
 
+`editor.vertex.validate_source` runs source-vertex diagnostics for a selected
+source brush set, an explicit `brush` / `brush_stable_id`, or the whole editable
+brush world when no source selection is active. It publishes
+`editor.vertex.diagnostics.*`, including `valid`, `message`, `world`,
+`brush_count`, `vertex_count`, `edge_count`, `face_count`,
+`shared_vertex_count`, `off_snap_count`, `degenerate_count`, `concave_count`,
+`non_finite_count`, `first_issue`, and `first_issue_stable_id`. Optional
+outputs can mirror those values to tool-specific scene-state keys. This action
+is intended for inspector panels, issue lists, and repair workflows that need
+the same source-model validity check used by vertex edit commits.
+
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
 test-run should place an existing actor, while the actor remains defined by the

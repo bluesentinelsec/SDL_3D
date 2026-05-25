@@ -2440,6 +2440,222 @@ bool slayer3d_game_data_add_editor_vertex_to_source(slayer3d_game_data_runtime *
     return editor_add_vertex_to_source_coord(runtime, action, world_runtime, source_index, coord);
 }
 
+static brush_world_runtime *editor_vertex_diagnostics_world_from_action(slayer3d_game_data_runtime *runtime,
+                                                                        yyjson_val *action)
+{
+    if (runtime == NULL)
+        return NULL;
+
+    const char *world_name = json_string(action, "world", NULL);
+    if ((world_name == NULL || world_name[0] == '\0') && editor_selected_vertices_active_for_scene(runtime) &&
+        runtime->editor_selected_vertex_count > 0)
+    {
+        world_name = runtime->editor_selected_vertices[0].world_name;
+    }
+    if ((world_name == NULL || world_name[0] == '\0') && editor_selected_brushes_active_for_scene(runtime) &&
+        runtime->editor_selected_brush_count > 0)
+    {
+        world_name = runtime->editor_selected_brushes[0].world_name;
+    }
+    if (world_name != NULL && world_name[0] != '\0')
+        return find_brush_world_runtime_mutable(runtime, world_name);
+
+    for (int i = 0; i < runtime->brush_world_count; ++i)
+    {
+        if (runtime->brush_worlds[i].editor_has_source_model)
+            return &runtime->brush_worlds[i];
+    }
+    return NULL;
+}
+
+static int editor_collect_vertex_diagnostic_targets(slayer3d_game_data_runtime *runtime,
+                                                    brush_world_runtime *world_runtime,
+                                                    editor_source_snap_target *targets, int target_capacity)
+{
+    if (runtime == NULL || world_runtime == NULL || targets == NULL || target_capacity <= 0)
+        return 0;
+
+    int target_count = 0;
+    if (editor_selected_vertices_active_for_scene(runtime))
+    {
+        for (int i = 0; i < runtime->editor_selected_vertex_count && target_count < target_capacity; ++i)
+        {
+            const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[i];
+            if (SDL_strcmp(selection->world_name, world_runtime->desc.name) == 0)
+                (void)editor_add_source_snap_target(targets, &target_count, world_runtime, selection->source_index);
+        }
+    }
+    if (target_count > 0)
+        return target_count;
+
+    if (editor_selected_brushes_active_for_scene(runtime))
+    {
+        for (int i = 0; i < runtime->editor_selected_brush_count && target_count < target_capacity; ++i)
+        {
+            const slayer3d_game_data_editor_selection selection =
+                resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+            if (SDL_strcmp(selection.world_name, world_runtime->desc.name) != 0)
+                continue;
+            const int source_index = editor_source_index_for_selection(world_runtime, &selection);
+            (void)editor_add_source_snap_target(targets, &target_count, world_runtime, source_index);
+        }
+    }
+    return target_count;
+}
+
+static void publish_editor_vertex_diagnostics_result(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                     const brush_world_runtime *world_runtime,
+                                                     const editor_brush_source_vertex_diagnostics *diagnostics,
+                                                     const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || diagnostics == NULL)
+        return;
+
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.diagnostics.valid", diagnostics->valid);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.diagnostics.message",
+                                   message != NULL ? message : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.diagnostics.world",
+                                   world_runtime != NULL && world_runtime->desc.name != NULL ? world_runtime->desc.name
+                                                                                             : "");
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.brush_count",
+                                diagnostics->brush_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.vertex_count",
+                                diagnostics->vertex_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.edge_count", diagnostics->edge_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.face_count", diagnostics->face_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.shared_vertex_count",
+                                diagnostics->shared_vertex_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.off_snap_count",
+                                diagnostics->off_snap_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.degenerate_count",
+                                diagnostics->degenerate_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.concave_count",
+                                diagnostics->concave_count);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.diagnostics.non_finite_count",
+                                diagnostics->non_finite_count);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.diagnostics.first_issue",
+                                   diagnostics->first_issue);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.diagnostics.first_issue_stable_id",
+                                   diagnostics->first_issue_stable_id);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message != NULL ? message : "");
+
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (!yyjson_is_obj(outputs))
+        return;
+    const char *valid_key = json_string(outputs, "valid_key", NULL);
+    const char *message_key = json_string(outputs, "message_key", NULL);
+    const char *world_key = json_string(outputs, "world_key", NULL);
+    const char *brush_count_key = json_string(outputs, "brush_count_key", NULL);
+    const char *vertex_count_key = json_string(outputs, "vertex_count_key", NULL);
+    const char *edge_count_key = json_string(outputs, "edge_count_key", NULL);
+    const char *face_count_key = json_string(outputs, "face_count_key", NULL);
+    const char *shared_vertex_count_key = json_string(outputs, "shared_vertex_count_key", NULL);
+    const char *off_snap_count_key = json_string(outputs, "off_snap_count_key", NULL);
+    const char *degenerate_count_key = json_string(outputs, "degenerate_count_key", NULL);
+    const char *concave_count_key = json_string(outputs, "concave_count_key", NULL);
+    const char *non_finite_count_key = json_string(outputs, "non_finite_count_key", NULL);
+    const char *first_issue_key = json_string(outputs, "first_issue_key", NULL);
+    const char *first_issue_stable_id_key = json_string(outputs, "first_issue_stable_id_key", NULL);
+
+    if (valid_key != NULL)
+        slayer3d_properties_set_bool(runtime->scene_state, valid_key, diagnostics->valid);
+    if (message_key != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, message_key, message != NULL ? message : "");
+    if (world_key != NULL)
+        slayer3d_properties_set_string(
+            runtime->scene_state, world_key,
+            world_runtime != NULL && world_runtime->desc.name != NULL ? world_runtime->desc.name : "");
+    if (brush_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, brush_count_key, diagnostics->brush_count);
+    if (vertex_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, vertex_count_key, diagnostics->vertex_count);
+    if (edge_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, edge_count_key, diagnostics->edge_count);
+    if (face_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, face_count_key, diagnostics->face_count);
+    if (shared_vertex_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, shared_vertex_count_key, diagnostics->shared_vertex_count);
+    if (off_snap_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, off_snap_count_key, diagnostics->off_snap_count);
+    if (degenerate_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, degenerate_count_key, diagnostics->degenerate_count);
+    if (concave_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, concave_count_key, diagnostics->concave_count);
+    if (non_finite_count_key != NULL)
+        slayer3d_properties_set_int(runtime->scene_state, non_finite_count_key, diagnostics->non_finite_count);
+    if (first_issue_key != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, first_issue_key, diagnostics->first_issue);
+    if (first_issue_stable_id_key != NULL)
+        slayer3d_properties_set_string(runtime->scene_state, first_issue_stable_id_key,
+                                       diagnostics->first_issue_stable_id);
+}
+
+bool slayer3d_game_data_validate_editor_vertex_source(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    editor_brush_source_vertex_diagnostics diagnostics;
+    SDL_zero(diagnostics);
+
+    brush_world_runtime *world_runtime = editor_vertex_diagnostics_world_from_action(runtime, action);
+    if (runtime == NULL || world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        SDL_strlcpy(diagnostics.first_issue, "source vertex diagnostics require an editable brush world",
+                    sizeof(diagnostics.first_issue));
+        publish_editor_vertex_diagnostics_result(runtime, action, world_runtime, &diagnostics, diagnostics.first_issue);
+        return true;
+    }
+
+    int explicit_source_index = -1;
+    const char *brush_identity = json_string(action, "brush_stable_id", NULL);
+    if (brush_identity == NULL || brush_identity[0] == '\0')
+        brush_identity = json_string(action, "brush", NULL);
+    if (brush_identity != NULL && brush_identity[0] != '\0')
+    {
+        explicit_source_index = editor_brush_world_find_source_box_index(world_runtime, brush_identity);
+        if (explicit_source_index < 0)
+        {
+            SDL_strlcpy(diagnostics.first_issue, "source brush not found", sizeof(diagnostics.first_issue));
+            publish_editor_vertex_diagnostics_result(runtime, action, world_runtime, &diagnostics,
+                                                     diagnostics.first_issue);
+            return true;
+        }
+    }
+
+    editor_source_snap_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    SDL_zeroa(targets);
+    int source_indices[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    SDL_zeroa(source_indices);
+    int source_index_count = 0;
+    if (explicit_source_index >= 0)
+    {
+        source_indices[source_index_count++] = explicit_source_index;
+    }
+    else
+    {
+        source_index_count =
+            editor_collect_vertex_diagnostic_targets(runtime, world_runtime, targets, SDL_arraysize(targets));
+        for (int i = 0; i < source_index_count; ++i)
+            source_indices[i] = targets[i].source_index;
+    }
+
+    char error[256];
+    SDL_zeroa(error);
+    const int *indices = source_index_count > 0 ? source_indices : NULL;
+    const int index_count = source_index_count > 0 ? source_index_count : 0;
+    if (!editor_brush_world_validate_source_vertex_model(world_runtime, indices, index_count, &diagnostics, error,
+                                                         sizeof(error)))
+    {
+        if (diagnostics.first_issue[0] == '\0')
+            SDL_strlcpy(diagnostics.first_issue, error[0] != '\0' ? error : "source vertex diagnostics failed",
+                        sizeof(diagnostics.first_issue));
+    }
+
+    const char *message = diagnostics.valid                    ? "source vertex model valid"
+                          : diagnostics.first_issue[0] != '\0' ? diagnostics.first_issue
+                                                               : "source vertex model invalid";
+    publish_editor_vertex_diagnostics_result(runtime, action, world_runtime, &diagnostics, message);
+    return true;
+}
+
 static bool editor_try_merge_selected_vertices_to_hover(slayer3d_game_data_runtime *runtime,
                                                         const slayer3d_game_data_editor_selection *hover_selection)
 {

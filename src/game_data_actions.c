@@ -452,6 +452,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.vertex.add_to_source") == 0)
         return slayer3d_game_data_add_editor_vertex_to_source(runtime, action);
 
+    if (SDL_strcmp(type, "editor.vertex.validate_source") == 0)
+        return slayer3d_game_data_validate_editor_vertex_source(runtime, action);
+
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
         return slayer3d_game_data_select_editor_brush_action(runtime, action);
 
