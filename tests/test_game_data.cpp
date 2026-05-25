@@ -178,6 +178,7 @@ extern "C"
     bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
     bool slayer3d_game_data_merge_selected_editor_vertices_to_hover(slayer3d_game_data_runtime *runtime,
                                                                     yyjson_val *action);
+    bool slayer3d_game_data_add_editor_vertex_to_source(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 }
 
 namespace
@@ -9735,6 +9736,30 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
               std::string::npos)
         << error;
 
+    write_text(dir / "bad_vertex_add_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Vertex Add Action" },
+  "world": { "name": "world.bad_editor_vertex_add_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.add"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.add",
+        "actions": [
+          { "type": "editor.vertex.add_to_source", "coord": [0, 1.5, 0] }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_vertex_add_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.vertex.add_to_source coord must be an int[3]"), std::string::npos)
+        << error;
+
     write_text(dir / "bad_preview_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -17084,6 +17109,74 @@ TEST(GameDataRuntime, EditorVertexMergeSelectedToTargetUsesSourceValidation)
     ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
     EXPECT_EQ(model.vertex_count, 7);
     EXPECT_GT(model.face_count, 4);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorVertexAddToSourceUsesSourceValidation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    const char add_json[] = R"json({
+  "world": "brush.editor_shell.target",
+  "brush_stable_id": "source.box.brush.target.cube",
+  "coord": [1000, 3000, 1000],
+  "outputs": {
+    "valid_key": "test.add.valid",
+    "message_key": "test.add.message",
+    "vertex_count_key": "test.add.vertex_count",
+    "added_count_key": "test.add.count"
+  }
+})json";
+    yyjson_doc *add_doc = yyjson_read(add_json, SDL_strlen(add_json), YYJSON_READ_NOFLAG);
+    ASSERT_NE(add_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_add_editor_vertex_to_source(runtime, yyjson_doc_get_root(add_doc)));
+    yyjson_doc_free(add_doc);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.add.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.add.count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.add.vertex_count", 0), 9);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.x", -1), 1000);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1), 3000);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.z", -1), 1000);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "added source vertex");
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 9);
+    EXPECT_GT(model.face_count, 6);
+
+    const char duplicate_json[] = R"json({
+  "world": "brush.editor_shell.target",
+  "brush_stable_id": "source.box.brush.target.cube",
+  "coord": [1000, 3000, 1000],
+  "outputs": { "valid_key": "test.add.duplicate.valid", "message_key": "test.add.duplicate.message" }
+})json";
+    yyjson_doc *duplicate_doc = yyjson_read(duplicate_json, SDL_strlen(duplicate_json), YYJSON_READ_NOFLAG);
+    ASSERT_NE(duplicate_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_add_editor_vertex_to_source(runtime, yyjson_doc_get_root(duplicate_doc)));
+    yyjson_doc_free(duplicate_doc);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "test.add.duplicate.valid", true));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "test.add.duplicate.message", ""))
+                  .find("already exists"),
+              std::string::npos);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

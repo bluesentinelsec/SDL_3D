@@ -1141,6 +1141,13 @@ validated before commit. Optional output keys publish `valid`, `message`, and
 `merged_count` values. Vertex-mode dragging uses the same command path when a
 selected vertex is dragged onto a different hovered vertex.
 
+`editor.vertex.add_to_source` adds a source vertex to a selected or explicitly
+addressed source brush, then rebuilds the brush through the same convex source
+validation path. Tools may provide either `coord` as fixed source units or
+`position` as meters; exactly one is required. Optional `world`, `brush`, and
+`brush_stable_id` fields make the target deterministic, and optional output keys
+publish `valid`, `message`, `vertex_count`, and `added_count` values.
+
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
 test-run should place an existing actor, while the actor remains defined by the
