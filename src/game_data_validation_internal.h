@@ -126,6 +126,10 @@ bool validate_update_phases(validation_context *ctx, yyjson_val *phases, const c
 bool validate_presentation(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_cameras(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_world_metadata(validation_context *ctx, yyjson_val *root);
+bool validate_render_effects(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_lights(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_transitions(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_render_settings(validation_context *ctx, yyjson_val *root);
 bool is_single_byte_string(yyjson_val *value);
 
 bool is_vec_array(yyjson_val *value, size_t min_count);

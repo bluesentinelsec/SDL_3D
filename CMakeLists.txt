@@ -215,6 +215,7 @@ target_sources(
         src/game_data_validation_haptics.c
         src/game_data_validation_input.c
         src/game_data_validation_persistence.c
+        src/game_data_validation_render.c
         src/game_data_validation_render_components.c
         src/game_data_validation_scene_editor.c
         src/game_data_validation.c
