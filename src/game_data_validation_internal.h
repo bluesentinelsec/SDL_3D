@@ -111,12 +111,21 @@ bool validate_action_array(validation_context *ctx, yyjson_val *actions, const c
                            validation_names *names);
 bool validate_network_port_value(validation_context *ctx, yyjson_val *value, const char *json_path, const char *label);
 bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type,
+                                     const char *field);
+bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                    validation_names *names, const char *field);
+bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type);
 bool validation_audio_bus_name_valid(const char *bus);
 bool collect_font_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_image_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_model_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_audio_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_sector_levels(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_sector_navigation(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_sector_doors(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_sector_platforms(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_actions(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_assignment_sets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names);
@@ -127,6 +136,12 @@ bool validate_input_assignment_sets(validation_context *ctx, yyjson_val *root);
 bool validate_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_grid_maps(validation_context *ctx, yyjson_val *root);
 bool validate_grid_pickup_layers(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_sector_levels(validation_context *ctx, yyjson_val *root);
+bool validate_sector_navigation(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_sector_doors(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_sector_platforms(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool sector_level_has_sector_name(yyjson_val *root, const char *level_name, const char *sector_name);
+bool sector_level_has_sector_index(yyjson_val *root, const char *level_name, int sector_index);
 bool validate_storage(validation_context *ctx, yyjson_val *root);
 bool validate_persistence(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_haptics(validation_context *ctx, yyjson_val *root, validation_names *names);

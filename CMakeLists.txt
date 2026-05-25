@@ -220,6 +220,7 @@ target_sources(
         src/game_data_validation_render.c
         src/game_data_validation_render_components.c
         src/game_data_validation_scene_editor.c
+        src/game_data_validation_sectors.c
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c
