@@ -1147,6 +1147,10 @@ validation path. Tools may provide either `coord` as fixed source units or
 `position` as meters; exactly one is required. Optional `world`, `brush`, and
 `brush_stable_id` fields make the target deterministic, and optional output keys
 publish `valid`, `message`, `vertex_count`, and `added_count` values.
+In the editor shell's vertex tool, Shift+left-clicking a selected source brush
+face away from an existing vertex handle runs the same add command with a
+grid-snapped point one active-grid step along the face normal, then selects the
+new handle.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
