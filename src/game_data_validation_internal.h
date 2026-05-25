@@ -88,12 +88,28 @@ const char *validation_json_string(yyjson_val *object, const char *key);
 
 void format_path(char *buffer, size_t buffer_size, const char *format, ...);
 bool validation_error(validation_context *ctx, const char *json_path, const char *format, ...);
+bool validation_warning(validation_context *ctx, const char *json_path, const char *format, ...);
 void validation_resolve_source_location(const validation_context *ctx, const char *json_path, char *source_buffer,
                                         size_t source_buffer_size, char *path_buffer, size_t path_buffer_size);
 char *validation_path_dirname(const char *path);
 char *validation_path_join(const char *base_dir, const char *path);
 const char *validation_asset_path_without_scheme(const char *path);
 bool validate_imports(validation_context *ctx, yyjson_val *root);
+bool is_supported_component_type(const char *type);
+bool validate_brush_velocity_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                       validation_names *names);
+bool validate_combat_health_component(validation_context *ctx, yyjson_val *component, const char *path);
+bool validate_pickup_respawn_component(validation_context *ctx, yyjson_val *component, const char *path);
+bool validate_status_effect_timer_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                            validation_names *names);
+bool validate_particle_emitter_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                         const validation_names *names);
+bool validate_weapon_state_component(validation_context *ctx, yyjson_val *component, const char *path);
+bool validate_interactable_component(validation_context *ctx, yyjson_val *component, const char *path,
+                                     validation_names *names);
+bool validate_projectile_fire_shape(validation_context *ctx, yyjson_val *value, const char *path,
+                                    validation_names *names, bool require_target);
+bool validate_actor_archetypes_and_pools(validation_context *ctx, yyjson_val *root, validation_names *names);
 
 void name_table_destroy(name_table *table);
 bool name_table_contains(const name_table *table, const char *name);
