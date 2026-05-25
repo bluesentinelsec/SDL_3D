@@ -118,6 +118,7 @@ bool validate_grid_maps(validation_context *ctx, yyjson_val *root);
 bool validate_grid_pickup_layers(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool validate_storage(validation_context *ctx, yyjson_val *root);
 bool validate_persistence(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validate_haptics(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool is_single_byte_string(yyjson_val *value);
 
 bool is_vec_array(yyjson_val *value, size_t min_count);
