@@ -111,6 +111,12 @@ bool validate_action_array(validation_context *ctx, yyjson_val *actions, const c
                            validation_names *names);
 bool validate_network_port_value(validation_context *ctx, yyjson_val *value, const char *json_path, const char *label);
 bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool validation_audio_bus_name_valid(const char *bus);
+bool collect_font_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_image_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_model_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
+bool collect_audio_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_actions(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_assignment_sets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_input_profiles(validation_context *ctx, yyjson_val *root, validation_names *names);

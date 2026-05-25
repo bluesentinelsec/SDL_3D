@@ -208,6 +208,7 @@ target_sources(
         src/game_presentation.c
         src/game_data_validation_brush_common.c
         src/game_data_validation_app_world.c
+        src/game_data_validation_assets.c
         src/game_data_validation_controller_components.c
         src/game_data_validation_brush_worlds.c
         src/game_data_validation_editor_metadata.c
