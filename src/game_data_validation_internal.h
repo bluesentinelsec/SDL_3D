@@ -116,6 +116,7 @@ bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, 
 bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
                                     validation_names *names, const char *field);
 bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type);
+bool validate_factions(validation_context *ctx, yyjson_val *root);
 bool validation_audio_bus_name_valid(const char *bus);
 bool collect_font_assets(validation_context *ctx, yyjson_val *root, validation_names *names);
 bool collect_sprite_assets(validation_context *ctx, yyjson_val *root, validation_names *names);

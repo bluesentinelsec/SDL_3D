@@ -211,6 +211,7 @@ target_sources(
         src/game_data_validation_assets.c
         src/game_data_validation_conditions.c
         src/game_data_validation_controller_components.c
+        src/game_data_validation_factions.c
         src/game_data_validation_brush_worlds.c
         src/game_data_validation_editor_metadata.c
         src/game_data_validation_grid.c
