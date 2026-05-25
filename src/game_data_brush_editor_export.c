@@ -41,6 +41,27 @@ static bool export_add_vec3i_values(yyjson_mut_doc *doc, yyjson_mut_val *obj, co
            yyjson_mut_arr_add_int(doc, arr, z) && yyjson_mut_obj_add_val(doc, obj, key, arr);
 }
 
+static bool export_add_source_vertices(yyjson_mut_doc *doc, yyjson_mut_val *obj,
+                                       const editor_brush_source_box_runtime *box)
+{
+    if (box == NULL || box->vertex_count <= 0)
+        return true;
+    yyjson_mut_val *vertices = yyjson_mut_arr(doc);
+    if (vertices == NULL)
+        return false;
+    for (int i = 0; i < box->vertex_count; ++i)
+    {
+        yyjson_mut_val *vertex = yyjson_mut_arr(doc);
+        if (vertex == NULL || !yyjson_mut_arr_add_int(doc, vertex, box->vertices[i][0]) ||
+            !yyjson_mut_arr_add_int(doc, vertex, box->vertices[i][1]) ||
+            !yyjson_mut_arr_add_int(doc, vertex, box->vertices[i][2]) || !yyjson_mut_arr_add_val(vertices, vertex))
+        {
+            return false;
+        }
+    }
+    return yyjson_mut_obj_add_val(doc, obj, "vertices", vertices);
+}
+
 static bool export_add_optional_string(yyjson_mut_doc *doc, yyjson_mut_val *obj, const char *key, const char *value)
 {
     return value == NULL || value[0] == '\0' || yyjson_mut_obj_add_strcpy(doc, obj, key, value);
@@ -182,11 +203,13 @@ static bool export_add_source_model_box(yyjson_mut_doc *doc, yyjson_mut_val *box
                                      box->face_materials[3], box->face_materials[4], box->face_materials[5]};
     return yyjson_mut_obj_add_strcpy(doc, obj, "stable_id", box->stable_id != NULL ? box->stable_id : "") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "name", box->name != NULL ? box->name : "") &&
-           yyjson_mut_obj_add_strcpy(doc, obj, "kind", "box") &&
+           yyjson_mut_obj_add_strcpy(doc, obj, "kind", box->vertex_count > 0 ? "convex" : "box") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "prefab", box->prefab != NULL ? box->prefab : "box") &&
            yyjson_mut_obj_add_strcpy(doc, obj, "material", box->material != NULL ? box->material : "") &&
-           export_add_vec3i_values(doc, obj, "min", box->min[0], box->min[1], box->min[2]) &&
-           export_add_vec3i_values(doc, obj, "max", box->max[0], box->max[1], box->max[2]) &&
+           (box->vertex_count > 0 ||
+            (export_add_vec3i_values(doc, obj, "min", box->min[0], box->min[1], box->min[2]) &&
+             export_add_vec3i_values(doc, obj, "max", box->max[0], box->max[1], box->max[2]))) &&
+           export_add_source_vertices(doc, obj, box) &&
            export_add_source_face_material_overrides(doc, obj, box->material, face_materials) &&
            export_add_brush_contents(doc, obj,
                                      box->contents != 0u ? box->contents : SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);

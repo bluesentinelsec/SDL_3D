@@ -150,6 +150,7 @@ target_sources(
         src/game_data_brush_editor_import.c
         src/game_data_brush_editor_mutation.c
         src/game_data_brush_source_model.c
+        src/game_data_brush_source_vertices.c
         src/game_data_brush_trace_queries.c
         src/game_data_brush_visibility_runtime.c
         src/game_data_brush.c

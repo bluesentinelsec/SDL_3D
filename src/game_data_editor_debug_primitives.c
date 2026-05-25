@@ -27,9 +27,14 @@ static bool emit_editor_overlapping_source_brush_bounds(const slayer3d_game_data
                                                         const slayer3d_game_data_editor_debug_desc *desc,
                                                         slayer3d_game_data_editor_debug_primitive_fn callback,
                                                         void *userdata);
+static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_runtime *runtime,
+                                                       const slayer3d_game_data_editor_debug_desc *desc,
+                                                       slayer3d_game_data_editor_debug_primitive_fn callback,
+                                                       void *userdata);
 static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
+static bool emit_editor_debug_marker_cross(editor_debug_iteration_context *context, slayer3d_vec3 center, float size);
 
 static slayer3d_color editor_debug_color_or_default(slayer3d_color color, slayer3d_color fallback)
 {
@@ -90,6 +95,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
     {
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS;
     }
+    if (SDL_strcmp(value != NULL ? value : "", "vertex_handles") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES;
     return 0u;
 }
 
@@ -133,6 +140,7 @@ static bool active_editor_debug_desc_from_json(const slayer3d_game_data_runtime 
     out_desc->command_preview_color = json_color(overlay, "command_preview_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->work_plane_grid_color = json_color(overlay, "work_plane_grid_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->player_start_color = json_color(overlay, "player_start_color", (slayer3d_color){0, 0, 0, 0});
+    out_desc->vertex_handle_color = json_color(overlay, "vertex_handle_color", (slayer3d_color){0, 0, 0, 0});
     out_desc->normal_length = json_float(overlay, "normal_length", 0.75f);
     out_desc->hit_marker_size = json_float(overlay, "hit_marker_size", 0.1f);
     out_desc->work_plane_grid_size = json_float(overlay, "work_plane_grid_size", 16.0f);
@@ -200,10 +208,97 @@ bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_ga
         return false;
     if (!emit_editor_selected_brush_bounds(runtime, &desc, callback, userdata))
         return false;
+    if (!emit_editor_selected_source_vertex_handles(runtime, &desc, callback, userdata))
+        return false;
     if (!emit_editor_overlapping_source_brush_bounds(runtime, &desc, callback, userdata))
         return false;
 
     return emit_editor_debug_overlay_markers(runtime, &desc, callback, userdata);
+}
+
+static bool editor_debug_mode_is_vertex(const slayer3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "vertex") == 0;
+}
+
+static slayer3d_vec3 editor_source_vertex_coord_meters(const brush_world_runtime *world,
+                                                       const editor_brush_source_vertex *vertex)
+{
+    const float meters_per_unit =
+        world != NULL && world->editor_source_meters_per_unit > 0.0f ? world->editor_source_meters_per_unit : 0.001f;
+    return slayer3d_vec3_make((float)vertex->coord[0] * meters_per_unit, (float)vertex->coord[1] * meters_per_unit,
+                              (float)vertex->coord[2] * meters_per_unit);
+}
+
+static int editor_debug_source_index_for_selection(const brush_world_runtime *world,
+                                                   const slayer3d_game_data_editor_selection *selection)
+{
+    if (world == NULL || selection == NULL || !selection->hit ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
+        return -1;
+    int source_index = editor_brush_world_find_source_box_index(world, selection->element_name);
+    if (source_index >= 0)
+        return source_index;
+    return selection->element_editor != NULL
+               ? editor_brush_world_find_source_box_index(world, selection->element_editor->stable_id)
+               : -1;
+}
+
+static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_runtime *runtime,
+                                                       const slayer3d_game_data_editor_debug_desc *desc,
+                                                       slayer3d_game_data_editor_debug_primitive_fn callback,
+                                                       void *userdata)
+{
+    if (runtime == NULL || desc == NULL || callback == NULL || runtime->editor_selected_brush_count <= 0 ||
+        !editor_debug_mode_is_vertex(runtime))
+    {
+        return true;
+    }
+    const unsigned int flags = desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES) == 0u)
+        return true;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (runtime->editor_selected_brush_scene == NULL || active_scene == NULL ||
+        SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0)
+    {
+        return true;
+    }
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.color = editor_debug_selection_flash_color(
+        editor_debug_color_or_default(desc->vertex_handle_color, (slayer3d_color){255, 224, 64, 255}));
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE;
+    context.face_index = -1;
+
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        if (!selection.hit || selection.world_name == NULL)
+            continue;
+        const brush_world_runtime *world = find_brush_world_runtime(runtime, selection.world_name);
+        const int source_index = editor_debug_source_index_for_selection(world, &selection);
+        if (world == NULL || source_index < 0)
+            continue;
+
+        editor_brush_source_vertex_model model;
+        if (!editor_brush_source_box_build_vertex_model(world, source_index, &model, NULL, 0))
+            continue;
+        context.world_name = selection.world_name;
+        for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+        {
+            context.element_name = model.vertices[vertex].stable_id;
+            const slayer3d_vec3 center = slayer3d_vec3_add(
+                selection.world_position, editor_source_vertex_coord_meters(world, &model.vertices[vertex]));
+            if (!emit_editor_debug_marker_cross(&context, center, 0.12f))
+                return false;
+        }
+    }
+    return true;
 }
 
 static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, slayer3d_bounding_box bounds)

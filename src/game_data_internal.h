@@ -209,6 +209,8 @@ typedef struct editor_drag_move_state
     bool moved;
     bool axis_lock_y;
     bool face_resize;
+    bool vertex_lasso;
+    bool lasso_additive;
     const char *scene;
     slayer3d_vec3 start_point;
     slayer3d_vec3 applied_offset;
@@ -216,6 +218,8 @@ typedef struct editor_drag_move_state
     float grid_size;
     float start_mouse_x;
     float start_mouse_y;
+    float current_mouse_x;
+    float current_mouse_y;
 } editor_drag_move_state;
 
 typedef struct editor_camera_orbit_state
@@ -234,8 +238,81 @@ typedef struct editor_brush_source_box_runtime
     char *face_materials[6];
     int min[3];
     int max[3];
+    int vertex_count;
+    int vertices[16][3];
     unsigned int contents;
 } editor_brush_source_box_runtime;
+
+#define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8
+#define SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT 12
+#define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_EDGE_CAPACITY 64
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
+#define SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX 320
+
+typedef int editor_brush_source_coord[3];
+
+typedef struct editor_brush_source_vertex
+{
+    int brush_index;
+    int vertex_index;
+    int coord[3];
+    char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+} editor_brush_source_vertex;
+
+typedef struct editor_brush_source_edge
+{
+    int brush_index;
+    int edge_index;
+    int vertex_indices[2];
+    char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+} editor_brush_source_edge;
+
+typedef struct editor_brush_source_face_ref
+{
+    int brush_index;
+    int face_index;
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    int vertex_count;
+    char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+} editor_brush_source_face_ref;
+
+typedef struct editor_brush_source_vertex_model
+{
+    int brush_index;
+    char brush_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    int vertex_count;
+    editor_brush_source_vertex vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    int edge_count;
+    editor_brush_source_edge edges[SLAYER3D_EDITOR_SOURCE_CONVEX_EDGE_CAPACITY];
+    int face_count;
+    editor_brush_source_face_ref faces[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
+} editor_brush_source_vertex_model;
+
+typedef struct editor_brush_source_shared_vertex
+{
+    int coord[3];
+    int first_brush_index;
+    int first_vertex_index;
+    int reference_count;
+} editor_brush_source_shared_vertex;
+
+typedef struct editor_brush_source_vertex_diagnostics
+{
+    bool valid;
+    int brush_count;
+    int vertex_count;
+    int edge_count;
+    int face_count;
+    int shared_vertex_count;
+    int off_snap_count;
+    int degenerate_count;
+    int concave_count;
+    int non_finite_count;
+    char first_issue[256];
+    char first_issue_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+} editor_brush_source_vertex_diagnostics;
 
 typedef struct editor_brush_source_prefab_desc
 {
@@ -266,6 +343,58 @@ typedef struct editor_brush_source_prefab_result
 
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
 #define SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY 512
+#define SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY 512
+
+typedef struct editor_source_vertex_selection
+{
+    char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    char vertex_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    int source_index;
+    int vertex_index;
+    int coord[3];
+} editor_source_vertex_selection;
+
+typedef struct editor_source_box_bounds_update
+{
+    int source_index;
+    int min[3];
+    int max[3];
+} editor_source_box_bounds_update;
+
+typedef enum editor_brush_source_vertex_operation_type
+{
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE_MANY_TO_TARGET,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP,
+} editor_brush_source_vertex_operation_type;
+
+typedef struct editor_brush_source_vertex_operation_desc
+{
+    const char *brush_identity;
+    editor_brush_source_vertex_operation_type type;
+    int vertex_index;
+    int target_vertex_index;
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    int vertex_index_count;
+    int coord[3];
+    int snap_units;
+} editor_brush_source_vertex_operation_desc;
+
+typedef struct editor_brush_source_vertex_operation_result
+{
+    bool valid;
+    int vertex_count;
+    int changed_count;
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    int face_count;
+    char diagnostic[256];
+    slayer3d_game_data_brush brush;
+} editor_brush_source_vertex_operation_result;
 
 typedef struct editor_command_transaction_entry
 {
@@ -832,6 +961,9 @@ typedef struct slayer3d_game_data_runtime
     slayer3d_game_data_editor_selection editor_selected_brushes[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
     int editor_selected_brush_count;
     const char *editor_selected_brush_scene;
+    editor_source_vertex_selection editor_selected_vertices[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    int editor_selected_vertex_count;
+    const char *editor_selected_vertex_scene;
     editor_command_preview_state editor_command_preview;
     editor_placement_preview_state editor_placement_preview;
     editor_drag_create_state editor_drag_create;
@@ -997,6 +1129,7 @@ bool execute_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actio
 bool execute_optional_action_array(slayer3d_game_data_runtime *runtime, yyjson_val *actions,
                                    const slayer3d_properties *payload);
 bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_clear_editor_vertex_selection(slayer3d_game_data_runtime *runtime);
 slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                               const slayer3d_game_data_editor_selection *selection);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
@@ -1005,6 +1138,12 @@ bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtim
                                                        const slayer3d_properties *payload);
 bool slayer3d_game_data_resize_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                          const slayer3d_properties *payload);
+bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_merge_selected_editor_vertices_to_hover(slayer3d_game_data_runtime *runtime,
+                                                                yyjson_val *action);
+bool slayer3d_game_data_add_editor_vertex_to_source(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+bool slayer3d_game_data_validate_editor_vertex_source(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_clear_editor_command_preview(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_commit_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -1262,9 +1401,39 @@ bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_ru
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size);
+bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *world_runtime,
+                                                       const editor_source_box_bounds_update *updates, int update_count,
+                                                       char *error_buffer, int error_buffer_size);
+bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_world_runtime *world_runtime,
+                                                                const char *brush_identity, const int *vertices,
+                                                                int vertex_count, slayer3d_game_data_brush *out_brush,
+                                                                char *error_buffer, int error_buffer_size);
+void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
+bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
+                                                        const editor_brush_source_vertex_operation_desc *desc,
+                                                        editor_brush_source_vertex_operation_result *out_result,
+                                                        char *error_buffer, int error_buffer_size);
+bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_vertex_operation_desc *desc,
+                                                      editor_brush_source_vertex_operation_result *out_result,
+                                                      char *error_buffer, int error_buffer_size);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);
+bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
+                                                      editor_brush_source_vertex_diagnostics *out_diagnostics,
+                                                      char *error_buffer, int error_buffer_size);
+bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
+                                                editor_brush_source_vertex_model *out_model, char *error_buffer,
+                                                int error_buffer_size);
+bool editor_brush_world_validate_source_vertex_model(const brush_world_runtime *world_runtime,
+                                                     const int *source_indices, int source_index_count,
+                                                     editor_brush_source_vertex_diagnostics *out_diagnostics,
+                                                     char *error_buffer, int error_buffer_size);
+bool editor_brush_world_find_shared_source_vertices(const brush_world_runtime *world_runtime, const int *source_indices,
+                                                    int source_index_count,
+                                                    editor_brush_source_shared_vertex *out_vertices, int out_capacity,
+                                                    int *out_count, char *error_buffer, int error_buffer_size);
 bool slayer3d_game_data_validate_editor_brush_source_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool slayer3d_game_data_validate_editor_brush_enclosure_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 bool load_grid_maps(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);

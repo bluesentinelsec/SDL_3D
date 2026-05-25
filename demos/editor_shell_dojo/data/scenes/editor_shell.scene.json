@@ -31,6 +31,7 @@
       "action.editor.wall_axis.toggle",
       "action.editor.mode.select",
       "action.editor.mode.brush",
+      "action.editor.mode.vertex",
       "action.editor.brush.lower_y",
       "action.editor.brush.raise_y",
       "action.editor.palette.brush",
@@ -271,6 +272,12 @@
         "tool_mode": "face",
         "message": "face tool",
         "button": { "x": 398, "y": 45, "w": 88, "h": 28 }
+      },
+      {
+        "mode": "vertex",
+        "tool_mode": "vertex",
+        "message": "vertex tool",
+        "button": { "x": 492, "y": 45, "w": 100, "h": 28 }
       }
     ],
     "palette": {
@@ -332,6 +339,7 @@
         "player_starts",
         "selection_bounds",
         "selection_face",
+        "vertex_handles",
         "command_preview",
         "markers"
       ],
@@ -626,6 +634,17 @@
         "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "face" }
       },
       {
+        "name": "ui.editor_shell.tool_toolbar.vertex.selected",
+        "x": 492,
+        "y": 45,
+        "w": 100,
+        "h": 28,
+        "color": [0, 0, 0, 0],
+        "border_color": [90, 255, 130, 255],
+        "border_thickness": 3,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "vertex" }
+      },
+      {
         "name": "ui.editor_shell.tool_toolbar.entity.selected",
         "x": 598,
         "y": 45,
@@ -673,7 +692,7 @@
         "x": 12,
         "y": 92,
         "w": 308,
-        "h": 250,
+        "h": 310,
         "color": [10, 14, 22, 228],
         "border_color": [82, 122, 170, 235],
         "border_thickness": 2,
@@ -771,6 +790,28 @@
         "name": "ui.editor_shell.left_inspector.row.id",
         "x": 24,
         "y": 306,
+        "w": 272,
+        "h": 26,
+        "color": [20, 26, 36, 228],
+        "border_color": [32, 40, 54, 210],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.vertex",
+        "x": 24,
+        "y": 336,
+        "w": 272,
+        "h": 26,
+        "color": [20, 26, 36, 228],
+        "border_color": [32, 40, 54, 210],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.vertex_coord",
+        "x": 24,
+        "y": 366,
         "w": 272,
         "h": 26,
         "color": [20, 26, 36, 228],
@@ -1560,6 +1601,55 @@
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
       },
       {
+        "name": "ui.editor_shell.left_inspector.row.vertex.label",
+        "text": "Vertex",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 343,
+        "color": [150, 185, 225, 235],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.vertex.value",
+        "format": "%s",
+        "bindings": [{ "type": "scene_state", "key": "editor.vertex.hover.vertex", "default": "none" }],
+        "font": "font.editor_shell.ui",
+        "x": 284,
+        "y": 343,
+        "align": "right",
+        "color": [230, 236, 246, 245],
+        "scale": 0.42,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.vertex_coord.label",
+        "text": "Vtx Pos",
+        "font": "font.editor_shell.ui",
+        "x": 34,
+        "y": 373,
+        "color": [150, 185, 225, 235],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
+        "name": "ui.editor_shell.left_inspector.row.vertex_coord.value",
+        "format": "%d, %d, %d (%d)",
+        "bindings": [
+          { "type": "scene_state", "key": "editor.vertex.hover.x", "default": 0 },
+          { "type": "scene_state", "key": "editor.vertex.hover.y", "default": 0 },
+          { "type": "scene_state", "key": "editor.vertex.hover.z", "default": 0 },
+          { "type": "scene_state", "key": "editor.vertex.hover.shared_count", "default": 0 }
+        ],
+        "font": "font.editor_shell.ui",
+        "x": 284,
+        "y": 373,
+        "align": "right",
+        "color": [230, 236, 246, 245],
+        "scale": 0.5,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false }
+      },
+      {
         "name": "ui.editor_shell.left_inspector.collapsed.label",
         "text": "Inspector  I",
         "font": "font.editor_shell.ui",
@@ -1814,7 +1904,7 @@
       },
       {
         "name": "ui.editor_shell.help",
-        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, M texture, G objects. Prefabs button opens blockout shapes. Esc clears selection/back to select.",
+        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, V vertex, M texture, G objects. Prefabs button opens blockout shapes. Esc clears selection/back to select.",
         "font": "font.editor_shell.ui",
         "x": 0.98,
         "y": 0.17,

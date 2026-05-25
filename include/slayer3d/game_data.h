@@ -1008,6 +1008,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DIAGNOSTIC_MARKER = 9,
         /** @brief Selected brush source face edge. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_FACE_EDGE = 10,
+        /** @brief Selected source brush vertex handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE = 11,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -1032,6 +1034,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS = 1u << 8,
         /** @brief Emit the selected source brush face outline when known. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE = 1u << 9,
+        /** @brief Emit source vertex handles for selected brushes. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES = 1u << 10,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
@@ -1039,7 +1043,7 @@ extern "C"
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
@@ -1088,6 +1092,8 @@ extern "C"
         slayer3d_color work_plane_grid_color;
         /** @brief Color for editor player-start marker lines, or alpha 0 for default. */
         slayer3d_color player_start_color;
+        /** @brief Color for selected source vertex handles, or alpha 0 for default. */
+        slayer3d_color vertex_handle_color;
         /** @brief True when work-plane grid settings are valid. */
         bool has_work_plane_grid;
         /** @brief Work-plane normal. */

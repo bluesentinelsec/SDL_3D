@@ -857,7 +857,8 @@ sector/brush, material, face indexes, hit point, hit normal, bounds, and
 runtime-owned editor metadata pointers. Debug overlays should consume
 `slayer3d_game_data_for_each_editor_debug_primitive()` or
 `slayer3d_game_data_draw_editor_debug_primitives()` for world bounds, selected
-bounds, trace rays, hit markers, and face normals. These helpers are
+bounds, trace rays, hit markers, face normals, source face outlines, and source
+vertex handles. These helpers are
 renderer-agnostic/data-driven editor substrate; authored gameplay JSON does
 not need to contain one-off debug actors for selection visualization.
 
@@ -967,6 +968,13 @@ selected face remains visible in tooling even when the compiler culls that face
 from the optimized runtime render mesh as an internal hidden surface. Override
 `selection_face_color` when the default green outline does not fit the editor
 theme.
+
+`vertex_handles` draws reusable handle markers for each vertex of selected
+source brushes while an editor is in a vertex-editing mode. The handles are
+emitted from the source brush topology rather than compiled render triangles, so
+they remain stable when the brush compiler removes hidden/internal faces.
+Override `vertex_handle_color` when the default flashing yellow does not fit the
+editor theme.
 
 `editor.debug_overlay.hover_selection_if` can be used when the overlay should
 draw the live hover trace instead of the last clicked active selection. Full
@@ -1080,7 +1088,80 @@ optional; at most one may be supplied. `face` and `face_from_state` accept the
 canonical box face keys `px`, `nx`, `py`, `ny`, `pz`, and `nz`, while
 `face_stable_id` selects a face by its source/editor stable id. When the target
 cannot be resolved, the action clears the active selection, publishes
-`valid_key: false` when configured, and reports `invalid_message`.
+`valid_key: false` when configured, and reports `invalid_message`. Set
+`additive: true` to add a brush to the current selection instead of replacing
+it.
+
+Vertex mode publishes hover and selection scene-state under
+`editor.vertex.hover.*` and `editor.vertex.selection.*`. Hover data includes
+`hit`, `brush`, `brush_stable_id`, `vertex`, `index`, `shared_count`, and
+integer source coordinates `x`, `y`, and `z`. Left-clicking a vertex handle
+selects the vertex group at that shared source position across the currently
+selected brushes; Shift+left-click toggles that group. Use
+`editor.vertex.selection.clear` to clear only vertex handles while preserving
+the brush selection and current editor tool. While vertex mode is active,
+arrow-key nudges and left-dragging selected handles move selected vertices on
+the current editor grid. Ctrl/Alt plus vertical movement constrains edits to
+the world Y axis. Edits are applied through the source-brush validation path, so
+off-grid, zero-volume, or otherwise invalid convex-box edits are rejected before
+runtime brush geometry is rebuilt. The source model also has a convex plane
+rebuild path for edited vertex sets: simple sloped/wedge-like solids can be
+validated as convex brushes, original face materials are preserved when the
+rebuilt face still maps to a canonical source face, and edits that would discard
+an input vertex or collapse the hull are rejected. The same source-model layer
+also exposes topology operation previews for add, delete, merge/fuse, and
+snap-to-grid vertex workflows. Snap operations round source coordinates to the
+requested fixed source-unit grid, then run the same convex rebuild validation as
+every other source-vertex edit. These operations produce validated convex
+runtime-brush output or a clear diagnostic. The apply path commits the same
+validated result back to
+`editor_brush_sources` as a durable convex source brush, so save/reopen and
+test-run compilation preserve topology edits.
+
+`editor.vertex.snap_selected` snaps the currently selected vertex source
+brushes, or the selected brushes when no vertex handles are selected. By
+default it reads `editor.grid.size` and converts that world-unit grid into the
+source model's fixed units; `snap_units` can be authored for deterministic tool
+commands and tests. Optional output keys publish `valid`, `message`,
+`source_count`, `changed_count`, and `snap_units` values.
+
+`editor.vertex.delete_selected` deletes the selected vertex handles from their
+source brushes through the same convex rebuild validation path. Invalid deletes,
+such as edits that would collapse a brush or discard required hull vertices, are
+reported as diagnostics and leave the source model unchanged. Optional output
+keys publish `valid`, `message`, `source_count`, and `deleted_count` values.
+The editor shell routes Delete/Backspace to this action while vertex mode has an
+active vertex selection; brush deletion remains unchanged in select mode.
+
+`editor.vertex.merge_selected_to_hover` fuses selected source vertices into the
+currently hovered vertex, or into an authored `target_vertex_index` when a tool
+command needs deterministic targeting. Only selected vertices from the same
+source brush as the target are merged, and the resulting convex source brush is
+validated before commit. Optional output keys publish `valid`, `message`, and
+`merged_count` values. Vertex-mode dragging uses the same command path when a
+selected vertex is dragged onto a different hovered vertex.
+
+`editor.vertex.add_to_source` adds a source vertex to a selected or explicitly
+addressed source brush, then rebuilds the brush through the same convex source
+validation path. Tools may provide either `coord` as fixed source units or
+`position` as meters; exactly one is required. Optional `world`, `brush`, and
+`brush_stable_id` fields make the target deterministic, and optional output keys
+publish `valid`, `message`, `vertex_count`, and `added_count` values.
+In the editor shell's vertex tool, Shift+left-clicking a selected source brush
+face away from an existing vertex handle runs the same add command with a
+grid-snapped point one active-grid step along the face normal, then selects the
+new handle.
+
+`editor.vertex.validate_source` runs source-vertex diagnostics for a selected
+source brush set, an explicit `brush` / `brush_stable_id`, or the whole editable
+brush world when no source selection is active. It publishes
+`editor.vertex.diagnostics.*`, including `valid`, `message`, `world`,
+`brush_count`, `vertex_count`, `edge_count`, `face_count`,
+`shared_vertex_count`, `off_snap_count`, `degenerate_count`, `concave_count`,
+`non_finite_count`, `first_issue`, and `first_issue_stable_id`. Optional
+outputs can mirror those values to tool-specific scene-state keys. This action
+is intended for inspector panels, issue lists, and repair workflows that need
+the same source-model validity check used by vertex edit commits.
 
 `editor_player_starts` is a mergeable editor/runtime section for player spawn
 markers. It is deliberately separate from `entities`: a start records where a
@@ -1105,9 +1186,10 @@ vec3, and optional `scene`, `target`, `yaw`, and `pitch` fields.
 
 `editor_brush_sources` is the editor-owned source model for structurally correct
 brush editing. Editable fragments include it alongside `brush_worlds`; when a
-matching source world is present, Slayer3D compiles the source boxes into the
-runtime brush world during load/import. Coordinates are fixed integer source
-units so editor decisions round-trip without accumulating floating-point drift;
+matching source world is present, Slayer3D compiles source boxes and convex
+source brushes into the runtime brush world during load/import. Coordinates are
+fixed integer source units so editor decisions round-trip without accumulating
+floating-point drift;
 `meters_per_unit` converts those source units to runtime meters. The default is
 millimeter precision (`meters_per_unit: 0.001`), but source-backed mutations and
 exports preserve the authored scale. Runtime `brush_worlds` remain meter-based
@@ -1115,8 +1197,10 @@ compiled output for renderer and collision. Editable level fragments loaded by
 the editor must include matching `editor_brush_sources`; older runtime-only
 brush fragments are not migrated or treated as editable graybox source. Each source
 world references a brush world and stores stable source brush IDs, prefab
-metadata, material references, and integer `min`/`max` coordinates for box
-sources. `material` is the default material for all six generated faces.
+metadata, material references, and either integer `min`/`max` coordinates for
+`kind: "box"` sources or integer `vertices` for `kind: "convex"` sources.
+Convex sources are used after topology edits add, remove, or merge vertices.
+`material` is the default material for generated faces.
 `face_materials` may override individual generated box faces with keys `px`,
 `nx`, `py`, `ny`, `pz`, and `nz`; omitted faces inherit `material`.
 

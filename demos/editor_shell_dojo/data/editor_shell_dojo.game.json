@@ -112,6 +112,10 @@
             "bindings": []
           },
           {
+            "name": "action.editor.mode.vertex",
+            "bindings": [{ "device": "keyboard", "key": "V" }]
+          },
+          {
             "name": "action.editor.palette.brush",
             "bindings": []
           },
@@ -266,6 +270,7 @@
     "signal.editor.mode.face",
     "signal.editor.mode.select",
     "signal.editor.mode.texture",
+    "signal.editor.mode.vertex",
     "signal.editor.palette.brush",
     "signal.editor.palette.material",
     "signal.editor.palette.game_object",
@@ -378,6 +383,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.mode.face",
         "on_pressed": "signal.editor.mode.face"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.mode.vertex",
+        "on_pressed": "signal.editor.mode.vertex"
       },
       {
         "type": "sensor.input_pressed",
@@ -520,6 +530,7 @@
       {
         "signal": "signal.editor.mode.brush",
         "actions": [
+          { "type": "editor.vertex.selection.clear" },
           { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "brush" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush tool" }
@@ -528,14 +539,33 @@
       {
         "signal": "signal.editor.mode.face",
         "actions": [
+          { "type": "editor.vertex.selection.clear" },
           { "type": "scene_state.set", "key": "editor.mode", "value": "face" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "face" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "face tool" }
         ]
       },
       {
+        "signal": "signal.editor.mode.vertex",
+        "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+            "then": [
+              { "type": "scene_state.set", "key": "editor.mode", "value": "vertex" },
+              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "vertex" },
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "vertex tool" }
+            ],
+            "else": [
+              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select a brush before vertex tool" }
+            ]
+          }
+        ]
+      },
+      {
         "signal": "signal.editor.mode.select",
         "actions": [
+          { "type": "editor.vertex.selection.clear" },
           { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
@@ -544,6 +574,7 @@
       {
         "signal": "signal.editor.mode.texture",
         "actions": [
+          { "type": "editor.vertex.selection.clear" },
           { "type": "scene_state.set", "key": "editor.mode", "value": "texture" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture mode" }
@@ -664,22 +695,15 @@
             "else": [
               {
                 "type": "branch",
-                "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                "if": { "type": "scene_state.compare", "key": "editor.vertex.selection.count", "op": ">", "value": 0, "default": 0 },
                 "then": [
-                  { "type": "editor.selection.clear" },
-                  { "type": "editor.command.clear_preview", "message": "selection cleared" },
-                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selection cleared" }
+                  { "type": "editor.vertex.selection.clear" },
+                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "vertex selection cleared" }
                 ],
                 "else": [
                   {
                     "type": "branch",
-                    "if": {
-                      "type": "any",
-                      "conditions": [
-                        { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
-                        { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" }
-                      ]
-                    },
+                    "if": { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "vertex", "default": "select" },
                     "then": [
                       { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
                       { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
@@ -687,7 +711,36 @@
                       { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
                     ],
                     "else": [
-                      { "type": "editor.command.clear_preview", "message": "escape" }
+                      {
+                        "type": "branch",
+                        "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
+                        "then": [
+                          { "type": "editor.selection.clear" },
+                          { "type": "editor.command.clear_preview", "message": "selection cleared" },
+                          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selection cleared" }
+                        ],
+                        "else": [
+                          {
+                            "type": "branch",
+                            "if": {
+                              "type": "any",
+                              "conditions": [
+                                { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
+                                { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" }
+                              ]
+                            },
+                            "then": [
+                              { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
+                              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
+                              { "type": "editor.command.clear_preview", "message": "tool closed" },
+                              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
+                            ],
+                            "else": [
+                              { "type": "editor.command.clear_preview", "message": "escape" }
+                            ]
+                          }
+                        ]
+                      }
                     ]
                   }
                 ]
@@ -923,6 +976,39 @@
                   "type": "scene_state.compare",
                   "key": "editor.mode",
                   "op": "==",
+                  "value": "vertex",
+                  "default": "select"
+                },
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.vertex.selection.count",
+                  "op": ">",
+                  "value": 0,
+                  "default": 0
+                }
+              ]
+            },
+            "then": [
+              {
+                "type": "editor.vertex.delete_selected",
+                "outputs": {
+                  "valid_key": "editor.vertex.delete.valid",
+                  "message_key": "editor.vertex.delete.message",
+                  "source_count_key": "editor.vertex.delete.source_count",
+                  "deleted_count_key": "editor.vertex.delete.deleted_count"
+                }
+              }
+            ],
+            "else": [
+              {
+                "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.mode",
+                  "op": "==",
                   "value": "select",
                   "default": "select"
                 },
@@ -1059,6 +1145,8 @@
                   }
                 ]
               }
+            ]
+          }
             ]
           }
         ]

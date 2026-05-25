@@ -3,6 +3,7 @@
 #include <array>
 #include <cfloat>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -35,6 +36,97 @@ extern "C"
 #include "slayer3d/timer_pool.h"
 
     typedef struct brush_world_runtime brush_world_runtime;
+#define SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT 8
+#define SLAYER3D_EDITOR_SOURCE_BOX_EDGE_COUNT 12
+#define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
+#define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
+#define SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX 320
+    typedef struct editor_brush_source_vertex
+    {
+        int brush_index;
+        int vertex_index;
+        int coord[3];
+        char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    } editor_brush_source_vertex;
+    typedef struct editor_brush_source_edge
+    {
+        int brush_index;
+        int edge_index;
+        int vertex_indices[2];
+        char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    } editor_brush_source_edge;
+    typedef struct editor_brush_source_face_ref
+    {
+        int brush_index;
+        int face_index;
+        int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+        int vertex_count;
+        char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    } editor_brush_source_face_ref;
+    typedef struct editor_brush_source_vertex_model
+    {
+        int brush_index;
+        char brush_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+        int vertex_count;
+        editor_brush_source_vertex vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+        int edge_count;
+        editor_brush_source_edge edges[64];
+        int face_count;
+        editor_brush_source_face_ref faces[SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY];
+    } editor_brush_source_vertex_model;
+    typedef struct editor_brush_source_shared_vertex
+    {
+        int coord[3];
+        int first_brush_index;
+        int first_vertex_index;
+        int reference_count;
+    } editor_brush_source_shared_vertex;
+    typedef struct editor_brush_source_vertex_diagnostics
+    {
+        bool valid;
+        int brush_count;
+        int vertex_count;
+        int edge_count;
+        int face_count;
+        int shared_vertex_count;
+        int off_snap_count;
+        int degenerate_count;
+        int concave_count;
+        int non_finite_count;
+        char first_issue[256];
+        char first_issue_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    } editor_brush_source_vertex_diagnostics;
+    typedef enum editor_brush_source_vertex_operation_type
+    {
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE_MANY_TO_TARGET,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP,
+    } editor_brush_source_vertex_operation_type;
+    typedef struct editor_brush_source_vertex_operation_desc
+    {
+        const char *brush_identity;
+        editor_brush_source_vertex_operation_type type;
+        int vertex_index;
+        int target_vertex_index;
+        int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+        int vertex_index_count;
+        int coord[3];
+        int snap_units;
+    } editor_brush_source_vertex_operation_desc;
+    typedef struct editor_brush_source_vertex_operation_result
+    {
+        bool valid;
+        int vertex_count;
+        int changed_count;
+        int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+        int face_count;
+        char diagnostic[256];
+        slayer3d_game_data_brush brush;
+    } editor_brush_source_vertex_operation_result;
     yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
     void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                          const slayer3d_game_data_editor_selection *hover_selection);
@@ -54,7 +146,41 @@ extern "C"
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
+    bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_world_runtime *world_runtime,
+                                                                    const char *brush_identity, const int *vertices,
+                                                                    int vertex_count,
+                                                                    slayer3d_game_data_brush *out_brush,
+                                                                    char *error_buffer, int error_buffer_size);
+    void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
+    bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
+                                                            const editor_brush_source_vertex_operation_desc *desc,
+                                                            editor_brush_source_vertex_operation_result *out_result,
+                                                            char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world_runtime,
+                                                          const editor_brush_source_vertex_operation_desc *desc,
+                                                          editor_brush_source_vertex_operation_result *out_result,
+                                                          char *error_buffer, int error_buffer_size);
+    bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
+                                                          editor_brush_source_vertex_diagnostics *out_diagnostics,
+                                                          char *error_buffer, int error_buffer_size);
+    bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
+                                                    editor_brush_source_vertex_model *out_model, char *error_buffer,
+                                                    int error_buffer_size);
+    bool editor_brush_world_validate_source_vertex_model(const brush_world_runtime *world_runtime,
+                                                         const int *source_indices, int source_index_count,
+                                                         editor_brush_source_vertex_diagnostics *out_diagnostics,
+                                                         char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_find_shared_source_vertices(const brush_world_runtime *world_runtime,
+                                                        const int *source_indices, int source_index_count,
+                                                        editor_brush_source_shared_vertex *out_vertices,
+                                                        int out_capacity, int *out_count, char *error_buffer,
+                                                        int error_buffer_size);
     bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+    bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+    bool slayer3d_game_data_merge_selected_editor_vertices_to_hover(slayer3d_game_data_runtime *runtime,
+                                                                    yyjson_val *action);
+    bool slayer3d_game_data_add_editor_vertex_to_source(slayer3d_game_data_runtime *runtime, yyjson_val *action);
+    bool slayer3d_game_data_validate_editor_vertex_source(slayer3d_game_data_runtime *runtime, yyjson_val *action);
 }
 
 namespace
@@ -622,20 +748,28 @@ void seed_editor_shell_player_start(slayer3d_game_data_runtime *runtime)
     ASSERT_TRUE(slayer3d_game_data_place_editor_player_start(runtime, &start, error, sizeof(error))) << error;
 }
 
-void select_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
+void select_editor_shell_test_brush(slayer3d_game_data_runtime *runtime, const char *brush_name, bool additive = false)
 {
     ASSERT_NE(runtime, nullptr);
-    const char *json = R"json({
+    char json[512]{};
+    SDL_snprintf(json, sizeof(json), R"json({
           "type": "editor.selection.select_brush",
           "world": "brush.editor_shell.target",
-          "element": "brush.target.cube",
-          "face": "nx"
-        })json";
+          "element": "%s",
+          "face": "nx",
+          "additive": %s
+        })json",
+                 brush_name != nullptr ? brush_name : "", additive ? "true" : "false");
     yyjson_doc *doc = yyjson_read(json, SDL_strlen(json), 0);
     ASSERT_NE(doc, nullptr);
     yyjson_val *root = yyjson_doc_get_root(doc);
     ASSERT_TRUE(slayer3d_game_data_select_editor_brush_action(runtime, root));
     yyjson_doc_free(doc);
+}
+
+void select_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
+{
+    select_editor_shell_test_brush(runtime, "brush.target.cube");
 }
 
 std::filesystem::path fps_template_data_path()
@@ -9555,6 +9689,108 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
               std::string::npos)
         << error;
 
+    write_text(dir / "bad_vertex_snap_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Vertex Snap Action" },
+  "world": { "name": "world.bad_editor_vertex_snap_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.snap"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.snap",
+        "actions": [
+          { "type": "editor.vertex.snap_selected", "snap_units": 0 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_vertex_snap_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.vertex.snap_selected snap_units must be positive"), std::string::npos)
+        << error;
+
+    write_text(dir / "bad_vertex_merge_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Vertex Merge Action" },
+  "world": { "name": "world.bad_editor_vertex_merge_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.merge"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.merge",
+        "actions": [
+          { "type": "editor.vertex.merge_selected_to_hover", "target_vertex_index": -1 }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_vertex_merge_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.vertex.merge_selected_to_hover target_vertex_index must be non-negative"),
+              std::string::npos)
+        << error;
+
+    write_text(dir / "bad_vertex_add_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Vertex Add Action" },
+  "world": { "name": "world.bad_editor_vertex_add_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.add"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.add",
+        "actions": [
+          { "type": "editor.vertex.add_to_source", "coord": [0, 1.5, 0] }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_vertex_add_action.game.json").string().c_str(), nullptr,
+                                                  error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.vertex.add_to_source coord must be an int[3]"), std::string::npos)
+        << error;
+
+    write_text(dir / "bad_vertex_validate_source_action.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Editor Vertex Validate Source Action" },
+  "world": { "name": "world.bad_editor_vertex_validate_source_action", "kind": "fixed_screen" },
+  "signals": ["signal.editor.validate"],
+  "logic": {
+    "bindings": [
+      {
+        "signal": "signal.editor.validate",
+        "actions": [
+          {
+            "type": "editor.vertex.validate_source",
+            "brush": "brush.source",
+            "brush_stable_id": "source.brush"
+          }
+        ]
+      }
+    ]
+  },
+  "scenes": { "initial": "scene.play", "files": ["scenes/play.scene.json"] }
+})json");
+    SDL_zeroa(error);
+    EXPECT_FALSE(slayer3d_game_data_validate_file(
+        (dir / "bad_vertex_validate_source_action.game.json").string().c_str(), nullptr, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("editor.vertex.validate_source accepts only one brush identity"),
+              std::string::npos)
+        << error;
+
     write_text(dir / "bad_preview_action.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -16230,6 +16466,820 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
+    ASSERT_GE(vertex_signal, 0);
+    ASSERT_GE(escape_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "vertex");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex tool");
+
+    auto visible_ui_rect = [&](const char *name) {
+        struct RectNameCapture
+        {
+            const slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
+            bool found = false;
+        } capture{runtime, name, false};
+        auto capture_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<RectNameCapture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                SDL_strcmp(rect->name, capture->name) != 0)
+            {
+                return true;
+            }
+            if (slayer3d_game_data_ui_rect_is_visible(capture->runtime, rect, nullptr))
+            {
+                capture->found = true;
+                return false;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &capture));
+        return capture.found;
+    };
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.vertex.selected"));
+
+    struct VertexDebugCapture
+    {
+        int handles = 0;
+        bool saw_vertex_id = false;
+    } vertex_debug;
+    auto capture_vertex_handles = [](void *userdata,
+                                     const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<VertexDebugCapture *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE)
+        {
+            capture->handles++;
+            if (primitive->element_name != nullptr &&
+                std::string(primitive->element_name).find("brush.target.cube.vertex.") == 0)
+            {
+                capture->saw_vertex_id = true;
+            }
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_vertex_handles, &vertex_debug));
+    EXPECT_GE(vertex_debug.handles, 8);
+    EXPECT_TRUE(vertex_debug.saw_vertex_id);
+
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.hit", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.vertex.hover.brush", ""), "brush.target.cube");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.vertex.hover.vertex", ""))
+                  .find("brush.target.cube.vertex."),
+              std::string::npos);
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.vertex.hover.index", -1), 0);
+    EXPECT_GE(slayer3d_properties_get_int(scene_state, "editor.vertex.hover.shared_count", 0), 1);
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0),
+              slayer3d_properties_get_int(scene_state, "editor.vertex.hover.shared_count", 0));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.selected", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex selected");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.vertex.selection.vertex", ""))
+                  .find("brush.target.cube.vertex."),
+              std::string::npos);
+
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_SetModState(SDL_KMOD_SHIFT);
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    SDL_SetModState(SDL_KMOD_NONE);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.selected", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex deselected");
+
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0), 0);
+
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", -1), 1);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeSelectsSharedPositionVertices)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+
+    slayer3d_game_data_create_box_brush_desc left{};
+    left.world_name = "brush.editor_shell.target";
+    left.brush_name = "brush.target.left_neighbor";
+    left.material_name = "mat.editor.wall";
+    left.min = slayer3d_vec3_make(-2.0f, 0.0f, 0.0f);
+    left.max = slayer3d_vec3_make(0.0f, 2.0f, 2.0f);
+    left.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &left, nullptr, 0, error, sizeof(error))) << error;
+
+    slayer3d_game_data_create_box_brush_desc right = left;
+    right.brush_name = "brush.target.right_neighbor";
+    right.min = slayer3d_vec3_make(2.0f, 0.0f, 0.0f);
+    right.max = slayer3d_vec3_make(4.0f, 2.0f, 2.0f);
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &right, nullptr, 0, error, sizeof(error))) << error;
+
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_brush(runtime, "brush.target.cube");
+    select_editor_shell_test_brush(runtime, "brush.target.left_neighbor", true);
+    select_editor_shell_test_brush(runtime, "brush.target.right_neighbor", true);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.hover.hit", false));
+    const int shared_count = slayer3d_properties_get_int(scene_state, "editor.vertex.hover.shared_count", 0);
+    ASSERT_GE(shared_count, 2);
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0), shared_count);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.selection.multiple", false));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event down{};
+    down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    down.button.button = SDL_BUTTON_LEFT;
+    down.button.x = 8.0f;
+    down.button.y = 88.0f;
+    slayer3d_input_process_event(input, &down);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.lasso.active", false));
+
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 1272.0f;
+    motion.motion.y = 592.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event up{};
+    up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    up.button.button = SDL_BUTTON_LEFT;
+    up.button.x = motion.motion.x;
+    up.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &up);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.lasso.active", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.lasso.selected_count", -1), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 8);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.selection.multiple", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex lasso selected");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeLassoUsesSelectedBrushSources)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+
+    slayer3d_game_data_create_box_brush_desc neighbor{};
+    neighbor.world_name = "brush.editor_shell.target";
+    neighbor.brush_name = "brush.target.unselected_neighbor";
+    neighbor.material_name = "mat.editor.wall";
+    neighbor.min = slayer3d_vec3_make(3.0f, 0.0f, 0.0f);
+    neighbor.max = slayer3d_vec3_make(5.0f, 2.0f, 2.0f);
+    neighbor.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &neighbor, nullptr, 0, error, sizeof(error))) << error;
+
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_SetModState(SDL_KMOD_SHIFT);
+    SDL_Event down{};
+    down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    down.button.button = SDL_BUTTON_LEFT;
+    down.button.x = 8.0f;
+    down.button.y = 88.0f;
+    slayer3d_input_process_event(input, &down);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.lasso.additive", false));
+
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 1272.0f;
+    motion.motion.y = 592.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event up{};
+    up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    up.button.button = SDL_BUTTON_LEFT;
+    up.button.x = motion.motion.x;
+    up.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &up);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    SDL_SetModState(SDL_KMOD_NONE);
+
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 8);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.lasso.selected_count", -1), 8);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.vertex.selection.brush", ""), "brush.target.cube");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeMovesSelectedVerticesOnGrid)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    auto brush_bounds = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, "brush.target.cube") == 0)
+                return brush.bounds;
+        }
+        ADD_FAILURE() << "brush.target.cube not found";
+        return slayer3d_bounding_box{slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 0.0f)};
+    };
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_GT(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0), 0);
+    const int selected_x = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.x", -1);
+    const slayer3d_bounding_box before_move = brush_bounds();
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_UP;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    key.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 5);
+
+    const slayer3d_bounding_box after_move = brush_bounds();
+    const int moved_x = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.x", -1);
+    EXPECT_EQ(moved_x, selected_x + 1000);
+    if (selected_x == 0)
+    {
+        EXPECT_NEAR(after_move.min.x, before_move.min.x + 1.0f, 0.001f);
+        EXPECT_NEAR(after_move.max.x, before_move.max.x, 0.001f);
+    }
+    else
+    {
+        EXPECT_NEAR(after_move.min.x, before_move.min.x, 0.001f);
+        EXPECT_NEAR(after_move.max.x, before_move.max.x + 1.0f, 0.001f);
+    }
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "moved selected vertices");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeRejectsDegenerateVertexMove)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(mutable_scene_state, nullptr);
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    const int selected_x = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.x", -1);
+    slayer3d_properties_set_float(mutable_scene_state, "editor.grid.size", 4.0f);
+
+    slayer3d_game_data_brush_world before_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &before_world));
+    ASSERT_EQ(before_world.brush_count, 1);
+    const slayer3d_bounding_box before = before_world.brushes[0].bounds;
+
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = selected_x <= 1000 ? SDL_SCANCODE_UP : SDL_SCANCODE_DOWN;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    slayer3d_game_data_brush_world after_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &after_world));
+    ASSERT_EQ(after_world.brush_count, 1);
+    const slayer3d_bounding_box after = after_world.brushes[0].bounds;
+    EXPECT_NEAR(after.min.x, before.min.x, 0.001f);
+    EXPECT_NEAR(after.max.x, before.max.x, 0.001f);
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""))
+                  .find("vertex move blocked"),
+              std::string::npos);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeDeleteSelectedVertexUsesSourceValidation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    const int delete_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.delete_selected");
+    ASSERT_GE(vertex_signal, 0);
+    ASSERT_GE(delete_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0), 1);
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    ASSERT_EQ(model.vertex_count, 8);
+
+    slayer3d_signal_emit(bus, delete_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.delete.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.delete.deleted_count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "deleted 1 selected source vertex");
+
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 7);
+    EXPECT_GT(model.face_count, 4);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorVertexMergeSelectedToTargetUsesSourceValidation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    const int selected_index = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.index", -1);
+    ASSERT_GE(selected_index, 0);
+    const int target_index = selected_index ^ 1;
+
+    char merge_json[512];
+    SDL_snprintf(merge_json, sizeof(merge_json),
+                 R"json({
+  "world": "brush.editor_shell.target",
+  "brush_stable_id": "source.box.brush.target.cube",
+  "target_vertex_index": %d,
+  "outputs": {
+    "valid_key": "test.merge.valid",
+    "message_key": "test.merge.message",
+    "merged_count_key": "test.merge.count"
+  }
+})json",
+                 target_index);
+    yyjson_doc *merge_doc = yyjson_read(merge_json, SDL_strlen(merge_json), YYJSON_READ_NOFLAG);
+    ASSERT_NE(merge_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_merge_selected_editor_vertices_to_hover(runtime, yyjson_doc_get_root(merge_doc)));
+    yyjson_doc_free(merge_doc);
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.merge.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.merge.count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "merged 1 selected source vertex");
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 7);
+    EXPECT_GT(model.face_count, 4);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorVertexAddToSourceUsesSourceValidation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    const char add_json[] = R"json({
+  "world": "brush.editor_shell.target",
+  "brush_stable_id": "source.box.brush.target.cube",
+  "coord": [1000, 3000, 1000],
+  "outputs": {
+    "valid_key": "test.add.valid",
+    "message_key": "test.add.message",
+    "vertex_count_key": "test.add.vertex_count",
+    "added_count_key": "test.add.count"
+  }
+})json";
+    yyjson_doc *add_doc = yyjson_read(add_json, SDL_strlen(add_json), YYJSON_READ_NOFLAG);
+    ASSERT_NE(add_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_add_editor_vertex_to_source(runtime, yyjson_doc_get_root(add_doc)));
+    yyjson_doc_free(add_doc);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.add.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.add.count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.add.vertex_count", 0), 9);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.x", -1), 1000);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1), 3000);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.z", -1), 1000);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "added source vertex");
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 9);
+    EXPECT_GT(model.face_count, 6);
+
+    const char duplicate_json[] = R"json({
+  "world": "brush.editor_shell.target",
+  "brush_stable_id": "source.box.brush.target.cube",
+  "coord": [1000, 3000, 1000],
+  "outputs": { "valid_key": "test.add.duplicate.valid", "message_key": "test.add.duplicate.message" }
+})json";
+    yyjson_doc *duplicate_doc = yyjson_read(duplicate_json, SDL_strlen(duplicate_json), YYJSON_READ_NOFLAG);
+    ASSERT_NE(duplicate_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_add_editor_vertex_to_source(runtime, yyjson_doc_get_root(duplicate_doc)));
+    yyjson_doc_free(duplicate_doc);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "test.add.duplicate.valid", true));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "test.add.duplicate.message", ""))
+                  .find("already exists"),
+              std::string::npos);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 660.0f;
+    motion.motion.y = 360.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+
+    SDL_SetModState(SDL_KMOD_SHIFT);
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    const bool updated_after_shift_click = slayer3d_game_data_update_active_editor_tooling(runtime);
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    SDL_SetModState(SDL_KMOD_NONE);
+    ASSERT_TRUE(updated_after_shift_click);
+
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.added_count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.vertex_count", 0), 9);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "added source vertex");
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 9);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -17729,6 +18779,1170 @@ TEST(GameDataRuntime, EditableLevelFragmentIgnoresStaleRuntimeBrushesWhenSourceE
     EXPECT_NE(exported.find("\"source.box.floor\""), std::string::npos);
     EXPECT_EQ(exported.find("brush.stale.runtime.only"), std::string::npos);
     EXPECT_EQ(exported.find("stale.runtime.source.id"), std::string::npos);
+    SDL_free(export_json);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexModelEnumeratesCanonicalCuboid)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.vertex_test",
+          "name": "brush.source.vertex_test",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -200, 8000],
+          "max": [8000, 0, 16000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/source-vertex-model.json",
+        error, sizeof(error)))
+        << error;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.brush_index, 0);
+    EXPECT_STREQ(model.brush_stable_id, "source.box.vertex_test");
+    EXPECT_EQ(model.vertex_count, 8);
+    EXPECT_EQ(model.edge_count, 12);
+    EXPECT_EQ(model.face_count, 6);
+    EXPECT_STREQ(model.vertices[0].stable_id, "source.box.vertex_test.vertex.nx.ny.nz");
+    EXPECT_EQ(model.vertices[0].coord[0], 0);
+    EXPECT_EQ(model.vertices[0].coord[1], -200);
+    EXPECT_EQ(model.vertices[0].coord[2], 8000);
+    EXPECT_STREQ(model.vertices[6].stable_id, "source.box.vertex_test.vertex.px.py.pz");
+    EXPECT_EQ(model.vertices[6].coord[0], 8000);
+    EXPECT_EQ(model.vertices[6].coord[1], 0);
+    EXPECT_EQ(model.vertices[6].coord[2], 16000);
+    EXPECT_EQ(model.edges[0].vertex_indices[0], 0);
+    EXPECT_EQ(model.edges[0].vertex_indices[1], 1);
+    EXPECT_STREQ(model.faces[0].stable_id, "source.box.vertex_test.face.px");
+    EXPECT_EQ(model.faces[0].vertex_count, 4);
+    EXPECT_EQ(model.faces[0].vertex_indices[0], 1);
+    EXPECT_EQ(model.faces[0].vertex_indices[3], 5);
+
+    editor_brush_source_vertex_diagnostics diagnostics{};
+    ASSERT_TRUE(
+        editor_brush_world_validate_source_vertex_model(world_runtime, nullptr, 0, &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.valid) << diagnostics.first_issue;
+    EXPECT_EQ(diagnostics.brush_count, 1);
+    EXPECT_EQ(diagnostics.vertex_count, 8);
+    EXPECT_EQ(diagnostics.edge_count, 12);
+    EXPECT_EQ(diagnostics.face_count, 6);
+    EXPECT_EQ(diagnostics.shared_vertex_count, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexModelDetectsSharedPositions)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.left",
+          "name": "brush.source.left",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, 0, 0],
+          "max": [1000, 1000, 1000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.right",
+          "name": "brush.source.right",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [1000, 0, 0],
+          "max": [2000, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/source-shared-vertices.json",
+        error, sizeof(error)))
+        << error;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    const int selection[] = {0, 1};
+    editor_brush_source_shared_vertex shared[8]{};
+    int shared_count = 0;
+    ASSERT_TRUE(editor_brush_world_find_shared_source_vertices(world_runtime, selection, 2, shared, 8, &shared_count,
+                                                               error, sizeof(error)))
+        << error;
+    EXPECT_EQ(shared_count, 4);
+
+    bool found_corner = false;
+    for (int i = 0; i < shared_count; ++i)
+    {
+        EXPECT_EQ(shared[i].reference_count, 2);
+        if (shared[i].coord[0] == 1000 && shared[i].coord[1] == 0 && shared[i].coord[2] == 0)
+        {
+            found_corner = true;
+            EXPECT_EQ(shared[i].first_brush_index, 0);
+            EXPECT_EQ(shared[i].first_vertex_index, 1);
+        }
+    }
+    EXPECT_TRUE(found_corner);
+
+    editor_brush_source_vertex_diagnostics diagnostics{};
+    ASSERT_TRUE(editor_brush_world_validate_source_vertex_model(world_runtime, selection, 2, &diagnostics, error,
+                                                                sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.valid) << diagnostics.first_issue;
+    EXPECT_EQ(diagnostics.brush_count, 2);
+    EXPECT_EQ(diagnostics.vertex_count, 16);
+    EXPECT_EQ(diagnostics.shared_vertex_count, 4);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorVertexValidateSourceActionPublishesDiagnostics)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 1000,
+      "boxes": [
+        {
+          "stable_id": "source.box.left",
+          "name": "brush.source.left",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, 0, 0],
+          "max": [1000, 1000, 1000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "source.box.right",
+          "name": "brush.source.right",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [1000, 0, 0],
+          "max": [2000, 1000, 1000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u,
+        "/tmp/source-vertex-diagnostics-action.json", error, sizeof(error)))
+        << error;
+
+    const char validate_json[] = R"json({
+  "world": "brush.editor_shell.target",
+  "outputs": {
+    "valid_key": "test.vertex_diag.valid",
+    "message_key": "test.vertex_diag.message",
+    "brush_count_key": "test.vertex_diag.brush_count",
+    "vertex_count_key": "test.vertex_diag.vertex_count",
+    "edge_count_key": "test.vertex_diag.edge_count",
+    "face_count_key": "test.vertex_diag.face_count",
+    "shared_vertex_count_key": "test.vertex_diag.shared_count",
+    "first_issue_key": "test.vertex_diag.first_issue"
+  }
+})json";
+    yyjson_doc *validate_doc = yyjson_read(validate_json, sizeof(validate_json) - 1u, YYJSON_READ_NOFLAG);
+    ASSERT_NE(validate_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_vertex_source(runtime, yyjson_doc_get_root(validate_doc)));
+    yyjson_doc_free(validate_doc);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.vertex_diag.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.vertex_diag.message", ""),
+                 "source vertex model valid");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.vertex_diag.brush_count", 0), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.vertex_diag.vertex_count", 0), 16);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.vertex_diag.edge_count", 0), 24);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.vertex_diag.face_count", 0), 12);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.vertex_diag.shared_count", 0), 4);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.vertex_diag.first_issue", "unexpected"), "");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.diagnostics.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.diagnostics.shared_vertex_count", 0), 4);
+
+    const char missing_json[] = R"json({
+  "world": "brush.editor_shell.target",
+  "brush_stable_id": "source.box.missing",
+  "outputs": {
+    "valid_key": "test.vertex_diag.missing_valid",
+    "message_key": "test.vertex_diag.missing_message",
+    "first_issue_key": "test.vertex_diag.missing_issue"
+  }
+})json";
+    yyjson_doc *missing_doc = yyjson_read(missing_json, sizeof(missing_json) - 1u, YYJSON_READ_NOFLAG);
+    ASSERT_NE(missing_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_vertex_source(runtime, yyjson_doc_get_root(missing_doc)));
+    yyjson_doc_free(missing_doc);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "test.vertex_diag.missing_valid", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "test.vertex_diag.missing_issue", ""),
+                 "source brush not found");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexTopologyRejectsDegenerateAndConcaveCoordinates)
+{
+    int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3] = {
+        {0, 0, 0},    {1000, 0, 0},    {1000, 1000, 0},    {0, 1000, 0},
+        {0, 0, 1000}, {1000, 0, 1000}, {1000, 1000, 1000}, {0, 1000, 1000},
+    };
+    char error[512]{};
+    editor_brush_source_vertex_diagnostics diagnostics{};
+    ASSERT_TRUE(
+        editor_brush_source_validate_box_vertex_topology(&vertices[0][0], 1, &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.valid);
+    EXPECT_EQ(diagnostics.degenerate_count, 0);
+    EXPECT_EQ(diagnostics.concave_count, 0);
+
+    int degenerate[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3];
+    SDL_memcpy(degenerate, vertices, sizeof(vertices));
+    degenerate[1][0] = 0;
+    SDL_zeroa(error);
+    EXPECT_FALSE(
+        editor_brush_source_validate_box_vertex_topology(&degenerate[0][0], 1, &diagnostics, error, sizeof(error)));
+    EXPECT_FALSE(diagnostics.valid);
+    EXPECT_GT(diagnostics.degenerate_count, 0);
+    EXPECT_NE(std::string(error).find("duplicate vertices"), std::string::npos) << error;
+
+    int concave[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3];
+    SDL_memcpy(concave, vertices, sizeof(vertices));
+    concave[6][0] = 800;
+    concave[6][1] = 800;
+    concave[6][2] = 800;
+    SDL_zeroa(error);
+    EXPECT_FALSE(
+        editor_brush_source_validate_box_vertex_topology(&concave[0][0], 1, &diagnostics, error, sizeof(error)));
+    EXPECT_FALSE(diagnostics.valid);
+    EXPECT_GT(diagnostics.concave_count, 0);
+    EXPECT_NE(std::string(error).find("convex canonical box"), std::string::npos) << error;
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexTopologyRejectsOffGridCoordinates)
+{
+    const int vertices[SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT][3] = {
+        {0, 0, 0},    {1001, 0, 0},    {1001, 1000, 0},    {0, 1000, 0},
+        {0, 0, 1000}, {1001, 0, 1000}, {1001, 1000, 1000}, {0, 1000, 1000},
+    };
+    char error[512]{};
+    editor_brush_source_vertex_diagnostics diagnostics{};
+    EXPECT_FALSE(
+        editor_brush_source_validate_box_vertex_topology(&vertices[0][0], 10, &diagnostics, error, sizeof(error)));
+    EXPECT_FALSE(diagnostics.valid);
+    EXPECT_GT(diagnostics.off_snap_count, 0);
+    EXPECT_EQ(diagnostics.degenerate_count, 0);
+    EXPECT_NE(std::string(error).find("off grid"), std::string::npos) << error;
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexRebuildCreatesSlopedConvexBrushAndPreservesMaterials)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] },
+        { "name": "mat.editor.ceiling", "albedo": [0.8, 0.8, 0.8, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.slope",
+          "name": "brush.source.slope",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "face_materials": { "py": "mat.editor.ceiling" },
+          "min": [0, 0, 0],
+          "max": [8000, 8000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-slope.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3] = {
+        {0, 0, 0},    {8000, 0, 0},    {8000, 4000, 0},    {0, 8000, 0},
+        {0, 0, 8000}, {8000, 0, 8000}, {8000, 4000, 8000}, {0, 8000, 8000},
+    };
+    slayer3d_game_data_brush brush{};
+    ASSERT_TRUE(editor_brush_world_build_source_convex_brush_from_vertices(
+        world_runtime, "source.box.slope", &vertices[0][0], SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT, &brush, error,
+        sizeof(error)))
+        << error;
+    EXPECT_EQ(brush.face_count, 6);
+    EXPECT_TRUE(brush.has_bounds);
+    EXPECT_NEAR(brush.bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush.bounds.max.y, 8.0f, 0.001f);
+
+    bool found_sloped_top = false;
+    for (int i = 0; i < brush.face_count; ++i)
+    {
+        const slayer3d_game_data_brush_face &face = brush.faces[i];
+        if (face.normal.y > 0.5f && std::fabs(face.normal.x) > 0.1f)
+        {
+            found_sloped_top = true;
+            EXPECT_STREQ(face.material_name, "mat.editor.ceiling");
+            EXPECT_STREQ(face.editor.stable_id, "source.box.slope.face.py");
+        }
+    }
+    EXPECT_TRUE(found_sloped_top);
+
+    editor_brush_source_free_runtime_brush(&brush);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexRebuildRejectsConcaveVertexCollapse)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.invalid",
+          "name": "brush.source.invalid",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "min": [0, 0, 0],
+          "max": [8000, 8000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u,
+                                                                     "/tmp/source-invalid.json", error, sizeof(error)))
+        << error;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3] = {
+        {0, 0, 0},    {8000, 0, 0},    {8000, 8000, 0},    {0, 8000, 0},
+        {0, 0, 8000}, {8000, 0, 8000}, {4000, 4000, 4000}, {0, 8000, 8000},
+    };
+    slayer3d_game_data_brush brush{};
+    EXPECT_FALSE(editor_brush_world_build_source_convex_brush_from_vertices(
+        world_runtime, "source.box.invalid", &vertices[0][0], SLAYER3D_EDITOR_SOURCE_BOX_VERTEX_COUNT, &brush, error,
+        sizeof(error)));
+    EXPECT_NE(std::string(error).find("discard a vertex"), std::string::npos) << error;
+    editor_brush_source_free_runtime_brush(&brush);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexOperationsPreviewMergeDeleteAndAdd)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] },
+        { "name": "mat.editor.ceiling", "albedo": [0.8, 0.8, 0.8, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.topology",
+          "name": "brush.source.topology",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "face_materials": { "py": "mat.editor.ceiling" },
+          "min": [0, 0, 0],
+          "max": [8000, 8000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u,
+                                                                     "/tmp/source-topology.json", error, sizeof(error)))
+        << error;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    editor_brush_source_vertex_operation_desc merge{};
+    merge.brush_identity = "source.box.topology";
+    merge.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE;
+    merge.vertex_index = 6;
+    merge.target_vertex_index = 7;
+    editor_brush_source_vertex_operation_result result{};
+    ASSERT_TRUE(
+        editor_brush_world_preview_source_vertex_operation(world_runtime, &merge, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_EQ(result.vertex_count, 7);
+    EXPECT_GT(result.face_count, 4);
+    EXPECT_TRUE(result.brush.has_bounds);
+    editor_brush_source_free_runtime_brush(&result.brush);
+
+    editor_brush_source_vertex_operation_desc delete_vertex{};
+    delete_vertex.brush_identity = "source.box.topology";
+    delete_vertex.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE;
+    delete_vertex.vertex_index = 6;
+    SDL_zero(result);
+    ASSERT_TRUE(editor_brush_world_preview_source_vertex_operation(world_runtime, &delete_vertex, &result, error,
+                                                                   sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_EQ(result.vertex_count, 7);
+    EXPECT_GT(result.face_count, 4);
+    editor_brush_source_free_runtime_brush(&result.brush);
+
+    editor_brush_source_vertex_operation_desc add_vertex{};
+    add_vertex.brush_identity = "source.box.topology";
+    add_vertex.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD;
+    add_vertex.coord[0] = 4000;
+    add_vertex.coord[1] = 12000;
+    add_vertex.coord[2] = 4000;
+    SDL_zero(result);
+    ASSERT_TRUE(
+        editor_brush_world_preview_source_vertex_operation(world_runtime, &add_vertex, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_EQ(result.vertex_count, 9);
+    EXPECT_GT(result.face_count, 6);
+    EXPECT_NEAR(result.brush.bounds.max.y, 12.0f, 0.001f);
+    editor_brush_source_free_runtime_brush(&result.brush);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexOperationsRejectInvalidAddAndDelete)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.reject",
+          "name": "brush.source.reject",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "min": [0, 0, 0],
+          "max": [8000, 8000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/source-topology-reject.json",
+        error, sizeof(error)))
+        << error;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    editor_brush_source_vertex_operation_desc duplicate_add{};
+    duplicate_add.brush_identity = "source.box.reject";
+    duplicate_add.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD;
+    duplicate_add.coord[0] = 0;
+    duplicate_add.coord[1] = 0;
+    duplicate_add.coord[2] = 0;
+    editor_brush_source_vertex_operation_result result{};
+    EXPECT_FALSE(editor_brush_world_preview_source_vertex_operation(world_runtime, &duplicate_add, &result, error,
+                                                                    sizeof(error)));
+    EXPECT_FALSE(result.valid);
+    EXPECT_NE(std::string(result.diagnostic).find("already exists"), std::string::npos) << result.diagnostic;
+
+    editor_brush_source_vertex_operation_desc bad_delete{};
+    bad_delete.brush_identity = "source.box.reject";
+    bad_delete.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE;
+    bad_delete.vertex_index = 99;
+    SDL_zeroa(error);
+    SDL_zero(result);
+    EXPECT_FALSE(
+        editor_brush_world_preview_source_vertex_operation(world_runtime, &bad_delete, &result, error, sizeof(error)));
+    EXPECT_FALSE(result.valid);
+    EXPECT_NE(std::string(result.diagnostic).find("out of range"), std::string::npos) << result.diagnostic;
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexSnapOperationUsesSourceValidation)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 1,
+      "boxes": [
+        {
+          "stable_id": "source.box.snap",
+          "name": "brush.source.snap",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "min": [0, 0, 0],
+          "max": [8500, 8100, 7700],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-snap.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_operation_desc snap{};
+    snap.brush_identity = "source.box.snap";
+    snap.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_SNAP;
+    snap.snap_units = 1000;
+    editor_brush_source_vertex_operation_result result{};
+    ASSERT_TRUE(editor_brush_world_preview_source_vertex_operation(world_runtime, &snap, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_GT(result.changed_count, 0);
+    ASSERT_EQ(result.vertex_count, 8);
+    for (int i = 0; i < result.vertex_count; ++i)
+    {
+        EXPECT_EQ(result.vertices[i][0] % 1000, 0);
+        EXPECT_EQ(result.vertices[i][1] % 1000, 0);
+        EXPECT_EQ(result.vertices[i][2] % 1000, 0);
+    }
+    EXPECT_NEAR(result.brush.bounds.max.x, 9.0f, 0.001f);
+    EXPECT_NEAR(result.brush.bounds.max.y, 8.0f, 0.001f);
+    EXPECT_NEAR(result.brush.bounds.max.z, 8.0f, 0.001f);
+    editor_brush_source_free_runtime_brush(&result.brush);
+
+    SDL_zero(result);
+    ASSERT_TRUE(editor_brush_world_apply_source_vertex_operation(world_runtime, &snap, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    editor_brush_source_free_runtime_brush(&result.brush);
+
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    ASSERT_EQ(model.vertex_count, 8);
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        EXPECT_EQ(model.vertices[i].coord[0] % 1000, 0);
+        EXPECT_EQ(model.vertices[i].coord[1] % 1000, 0);
+        EXPECT_EQ(model.vertices[i].coord[2] % 1000, 0);
+    }
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorVertexSnapSelectedActionSnapsSelectedSourceBrushes)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 1,
+      "boxes": [
+        {
+          "stable_id": "source.box.snap.action",
+          "name": "brush.source.snap.action",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "min": [0, 0, 0],
+          "max": [2750, 2250, 1750],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/source-snap-action.json",
+        error, sizeof(error)))
+        << error;
+
+    const char select_json[] = R"json({
+  "world": "brush.editor_shell.target",
+  "element_stable_id": "source.box.snap.action"
+})json";
+    yyjson_doc *select_doc = yyjson_read(select_json, sizeof(select_json) - 1u, YYJSON_READ_NOFLAG);
+    ASSERT_NE(select_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_select_editor_brush_action(runtime, yyjson_doc_get_root(select_doc)));
+    yyjson_doc_free(select_doc);
+
+    const char snap_json[] = R"json({
+  "snap_units": 1000,
+  "outputs": {
+    "valid_key": "test.snap.valid",
+    "message_key": "test.snap.message",
+    "changed_count_key": "test.snap.changed",
+    "source_count_key": "test.snap.sources",
+    "snap_units_key": "test.snap.units"
+  }
+})json";
+    yyjson_doc *snap_doc = yyjson_read(snap_json, sizeof(snap_json) - 1u, YYJSON_READ_NOFLAG);
+    ASSERT_NE(snap_doc, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_snap_selected_editor_vertices(runtime, yyjson_doc_get_root(snap_doc)));
+    yyjson_doc_free(snap_doc);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "test.snap.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.snap.sources", 0), 1);
+    EXPECT_GT(slayer3d_properties_get_int(scene_state, "test.snap.changed", 0), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "test.snap.units", 0), 1000);
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    ASSERT_EQ(model.vertex_count, 8);
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        EXPECT_EQ(model.vertices[i].coord[0] % 1000, 0);
+        EXPECT_EQ(model.vertices[i].coord[1] % 1000, 0);
+        EXPECT_EQ(model.vertices[i].coord[2] % 1000, 0);
+    }
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceConvexSourcesLoadExportAndReload)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [
+        { "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] },
+        { "name": "mat.editor.ceiling", "albedo": [0.8, 0.8, 0.8, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.convex.slope",
+          "name": "brush.source.slope",
+          "kind": "convex",
+          "prefab": "convex",
+          "material": "mat.editor.wall",
+          "face_materials": { "py": "mat.editor.ceiling" },
+          "vertices": [
+            [0, 0, 0],
+            [8000, 0, 0],
+            [8000, 4000, 0],
+            [0, 8000, 0],
+            [0, 0, 8000],
+            [8000, 0, 8000],
+            [8000, 4000, 8000],
+            [0, 8000, 8000]
+          ],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u,
+                                                                     "/tmp/source-convex.json", error, sizeof(error)))
+        << error;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 8);
+    EXPECT_EQ(model.edge_count, 12);
+    EXPECT_EQ(model.face_count, 6);
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+    std::string exported(export_json, export_size);
+    EXPECT_NE(exported.find("\"kind\": \"convex\""), std::string::npos);
+    EXPECT_NE(exported.find("\"vertices\""), std::string::npos);
+    EXPECT_EQ(exported.find("\"min\""), std::string::npos);
+    EXPECT_EQ(exported.find("\"max\""), std::string::npos);
+
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", export_json,
+                                                                     export_size, "/tmp/source-convex-roundtrip.json",
+                                                                     error, sizeof(error)))
+        << error;
+    SDL_free(export_json);
+    world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    SDL_zero(model);
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 8);
+    EXPECT_EQ(model.edge_count, 12);
+
+    slayer3d_game_data_brush_world public_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &public_world));
+    ASSERT_EQ(public_world.brush_count, 1);
+    EXPECT_NEAR(public_world.brushes[0].bounds.max.y, 8.0f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexOperationApplyPersistsConvexSource)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.apply",
+          "name": "brush.source.apply",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "min": [0, 0, 0],
+          "max": [8000, 8000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u, "/tmp/source-apply.json",
+                                                                     error, sizeof(error)))
+        << error;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_operation_desc add_vertex{};
+    add_vertex.brush_identity = "source.box.apply";
+    add_vertex.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD;
+    add_vertex.coord[0] = 4000;
+    add_vertex.coord[1] = 12000;
+    add_vertex.coord[2] = 4000;
+    editor_brush_source_vertex_operation_result result{};
+    ASSERT_TRUE(
+        editor_brush_world_apply_source_vertex_operation(world_runtime, &add_vertex, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_EQ(result.vertex_count, 9);
+    editor_brush_source_free_runtime_brush(&result.brush);
+
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 9);
+    EXPECT_GT(model.edge_count, 12);
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+    std::string exported(export_json, export_size);
+    EXPECT_NE(exported.find("\"kind\": \"convex\""), std::string::npos);
+    EXPECT_NE(exported.find("\"prefab\": \"convex\""), std::string::npos);
+    yyjson_doc *export_doc = yyjson_read(export_json, export_size, 0);
+    ASSERT_NE(export_doc, nullptr);
+    yyjson_val *export_root = yyjson_doc_get_root(export_doc);
+    yyjson_val *export_sources = yyjson_obj_get(export_root, "editor_brush_sources");
+    ASSERT_TRUE(yyjson_is_arr(export_sources));
+    yyjson_val *export_boxes = yyjson_obj_get(yyjson_arr_get(export_sources, 0), "boxes");
+    ASSERT_TRUE(yyjson_is_arr(export_boxes));
+    yyjson_val *export_vertices = yyjson_obj_get(yyjson_arr_get(export_boxes, 0), "vertices");
+    ASSERT_TRUE(yyjson_is_arr(export_vertices));
+    bool found_apex = false;
+    for (size_t i = 0; i < yyjson_arr_size(export_vertices); ++i)
+    {
+        yyjson_val *vertex = yyjson_arr_get(export_vertices, i);
+        if (yyjson_is_arr(vertex) && yyjson_arr_size(vertex) >= 3u &&
+            yyjson_get_int(yyjson_arr_get(vertex, 0)) == 4000 && yyjson_get_int(yyjson_arr_get(vertex, 1)) == 12000 &&
+            yyjson_get_int(yyjson_arr_get(vertex, 2)) == 4000)
+        {
+            found_apex = true;
+        }
+    }
+    yyjson_doc_free(export_doc);
+    EXPECT_TRUE(found_apex);
+
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", export_json,
+                                                                     export_size, "/tmp/source-apply-roundtrip.json",
+                                                                     error, sizeof(error)))
+        << error;
+    SDL_free(export_json);
+
+    world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    SDL_zero(model);
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 9);
+    slayer3d_game_data_brush_world public_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &public_world));
+    ASSERT_EQ(public_world.brush_count, 1);
+    EXPECT_NEAR(public_world.brushes[0].bounds.max.y, 12.0f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexOperationApplyRollbackPreservesSourceOnFailure)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.rollback",
+          "name": "brush.source.rollback",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "min": [0, 0, 0],
+          "max": [8000, 8000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u,
+                                                                     "/tmp/source-rollback.json", error, sizeof(error)))
+        << error;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_operation_desc bad_delete{};
+    bad_delete.brush_identity = "source.box.rollback";
+    bad_delete.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE;
+    bad_delete.vertex_index = 99;
+    editor_brush_source_vertex_operation_result result{};
+    EXPECT_FALSE(
+        editor_brush_world_apply_source_vertex_operation(world_runtime, &bad_delete, &result, error, sizeof(error)));
+    EXPECT_FALSE(result.valid);
+
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 8);
+    EXPECT_EQ(model.edge_count, 12);
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+    std::string exported(export_json, export_size);
+    EXPECT_NE(exported.find("\"kind\": \"box\""), std::string::npos);
+    EXPECT_EQ(exported.find("\"kind\": \"convex\""), std::string::npos);
     SDL_free(export_json);
 
     slayer3d_game_data_destroy(runtime);

@@ -437,6 +437,24 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return slayer3d_game_data_clear_active_editor_selection(runtime);
 
+    if (SDL_strcmp(type, "editor.vertex.selection.clear") == 0)
+        return slayer3d_game_data_clear_editor_vertex_selection(runtime);
+
+    if (SDL_strcmp(type, "editor.vertex.snap_selected") == 0)
+        return slayer3d_game_data_snap_selected_editor_vertices(runtime, action);
+
+    if (SDL_strcmp(type, "editor.vertex.delete_selected") == 0)
+        return slayer3d_game_data_delete_selected_editor_vertices(runtime, action);
+
+    if (SDL_strcmp(type, "editor.vertex.merge_selected_to_hover") == 0)
+        return slayer3d_game_data_merge_selected_editor_vertices_to_hover(runtime, action);
+
+    if (SDL_strcmp(type, "editor.vertex.add_to_source") == 0)
+        return slayer3d_game_data_add_editor_vertex_to_source(runtime, action);
+
+    if (SDL_strcmp(type, "editor.vertex.validate_source") == 0)
+        return slayer3d_game_data_validate_editor_vertex_source(runtime, action);
+
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
         return slayer3d_game_data_select_editor_brush_action(runtime, action);
 
