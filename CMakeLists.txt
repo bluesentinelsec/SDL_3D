@@ -209,6 +209,7 @@ target_sources(
         src/game_data_standard_options.c
         src/game_presentation.c
         src/game_presentation_app_flow.c
+        src/game_presentation_menus.c
         src/game_presentation_scene_flow.c
         src/game_data_validation_actions.c
         src/game_data_validation_brush_common.c
