@@ -23,6 +23,8 @@
 #include "slayer3d/effects.h"
 #include "slayer3d/font.h"
 #include "slayer3d/game.h"
+#include "slayer3d/game_data_defaults.h"
+#include "slayer3d/game_data_network.h"
 #include "slayer3d/level.h"
 #include "slayer3d/lighting.h"
 #include "slayer3d/model.h"
@@ -38,26 +40,6 @@
 extern "C"
 {
 #endif
-
-    /**
-     * @brief Exact byte size of an authored network control message packet.
-     *
-     * Control messages carry only fixed metadata: magic, version, tick,
-     * control-message index, and the schema hash.
-     */
-#define SLAYER3D_GAME_DATA_NETWORK_CONTROL_PACKET_SIZE (16U + SLAYER3D_REPLICATION_SCHEMA_HASH_SIZE)
-
-    /** @brief Maximum bytes stored for one dynamic menu row label or value, including room for terminator. */
-#define SLAYER3D_GAME_DATA_MENU_DYNAMIC_TEXT_CAPACITY 256U
-
-    /** @brief Default vertical field-of-view for authored perspective, chase, and FPS cameras. */
-#define SLAYER3D_GAME_DATA_DEFAULT_CAMERA_FOVY_DEGREES 90.0f
-
-    /** @brief Default world unit label. SLAYER3D convention is one authored world unit equals one meter. */
-#define SLAYER3D_GAME_DATA_DEFAULT_WORLD_UNITS "meters"
-
-    /** @brief Default scale from authored world units to real-world meters. */
-#define SLAYER3D_GAME_DATA_DEFAULT_METERS_PER_UNIT 1.0f
 
     /** @brief Opaque runtime created from one game JSON document. */
     typedef struct slayer3d_game_data_runtime slayer3d_game_data_runtime;
@@ -88,32 +70,6 @@ extern "C"
         /** @brief Property key containing V-sync, or NULL. */
         const char *window_vsync_key;
     } slayer3d_game_data_app_control;
-
-    /** @brief Direction for an authored network replication or control message. */
-    typedef enum slayer3d_game_data_network_direction
-    {
-        /** @brief Invalid or unknown network direction. */
-        SLAYER3D_GAME_DATA_NETWORK_DIRECTION_INVALID = 0,
-        /** @brief Message flows from the authoritative host to a client. */
-        SLAYER3D_GAME_DATA_NETWORK_DIRECTION_HOST_TO_CLIENT = 1,
-        /** @brief Message flows from a client to the authoritative host. */
-        SLAYER3D_GAME_DATA_NETWORK_DIRECTION_CLIENT_TO_HOST = 2,
-        /** @brief Message may flow in either direction. */
-        SLAYER3D_GAME_DATA_NETWORK_DIRECTION_BIDIRECTIONAL = 3,
-    } slayer3d_game_data_network_direction;
-
-    /** @brief Decoded authored network control message descriptor. */
-    typedef struct slayer3d_game_data_network_control
-    {
-        /** @brief Authored control message name, owned by the runtime. */
-        const char *name;
-        /** @brief Authored message direction. */
-        slayer3d_game_data_network_direction direction;
-        /** @brief Signal referenced by the control message, or -1. */
-        int signal_id;
-        /** @brief Tick carried by the control packet. */
-        Uint32 tick;
-    } slayer3d_game_data_network_control;
 
     /** @brief Authored haptics/rumble policy selected by a signal payload. */
     typedef struct slayer3d_game_data_haptics_policy
