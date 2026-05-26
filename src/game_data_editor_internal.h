@@ -59,6 +59,19 @@ bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *s
                                     const char *element_name);
 bool editor_hover_is_selected_brush(const slayer3d_game_data_runtime *runtime,
                                     const slayer3d_game_data_editor_selection *hover_selection);
+void publish_editor_vertex_hover_state(slayer3d_game_data_runtime *runtime,
+                                       const slayer3d_game_data_editor_selection *selection);
+bool editor_handle_vertex_lasso(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
+bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
+                               const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
+bool editor_handle_vertex_add_to_source(slayer3d_game_data_runtime *runtime,
+                                        const slayer3d_game_data_editor_selection *hover_selection,
+                                        bool select_requested, bool *out_consumed);
+bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
+                                    const slayer3d_game_data_editor_selection *hover_selection, bool select_requested,
+                                    bool *out_consumed);
+bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
 bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                  slayer3d_game_data_world_trace_desc *out_trace);
 bool editor_trace_select_viewport_at(const slayer3d_game_data_runtime *runtime, yyjson_val *trace, float screen_x,
