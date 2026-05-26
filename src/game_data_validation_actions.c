@@ -2612,11 +2612,18 @@ typedef enum action_validation_rule_match
     ACTION_RULE_PREFIX
 } action_validation_rule_match;
 
+typedef bool (*action_validator_fn)(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                    validation_names *names, const char *type);
+
 typedef struct action_validation_rule
 {
     const char *name;
     action_validation_rule_match match;
+    action_validator_fn validate;
 } action_validation_rule;
+
+#define ACTION_RULE_EXACT_ENTRY(name) {name, ACTION_RULE_EXACT, validate_known_action}
+#define ACTION_RULE_PREFIX_ENTRY(name) {name, ACTION_RULE_PREFIX, validate_known_action}
 
 static bool action_rule_matches(const action_validation_rule *rule, const char *type)
 {
@@ -2628,106 +2635,106 @@ static bool action_rule_matches(const action_validation_rule *rule, const char *
 static const action_validation_rule *find_action_validation_rule(const char *type)
 {
     static const action_validation_rule rules[] = {
-        {"signal.emit", ACTION_RULE_EXACT},
-        {"timer.start", ACTION_RULE_EXACT},
-        {"property.set", ACTION_RULE_EXACT},
-        {"property.add", ACTION_RULE_EXACT},
-        {"property.snapshot", ACTION_RULE_EXACT},
-        {"property.restore_snapshot", ACTION_RULE_EXACT},
-        {"property.animate", ACTION_RULE_EXACT},
-        {"property.reset_defaults", ACTION_RULE_EXACT},
-        {"debug.write_actor_properties", ACTION_RULE_EXACT},
-        {"actor.spawn", ACTION_RULE_EXACT},
-        {"actor.despawn", ACTION_RULE_EXACT},
-        {"actor.despawn_by_tag", ACTION_RULE_EXACT},
-        {"combat.damage", ACTION_RULE_EXACT},
-        {"combat.heal", ACTION_RULE_EXACT},
-        {"combat.kill", ACTION_RULE_EXACT},
-        {"combat.revive", ACTION_RULE_EXACT},
-        {"resource.add", ACTION_RULE_EXACT},
-        {"resource.consume", ACTION_RULE_EXACT},
-        {"resource.set", ACTION_RULE_EXACT},
-        {"pickup.collect", ACTION_RULE_EXACT},
-        {"resource.station.use", ACTION_RULE_EXACT},
-        {"status_effect.apply", ACTION_RULE_EXACT},
-        {"weapon.reload", ACTION_RULE_EXACT},
-        {"weapon.hitscan", ACTION_RULE_EXACT},
-        {"interaction.use", ACTION_RULE_EXACT},
-        {"effect.explosion", ACTION_RULE_EXACT},
-        {"noise.emit", ACTION_RULE_EXACT},
-        {"sector_door.open", ACTION_RULE_EXACT},
-        {"sector_door.close", ACTION_RULE_EXACT},
-        {"sector_door.toggle", ACTION_RULE_EXACT},
-        {"sector_door.interact", ACTION_RULE_EXACT},
-        {"sector_lighting.set", ACTION_RULE_EXACT},
-        {"projectile.fire", ACTION_RULE_EXACT},
-        {"controller.fps.launch", ACTION_RULE_EXACT},
-        {"controller.fps.teleport", ACTION_RULE_EXACT},
-        {"controller.fps.push", ACTION_RULE_EXACT},
-        {"controller.fps_sector.launch", ACTION_RULE_EXACT},
-        {"controller.fps_sector.teleport", ACTION_RULE_EXACT},
-        {"grid.spawn_from_glyphs", ACTION_RULE_EXACT},
-        {"grid.spawn_runs_from_glyphs", ACTION_RULE_EXACT},
-        {"grid.pickup_layer.reset", ACTION_RULE_EXACT},
-        {"input.reset_bindings", ACTION_RULE_EXACT},
-        {"input.apply_profile", ACTION_RULE_EXACT},
-        {"input.apply_active_profile", ACTION_RULE_EXACT},
-        {"input.clear_network_input_overrides", ACTION_RULE_EXACT},
-        {"scene_state.set", ACTION_RULE_EXACT},
-        {"scene_state.toggle", ACTION_RULE_EXACT},
-        {"scene_state.cycle", ACTION_RULE_EXACT},
-        {"console.write", ACTION_RULE_EXACT},
-        {"editor.selection.clear", ACTION_RULE_EXACT},
-        {"editor.vertex.selection.clear", ACTION_RULE_EXACT},
-        {"editor.vertex.delete_selected", ACTION_RULE_EXACT},
-        {"editor.vertex.merge_selected_to_hover", ACTION_RULE_EXACT},
-        {"editor.vertex.add_to_source", ACTION_RULE_EXACT},
-        {"editor.vertex.validate_source", ACTION_RULE_EXACT},
-        {"editor.vertex.snap_selected", ACTION_RULE_EXACT},
-        {"editor.selection.select_brush", ACTION_RULE_EXACT},
-        {"editor.selection.delete_selected", ACTION_RULE_EXACT},
-        {"editor.selection.resize_y", ACTION_RULE_EXACT},
-        {"editor.selection.run", ACTION_RULE_EXACT},
-        {"editor.command.preview", ACTION_RULE_EXACT},
-        {"editor.command.clear_preview", ACTION_RULE_EXACT},
-        {"editor.command.commit", ACTION_RULE_EXACT},
-        {"editor.command.undo", ACTION_RULE_EXACT},
-        {"editor.command.redo", ACTION_RULE_EXACT},
-        {"editor.brush_world.export", ACTION_RULE_EXACT},
-        {"editor.level.export", ACTION_RULE_EXACT},
-        {"editor.level.save", ACTION_RULE_EXACT},
-        {"editor.level.load", ACTION_RULE_EXACT},
-        {"editor.test_run.prepare", ACTION_RULE_EXACT},
-        {"editor.test_run.save_manifest", ACTION_RULE_EXACT},
-        {"editor.brush_world.status", ACTION_RULE_EXACT},
-        {"editor.brush_world.validate_source", ACTION_RULE_EXACT},
-        {"editor.brush_world.validate_enclosure", ACTION_RULE_EXACT},
-        {"editor.brush_world.create_box", ACTION_RULE_EXACT},
-        {"editor.player_start.place", ACTION_RULE_EXACT},
-        {"editor.player_start.apply", ACTION_RULE_EXACT},
-        {"editor.player_start.delete", ACTION_RULE_EXACT},
-        {"network.direct_connect.start", ACTION_RULE_EXACT},
-        {"network.direct_connect.cancel", ACTION_RULE_EXACT},
-        {"network.direct_connect.observe", ACTION_RULE_EXACT},
-        {"network.host.start", ACTION_RULE_EXACT},
-        {"network.host.cancel", ACTION_RULE_EXACT},
-        {"network.host.observe", ACTION_RULE_EXACT},
-        {"network.discovery.start", ACTION_RULE_EXACT},
-        {"network.discovery.refresh", ACTION_RULE_EXACT},
-        {"network.discovery.observe", ACTION_RULE_EXACT},
-        {"network.discovery.cancel", ACTION_RULE_EXACT},
-        {"network.discovery.connect_selected", ACTION_RULE_EXACT},
-        {"ui.animate", ACTION_RULE_EXACT},
-        {"audio.", ACTION_RULE_PREFIX},
-        {"persistence.load", ACTION_RULE_EXACT},
-        {"persistence.save", ACTION_RULE_EXACT},
-        {"entity.set_active", ACTION_RULE_EXACT},
-        {"transform.set_position", ACTION_RULE_EXACT},
-        {"camera.toggle", ACTION_RULE_EXACT},
-        {"camera.set", ACTION_RULE_EXACT},
-        {"scene.set", ACTION_RULE_EXACT},
-        {"adapter.invoke", ACTION_RULE_EXACT},
-        {"branch", ACTION_RULE_EXACT},
+        ACTION_RULE_EXACT_ENTRY("signal.emit"),
+        ACTION_RULE_EXACT_ENTRY("timer.start"),
+        ACTION_RULE_EXACT_ENTRY("property.set"),
+        ACTION_RULE_EXACT_ENTRY("property.add"),
+        ACTION_RULE_EXACT_ENTRY("property.snapshot"),
+        ACTION_RULE_EXACT_ENTRY("property.restore_snapshot"),
+        ACTION_RULE_EXACT_ENTRY("property.animate"),
+        ACTION_RULE_EXACT_ENTRY("property.reset_defaults"),
+        ACTION_RULE_EXACT_ENTRY("debug.write_actor_properties"),
+        ACTION_RULE_EXACT_ENTRY("actor.spawn"),
+        ACTION_RULE_EXACT_ENTRY("actor.despawn"),
+        ACTION_RULE_EXACT_ENTRY("actor.despawn_by_tag"),
+        ACTION_RULE_EXACT_ENTRY("combat.damage"),
+        ACTION_RULE_EXACT_ENTRY("combat.heal"),
+        ACTION_RULE_EXACT_ENTRY("combat.kill"),
+        ACTION_RULE_EXACT_ENTRY("combat.revive"),
+        ACTION_RULE_EXACT_ENTRY("resource.add"),
+        ACTION_RULE_EXACT_ENTRY("resource.consume"),
+        ACTION_RULE_EXACT_ENTRY("resource.set"),
+        ACTION_RULE_EXACT_ENTRY("pickup.collect"),
+        ACTION_RULE_EXACT_ENTRY("resource.station.use"),
+        ACTION_RULE_EXACT_ENTRY("status_effect.apply"),
+        ACTION_RULE_EXACT_ENTRY("weapon.reload"),
+        ACTION_RULE_EXACT_ENTRY("weapon.hitscan"),
+        ACTION_RULE_EXACT_ENTRY("interaction.use"),
+        ACTION_RULE_EXACT_ENTRY("effect.explosion"),
+        ACTION_RULE_EXACT_ENTRY("noise.emit"),
+        ACTION_RULE_EXACT_ENTRY("sector_door.open"),
+        ACTION_RULE_EXACT_ENTRY("sector_door.close"),
+        ACTION_RULE_EXACT_ENTRY("sector_door.toggle"),
+        ACTION_RULE_EXACT_ENTRY("sector_door.interact"),
+        ACTION_RULE_EXACT_ENTRY("sector_lighting.set"),
+        ACTION_RULE_EXACT_ENTRY("projectile.fire"),
+        ACTION_RULE_EXACT_ENTRY("controller.fps.launch"),
+        ACTION_RULE_EXACT_ENTRY("controller.fps.teleport"),
+        ACTION_RULE_EXACT_ENTRY("controller.fps.push"),
+        ACTION_RULE_EXACT_ENTRY("controller.fps_sector.launch"),
+        ACTION_RULE_EXACT_ENTRY("controller.fps_sector.teleport"),
+        ACTION_RULE_EXACT_ENTRY("grid.spawn_from_glyphs"),
+        ACTION_RULE_EXACT_ENTRY("grid.spawn_runs_from_glyphs"),
+        ACTION_RULE_EXACT_ENTRY("grid.pickup_layer.reset"),
+        ACTION_RULE_EXACT_ENTRY("input.reset_bindings"),
+        ACTION_RULE_EXACT_ENTRY("input.apply_profile"),
+        ACTION_RULE_EXACT_ENTRY("input.apply_active_profile"),
+        ACTION_RULE_EXACT_ENTRY("input.clear_network_input_overrides"),
+        ACTION_RULE_EXACT_ENTRY("scene_state.set"),
+        ACTION_RULE_EXACT_ENTRY("scene_state.toggle"),
+        ACTION_RULE_EXACT_ENTRY("scene_state.cycle"),
+        ACTION_RULE_EXACT_ENTRY("console.write"),
+        ACTION_RULE_EXACT_ENTRY("editor.selection.clear"),
+        ACTION_RULE_EXACT_ENTRY("editor.vertex.selection.clear"),
+        ACTION_RULE_EXACT_ENTRY("editor.vertex.delete_selected"),
+        ACTION_RULE_EXACT_ENTRY("editor.vertex.merge_selected_to_hover"),
+        ACTION_RULE_EXACT_ENTRY("editor.vertex.add_to_source"),
+        ACTION_RULE_EXACT_ENTRY("editor.vertex.validate_source"),
+        ACTION_RULE_EXACT_ENTRY("editor.vertex.snap_selected"),
+        ACTION_RULE_EXACT_ENTRY("editor.selection.select_brush"),
+        ACTION_RULE_EXACT_ENTRY("editor.selection.delete_selected"),
+        ACTION_RULE_EXACT_ENTRY("editor.selection.resize_y"),
+        ACTION_RULE_EXACT_ENTRY("editor.selection.run"),
+        ACTION_RULE_EXACT_ENTRY("editor.command.preview"),
+        ACTION_RULE_EXACT_ENTRY("editor.command.clear_preview"),
+        ACTION_RULE_EXACT_ENTRY("editor.command.commit"),
+        ACTION_RULE_EXACT_ENTRY("editor.command.undo"),
+        ACTION_RULE_EXACT_ENTRY("editor.command.redo"),
+        ACTION_RULE_EXACT_ENTRY("editor.brush_world.export"),
+        ACTION_RULE_EXACT_ENTRY("editor.level.export"),
+        ACTION_RULE_EXACT_ENTRY("editor.level.save"),
+        ACTION_RULE_EXACT_ENTRY("editor.level.load"),
+        ACTION_RULE_EXACT_ENTRY("editor.test_run.prepare"),
+        ACTION_RULE_EXACT_ENTRY("editor.test_run.save_manifest"),
+        ACTION_RULE_EXACT_ENTRY("editor.brush_world.status"),
+        ACTION_RULE_EXACT_ENTRY("editor.brush_world.validate_source"),
+        ACTION_RULE_EXACT_ENTRY("editor.brush_world.validate_enclosure"),
+        ACTION_RULE_EXACT_ENTRY("editor.brush_world.create_box"),
+        ACTION_RULE_EXACT_ENTRY("editor.player_start.place"),
+        ACTION_RULE_EXACT_ENTRY("editor.player_start.apply"),
+        ACTION_RULE_EXACT_ENTRY("editor.player_start.delete"),
+        ACTION_RULE_EXACT_ENTRY("network.direct_connect.start"),
+        ACTION_RULE_EXACT_ENTRY("network.direct_connect.cancel"),
+        ACTION_RULE_EXACT_ENTRY("network.direct_connect.observe"),
+        ACTION_RULE_EXACT_ENTRY("network.host.start"),
+        ACTION_RULE_EXACT_ENTRY("network.host.cancel"),
+        ACTION_RULE_EXACT_ENTRY("network.host.observe"),
+        ACTION_RULE_EXACT_ENTRY("network.discovery.start"),
+        ACTION_RULE_EXACT_ENTRY("network.discovery.refresh"),
+        ACTION_RULE_EXACT_ENTRY("network.discovery.observe"),
+        ACTION_RULE_EXACT_ENTRY("network.discovery.cancel"),
+        ACTION_RULE_EXACT_ENTRY("network.discovery.connect_selected"),
+        ACTION_RULE_EXACT_ENTRY("ui.animate"),
+        ACTION_RULE_PREFIX_ENTRY("audio."),
+        ACTION_RULE_EXACT_ENTRY("persistence.load"),
+        ACTION_RULE_EXACT_ENTRY("persistence.save"),
+        ACTION_RULE_EXACT_ENTRY("entity.set_active"),
+        ACTION_RULE_EXACT_ENTRY("transform.set_position"),
+        ACTION_RULE_EXACT_ENTRY("camera.toggle"),
+        ACTION_RULE_EXACT_ENTRY("camera.set"),
+        ACTION_RULE_EXACT_ENTRY("scene.set"),
+        ACTION_RULE_EXACT_ENTRY("adapter.invoke"),
+        ACTION_RULE_EXACT_ENTRY("branch"),
     };
     for (size_t i = 0; i < SDL_arraysize(rules); ++i)
     {
@@ -2737,6 +2744,15 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
     return NULL;
 }
 
+static bool validate_action_with_rule(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                      validation_names *names, const char *type, const action_validation_rule *rule)
+{
+    if (rule == NULL)
+        return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);
+    return rule->validate != NULL ? rule->validate(ctx, action, json_path, names, type)
+                                  : validate_known_action(ctx, action, json_path, names, type);
+}
+
 bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path, validation_names *names)
 {
     if (!yyjson_is_obj(action))
@@ -2744,9 +2760,7 @@ bool validate_one_action(validation_context *ctx, yyjson_val *action, const char
     const char *type = json_string(action, "type");
     if (type == NULL || type[0] == '\0')
         return validation_error(ctx, json_path, "logic action requires a non-empty type");
-    if (find_action_validation_rule(type) == NULL)
-        return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);
-    return validate_known_action(ctx, action, json_path, names, type);
+    return validate_action_with_rule(ctx, action, json_path, names, type, find_action_validation_rule(type));
 }
 
 bool validate_action_array(validation_context *ctx, yyjson_val *actions, const char *json_path, validation_names *names)

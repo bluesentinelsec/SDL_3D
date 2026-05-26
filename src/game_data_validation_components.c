@@ -919,20 +919,15 @@ static const component_validation_handler *component_validation_handlers(void)
         {"viewmodel.bob", validate_known_component},
         {"weapon.projectile", validate_known_component},
         {"weapon.state", validate_known_component},
+        {NULL, NULL},
     };
     return handlers;
-}
-
-static size_t component_validation_handler_count(void)
-{
-    return 35;
 }
 
 static const component_validation_handler *find_component_validation_handler(const char *type)
 {
     const component_validation_handler *handlers = component_validation_handlers();
-    const size_t count = component_validation_handler_count();
-    for (size_t i = 0; i < count; ++i)
+    for (size_t i = 0; handlers[i].type != NULL; ++i)
     {
         if (SDL_strcmp(type, handlers[i].type) == 0)
             return &handlers[i];
