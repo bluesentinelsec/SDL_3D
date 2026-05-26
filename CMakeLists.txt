@@ -251,8 +251,10 @@ target_sources(
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c
+        src/gl_renderer_draw_lists.c
         src/gl_renderer_programs.c
         src/gl_renderer_shaders.c
+        src/gl_renderer_texture_cache.c
         src/image.c
         src/input.c
         src/lighting.c

@@ -6,468 +6,19 @@
  * fullscreen-triangle copy pass for letterboxed presentation.
  */
 
-#include "gl_renderer.h"
+#include "gl_renderer_internal.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_video.h>
 
-#include "gl_funcs.h"
 #include "gl_renderer_programs.h"
 #include "gl_renderer_shaders.h"
-#include "render_context_internal.h"
-#include "slayer3d/lighting.h"
-#include "slayer3d/texture.h"
 
 #include <string.h>
 
-/* ------------------------------------------------------------------ */
-/* Texture cache                                                       */
-/* ------------------------------------------------------------------ */
-
-#define SLAYER3D_MAX_POINT_SHADOWS 2
-#define SLAYER3D_SKIN_PALETTE_BINDING 1
-#define SLAYER3D_GPU_SKINNING_PALETTE_MATRICES 256
-
-typedef struct slayer3d_gl_tex_entry
-{
-    const slayer3d_texture2d *key;
-    Uint32 generation; /* generation at upload time */
-    GLuint gl_tex;
-    struct slayer3d_gl_tex_entry *next;
-} slayer3d_gl_tex_entry;
-
-/* ------------------------------------------------------------------ */
-/* Scene UBO (std140 layout, must match GLSL SceneUBO)                 */
-/* ------------------------------------------------------------------ */
-
-typedef struct slayer3d_scene_ubo_data
-{
-    float view_projection[16];
-    float camera_pos[3];
-    float _pad0;
-    float ambient[3];
-    int light_count;
-    struct
-    {
-        int type;
-        float _pad[3];
-        float position[3];
-        float _pad1;
-        float direction[3];
-        float _pad2;
-        float color[3];
-        float intensity;
-        float range;
-        float inner_cutoff;
-        float outer_cutoff;
-        float _pad3;
-    } lights[SLAYER3D_MAX_SHADER_LIGHTS];
-    int fog_mode;
-    float fog_start;
-    float fog_end;
-    float fog_density;
-    float fog_color[3];
-    int tonemap_mode;
-} slayer3d_scene_ubo_data;
-
-/* ------------------------------------------------------------------ */
-/* Draw list entry                                                     */
-/* ------------------------------------------------------------------ */
-
-/* Overlay entries are rendered directly to the default framebuffer
- * after the FBO blit, bypassing all post-processing. Used for UI text
- * and other screen-space elements that must not be affected by bloom,
- * SSAO, vignette, etc. Each entry owns its vertex data (copied at
- * submission time) so the caller can free/reload textures freely. */
-
-/* Persistent overlay atlas — uploaded to GL once, re-uploaded only
- * when the source texture's generation changes. */
-typedef struct slayer3d_overlay_atlas
-{
-    const slayer3d_texture2d *source; /* source texture pointer */
-    Uint32 generation;                /* generation at last upload */
-    GLuint gl_tex;                    /* persistent GL texture */
-} slayer3d_overlay_atlas;
-
-typedef struct slayer3d_overlay_entry
-{
-    float *positions; /* 3 floats per vertex, heap-allocated copy */
-    float *uvs;       /* 2 floats per vertex, heap-allocated copy */
-    int vertex_count;
-    float mvp[16];
-    float tint[4];
-    slayer3d_overlay_effect effect;
-    float effect_progress;
-    float effect_seed;
-    float effect_columns;
-    const char *shader_vertex_source;
-    const char *shader_fragment_source;
-    bool scissor_enabled;
-    SDL_Rect scissor_rect;
-    int atlas_index; /* index into overlay_atlases */
-} slayer3d_overlay_entry;
-
-typedef struct slayer3d_draw_entry
-{
-    const float *positions;
-    const float *normals;
-    const float *uvs;
-    const float *lightmap_uvs;
-    const float *colors;
-    const unsigned int *indices;
-    int vertex_count;
-    int index_count;
-    float view_matrix[16];
-    float view_projection[16];
-    float camera_pos[3];
-    float model_matrix[16];
-    float normal_matrix[9];
-    float tint[4];
-    float metallic;
-    float roughness;
-    float emissive[3];
-    const slayer3d_texture2d *texture;
-    const slayer3d_texture2d *lightmap_texture;
-    bool lit;
-    bool baked_light_mode;
-    bool has_lightmap;
-    GLenum primitive_mode;
-    const char *shader_vertex_source;
-    const char *shader_fragment_source;
-    float mvp[16];
-    bool owns_arrays;
-    bool depth_prepass_eligible;
-    bool bounds_valid;
-    slayer3d_vec3 bounds_center;
-    float bounds_radius;
-    struct slayer3d_gl_mesh_cache_entry *mesh_cache;
-    const unsigned short *joint_indices;
-    const float *joint_weights;
-    float *joint_matrices;
-    int joint_count;
-    int joint_palette_offset;
-    bool use_joint_palette_buffer;
-    bool gpu_skinned;
-    bool viewport_enabled;
-    SDL_Rect viewport_rect;
-    bool scissor_enabled;
-    SDL_Rect scissor_rect;
-} slayer3d_draw_entry;
-
 static void draw_entry_capture_viewport(slayer3d_draw_entry *entry, const slayer3d_render_context *context);
-
-typedef struct slayer3d_custom_shader_cache_entry
-{
-    bool lit;
-    char *vertex_source;
-    char *fragment_source;
-    GLuint program;
-    GLint mvp_loc;
-    GLint texture_loc;
-    GLint has_texture_loc;
-    GLint tint_loc;
-    GLint model_loc;
-    GLint normal_matrix_loc;
-    GLint metallic_loc;
-    GLint roughness_loc;
-    GLint emissive_loc;
-    GLint baked_light_mode_loc;
-    GLint pbr_texture_loc;
-    GLint pbr_has_texture_loc;
-    GLint pbr_lightmap_loc;
-    GLint pbr_has_lightmap_loc;
-    GLint pbr_shadow_map_loc;
-    GLint pbr_shadow_vp_loc;
-    GLint pbr_shadow_enabled_loc;
-    GLint pbr_shadow_bias_loc;
-    GLint pbr_csm_vp_loc[4];
-    GLint pbr_csm_splits_loc;
-    GLint pbr_csm_enabled_loc;
-    GLint pbr_view_matrix_loc;
-    GLint pbr_point_shadow_map_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_light_pos_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_far_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_count_loc;
-    GLint pbr_irradiance_map_loc;
-    GLint pbr_prefilter_map_loc;
-    GLint pbr_brdf_lut_loc;
-    GLint pbr_ibl_enabled_loc;
-    GLint pbr_max_reflection_lod_loc;
-    GLint overlay_effect_loc;
-    GLint overlay_effect_progress_loc;
-    GLint overlay_effect_seed_loc;
-    GLint overlay_effect_columns_loc;
-    struct slayer3d_custom_shader_cache_entry *next;
-} slayer3d_custom_shader_cache_entry;
-
-typedef struct slayer3d_gl_mesh_cache_entry
-{
-    bool lit;
-    GLenum primitive_mode;
-    const float *positions;
-    const float *normals;
-    const float *uvs;
-    const float *lightmap_uvs;
-    const float *colors;
-    const unsigned int *indices;
-    const unsigned short *joint_indices;
-    const float *joint_weights;
-    int vertex_count;
-    int index_count;
-    bool has_lightmap_uvs;
-    bool gpu_skinned;
-    GLuint vao;
-    GLuint position_vbo;
-    GLuint normal_vbo;
-    GLuint uv_vbo;
-    GLuint lightmap_uv_vbo;
-    GLuint color_vbo;
-    GLuint joint_index_vbo;
-    GLuint joint_weight_vbo;
-    GLuint ebo;
-    GLuint shadow_vao;
-    GLuint shadow_position_vbo;
-    GLuint shadow_joint_index_vbo;
-    GLuint shadow_joint_weight_vbo;
-    GLuint shadow_ebo;
-    struct slayer3d_gl_mesh_cache_entry *next;
-} slayer3d_gl_mesh_cache_entry;
-
-/* ------------------------------------------------------------------ */
-/* Context                                                             */
-/* ------------------------------------------------------------------ */
-
-#define SLAYER3D_MAX_POINT_SHADOWS 2
-#define SLAYER3D_POINT_SHADOWS_ENABLED 1
-
-struct slayer3d_gl_context
-{
-    SDL_Window *window;
-    SDL_GLContext gl_context;
-    slayer3d_gl_funcs gl;
-    bool is_es;
-    bool sample_queries_supported;
-    Uint64 frame_index;
-    bool ubo_dirty;
-
-    GLuint pbr_program;
-    GLuint unlit_program;
-    GLuint copy_program;
-    slayer3d_custom_shader_cache_entry *custom_shader_cache;
-    GLuint depth_prepass_query;
-    GLuint geometry_query;
-
-    /* PBR uniform locations */
-    GLint pbr_model_loc;
-    GLint pbr_normal_matrix_loc;
-    GLint pbr_use_instancing_loc;
-    GLint pbr_use_skinning_loc;
-    GLint pbr_use_skin_palette_loc;
-    GLint pbr_joint_palette_offset_loc;
-    GLint pbr_joint_matrices_loc;
-    GLint pbr_texture_loc;
-    GLint pbr_has_texture_loc;
-    GLint pbr_tint_loc;
-    GLint pbr_metallic_loc;
-    GLint pbr_roughness_loc;
-    GLint pbr_emissive_loc;
-    GLint pbr_baked_light_mode_loc;
-    GLint pbr_lightmap_loc;
-    GLint pbr_has_lightmap_loc;
-
-    /* Unlit uniform locations */
-    GLint unlit_mvp_loc;
-    GLint unlit_texture_loc;
-    GLint unlit_has_texture_loc;
-    GLint unlit_tint_loc;
-    GLint unlit_overlay_effect_loc;
-    GLint unlit_overlay_effect_progress_loc;
-    GLint unlit_overlay_effect_seed_loc;
-    GLint unlit_overlay_effect_columns_loc;
-
-    /* Copy uniform locations */
-    GLint copy_texture_loc;
-
-    /* Transition pass */
-    GLuint transition_program;
-    GLint transition_scene_loc;
-    GLint transition_type_loc;
-    GLint transition_direction_loc;
-    GLint transition_progress_loc;
-    GLint transition_color_loc;
-    GLint transition_resolution_loc;
-    GLint transition_melt_offsets_loc;
-    GLuint transition_melt_offsets_tex;
-    bool transition_pending;
-    slayer3d_transition pending_transition;
-
-    /* Scene UBO */
-    GLuint scene_ubo;
-    GLuint skin_palette_ubo;
-    float skin_palette_matrices[SLAYER3D_GPU_SKINNING_PALETTE_MATRICES * 16];
-    int skin_palette_matrix_count;
-
-    /* Lit streaming buffers */
-    GLuint lit_vao;
-    GLuint lit_position_vbo;
-    GLuint lit_normal_vbo;
-    GLuint lit_uv_vbo;
-    GLuint lit_lightmap_uv_vbo;
-    GLuint lit_color_vbo;
-    GLuint lit_ebo;
-    GLuint instance_model_vbo;
-    GLuint instance_normal_vbo;
-
-    /* Unlit streaming buffers */
-    GLuint unlit_vao;
-    GLuint unlit_position_vbo;
-    GLuint unlit_uv_vbo;
-    GLuint unlit_color_vbo;
-    GLuint unlit_ebo;
-
-    GLuint fullscreen_vao;
-
-    /* Shadow mapping */
-    GLuint shadow_fbo;
-    GLuint shadow_depth_tex;
-    GLuint shadow_program;
-    GLint shadow_light_vp_loc;
-    GLint shadow_model_loc;
-    GLint shadow_use_instancing_loc;
-    GLint shadow_use_skinning_loc;
-    GLint shadow_use_skin_palette_loc;
-    GLint shadow_joint_palette_offset_loc;
-    GLint shadow_joint_matrices_loc;
-    GLuint shadow_vao;
-    GLuint shadow_position_vbo;
-    GLuint shadow_ebo;
-    bool in_shadow_pass;
-    float shadow_light_vp[16];
-    float shadow_bias;
-
-#define SLAYER3D_CSM_CASCADE_COUNT 4
-    float csm_light_vp[SLAYER3D_CSM_CASCADE_COUNT][16];
-    float csm_split_depths[SLAYER3D_CSM_CASCADE_COUNT];
-    bool csm_fragment_enabled;
-
-    /* PBR shadow uniform locations */
-    GLint pbr_shadow_map_loc;
-    GLint pbr_shadow_vp_loc;
-    GLint pbr_shadow_enabled_loc;
-    GLint pbr_shadow_bias_loc;
-
-    /* CSM uniform locations */
-    GLint pbr_csm_vp_loc[4];
-    GLint pbr_csm_splits_loc;
-    GLint pbr_view_matrix_loc;
-    GLint pbr_csm_enabled_loc;
-
-    /* Point light shadows */
-    GLuint point_shadow_fbo;
-    GLuint point_shadow_cubemap[SLAYER3D_MAX_POINT_SHADOWS];
-    GLuint point_shadow_program;
-    GLint point_shadow_model_loc;
-    GLint point_shadow_light_vp_loc;
-    GLint point_shadow_light_pos_loc;
-    GLint point_shadow_far_loc;
-    GLint point_shadow_use_skinning_loc;
-    GLint point_shadow_use_skin_palette_loc;
-    GLint point_shadow_joint_palette_offset_loc;
-    GLint point_shadow_joint_matrices_loc;
-    int point_shadow_light_index[SLAYER3D_MAX_POINT_SHADOWS];
-    float point_shadow_far_plane[SLAYER3D_MAX_POINT_SHADOWS];
-    float point_shadow_vp[SLAYER3D_MAX_POINT_SHADOWS][6][16];
-    int point_shadow_count;
-
-    GLint pbr_point_shadow_map_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_light_pos_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_far_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_count_loc;
-
-    /* Deferred draw list */
-    slayer3d_draw_entry *draw_list;
-    int draw_count;
-    int draw_capacity;
-    slayer3d_gl_mesh_cache_entry *mesh_cache;
-
-    /* Overlay draw list — rendered after FBO blit, no post-processing */
-    slayer3d_overlay_entry *overlay_list;
-    int overlay_count;
-    int overlay_capacity;
-
-    /* Per-frame atlas snapshots shared across overlay entries */
-    slayer3d_overlay_atlas *overlay_atlases;
-    int overlay_atlas_count;
-    int overlay_atlas_capacity;
-
-    GLuint white_texture;
-    GLuint black_texture;
-    GLuint black_cubemap;
-
-    slayer3d_gl_tex_entry *tex_cache;
-
-    float *white_colors;
-    int white_colors_capacity;
-
-    GLuint fbo;
-    GLuint fbo_color;
-    GLuint fbo_depth;
-    int logical_w;
-    int logical_h;
-    int world_w;
-    int world_h;
-    float world_render_scale;
-
-    /* Post-process */
-    GLuint pp_fbo_a, pp_fbo_b;
-    GLuint pp_tex_a, pp_tex_b;
-    GLuint bloom_program;
-    GLuint bloom_blur_program;
-    GLuint composite_program;
-    GLint bloom_scene_loc, bloom_threshold_loc;
-    GLint blur_image_loc, blur_horizontal_loc;
-    GLint comp_scene_loc, comp_bloom_loc, comp_vignette_loc, comp_contrast_loc, comp_saturation_loc;
-    GLuint final_color_tex;
-
-    /* Retro profile post-process */
-    GLuint retro_program;
-    GLint retro_scene_loc;
-    GLint retro_profile_loc;
-    GLint retro_virtual_resolution_loc;
-    GLint retro_output_resolution_loc;
-    int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES, 5=grayscale, 6=Game Boy */
-    int active_retro_virtual_w;
-    int active_retro_virtual_h;
-    int active_retro_filter;
-
-    /* SSAO post-process */
-    GLuint ssao_program;
-    GLint ssao_scene_loc, ssao_depth_loc, ssao_texel_size_loc, ssao_near_loc, ssao_far_loc;
-
-    /* Cached render context pointer for lazy UBO upload */
-    slayer3d_render_context *current_ctx;
-
-    /* IBL (Image-Based Lighting) */
-    GLuint ibl_irradiance_map; /* diffuse irradiance cubemap */
-    GLuint ibl_prefilter_map;  /* specular prefiltered cubemap */
-    GLuint ibl_brdf_lut;       /* 2D BRDF integration LUT */
-    GLint pbr_irradiance_map_loc;
-    GLint pbr_prefilter_map_loc;
-    GLint pbr_brdf_lut_loc;
-    GLint pbr_ibl_enabled_loc;
-    GLint pbr_max_reflection_lod_loc;
-    bool ibl_ready;
-
-    /* IBL processing shaders */
-    GLuint equirect_to_cube_program;
-    GLuint irradiance_program;
-    GLuint prefilter_program;
-    GLuint brdf_program;
-    GLuint capture_fbo;
-    GLuint capture_rbo;
-};
 
 static const float k_cube_vertices[] = {
     -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1,
@@ -479,79 +30,6 @@ static const unsigned int k_cube_indices[] = {
 static const char *gl_version_prefix_for_context(const slayer3d_gl_context *ctx)
 {
     return (ctx != NULL && ctx->is_es) ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
-}
-
-/* ------------------------------------------------------------------ */
-/* Texture cache                                                       */
-/* ------------------------------------------------------------------ */
-
-static GLuint tex_cache_lookup(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
-{
-    slayer3d_gl_tex_entry **prev = &ctx->tex_cache;
-    for (slayer3d_gl_tex_entry *e = ctx->tex_cache; e; prev = &e->next, e = e->next)
-    {
-        if (e->key == tex)
-        {
-            if (e->generation != tex->generation)
-            {
-                ctx->gl.DeleteTextures(1, &e->gl_tex);
-                *prev = e->next;
-                SDL_free(e);
-                return 0;
-            }
-            return e->gl_tex;
-        }
-    }
-    return 0;
-}
-
-static GLuint tex_cache_upload(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    GLuint id;
-    gl->GenTextures(1, &id);
-    gl->BindTexture(GL_TEXTURE_2D, id);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->width, tex->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex->pixels);
-    gl->GenerateMipmap(GL_TEXTURE_2D);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 0x2703 /* GL_LINEAR_MIPMAP_LINEAR */);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    /* Anisotropic filtering if available. */
-    {
-        float aniso = 16.0f;
-        gl->TexParameterfv(GL_TEXTURE_2D, 0x84FE /* GL_TEXTURE_MAX_ANISOTROPY_EXT */, &aniso);
-    }
-
-    slayer3d_gl_tex_entry *entry = SDL_calloc(1, sizeof(*entry));
-    entry->key = tex;
-    entry->generation = tex->generation;
-    entry->gl_tex = id;
-    entry->next = ctx->tex_cache;
-    ctx->tex_cache = entry;
-    return id;
-}
-
-static GLuint resolve_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
-{
-    if (!tex)
-        return ctx->white_texture;
-    GLuint id = tex_cache_lookup(ctx, tex);
-    return id ? id : tex_cache_upload(ctx, tex);
-}
-
-static void tex_cache_free(slayer3d_gl_context *ctx)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    slayer3d_gl_tex_entry *e = ctx->tex_cache;
-    while (e)
-    {
-        slayer3d_gl_tex_entry *next = e->next;
-        gl->DeleteTextures(1, &e->gl_tex);
-        SDL_free(e);
-        e = next;
-    }
-    ctx->tex_cache = NULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -571,168 +49,7 @@ static const float *ensure_white_colors(slayer3d_gl_context *ctx, int vertex_cou
     return ctx->white_colors;
 }
 
-/* ------------------------------------------------------------------ */
-/* Draw list helpers                                                   */
-/* ------------------------------------------------------------------ */
-
-static void free_draw_list(slayer3d_gl_context *ctx)
-{
-    for (int i = 0; i < ctx->draw_count; i++)
-    {
-        slayer3d_draw_entry *e = &ctx->draw_list[i];
-        if (e->owns_arrays)
-        {
-            SDL_free((void *)e->positions);
-            SDL_free((void *)e->normals);
-            SDL_free((void *)e->uvs);
-            SDL_free((void *)e->lightmap_uvs);
-            SDL_free((void *)e->colors);
-            SDL_free((void *)e->indices);
-        }
-        SDL_free(e->joint_matrices);
-    }
-    ctx->draw_count = 0;
-}
-
-static slayer3d_draw_entry *append_draw_entry(slayer3d_gl_context *ctx)
-{
-    if (ctx->draw_count == ctx->draw_capacity)
-    {
-        int cap = ctx->draw_capacity ? ctx->draw_capacity * 2 : 64;
-        slayer3d_draw_entry *buf = SDL_realloc(ctx->draw_list, (size_t)cap * sizeof(slayer3d_draw_entry));
-        if (!buf)
-            return NULL;
-        ctx->draw_list = buf;
-        ctx->draw_capacity = cap;
-    }
-    slayer3d_draw_entry *e = &ctx->draw_list[ctx->draw_count++];
-    SDL_memset(e, 0, sizeof(*e));
-    return e;
-}
-
-/* ------------------------------------------------------------------ */
-/* Overlay draw list helpers                                           */
-/* ------------------------------------------------------------------ */
-
-static void free_overlay_list(slayer3d_gl_context *ctx)
-{
-    for (int i = 0; i < ctx->overlay_count; i++)
-    {
-        slayer3d_overlay_entry *e = &ctx->overlay_list[i];
-        SDL_free(e->positions);
-        SDL_free(e->uvs);
-    }
-    ctx->overlay_count = 0;
-    /* Atlases are persistent — not freed per frame. */
-}
-
-static slayer3d_overlay_entry *append_overlay_entry(slayer3d_gl_context *ctx)
-{
-    if (ctx->overlay_count == ctx->overlay_capacity)
-    {
-        int cap = ctx->overlay_capacity ? ctx->overlay_capacity * 2 : 64;
-        slayer3d_overlay_entry *buf = SDL_realloc(ctx->overlay_list, (size_t)cap * sizeof(slayer3d_overlay_entry));
-        if (!buf)
-            return NULL;
-        ctx->overlay_list = buf;
-        ctx->overlay_capacity = cap;
-    }
-    slayer3d_overlay_entry *e = &ctx->overlay_list[ctx->overlay_count++];
-    SDL_memset(e, 0, sizeof(*e));
-    return e;
-}
-
 static float *copy_floats(const float *src, size_t count);
-
-bool slayer3d_gl_append_overlay(slayer3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
-                                const float *mvp, const float *tint, const slayer3d_texture2d *texture,
-                                bool scissor_enabled, const SDL_Rect *scissor_rect, slayer3d_overlay_effect effect,
-                                float effect_progress, Uint32 effect_seed, const char *shader_vertex_source,
-                                const char *shader_fragment_source)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-
-    int atlas_idx = -1;
-    if (texture != NULL)
-    {
-        /* Find or create a persistent GL texture for this atlas. */
-        for (int i = 0; i < ctx->overlay_atlas_count; i++)
-        {
-            slayer3d_overlay_atlas *a = &ctx->overlay_atlases[i];
-            if (a->source == texture)
-            {
-                /* Re-upload if the texture has changed. */
-                if (a->generation != texture->generation)
-                {
-                    gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
-                    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA,
-                                   GL_UNSIGNED_BYTE, texture->pixels);
-                    a->generation = texture->generation;
-                }
-                atlas_idx = i;
-                break;
-            }
-        }
-        if (atlas_idx < 0)
-        {
-            if (ctx->overlay_atlas_count == ctx->overlay_atlas_capacity)
-            {
-                int cap = ctx->overlay_atlas_capacity ? ctx->overlay_atlas_capacity * 2 : 16;
-                slayer3d_overlay_atlas *buf =
-                    SDL_realloc(ctx->overlay_atlases, (size_t)cap * sizeof(slayer3d_overlay_atlas));
-                if (!buf)
-                    return SDL_OutOfMemory();
-                ctx->overlay_atlases = buf;
-                ctx->overlay_atlas_capacity = cap;
-            }
-            atlas_idx = ctx->overlay_atlas_count++;
-            slayer3d_overlay_atlas *a = &ctx->overlay_atlases[atlas_idx];
-            a->source = texture;
-            a->generation = texture->generation;
-            gl->GenTextures(1, &a->gl_tex);
-            gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
-            gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                           texture->pixels);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        }
-    }
-
-    slayer3d_overlay_entry *e = append_overlay_entry(ctx);
-    if (!e)
-        return SDL_OutOfMemory();
-
-    size_t pos_bytes = (size_t)vertex_count * 3 * sizeof(float);
-    size_t uv_bytes = (size_t)vertex_count * 2 * sizeof(float);
-
-    e->positions = SDL_malloc(pos_bytes);
-    e->uvs = SDL_malloc(uv_bytes);
-    if (!e->positions || !e->uvs)
-    {
-        SDL_free(e->positions);
-        SDL_free(e->uvs);
-        ctx->overlay_count--;
-        return SDL_OutOfMemory();
-    }
-
-    SDL_memcpy(e->positions, positions, pos_bytes);
-    SDL_memcpy(e->uvs, uvs, uv_bytes);
-    SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
-    SDL_memcpy(e->tint, tint, 4 * sizeof(float));
-    e->vertex_count = vertex_count;
-    e->scissor_enabled = scissor_enabled;
-    e->scissor_rect = scissor_rect ? *scissor_rect : (SDL_Rect){0, 0, 0, 0};
-    e->atlas_index = atlas_idx;
-    e->effect = effect;
-    e->effect_progress = effect_progress;
-    e->effect_seed = (float)effect_seed * (1.0f / 4294967295.0f);
-    e->effect_columns = texture != NULL ? (float)SDL_max(24, texture->width / 16) : 1.0f;
-    e->shader_vertex_source = shader_vertex_source;
-    e->shader_fragment_source = shader_fragment_source;
-    return true;
-}
 
 bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp)
 {
@@ -744,7 +61,7 @@ bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, c
         return false;
     }
 
-    slayer3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = slayer3d_gl_append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -1996,7 +1313,8 @@ static void bind_builtin_pbr_entry(slayer3d_gl_context *ctx, const slayer3d_draw
     gl->Uniform1i(ctx->pbr_texture_loc, 0);
     gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
     gl->ActiveTexture(GL_TEXTURE0 + 7);
-    gl->BindTexture(GL_TEXTURE_2D, e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+    gl->BindTexture(GL_TEXTURE_2D,
+                    e->has_lightmap ? slayer3d_gl_resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
     gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
     gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
     gl->ActiveTexture(GL_TEXTURE0);
@@ -2231,7 +1549,7 @@ static bool draw_static_mesh_instance_batch(slayer3d_gl_context *ctx, int start,
         return false;
     slayer3d_gl_funcs *gl = &ctx->gl;
     slayer3d_draw_entry *e = &ctx->draw_list[start];
-    GLuint tex = resolve_texture(ctx, e->texture);
+    GLuint tex = slayer3d_gl_resolve_texture(ctx, e->texture);
 
     apply_draw_entry_viewport(ctx, e);
     flush_scene_ubo_for_draw_entry(ctx, e);
@@ -2262,7 +1580,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
     for (int i = 0; i < ctx->draw_count; i++)
     {
         slayer3d_draw_entry *e = &ctx->draw_list[i];
-        GLuint tex = resolve_texture(ctx, e->texture);
+        GLuint tex = slayer3d_gl_resolve_texture(ctx, e->texture);
         apply_draw_entry_viewport(ctx, e);
 
         if (e->lit)
@@ -2305,8 +1623,8 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                 if (custom->pbr_has_texture_loc >= 0)
                     gl->Uniform1i(custom->pbr_has_texture_loc, e->texture ? 1 : 0);
                 gl->ActiveTexture(GL_TEXTURE0 + 7);
-                gl->BindTexture(GL_TEXTURE_2D,
-                                e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+                gl->BindTexture(GL_TEXTURE_2D, e->has_lightmap ? slayer3d_gl_resolve_texture(ctx, e->lightmap_texture)
+                                                               : ctx->black_texture);
                 if (custom->pbr_lightmap_loc >= 0)
                     gl->Uniform1i(custom->pbr_lightmap_loc, 7);
                 if (custom->pbr_has_lightmap_loc >= 0)
@@ -2427,8 +1745,8 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                 gl->Uniform1i(ctx->pbr_texture_loc, 0);
                 gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
                 gl->ActiveTexture(GL_TEXTURE0 + 7);
-                gl->BindTexture(GL_TEXTURE_2D,
-                                e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+                gl->BindTexture(GL_TEXTURE_2D, e->has_lightmap ? slayer3d_gl_resolve_texture(ctx, e->lightmap_texture)
+                                                               : ctx->black_texture);
                 gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
                 gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
                 gl->ActiveTexture(GL_TEXTURE0);
@@ -3514,18 +2832,18 @@ void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
         return;
     slayer3d_gl_funcs *gl = &ctx->gl;
 
-    free_draw_list(ctx);
+    slayer3d_gl_free_draw_list(ctx);
     SDL_free(ctx->draw_list);
     mesh_cache_free(ctx);
     custom_shader_cache_free(ctx);
 
-    free_overlay_list(ctx);
+    slayer3d_gl_free_overlay_list(ctx);
     SDL_free(ctx->overlay_list);
     for (int i = 0; i < ctx->overlay_atlas_count; i++)
         gl->DeleteTextures(1, &ctx->overlay_atlases[i].gl_tex);
     SDL_free(ctx->overlay_atlases);
 
-    tex_cache_free(ctx);
+    slayer3d_gl_tex_cache_free(ctx);
     SDL_free(ctx->white_colors);
 
     if (ctx->pbr_program)
@@ -3688,7 +3006,7 @@ static bool gl_clear(slayer3d_render_context *context, slayer3d_color color)
     slayer3d_gl_context *ctx = context->gl;
     slayer3d_gl_funcs *gl = &ctx->gl;
 
-    free_draw_list(ctx);
+    slayer3d_gl_free_draw_list(ctx);
 
     ctx->frame_index++;
     ctx->current_ctx = context;
@@ -3724,7 +3042,7 @@ static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_
 
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    slayer3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = slayer3d_gl_append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -3765,7 +3083,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
 
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    slayer3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = slayer3d_gl_append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -4320,7 +3638,7 @@ static bool gl_present(slayer3d_render_context *context)
     /* Overlay pass: UI text rendered directly to the default framebuffer,
      * after the FBO blit, bypassing all post-processing. */
     replay_overlay_list(ctx, vp_x, vp_y, vp_w, vp_h);
-    free_overlay_list(ctx);
+    slayer3d_gl_free_overlay_list(ctx);
 
     SDL_GL_SwapWindow(ctx->window);
     return true;
