@@ -215,6 +215,7 @@ target_sources(
         src/game_data_standard_options.c
         src/game_presentation.c
         src/game_presentation_app_flow.c
+        src/game_presentation_cache.c
         src/game_presentation_brush_worlds.c
         src/game_presentation_cache_lifecycle.c
         src/game_presentation_frame_state.c

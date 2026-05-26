@@ -461,6 +461,91 @@ typedef struct component_validation_handler
     component_validator_fn validate;
 } component_validation_handler;
 
+static bool validate_fps_sector_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                  validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_fps_sector_component(ctx, component, path, names);
+}
+
+static bool validate_fps_brush_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                 validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_fps_brush_component(ctx, component, path, names);
+}
+
+static bool validate_editor_camera_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                     validation_names *names, const char *type)
+{
+    (void)type;
+    if (!validate_editor_camera_component(ctx, component, path, names))
+        return false;
+    char condition_path[PATH_BUFFER_SIZE];
+    format_path(condition_path, sizeof(condition_path), "%s.orthographic_controls_if", path);
+    return validate_data_condition(ctx, obj_get(component, "orthographic_controls_if"), condition_path, names);
+}
+
+static bool validate_combat_health_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                     validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    return validate_combat_health_component(ctx, component, path);
+}
+
+static bool validate_pickup_respawn_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                      validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    return validate_pickup_respawn_component(ctx, component, path);
+}
+
+static bool validate_status_effect_timer_component_handler(validation_context *ctx, yyjson_val *component,
+                                                           const char *path, validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_status_effect_timer_component(ctx, component, path, names);
+}
+
+static bool validate_weapon_state_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                    validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    return validate_weapon_state_component(ctx, component, path);
+}
+
+static bool validate_interactable_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                    validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_interactable_component(ctx, component, path, names);
+}
+
+static bool validate_weapon_projectile_component_handler(validation_context *ctx, yyjson_val *component,
+                                                         const char *path, validation_names *names, const char *type)
+{
+    (void)type;
+    return require_ref(ctx, &names->actions, "input action", json_string(component, "action"), path) &&
+           validate_projectile_fire_shape(ctx, component, path, names, false);
+}
+
+static bool validate_brush_velocity_component_handler(validation_context *ctx, yyjson_val *component, const char *path,
+                                                      validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_brush_velocity_component(ctx, component, path, names);
+}
+
+static bool validate_particle_emitter_component_handler(validation_context *ctx, yyjson_val *component,
+                                                        const char *path, validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_particle_emitter_component(ctx, component, path, names);
+}
+
 static bool validate_known_component(validation_context *ctx, yyjson_val *component, const char *path,
                                      validation_names *names, const char *type)
 {
@@ -887,16 +972,16 @@ static const component_validation_handler *component_validation_handlers(void)
         {"adapter.controller", validate_known_component},
         {"collision.aabb", validate_known_component},
         {"collision.circle", validate_known_component},
-        {"combat.health", validate_known_component},
+        {"combat.health", validate_combat_health_component_handler},
         {"control.axis_1d", validate_known_component},
-        {"controller.editor_camera", validate_known_component},
-        {"controller.fps_brush", validate_known_component},
-        {"controller.fps_sector", validate_known_component},
+        {"controller.editor_camera", validate_editor_camera_component_handler},
+        {"controller.fps_brush", validate_fps_brush_component_handler},
+        {"controller.fps_sector", validate_fps_sector_component_handler},
         {"lifecycle.ttl", validate_known_component},
         {"light.directional", validate_known_component},
         {"light.point", validate_known_component},
         {"light.spot", validate_known_component},
-        {"motion.brush_velocity_3d", validate_known_component},
+        {"motion.brush_velocity_3d", validate_brush_velocity_component_handler},
         {"motion.grid_agent", validate_known_component},
         {"motion.oscillate", validate_known_component},
         {"motion.patrol", validate_known_component},
@@ -905,9 +990,9 @@ static const component_validation_handler *component_validation_handlers(void)
         {"motion.spin", validate_known_component},
         {"motion.velocity_2d", validate_known_component},
         {"motion.velocity_3d", validate_known_component},
-        {"interactable", validate_known_component},
-        {"particles.emitter", validate_known_component},
-        {"pickup.respawn", validate_known_component},
+        {"interactable", validate_interactable_component_handler},
+        {"particles.emitter", validate_particle_emitter_component_handler},
+        {"pickup.respawn", validate_pickup_respawn_component_handler},
         {"property.decay", validate_known_component},
         {"render.composite", validate_known_component},
         {"render.cube", validate_known_component},
@@ -915,10 +1000,10 @@ static const component_validation_handler *component_validation_handlers(void)
         {"render.model", validate_known_component},
         {"render.sphere", validate_known_component},
         {"render.sprite", validate_known_component},
-        {"status_effect.timer", validate_known_component},
+        {"status_effect.timer", validate_status_effect_timer_component_handler},
         {"viewmodel.bob", validate_known_component},
-        {"weapon.projectile", validate_known_component},
-        {"weapon.state", validate_known_component},
+        {"weapon.projectile", validate_weapon_projectile_component_handler},
+        {"weapon.state", validate_weapon_state_component_handler},
         {NULL, NULL},
     };
     return handlers;

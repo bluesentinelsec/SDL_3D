@@ -2623,7 +2623,9 @@ typedef struct action_validation_rule
 } action_validation_rule;
 
 #define ACTION_RULE_EXACT_ENTRY(name) {name, ACTION_RULE_EXACT, validate_known_action}
+#define ACTION_RULE_EXACT_HANDLER(name, handler) {name, ACTION_RULE_EXACT, handler}
 #define ACTION_RULE_PREFIX_ENTRY(name) {name, ACTION_RULE_PREFIX, validate_known_action}
+#define ACTION_RULE_PREFIX_HANDLER(name, handler) {name, ACTION_RULE_PREFIX, handler}
 
 static bool action_rule_matches(const action_validation_rule *rule, const char *type)
 {
@@ -2725,7 +2727,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_ENTRY("network.discovery.cancel"),
         ACTION_RULE_EXACT_ENTRY("network.discovery.connect_selected"),
         ACTION_RULE_EXACT_ENTRY("ui.animate"),
-        ACTION_RULE_PREFIX_ENTRY("audio."),
+        ACTION_RULE_PREFIX_HANDLER("audio.", validate_audio_action),
         ACTION_RULE_EXACT_ENTRY("persistence.load"),
         ACTION_RULE_EXACT_ENTRY("persistence.save"),
         ACTION_RULE_EXACT_ENTRY("entity.set_active"),
