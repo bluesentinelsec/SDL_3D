@@ -121,6 +121,20 @@ bool require_ref(validation_context *ctx, const name_table *table, const char *k
                  const char *json_path);
 bool require_actor_ref(validation_context *ctx, const validation_names *names, const char *name, const char *json_path);
 bool asset_path_exists(validation_context *ctx, const char *asset_path, const char *json_path, const char *asset_kind);
+bool validate_optional_non_empty_string_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                              const char *description);
+bool validate_optional_number_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                    const char *description);
+bool validate_optional_positive_number_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                             const char *description);
+bool validate_optional_non_negative_number_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                                 const char *description);
+bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type,
+                                     const char *field);
+bool validate_exactly_one_field_present(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                        const char *type, const char *first_field, const char *second_field);
+bool validate_optional_output_keys(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type,
+                                   const char *const *fields, size_t field_count);
 bool validate_editor_metadata(validation_context *ctx, yyjson_val *metadata, const char *json_path,
                               validation_names *names, bool allow_templates);
 bool validate_editor_metadata_tree(validation_context *ctx, yyjson_val *root, validation_names *names);
@@ -135,8 +149,6 @@ bool validate_action_array(validation_context *ctx, yyjson_val *actions, const c
                            validation_names *names);
 bool validate_network_port_value(validation_context *ctx, yyjson_val *value, const char *json_path, const char *label);
 bool validate_network(validation_context *ctx, yyjson_val *root, validation_names *names);
-bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type,
-                                     const char *field);
 bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
                                     validation_names *names, const char *field);
 bool validate_target_filter_fields(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type);

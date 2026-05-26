@@ -220,6 +220,91 @@ bool require_actor_ref(validation_context *ctx, const validation_names *names, c
     return true;
 }
 
+bool validate_optional_non_empty_string_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                              const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
+        return validation_error(ctx, json_path, "%s must be a non-empty string", description);
+    return true;
+}
+
+bool validate_optional_number_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                    const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value))
+        return validation_error(ctx, json_path, "%s must be a number", description);
+    return true;
+}
+
+bool validate_optional_positive_number_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                             const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0)
+        return validation_error(ctx, json_path, "%s must be positive", description);
+    return true;
+}
+
+bool validate_optional_non_negative_number_value(validation_context *ctx, yyjson_val *value, const char *json_path,
+                                                 const char *description)
+{
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0)
+        return validation_error(ctx, json_path, "%s must be non-negative", description);
+    return true;
+}
+
+bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type,
+                                     const char *field)
+{
+    yyjson_val *value = obj_get(json, field);
+    if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, field);
+    return true;
+}
+
+bool validate_exactly_one_field_present(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                        const char *type, const char *first_field, const char *second_field)
+{
+    const bool has_first = obj_get(json, first_field) != NULL;
+    const bool has_second = obj_get(json, second_field) != NULL;
+    if (has_first == has_second)
+    {
+        return validation_error(ctx, json_path, "%s requires exactly one of %s or %s", type, first_field, second_field);
+    }
+    return true;
+}
+
+bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
+                                    validation_names *names, const char *field)
+{
+    const char *signal = json_string(json, field);
+    return signal == NULL || require_ref(ctx, &names->signals, "signal", signal, json_path);
+}
+
+bool validate_optional_output_keys(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type,
+                                   const char *const *fields, size_t field_count)
+{
+    yyjson_val *outputs = obj_get(json, "outputs");
+    if (outputs == NULL)
+        return true;
+    if (!yyjson_is_obj(outputs))
+        return validation_error(ctx, json_path, "%s outputs must be an object", type);
+    for (size_t i = 0; i < field_count; ++i)
+    {
+        yyjson_val *field = obj_get(outputs, fields[i]);
+        if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s output keys must be non-empty strings", type);
+    }
+    return true;
+}
+
 bool note_name(name_table *table, const char *name, const char *json_path)
 {
     if (name == NULL || name[0] == '\0' || name_table_contains(table, name))

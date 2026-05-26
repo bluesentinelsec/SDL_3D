@@ -150,6 +150,7 @@ target_sources(
         src/game_data_brush_editor_import.c
         src/game_data_brush_editor_mutation.c
         src/game_data_brush_source_enclosure.c
+        src/game_data_brush_source_lifecycle.c
         src/game_data_brush_source_model.c
         src/game_data_brush_source_vertices.c
         src/game_data_brush_trace_queries.c
@@ -221,10 +222,12 @@ target_sources(
         src/game_presentation_frame_state.c
         src/game_presentation_menus.c
         src/game_presentation_particles.c
+        src/game_presentation_primitives.c
         src/game_presentation_scene_flow.c
         src/game_presentation_sector_levels.c
         src/game_presentation_ui.c
         src/game_data_validation_actions.c
+        src/game_data_validation_actions_editor.c
         src/game_data_validation_brush_common.c
         src/game_data_validation_app_world.c
         src/game_data_validation_actors.c
@@ -253,8 +256,10 @@ target_sources(
         src/gl_renderer.c
         src/gl_renderer_draw_lists.c
         src/gl_renderer_mesh_cache.c
+        src/gl_renderer_postprocess.c
         src/gl_renderer_programs.c
         src/gl_renderer_shaders.c
+        src/gl_renderer_targets.c
         src/gl_renderer_texture_cache.c
         src/image.c
         src/input.c
