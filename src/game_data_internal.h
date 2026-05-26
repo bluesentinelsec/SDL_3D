@@ -271,14 +271,6 @@ bool format_payload_string(const slayer3d_properties *payload, const char *forma
 slayer3d_properties *properties_from_json_payload(yyjson_val *json, const slayer3d_properties *source_payload);
 float vec_axis(slayer3d_vec3 value, int axis);
 void set_vec_axis(slayer3d_vec3 *value, int axis, float component);
-fps_controller_runtime *find_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name);
-const fps_controller_runtime *find_fps_controller_const(const slayer3d_game_data_runtime *runtime,
-                                                        const char *entity_name);
-fps_controller_runtime *find_or_add_fps_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
-                                                   yyjson_val *component);
-patrol_controller_runtime *find_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name);
-patrol_controller_runtime *find_or_add_patrol_controller(slayer3d_game_data_runtime *runtime, const char *entity_name,
-                                                         yyjson_val *component);
 float game_data_random01(slayer3d_game_data_runtime *runtime);
 int action_signal_id(slayer3d_game_data_runtime *runtime, yyjson_val *action, const char *key);
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload);
@@ -367,23 +359,9 @@ bool update_sector_platforms(slayer3d_game_data_runtime *runtime, float dt);
 void update_control_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt);
 void update_motion_components(slayer3d_game_data_runtime *runtime, yyjson_val *root, float dt);
 void update_sensors(slayer3d_game_data_runtime *runtime);
-void update_patrol_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                              slayer3d_registered_actor *actor, float dt);
-void update_fps_sector_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                  slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
-void update_fps_brush_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                 slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
-void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson_val *component,
-                                     slayer3d_registered_actor *actor, const slayer3d_input_manager *input, float dt);
 bool update_brush_velocity_motion(slayer3d_game_data_runtime *runtime, yyjson_val *component,
                                   slayer3d_registered_actor *actor, int actor_id, int pool_index, int actor_index,
                                   float dt);
-bool execute_fps_controller_launch_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                          const slayer3d_properties *payload);
-bool execute_fps_controller_teleport_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                            const slayer3d_properties *payload);
-bool execute_fps_controller_push_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
-                                        const slayer3d_properties *payload);
 bool execute_projectile_fire_action_for_actor(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                               const slayer3d_properties *payload,
                                               slayer3d_registered_actor *source_actor);
@@ -397,35 +375,7 @@ bool runtime_collection_field_to_string(const runtime_collection *collection, in
 #include "game_data_world_internal.h"
 void free_editor_metadata(slayer3d_game_data_editor_metadata *metadata);
 
-SDL_Scancode scancode_from_json(const char *name);
-const char *scancode_display_name(SDL_Scancode scancode);
-Uint8 mouse_button_from_json(const char *name);
-const char *mouse_button_display_name(Uint8 button);
-slayer3d_mouse_axis mouse_axis_from_json(const char *name, bool *valid);
-const char *gamepad_button_display_name(SDL_GamepadButton button);
-SDL_GamepadAxis gamepad_axis_from_json(const char *name);
-SDL_GamepadButton gamepad_button_from_json(const char *name);
-
-int fps_controller_action_id(const slayer3d_game_data_runtime *runtime, yyjson_val *component, const char *name);
-float fps_controller_action_value(const slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
-                                  int action_id);
-bool fps_controller_action_pressed(const slayer3d_game_data_runtime *runtime, const slayer3d_input_manager *input,
-                                   int action_id);
-slayer3d_actor_patrol_mode parse_patrol_mode(const char *value);
-int patrol_signal_id(const slayer3d_game_data_runtime *runtime, yyjson_val *component, const char *name);
-
 int find_timer_index(const slayer3d_game_data_runtime *runtime, const char *name);
-adapter_entry *find_adapter(slayer3d_game_data_runtime *runtime, const char *name);
-script_entry *find_script(slayer3d_game_data_runtime *runtime, const char *id);
-bool append_adapter(slayer3d_game_data_runtime *runtime, const char *name, slayer3d_game_data_adapter_fn callback,
-                    void *userdata);
-bool set_adapter_lua_function(slayer3d_game_data_runtime *runtime, const char *name, const char *script_id,
-                              const char *function_name, slayer3d_script_ref function_ref);
-bool invoke_adapter(slayer3d_game_data_runtime *runtime, adapter_entry *adapter, slayer3d_registered_actor *target,
-                    const slayer3d_properties *payload);
-void lua_push_actor_wrapper(lua_State *lua, const slayer3d_registered_actor *actor);
-
-void register_lua_api(slayer3d_game_data_runtime *runtime, slayer3d_script_engine *engine);
 bool load_timers(slayer3d_game_data_runtime *runtime, yyjson_val *logic, char *error_buffer, int error_buffer_size);
 bool load_signals(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
 bool load_entities(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
@@ -439,13 +389,10 @@ bool load_wave_schedules(slayer3d_game_data_runtime *runtime, yyjson_val *logic)
 void load_active_camera(slayer3d_game_data_runtime *runtime, yyjson_val *root);
 bool load_scenes(slayer3d_game_data_runtime *runtime, yyjson_val *root, const slayer3d_game_data_load_options *options,
                  char *error_buffer, int error_buffer_size);
-bool load_script_index_into_engine(slayer3d_game_data_runtime *runtime, slayer3d_asset_resolver *assets,
-                                   slayer3d_script_engine *engine, int index, slayer3d_script_ref *module_refs,
-                                   bool *loading, bool *loaded, char *error_buffer, int error_buffer_size);
-bool load_scripts(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer, int error_buffer_size);
-bool load_lua_adapters(slayer3d_game_data_runtime *runtime, yyjson_val *root, char *error_buffer,
-                       int error_buffer_size);
 
+#include "game_data_controller_internal.h"
+#include "game_data_input_internal.h"
 #include "game_data_network_internal.h"
+#include "game_data_script_internal.h"
 
 #endif
