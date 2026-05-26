@@ -225,6 +225,7 @@ target_sources(
         src/game_presentation_sector_levels.c
         src/game_presentation_ui.c
         src/game_data_validation_actions.c
+        src/game_data_validation_actions_editor.c
         src/game_data_validation_brush_common.c
         src/game_data_validation_app_world.c
         src/game_data_validation_actors.c
