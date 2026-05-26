@@ -604,7 +604,7 @@ static int editor_select_vertices_in_lasso(slayer3d_game_data_runtime *runtime, 
             }
             editor_source_vertex_selection candidate;
             if (editor_source_vertex_selection_from_model(world_runtime, &model, v, &candidate))
-                (void)add_editor_selected_vertex(runtime, &candidate);
+                (void)editor_add_shared_vertex_selection_group(runtime, &candidate);
         }
     }
 
@@ -681,13 +681,6 @@ bool editor_handle_vertex_lasso(slayer3d_game_data_runtime *runtime, yyjson_val 
     return true;
 }
 
-typedef struct editor_vertex_bounds_accumulator
-{
-    editor_source_box_bounds_update update;
-    bool min_touched[3];
-    bool max_touched[3];
-} editor_vertex_bounds_accumulator;
-
 static int editor_source_units_from_meters(const brush_world_runtime *world_runtime, float meters)
 {
     const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
@@ -696,15 +689,79 @@ static int editor_source_units_from_meters(const brush_world_runtime *world_runt
     return (int)SDL_roundf(meters / meters_per_unit);
 }
 
-static editor_vertex_bounds_accumulator *editor_find_vertex_bounds_accumulator(
-    editor_vertex_bounds_accumulator *accumulators, int count, int source_index)
+typedef struct editor_source_vertex_move_target
 {
+    brush_world_runtime *world_runtime;
+    int source_index;
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    int coords[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    int vertex_index_count;
+} editor_source_vertex_move_target;
+
+static editor_source_vertex_move_target *editor_find_vertex_move_target(editor_source_vertex_move_target *targets,
+                                                                        int count,
+                                                                        const brush_world_runtime *world_runtime,
+                                                                        int source_index)
+{
+    if (targets == NULL || world_runtime == NULL || source_index < 0)
+        return NULL;
     for (int i = 0; i < count; ++i)
     {
-        if (accumulators[i].update.source_index == source_index)
-            return &accumulators[i];
+        if (targets[i].world_runtime == world_runtime && targets[i].source_index == source_index)
+            return &targets[i];
     }
     return NULL;
+}
+
+static bool editor_vertex_move_target_add(editor_source_vertex_move_target *target,
+                                          const editor_source_vertex_selection *selection, const int delta[3])
+{
+    if (target == NULL || selection == NULL || delta == NULL || selection->vertex_index < 0)
+        return false;
+
+    for (int i = 0; i < target->vertex_index_count; ++i)
+    {
+        if (target->vertex_indices[i] == selection->vertex_index)
+            return true;
+    }
+    if (target->vertex_index_count >= SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+        return false;
+
+    const int index = target->vertex_index_count++;
+    target->vertex_indices[index] = selection->vertex_index;
+    for (int axis = 0; axis < 3; ++axis)
+        target->coords[index][axis] = selection->coord[axis] + delta[axis];
+    return true;
+}
+
+static const char *editor_source_move_target_identity(const editor_source_vertex_move_target *target)
+{
+    if (target == NULL || target->world_runtime == NULL || target->source_index < 0 ||
+        target->source_index >= target->world_runtime->editor_source_box_count)
+    {
+        return NULL;
+    }
+    const editor_brush_source_box_runtime *box = &target->world_runtime->editor_source_boxes[target->source_index];
+    return box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
+}
+
+static void editor_init_vertex_move_desc(const editor_source_vertex_move_target *target,
+                                         editor_brush_source_vertex_operation_desc *desc)
+{
+    if (desc == NULL)
+        return;
+    SDL_zero(*desc);
+    desc->brush_identity = editor_source_move_target_identity(target);
+    desc->type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY;
+    if (target == NULL)
+        return;
+    desc->vertex_index_count = target->vertex_index_count;
+    for (int i = 0; i < target->vertex_index_count; ++i)
+    {
+        desc->vertex_indices[i] = target->vertex_indices[i];
+        for (int axis = 0; axis < 3; ++axis)
+            desc->coords[i][axis] = target->coords[i][axis];
+    }
 }
 
 static void editor_refresh_selected_brushes_after_source_edit(slayer3d_game_data_runtime *runtime)
@@ -770,9 +827,9 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
     if (delta[0] == 0 && delta[1] == 0 && delta[2] == 0)
         return false;
 
-    editor_vertex_bounds_accumulator accumulators[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(accumulators);
-    int accumulator_count = 0;
+    editor_source_vertex_move_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    SDL_zeroa(targets);
+    int target_count = 0;
     for (int i = 0; i < runtime->editor_selected_vertex_count; ++i)
     {
         const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[i];
@@ -784,58 +841,74 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
             return false;
         }
 
-        editor_vertex_bounds_accumulator *accumulator =
-            editor_find_vertex_bounds_accumulator(accumulators, accumulator_count, selection->source_index);
-        if (accumulator == NULL)
+        editor_source_vertex_move_target *target =
+            editor_find_vertex_move_target(targets, target_count, world_runtime, selection->source_index);
+        if (target == NULL)
         {
-            if (accumulator_count >= (int)SDL_arraysize(accumulators))
+            if (target_count >= (int)SDL_arraysize(targets))
                 return false;
-            accumulator = &accumulators[accumulator_count++];
-            accumulator->update.source_index = selection->source_index;
-            const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[selection->source_index];
-            for (int axis = 0; axis < 3; ++axis)
-            {
-                accumulator->update.min[axis] = box->min[axis];
-                accumulator->update.max[axis] = box->max[axis];
-            }
+            target = &targets[target_count++];
+            target->world_runtime = world_runtime;
+            target->source_index = selection->source_index;
         }
 
-        const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[selection->source_index];
-        for (int axis = 0; axis < 3; ++axis)
+        if (!editor_vertex_move_target_add(target, selection, delta))
         {
-            if (delta[axis] == 0)
-                continue;
-            if (selection->coord[axis] == box->min[axis] && !accumulator->min_touched[axis])
-            {
-                accumulator->update.min[axis] += delta[axis];
-                accumulator->min_touched[axis] = true;
-            }
-            if (selection->coord[axis] == box->max[axis] && !accumulator->max_touched[axis])
-            {
-                accumulator->update.max[axis] += delta[axis];
-                accumulator->max_touched[axis] = true;
-            }
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                           "vertex move blocked: too many selected vertices");
+            return false;
         }
     }
-
-    editor_source_box_bounds_update updates[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    for (int i = 0; i < accumulator_count; ++i)
-        updates[i] = accumulators[i].update;
 
     char error[256];
-    if (!editor_brush_world_update_source_box_bounds_batch(world_runtime, updates, accumulator_count, error,
-                                                           sizeof(error)))
+    SDL_zeroa(error);
+    for (int i = 0; i < target_count; ++i)
     {
-        char message[320];
-        SDL_snprintf(message, sizeof(message), "vertex move blocked: %s", error[0] != '\0' ? error : "invalid edit");
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
-        editor_refresh_selected_vertices_after_source_edit(runtime, world_runtime);
-        editor_refresh_selected_brushes_after_source_edit(runtime);
-        return false;
+        editor_brush_source_vertex_operation_desc desc;
+        editor_init_vertex_move_desc(&targets[i], &desc);
+        editor_brush_source_vertex_operation_result preview;
+        SDL_zero(preview);
+        if (!editor_brush_world_preview_source_vertex_operation(targets[i].world_runtime, &desc, &preview, error,
+                                                                sizeof(error)))
+        {
+            char message[320];
+            SDL_snprintf(message, sizeof(message), "vertex move blocked: %s",
+                         error[0] != '\0' ? error : "invalid source edit");
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+            editor_brush_source_free_runtime_brush(&preview.brush);
+            editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
+            editor_refresh_selected_brushes_after_source_edit(runtime);
+            return false;
+        }
+        editor_brush_source_free_runtime_brush(&preview.brush);
     }
 
-    editor_refresh_selected_vertices_after_source_edit(runtime, world_runtime);
-    editor_refresh_selected_brushes_after_source_edit(runtime);
+    for (int i = 0; i < target_count; ++i)
+    {
+        editor_brush_source_vertex_operation_desc desc;
+        editor_init_vertex_move_desc(&targets[i], &desc);
+        editor_brush_source_vertex_operation_result result;
+        SDL_zero(result);
+        if (!editor_brush_world_apply_source_vertex_operation(targets[i].world_runtime, &desc, &result, error,
+                                                              sizeof(error)))
+        {
+            char message[320];
+            SDL_snprintf(message, sizeof(message), "vertex move blocked: %s",
+                         error[0] != '\0' ? error : "invalid source edit");
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+            editor_brush_source_free_runtime_brush(&result.brush);
+            editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
+            editor_refresh_selected_brushes_after_source_edit(runtime);
+            return false;
+        }
+        editor_brush_source_free_runtime_brush(&result.brush);
+    }
+
+    for (int i = 0; i < target_count; ++i)
+    {
+        editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
+        editor_refresh_selected_brushes_after_source_edit(runtime);
+    }
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "moved selected vertices");
     return true;
 }
