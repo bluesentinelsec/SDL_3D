@@ -89,6 +89,10 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_DRAG_GUIDE = 12,
         /** @brief Pending add-vertex preview handle line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_ADD_PREVIEW = 13,
+        /** @brief Selected source brush vertex handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE = 14,
+        /** @brief Hovered source brush vertex handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_HANDLE = 15,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum

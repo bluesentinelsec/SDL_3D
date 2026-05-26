@@ -548,12 +548,12 @@
       {
         "signal": "signal.editor.mode.vertex",
         "actions": [
+          { "type": "scene_state.set", "key": "editor.mode", "value": "vertex" },
+          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "vertex" },
           {
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
             "then": [
-              { "type": "scene_state.set", "key": "editor.mode", "value": "vertex" },
-              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "vertex" },
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "vertex tool" }
             ],
             "else": [
