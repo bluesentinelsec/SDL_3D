@@ -433,5 +433,9 @@ void slayer3d_gl_mesh_cache_free(slayer3d_gl_context *ctx);
 void slayer3d_gl_free_draw_list(slayer3d_gl_context *ctx);
 slayer3d_draw_entry *slayer3d_gl_append_draw_entry(slayer3d_gl_context *ctx);
 void slayer3d_gl_free_overlay_list(slayer3d_gl_context *ctx);
+bool slayer3d_gl_create_world_targets(slayer3d_gl_context *ctx, int w, int h);
+void slayer3d_gl_destroy_world_targets(slayer3d_gl_context *ctx);
+int slayer3d_gl_scaled_world_dimension(int logical_dimension, float scale);
+void slayer3d_gl_apply_transition_pass(slayer3d_gl_context *ctx);
 
 #endif

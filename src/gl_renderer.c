@@ -1806,121 +1806,6 @@ static void apply_geometry_cull_state(slayer3d_gl_context *ctx)
 }
 
 /* ------------------------------------------------------------------ */
-/* FBO helpers                                                         */
-/* ------------------------------------------------------------------ */
-
-static bool create_fbo(slayer3d_gl_context *ctx, int w, int h)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-
-    gl->GenTextures(1, &ctx->fbo_color);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-    gl->GenTextures(1, &ctx->fbo_depth);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_depth);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, w, h, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-    gl->GenFramebuffers(1, &ctx->fbo);
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->fbo_color, 0);
-    gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, ctx->fbo_depth, 0);
-
-    GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
-    if (status != GL_FRAMEBUFFER_COMPLETE)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL FBO incomplete: 0x%x", status);
-        return false;
-    }
-
-    gl->BindFramebuffer(GL_FRAMEBUFFER, 0);
-    ctx->world_w = w;
-    ctx->world_h = h;
-    return true;
-}
-
-static bool create_post_process_fbos(slayer3d_gl_context *ctx, int w, int h)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    GLuint *fbos[2] = {&ctx->pp_fbo_a, &ctx->pp_fbo_b};
-    GLuint *texs[2] = {&ctx->pp_tex_a, &ctx->pp_tex_b};
-
-    for (int i = 0; i < 2; i++)
-    {
-        gl->GenTextures(1, texs[i]);
-        gl->BindTexture(GL_TEXTURE_2D, *texs[i]);
-        gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, w, h, 0, GL_RGBA, GL_FLOAT, NULL);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-        gl->GenFramebuffers(1, fbos[i]);
-        gl->BindFramebuffer(GL_FRAMEBUFFER, *fbos[i]);
-        gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *texs[i], 0);
-        GLenum status = gl->CheckFramebufferStatus(GL_FRAMEBUFFER);
-        if (status != GL_FRAMEBUFFER_COMPLETE)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: post-process FBO %d incomplete: 0x%x", i, status);
-            gl->BindFramebuffer(GL_FRAMEBUFFER, 0);
-            return false;
-        }
-    }
-    gl->BindFramebuffer(GL_FRAMEBUFFER, 0);
-    return true;
-}
-
-static void destroy_world_targets(slayer3d_gl_context *ctx)
-{
-    if (ctx == NULL)
-    {
-        return;
-    }
-
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    if (ctx->pp_fbo_a)
-        gl->DeleteFramebuffers(1, &ctx->pp_fbo_a);
-    if (ctx->pp_fbo_b)
-        gl->DeleteFramebuffers(1, &ctx->pp_fbo_b);
-    if (ctx->pp_tex_a)
-        gl->DeleteTextures(1, &ctx->pp_tex_a);
-    if (ctx->pp_tex_b)
-        gl->DeleteTextures(1, &ctx->pp_tex_b);
-    if (ctx->fbo)
-        gl->DeleteFramebuffers(1, &ctx->fbo);
-    if (ctx->fbo_color)
-        gl->DeleteTextures(1, &ctx->fbo_color);
-    if (ctx->fbo_depth)
-        gl->DeleteTextures(1, &ctx->fbo_depth);
-
-    ctx->pp_fbo_a = 0;
-    ctx->pp_fbo_b = 0;
-    ctx->pp_tex_a = 0;
-    ctx->pp_tex_b = 0;
-    ctx->fbo = 0;
-    ctx->fbo_color = 0;
-    ctx->fbo_depth = 0;
-    ctx->world_w = 0;
-    ctx->world_h = 0;
-}
-
-static bool create_world_targets(slayer3d_gl_context *ctx, int w, int h)
-{
-    return create_fbo(ctx, w, h) && create_post_process_fbos(ctx, w, h);
-}
-
-static int scaled_world_dimension(int logical_dimension, float scale)
-{
-    return SDL_max(1, (int)SDL_floorf((float)logical_dimension * scale + 0.5f));
-}
-
-/* ------------------------------------------------------------------ */
 /* Lazy UBO upload                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -2592,7 +2477,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     ctx->world_render_scale = 1.0f;
 
     /* ---- Main FBO ---- */
-    if (!create_world_targets(ctx, width, height))
+    if (!slayer3d_gl_create_world_targets(ctx, width, height))
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: FBO creation failed");
         slayer3d_gl_destroy(ctx);
@@ -2768,78 +2653,11 @@ void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
     if (ctx->black_cubemap)
         gl->DeleteTextures(1, &ctx->black_cubemap);
 
-    destroy_world_targets(ctx);
+    slayer3d_gl_destroy_world_targets(ctx);
 
     if (ctx->gl_context)
         SDL_GL_DestroyContext(ctx->gl_context);
     SDL_free(ctx);
-}
-
-bool slayer3d_gl_set_world_render_scale(slayer3d_gl_context *ctx, int logical_width, int logical_height, float scale,
-                                        int *out_width, int *out_height)
-{
-    if (ctx == NULL)
-    {
-        return SDL_InvalidParamError("ctx");
-    }
-    if (logical_width <= 0 || logical_height <= 0)
-    {
-        return SDL_InvalidParamError("logical dimensions");
-    }
-    if (!(scale >= 0.25f && scale <= 1.0f))
-    {
-        return SDL_SetError("World render scale must be between 0.25 and 1.0.");
-    }
-
-    const int new_width = scaled_world_dimension(logical_width, scale);
-    const int new_height = scaled_world_dimension(logical_height, scale);
-    if (ctx->logical_w == logical_width && ctx->logical_h == logical_height && ctx->world_w == new_width &&
-        ctx->world_h == new_height)
-    {
-        ctx->world_render_scale = scale;
-        if (out_width != NULL)
-            *out_width = ctx->world_w;
-        if (out_height != NULL)
-            *out_height = ctx->world_h;
-        return true;
-    }
-
-    const int old_width = ctx->world_w > 0 ? ctx->world_w : logical_width;
-    const int old_height = ctx->world_h > 0 ? ctx->world_h : logical_height;
-    const float old_scale = ctx->world_render_scale > 0.0f ? ctx->world_render_scale : 1.0f;
-
-    destroy_world_targets(ctx);
-    if (!create_world_targets(ctx, new_width, new_height))
-    {
-        destroy_world_targets(ctx);
-        (void)create_world_targets(ctx, old_width, old_height);
-        ctx->world_render_scale = old_scale;
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: failed to resize world render target to %dx%d",
-                     new_width, new_height);
-        return false;
-    }
-
-    ctx->logical_w = logical_width;
-    ctx->logical_h = logical_height;
-    ctx->world_render_scale = scale;
-    if (out_width != NULL)
-        *out_width = ctx->world_w;
-    if (out_height != NULL)
-        *out_height = ctx->world_h;
-    return true;
-}
-
-float slayer3d_gl_world_render_scale(const slayer3d_gl_context *ctx)
-{
-    return ctx != NULL ? ctx->world_render_scale : 1.0f;
-}
-
-void slayer3d_gl_world_render_size(const slayer3d_gl_context *ctx, int *out_width, int *out_height)
-{
-    if (out_width != NULL)
-        *out_width = ctx != NULL ? ctx->world_w : 0;
-    if (out_height != NULL)
-        *out_height = ctx != NULL ? ctx->world_h : 0;
 }
 
 /* ================================================================== */
@@ -3154,75 +2972,6 @@ static void replay_overlay_list(slayer3d_gl_context *ctx, int vp_x, int vp_y, in
     gl->Enable(GL_DEPTH_TEST);
 }
 
-bool slayer3d_gl_queue_transition(slayer3d_gl_context *ctx, const slayer3d_transition *transition)
-{
-    if (ctx == NULL)
-    {
-        return SDL_InvalidParamError("ctx");
-    }
-    if (transition == NULL)
-    {
-        return SDL_InvalidParamError("transition");
-    }
-    if (!transition->active)
-    {
-        return true;
-    }
-
-    ctx->pending_transition = *transition;
-    ctx->transition_pending = true;
-    return true;
-}
-
-static void apply_transition_pass(slayer3d_gl_context *ctx)
-{
-    if (ctx == NULL || !ctx->transition_pending || ctx->transition_program == 0)
-    {
-        return;
-    }
-
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    const slayer3d_transition *transition = &ctx->pending_transition;
-
-    if (transition->type == SLAYER3D_TRANSITION_MELT && ctx->transition_melt_offsets_tex != 0)
-    {
-        gl->ActiveTexture(GL_TEXTURE0 + 1);
-        gl->BindTexture(GL_TEXTURE_2D, ctx->transition_melt_offsets_tex);
-        gl->TexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, SLAYER3D_TRANSITION_MELT_COLUMNS, 1, GL_RED, GL_FLOAT,
-                          transition->melt_offsets);
-    }
-
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->pp_fbo_a);
-    gl->Viewport(0, 0, ctx->world_w, ctx->world_h);
-    gl->Clear(GL_COLOR_BUFFER_BIT);
-    gl->UseProgram(ctx->transition_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->fbo_color);
-    gl->Uniform1i(ctx->transition_scene_loc, 0);
-    gl->ActiveTexture(GL_TEXTURE0 + 1);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->transition_melt_offsets_tex);
-    gl->Uniform1i(ctx->transition_melt_offsets_loc, 1);
-    gl->Uniform1i(ctx->transition_type_loc, (int)transition->type);
-    gl->Uniform1i(ctx->transition_direction_loc, (int)transition->direction);
-    gl->Uniform1f(ctx->transition_progress_loc, slayer3d_transition_progress(transition));
-    gl->Uniform4f(ctx->transition_color_loc, (float)transition->color.r / 255.0f, (float)transition->color.g / 255.0f,
-                  (float)transition->color.b / 255.0f, (float)transition->color.a / 255.0f);
-    gl->Uniform2f(ctx->transition_resolution_loc, (float)ctx->world_w, (float)ctx->world_h);
-    gl->BindVertexArray(ctx->fullscreen_vao);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
-
-    gl->BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    gl->Viewport(0, 0, ctx->world_w, ctx->world_h);
-    gl->UseProgram(ctx->copy_program);
-    gl->ActiveTexture(GL_TEXTURE0);
-    gl->BindTexture(GL_TEXTURE_2D, ctx->pp_tex_a);
-    gl->Uniform1i(ctx->copy_texture_loc, 0);
-    gl->DrawArrays(GL_TRIANGLES, 0, 3);
-    gl->ActiveTexture(GL_TEXTURE0);
-
-    ctx->transition_pending = false;
-}
-
 static bool gl_present(slayer3d_render_context *context)
 {
     slayer3d_gl_context *ctx = context->gl;
@@ -3423,7 +3172,7 @@ static bool gl_present(slayer3d_render_context *context)
         gl->ActiveTexture(GL_TEXTURE0);
     } /* bloom_enabled */
 
-    apply_transition_pass(ctx);
+    slayer3d_gl_apply_transition_pass(ctx);
 
     gl->Disable(GL_CULL_FACE);
     gl->Enable(GL_DEPTH_TEST);
@@ -3502,19 +3251,6 @@ static void gl_destroy_adapter(slayer3d_render_context *context)
 /* ------------------------------------------------------------------ */
 /* Backend interface initializer                                       */
 /* ------------------------------------------------------------------ */
-
-void slayer3d_gl_post_process(slayer3d_gl_context *ctx, int effects, float bloom_threshold, float bloom_intensity,
-                              float vignette_intensity, float contrast, float brightness, float saturation)
-{
-    (void)ctx;
-    (void)effects;
-    (void)bloom_threshold;
-    (void)bloom_intensity;
-    (void)vignette_intensity;
-    (void)contrast;
-    (void)brightness;
-    (void)saturation;
-}
 
 void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned char *rgba)
 {
@@ -3622,24 +3358,6 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
     SDL_GL_MakeCurrent(ctx->window, ctx->gl_context);
     ctx->gl.BindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
     ctx->gl.ReadPixels(x, y, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
-}
-
-int slayer3d_gl_active_retro_profile(const slayer3d_gl_context *ctx)
-{
-    return ctx != NULL ? ctx->active_retro_profile : (int)SLAYER3D_DISPLAY_PROFILE_MODERN;
-}
-
-void slayer3d_gl_active_retro_virtual_resolution(const slayer3d_gl_context *ctx, int *out_width, int *out_height)
-{
-    if (out_width != NULL)
-        *out_width = ctx != NULL ? ctx->active_retro_virtual_w : 0;
-    if (out_height != NULL)
-        *out_height = ctx != NULL ? ctx->active_retro_virtual_h : 0;
-}
-
-int slayer3d_gl_active_retro_filter(const slayer3d_gl_context *ctx)
-{
-    return ctx != NULL ? ctx->active_retro_filter : (int)SLAYER3D_DISPLAY_FILTER_LINEAR;
 }
 
 void slayer3d_gl_backend_init(slayer3d_backend_interface *iface)
