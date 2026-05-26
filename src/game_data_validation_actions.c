@@ -788,177 +788,154 @@ static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val
            validate_optional_signal_field(ctx, action, json_path, names, "on_hit");
 }
 
+static bool validate_optional_outputs(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                      const char *type, const char *const *fields, size_t field_count)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    if (outputs == NULL)
+        return true;
+    if (!yyjson_is_obj(outputs))
+        return validation_error(ctx, json_path, "%s outputs must be an object", type);
+    for (size_t i = 0; i < field_count; ++i)
+    {
+        yyjson_val *field = obj_get(outputs, fields[i]);
+        if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s output keys must be non-empty strings", type);
+    }
+    return true;
+}
+
+static bool validate_noop_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                 validation_names *names, const char *type)
+{
+    (void)ctx;
+    (void)action;
+    (void)json_path;
+    (void)names;
+    (void)type;
+    return true;
+}
+
+static bool validate_editor_vertex_delete_selected_action(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type)
+{
+    (void)names;
+    const char *output_fields[] = {"valid_key", "message_key", "deleted_count_key", "source_count_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+}
+
+static bool validate_editor_vertex_merge_selected_to_hover_action(validation_context *ctx, yyjson_val *action,
+                                                                  const char *json_path, validation_names *names,
+                                                                  const char *type)
+{
+    (void)names;
+    yyjson_val *target_vertex_index = obj_get(action, "target_vertex_index");
+    if (target_vertex_index != NULL && (!yyjson_is_int(target_vertex_index) || yyjson_get_int(target_vertex_index) < 0))
+        return validation_error(ctx, json_path,
+                                "editor.vertex.merge_selected_to_hover target_vertex_index must be non-negative");
+    yyjson_val *world = obj_get(action, "world");
+    if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover world must be non-empty");
+    yyjson_val *brush = obj_get(action, "brush");
+    if (brush != NULL && (!yyjson_is_str(brush) || yyjson_get_str(brush)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover brush must be non-empty");
+    yyjson_val *brush_stable_id = obj_get(action, "brush_stable_id");
+    if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
+        return validation_error(ctx, json_path,
+                                "editor.vertex.merge_selected_to_hover brush_stable_id must be non-empty");
+    const char *output_fields[] = {"valid_key", "message_key", "merged_count_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+}
+
+static bool validate_editor_vertex_add_to_source_action(validation_context *ctx, yyjson_val *action,
+                                                        const char *json_path, validation_names *names,
+                                                        const char *type)
+{
+    (void)names;
+    yyjson_val *coord = obj_get(action, "coord");
+    yyjson_val *position = obj_get(action, "position");
+    if ((coord == NULL) == (position == NULL))
+        return validation_error(ctx, json_path,
+                                "editor.vertex.add_to_source requires exactly one of coord or position");
+    if (coord != NULL)
+    {
+        if (!yyjson_is_arr(coord) || yyjson_arr_size(coord) != 3)
+            return validation_error(ctx, json_path, "editor.vertex.add_to_source coord must be an int[3]");
+        for (size_t i = 0; i < 3; ++i)
+        {
+            if (!yyjson_is_int(yyjson_arr_get(coord, i)))
+                return validation_error(ctx, json_path, "editor.vertex.add_to_source coord must be an int[3]");
+        }
+    }
+    if (position != NULL && !is_vec_array(position, 3))
+        return validation_error(ctx, json_path, "editor.vertex.add_to_source position must be a vec3");
+    yyjson_val *world = obj_get(action, "world");
+    if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.add_to_source world must be non-empty");
+    yyjson_val *brush = obj_get(action, "brush");
+    if (brush != NULL && (!yyjson_is_str(brush) || yyjson_get_str(brush)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.add_to_source brush must be non-empty");
+    yyjson_val *brush_stable_id = obj_get(action, "brush_stable_id");
+    if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.add_to_source brush_stable_id must be non-empty");
+    const char *output_fields[] = {"valid_key", "message_key", "vertex_count_key", "added_count_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+}
+
+static bool validate_editor_vertex_validate_source_action(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type)
+{
+    (void)names;
+    yyjson_val *world = obj_get(action, "world");
+    if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.validate_source world must be non-empty");
+    yyjson_val *brush = obj_get(action, "brush");
+    if (brush != NULL && (!yyjson_is_str(brush) || yyjson_get_str(brush)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.validate_source brush must be non-empty");
+    yyjson_val *brush_stable_id = obj_get(action, "brush_stable_id");
+    if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.validate_source brush_stable_id must be non-empty");
+    if (brush != NULL && brush_stable_id != NULL)
+        return validation_error(ctx, json_path, "editor.vertex.validate_source accepts only one brush identity");
+    const char *output_fields[] = {"valid_key",          "message_key",
+                                   "world_key",          "brush_count_key",
+                                   "vertex_count_key",   "edge_count_key",
+                                   "face_count_key",     "shared_vertex_count_key",
+                                   "off_snap_count_key", "degenerate_count_key",
+                                   "concave_count_key",  "non_finite_count_key",
+                                   "first_issue_key",    "first_issue_stable_id_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+}
+
+static bool validate_editor_vertex_snap_selected_action(validation_context *ctx, yyjson_val *action,
+                                                        const char *json_path, validation_names *names,
+                                                        const char *type)
+{
+    (void)names;
+    yyjson_val *snap_units = obj_get(action, "snap_units");
+    if (snap_units != NULL && (!yyjson_is_int(snap_units) || yyjson_get_int(snap_units) <= 0))
+        return validation_error(ctx, json_path, "editor.vertex.snap_selected snap_units must be positive");
+    yyjson_val *grid = obj_get(action, "grid");
+    if (grid != NULL && (!yyjson_is_num(grid) || yyjson_get_num(grid) <= 0.0))
+        return validation_error(ctx, json_path, "editor.vertex.snap_selected grid must be positive");
+    yyjson_val *default_grid = obj_get(action, "default_grid");
+    if (default_grid != NULL && (!yyjson_is_num(default_grid) || yyjson_get_num(default_grid) <= 0.0))
+        return validation_error(ctx, json_path, "editor.vertex.snap_selected default_grid must be positive");
+    yyjson_val *grid_key = obj_get(action, "grid_key");
+    if (grid_key != NULL && (!yyjson_is_str(grid_key) || yyjson_get_str(grid_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.vertex.snap_selected grid_key must be non-empty");
+    const char *output_fields[] = {"valid_key", "message_key", "changed_count_key", "source_count_key",
+                                   "snap_units_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+}
+
 static bool validate_known_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                   validation_names *names, const char *type)
 {
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return true;
-    if (SDL_strcmp(type, "editor.vertex.selection.clear") == 0)
-        return true;
-    if (SDL_strcmp(type, "editor.vertex.delete_selected") == 0)
-    {
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.vertex.delete_selected outputs must be an object");
-        if (outputs != NULL)
-        {
-            const char *output_fields[] = {"valid_key", "message_key", "deleted_count_key", "source_count_key"};
-            for (int i = 0; i < (int)SDL_arraysize(output_fields); ++i)
-            {
-                yyjson_val *field = obj_get(outputs, output_fields[i]);
-                if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-                    return validation_error(ctx, json_path,
-                                            "editor.vertex.delete_selected output keys must be non-empty strings");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.vertex.merge_selected_to_hover") == 0)
-    {
-        yyjson_val *target_vertex_index = obj_get(action, "target_vertex_index");
-        if (target_vertex_index != NULL &&
-            (!yyjson_is_int(target_vertex_index) || yyjson_get_int(target_vertex_index) < 0))
-            return validation_error(ctx, json_path,
-                                    "editor.vertex.merge_selected_to_hover target_vertex_index must be non-negative");
-        yyjson_val *world = obj_get(action, "world");
-        if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover world must be non-empty");
-        yyjson_val *brush = obj_get(action, "brush");
-        if (brush != NULL && (!yyjson_is_str(brush) || yyjson_get_str(brush)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover brush must be non-empty");
-        yyjson_val *brush_stable_id = obj_get(action, "brush_stable_id");
-        if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
-            return validation_error(ctx, json_path,
-                                    "editor.vertex.merge_selected_to_hover brush_stable_id must be non-empty");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.vertex.merge_selected_to_hover outputs must be an object");
-        if (outputs != NULL)
-        {
-            const char *output_fields[] = {"valid_key", "message_key", "merged_count_key"};
-            for (int i = 0; i < (int)SDL_arraysize(output_fields); ++i)
-            {
-                yyjson_val *field = obj_get(outputs, output_fields[i]);
-                if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-                    return validation_error(
-                        ctx, json_path, "editor.vertex.merge_selected_to_hover output keys must be non-empty strings");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.vertex.add_to_source") == 0)
-    {
-        yyjson_val *coord = obj_get(action, "coord");
-        yyjson_val *position = obj_get(action, "position");
-        if ((coord == NULL) == (position == NULL))
-            return validation_error(ctx, json_path,
-                                    "editor.vertex.add_to_source requires exactly one of coord or position");
-        if (coord != NULL)
-        {
-            if (!yyjson_is_arr(coord) || yyjson_arr_size(coord) != 3)
-                return validation_error(ctx, json_path, "editor.vertex.add_to_source coord must be an int[3]");
-            for (size_t i = 0; i < 3; ++i)
-            {
-                if (!yyjson_is_int(yyjson_arr_get(coord, i)))
-                    return validation_error(ctx, json_path, "editor.vertex.add_to_source coord must be an int[3]");
-            }
-        }
-        if (position != NULL)
-        {
-            if (!is_vec_array(position, 3))
-                return validation_error(ctx, json_path, "editor.vertex.add_to_source position must be a vec3");
-        }
-        yyjson_val *world = obj_get(action, "world");
-        if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.add_to_source world must be non-empty");
-        yyjson_val *brush = obj_get(action, "brush");
-        if (brush != NULL && (!yyjson_is_str(brush) || yyjson_get_str(brush)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.add_to_source brush must be non-empty");
-        yyjson_val *brush_stable_id = obj_get(action, "brush_stable_id");
-        if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.add_to_source brush_stable_id must be non-empty");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.vertex.add_to_source outputs must be an object");
-        if (outputs != NULL)
-        {
-            const char *output_fields[] = {"valid_key", "message_key", "vertex_count_key", "added_count_key"};
-            for (int i = 0; i < (int)SDL_arraysize(output_fields); ++i)
-            {
-                yyjson_val *field = obj_get(outputs, output_fields[i]);
-                if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-                    return validation_error(ctx, json_path,
-                                            "editor.vertex.add_to_source output keys must be non-empty strings");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.vertex.validate_source") == 0)
-    {
-        yyjson_val *world = obj_get(action, "world");
-        if (world != NULL && (!yyjson_is_str(world) || yyjson_get_str(world)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.validate_source world must be non-empty");
-        yyjson_val *brush = obj_get(action, "brush");
-        if (brush != NULL && (!yyjson_is_str(brush) || yyjson_get_str(brush)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.validate_source brush must be non-empty");
-        yyjson_val *brush_stable_id = obj_get(action, "brush_stable_id");
-        if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.validate_source brush_stable_id must be non-empty");
-        if (brush != NULL && brush_stable_id != NULL)
-            return validation_error(ctx, json_path, "editor.vertex.validate_source accepts only one brush identity");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.vertex.validate_source outputs must be an object");
-        if (outputs != NULL)
-        {
-            const char *output_fields[] = {"valid_key",          "message_key",
-                                           "world_key",          "brush_count_key",
-                                           "vertex_count_key",   "edge_count_key",
-                                           "face_count_key",     "shared_vertex_count_key",
-                                           "off_snap_count_key", "degenerate_count_key",
-                                           "concave_count_key",  "non_finite_count_key",
-                                           "first_issue_key",    "first_issue_stable_id_key"};
-            for (int i = 0; i < (int)SDL_arraysize(output_fields); ++i)
-            {
-                yyjson_val *field = obj_get(outputs, output_fields[i]);
-                if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-                    return validation_error(ctx, json_path,
-                                            "editor.vertex.validate_source output keys must be non-empty strings");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.vertex.snap_selected") == 0)
-    {
-        yyjson_val *snap_units = obj_get(action, "snap_units");
-        if (snap_units != NULL && (!yyjson_is_int(snap_units) || yyjson_get_int(snap_units) <= 0))
-            return validation_error(ctx, json_path, "editor.vertex.snap_selected snap_units must be positive");
-        yyjson_val *grid = obj_get(action, "grid");
-        if (grid != NULL && (!yyjson_is_num(grid) || yyjson_get_num(grid) <= 0.0))
-            return validation_error(ctx, json_path, "editor.vertex.snap_selected grid must be positive");
-        yyjson_val *default_grid = obj_get(action, "default_grid");
-        if (default_grid != NULL && (!yyjson_is_num(default_grid) || yyjson_get_num(default_grid) <= 0.0))
-            return validation_error(ctx, json_path, "editor.vertex.snap_selected default_grid must be positive");
-        yyjson_val *grid_key = obj_get(action, "grid_key");
-        if (grid_key != NULL && (!yyjson_is_str(grid_key) || yyjson_get_str(grid_key)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.vertex.snap_selected grid_key must be non-empty");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.vertex.snap_selected outputs must be an object");
-        if (outputs != NULL)
-        {
-            const char *output_fields[] = {"valid_key", "message_key", "changed_count_key", "source_count_key",
-                                           "snap_units_key"};
-            for (int i = 0; i < (int)SDL_arraysize(output_fields); ++i)
-            {
-                yyjson_val *field = obj_get(outputs, output_fields[i]);
-                if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-                    return validation_error(ctx, json_path,
-                                            "editor.vertex.snap_selected output keys must be non-empty strings");
-            }
-        }
-        return true;
-    }
     if (SDL_strcmp(type, "editor.selection.select_brush") == 0)
     {
         if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
@@ -1972,13 +1949,14 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("scene_state.toggle", validate_scene_state_toggle_action),
         ACTION_RULE_EXACT_HANDLER("scene_state.cycle", validate_scene_state_cycle_action),
         ACTION_RULE_EXACT_HANDLER("console.write", validate_console_write_action),
-        ACTION_RULE_EXACT_ENTRY("editor.selection.clear"),
-        ACTION_RULE_EXACT_ENTRY("editor.vertex.selection.clear"),
-        ACTION_RULE_EXACT_ENTRY("editor.vertex.delete_selected"),
-        ACTION_RULE_EXACT_ENTRY("editor.vertex.merge_selected_to_hover"),
-        ACTION_RULE_EXACT_ENTRY("editor.vertex.add_to_source"),
-        ACTION_RULE_EXACT_ENTRY("editor.vertex.validate_source"),
-        ACTION_RULE_EXACT_ENTRY("editor.vertex.snap_selected"),
+        ACTION_RULE_EXACT_HANDLER("editor.selection.clear", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.vertex.selection.clear", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.vertex.delete_selected", validate_editor_vertex_delete_selected_action),
+        ACTION_RULE_EXACT_HANDLER("editor.vertex.merge_selected_to_hover",
+                                  validate_editor_vertex_merge_selected_to_hover_action),
+        ACTION_RULE_EXACT_HANDLER("editor.vertex.add_to_source", validate_editor_vertex_add_to_source_action),
+        ACTION_RULE_EXACT_HANDLER("editor.vertex.validate_source", validate_editor_vertex_validate_source_action),
+        ACTION_RULE_EXACT_HANDLER("editor.vertex.snap_selected", validate_editor_vertex_snap_selected_action),
         ACTION_RULE_EXACT_ENTRY("editor.selection.select_brush"),
         ACTION_RULE_EXACT_ENTRY("editor.selection.delete_selected"),
         ACTION_RULE_EXACT_ENTRY("editor.selection.resize_y"),
