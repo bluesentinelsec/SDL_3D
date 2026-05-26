@@ -1317,331 +1317,251 @@ static bool validate_editor_test_run_save_manifest_action(validation_context *ct
     return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
-static bool validate_known_action(validation_context *ctx, yyjson_val *action, const char *json_path,
-                                  validation_names *names, const char *type)
+static bool validate_editor_brush_world_status_action(validation_context *ctx, yyjson_val *action,
+                                                      const char *json_path, validation_names *names, const char *type)
 {
-    if (SDL_strcmp(type, "editor.brush_world.status") == 0)
-    {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        yyjson_val *message = obj_get(action, "message");
-        if (message != NULL && !yyjson_is_str(message))
-            return validation_error(ctx, json_path, "editor.brush_world.status message must be a string");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.brush_world.status outputs must be an object");
-        static const char *const output_keys[] = {"valid_key", "message_key",  "world_key",         "source_path_key",
-                                                  "dirty_key", "revision_key", "saved_revision_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.brush_world.status output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.brush_world.validate_source") == 0)
-    {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        yyjson_val *message = obj_get(action, "message");
-        if (message != NULL && !yyjson_is_str(message))
-            return validation_error(ctx, json_path, "editor.brush_world.validate_source message must be a string");
-        yyjson_val *near_gap_units = obj_get(action, "near_gap_units");
-        if (near_gap_units != NULL && (!yyjson_is_int(near_gap_units) || yyjson_get_int(near_gap_units) < 0))
-            return validation_error(ctx, json_path,
-                                    "editor.brush_world.validate_source near_gap_units must be a non-negative integer");
-        if (obj_get(action, "allow_missing_source") != NULL)
-            return validation_error(ctx, json_path,
-                                    "editor.brush_world.validate_source allow_missing_source is no longer supported");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.brush_world.validate_source outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",
-                                                  "message_key",
-                                                  "box_count_key",
-                                                  "snap_units_key",
-                                                  "off_snap_count_key",
-                                                  "overlap_count_key",
-                                                  "near_gap_count_key",
-                                                  "face_contact_count_key",
-                                                  "edge_contact_count_key",
-                                                  "vertex_contact_count_key",
-                                                  "partial_face_contact_count_key",
-                                                  "runtime_brush_count_key",
-                                                  "runtime_source_mismatch_count_key",
-                                                  "compiled_face_count_key",
-                                                  "compiled_face_missing_source_count_key",
-                                                  "compiled_face_unknown_source_count_key",
-                                                  "first_issue_kind_key",
-                                                  "first_issue_source_name_key",
-                                                  "first_issue_source_stable_id_key",
-                                                  "first_issue_related_source_name_key",
-                                                  "first_issue_related_source_stable_id_key",
-                                                  "first_issue_source_face_key",
-                                                  "first_issue_runtime_brush_name_key",
-                                                  "first_issue_runtime_brush_index_key",
-                                                  "first_issue_compiled_face_index_key",
-                                                  "world_key",
-                                                  "source_path_key",
-                                                  "dirty_key",
-                                                  "revision_key",
-                                                  "saved_revision_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.brush_world.validate_source output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.brush_world.validate_enclosure") == 0)
-    {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        const char *player_start = json_string(action, "player_start");
-        if (player_start == NULL || player_start[0] == '\0')
-            return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure requires a player_start");
-        yyjson_val *allow_missing_player_start = obj_get(action, "allow_missing_player_start");
-        if (allow_missing_player_start != NULL && !yyjson_is_bool(allow_missing_player_start))
-        {
-            return validation_error(ctx, json_path,
-                                    "editor.brush_world.validate_enclosure allow_missing_player_start must be a "
-                                    "boolean");
-        }
-        const bool permits_missing_player_start =
-            allow_missing_player_start != NULL && yyjson_get_bool(allow_missing_player_start);
-        if (!permits_missing_player_start &&
-            !require_ref(ctx, &names->editor_player_starts, "editor player start", player_start, json_path))
-        {
-            return false;
-        }
-        yyjson_val *message = obj_get(action, "message");
-        if (message != NULL && !yyjson_is_str(message))
-            return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure message must be a string");
-        if (obj_get(action, "allow_missing_source") != NULL)
-            return validation_error(
-                ctx, json_path, "editor.brush_world.validate_enclosure allow_missing_source is no longer supported");
-        yyjson_val *max_cells = obj_get(action, "max_cells");
-        if (max_cells != NULL && (!yyjson_is_int(max_cells) || yyjson_get_int(max_cells) <= 0))
-            return validation_error(ctx, json_path,
-                                    "editor.brush_world.validate_enclosure max_cells must be a positive integer");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.brush_world.validate_enclosure outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",
-                                                  "message_key",
-                                                  "has_source_key",
-                                                  "has_player_start_key",
-                                                  "box_count_key",
-                                                  "grid_cell_count_key",
-                                                  "solid_cell_count_key",
-                                                  "visited_cell_count_key",
-                                                  "open_boundary_count_key",
-                                                  "leak_point_key",
-                                                  "leak_axis_key",
-                                                  "leak_side_key",
-                                                  "candidate_name_key",
-                                                  "candidate_stable_id_key",
-                                                  "candidate_face_key",
-                                                  "candidate_point_key",
-                                                  "candidate_distance_key",
-                                                  "world_key",
-                                                  "source_path_key",
-                                                  "dirty_key",
-                                                  "revision_key",
-                                                  "saved_revision_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL &&
-                (!yyjson_is_str(output) || yyjson_get_str(output) == NULL || yyjson_get_str(output)[0] == '\0'))
-            {
-                return validation_error(ctx, json_path,
-                                        "editor.brush_world.validate_enclosure output keys must be non-empty strings");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.brush_world.create_box") == 0)
-    {
-        const char *position_from = json_string(action, "position_from");
-        const bool from_preview = position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0;
-        if (!from_preview &&
-            !require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        if (!from_preview && !is_non_empty_string(action, "material"))
-            return validation_error(ctx, json_path, "editor.brush_world.create_box requires a non-empty material");
-        yyjson_val *name = obj_get(action, "name");
-        if (name != NULL && (!yyjson_is_str(name) || yyjson_get_str(name)[0] == '\0'))
-            return validation_error(ctx, json_path,
-                                    "editor.brush_world.create_box name must be non-empty when present");
-        yyjson_val *preview_mode = obj_get(action, "preview_mode");
-        if (preview_mode != NULL && (!yyjson_is_str(preview_mode) || yyjson_get_str(preview_mode)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.brush_world.create_box preview_mode must be non-empty");
-        yyjson_val *min = obj_get(action, "min");
-        yyjson_val *max = obj_get(action, "max");
-        if (!from_preview && (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3)))
-            return validation_error(ctx, json_path, "editor.brush_world.create_box requires min and max vec3 values");
-        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
-            SDL_strcmp(position_from, "placement_preview") != 0)
-            return validation_error(ctx, json_path,
-                                    "editor.brush_world.create_box position_from must be selection_point or "
-                                    "placement_preview");
-        yyjson_val *position_offset = obj_get(action, "position_offset");
-        if (position_offset != NULL && !is_exact_vec_array(position_offset, 3))
-            return validation_error(ctx, json_path, "editor.brush_world.create_box position_offset must be a vec3");
-        yyjson_val *snap = obj_get(action, "snap");
-        if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
-            return validation_error(ctx, json_path, "editor.brush_world.create_box snap must be a positive number");
-        char contents_path[PATH_BUFFER_SIZE];
-        format_path(contents_path, sizeof(contents_path), "%s.contents", json_path);
-        if (!validate_brush_string_or_string_array(ctx, obj_get(action, "contents"), contents_path,
-                                                   "editor.brush_world.create_box contents", brush_content_name_valid,
-                                                   false))
-        {
-            return false;
-        }
-        if (!from_preview)
-        {
-            const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));
-            const double min_y = yyjson_get_num(yyjson_arr_get(min, 1));
-            const double min_z = yyjson_get_num(yyjson_arr_get(min, 2));
-            const double max_x = yyjson_get_num(yyjson_arr_get(max, 0));
-            const double max_y = yyjson_get_num(yyjson_arr_get(max, 1));
-            const double max_z = yyjson_get_num(yyjson_arr_get(max, 2));
-            if (!(min_x < max_x && min_y < max_y && min_z < max_z))
-                return validation_error(ctx, json_path, "editor.brush_world.create_box bounds require min < max");
-        }
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.brush_world.create_box outputs must be an object");
-        static const char *const output_keys[] = {
-            "valid_key", "message_key",  "brush_key",          "world_key",      "source_path_key",
-            "dirty_key", "revision_key", "saved_revision_key", "bounds_min_key", "bounds_max_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.brush_world.create_box output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.player_start.place") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "editor.player_start.place requires a non-empty name");
-        const char *scene = json_string(action, "scene");
-        const char *target = json_string(action, "target");
-        if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
-            return false;
-        if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
-            return false;
-        yyjson_val *position = obj_get(action, "position");
-        if (position != NULL && !is_exact_vec_array(position, 3))
-            return validation_error(ctx, json_path, "editor.player_start.place position must be a vec3");
-        const char *position_from = json_string(action, "position_from");
-        if (position != NULL && position_from != NULL)
-            return validation_error(ctx, json_path,
-                                    "editor.player_start.place requires position or position_from, not both");
-        yyjson_val *preview_mode = obj_get(action, "preview_mode");
-        if (preview_mode != NULL && (!yyjson_is_str(preview_mode) || yyjson_get_str(preview_mode)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.player_start.place preview_mode must be non-empty");
-        if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
-            SDL_strcmp(position_from, "placement_preview") != 0)
-            return validation_error(ctx, json_path,
-                                    "editor.player_start.place position_from must be selection_point or "
-                                    "placement_preview");
-        yyjson_val *yaw = obj_get(action, "yaw");
-        yyjson_val *pitch = obj_get(action, "pitch");
-        yyjson_val *apply_to_target = obj_get(action, "apply_to_target");
-        if ((yaw != NULL && !yyjson_is_num(yaw)) || (pitch != NULL && !yyjson_is_num(pitch)) ||
-            (apply_to_target != NULL && !yyjson_is_bool(apply_to_target)))
-        {
-            return validation_error(ctx, json_path,
-                                    "editor.player_start.place yaw/pitch must be numeric and apply_to_target bool");
-        }
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.player_start.place outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",  "message_key",  "player_start_key",  "scene_key",
-                                                  "target_key", "position_key", "yaw_key",           "pitch_key",
-                                                  "dirty_key",  "revision_key", "saved_revision_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.player_start.place output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.player_start.apply") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "editor.player_start.apply requires a non-empty name");
-        const char *name = json_string(action, "name");
-        yyjson_val *allow_missing_player_start = obj_get(action, "allow_missing_player_start");
-        if (allow_missing_player_start != NULL && !yyjson_is_bool(allow_missing_player_start))
-        {
-            return validation_error(ctx, json_path,
-                                    "editor.player_start.apply allow_missing_player_start must be a boolean");
-        }
-        const bool permits_missing_player_start =
-            allow_missing_player_start != NULL && yyjson_get_bool(allow_missing_player_start);
-        if (!permits_missing_player_start &&
-            !require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
-        {
-            return false;
-        }
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.player_start.apply outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",  "message_key",  "player_start_key",  "scene_key",
-                                                  "target_key", "position_key", "yaw_key",           "pitch_key",
-                                                  "dirty_key",  "revision_key", "saved_revision_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.player_start.apply output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.player_start.delete") == 0)
-    {
-        const char *name = json_string(action, "name");
-        yyjson_val *name_from_selection_value = obj_get(action, "name_from_selection");
-        if (name_from_selection_value != NULL && !yyjson_is_bool(name_from_selection_value))
-            return validation_error(ctx, json_path, "editor.player_start.delete name_from_selection must be bool");
-        const bool name_from_selection =
-            name_from_selection_value != NULL && yyjson_get_bool(name_from_selection_value);
-        if ((name == NULL || name[0] == '\0') && !name_from_selection)
-            return validation_error(ctx, json_path, "editor.player_start.delete requires name or name_from_selection");
-        if (name != NULL && !require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
-            return false;
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.player_start.delete outputs must be an object");
-        static const char *const output_keys[] = {"valid_key", "message_key",  "player_start_key",
-                                                  "dirty_key", "revision_key", "saved_revision_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.player_start.delete output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strncmp(type, "audio.", 6) == 0)
-        return validate_audio_action(ctx, action, json_path, names, type);
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        return false;
+    yyjson_val *message = obj_get(action, "message");
+    if (message != NULL && !yyjson_is_str(message))
+        return validation_error(ctx, json_path, "%s message must be a string", type);
+    const char *output_keys[] = {"valid_key", "message_key",  "world_key",         "source_path_key",
+                                 "dirty_key", "revision_key", "saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
 
-    return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);
+static bool validate_editor_brush_world_validate_source_action(validation_context *ctx, yyjson_val *action,
+                                                               const char *json_path, validation_names *names,
+                                                               const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        return false;
+    yyjson_val *message = obj_get(action, "message");
+    if (message != NULL && !yyjson_is_str(message))
+        return validation_error(ctx, json_path, "%s message must be a string", type);
+    yyjson_val *near_gap_units = obj_get(action, "near_gap_units");
+    if (near_gap_units != NULL && (!yyjson_is_int(near_gap_units) || yyjson_get_int(near_gap_units) < 0))
+        return validation_error(ctx, json_path, "%s near_gap_units must be a non-negative integer", type);
+    if (obj_get(action, "allow_missing_source") != NULL)
+        return validation_error(ctx, json_path, "%s allow_missing_source is no longer supported", type);
+    const char *output_keys[] = {"valid_key",
+                                 "message_key",
+                                 "box_count_key",
+                                 "snap_units_key",
+                                 "off_snap_count_key",
+                                 "overlap_count_key",
+                                 "near_gap_count_key",
+                                 "face_contact_count_key",
+                                 "edge_contact_count_key",
+                                 "vertex_contact_count_key",
+                                 "partial_face_contact_count_key",
+                                 "runtime_brush_count_key",
+                                 "runtime_source_mismatch_count_key",
+                                 "compiled_face_count_key",
+                                 "compiled_face_missing_source_count_key",
+                                 "compiled_face_unknown_source_count_key",
+                                 "first_issue_kind_key",
+                                 "first_issue_source_name_key",
+                                 "first_issue_source_stable_id_key",
+                                 "first_issue_related_source_name_key",
+                                 "first_issue_related_source_stable_id_key",
+                                 "first_issue_source_face_key",
+                                 "first_issue_runtime_brush_name_key",
+                                 "first_issue_runtime_brush_index_key",
+                                 "first_issue_compiled_face_index_key",
+                                 "world_key",
+                                 "source_path_key",
+                                 "dirty_key",
+                                 "revision_key",
+                                 "saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_brush_world_validate_enclosure_action(validation_context *ctx, yyjson_val *action,
+                                                                  const char *json_path, validation_names *names,
+                                                                  const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        return false;
+    const char *player_start = json_string(action, "player_start");
+    if (player_start == NULL || player_start[0] == '\0')
+        return validation_error(ctx, json_path, "%s requires a player_start", type);
+    yyjson_val *allow_missing_player_start = obj_get(action, "allow_missing_player_start");
+    if (allow_missing_player_start != NULL && !yyjson_is_bool(allow_missing_player_start))
+        return validation_error(ctx, json_path, "%s allow_missing_player_start must be a boolean", type);
+    const bool permits_missing_player_start =
+        allow_missing_player_start != NULL && yyjson_get_bool(allow_missing_player_start);
+    if (!permits_missing_player_start &&
+        !require_ref(ctx, &names->editor_player_starts, "editor player start", player_start, json_path))
+    {
+        return false;
+    }
+    yyjson_val *message = obj_get(action, "message");
+    if (message != NULL && !yyjson_is_str(message))
+        return validation_error(ctx, json_path, "%s message must be a string", type);
+    if (obj_get(action, "allow_missing_source") != NULL)
+        return validation_error(ctx, json_path, "%s allow_missing_source is no longer supported", type);
+    yyjson_val *max_cells = obj_get(action, "max_cells");
+    if (max_cells != NULL && (!yyjson_is_int(max_cells) || yyjson_get_int(max_cells) <= 0))
+        return validation_error(ctx, json_path, "%s max_cells must be a positive integer", type);
+    const char *output_keys[] = {"valid_key",
+                                 "message_key",
+                                 "has_source_key",
+                                 "has_player_start_key",
+                                 "box_count_key",
+                                 "grid_cell_count_key",
+                                 "solid_cell_count_key",
+                                 "visited_cell_count_key",
+                                 "open_boundary_count_key",
+                                 "leak_point_key",
+                                 "leak_axis_key",
+                                 "leak_side_key",
+                                 "candidate_name_key",
+                                 "candidate_stable_id_key",
+                                 "candidate_face_key",
+                                 "candidate_point_key",
+                                 "candidate_distance_key",
+                                 "world_key",
+                                 "source_path_key",
+                                 "dirty_key",
+                                 "revision_key",
+                                 "saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_brush_world_create_box_action(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type)
+{
+    const char *position_from = json_string(action, "position_from");
+    const bool from_preview = position_from != NULL && SDL_strcmp(position_from, "placement_preview") == 0;
+    if (!from_preview &&
+        !require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        return false;
+    if (!from_preview && !is_non_empty_string(action, "material"))
+        return validation_error(ctx, json_path, "%s requires a non-empty material", type);
+    if (!validate_non_empty_string_field(ctx, action, json_path, type, "name") ||
+        !validate_non_empty_string_field(ctx, action, json_path, type, "preview_mode"))
+    {
+        return false;
+    }
+    yyjson_val *min = obj_get(action, "min");
+    yyjson_val *max = obj_get(action, "max");
+    if (!from_preview && (!is_exact_vec_array(min, 3) || !is_exact_vec_array(max, 3)))
+        return validation_error(ctx, json_path, "%s requires min and max vec3 values", type);
+    if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
+        SDL_strcmp(position_from, "placement_preview") != 0)
+    {
+        return validation_error(ctx, json_path, "%s position_from must be selection_point or placement_preview", type);
+    }
+    yyjson_val *position_offset = obj_get(action, "position_offset");
+    if (position_offset != NULL && !is_exact_vec_array(position_offset, 3))
+        return validation_error(ctx, json_path, "%s position_offset must be a vec3", type);
+    yyjson_val *snap = obj_get(action, "snap");
+    if (snap != NULL && (!yyjson_is_num(snap) || yyjson_get_num(snap) <= 0.0))
+        return validation_error(ctx, json_path, "%s snap must be a positive number", type);
+    char contents_path[PATH_BUFFER_SIZE];
+    format_path(contents_path, sizeof(contents_path), "%s.contents", json_path);
+    if (!validate_brush_string_or_string_array(ctx, obj_get(action, "contents"), contents_path,
+                                               "editor.brush_world.create_box contents", brush_content_name_valid,
+                                               false))
+    {
+        return false;
+    }
+    if (!from_preview)
+    {
+        const double min_x = yyjson_get_num(yyjson_arr_get(min, 0));
+        const double min_y = yyjson_get_num(yyjson_arr_get(min, 1));
+        const double min_z = yyjson_get_num(yyjson_arr_get(min, 2));
+        const double max_x = yyjson_get_num(yyjson_arr_get(max, 0));
+        const double max_y = yyjson_get_num(yyjson_arr_get(max, 1));
+        const double max_z = yyjson_get_num(yyjson_arr_get(max, 2));
+        if (!(min_x < max_x && min_y < max_y && min_z < max_z))
+            return validation_error(ctx, json_path, "%s bounds require min < max", type);
+    }
+    const char *output_keys[] = {"valid_key", "message_key",  "brush_key",          "world_key",      "source_path_key",
+                                 "dirty_key", "revision_key", "saved_revision_key", "bounds_min_key", "bounds_max_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_player_start_outputs(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 const char *type)
+{
+    const char *output_keys[] = {"valid_key",  "message_key",  "player_start_key",  "scene_key",
+                                 "target_key", "position_key", "yaw_key",           "pitch_key",
+                                 "dirty_key",  "revision_key", "saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_player_start_place_action(validation_context *ctx, yyjson_val *action,
+                                                      const char *json_path, validation_names *names, const char *type)
+{
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+    const char *scene = json_string(action, "scene");
+    const char *target = json_string(action, "target");
+    if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+        return false;
+    if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
+        return false;
+    yyjson_val *position = obj_get(action, "position");
+    if (position != NULL && !is_exact_vec_array(position, 3))
+        return validation_error(ctx, json_path, "%s position must be a vec3", type);
+    const char *position_from = json_string(action, "position_from");
+    if (position != NULL && position_from != NULL)
+        return validation_error(ctx, json_path, "%s requires position or position_from, not both", type);
+    if (!validate_non_empty_string_field(ctx, action, json_path, type, "preview_mode"))
+        return false;
+    if (position_from != NULL && SDL_strcmp(position_from, "selection_point") != 0 &&
+        SDL_strcmp(position_from, "placement_preview") != 0)
+    {
+        return validation_error(ctx, json_path, "%s position_from must be selection_point or placement_preview", type);
+    }
+    yyjson_val *yaw = obj_get(action, "yaw");
+    yyjson_val *pitch = obj_get(action, "pitch");
+    yyjson_val *apply_to_target = obj_get(action, "apply_to_target");
+    if ((yaw != NULL && !yyjson_is_num(yaw)) || (pitch != NULL && !yyjson_is_num(pitch)) ||
+        (apply_to_target != NULL && !yyjson_is_bool(apply_to_target)))
+    {
+        return validation_error(ctx, json_path, "%s yaw/pitch must be numeric and apply_to_target bool", type);
+    }
+    return validate_editor_player_start_outputs(ctx, action, json_path, type);
+}
+
+static bool validate_editor_player_start_apply_action(validation_context *ctx, yyjson_val *action,
+                                                      const char *json_path, validation_names *names, const char *type)
+{
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+    const char *name = json_string(action, "name");
+    yyjson_val *allow_missing_player_start = obj_get(action, "allow_missing_player_start");
+    if (allow_missing_player_start != NULL && !yyjson_is_bool(allow_missing_player_start))
+        return validation_error(ctx, json_path, "%s allow_missing_player_start must be a boolean", type);
+    const bool permits_missing_player_start =
+        allow_missing_player_start != NULL && yyjson_get_bool(allow_missing_player_start);
+    if (!permits_missing_player_start &&
+        !require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
+    {
+        return false;
+    }
+    return validate_editor_player_start_outputs(ctx, action, json_path, type);
+}
+
+static bool validate_editor_player_start_delete_action(validation_context *ctx, yyjson_val *action,
+                                                       const char *json_path, validation_names *names, const char *type)
+{
+    const char *name = json_string(action, "name");
+    yyjson_val *name_from_selection_value = obj_get(action, "name_from_selection");
+    if (name_from_selection_value != NULL && !yyjson_is_bool(name_from_selection_value))
+        return validation_error(ctx, json_path, "%s name_from_selection must be bool", type);
+    const bool name_from_selection = name_from_selection_value != NULL && yyjson_get_bool(name_from_selection_value);
+    if ((name == NULL || name[0] == '\0') && !name_from_selection)
+        return validation_error(ctx, json_path, "%s requires name or name_from_selection", type);
+    if (name != NULL && !require_ref(ctx, &names->editor_player_starts, "editor player start", name, json_path))
+        return false;
+    const char *output_keys[] = {"valid_key", "message_key",  "player_start_key",
+                                 "dirty_key", "revision_key", "saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 typedef enum action_validation_rule_match
@@ -1775,9 +1695,7 @@ static bool validate_adapter_invoke_action(validation_context *ctx, yyjson_val *
 static bool validate_branch_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                    validation_names *names, const char *type);
 
-#define ACTION_RULE_EXACT_ENTRY(name) {name, ACTION_RULE_EXACT, validate_known_action}
 #define ACTION_RULE_EXACT_HANDLER(name, handler) {name, ACTION_RULE_EXACT, handler}
-#define ACTION_RULE_PREFIX_ENTRY(name) {name, ACTION_RULE_PREFIX, validate_known_action}
 #define ACTION_RULE_PREFIX_HANDLER(name, handler) {name, ACTION_RULE_PREFIX, handler}
 
 static bool action_rule_matches(const action_validation_rule *rule, const char *type)
@@ -1863,13 +1781,15 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.level.load", validate_editor_level_load_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.prepare", validate_editor_test_run_prepare_action),
         ACTION_RULE_EXACT_HANDLER("editor.test_run.save_manifest", validate_editor_test_run_save_manifest_action),
-        ACTION_RULE_EXACT_ENTRY("editor.brush_world.status"),
-        ACTION_RULE_EXACT_ENTRY("editor.brush_world.validate_source"),
-        ACTION_RULE_EXACT_ENTRY("editor.brush_world.validate_enclosure"),
-        ACTION_RULE_EXACT_ENTRY("editor.brush_world.create_box"),
-        ACTION_RULE_EXACT_ENTRY("editor.player_start.place"),
-        ACTION_RULE_EXACT_ENTRY("editor.player_start.apply"),
-        ACTION_RULE_EXACT_ENTRY("editor.player_start.delete"),
+        ACTION_RULE_EXACT_HANDLER("editor.brush_world.status", validate_editor_brush_world_status_action),
+        ACTION_RULE_EXACT_HANDLER("editor.brush_world.validate_source",
+                                  validate_editor_brush_world_validate_source_action),
+        ACTION_RULE_EXACT_HANDLER("editor.brush_world.validate_enclosure",
+                                  validate_editor_brush_world_validate_enclosure_action),
+        ACTION_RULE_EXACT_HANDLER("editor.brush_world.create_box", validate_editor_brush_world_create_box_action),
+        ACTION_RULE_EXACT_HANDLER("editor.player_start.place", validate_editor_player_start_place_action),
+        ACTION_RULE_EXACT_HANDLER("editor.player_start.apply", validate_editor_player_start_apply_action),
+        ACTION_RULE_EXACT_HANDLER("editor.player_start.delete", validate_editor_player_start_delete_action),
         ACTION_RULE_EXACT_HANDLER("network.direct_connect.start", validate_network_direct_connect_start_action),
         ACTION_RULE_EXACT_HANDLER("network.direct_connect.cancel", validate_network_named_session_action),
         ACTION_RULE_EXACT_HANDLER("network.direct_connect.observe", validate_network_named_session_action),
@@ -1905,10 +1825,9 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
 static bool validate_action_with_rule(validation_context *ctx, yyjson_val *action, const char *json_path,
                                       validation_names *names, const char *type, const action_validation_rule *rule)
 {
-    if (rule == NULL)
+    if (rule == NULL || rule->validate == NULL)
         return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);
-    return rule->validate != NULL ? rule->validate(ctx, action, json_path, names, type)
-                                  : validate_known_action(ctx, action, json_path, names, type);
+    return rule->validate(ctx, action, json_path, names, type);
 }
 
 bool validate_one_action(validation_context *ctx, yyjson_val *action, const char *json_path, validation_names *names)
