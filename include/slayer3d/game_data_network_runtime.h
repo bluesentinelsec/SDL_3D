@@ -28,6 +28,116 @@ extern "C"
     typedef struct slayer3d_game_data_runtime slayer3d_game_data_runtime;
 
     /**
+     * @brief Start or replace a named runtime-owned UDP direct-connect client session.
+     *
+     * The session is owned by @p runtime and remains valid until canceled,
+     * replaced, or the runtime is destroyed. @p status_key, @p state_key, and
+     * @p connected_key are optional scene-state keys updated after creation.
+     */
+    bool slayer3d_game_data_network_direct_connect_start(slayer3d_game_data_runtime *runtime, const char *session_name,
+                                                         const char *host, int port, const char *status_key,
+                                                         const char *state_key, const char *connected_key);
+
+    /**
+     * @brief Cancel and destroy a named runtime-owned direct-connect session.
+     *
+     * Canceling an unknown session is a successful no-op.
+     */
+    bool slayer3d_game_data_network_direct_connect_cancel(slayer3d_game_data_runtime *runtime, const char *session_name,
+                                                          const char *status_key, const char *state_key,
+                                                          const char *connected_key, const char *status);
+
+    /**
+     * @brief Publish a named runtime-owned direct-connect session's status into scene state.
+     */
+    bool slayer3d_game_data_network_direct_connect_publish_status(slayer3d_game_data_runtime *runtime,
+                                                                  const char *session_name, const char *status_key,
+                                                                  const char *state_key, const char *connected_key);
+
+    /**
+     * @brief Return a runtime-owned direct-connect session, or NULL when absent.
+     *
+     * The caller must not destroy the returned pointer.
+     */
+    slayer3d_network_session *slayer3d_game_data_get_network_direct_connect_session(slayer3d_game_data_runtime *runtime,
+                                                                                    const char *session_name);
+
+    /**
+     * @brief Start or keep a named runtime-owned UDP host session alive.
+     *
+     * Host sessions listen for exactly one client. The session is owned by
+     * @p runtime and remains valid until canceled, replaced, or the runtime is
+     * destroyed. Optional scene-state keys publish human-readable status,
+     * endpoint, peer label, and connected state.
+     */
+    bool slayer3d_game_data_network_host_start(slayer3d_game_data_runtime *runtime, const char *session_name, int port,
+                                               const char *advertised_name, const char *status_key,
+                                               const char *endpoint_key, const char *peer_key,
+                                               const char *connected_key);
+
+    /**
+     * @brief Cancel and destroy a named runtime-owned host session.
+     *
+     * Canceling an unknown host session is a successful no-op.
+     */
+    bool slayer3d_game_data_network_host_cancel(slayer3d_game_data_runtime *runtime, const char *session_name,
+                                                const char *status_key, const char *endpoint_key, const char *peer_key,
+                                                const char *connected_key, const char *status);
+
+    /**
+     * @brief Publish a named runtime-owned host session's status into scene state.
+     */
+    bool slayer3d_game_data_network_host_publish_status(slayer3d_game_data_runtime *runtime, const char *session_name,
+                                                        const char *status_key, const char *endpoint_key,
+                                                        const char *peer_key, const char *connected_key);
+
+    /**
+     * @brief Return a runtime-owned host session, or NULL when absent.
+     *
+     * The caller must not destroy the returned pointer.
+     */
+    slayer3d_network_session *slayer3d_game_data_get_network_host_session(slayer3d_game_data_runtime *runtime,
+                                                                          const char *session_name);
+
+    /**
+     * @brief Start or refresh a named runtime-owned LAN discovery scanner.
+     *
+     * Results are published to @p collection_name when provided. Each row
+     * contains `label`, `name`, `host`, `port`, `status`, and `endpoint`
+     * fields. @p status_key and @p count_key are optional scene-state outputs.
+     */
+    bool slayer3d_game_data_network_discovery_start(slayer3d_game_data_runtime *runtime, const char *session_name,
+                                                    const char *host, int port, int local_port,
+                                                    const char *collection_name, const char *status_key,
+                                                    const char *count_key);
+
+    /**
+     * @brief Advance a named discovery scanner and republish results.
+     */
+    bool slayer3d_game_data_network_discovery_update(slayer3d_game_data_runtime *runtime, const char *session_name,
+                                                     float dt, const char *collection_name, const char *status_key,
+                                                     const char *count_key);
+
+    /**
+     * @brief Cancel and destroy a named discovery scanner.
+     *
+     * Canceling an unknown scanner is a successful no-op.
+     */
+    bool slayer3d_game_data_network_discovery_cancel(slayer3d_game_data_runtime *runtime, const char *session_name,
+                                                     const char *collection_name, const char *status_key,
+                                                     const char *count_key, const char *status);
+
+    /**
+     * @brief Connect a direct-connect session to one row from a discovery collection.
+     *
+     * The selected collection row must contain `host` and `port` fields.
+     */
+    bool slayer3d_game_data_network_discovery_connect_selected(
+        slayer3d_game_data_runtime *runtime, const char *discovery_name, const char *collection_name,
+        int selected_index, const char *direct_connect_name, const char *host_key, const char *port_key,
+        const char *status_key, const char *state_key, const char *connected_key, const char *connecting_status);
+
+    /**
      * @brief Return whether the game data authored a network replication schema.
      *
      * Local-only games can omit the `network` block entirely. In that case
