@@ -791,100 +791,6 @@ static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val
 static bool validate_known_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                   validation_names *names, const char *type)
 {
-    if (SDL_strcmp(type, "signal.emit") == 0)
-        return require_ref(ctx, &names->signals, "signal", json_string(action, "signal"), json_path);
-    if (SDL_strcmp(type, "timer.start") == 0)
-        return require_ref(ctx, &names->timers, "timer", json_string(action, "timer"), json_path);
-    if (SDL_strcmp(type, "property.set") == 0 || SDL_strcmp(type, "property.add") == 0)
-    {
-        yyjson_val *target_value = obj_get(action, "target");
-        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
-        const char *target = json_string(action, "target");
-        const char *target_from_payload = json_string(action, "target_from_payload");
-        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
-            return validation_error(ctx, json_path, "%s requires exactly one of target or target_from_payload", type);
-        if (target_value != NULL && !yyjson_is_str(target_value))
-            return validation_error(ctx, json_path, "%s target must be a string", type);
-        if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
-            return validation_error(ctx, json_path, "%s target_from_payload must be a string", type);
-        if (target != NULL && !require_ref(ctx, &names->entities, "entity", target, json_path))
-            return false;
-        if (target_from_payload != NULL && target_from_payload[0] == '\0')
-            return validation_error(ctx, json_path, "%s target_from_payload must be non-empty", type);
-        if (!is_non_empty_string(action, "key"))
-            return validation_error(ctx, json_path, "%s requires a non-empty key", type);
-        yyjson_val *value = obj_get(action, "value");
-        yyjson_val *value_from_payload_value = obj_get(action, "value_from_payload");
-        const char *value_from_payload = json_string(action, "value_from_payload");
-        if ((value == NULL && value_from_payload == NULL) || (value != NULL && value_from_payload != NULL))
-            return validation_error(ctx, json_path, "%s requires exactly one of value or value_from_payload", type);
-        if (value_from_payload_value != NULL && !yyjson_is_str(value_from_payload_value))
-            return validation_error(ctx, json_path, "%s value_from_payload must be a string", type);
-        if (value_from_payload != NULL && value_from_payload[0] == '\0')
-            return validation_error(ctx, json_path, "%s value_from_payload must be non-empty", type);
-        return true;
-    }
-    if (SDL_strcmp(type, "property.snapshot") == 0 || SDL_strcmp(type, "property.restore_snapshot") == 0)
-    {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
-            return false;
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
-        yyjson_val *keys = obj_get(action, "keys");
-        if (keys != NULL && !yyjson_is_arr(keys))
-            return validation_error(ctx, json_path, "%s keys must be an array", type);
-        for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
-        {
-            if (!yyjson_is_str(yyjson_arr_get(keys, i)))
-                return validation_error(ctx, json_path, "%s keys must be strings", type);
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "property.animate") == 0)
-    {
-        if (!validate_actor_target_action(ctx, action, json_path, names, "property.animate", "target",
-                                          "target_from_payload"))
-            return false;
-        if (!is_non_empty_string(action, "key"))
-            return validation_error(ctx, json_path, "property.animate requires a non-empty key");
-        return validate_animation_common(ctx, action, json_path, names);
-    }
-    if (SDL_strcmp(type, "property.reset_defaults") == 0)
-    {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
-            return false;
-        yyjson_val *keys = obj_get(action, "keys");
-        if (keys != NULL && !yyjson_is_arr(keys))
-            return validation_error(ctx, json_path, "property.reset_defaults keys must be an array");
-        for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
-        {
-            if (!yyjson_is_str(yyjson_arr_get(keys, i)))
-                return validation_error(ctx, json_path, "property.reset_defaults keys must be strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "debug.write_actor_properties") == 0)
-    {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
-            return false;
-        if (!is_non_empty_string(action, "path"))
-            return validation_error(ctx, json_path, "debug.write_actor_properties requires a non-empty path");
-        yyjson_val *append = obj_get(action, "append");
-        if (append != NULL && !yyjson_is_bool(append))
-            return validation_error(ctx, json_path, "debug.write_actor_properties append must be a boolean");
-        yyjson_val *properties = obj_get(action, "properties");
-        if (!yyjson_is_arr(properties) || yyjson_arr_size(properties) == 0)
-            return validation_error(ctx, json_path,
-                                    "debug.write_actor_properties requires a non-empty properties array");
-        for (size_t i = 0; i < yyjson_arr_size(properties); ++i)
-        {
-            yyjson_val *property = yyjson_arr_get(properties, i);
-            if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
-                return validation_error(ctx, json_path,
-                                        "debug.write_actor_properties properties must be non-empty strings");
-        }
-        return true;
-    }
     if (SDL_strcmp(type, "actor.spawn") == 0)
     {
         if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
@@ -2495,6 +2401,21 @@ typedef struct action_validation_rule
 
 static bool validate_combat_damage_or_heal_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                   validation_names *names, const char *type);
+static bool validate_signal_emit_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
+static bool validate_timer_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
+static bool validate_property_set_or_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type);
+static bool validate_property_snapshot_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type);
+static bool validate_property_animate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                             validation_names *names, const char *type);
+static bool validate_property_reset_defaults_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type);
+static bool validate_debug_write_actor_properties_action(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type);
 static bool validate_combat_kill_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
 static bool validate_combat_revive_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -2551,15 +2472,15 @@ static bool action_rule_matches(const action_validation_rule *rule, const char *
 static const action_validation_rule *find_action_validation_rule(const char *type)
 {
     static const action_validation_rule rules[] = {
-        ACTION_RULE_EXACT_ENTRY("signal.emit"),
-        ACTION_RULE_EXACT_ENTRY("timer.start"),
-        ACTION_RULE_EXACT_ENTRY("property.set"),
-        ACTION_RULE_EXACT_ENTRY("property.add"),
-        ACTION_RULE_EXACT_ENTRY("property.snapshot"),
-        ACTION_RULE_EXACT_ENTRY("property.restore_snapshot"),
-        ACTION_RULE_EXACT_ENTRY("property.animate"),
-        ACTION_RULE_EXACT_ENTRY("property.reset_defaults"),
-        ACTION_RULE_EXACT_ENTRY("debug.write_actor_properties"),
+        ACTION_RULE_EXACT_HANDLER("signal.emit", validate_signal_emit_action),
+        ACTION_RULE_EXACT_HANDLER("timer.start", validate_timer_start_action),
+        ACTION_RULE_EXACT_HANDLER("property.set", validate_property_set_or_add_action),
+        ACTION_RULE_EXACT_HANDLER("property.add", validate_property_set_or_add_action),
+        ACTION_RULE_EXACT_HANDLER("property.snapshot", validate_property_snapshot_action),
+        ACTION_RULE_EXACT_HANDLER("property.restore_snapshot", validate_property_snapshot_action),
+        ACTION_RULE_EXACT_HANDLER("property.animate", validate_property_animate_action),
+        ACTION_RULE_EXACT_HANDLER("property.reset_defaults", validate_property_reset_defaults_action),
+        ACTION_RULE_EXACT_HANDLER("debug.write_actor_properties", validate_debug_write_actor_properties_action),
         ACTION_RULE_EXACT_ENTRY("actor.spawn"),
         ACTION_RULE_EXACT_ENTRY("actor.despawn"),
         ACTION_RULE_EXACT_ENTRY("actor.despawn_by_tag"),
@@ -2689,6 +2610,126 @@ bool validate_action_array(validation_context *ctx, yyjson_val *actions, const c
         format_path(path, sizeof(path), "%s[%zu]", json_path, i);
         if (!validate_one_action(ctx, yyjson_arr_get(actions, i), path, names))
             return false;
+    }
+    return true;
+}
+
+static bool validate_signal_emit_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    (void)type;
+    return require_ref(ctx, &names->signals, "signal", json_string(action, "signal"), json_path);
+}
+
+static bool validate_timer_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    (void)type;
+    return require_ref(ctx, &names->timers, "timer", json_string(action, "timer"), json_path);
+}
+
+static bool validate_property_set_or_add_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type)
+{
+    yyjson_val *target_value = obj_get(action, "target");
+    yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
+    const char *target = json_string(action, "target");
+    const char *target_from_payload = json_string(action, "target_from_payload");
+    if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of target or target_from_payload", type);
+    if (target_value != NULL && !yyjson_is_str(target_value))
+        return validation_error(ctx, json_path, "%s target must be a string", type);
+    if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
+        return validation_error(ctx, json_path, "%s target_from_payload must be a string", type);
+    if (target != NULL && !require_ref(ctx, &names->entities, "entity", target, json_path))
+        return false;
+    if (target_from_payload != NULL && target_from_payload[0] == '\0')
+        return validation_error(ctx, json_path, "%s target_from_payload must be non-empty", type);
+    if (!is_non_empty_string(action, "key"))
+        return validation_error(ctx, json_path, "%s requires a non-empty key", type);
+
+    yyjson_val *value = obj_get(action, "value");
+    yyjson_val *value_from_payload_value = obj_get(action, "value_from_payload");
+    const char *value_from_payload = json_string(action, "value_from_payload");
+    if ((value == NULL && value_from_payload == NULL) || (value != NULL && value_from_payload != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of value or value_from_payload", type);
+    if (value_from_payload_value != NULL && !yyjson_is_str(value_from_payload_value))
+        return validation_error(ctx, json_path, "%s value_from_payload must be a string", type);
+    if (value_from_payload != NULL && value_from_payload[0] == '\0')
+        return validation_error(ctx, json_path, "%s value_from_payload must be non-empty", type);
+    return true;
+}
+
+static bool validate_property_snapshot_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+        return false;
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+    yyjson_val *keys = obj_get(action, "keys");
+    if (keys != NULL && !yyjson_is_arr(keys))
+        return validation_error(ctx, json_path, "%s keys must be an array", type);
+    for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
+    {
+        if (!yyjson_is_str(yyjson_arr_get(keys, i)))
+            return validation_error(ctx, json_path, "%s keys must be strings", type);
+    }
+    return true;
+}
+
+static bool validate_property_animate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                             validation_names *names, const char *type)
+{
+    (void)type;
+    if (!validate_actor_target_action(ctx, action, json_path, names, "property.animate", "target",
+                                      "target_from_payload"))
+    {
+        return false;
+    }
+    if (!is_non_empty_string(action, "key"))
+        return validation_error(ctx, json_path, "property.animate requires a non-empty key");
+    return validate_animation_common(ctx, action, json_path, names);
+}
+
+static bool validate_property_reset_defaults_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    (void)type;
+    if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+        return false;
+    yyjson_val *keys = obj_get(action, "keys");
+    if (keys != NULL && !yyjson_is_arr(keys))
+        return validation_error(ctx, json_path, "property.reset_defaults keys must be an array");
+    for (size_t i = 0; yyjson_is_arr(keys) && i < yyjson_arr_size(keys); ++i)
+    {
+        if (!yyjson_is_str(yyjson_arr_get(keys, i)))
+            return validation_error(ctx, json_path, "property.reset_defaults keys must be strings");
+    }
+    return true;
+}
+
+static bool validate_debug_write_actor_properties_action(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type)
+{
+    (void)type;
+    if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+        return false;
+    if (!is_non_empty_string(action, "path"))
+        return validation_error(ctx, json_path, "debug.write_actor_properties requires a non-empty path");
+    yyjson_val *append = obj_get(action, "append");
+    if (append != NULL && !yyjson_is_bool(append))
+        return validation_error(ctx, json_path, "debug.write_actor_properties append must be a boolean");
+    yyjson_val *properties = obj_get(action, "properties");
+    if (!yyjson_is_arr(properties) || yyjson_arr_size(properties) == 0)
+        return validation_error(ctx, json_path, "debug.write_actor_properties requires a non-empty properties array");
+    for (size_t i = 0; i < yyjson_arr_size(properties); ++i)
+    {
+        yyjson_val *property = yyjson_arr_get(properties, i);
+        if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+            return validation_error(ctx, json_path,
+                                    "debug.write_actor_properties properties must be non-empty strings");
     }
     return true;
 }
