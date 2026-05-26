@@ -222,6 +222,7 @@ target_sources(
         src/game_presentation_frame_state.c
         src/game_presentation_menus.c
         src/game_presentation_particles.c
+        src/game_presentation_primitives.c
         src/game_presentation_scene_flow.c
         src/game_presentation_sector_levels.c
         src/game_presentation_ui.c
