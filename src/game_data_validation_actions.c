@@ -791,220 +791,6 @@ static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val
 static bool validate_known_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                   validation_names *names, const char *type)
 {
-    if (SDL_strcmp(type, "controller.fps.launch") == 0 || SDL_strcmp(type, "controller.fps.teleport") == 0 ||
-        SDL_strcmp(type, "controller.fps.push") == 0 || SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
-        SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
-    {
-        yyjson_val *target_value = obj_get(action, "target");
-        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
-        const char *target = json_string(action, "target");
-        const char *target_from_payload = json_string(action, "target_from_payload");
-        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
-            return validation_error(ctx, json_path, "%s requires exactly one of target or target_from_payload", type);
-        if (target_value != NULL && !yyjson_is_str(target_value))
-            return validation_error(ctx, json_path, "%s target must be a string", type);
-        if (target != NULL && !require_ref(ctx, &names->entities, "entity", target, json_path))
-            return false;
-        if (target_from_payload_value != NULL &&
-            (!yyjson_is_str(target_from_payload_value) || yyjson_get_str(target_from_payload_value)[0] == '\0'))
-            return validation_error(ctx, json_path, "%s target_from_payload must be a non-empty string", type);
-        if (SDL_strcmp(type, "controller.fps.launch") == 0 || SDL_strcmp(type, "controller.fps_sector.launch") == 0)
-        {
-            yyjson_val *vertical_velocity = obj_get(action, "vertical_velocity");
-            if (!yyjson_is_num(vertical_velocity) || yyjson_get_num(vertical_velocity) <= 0.0)
-                return validation_error(ctx, json_path, "%s requires positive vertical_velocity", type);
-            return true;
-        }
-        if (SDL_strcmp(type, "controller.fps.push") == 0)
-        {
-            if (!is_vec_array(obj_get(action, "velocity"), 3))
-                return validation_error(ctx, json_path, "%s requires a vec3 velocity", type);
-            yyjson_val *scale_by_dt = obj_get(action, "scale_by_dt");
-            if (scale_by_dt != NULL && !yyjson_is_bool(scale_by_dt))
-                return validation_error(ctx, json_path, "%s scale_by_dt must be a boolean", type);
-            return true;
-        }
-
-        if (!is_vec_array(obj_get(action, "position"), 3))
-            return validation_error(ctx, json_path, "%s requires a vec3 position", type);
-        yyjson_val *yaw = obj_get(action, "yaw");
-        yyjson_val *pitch = obj_get(action, "pitch");
-        if ((yaw != NULL && !yyjson_is_num(yaw)) || (pitch != NULL && !yyjson_is_num(pitch)))
-            return validation_error(ctx, json_path, "%s yaw and pitch must be numeric", type);
-        return true;
-    }
-    if (SDL_strcmp(type, "grid.spawn_from_glyphs") == 0 || SDL_strcmp(type, "grid.spawn_runs_from_glyphs") == 0)
-    {
-        if (!require_ref(ctx, &names->grid_maps, "grid map", json_string(action, "map"), json_path))
-            return false;
-        yyjson_val *spawns = obj_get(action, "spawns");
-        if (!yyjson_is_arr(spawns) || yyjson_arr_size(spawns) <= 0)
-            return validation_error(ctx, json_path, "%s requires a non-empty spawns array", type);
-        yyjson_val *properties = obj_get(action, "properties");
-        if (properties != NULL && !yyjson_is_obj(properties))
-            return validation_error(ctx, json_path, "%s properties must be an object", type);
-        yyjson_val *z = obj_get(action, "z");
-        if (z != NULL && !yyjson_is_num(z))
-            return validation_error(ctx, json_path, "%s z must be numeric", type);
-        yyjson_val *depth = obj_get(action, "depth");
-        if (depth != NULL && !yyjson_is_num(depth))
-            return validation_error(ctx, json_path, "%s depth must be numeric", type);
-        yyjson_val *inset = obj_get(action, "inset");
-        if (inset != NULL && !yyjson_is_num(inset))
-            return validation_error(ctx, json_path, "%s inset must be numeric", type);
-        yyjson_val *size = obj_get(action, "size");
-        if (size != NULL && !is_vec_array(size, 3))
-            return validation_error(ctx, json_path, "%s size must be a vec3", type);
-        const char *axis = json_string(action, "axis");
-        if (axis != NULL && SDL_strcmp(axis, "x") != 0 && SDL_strcmp(axis, "horizontal") != 0 &&
-            SDL_strcmp(axis, "row") != 0 && SDL_strcmp(axis, "y") != 0 && SDL_strcmp(axis, "vertical") != 0 &&
-            SDL_strcmp(axis, "column") != 0)
-        {
-            return validation_error(ctx, json_path, "%s axis must be x, y, horizontal, vertical, row, or column", type);
-        }
-        yyjson_val *output_count_key = obj_get(action, "output_count_key");
-        if (output_count_key != NULL && !is_non_empty_string(action, "output_count_key"))
-            return validation_error(ctx, json_path, "%s output_count_key must be non-empty", type);
-        for (size_t i = 0; i < yyjson_arr_size(spawns); ++i)
-        {
-            char spawn_path[PATH_BUFFER_SIZE];
-            format_path(spawn_path, sizeof(spawn_path), "%s.spawns[%zu]", json_path, i);
-            yyjson_val *spawn = yyjson_arr_get(spawns, i);
-            if (!yyjson_is_obj(spawn))
-                return validation_error(ctx, spawn_path, "grid spawn entries must be objects");
-            if (!is_single_byte_string(obj_get(spawn, "glyph")))
-                return validation_error(ctx, spawn_path, "grid spawn glyph must be a single-byte string");
-            if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(spawn, "pool"), spawn_path))
-                return false;
-            yyjson_val *spawn_properties = obj_get(spawn, "properties");
-            if (spawn_properties != NULL && !yyjson_is_obj(spawn_properties))
-                return validation_error(ctx, spawn_path, "grid spawn properties must be an object");
-            yyjson_val *spawn_z = obj_get(spawn, "z");
-            if (spawn_z != NULL && !yyjson_is_num(spawn_z))
-                return validation_error(ctx, spawn_path, "grid spawn z must be numeric");
-            yyjson_val *spawn_depth = obj_get(spawn, "depth");
-            if (spawn_depth != NULL && !yyjson_is_num(spawn_depth))
-                return validation_error(ctx, spawn_path, "grid spawn depth must be numeric");
-            yyjson_val *spawn_inset = obj_get(spawn, "inset");
-            if (spawn_inset != NULL && !yyjson_is_num(spawn_inset))
-                return validation_error(ctx, spawn_path, "grid spawn inset must be numeric");
-            yyjson_val *spawn_size = obj_get(spawn, "size");
-            if (spawn_size != NULL && !is_vec_array(spawn_size, 3))
-                return validation_error(ctx, spawn_path, "grid spawn size must be a vec3");
-            const char *spawn_axis = json_string(spawn, "axis");
-            if (spawn_axis != NULL && SDL_strcmp(spawn_axis, "x") != 0 && SDL_strcmp(spawn_axis, "horizontal") != 0 &&
-                SDL_strcmp(spawn_axis, "row") != 0 && SDL_strcmp(spawn_axis, "y") != 0 &&
-                SDL_strcmp(spawn_axis, "vertical") != 0 && SDL_strcmp(spawn_axis, "column") != 0)
-            {
-                return validation_error(ctx, spawn_path,
-                                        "grid spawn axis must be x, y, horizontal, vertical, row, or column");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "grid.pickup_layer.reset") == 0)
-    {
-        if (!require_ref(ctx, &names->grid_pickup_layers, "grid pickup layer", json_string(action, "layer"), json_path))
-            return false;
-        yyjson_val *output_count_key = obj_get(action, "output_count_key");
-        if (output_count_key != NULL && !is_non_empty_string(action, "output_count_key"))
-            return validation_error(ctx, json_path, "grid.pickup_layer.reset output_count_key must be non-empty");
-        return true;
-    }
-    if (SDL_strcmp(type, "input.reset_bindings") == 0)
-    {
-        if (!is_non_empty_string(action, "menu"))
-            return validation_error(ctx, json_path, "input.reset_bindings requires a non-empty menu");
-        return true;
-    }
-    if (SDL_strcmp(type, "input.apply_profile") == 0)
-    {
-        const char *profile = json_string(action, "profile");
-        return require_ref(ctx, &names->input_profiles, "input profile", profile, json_path);
-    }
-    if (SDL_strcmp(type, "input.apply_active_profile") == 0)
-    {
-        if (names->input_profiles.count <= 0)
-            return validation_error(ctx, json_path, "input.apply_active_profile requires at least one input profile");
-        return true;
-    }
-    if (SDL_strcmp(type, "input.clear_network_input_overrides") == 0)
-    {
-        return require_ref(ctx, &names->network_input_channels, "network input channel", json_string(action, "channel"),
-                           json_path);
-    }
-    if (SDL_strcmp(type, "scene_state.set") == 0)
-    {
-        if (!is_non_empty_string(action, "key"))
-            return validation_error(ctx, json_path, "scene_state.set requires a non-empty key");
-        yyjson_val *value = obj_get(action, "value");
-        if (value == NULL ||
-            !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) || is_exact_vec_array(value, 3)))
-        {
-            return validation_error(ctx, json_path, "scene_state.set requires a scalar or vec3 value");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "scene_state.toggle") == 0)
-    {
-        if (!is_non_empty_string(action, "key"))
-            return validation_error(ctx, json_path, "scene_state.toggle requires a non-empty key");
-        yyjson_val *default_value = obj_get(action, "default");
-        if (default_value != NULL && !yyjson_is_bool(default_value))
-            return validation_error(ctx, json_path, "scene_state.toggle default must be a boolean");
-        return true;
-    }
-    if (SDL_strcmp(type, "scene_state.cycle") == 0)
-    {
-        if (!is_non_empty_string(action, "key"))
-            return validation_error(ctx, json_path, "scene_state.cycle requires a non-empty key");
-        yyjson_val *values = obj_get(action, "values");
-        if (!yyjson_is_arr(values) || yyjson_arr_size(values) == 0)
-            return validation_error(ctx, json_path, "scene_state.cycle requires a non-empty values array");
-        for (size_t i = 0; i < yyjson_arr_size(values); ++i)
-        {
-            yyjson_val *value = yyjson_arr_get(values, i);
-            if (!(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
-                return validation_error(ctx, json_path, "scene_state.cycle values must be scalar");
-        }
-        yyjson_val *default_value = obj_get(action, "default");
-        if (default_value != NULL &&
-            !(yyjson_is_bool(default_value) || yyjson_is_num(default_value) || yyjson_is_str(default_value)))
-            return validation_error(ctx, json_path, "scene_state.cycle default must be scalar");
-        yyjson_val *direction = obj_get(action, "direction");
-        if (direction != NULL && (!yyjson_is_int(direction) || yyjson_get_int(direction) == 0))
-            return validation_error(ctx, json_path, "scene_state.cycle direction must be a non-zero integer");
-        return true;
-    }
-    if (SDL_strcmp(type, "console.write") == 0)
-    {
-        yyjson_val *message = obj_get(action, "message");
-        yyjson_val *message_from_state = obj_get(action, "message_from_state");
-        const int message_fields = (message != NULL ? 1 : 0) + (message_from_state != NULL ? 1 : 0);
-        if (message_fields != 1)
-            return validation_error(ctx, json_path,
-                                    "console.write requires exactly one of message or message_from_state");
-        if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
-            return validation_error(ctx, json_path, "console.write message must be a non-empty string");
-        if (message_from_state != NULL &&
-            (!yyjson_is_str(message_from_state) || yyjson_get_str(message_from_state)[0] == '\0'))
-        {
-            return validation_error(ctx, json_path, "console.write message_from_state must be a non-empty string");
-        }
-        yyjson_val *line_key_prefix = obj_get(action, "line_key_prefix");
-        if (line_key_prefix != NULL && (!yyjson_is_str(line_key_prefix) || yyjson_get_str(line_key_prefix)[0] == '\0'))
-            return validation_error(ctx, json_path, "console.write line_key_prefix must be a non-empty string");
-        yyjson_val *count_key = obj_get(action, "count_key");
-        if (count_key != NULL && (!yyjson_is_str(count_key) || yyjson_get_str(count_key)[0] == '\0'))
-            return validation_error(ctx, json_path, "console.write count_key must be a non-empty string");
-        yyjson_val *line_count = obj_get(action, "line_count");
-        if (line_count != NULL &&
-            (!yyjson_is_int(line_count) || yyjson_get_int(line_count) < 1 || yyjson_get_int(line_count) > 8))
-        {
-            return validation_error(ctx, json_path, "console.write line_count must be an integer from 1 to 8");
-        }
-        return true;
-    }
     if (SDL_strcmp(type, "editor.selection.clear") == 0)
         return true;
     if (SDL_strcmp(type, "editor.vertex.selection.clear") == 0)
@@ -2141,6 +1927,30 @@ static bool validate_sector_lighting_set_action(validation_context *ctx, yyjson_
                                                 validation_names *names, const char *type);
 static bool validate_projectile_fire_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                             validation_names *names, const char *type);
+static bool validate_controller_fps_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type);
+static bool validate_grid_spawn_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type);
+static bool validate_grid_pickup_layer_reset_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type);
+static bool validate_input_reset_bindings_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type);
+static bool validate_input_apply_profile_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type);
+static bool validate_input_apply_active_profile_action(validation_context *ctx, yyjson_val *action,
+                                                       const char *json_path, validation_names *names,
+                                                       const char *type);
+static bool validate_input_clear_network_input_overrides_action(validation_context *ctx, yyjson_val *action,
+                                                                const char *json_path, validation_names *names,
+                                                                const char *type);
+static bool validate_scene_state_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type);
+static bool validate_scene_state_toggle_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type);
+static bool validate_scene_state_cycle_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type);
+static bool validate_console_write_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type);
 static bool validate_combat_kill_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
 static bool validate_combat_revive_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -2230,22 +2040,23 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("sector_door.interact", validate_sector_door_interact_action),
         ACTION_RULE_EXACT_HANDLER("sector_lighting.set", validate_sector_lighting_set_action),
         ACTION_RULE_EXACT_HANDLER("projectile.fire", validate_projectile_fire_action),
-        ACTION_RULE_EXACT_ENTRY("controller.fps.launch"),
-        ACTION_RULE_EXACT_ENTRY("controller.fps.teleport"),
-        ACTION_RULE_EXACT_ENTRY("controller.fps.push"),
-        ACTION_RULE_EXACT_ENTRY("controller.fps_sector.launch"),
-        ACTION_RULE_EXACT_ENTRY("controller.fps_sector.teleport"),
-        ACTION_RULE_EXACT_ENTRY("grid.spawn_from_glyphs"),
-        ACTION_RULE_EXACT_ENTRY("grid.spawn_runs_from_glyphs"),
-        ACTION_RULE_EXACT_ENTRY("grid.pickup_layer.reset"),
-        ACTION_RULE_EXACT_ENTRY("input.reset_bindings"),
-        ACTION_RULE_EXACT_ENTRY("input.apply_profile"),
-        ACTION_RULE_EXACT_ENTRY("input.apply_active_profile"),
-        ACTION_RULE_EXACT_ENTRY("input.clear_network_input_overrides"),
-        ACTION_RULE_EXACT_ENTRY("scene_state.set"),
-        ACTION_RULE_EXACT_ENTRY("scene_state.toggle"),
-        ACTION_RULE_EXACT_ENTRY("scene_state.cycle"),
-        ACTION_RULE_EXACT_ENTRY("console.write"),
+        ACTION_RULE_EXACT_HANDLER("controller.fps.launch", validate_controller_fps_action),
+        ACTION_RULE_EXACT_HANDLER("controller.fps.teleport", validate_controller_fps_action),
+        ACTION_RULE_EXACT_HANDLER("controller.fps.push", validate_controller_fps_action),
+        ACTION_RULE_EXACT_HANDLER("controller.fps_sector.launch", validate_controller_fps_action),
+        ACTION_RULE_EXACT_HANDLER("controller.fps_sector.teleport", validate_controller_fps_action),
+        ACTION_RULE_EXACT_HANDLER("grid.spawn_from_glyphs", validate_grid_spawn_action),
+        ACTION_RULE_EXACT_HANDLER("grid.spawn_runs_from_glyphs", validate_grid_spawn_action),
+        ACTION_RULE_EXACT_HANDLER("grid.pickup_layer.reset", validate_grid_pickup_layer_reset_action),
+        ACTION_RULE_EXACT_HANDLER("input.reset_bindings", validate_input_reset_bindings_action),
+        ACTION_RULE_EXACT_HANDLER("input.apply_profile", validate_input_apply_profile_action),
+        ACTION_RULE_EXACT_HANDLER("input.apply_active_profile", validate_input_apply_active_profile_action),
+        ACTION_RULE_EXACT_HANDLER("input.clear_network_input_overrides",
+                                  validate_input_clear_network_input_overrides_action),
+        ACTION_RULE_EXACT_HANDLER("scene_state.set", validate_scene_state_set_action),
+        ACTION_RULE_EXACT_HANDLER("scene_state.toggle", validate_scene_state_toggle_action),
+        ACTION_RULE_EXACT_HANDLER("scene_state.cycle", validate_scene_state_cycle_action),
+        ACTION_RULE_EXACT_HANDLER("console.write", validate_console_write_action),
         ACTION_RULE_EXACT_ENTRY("editor.selection.clear"),
         ACTION_RULE_EXACT_ENTRY("editor.vertex.selection.clear"),
         ACTION_RULE_EXACT_ENTRY("editor.vertex.delete_selected"),
@@ -2766,6 +2577,256 @@ static bool validate_projectile_fire_action(validation_context *ctx, yyjson_val 
 {
     (void)type;
     return validate_projectile_fire_shape(ctx, action, json_path, names, true);
+}
+
+static bool validate_controller_fps_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type)
+{
+    yyjson_val *target_value = obj_get(action, "target");
+    yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
+    const char *target = json_string(action, "target");
+    const char *target_from_payload = json_string(action, "target_from_payload");
+    if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of target or target_from_payload", type);
+    if (target_value != NULL && !yyjson_is_str(target_value))
+        return validation_error(ctx, json_path, "%s target must be a string", type);
+    if (target != NULL && !require_ref(ctx, &names->entities, "entity", target, json_path))
+        return false;
+    if (target_from_payload_value != NULL &&
+        (!yyjson_is_str(target_from_payload_value) || yyjson_get_str(target_from_payload_value)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s target_from_payload must be a non-empty string", type);
+    if (SDL_strcmp(type, "controller.fps.launch") == 0 || SDL_strcmp(type, "controller.fps_sector.launch") == 0)
+    {
+        yyjson_val *vertical_velocity = obj_get(action, "vertical_velocity");
+        if (!yyjson_is_num(vertical_velocity) || yyjson_get_num(vertical_velocity) <= 0.0)
+            return validation_error(ctx, json_path, "%s requires positive vertical_velocity", type);
+        return true;
+    }
+    if (SDL_strcmp(type, "controller.fps.push") == 0)
+    {
+        if (!is_vec_array(obj_get(action, "velocity"), 3))
+            return validation_error(ctx, json_path, "%s requires a vec3 velocity", type);
+        yyjson_val *scale_by_dt = obj_get(action, "scale_by_dt");
+        if (scale_by_dt != NULL && !yyjson_is_bool(scale_by_dt))
+            return validation_error(ctx, json_path, "%s scale_by_dt must be a boolean", type);
+        return true;
+    }
+
+    if (!is_vec_array(obj_get(action, "position"), 3))
+        return validation_error(ctx, json_path, "%s requires a vec3 position", type);
+    yyjson_val *yaw = obj_get(action, "yaw");
+    yyjson_val *pitch = obj_get(action, "pitch");
+    if ((yaw != NULL && !yyjson_is_num(yaw)) || (pitch != NULL && !yyjson_is_num(pitch)))
+        return validation_error(ctx, json_path, "%s yaw and pitch must be numeric", type);
+    return true;
+}
+
+static bool validate_grid_spawn_axis(validation_context *ctx, const char *json_path, const char *action_type,
+                                     const char *axis, const char *message_prefix)
+{
+    if (axis == NULL || SDL_strcmp(axis, "x") == 0 || SDL_strcmp(axis, "horizontal") == 0 ||
+        SDL_strcmp(axis, "row") == 0 || SDL_strcmp(axis, "y") == 0 || SDL_strcmp(axis, "vertical") == 0 ||
+        SDL_strcmp(axis, "column") == 0)
+    {
+        return true;
+    }
+    return validation_error(ctx, json_path, "%s %saxis must be x, y, horizontal, vertical, row, or column", action_type,
+                            message_prefix);
+}
+
+static bool validate_grid_spawn_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->grid_maps, "grid map", json_string(action, "map"), json_path))
+        return false;
+    yyjson_val *spawns = obj_get(action, "spawns");
+    if (!yyjson_is_arr(spawns) || yyjson_arr_size(spawns) <= 0)
+        return validation_error(ctx, json_path, "%s requires a non-empty spawns array", type);
+    yyjson_val *properties = obj_get(action, "properties");
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "%s properties must be an object", type);
+    yyjson_val *z = obj_get(action, "z");
+    if (z != NULL && !yyjson_is_num(z))
+        return validation_error(ctx, json_path, "%s z must be numeric", type);
+    yyjson_val *depth = obj_get(action, "depth");
+    if (depth != NULL && !yyjson_is_num(depth))
+        return validation_error(ctx, json_path, "%s depth must be numeric", type);
+    yyjson_val *inset = obj_get(action, "inset");
+    if (inset != NULL && !yyjson_is_num(inset))
+        return validation_error(ctx, json_path, "%s inset must be numeric", type);
+    yyjson_val *size = obj_get(action, "size");
+    if (size != NULL && !is_vec_array(size, 3))
+        return validation_error(ctx, json_path, "%s size must be a vec3", type);
+    if (!validate_grid_spawn_axis(ctx, json_path, type, json_string(action, "axis"), ""))
+        return false;
+    yyjson_val *output_count_key = obj_get(action, "output_count_key");
+    if (output_count_key != NULL && !is_non_empty_string(action, "output_count_key"))
+        return validation_error(ctx, json_path, "%s output_count_key must be non-empty", type);
+    for (size_t i = 0; i < yyjson_arr_size(spawns); ++i)
+    {
+        char spawn_path[PATH_BUFFER_SIZE];
+        format_path(spawn_path, sizeof(spawn_path), "%s.spawns[%zu]", json_path, i);
+        yyjson_val *spawn = yyjson_arr_get(spawns, i);
+        if (!yyjson_is_obj(spawn))
+            return validation_error(ctx, spawn_path, "grid spawn entries must be objects");
+        if (!is_single_byte_string(obj_get(spawn, "glyph")))
+            return validation_error(ctx, spawn_path, "grid spawn glyph must be a single-byte string");
+        if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(spawn, "pool"), spawn_path))
+            return false;
+        yyjson_val *spawn_properties = obj_get(spawn, "properties");
+        if (spawn_properties != NULL && !yyjson_is_obj(spawn_properties))
+            return validation_error(ctx, spawn_path, "grid spawn properties must be an object");
+        yyjson_val *spawn_z = obj_get(spawn, "z");
+        if (spawn_z != NULL && !yyjson_is_num(spawn_z))
+            return validation_error(ctx, spawn_path, "grid spawn z must be numeric");
+        yyjson_val *spawn_depth = obj_get(spawn, "depth");
+        if (spawn_depth != NULL && !yyjson_is_num(spawn_depth))
+            return validation_error(ctx, spawn_path, "grid spawn depth must be numeric");
+        yyjson_val *spawn_inset = obj_get(spawn, "inset");
+        if (spawn_inset != NULL && !yyjson_is_num(spawn_inset))
+            return validation_error(ctx, spawn_path, "grid spawn inset must be numeric");
+        yyjson_val *spawn_size = obj_get(spawn, "size");
+        if (spawn_size != NULL && !is_vec_array(spawn_size, 3))
+            return validation_error(ctx, spawn_path, "grid spawn size must be a vec3");
+        if (!validate_grid_spawn_axis(ctx, spawn_path, "grid spawn", json_string(spawn, "axis"), ""))
+            return false;
+    }
+    return true;
+}
+
+static bool validate_grid_pickup_layer_reset_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    (void)type;
+    if (!require_ref(ctx, &names->grid_pickup_layers, "grid pickup layer", json_string(action, "layer"), json_path))
+        return false;
+    yyjson_val *output_count_key = obj_get(action, "output_count_key");
+    if (output_count_key != NULL && !is_non_empty_string(action, "output_count_key"))
+        return validation_error(ctx, json_path, "grid.pickup_layer.reset output_count_key must be non-empty");
+    return true;
+}
+
+static bool validate_input_reset_bindings_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "menu"))
+        return validation_error(ctx, json_path, "input.reset_bindings requires a non-empty menu");
+    return true;
+}
+
+static bool validate_input_apply_profile_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type)
+{
+    (void)type;
+    return require_ref(ctx, &names->input_profiles, "input profile", json_string(action, "profile"), json_path);
+}
+
+static bool validate_input_apply_active_profile_action(validation_context *ctx, yyjson_val *action,
+                                                       const char *json_path, validation_names *names, const char *type)
+{
+    (void)action;
+    (void)type;
+    if (names->input_profiles.count <= 0)
+        return validation_error(ctx, json_path, "input.apply_active_profile requires at least one input profile");
+    return true;
+}
+
+static bool validate_input_clear_network_input_overrides_action(validation_context *ctx, yyjson_val *action,
+                                                                const char *json_path, validation_names *names,
+                                                                const char *type)
+{
+    (void)type;
+    return require_ref(ctx, &names->network_input_channels, "network input channel", json_string(action, "channel"),
+                       json_path);
+}
+
+static bool validate_scene_state_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "key"))
+        return validation_error(ctx, json_path, "scene_state.set requires a non-empty key");
+    yyjson_val *value = obj_get(action, "value");
+    if (value == NULL ||
+        !(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value) || is_exact_vec_array(value, 3)))
+    {
+        return validation_error(ctx, json_path, "scene_state.set requires a scalar or vec3 value");
+    }
+    return true;
+}
+
+static bool validate_scene_state_toggle_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "key"))
+        return validation_error(ctx, json_path, "scene_state.toggle requires a non-empty key");
+    yyjson_val *default_value = obj_get(action, "default");
+    if (default_value != NULL && !yyjson_is_bool(default_value))
+        return validation_error(ctx, json_path, "scene_state.toggle default must be a boolean");
+    return true;
+}
+
+static bool validate_scene_state_cycle_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "key"))
+        return validation_error(ctx, json_path, "scene_state.cycle requires a non-empty key");
+    yyjson_val *values = obj_get(action, "values");
+    if (!yyjson_is_arr(values) || yyjson_arr_size(values) == 0)
+        return validation_error(ctx, json_path, "scene_state.cycle requires a non-empty values array");
+    for (size_t i = 0; i < yyjson_arr_size(values); ++i)
+    {
+        yyjson_val *value = yyjson_arr_get(values, i);
+        if (!(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
+            return validation_error(ctx, json_path, "scene_state.cycle values must be scalar");
+    }
+    yyjson_val *default_value = obj_get(action, "default");
+    if (default_value != NULL &&
+        !(yyjson_is_bool(default_value) || yyjson_is_num(default_value) || yyjson_is_str(default_value)))
+        return validation_error(ctx, json_path, "scene_state.cycle default must be scalar");
+    yyjson_val *direction = obj_get(action, "direction");
+    if (direction != NULL && (!yyjson_is_int(direction) || yyjson_get_int(direction) == 0))
+        return validation_error(ctx, json_path, "scene_state.cycle direction must be a non-zero integer");
+    return true;
+}
+
+static bool validate_console_write_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    yyjson_val *message = obj_get(action, "message");
+    yyjson_val *message_from_state = obj_get(action, "message_from_state");
+    const int message_fields = (message != NULL ? 1 : 0) + (message_from_state != NULL ? 1 : 0);
+    if (message_fields != 1)
+        return validation_error(ctx, json_path, "console.write requires exactly one of message or message_from_state");
+    if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
+        return validation_error(ctx, json_path, "console.write message must be a non-empty string");
+    if (message_from_state != NULL &&
+        (!yyjson_is_str(message_from_state) || yyjson_get_str(message_from_state)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "console.write message_from_state must be a non-empty string");
+    }
+    yyjson_val *line_key_prefix = obj_get(action, "line_key_prefix");
+    if (line_key_prefix != NULL && (!yyjson_is_str(line_key_prefix) || yyjson_get_str(line_key_prefix)[0] == '\0'))
+        return validation_error(ctx, json_path, "console.write line_key_prefix must be a non-empty string");
+    yyjson_val *count_key = obj_get(action, "count_key");
+    if (count_key != NULL && (!yyjson_is_str(count_key) || yyjson_get_str(count_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "console.write count_key must be a non-empty string");
+    yyjson_val *line_count = obj_get(action, "line_count");
+    if (line_count != NULL &&
+        (!yyjson_is_int(line_count) || yyjson_get_int(line_count) < 1 || yyjson_get_int(line_count) > 8))
+    {
+        return validation_error(ctx, json_path, "console.write line_count must be an integer from 1 to 8");
+    }
+    return true;
 }
 
 static bool validate_combat_damage_or_heal_action(validation_context *ctx, yyjson_val *action, const char *json_path,
