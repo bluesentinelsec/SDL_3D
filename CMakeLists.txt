@@ -223,6 +223,7 @@ target_sources(
         src/game_presentation_particles.c
         src/game_presentation_scene_flow.c
         src/game_presentation_sector_levels.c
+        src/game_presentation_ui.c
         src/game_data_validation_actions.c
         src/game_data_validation_brush_common.c
         src/game_data_validation_app_world.c
