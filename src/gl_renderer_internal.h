@@ -424,6 +424,12 @@ struct slayer3d_gl_context
 
 GLuint slayer3d_gl_resolve_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex);
 void slayer3d_gl_tex_cache_free(slayer3d_gl_context *ctx);
+slayer3d_gl_mesh_cache_entry *slayer3d_gl_mesh_cache_lookup_or_create(
+    slayer3d_gl_context *ctx, bool lit, GLenum primitive_mode, const float *positions, const float *normals,
+    const float *uvs, const float *lightmap_uvs, const float *colors, const unsigned int *indices,
+    const unsigned short *joint_indices, const float *joint_weights, int vertex_count, int index_count,
+    bool has_lightmap_uvs, bool gpu_skinned);
+void slayer3d_gl_mesh_cache_free(slayer3d_gl_context *ctx);
 void slayer3d_gl_free_draw_list(slayer3d_gl_context *ctx);
 slayer3d_draw_entry *slayer3d_gl_append_draw_entry(slayer3d_gl_context *ctx);
 void slayer3d_gl_free_overlay_list(slayer3d_gl_context *ctx);
