@@ -1695,8 +1695,10 @@ static bool validate_adapter_invoke_action(validation_context *ctx, yyjson_val *
 static bool validate_branch_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                    validation_names *names, const char *type);
 
+// clang-format off
 #define ACTION_RULE_EXACT_HANDLER(name, handler) {name, ACTION_RULE_EXACT, handler}
 #define ACTION_RULE_PREFIX_HANDLER(name, handler) {name, ACTION_RULE_PREFIX, handler}
+// clang-format on
 
 static bool action_rule_matches(const action_validation_rule *rule, const char *type)
 {
