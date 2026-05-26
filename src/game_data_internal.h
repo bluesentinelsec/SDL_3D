@@ -8,8 +8,10 @@
 #include <SDL3/SDL_stdinc.h>
 
 #include "game_data_actor_pool_types.h"
+#include "game_data_animation_types.h"
 #include "game_data_brush_internal.h"
 #include "game_data_grid_types.h"
+#include "game_data_logic_types.h"
 #include "game_data_network_types.h"
 #include "script_internal.h"
 #include "slayer3d/actor_controller.h"
@@ -39,142 +41,7 @@ typedef struct slayer3d_replication_field_descriptor slayer3d_replication_field_
 #define SLAYER3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
 #define SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS 4
 
-typedef enum game_data_sensor_type
-{
-    GAME_DATA_SENSOR_BOUNDS_EXIT,
-    GAME_DATA_SENSOR_BOUNDS_REFLECT,
-    GAME_DATA_SENSOR_CONTACT_2D,
-    GAME_DATA_SENSOR_HEARING,
-    GAME_DATA_SENSOR_INPUT_PRESSED,
-    GAME_DATA_SENSOR_BRUSH_CONTENTS,
-    GAME_DATA_SENSOR_BRUSH_PERCEPTION,
-    GAME_DATA_SENSOR_PERCEPTION,
-    GAME_DATA_SENSOR_SECTOR,
-    GAME_DATA_SENSOR_VOLUME,
-} game_data_sensor_type;
-
-typedef struct named_signal
-{
-    const char *name;
-    int id;
-} named_signal;
-
-typedef struct named_timer
-{
-    const char *name;
-    float delay;
-    int signal_id;
-    bool repeating;
-    float interval;
-} named_timer;
-
-typedef struct named_action
-{
-    const char *name;
-    int id;
-} named_action;
-
-typedef struct adapter_entry
-{
-    char *name;
-    char *lua_script_id;
-    char *lua_function;
-    slayer3d_script_ref lua_function_ref;
-    slayer3d_game_data_adapter_fn callback;
-    void *userdata;
-} adapter_entry;
-
-typedef struct script_entry
-{
-    const char *id;
-    const char *path;
-    const char *module;
-    const char **dependencies;
-    int dependency_count;
-    slayer3d_script_ref module_ref;
-    bool autoload;
-    bool loading;
-    bool loaded;
-} script_entry;
-
-typedef struct binding_entry
-{
-    struct slayer3d_game_data_runtime *runtime;
-    yyjson_val *actions;
-    int connection_id;
-} binding_entry;
-
-typedef struct sensor_contact_pair_state
-{
-    const char *actor_name;
-    const char *other_actor_name;
-    bool owns_actor_name;
-    bool owns_other_actor_name;
-    bool active;
-    bool seen;
-} sensor_contact_pair_state;
-
-typedef struct sensor_entry
-{
-    game_data_sensor_type type;
-    yyjson_val *json;
-    const char *name;
-    const char *entity;
-    const char *other;
-    const char *entity_tag;
-    const char *other_tag;
-    const char *sector_level;
-    const char *sector;
-    const char *sector_property;
-    int sector_index;
-    const char *action;
-    const char *axis;
-    const char *side;
-    float min_value;
-    float max_value;
-    float threshold;
-    float range;
-    float min_dot;
-    float observer_eye_height;
-    float target_eye_height;
-    const char *yaw_property;
-    slayer3d_vec3 volume_min;
-    slayer3d_vec3 volume_max;
-    int signal_id;
-    yyjson_val *actions;
-    const char *edge;
-    bool was_active;
-    sensor_contact_pair_state *contact_pairs;
-    int contact_pair_count;
-    int contact_pair_capacity;
-} sensor_entry;
-
 #include "game_data_editor_types.h"
-
-typedef struct wave_schedule_entry
-{
-    yyjson_val *schedule;
-    float elapsed;
-    bool initialized;
-} wave_schedule_entry;
-
-typedef struct noise_event_runtime
-{
-    unsigned int id;
-    char key[32];
-    const char *source_actor_name;
-    slayer3d_vec3 position;
-    float radius;
-    float loudness;
-    float remaining_seconds;
-} noise_event_runtime;
-
-typedef struct sensor_actor_list
-{
-    slayer3d_registered_actor **items;
-    int count;
-    int capacity;
-} sensor_actor_list;
 
 typedef struct input_binding_spec
 {
@@ -229,61 +96,6 @@ typedef struct ui_state_entry
     slayer3d_game_data_ui_state state;
     bool animated;
 } ui_state_entry;
-
-typedef enum game_data_tween_target
-{
-    GAME_DATA_TWEEN_UI,
-    GAME_DATA_TWEEN_PROPERTY,
-} game_data_tween_target;
-
-typedef enum game_data_tween_value_type
-{
-    GAME_DATA_TWEEN_FLOAT,
-    GAME_DATA_TWEEN_VEC3,
-    GAME_DATA_TWEEN_COLOR,
-} game_data_tween_value_type;
-
-typedef enum game_data_tween_easing
-{
-    GAME_DATA_TWEEN_LINEAR,
-    GAME_DATA_TWEEN_IN_QUAD,
-    GAME_DATA_TWEEN_OUT_QUAD,
-    GAME_DATA_TWEEN_IN_OUT_QUAD,
-} game_data_tween_easing;
-
-typedef enum game_data_tween_repeat
-{
-    GAME_DATA_TWEEN_REPEAT_NONE,
-    GAME_DATA_TWEEN_REPEAT_LOOP,
-    GAME_DATA_TWEEN_REPEAT_PING_PONG,
-} game_data_tween_repeat;
-
-typedef struct game_data_tween_value
-{
-    game_data_tween_value_type type;
-    union {
-        float as_float;
-        slayer3d_vec3 as_vec3;
-        slayer3d_color as_color;
-    };
-} game_data_tween_value;
-
-typedef struct game_data_animation
-{
-    game_data_tween_target target_type;
-    const char *target;
-    const char *property;
-    const char *key;
-    const char *scene;
-    float duration;
-    float elapsed;
-    game_data_tween_easing easing;
-    game_data_tween_repeat repeat;
-    game_data_tween_value from;
-    game_data_tween_value to;
-    slayer3d_value_type property_type;
-    int done_signal_id;
-} game_data_animation;
 
 typedef struct materialized_audio_file
 {
