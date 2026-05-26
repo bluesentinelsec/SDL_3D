@@ -14,6 +14,7 @@
 #include "game_data_logic_types.h"
 #include "game_data_menu_types.h"
 #include "game_data_network_types.h"
+#include "game_data_runtime_types.h"
 #include "game_data_world_types.h"
 #include "script_internal.h"
 #include "slayer3d/actor_controller.h"
@@ -31,8 +32,6 @@
 #include "slayer3d/timer_pool.h"
 #include "yyjson.h"
 
-typedef struct slayer3d_replication_field_descriptor slayer3d_replication_field_descriptor;
-
 #define SLAYER3D_GAME_DATA_SIGNAL_BASE 20000
 #define SLAYER3D_GAME_DATA_MENU_TEXT_MAX_BYTES 255
 #define SLAYER3D_GAME_DATA_NETWORK_SNAPSHOT_MAGIC 0x53335253u /* "S3RS" */
@@ -42,68 +41,6 @@ typedef struct slayer3d_replication_field_descriptor slayer3d_replication_field_
 #define SLAYER3D_GAME_DATA_NETWORK_CONTROL_MAGIC 0x43335253u /* "S3RC" */
 #define SLAYER3D_GAME_DATA_NETWORK_CONTROL_VERSION 1u
 #include "game_data_editor_types.h"
-
-typedef struct materialized_audio_file
-{
-    char *asset_path;
-    char *file_path;
-} materialized_audio_file;
-
-typedef struct property_snapshot
-{
-    char *name;
-    char *target;
-    slayer3d_properties *properties;
-} property_snapshot;
-
-typedef struct runtime_collection
-{
-    char *name;
-    slayer3d_properties **rows;
-    int row_count;
-    int row_capacity;
-} runtime_collection;
-
-typedef struct game_data_snapshot_value
-{
-    slayer3d_replication_field_type type;
-    union {
-        bool as_bool;
-        Sint32 as_int32;
-        float as_float32;
-        slayer3d_vec2 as_vec2;
-        slayer3d_vec3 as_vec3;
-    } value;
-} game_data_snapshot_value;
-
-typedef struct game_data_input_value
-{
-    int action_id;
-    float value;
-} game_data_input_value;
-
-typedef struct scene_activity_state
-{
-    const char *scene;
-    float idle_elapsed;
-    float *periodic_elapsed;
-    int periodic_count;
-    int periodic_capacity;
-    bool idle;
-    bool entered;
-} scene_activity_state;
-
-typedef struct scene_entry
-{
-    yyjson_doc *doc;
-    yyjson_val *root;
-    const char *name;
-    const char **entities;
-    int entity_count;
-    bool has_entity_filter;
-    scene_menu_state *menus;
-    int menu_count;
-} scene_entry;
 
 typedef struct slayer3d_game_data_runtime
 {
