@@ -1160,248 +1160,166 @@ static bool validate_editor_command_history_action(validation_context *ctx, yyjs
            validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
+static bool validate_editor_brush_world_export_action(validation_context *ctx, yyjson_val *action,
+                                                      const char *json_path, validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        return false;
+    const char *output_keys[] = {"valid_key",       "message_key", "json_key",     "size_key",          "world_key",
+                                 "source_path_key", "dirty_key",   "revision_key", "saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_level_export_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
+        return false;
+    const char *output_keys[] = {"valid_key",
+                                 "message_key",
+                                 "json_key",
+                                 "size_key",
+                                 "brush_world_key",
+                                 "brush_source_path_key",
+                                 "brush_dirty_key",
+                                 "brush_revision_key",
+                                 "brush_saved_revision_key",
+                                 "player_start_source_path_key",
+                                 "player_start_count_key",
+                                 "player_start_dirty_key",
+                                 "player_start_revision_key",
+                                 "player_start_saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_level_path_pair(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            const char *type)
+{
+    yyjson_val *path = obj_get(action, "path");
+    yyjson_val *path_from_state = obj_get(action, "path_from_state");
+    if ((path == NULL && path_from_state == NULL) || (path != NULL && path_from_state != NULL))
+        return validation_error(ctx, json_path, "%s requires exactly one of path or path_from_state", type);
+    if (path != NULL && (!yyjson_is_str(path) || yyjson_get_str(path)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s path must be a non-empty string", type);
+    if (path_from_state != NULL && (!yyjson_is_str(path_from_state) || yyjson_get_str(path_from_state)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s path_from_state must be a non-empty string", type);
+    return true;
+}
+
+static bool validate_editor_level_save_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path) ||
+        !validate_editor_level_path_pair(ctx, action, json_path, type))
+    {
+        return false;
+    }
+    const char *output_keys[] = {"valid_key",
+                                 "message_key",
+                                 "path_key",
+                                 "size_key",
+                                 "brush_world_key",
+                                 "brush_source_path_key",
+                                 "brush_dirty_key",
+                                 "brush_revision_key",
+                                 "brush_saved_revision_key",
+                                 "player_start_source_path_key",
+                                 "player_start_count_key",
+                                 "player_start_dirty_key",
+                                 "player_start_revision_key",
+                                 "player_start_saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_level_load_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type)
+{
+    if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path) ||
+        !validate_editor_level_path_pair(ctx, action, json_path, type))
+    {
+        return false;
+    }
+    yyjson_val *optional = obj_get(action, "optional");
+    if (optional != NULL && !yyjson_is_bool(optional))
+        return validation_error(ctx, json_path, "editor.level.load optional must be a boolean");
+    const char *output_keys[] = {"valid_key",
+                                 "message_key",
+                                 "path_key",
+                                 "brush_world_key",
+                                 "brush_source_path_key",
+                                 "brush_dirty_key",
+                                 "brush_revision_key",
+                                 "brush_saved_revision_key",
+                                 "player_start_source_path_key",
+                                 "player_start_count_key",
+                                 "player_start_dirty_key",
+                                 "player_start_revision_key",
+                                 "player_start_saved_revision_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_test_run_common(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type, bool require_path)
+{
+    if (!is_non_empty_string(action, "data_asset"))
+        return validation_error(ctx, json_path, "%s requires a non-empty data_asset", type);
+    const char *string_fields[] = {"runner", "root", "pack", "media"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        yyjson_val *field = obj_get(action, string_fields[i]);
+        if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+            return validation_error(ctx, json_path, "%s command fields must be non-empty strings", type);
+    }
+    yyjson_val *embedded = obj_get(action, "embedded");
+    if (embedded != NULL && !yyjson_is_bool(embedded))
+        return validation_error(ctx, json_path, "%s embedded must be a boolean", type);
+    const int mount_count = (obj_get(action, "root") != NULL ? 1 : 0) + (obj_get(action, "pack") != NULL ? 1 : 0) +
+                            (embedded != NULL && yyjson_get_bool(embedded) ? 1 : 0);
+    if (mount_count > 1)
+        return validation_error(ctx, json_path, "%s accepts at most one of root, pack, or embedded", type);
+    if (require_path && !validate_editor_level_path_pair(ctx, action, json_path, type))
+        return false;
+    const char *scene = json_string(action, "scene");
+    if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
+        return false;
+    yyjson_val *player_start = obj_get(action, "player_start");
+    if (player_start != NULL && (!yyjson_is_str(player_start) || yyjson_get_str(player_start)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s player_start must be a non-empty string", type);
+    if (player_start != NULL &&
+        !require_ref(ctx, &names->editor_player_starts, "editor player start", yyjson_get_str(player_start), json_path))
+    {
+        return false;
+    }
+    if (scene == NULL && player_start == NULL)
+        return validation_error(ctx, json_path, "%s requires scene or player_start", type);
+    return true;
+}
+
+static bool validate_editor_test_run_prepare_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    if (!validate_editor_test_run_common(ctx, action, json_path, names, type, false))
+        return false;
+    const char *output_keys[] = {"valid_key", "message_key",      "manifest_json_key", "size_key",   "data_asset_key",
+                                 "scene_key", "player_start_key", "target_key",        "command_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
+static bool validate_editor_test_run_save_manifest_action(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type)
+{
+    if (!validate_editor_test_run_common(ctx, action, json_path, names, type, true))
+        return false;
+    const char *output_keys[] = {"valid_key",  "message_key",    "path_key",  "manifest_json_key",
+                                 "size_key",   "data_asset_key", "scene_key", "player_start_key",
+                                 "target_key", "command_key"};
+    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+}
+
 static bool validate_known_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                   validation_names *names, const char *type)
 {
-    if (SDL_strcmp(type, "editor.brush_world.export") == 0)
-    {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.brush_world.export outputs must be an object");
-        static const char *const output_keys[] = {"valid_key", "message_key",  "json_key",
-                                                  "size_key",  "world_key",    "source_path_key",
-                                                  "dirty_key", "revision_key", "saved_revision_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.brush_world.export output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.level.export") == 0)
-    {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.level.export outputs must be an object");
-        static const char *const output_keys[] = {
-            "valid_key",
-            "message_key",
-            "json_key",
-            "size_key",
-            "brush_world_key",
-            "brush_source_path_key",
-            "brush_dirty_key",
-            "brush_revision_key",
-            "brush_saved_revision_key",
-            "player_start_source_path_key",
-            "player_start_count_key",
-            "player_start_dirty_key",
-            "player_start_revision_key",
-            "player_start_saved_revision_key",
-        };
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path, "editor.level.export output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.level.save") == 0)
-    {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        yyjson_val *path = obj_get(action, "path");
-        yyjson_val *path_from_state = obj_get(action, "path_from_state");
-        if ((path == NULL && path_from_state == NULL) || (path != NULL && path_from_state != NULL))
-            return validation_error(ctx, json_path,
-                                    "editor.level.save requires exactly one of path or path_from_state");
-        if (path != NULL && (!yyjson_is_str(path) || yyjson_get_str(path)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.level.save path must be a non-empty string");
-        if (path_from_state != NULL && (!yyjson_is_str(path_from_state) || yyjson_get_str(path_from_state)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.level.save path_from_state must be a non-empty string");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.level.save outputs must be an object");
-        static const char *const output_keys[] = {
-            "valid_key",
-            "message_key",
-            "path_key",
-            "size_key",
-            "brush_world_key",
-            "brush_source_path_key",
-            "brush_dirty_key",
-            "brush_revision_key",
-            "brush_saved_revision_key",
-            "player_start_source_path_key",
-            "player_start_count_key",
-            "player_start_dirty_key",
-            "player_start_revision_key",
-            "player_start_saved_revision_key",
-        };
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path, "editor.level.save output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.level.load") == 0)
-    {
-        if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
-            return false;
-        yyjson_val *path = obj_get(action, "path");
-        yyjson_val *path_from_state = obj_get(action, "path_from_state");
-        if ((path == NULL && path_from_state == NULL) || (path != NULL && path_from_state != NULL))
-            return validation_error(ctx, json_path,
-                                    "editor.level.load requires exactly one of path or path_from_state");
-        if (path != NULL && (!yyjson_is_str(path) || yyjson_get_str(path)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.level.load path must be a non-empty string");
-        if (path_from_state != NULL && (!yyjson_is_str(path_from_state) || yyjson_get_str(path_from_state)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.level.load path_from_state must be a non-empty string");
-        yyjson_val *optional = obj_get(action, "optional");
-        if (optional != NULL && !yyjson_is_bool(optional))
-            return validation_error(ctx, json_path, "editor.level.load optional must be a boolean");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.level.load outputs must be an object");
-        static const char *const output_keys[] = {
-            "valid_key",
-            "message_key",
-            "path_key",
-            "brush_world_key",
-            "brush_source_path_key",
-            "brush_dirty_key",
-            "brush_revision_key",
-            "brush_saved_revision_key",
-            "player_start_source_path_key",
-            "player_start_count_key",
-            "player_start_dirty_key",
-            "player_start_revision_key",
-            "player_start_saved_revision_key",
-        };
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path, "editor.level.load output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.test_run.prepare") == 0)
-    {
-        if (!is_non_empty_string(action, "data_asset"))
-            return validation_error(ctx, json_path, "editor.test_run.prepare requires a non-empty data_asset");
-        static const char *const string_fields[] = {"runner", "root", "pack", "media"};
-        for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
-        {
-            yyjson_val *field = obj_get(action, string_fields[i]);
-            if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.test_run.prepare command fields must be non-empty strings");
-        }
-        yyjson_val *embedded = obj_get(action, "embedded");
-        if (embedded != NULL && !yyjson_is_bool(embedded))
-            return validation_error(ctx, json_path, "editor.test_run.prepare embedded must be a boolean");
-        const int mount_count = (obj_get(action, "root") != NULL ? 1 : 0) + (obj_get(action, "pack") != NULL ? 1 : 0) +
-                                (embedded != NULL && yyjson_get_bool(embedded) ? 1 : 0);
-        if (mount_count > 1)
-            return validation_error(ctx, json_path,
-                                    "editor.test_run.prepare accepts at most one of root, pack, or embedded");
-        const char *scene = json_string(action, "scene");
-        if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
-            return false;
-        yyjson_val *player_start = obj_get(action, "player_start");
-        if (player_start != NULL && (!yyjson_is_str(player_start) || yyjson_get_str(player_start)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.test_run.prepare player_start must be a non-empty string");
-        if (player_start != NULL && !require_ref(ctx, &names->editor_player_starts, "editor player start",
-                                                 yyjson_get_str(player_start), json_path))
-        {
-            return false;
-        }
-        if (scene == NULL && player_start == NULL)
-            return validation_error(ctx, json_path, "editor.test_run.prepare requires scene or player_start");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.test_run.prepare outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",        "message_key",    "manifest_json_key",
-                                                  "size_key",         "data_asset_key", "scene_key",
-                                                  "player_start_key", "target_key",     "command_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.test_run.prepare output keys must be non-empty strings");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "editor.test_run.save_manifest") == 0)
-    {
-        if (!is_non_empty_string(action, "data_asset"))
-            return validation_error(ctx, json_path, "editor.test_run.save_manifest requires a non-empty data_asset");
-        static const char *const string_fields[] = {"runner", "root", "pack", "media"};
-        for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
-        {
-            yyjson_val *field = obj_get(action, string_fields[i]);
-            if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.test_run.save_manifest command fields must be non-empty strings");
-        }
-        yyjson_val *embedded = obj_get(action, "embedded");
-        if (embedded != NULL && !yyjson_is_bool(embedded))
-            return validation_error(ctx, json_path, "editor.test_run.save_manifest embedded must be a boolean");
-        const int mount_count = (obj_get(action, "root") != NULL ? 1 : 0) + (obj_get(action, "pack") != NULL ? 1 : 0) +
-                                (embedded != NULL && yyjson_get_bool(embedded) ? 1 : 0);
-        if (mount_count > 1)
-            return validation_error(ctx, json_path,
-                                    "editor.test_run.save_manifest accepts at most one of root, pack, or embedded");
-        yyjson_val *path = obj_get(action, "path");
-        yyjson_val *path_from_state = obj_get(action, "path_from_state");
-        if ((path == NULL && path_from_state == NULL) || (path != NULL && path_from_state != NULL))
-            return validation_error(ctx, json_path,
-                                    "editor.test_run.save_manifest requires exactly one of path or path_from_state");
-        if (path != NULL && (!yyjson_is_str(path) || yyjson_get_str(path)[0] == '\0'))
-            return validation_error(ctx, json_path, "editor.test_run.save_manifest path must be a non-empty string");
-        if (path_from_state != NULL && (!yyjson_is_str(path_from_state) || yyjson_get_str(path_from_state)[0] == '\0'))
-            return validation_error(ctx, json_path,
-                                    "editor.test_run.save_manifest path_from_state must be a non-empty string");
-        const char *scene = json_string(action, "scene");
-        if (scene != NULL && !require_ref(ctx, &names->scenes, "scene", scene, json_path))
-            return false;
-        yyjson_val *player_start = obj_get(action, "player_start");
-        if (player_start != NULL && (!yyjson_is_str(player_start) || yyjson_get_str(player_start)[0] == '\0'))
-            return validation_error(ctx, json_path,
-                                    "editor.test_run.save_manifest player_start must be a non-empty string");
-        if (player_start != NULL && !require_ref(ctx, &names->editor_player_starts, "editor player start",
-                                                 yyjson_get_str(player_start), json_path))
-        {
-            return false;
-        }
-        if (scene == NULL && player_start == NULL)
-            return validation_error(ctx, json_path, "editor.test_run.save_manifest requires scene or player_start");
-        yyjson_val *outputs = obj_get(action, "outputs");
-        if (outputs != NULL && !yyjson_is_obj(outputs))
-            return validation_error(ctx, json_path, "editor.test_run.save_manifest outputs must be an object");
-        static const char *const output_keys[] = {"valid_key",  "message_key",    "path_key",  "manifest_json_key",
-                                                  "size_key",   "data_asset_key", "scene_key", "player_start_key",
-                                                  "target_key", "command_key"};
-        for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-        {
-            yyjson_val *output = obj_get(outputs, output_keys[i]);
-            if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-                return validation_error(ctx, json_path,
-                                        "editor.test_run.save_manifest output keys must be non-empty strings");
-        }
-        return true;
-    }
     if (SDL_strcmp(type, "editor.brush_world.status") == 0)
     {
         if (!require_ref(ctx, &names->brush_worlds, "brush world", json_string(action, "world"), json_path))
@@ -1939,12 +1857,12 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.command.commit", validate_editor_command_history_action),
         ACTION_RULE_EXACT_HANDLER("editor.command.undo", validate_editor_command_history_action),
         ACTION_RULE_EXACT_HANDLER("editor.command.redo", validate_editor_command_history_action),
-        ACTION_RULE_EXACT_ENTRY("editor.brush_world.export"),
-        ACTION_RULE_EXACT_ENTRY("editor.level.export"),
-        ACTION_RULE_EXACT_ENTRY("editor.level.save"),
-        ACTION_RULE_EXACT_ENTRY("editor.level.load"),
-        ACTION_RULE_EXACT_ENTRY("editor.test_run.prepare"),
-        ACTION_RULE_EXACT_ENTRY("editor.test_run.save_manifest"),
+        ACTION_RULE_EXACT_HANDLER("editor.brush_world.export", validate_editor_brush_world_export_action),
+        ACTION_RULE_EXACT_HANDLER("editor.level.export", validate_editor_level_export_action),
+        ACTION_RULE_EXACT_HANDLER("editor.level.save", validate_editor_level_save_action),
+        ACTION_RULE_EXACT_HANDLER("editor.level.load", validate_editor_level_load_action),
+        ACTION_RULE_EXACT_HANDLER("editor.test_run.prepare", validate_editor_test_run_prepare_action),
+        ACTION_RULE_EXACT_HANDLER("editor.test_run.save_manifest", validate_editor_test_run_save_manifest_action),
         ACTION_RULE_EXACT_ENTRY("editor.brush_world.status"),
         ACTION_RULE_EXACT_ENTRY("editor.brush_world.validate_source"),
         ACTION_RULE_EXACT_ENTRY("editor.brush_world.validate_enclosure"),
