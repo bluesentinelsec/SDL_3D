@@ -18,6 +18,7 @@
 #include "slayer3d/shapes.h"
 
 #include "game_data_internal.h"
+#include "game_presentation_internal.h"
 #include "render_context_internal.h"
 
 typedef struct primitive_draw_context
@@ -41,16 +42,6 @@ typedef struct primitive_draw_context
 } primitive_draw_context;
 
 static const float SLAYER3D_GAME_PRESENTATION_PI = 3.14159265358979323846f;
-
-typedef struct sector_level_draw_context
-{
-    slayer3d_render_context *renderer;
-    const slayer3d_asset_resolver *assets;
-    const slayer3d_camera3d *camera;
-    bool *sector_visible;
-    int sector_visible_capacity;
-    bool ok;
-} sector_level_draw_context;
 
 typedef struct ui_draw_context
 {
@@ -110,13 +101,6 @@ static slayer3d_overlay_effect ui_image_effect_from_name(const char *effect)
         return SLAYER3D_OVERLAY_EFFECT_MELT;
     return SLAYER3D_OVERLAY_EFFECT_NONE;
 }
-
-typedef struct particle_update_context
-{
-    slayer3d_game_data_particle_cache *cache;
-    float dt;
-    bool ok;
-} particle_update_context;
 
 static slayer3d_camera3d default_camera(void)
 {
@@ -257,26 +241,6 @@ static bool ensure_font_cache_capacity(slayer3d_game_data_font_cache *cache, int
     return true;
 }
 
-static bool ensure_particle_cache_capacity(slayer3d_game_data_particle_cache *cache, int required)
-{
-    if (cache == NULL || required <= cache->capacity)
-        return cache != NULL;
-
-    int next_capacity = cache->capacity < 4 ? 4 : cache->capacity * 2;
-    while (next_capacity < required)
-        next_capacity *= 2;
-
-    slayer3d_game_data_particle_cache_entry *entries = (slayer3d_game_data_particle_cache_entry *)SDL_realloc(
-        cache->entries, (size_t)next_capacity * sizeof(*entries));
-    if (entries == NULL)
-        return false;
-
-    SDL_memset(entries + cache->capacity, 0, (size_t)(next_capacity - cache->capacity) * sizeof(*entries));
-    cache->entries = entries;
-    cache->capacity = next_capacity;
-    return true;
-}
-
 static bool ensure_image_cache_capacity(slayer3d_game_data_image_cache *cache, int required)
 {
     if (cache == NULL || required <= cache->capacity)
@@ -376,44 +340,6 @@ static bool ensure_mesh_primitive_cache_capacity(slayer3d_game_data_mesh_primiti
     cache->entries = entries;
     cache->capacity = next_capacity;
     return true;
-}
-
-static slayer3d_game_data_particle_cache_entry *find_particle_entry(slayer3d_game_data_particle_cache *cache,
-                                                                    const char *entity_name)
-{
-    if (cache == NULL || entity_name == NULL)
-        return NULL;
-
-    for (int i = 0; i < cache->count; ++i)
-    {
-        if (cache->entries[i].entity_name != NULL && SDL_strcmp(cache->entries[i].entity_name, entity_name) == 0)
-            return &cache->entries[i];
-    }
-    return NULL;
-}
-
-static slayer3d_game_data_particle_cache_entry *find_or_create_particle_entry(
-    slayer3d_game_data_particle_cache *cache, const slayer3d_game_data_particle_emitter *emitter)
-{
-    if (cache == NULL || emitter == NULL || emitter->entity_name == NULL)
-        return NULL;
-
-    slayer3d_game_data_particle_cache_entry *entry = find_particle_entry(cache, emitter->entity_name);
-    if (entry != NULL)
-        return entry;
-
-    if (!ensure_particle_cache_capacity(cache, cache->count + 1))
-        return NULL;
-
-    entry = &cache->entries[cache->count];
-    SDL_zero(*entry);
-    entry->entity_name = emitter->entity_name;
-    entry->emitter = slayer3d_create_particle_emitter(&emitter->config);
-    if (entry->emitter == NULL)
-        return NULL;
-
-    ++cache->count;
-    return entry;
 }
 
 static slayer3d_font *find_or_load_font(const slayer3d_game_data_runtime *runtime, slayer3d_game_data_font_cache *cache,
@@ -2555,31 +2481,6 @@ static bool draw_ui_rect(void *userdata, const slayer3d_game_data_ui_rect *rect)
     return true;
 }
 
-static bool update_particle(void *userdata, const slayer3d_game_data_particle_emitter *emitter)
-{
-    particle_update_context *context = (particle_update_context *)userdata;
-    if (context == NULL || context->cache == NULL || emitter == NULL)
-        return false;
-
-    slayer3d_game_data_particle_cache_entry *entry = find_or_create_particle_entry(context->cache, emitter);
-    if (entry == NULL)
-    {
-        context->ok = false;
-        return true;
-    }
-
-    if (!slayer3d_particle_emitter_set_config(entry->emitter, &emitter->config))
-    {
-        context->ok = false;
-        return true;
-    }
-    entry->view_space = emitter->view_space;
-    entry->draw_emissive = emitter->draw_emissive;
-    entry->visible = true;
-    slayer3d_particle_emitter_update(entry->emitter, context->dt);
-    return true;
-}
-
 void slayer3d_game_data_mesh_primitive_cache_init(slayer3d_game_data_mesh_primitive_cache *cache)
 {
     if (cache == NULL)
@@ -2624,96 +2525,6 @@ static bool draw_render_primitives_evaluated_with_cache(
     ok = flush_sphere_draw_batch(&context) && ok;
     SDL_free(context.sphere_batch_positions);
     return ok;
-}
-
-static bool draw_sector_level_instance(void *userdata, const slayer3d_game_data_sector_level_instance *instance)
-{
-    sector_level_draw_context *context = (sector_level_draw_context *)userdata;
-    if (context == NULL || context->renderer == NULL || instance == NULL || instance->level == NULL)
-        return false;
-
-    slayer3d_visibility_result vis;
-    SDL_zero(vis);
-    const slayer3d_visibility_result *vis_ptr = NULL;
-    if (instance->portal_culling && context->camera != NULL && instance->sectors != NULL && instance->sector_count > 0)
-    {
-        if (context->sector_visible_capacity < instance->sector_count)
-        {
-            bool *visible =
-                (bool *)SDL_realloc(context->sector_visible, (size_t)instance->sector_count * sizeof(*visible));
-            if (visible == NULL)
-            {
-                context->ok = false;
-                return false;
-            }
-            context->sector_visible = visible;
-            context->sector_visible_capacity = instance->sector_count;
-        }
-        vis.sector_visible = context->sector_visible;
-        slayer3d_camera3d local_camera = *context->camera;
-        local_camera.position.x -= instance->position.x;
-        local_camera.position.y -= instance->position.y;
-        local_camera.position.z -= instance->position.z;
-        local_camera.target.x -= instance->position.x;
-        local_camera.target.y -= instance->position.y;
-        local_camera.target.z -= instance->position.z;
-        slayer3d_level_compute_visibility_from_camera(
-            instance->level, instance->sectors, &local_camera, slayer3d_get_render_context_width(context->renderer),
-            slayer3d_get_render_context_height(context->renderer), 0.01f, 1000.0f, &vis);
-        vis_ptr = &vis;
-    }
-
-    bool pushed = false;
-    if (instance->position.x != 0.0f || instance->position.y != 0.0f || instance->position.z != 0.0f)
-    {
-        if (!slayer3d_push_matrix(context->renderer))
-        {
-            context->ok = false;
-            return false;
-        }
-        pushed = true;
-        if (!slayer3d_translate(context->renderer, instance->position.x, instance->position.y, instance->position.z))
-        {
-            context->ok = false;
-            if (pushed)
-                (void)slayer3d_pop_matrix(context->renderer);
-            return false;
-        }
-    }
-
-    const bool drawn = slayer3d_draw_level_with_assets(context->renderer, context->assets, instance->level, vis_ptr,
-                                                       (slayer3d_color){255, 255, 255, 255});
-    if (pushed && !slayer3d_pop_matrix(context->renderer))
-        context->ok = false;
-    if (!drawn)
-        context->ok = false;
-    return context->ok;
-}
-
-bool slayer3d_game_data_draw_sector_levels(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
-                                           const slayer3d_camera3d *camera)
-{
-    return slayer3d_game_data_draw_sector_levels_with_assets(runtime, renderer, NULL, camera);
-}
-
-bool slayer3d_game_data_draw_sector_levels_with_assets(const slayer3d_game_data_runtime *runtime,
-                                                       slayer3d_render_context *renderer,
-                                                       const slayer3d_asset_resolver *assets,
-                                                       const slayer3d_camera3d *camera)
-{
-    if (runtime == NULL || renderer == NULL)
-        return false;
-
-    sector_level_draw_context context;
-    SDL_zero(context);
-    context.renderer = renderer;
-    context.assets = assets;
-    context.camera = camera;
-    context.ok = true;
-    const bool iterated =
-        slayer3d_game_data_for_each_sector_level_instance(runtime, draw_sector_level_instance, &context);
-    SDL_free(context.sector_visible);
-    return iterated && context.ok;
 }
 
 static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
@@ -2875,74 +2686,6 @@ bool slayer3d_game_data_draw_ui_rects(const slayer3d_game_data_runtime *runtime,
     context.ok = true;
 
     return slayer3d_game_data_for_each_ui_rect(runtime, draw_ui_rect, &context) && context.ok;
-}
-
-void slayer3d_game_data_particle_cache_init(slayer3d_game_data_particle_cache *cache)
-{
-    if (cache != NULL)
-        SDL_zero(*cache);
-}
-
-void slayer3d_game_data_particle_cache_free(slayer3d_game_data_particle_cache *cache)
-{
-    if (cache == NULL)
-        return;
-    for (int i = 0; i < cache->count; ++i)
-    {
-        slayer3d_destroy_particle_emitter(cache->entries[i].emitter);
-    }
-    SDL_free(cache->entries);
-    SDL_zero(*cache);
-}
-
-bool slayer3d_game_data_update_particles(const slayer3d_game_data_runtime *runtime,
-                                         slayer3d_game_data_particle_cache *cache, float dt)
-{
-    if (runtime == NULL || cache == NULL)
-        return false;
-
-    for (int i = 0; i < cache->count; ++i)
-    {
-        cache->entries[i].visible = false;
-    }
-
-    particle_update_context context;
-    SDL_zero(context);
-    context.cache = cache;
-    context.dt = dt;
-    context.ok = true;
-
-    return slayer3d_game_data_for_each_particle_emitter(runtime, update_particle, &context) && context.ok;
-}
-
-static bool draw_particles_filtered(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
-                                    slayer3d_game_data_particle_cache *cache, bool draw_world_space,
-                                    bool draw_view_space)
-{
-    if (runtime == NULL || renderer == NULL || cache == NULL)
-        return false;
-
-    for (int i = 0; i < cache->count; ++i)
-    {
-        slayer3d_game_data_particle_cache_entry *entry = &cache->entries[i];
-        if (!entry->visible || entry->emitter == NULL || (entry->view_space && !draw_view_space) ||
-            (!entry->view_space && !draw_world_space) ||
-            !slayer3d_game_data_active_scene_has_entity(runtime, entry->entity_name))
-        {
-            continue;
-        }
-
-        slayer3d_set_emissive(renderer, entry->draw_emissive.x, entry->draw_emissive.y, entry->draw_emissive.z);
-        slayer3d_draw_particles(renderer, entry->emitter);
-        slayer3d_set_emissive(renderer, 0.0f, 0.0f, 0.0f);
-    }
-    return true;
-}
-
-bool slayer3d_game_data_draw_particles(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
-                                       slayer3d_game_data_particle_cache *cache)
-{
-    return draw_particles_filtered(runtime, renderer, cache, true, true);
 }
 
 void slayer3d_game_data_frame_state_init(slayer3d_game_data_frame_state *state)
@@ -3264,7 +3007,9 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
                  camera) &&
              ok;
         if (frame->particle_cache != NULL)
-            ok = draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache, true, false) && ok;
+            ok = slayer3d_game_data_draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache,
+                                                            true, false) &&
+                 ok;
         ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
                                                          frame->image_cache, frame->sprite_cache, frame->model_cache,
                                                          frame->mesh_primitive_cache, camera, true, false) &&
@@ -3288,7 +3033,9 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
                      frame->model_cache, frame->mesh_primitive_cache, &viewmodel_camera, false, true) &&
                  ok;
             if (frame->particle_cache != NULL)
-                ok = draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache, false, true) && ok;
+                ok = slayer3d_game_data_draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache,
+                                                                false, true) &&
+                     ok;
             slayer3d_end_mode_3d(frame->renderer);
         }
         else
