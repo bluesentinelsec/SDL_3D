@@ -2473,90 +2473,6 @@ static bool validate_known_action(validation_context *ctx, yyjson_val *action, c
     }
     if (SDL_strncmp(type, "audio.", 6) == 0)
         return validate_audio_action(ctx, action, json_path, names, type);
-    if (SDL_strcmp(type, "persistence.load") == 0 || SDL_strcmp(type, "persistence.save") == 0)
-    {
-        const char *entry = json_string(action, "entry");
-        if (entry == NULL)
-            entry = json_string(action, "name");
-        return require_ref(ctx, &names->persistence, "persistence entry", entry, json_path);
-    }
-    if (SDL_strcmp(type, "entity.set_active") == 0)
-    {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
-            return false;
-        if (!yyjson_is_bool(obj_get(action, "active")))
-            return validation_error(ctx, json_path, "entity.set_active requires a boolean active value");
-        return true;
-    }
-    if (SDL_strcmp(type, "transform.set_position") == 0)
-    {
-        if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
-            return false;
-        if (!is_vec_array(obj_get(action, "position"), 2))
-            return validation_error(ctx, json_path, "transform.set_position requires a numeric position array");
-        return true;
-    }
-    if (SDL_strcmp(type, "camera.toggle") == 0)
-    {
-        return require_ref(ctx, &names->cameras, "camera", json_string(action, "camera"), json_path) &&
-               require_ref(ctx, &names->cameras, "camera", json_string(action, "fallback"), json_path);
-    }
-    if (SDL_strcmp(type, "camera.set") == 0)
-        return require_ref(ctx, &names->cameras, "camera", json_string(action, "camera"), json_path);
-    if (SDL_strcmp(type, "scene.set") == 0)
-    {
-        if (!require_ref(ctx, &names->scenes, "scene", json_string(action, "scene"), json_path))
-            return false;
-        yyjson_val *payload = obj_get(action, "payload");
-        if (payload != NULL)
-        {
-            if (!yyjson_is_obj(payload))
-                return validation_error(ctx, json_path, "scene.set payload must be an object");
-            yyjson_val *key;
-            yyjson_obj_iter iter;
-            yyjson_obj_iter_init(payload, &iter);
-            while ((key = yyjson_obj_iter_next(&iter)) != NULL)
-            {
-                const char *name = yyjson_get_str(key);
-                yyjson_val *value = yyjson_obj_iter_get_val(key);
-                if (name == NULL || name[0] == '\0')
-                    return validation_error(ctx, json_path, "scene.set payload keys must be non-empty");
-                if (!(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
-                    return validation_error(ctx, json_path, "scene.set payload values must be scalar");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "adapter.invoke") == 0)
-    {
-        const char *adapter = json_string(action, "adapter");
-        if (!require_ref(ctx, &names->adapters, "adapter", adapter, json_path))
-            return false;
-        if (!note_name(&names->used_adapters, adapter, json_path))
-            return validation_error(ctx, json_path, "failed to record adapter use");
-        if (json_string(action, "target") != NULL &&
-            !require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
-            return false;
-        return true;
-    }
-    if (SDL_strcmp(type, "branch") == 0)
-    {
-        yyjson_val *condition = obj_get(action, "if");
-        if (!yyjson_is_obj(condition))
-            return validation_error(ctx, json_path, "branch requires an object 'if' condition");
-        char condition_path[PATH_BUFFER_SIZE];
-        format_path(condition_path, sizeof(condition_path), "%s.if", json_path);
-        if (!validate_data_condition(ctx, condition, condition_path, names))
-            return false;
-        char then_path[PATH_BUFFER_SIZE];
-        char else_path[PATH_BUFFER_SIZE];
-        format_path(then_path, sizeof(then_path), "%s.then", json_path);
-        format_path(else_path, sizeof(else_path), "%s.else", json_path);
-        yyjson_val *then_actions = obj_get(action, "then");
-        yyjson_val *else_actions = obj_get(action, "else");
-        return (then_actions == NULL || validate_action_array(ctx, then_actions, then_path, names)) &&
-               (else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names));
-    }
 
     return validation_error(ctx, json_path, "unsupported logic action type '%s'", type);
 }
@@ -2603,6 +2519,22 @@ static bool validate_interaction_use_action_dispatch(validation_context *ctx, yy
                                                      validation_names *names, const char *type);
 static bool validate_effect_explosion_action_dispatch(validation_context *ctx, yyjson_val *action,
                                                       const char *json_path, validation_names *names, const char *type);
+static bool validate_persistence_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
+static bool validate_entity_set_active_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type);
+static bool validate_transform_set_position_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type);
+static bool validate_camera_toggle_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type);
+static bool validate_camera_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type);
+static bool validate_scene_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                      validation_names *names, const char *type);
+static bool validate_adapter_invoke_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type);
+static bool validate_branch_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                   validation_names *names, const char *type);
 
 #define ACTION_RULE_EXACT_ENTRY(name) {name, ACTION_RULE_EXACT, validate_known_action}
 #define ACTION_RULE_EXACT_HANDLER(name, handler) {name, ACTION_RULE_EXACT, handler}
@@ -2710,15 +2642,15 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_ENTRY("network.discovery.connect_selected"),
         ACTION_RULE_EXACT_ENTRY("ui.animate"),
         ACTION_RULE_PREFIX_HANDLER("audio.", validate_audio_action),
-        ACTION_RULE_EXACT_ENTRY("persistence.load"),
-        ACTION_RULE_EXACT_ENTRY("persistence.save"),
-        ACTION_RULE_EXACT_ENTRY("entity.set_active"),
-        ACTION_RULE_EXACT_ENTRY("transform.set_position"),
-        ACTION_RULE_EXACT_ENTRY("camera.toggle"),
-        ACTION_RULE_EXACT_ENTRY("camera.set"),
-        ACTION_RULE_EXACT_ENTRY("scene.set"),
-        ACTION_RULE_EXACT_ENTRY("adapter.invoke"),
-        ACTION_RULE_EXACT_ENTRY("branch"),
+        ACTION_RULE_EXACT_HANDLER("persistence.load", validate_persistence_action),
+        ACTION_RULE_EXACT_HANDLER("persistence.save", validate_persistence_action),
+        ACTION_RULE_EXACT_HANDLER("entity.set_active", validate_entity_set_active_action),
+        ACTION_RULE_EXACT_HANDLER("transform.set_position", validate_transform_set_position_action),
+        ACTION_RULE_EXACT_HANDLER("camera.toggle", validate_camera_toggle_action),
+        ACTION_RULE_EXACT_HANDLER("camera.set", validate_camera_set_action),
+        ACTION_RULE_EXACT_HANDLER("scene.set", validate_scene_set_action),
+        ACTION_RULE_EXACT_HANDLER("adapter.invoke", validate_adapter_invoke_action),
+        ACTION_RULE_EXACT_HANDLER("branch", validate_branch_action),
     };
     for (size_t i = 0; i < SDL_arraysize(rules); ++i)
     {
@@ -2854,4 +2786,117 @@ static bool validate_effect_explosion_action_dispatch(validation_context *ctx, y
 {
     (void)type;
     return validate_effect_explosion_action(ctx, action, json_path, names);
+}
+
+static bool validate_persistence_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    (void)type;
+    const char *entry = json_string(action, "entry");
+    if (entry == NULL)
+        entry = json_string(action, "name");
+    return require_ref(ctx, &names->persistence, "persistence entry", entry, json_path);
+}
+
+static bool validate_entity_set_active_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                              validation_names *names, const char *type)
+{
+    (void)type;
+    if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+        return false;
+    if (!yyjson_is_bool(obj_get(action, "active")))
+        return validation_error(ctx, json_path, "entity.set_active requires a boolean active value");
+    return true;
+}
+
+static bool validate_transform_set_position_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type)
+{
+    (void)type;
+    if (!require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+        return false;
+    if (!is_vec_array(obj_get(action, "position"), 2))
+        return validation_error(ctx, json_path, "transform.set_position requires a numeric position array");
+    return true;
+}
+
+static bool validate_camera_toggle_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type)
+{
+    (void)type;
+    return require_ref(ctx, &names->cameras, "camera", json_string(action, "camera"), json_path) &&
+           require_ref(ctx, &names->cameras, "camera", json_string(action, "fallback"), json_path);
+}
+
+static bool validate_camera_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type)
+{
+    (void)type;
+    return require_ref(ctx, &names->cameras, "camera", json_string(action, "camera"), json_path);
+}
+
+static bool validate_scene_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                      validation_names *names, const char *type)
+{
+    (void)type;
+    if (!require_ref(ctx, &names->scenes, "scene", json_string(action, "scene"), json_path))
+        return false;
+    yyjson_val *payload = obj_get(action, "payload");
+    if (payload == NULL)
+        return true;
+    if (!yyjson_is_obj(payload))
+        return validation_error(ctx, json_path, "scene.set payload must be an object");
+
+    yyjson_val *key;
+    yyjson_obj_iter iter;
+    yyjson_obj_iter_init(payload, &iter);
+    while ((key = yyjson_obj_iter_next(&iter)) != NULL)
+    {
+        const char *name = yyjson_get_str(key);
+        yyjson_val *value = yyjson_obj_iter_get_val(key);
+        if (name == NULL || name[0] == '\0')
+            return validation_error(ctx, json_path, "scene.set payload keys must be non-empty");
+        if (!(yyjson_is_bool(value) || yyjson_is_num(value) || yyjson_is_str(value)))
+            return validation_error(ctx, json_path, "scene.set payload values must be scalar");
+    }
+    return true;
+}
+
+static bool validate_adapter_invoke_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                           validation_names *names, const char *type)
+{
+    (void)type;
+    const char *adapter = json_string(action, "adapter");
+    if (!require_ref(ctx, &names->adapters, "adapter", adapter, json_path))
+        return false;
+    if (!note_name(&names->used_adapters, adapter, json_path))
+        return validation_error(ctx, json_path, "failed to record adapter use");
+    if (json_string(action, "target") != NULL &&
+        !require_ref(ctx, &names->entities, "entity", json_string(action, "target"), json_path))
+    {
+        return false;
+    }
+    return true;
+}
+
+static bool validate_branch_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                   validation_names *names, const char *type)
+{
+    (void)type;
+    yyjson_val *condition = obj_get(action, "if");
+    if (!yyjson_is_obj(condition))
+        return validation_error(ctx, json_path, "branch requires an object 'if' condition");
+    char condition_path[PATH_BUFFER_SIZE];
+    format_path(condition_path, sizeof(condition_path), "%s.if", json_path);
+    if (!validate_data_condition(ctx, condition, condition_path, names))
+        return false;
+
+    char then_path[PATH_BUFFER_SIZE];
+    char else_path[PATH_BUFFER_SIZE];
+    format_path(then_path, sizeof(then_path), "%s.then", json_path);
+    format_path(else_path, sizeof(else_path), "%s.else", json_path);
+    yyjson_val *then_actions = obj_get(action, "then");
+    yyjson_val *else_actions = obj_get(action, "else");
+    return (then_actions == NULL || validate_action_array(ctx, then_actions, then_path, names)) &&
+           (else_actions == NULL || validate_action_array(ctx, else_actions, else_path, names));
 }
