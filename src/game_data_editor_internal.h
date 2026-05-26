@@ -37,6 +37,28 @@ void publish_editor_vertex_lasso_state(slayer3d_game_data_runtime *runtime, cons
 void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime);
 void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime);
 void clear_editor_active_selection(slayer3d_game_data_runtime *runtime);
+bool editor_selection_is_selectable_brush(const slayer3d_game_data_editor_selection *selection);
+bool editor_selection_from_brush_index(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                       int brush_index, int face_index,
+                                       slayer3d_game_data_editor_selection *out_selection);
+int editor_selected_brush_index(const slayer3d_game_data_runtime *runtime,
+                                const slayer3d_game_data_editor_selection *selection);
+void remove_editor_selected_brush_at(slayer3d_game_data_runtime *runtime, int index);
+bool add_editor_selected_brush(slayer3d_game_data_runtime *runtime,
+                               const slayer3d_game_data_editor_selection *selection);
+void update_active_editor_selection_from_selected_brushes(slayer3d_game_data_runtime *runtime);
+bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime,
+                                      const slayer3d_game_data_editor_selection *hover_selection);
+bool editor_select_mode_secondary_click(slayer3d_game_data_runtime *runtime,
+                                        const slayer3d_game_data_editor_selection *hover_selection);
+bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime);
+bool editor_mode_is_brush(const slayer3d_game_data_runtime *runtime);
+bool editor_mode_is_face(const slayer3d_game_data_runtime *runtime);
+bool editor_mode_is_vertex(const slayer3d_game_data_runtime *runtime);
+bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,
+                                    const char *element_name);
+bool editor_hover_is_selected_brush(const slayer3d_game_data_runtime *runtime,
+                                    const slayer3d_game_data_editor_selection *hover_selection);
 bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                  slayer3d_game_data_world_trace_desc *out_trace);
 bool editor_trace_select_viewport_at(const slayer3d_game_data_runtime *runtime, yyjson_val *trace, float screen_x,

@@ -173,6 +173,7 @@ target_sources(
         src/game_data_editor_placement_preview.c
         src/game_data_editor_player_start.c
         src/game_data_editor_selection_output.c
+        src/game_data_editor_selection_helpers.c
         src/game_data_editor_selection_state.c
         src/game_data_editor_selection_queries.c
         src/game_data_editor_debug_primitives.c
