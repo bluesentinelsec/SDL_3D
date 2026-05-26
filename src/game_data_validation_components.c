@@ -568,58 +568,6 @@ static bool validate_known_component(validation_context *ctx, yyjson_val *compon
             !require_ref(ctx, &names->entities, "entity", json_string(component, "target"), path))
             return false;
     }
-    else if (SDL_strcmp(type, "controller.fps_sector") == 0)
-    {
-        if (!validate_fps_sector_component(ctx, component, path, names))
-            return false;
-    }
-    else if (SDL_strcmp(type, "controller.fps_brush") == 0)
-    {
-        if (!validate_fps_brush_component(ctx, component, path, names))
-            return false;
-    }
-    else if (SDL_strcmp(type, "controller.editor_camera") == 0)
-    {
-        if (!validate_editor_camera_component(ctx, component, path, names))
-            return false;
-        char condition_path[PATH_BUFFER_SIZE];
-        format_path(condition_path, sizeof(condition_path), "%s.orthographic_controls_if", path);
-        if (!validate_data_condition(ctx, obj_get(component, "orthographic_controls_if"), condition_path, names))
-            return false;
-    }
-    else if (SDL_strcmp(type, "combat.health") == 0)
-    {
-        if (!validate_combat_health_component(ctx, component, path))
-            return false;
-    }
-    else if (SDL_strcmp(type, "pickup.respawn") == 0)
-    {
-        if (!validate_pickup_respawn_component(ctx, component, path))
-            return false;
-    }
-    else if (SDL_strcmp(type, "status_effect.timer") == 0)
-    {
-        if (!validate_status_effect_timer_component(ctx, component, path, names))
-            return false;
-    }
-    else if (SDL_strcmp(type, "weapon.state") == 0)
-    {
-        if (!validate_weapon_state_component(ctx, component, path))
-            return false;
-    }
-    else if (SDL_strcmp(type, "interactable") == 0)
-    {
-        if (!validate_interactable_component(ctx, component, path, names))
-            return false;
-    }
-    else if (SDL_strcmp(type, "weapon.projectile") == 0)
-    {
-        if (!require_ref(ctx, &names->actions, "input action", json_string(component, "action"), path) ||
-            !validate_projectile_fire_shape(ctx, component, path, names, false))
-        {
-            return false;
-        }
-    }
     else if (SDL_strcmp(type, "property.decay") == 0)
     {
         if (!is_non_empty_string(component, "property"))
@@ -732,11 +680,6 @@ static bool validate_known_component(validation_context *ctx, yyjson_val *compon
         if (property != NULL && !is_non_empty_string(component, "property"))
             return validation_error(ctx, path, "%s property must be non-empty", type);
     }
-    else if (SDL_strcmp(type, "motion.brush_velocity_3d") == 0)
-    {
-        if (!validate_brush_velocity_component(ctx, component, path, names))
-            return false;
-    }
     else if (SDL_strcmp(type, "lifecycle.ttl") == 0)
     {
         yyjson_val *ttl = obj_get(component, "ttl");
@@ -751,11 +694,6 @@ static bool validate_known_component(validation_context *ctx, yyjson_val *compon
         {
             return validation_error(ctx, path, "lifecycle.ttl property names and reason must be non-empty strings");
         }
-    }
-    else if (SDL_strcmp(type, "particles.emitter") == 0)
-    {
-        if (!validate_particle_emitter_component(ctx, component, path, names))
-            return false;
     }
     else if (SDL_strcmp(type, "motion.spin") == 0)
     {
