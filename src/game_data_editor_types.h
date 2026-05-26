@@ -73,6 +73,7 @@ typedef struct editor_drag_move_state
     bool active;
     bool moved;
     bool axis_lock_y;
+    bool axis_lock_dominant;
     bool face_resize;
     bool vertex_drag;
     bool vertex_lasso;

@@ -373,7 +373,8 @@ static bool emit_editor_source_vertex_drag_guides(const slayer3d_game_data_runti
     SDL_zero(context);
     context.callback = callback;
     context.userdata = userdata;
-    context.color = drag->axis_lock_y ? (slayer3d_color){255, 96, 72, 255} : (slayer3d_color){255, 224, 64, 255};
+    context.color = (drag->axis_lock_y || drag->axis_lock_dominant) ? (slayer3d_color){255, 96, 72, 255}
+                                                                    : (slayer3d_color){255, 224, 64, 255};
     context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_DRAG_GUIDE;
     context.face_index = -1;
 
