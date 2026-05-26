@@ -1051,51 +1051,6 @@ static bool validate_known_action(validation_context *ctx, yyjson_val *action, c
             return validation_error(ctx, json_path, "actor.despawn_by_tag reason must be a string");
         return true;
     }
-    if (SDL_strcmp(type, "combat.damage") == 0)
-        return validate_combat_amount_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
-    if (SDL_strcmp(type, "combat.heal") == 0)
-        return validate_combat_amount_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
-    if (SDL_strcmp(type, "combat.kill") == 0)
-        return validate_combat_target_action(ctx, action, json_path, names, type);
-    if (SDL_strcmp(type, "combat.revive") == 0)
-    {
-        if (!validate_combat_target_action(ctx, action, json_path, names, type))
-            return false;
-        yyjson_val *health = obj_get(action, "health");
-        yyjson_val *health_from_payload_value = obj_get(action, "health_from_payload");
-        const char *health_from_payload = json_string(action, "health_from_payload");
-        if (health != NULL && health_from_payload != NULL)
-            return validation_error(ctx, json_path,
-                                    "combat.revive requires at most one of health or health_from_payload");
-        if (health != NULL && (!yyjson_is_num(health) || yyjson_get_num(health) < 0.0))
-            return validation_error(ctx, json_path, "combat.revive health must be a non-negative number");
-        if (health_from_payload_value != NULL &&
-            (!yyjson_is_str(health_from_payload_value) || yyjson_get_str(health_from_payload_value)[0] == '\0'))
-        {
-            return validation_error(ctx, json_path, "combat.revive health_from_payload must be a non-empty string");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "resource.add") == 0)
-        return validate_resource_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
-    if (SDL_strcmp(type, "resource.consume") == 0)
-        return validate_resource_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
-    if (SDL_strcmp(type, "resource.set") == 0)
-        return validate_resource_action(ctx, action, json_path, names, type, "value", "value_from_payload");
-    if (SDL_strcmp(type, "pickup.collect") == 0)
-        return validate_pickup_collect_action(ctx, action, json_path, names);
-    if (SDL_strcmp(type, "resource.station.use") == 0)
-        return validate_resource_station_use_action(ctx, action, json_path, names);
-    if (SDL_strcmp(type, "status_effect.apply") == 0)
-        return validate_status_effect_apply_action(ctx, action, json_path, names);
-    if (SDL_strcmp(type, "weapon.reload") == 0)
-        return validate_weapon_reload_action(ctx, action, json_path, names);
-    if (SDL_strcmp(type, "weapon.hitscan") == 0)
-        return validate_weapon_hitscan_action(ctx, action, json_path, names);
-    if (SDL_strcmp(type, "interaction.use") == 0)
-        return validate_interaction_use_action(ctx, action, json_path, names);
-    if (SDL_strcmp(type, "effect.explosion") == 0)
-        return validate_effect_explosion_action(ctx, action, json_path, names);
     if (SDL_strcmp(type, "noise.emit") == 0)
     {
         const char *source = json_string(action, "source");
@@ -2622,6 +2577,33 @@ typedef struct action_validation_rule
     action_validator_fn validate;
 } action_validation_rule;
 
+static bool validate_combat_damage_or_heal_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                  validation_names *names, const char *type);
+static bool validate_combat_kill_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
+static bool validate_combat_revive_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type);
+static bool validate_resource_add_or_consume_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type);
+static bool validate_resource_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type);
+static bool validate_pickup_collect_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type);
+static bool validate_resource_station_use_action_dispatch(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type);
+static bool validate_status_effect_apply_action_dispatch(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type);
+static bool validate_weapon_reload_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type);
+static bool validate_weapon_hitscan_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type);
+static bool validate_interaction_use_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                     validation_names *names, const char *type);
+static bool validate_effect_explosion_action_dispatch(validation_context *ctx, yyjson_val *action,
+                                                      const char *json_path, validation_names *names, const char *type);
+
 #define ACTION_RULE_EXACT_ENTRY(name) {name, ACTION_RULE_EXACT, validate_known_action}
 #define ACTION_RULE_EXACT_HANDLER(name, handler) {name, ACTION_RULE_EXACT, handler}
 #define ACTION_RULE_PREFIX_ENTRY(name) {name, ACTION_RULE_PREFIX, validate_known_action}
@@ -2649,20 +2631,20 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_ENTRY("actor.spawn"),
         ACTION_RULE_EXACT_ENTRY("actor.despawn"),
         ACTION_RULE_EXACT_ENTRY("actor.despawn_by_tag"),
-        ACTION_RULE_EXACT_ENTRY("combat.damage"),
-        ACTION_RULE_EXACT_ENTRY("combat.heal"),
-        ACTION_RULE_EXACT_ENTRY("combat.kill"),
-        ACTION_RULE_EXACT_ENTRY("combat.revive"),
-        ACTION_RULE_EXACT_ENTRY("resource.add"),
-        ACTION_RULE_EXACT_ENTRY("resource.consume"),
-        ACTION_RULE_EXACT_ENTRY("resource.set"),
-        ACTION_RULE_EXACT_ENTRY("pickup.collect"),
-        ACTION_RULE_EXACT_ENTRY("resource.station.use"),
-        ACTION_RULE_EXACT_ENTRY("status_effect.apply"),
-        ACTION_RULE_EXACT_ENTRY("weapon.reload"),
-        ACTION_RULE_EXACT_ENTRY("weapon.hitscan"),
-        ACTION_RULE_EXACT_ENTRY("interaction.use"),
-        ACTION_RULE_EXACT_ENTRY("effect.explosion"),
+        ACTION_RULE_EXACT_HANDLER("combat.damage", validate_combat_damage_or_heal_action),
+        ACTION_RULE_EXACT_HANDLER("combat.heal", validate_combat_damage_or_heal_action),
+        ACTION_RULE_EXACT_HANDLER("combat.kill", validate_combat_kill_action),
+        ACTION_RULE_EXACT_HANDLER("combat.revive", validate_combat_revive_action),
+        ACTION_RULE_EXACT_HANDLER("resource.add", validate_resource_add_or_consume_action),
+        ACTION_RULE_EXACT_HANDLER("resource.consume", validate_resource_add_or_consume_action),
+        ACTION_RULE_EXACT_HANDLER("resource.set", validate_resource_set_action),
+        ACTION_RULE_EXACT_HANDLER("pickup.collect", validate_pickup_collect_action_dispatch),
+        ACTION_RULE_EXACT_HANDLER("resource.station.use", validate_resource_station_use_action_dispatch),
+        ACTION_RULE_EXACT_HANDLER("status_effect.apply", validate_status_effect_apply_action_dispatch),
+        ACTION_RULE_EXACT_HANDLER("weapon.reload", validate_weapon_reload_action_dispatch),
+        ACTION_RULE_EXACT_HANDLER("weapon.hitscan", validate_weapon_hitscan_action_dispatch),
+        ACTION_RULE_EXACT_HANDLER("interaction.use", validate_interaction_use_action_dispatch),
+        ACTION_RULE_EXACT_HANDLER("effect.explosion", validate_effect_explosion_action_dispatch),
         ACTION_RULE_EXACT_ENTRY("noise.emit"),
         ACTION_RULE_EXACT_ENTRY("sector_door.open"),
         ACTION_RULE_EXACT_ENTRY("sector_door.close"),
@@ -2777,4 +2759,99 @@ bool validate_action_array(validation_context *ctx, yyjson_val *actions, const c
             return false;
     }
     return true;
+}
+
+static bool validate_combat_damage_or_heal_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                  validation_names *names, const char *type)
+{
+    return validate_combat_amount_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
+}
+
+static bool validate_combat_kill_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    return validate_combat_target_action(ctx, action, json_path, names, type);
+}
+
+static bool validate_combat_revive_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type)
+{
+    if (!validate_combat_target_action(ctx, action, json_path, names, type))
+        return false;
+    yyjson_val *health = obj_get(action, "health");
+    yyjson_val *health_from_payload_value = obj_get(action, "health_from_payload");
+    const char *health_from_payload = json_string(action, "health_from_payload");
+    if (health != NULL && health_from_payload != NULL)
+        return validation_error(ctx, json_path, "combat.revive requires at most one of health or health_from_payload");
+    if (health != NULL && (!yyjson_is_num(health) || yyjson_get_num(health) < 0.0))
+        return validation_error(ctx, json_path, "combat.revive health must be a non-negative number");
+    if (health_from_payload_value != NULL &&
+        (!yyjson_is_str(health_from_payload_value) || yyjson_get_str(health_from_payload_value)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "combat.revive health_from_payload must be a non-empty string");
+    }
+    return true;
+}
+
+static bool validate_resource_add_or_consume_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    return validate_resource_action(ctx, action, json_path, names, type, "amount", "amount_from_payload");
+}
+
+static bool validate_resource_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                         validation_names *names, const char *type)
+{
+    return validate_resource_action(ctx, action, json_path, names, type, "value", "value_from_payload");
+}
+
+static bool validate_pickup_collect_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_pickup_collect_action(ctx, action, json_path, names);
+}
+
+static bool validate_resource_station_use_action_dispatch(validation_context *ctx, yyjson_val *action,
+                                                          const char *json_path, validation_names *names,
+                                                          const char *type)
+{
+    (void)type;
+    return validate_resource_station_use_action(ctx, action, json_path, names);
+}
+
+static bool validate_status_effect_apply_action_dispatch(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type)
+{
+    (void)type;
+    return validate_status_effect_apply_action(ctx, action, json_path, names);
+}
+
+static bool validate_weapon_reload_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                   validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_weapon_reload_action(ctx, action, json_path, names);
+}
+
+static bool validate_weapon_hitscan_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_weapon_hitscan_action(ctx, action, json_path, names);
+}
+
+static bool validate_interaction_use_action_dispatch(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                     validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_interaction_use_action(ctx, action, json_path, names);
+}
+
+static bool validate_effect_explosion_action_dispatch(validation_context *ctx, yyjson_val *action,
+                                                      const char *json_path, validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_effect_explosion_action(ctx, action, json_path, names);
 }
