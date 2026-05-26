@@ -112,6 +112,15 @@ bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_worl
                                                                 int vertex_count, slayer3d_game_data_brush *out_brush,
                                                                 char *error_buffer, int error_buffer_size);
 void editor_brush_source_free_runtime_brush(slayer3d_game_data_brush *brush);
+
+/*
+ * Shared source-vertex mutation boundary for editor tools.
+ *
+ * Vertex mode, face/edge tools, clip tools, and future CSG tooling should route source-brush edits through this
+ * preview/apply pair instead of mutating editor_source_boxes directly. Preview and apply use the same validation and
+ * convex rebuild path, so callers can render diagnostics/handles from dry-run output and then commit the exact same
+ * operation when the user accepts it.
+ */
 bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
                                                         const editor_brush_source_vertex_operation_desc *desc,
                                                         editor_brush_source_vertex_operation_result *out_result,

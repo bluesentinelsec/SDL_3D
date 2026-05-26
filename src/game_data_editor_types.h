@@ -58,18 +58,32 @@ typedef struct editor_drag_create_state
     int source_max[3];
 } editor_drag_create_state;
 
+#define SLAYER3D_EDITOR_DRAG_VERTEX_ORIGIN_CAPACITY 512
+
+typedef struct editor_drag_vertex_origin
+{
+    char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char vertex_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    int coord[3];
+} editor_drag_vertex_origin;
+
 typedef struct editor_drag_move_state
 {
     bool active;
     bool moved;
     bool axis_lock_y;
+    bool axis_lock_dominant;
     bool face_resize;
+    bool vertex_drag;
     bool vertex_lasso;
     bool lasso_additive;
     const char *scene;
     slayer3d_vec3 start_point;
     slayer3d_vec3 applied_offset;
     slayer3d_game_data_editor_selection face_selection;
+    int vertex_origin_count;
+    editor_drag_vertex_origin vertex_origins[SLAYER3D_EDITOR_DRAG_VERTEX_ORIGIN_CAPACITY];
     float grid_size;
     float start_mouse_x;
     float start_mouse_y;
@@ -221,6 +235,8 @@ typedef struct editor_source_box_bounds_update
 typedef enum editor_brush_source_vertex_operation_type
 {
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
@@ -237,6 +253,7 @@ typedef struct editor_brush_source_vertex_operation_desc
     int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     int vertex_index_count;
     int coord[3];
+    int coords[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
     int snap_units;
 } editor_brush_source_vertex_operation_desc;
 
