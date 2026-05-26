@@ -49,6 +49,9 @@ void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson
                                      const slayer3d_game_data_editor_selection *hover_selection);
 bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
+const char *editor_selection_type_name(slayer3d_game_data_world_model_type type);
+slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
+                                                              const slayer3d_game_data_editor_selection *selection);
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                               const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
