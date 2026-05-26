@@ -100,6 +100,8 @@ extern "C"
     typedef enum editor_brush_source_vertex_operation_type
     {
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE,
+        EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
@@ -115,6 +117,7 @@ extern "C"
         int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
         int vertex_index_count;
         int coord[3];
+        int coords[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
         int snap_units;
     } editor_brush_source_vertex_operation_desc;
     typedef struct editor_brush_source_vertex_operation_result
@@ -19384,6 +19387,142 @@ TEST(GameDataRuntime, EditorBrushSourceVertexOperationsPreviewMergeDeleteAndAdd)
     EXPECT_GT(result.face_count, 6);
     EXPECT_NEAR(result.brush.bounds.max.y, 12.0f, 0.001f);
     editor_brush_source_free_runtime_brush(&result.brush);
+
+    editor_brush_source_vertex_operation_desc move_vertex{};
+    move_vertex.brush_identity = "source.box.topology";
+    move_vertex.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE;
+    move_vertex.vertex_index = 6;
+    move_vertex.coord[0] = 8000;
+    move_vertex.coord[1] = 12000;
+    move_vertex.coord[2] = 8000;
+    SDL_zero(result);
+    ASSERT_TRUE(
+        editor_brush_world_preview_source_vertex_operation(world_runtime, &move_vertex, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_EQ(result.vertex_count, 8);
+    EXPECT_GE(result.face_count, 6);
+    EXPECT_NEAR(result.brush.bounds.max.y, 12.0f, 0.001f);
+    editor_brush_source_free_runtime_brush(&result.brush);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceVertexMoveTransactionsRejectInvalidMutationsAtomically)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "boxes": [
+        {
+          "stable_id": "source.box.move_txn",
+          "name": "brush.source.move_txn",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "min": [0, 0, 0],
+          "max": [8000, 8000, 8000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", import_json,
+                                                                     sizeof(import_json) - 1u,
+                                                                     "/tmp/source-move-txn.json", error, sizeof(error)))
+        << error;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model before{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &before, error, sizeof(error))) << error;
+    ASSERT_EQ(before.vertex_count, 8);
+
+    editor_brush_source_vertex_operation_desc concave_move{};
+    concave_move.brush_identity = "source.box.move_txn";
+    concave_move.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE;
+    concave_move.vertex_index = 6;
+    concave_move.coord[0] = 4000;
+    concave_move.coord[1] = 4000;
+    concave_move.coord[2] = 4000;
+    editor_brush_source_vertex_operation_result result{};
+    EXPECT_FALSE(
+        editor_brush_world_apply_source_vertex_operation(world_runtime, &concave_move, &result, error, sizeof(error)));
+    EXPECT_FALSE(result.valid);
+    EXPECT_NE(std::string(result.diagnostic).find("discard a vertex"), std::string::npos) << result.diagnostic;
+
+    editor_brush_source_vertex_model after_concave{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &after_concave, error, sizeof(error)))
+        << error;
+    ASSERT_EQ(after_concave.vertex_count, before.vertex_count);
+    for (int i = 0; i < before.vertex_count; ++i)
+    {
+        EXPECT_EQ(after_concave.vertices[i].coord[0], before.vertices[i].coord[0]);
+        EXPECT_EQ(after_concave.vertices[i].coord[1], before.vertices[i].coord[1]);
+        EXPECT_EQ(after_concave.vertices[i].coord[2], before.vertices[i].coord[2]);
+    }
+
+    editor_brush_source_vertex_operation_desc collapse_top{};
+    collapse_top.brush_identity = "source.box.move_txn";
+    collapse_top.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY;
+    collapse_top.vertex_index_count = 4;
+    collapse_top.vertex_indices[0] = 4;
+    collapse_top.vertex_indices[1] = 5;
+    collapse_top.vertex_indices[2] = 6;
+    collapse_top.vertex_indices[3] = 7;
+    collapse_top.coords[0][0] = 0;
+    collapse_top.coords[0][1] = 0;
+    collapse_top.coords[0][2] = 0;
+    collapse_top.coords[1][0] = 8000;
+    collapse_top.coords[1][1] = 0;
+    collapse_top.coords[1][2] = 0;
+    collapse_top.coords[2][0] = 8000;
+    collapse_top.coords[2][1] = 8000;
+    collapse_top.coords[2][2] = 0;
+    collapse_top.coords[3][0] = 0;
+    collapse_top.coords[3][1] = 8000;
+    collapse_top.coords[3][2] = 0;
+    SDL_zero(result);
+    SDL_zeroa(error);
+    EXPECT_FALSE(
+        editor_brush_world_apply_source_vertex_operation(world_runtime, &collapse_top, &result, error, sizeof(error)));
+    EXPECT_FALSE(result.valid);
+    EXPECT_NE(std::string(result.diagnostic).find("zero-volume"), std::string::npos) << result.diagnostic;
+
+    editor_brush_source_vertex_model after_collapse{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &after_collapse, error, sizeof(error)))
+        << error;
+    ASSERT_EQ(after_collapse.vertex_count, before.vertex_count);
+    for (int i = 0; i < before.vertex_count; ++i)
+    {
+        EXPECT_EQ(after_collapse.vertices[i].coord[0], before.vertices[i].coord[0]);
+        EXPECT_EQ(after_collapse.vertices[i].coord[1], before.vertices[i].coord[1]);
+        EXPECT_EQ(after_collapse.vertices[i].coord[2], before.vertices[i].coord[2]);
+    }
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

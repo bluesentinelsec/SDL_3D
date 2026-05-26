@@ -221,6 +221,8 @@ typedef struct editor_source_box_bounds_update
 typedef enum editor_brush_source_vertex_operation_type
 {
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE,
+    EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE_MANY,
     EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE,
@@ -237,6 +239,7 @@ typedef struct editor_brush_source_vertex_operation_desc
     int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
     int vertex_index_count;
     int coord[3];
+    int coords[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
     int snap_units;
 } editor_brush_source_vertex_operation_desc;
 

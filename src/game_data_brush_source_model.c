@@ -1730,6 +1730,87 @@ static bool source_vertex_operation_delete(const brush_world_runtime *world_runt
 }
 
 static bool source_vertex_operation_desc_has_index(const editor_brush_source_vertex_operation_desc *desc, int index);
+static int source_vertex_operation_desc_index_offset(const editor_brush_source_vertex_operation_desc *desc, int index);
+
+static bool source_vertex_operation_move(const brush_world_runtime *world_runtime,
+                                         const editor_brush_source_vertex_operation_desc *desc,
+                                         int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                         int *vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || desc == NULL || vertices == NULL || vertex_count == NULL)
+        return false;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
+    editor_brush_source_vertex_model model;
+    if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model,
+                                                                        error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (desc->vertex_index < 0 || desc->vertex_index >= model.vertex_count)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex move index out of range");
+        return false;
+    }
+
+    *vertex_count = 0;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        const int *coord = i == desc->vertex_index ? desc->coord : model.vertices[i].coord;
+        if (!source_vertex_operation_append_unique(vertices, vertex_count, coord, error_buffer, error_buffer_size))
+            return false;
+    }
+    return true;
+}
+
+static bool source_vertex_operation_move_many(const brush_world_runtime *world_runtime,
+                                              const editor_brush_source_vertex_operation_desc *desc,
+                                              int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                              int *vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || desc == NULL || vertices == NULL || vertex_count == NULL)
+        return false;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
+    editor_brush_source_vertex_model model;
+    if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model,
+                                                                        error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (desc->vertex_index_count <= 0 || desc->vertex_index_count > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_error(error_buffer, error_buffer_size, "source vertex move requires at least one vertex");
+        return false;
+    }
+    for (int i = 0; i < desc->vertex_index_count; ++i)
+    {
+        const int vertex_index = desc->vertex_indices[i];
+        if (vertex_index < 0 || vertex_index >= model.vertex_count)
+        {
+            set_error(error_buffer, error_buffer_size, "source vertex move index out of range");
+            return false;
+        }
+        for (int j = i + 1; j < desc->vertex_index_count; ++j)
+        {
+            if (desc->vertex_indices[j] == vertex_index)
+            {
+                set_error(error_buffer, error_buffer_size, "source vertex move indices must be unique");
+                return false;
+            }
+        }
+    }
+
+    *vertex_count = 0;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        const int move_offset = source_vertex_operation_desc_index_offset(desc, i);
+        const int *coord = move_offset >= 0 ? desc->coords[move_offset] : model.vertices[i].coord;
+        if (!source_vertex_operation_append_unique(vertices, vertex_count, coord, error_buffer, error_buffer_size))
+            return false;
+    }
+    return true;
+}
 
 static bool source_vertex_operation_merge_many_to_target(const brush_world_runtime *world_runtime,
                                                          const editor_brush_source_vertex_operation_desc *desc,
@@ -1796,6 +1877,18 @@ static bool source_vertex_operation_desc_has_index(const editor_brush_source_ver
             return true;
     }
     return false;
+}
+
+static int source_vertex_operation_desc_index_offset(const editor_brush_source_vertex_operation_desc *desc, int index)
+{
+    if (desc == NULL || index < 0)
+        return -1;
+    for (int i = 0; i < desc->vertex_index_count; ++i)
+    {
+        if (desc->vertex_indices[i] == index)
+            return i;
+    }
+    return -1;
 }
 
 static bool source_vertex_operation_delete_many(const brush_world_runtime *world_runtime,
@@ -1913,6 +2006,24 @@ static bool source_vertex_operation_snap(const brush_world_runtime *world_runtim
     return true;
 }
 
+typedef struct editor_brush_source_vertex_transaction
+{
+    int source_index;
+    editor_brush_source_box_runtime rollback_box;
+    bool rollback_captured;
+    editor_brush_source_vertex_operation_result preview;
+} editor_brush_source_vertex_transaction;
+
+static void source_vertex_transaction_dispose(editor_brush_source_vertex_transaction *transaction)
+{
+    if (transaction == NULL)
+        return;
+    if (transaction->rollback_captured)
+        free_editor_brush_source_box(&transaction->rollback_box);
+    editor_brush_source_free_runtime_brush(&transaction->preview.brush);
+    SDL_zero(*transaction);
+}
+
 bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtime *world_runtime,
                                                         const editor_brush_source_vertex_operation_desc *desc,
                                                         editor_brush_source_vertex_operation_result *out_result,
@@ -1928,6 +2039,13 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
         return false;
     }
 
+    if (find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity) < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        source_vertex_operation_set_failure(out_result, "source brush not found");
+        return false;
+    }
+
     int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
     SDL_zeroa(vertices);
     int vertex_count = 0;
@@ -1938,6 +2056,16 @@ bool editor_brush_world_preview_source_vertex_operation(const brush_world_runtim
     case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD:
         ok = source_vertex_operation_add(world_runtime, desc, vertices, &vertex_count, error_buffer, error_buffer_size);
         changed_count = ok ? 1 : 0;
+        break;
+    case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE:
+        ok =
+            source_vertex_operation_move(world_runtime, desc, vertices, &vertex_count, error_buffer, error_buffer_size);
+        changed_count = ok ? 1 : 0;
+        break;
+    case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY:
+        ok = source_vertex_operation_move_many(world_runtime, desc, vertices, &vertex_count, error_buffer,
+                                               error_buffer_size);
+        changed_count = ok ? desc->vertex_index_count : 0;
         break;
     case EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_DELETE:
         ok = source_vertex_operation_delete(world_runtime, desc, vertices, &vertex_count, error_buffer,
@@ -2012,38 +2140,40 @@ bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world
         return false;
     }
 
-    editor_brush_source_vertex_operation_result preview;
-    if (!editor_brush_world_preview_source_vertex_operation(world_runtime, desc, &preview, error_buffer,
+    editor_brush_source_vertex_transaction transaction;
+    SDL_zero(transaction);
+    if (!editor_brush_world_preview_source_vertex_operation(world_runtime, desc, &transaction.preview, error_buffer,
                                                             error_buffer_size))
     {
         if (out_result != NULL)
-            *out_result = preview;
+            *out_result = transaction.preview;
         return false;
     }
 
-    const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
-    if (source_index < 0)
+    transaction.source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identity);
+    if (transaction.source_index < 0)
     {
-        editor_brush_source_free_runtime_brush(&preview.brush);
+        source_vertex_transaction_dispose(&transaction);
         set_error(error_buffer, error_buffer_size, "source brush not found");
         return false;
     }
 
-    editor_brush_source_box_runtime old_box;
-    if (!copy_editor_brush_source_box_runtime(&world_runtime->editor_source_boxes[source_index], &old_box))
+    if (!copy_editor_brush_source_box_runtime(&world_runtime->editor_source_boxes[transaction.source_index],
+                                              &transaction.rollback_box))
     {
-        editor_brush_source_free_runtime_brush(&preview.brush);
+        source_vertex_transaction_dispose(&transaction);
         set_error(error_buffer, error_buffer_size, "failed to copy source brush rollback state");
         return false;
     }
+    transaction.rollback_captured = true;
 
-    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
-    box->vertex_count = preview.vertex_count;
-    for (int i = 0; i < preview.vertex_count; ++i)
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[transaction.source_index];
+    box->vertex_count = transaction.preview.vertex_count;
+    for (int i = 0; i < transaction.preview.vertex_count; ++i)
     {
-        box->vertices[i][0] = preview.vertices[i][0];
-        box->vertices[i][1] = preview.vertices[i][1];
-        box->vertices[i][2] = preview.vertices[i][2];
+        box->vertices[i][0] = transaction.preview.vertices[i][0];
+        box->vertices[i][1] = transaction.preview.vertices[i][1];
+        box->vertices[i][2] = transaction.preview.vertices[i][2];
     }
     source_box_update_bounds_from_vertices(box);
     if (box->prefab == NULL || SDL_strcmp(box->prefab, "box") == 0 || SDL_strcmp(box->prefab, "editor.box") == 0)
@@ -2053,29 +2183,30 @@ bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world
         if (box->prefab == NULL)
         {
             box->prefab = old_prefab;
-            free_editor_brush_source_box(&old_box);
-            editor_brush_source_free_runtime_brush(&preview.brush);
+            source_vertex_transaction_dispose(&transaction);
             set_error(error_buffer, error_buffer_size, "failed to allocate source convex prefab metadata");
             return false;
         }
         SDL_free(old_prefab);
     }
 
-    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
+    if (!source_box_candidate_valid(world_runtime, box, transaction.source_index, error_buffer, error_buffer_size) ||
         !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
     {
         free_editor_brush_source_box(box);
-        *box = old_box;
+        *box = transaction.rollback_box;
+        transaction.rollback_captured = false;
         (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
-        editor_brush_source_free_runtime_brush(&preview.brush);
+        editor_brush_source_free_runtime_brush(&transaction.preview.brush);
         return false;
     }
 
-    free_editor_brush_source_box(&old_box);
+    free_editor_brush_source_box(&transaction.rollback_box);
+    transaction.rollback_captured = false;
     if (out_result != NULL)
-        *out_result = preview;
+        *out_result = transaction.preview;
     else
-        editor_brush_source_free_runtime_brush(&preview.brush);
+        editor_brush_source_free_runtime_brush(&transaction.preview.brush);
     return true;
 }
 
