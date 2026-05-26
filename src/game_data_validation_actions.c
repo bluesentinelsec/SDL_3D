@@ -1770,108 +1770,6 @@ static bool validate_known_action(validation_context *ctx, yyjson_val *action, c
         }
         return true;
     }
-    if (SDL_strcmp(type, "network.direct_connect.start") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "network.direct_connect.start requires a non-empty name");
-        if (!is_non_empty_string(action, "host_key") && !is_non_empty_string(action, "host") &&
-            !is_non_empty_string(action, "default_host"))
-            return validation_error(ctx, json_path,
-                                    "network.direct_connect.start requires host_key, host, or default_host");
-        if (!is_non_empty_string(action, "port_key") && obj_get(action, "port") == NULL &&
-            obj_get(action, "default_port") == NULL)
-            return validation_error(ctx, json_path,
-                                    "network.direct_connect.start requires port_key, port, or default_port");
-        if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.direct_connect.start port"))
-            return false;
-        yyjson_val *default_port = obj_get(action, "default_port");
-        if (default_port != NULL &&
-            (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
-            return validation_error(ctx, json_path,
-                                    "network.direct_connect.start default_port must be integer 1..65535");
-        return true;
-    }
-    if (SDL_strcmp(type, "network.direct_connect.cancel") == 0 ||
-        SDL_strcmp(type, "network.direct_connect.observe") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
-        return true;
-    }
-    if (SDL_strcmp(type, "network.host.start") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "network.host.start requires a non-empty name");
-        if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.host.start port"))
-            return false;
-        yyjson_val *default_port = obj_get(action, "default_port");
-        if (default_port != NULL &&
-            (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
-            return validation_error(ctx, json_path, "network.host.start default_port must be integer 1..65535");
-        return true;
-    }
-    if (SDL_strcmp(type, "network.host.cancel") == 0 || SDL_strcmp(type, "network.host.observe") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
-        return true;
-    }
-    if (SDL_strcmp(type, "network.discovery.start") == 0 || SDL_strcmp(type, "network.discovery.refresh") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
-        if (!is_non_empty_string(action, "collection"))
-            return validation_error(ctx, json_path, "%s requires a non-empty collection", type);
-        if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.discovery port"))
-            return false;
-        yyjson_val *default_port = obj_get(action, "default_port");
-        if (default_port != NULL &&
-            (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
-            return validation_error(ctx, json_path, "network.discovery default_port must be integer 1..65535");
-        yyjson_val *local_port = obj_get(action, "local_port");
-        if (local_port != NULL &&
-            (!yyjson_is_int(local_port) || yyjson_get_int(local_port) < 0 || yyjson_get_int(local_port) > 65535))
-            return validation_error(ctx, json_path, "network.discovery local_port must be integer 0..65535");
-        return true;
-    }
-    if (SDL_strcmp(type, "network.discovery.observe") == 0 || SDL_strcmp(type, "network.discovery.cancel") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "%s requires a non-empty name", type);
-        if (!is_non_empty_string(action, "collection"))
-            return validation_error(ctx, json_path, "%s requires a non-empty collection", type);
-        return true;
-    }
-    if (SDL_strcmp(type, "network.discovery.connect_selected") == 0)
-    {
-        if (!is_non_empty_string(action, "name"))
-            return validation_error(ctx, json_path, "network.discovery.connect_selected requires a non-empty name");
-        if (!is_non_empty_string(action, "collection"))
-            return validation_error(ctx, json_path,
-                                    "network.discovery.connect_selected requires a non-empty collection");
-        if (!is_non_empty_string(action, "selected_index_key") && obj_get(action, "selected_index") == NULL)
-            return validation_error(ctx, json_path,
-                                    "network.discovery.connect_selected requires selected_index_key or selected_index");
-        yyjson_val *selected_index = obj_get(action, "selected_index");
-        if (selected_index != NULL && (!yyjson_is_int(selected_index) || yyjson_get_int(selected_index) < 0))
-            return validation_error(ctx, json_path,
-                                    "network.discovery.connect_selected selected_index must be an integer >= 0");
-        if (!is_non_empty_string(action, "direct_connect_name"))
-            return validation_error(ctx, json_path,
-                                    "network.discovery.connect_selected requires a non-empty direct_connect_name");
-        return true;
-    }
-    if (SDL_strcmp(type, "ui.animate") == 0)
-    {
-        if (!is_non_empty_string(action, "target") && !is_non_empty_string(action, "ui"))
-            return validation_error(ctx, json_path, "ui.animate requires a non-empty target");
-        if (!is_non_empty_string(action, "property"))
-            return validation_error(ctx, json_path, "ui.animate requires a non-empty property");
-        if (!is_ui_tween_property(json_string(action, "property")))
-            return validation_error(
-                ctx, json_path, "ui.animate property must be alpha, scale, offset_x, offset_y, x, y, tint, or color");
-        return validate_animation_common(ctx, action, json_path, names);
-    }
     if (SDL_strncmp(type, "audio.", 6) == 0)
         return validate_audio_action(ctx, action, json_path, names, type);
 
@@ -1951,6 +1849,23 @@ static bool validate_scene_state_cycle_action(validation_context *ctx, yyjson_va
                                               validation_names *names, const char *type);
 static bool validate_console_write_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                           validation_names *names, const char *type);
+static bool validate_network_direct_connect_start_action(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type);
+static bool validate_network_named_session_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                  validation_names *names, const char *type);
+static bool validate_network_host_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type);
+static bool validate_network_discovery_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type);
+static bool validate_network_discovery_collection_action(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type);
+static bool validate_network_discovery_connect_selected_action(validation_context *ctx, yyjson_val *action,
+                                                               const char *json_path, validation_names *names,
+                                                               const char *type);
+static bool validate_ui_animate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type);
 static bool validate_combat_kill_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
 static bool validate_combat_revive_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -2086,18 +2001,19 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_ENTRY("editor.player_start.place"),
         ACTION_RULE_EXACT_ENTRY("editor.player_start.apply"),
         ACTION_RULE_EXACT_ENTRY("editor.player_start.delete"),
-        ACTION_RULE_EXACT_ENTRY("network.direct_connect.start"),
-        ACTION_RULE_EXACT_ENTRY("network.direct_connect.cancel"),
-        ACTION_RULE_EXACT_ENTRY("network.direct_connect.observe"),
-        ACTION_RULE_EXACT_ENTRY("network.host.start"),
-        ACTION_RULE_EXACT_ENTRY("network.host.cancel"),
-        ACTION_RULE_EXACT_ENTRY("network.host.observe"),
-        ACTION_RULE_EXACT_ENTRY("network.discovery.start"),
-        ACTION_RULE_EXACT_ENTRY("network.discovery.refresh"),
-        ACTION_RULE_EXACT_ENTRY("network.discovery.observe"),
-        ACTION_RULE_EXACT_ENTRY("network.discovery.cancel"),
-        ACTION_RULE_EXACT_ENTRY("network.discovery.connect_selected"),
-        ACTION_RULE_EXACT_ENTRY("ui.animate"),
+        ACTION_RULE_EXACT_HANDLER("network.direct_connect.start", validate_network_direct_connect_start_action),
+        ACTION_RULE_EXACT_HANDLER("network.direct_connect.cancel", validate_network_named_session_action),
+        ACTION_RULE_EXACT_HANDLER("network.direct_connect.observe", validate_network_named_session_action),
+        ACTION_RULE_EXACT_HANDLER("network.host.start", validate_network_host_start_action),
+        ACTION_RULE_EXACT_HANDLER("network.host.cancel", validate_network_named_session_action),
+        ACTION_RULE_EXACT_HANDLER("network.host.observe", validate_network_named_session_action),
+        ACTION_RULE_EXACT_HANDLER("network.discovery.start", validate_network_discovery_start_action),
+        ACTION_RULE_EXACT_HANDLER("network.discovery.refresh", validate_network_discovery_start_action),
+        ACTION_RULE_EXACT_HANDLER("network.discovery.observe", validate_network_discovery_collection_action),
+        ACTION_RULE_EXACT_HANDLER("network.discovery.cancel", validate_network_discovery_collection_action),
+        ACTION_RULE_EXACT_HANDLER("network.discovery.connect_selected",
+                                  validate_network_discovery_connect_selected_action),
+        ACTION_RULE_EXACT_HANDLER("ui.animate", validate_ui_animate_action),
         ACTION_RULE_PREFIX_HANDLER("audio.", validate_audio_action),
         ACTION_RULE_EXACT_HANDLER("persistence.load", validate_persistence_action),
         ACTION_RULE_EXACT_HANDLER("persistence.save", validate_persistence_action),
@@ -2827,6 +2743,126 @@ static bool validate_console_write_action(validation_context *ctx, yyjson_val *a
         return validation_error(ctx, json_path, "console.write line_count must be an integer from 1 to 8");
     }
     return true;
+}
+
+static bool validate_network_direct_connect_start_action(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "network.direct_connect.start requires a non-empty name");
+    if (!is_non_empty_string(action, "host_key") && !is_non_empty_string(action, "host") &&
+        !is_non_empty_string(action, "default_host"))
+        return validation_error(ctx, json_path,
+                                "network.direct_connect.start requires host_key, host, or default_host");
+    if (!is_non_empty_string(action, "port_key") && obj_get(action, "port") == NULL &&
+        obj_get(action, "default_port") == NULL)
+        return validation_error(ctx, json_path,
+                                "network.direct_connect.start requires port_key, port, or default_port");
+    if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.direct_connect.start port"))
+        return false;
+    yyjson_val *default_port = obj_get(action, "default_port");
+    if (default_port != NULL &&
+        (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
+        return validation_error(ctx, json_path, "network.direct_connect.start default_port must be integer 1..65535");
+    return true;
+}
+
+static bool validate_network_named_session_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                  validation_names *names, const char *type)
+{
+    (void)names;
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+    return true;
+}
+
+static bool validate_network_host_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "network.host.start requires a non-empty name");
+    if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.host.start port"))
+        return false;
+    yyjson_val *default_port = obj_get(action, "default_port");
+    if (default_port != NULL &&
+        (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
+        return validation_error(ctx, json_path, "network.host.start default_port must be integer 1..65535");
+    return true;
+}
+
+static bool validate_network_discovery_start_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    (void)names;
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+    if (!is_non_empty_string(action, "collection"))
+        return validation_error(ctx, json_path, "%s requires a non-empty collection", type);
+    if (!validate_network_port_value(ctx, obj_get(action, "port"), json_path, "network.discovery port"))
+        return false;
+    yyjson_val *default_port = obj_get(action, "default_port");
+    if (default_port != NULL &&
+        (!yyjson_is_int(default_port) || yyjson_get_int(default_port) <= 0 || yyjson_get_int(default_port) > 65535))
+        return validation_error(ctx, json_path, "network.discovery default_port must be integer 1..65535");
+    yyjson_val *local_port = obj_get(action, "local_port");
+    if (local_port != NULL &&
+        (!yyjson_is_int(local_port) || yyjson_get_int(local_port) < 0 || yyjson_get_int(local_port) > 65535))
+        return validation_error(ctx, json_path, "network.discovery local_port must be integer 0..65535");
+    return true;
+}
+
+static bool validate_network_discovery_collection_action(validation_context *ctx, yyjson_val *action,
+                                                         const char *json_path, validation_names *names,
+                                                         const char *type)
+{
+    (void)names;
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "%s requires a non-empty name", type);
+    if (!is_non_empty_string(action, "collection"))
+        return validation_error(ctx, json_path, "%s requires a non-empty collection", type);
+    return true;
+}
+
+static bool validate_network_discovery_connect_selected_action(validation_context *ctx, yyjson_val *action,
+                                                               const char *json_path, validation_names *names,
+                                                               const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "name"))
+        return validation_error(ctx, json_path, "network.discovery.connect_selected requires a non-empty name");
+    if (!is_non_empty_string(action, "collection"))
+        return validation_error(ctx, json_path, "network.discovery.connect_selected requires a non-empty collection");
+    if (!is_non_empty_string(action, "selected_index_key") && obj_get(action, "selected_index") == NULL)
+        return validation_error(ctx, json_path,
+                                "network.discovery.connect_selected requires selected_index_key or selected_index");
+    yyjson_val *selected_index = obj_get(action, "selected_index");
+    if (selected_index != NULL && (!yyjson_is_int(selected_index) || yyjson_get_int(selected_index) < 0))
+        return validation_error(ctx, json_path,
+                                "network.discovery.connect_selected selected_index must be an integer >= 0");
+    if (!is_non_empty_string(action, "direct_connect_name"))
+        return validation_error(ctx, json_path,
+                                "network.discovery.connect_selected requires a non-empty direct_connect_name");
+    return true;
+}
+
+static bool validate_ui_animate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type)
+{
+    (void)type;
+    if (!is_non_empty_string(action, "target") && !is_non_empty_string(action, "ui"))
+        return validation_error(ctx, json_path, "ui.animate requires a non-empty target");
+    if (!is_non_empty_string(action, "property"))
+        return validation_error(ctx, json_path, "ui.animate requires a non-empty property");
+    if (!is_ui_tween_property(json_string(action, "property")))
+        return validation_error(ctx, json_path,
+                                "ui.animate property must be alpha, scale, offset_x, offset_y, x, y, tint, or color");
+    return validate_animation_common(ctx, action, json_path, names);
 }
 
 static bool validate_combat_damage_or_heal_action(validation_context *ctx, yyjson_val *action, const char *json_path,
