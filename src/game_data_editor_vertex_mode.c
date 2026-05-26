@@ -20,11 +20,28 @@ static float editor_snap_delta(float delta, float grid_size)
     return SDL_roundf(delta / grid) * grid;
 }
 
+static void publish_editor_vertex_drag_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const bool active = drag != NULL && drag->active && drag->vertex_drag;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.drag.active", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.drag.moved", active ? drag->moved : false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.drag.axis_lock_y",
+                                 active ? drag->axis_lock_y : false);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.drag.guide_count",
+                                active ? drag->vertex_origin_count : 0);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.vertex.drag.offset",
+                                 active ? drag->applied_offset : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+}
+
 static void clear_editor_drag_move(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
         return;
     SDL_zero(runtime->editor_drag_move);
+    publish_editor_vertex_drag_state(runtime, NULL);
 }
 
 static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)
@@ -1876,6 +1893,26 @@ static bool editor_try_merge_selected_vertices_to_hover(slayer3d_game_data_runti
     return slayer3d_game_data_merge_selected_editor_vertices_to_hover(runtime, NULL);
 }
 
+static void editor_capture_vertex_drag_origins(slayer3d_game_data_runtime *runtime, editor_drag_move_state *drag)
+{
+    if (runtime == NULL || drag == NULL || !editor_selected_vertices_active_for_scene(runtime))
+        return;
+
+    const int count = SDL_min(runtime->editor_selected_vertex_count, SLAYER3D_EDITOR_DRAG_VERTEX_ORIGIN_CAPACITY);
+    drag->vertex_origin_count = count;
+    for (int i = 0; i < count; ++i)
+    {
+        const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[i];
+        editor_drag_vertex_origin *origin = &drag->vertex_origins[i];
+        SDL_strlcpy(origin->world_name, selection->world_name, sizeof(origin->world_name));
+        SDL_strlcpy(origin->brush_name, selection->brush_name, sizeof(origin->brush_name));
+        SDL_strlcpy(origin->vertex_stable_id, selection->vertex_stable_id, sizeof(origin->vertex_stable_id));
+        origin->coord[0] = selection->coord[0];
+        origin->coord[1] = selection->coord[1];
+        origin->coord[2] = selection->coord[2];
+    }
+}
+
 static void editor_begin_vertex_drag(slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
                                      const slayer3d_game_data_editor_selection *hover_selection)
 {
@@ -1887,7 +1924,12 @@ static void editor_begin_vertex_drag(slayer3d_game_data_runtime *runtime, slayer
     drag->scene = slayer3d_game_data_active_scene(runtime);
     drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
     drag->start_point = hover_selection->hit ? hover_selection->point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    drag->vertex_drag = true;
+    editor_capture_vertex_drag_origins(runtime, drag);
     (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
+    drag->current_mouse_x = drag->start_mouse_x;
+    drag->current_mouse_y = drag->start_mouse_y;
+    publish_editor_vertex_drag_state(runtime, drag);
 }
 
 bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
@@ -1919,6 +1961,7 @@ bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
     {
         const SDL_Keymod modifiers = SDL_GetModState();
         const bool y_axis_lock = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) != 0;
+        drag->axis_lock_y = y_axis_lock;
         slayer3d_vec3 desired = drag->applied_offset;
         if (y_axis_lock)
         {
@@ -1940,6 +1983,7 @@ bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
             drag->applied_offset = desired;
             drag->moved = true;
         }
+        publish_editor_vertex_drag_state(runtime, drag);
     }
 
     if (left_released || !left_down)
