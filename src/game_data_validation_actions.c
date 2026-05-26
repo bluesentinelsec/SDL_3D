@@ -791,297 +791,6 @@ static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val
 static bool validate_known_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                   validation_names *names, const char *type)
 {
-    if (SDL_strcmp(type, "actor.spawn") == 0)
-    {
-        if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
-            return false;
-        const char *from = json_string(action, "from");
-        if (from != NULL && from[0] == '\0')
-            return validation_error(ctx, json_path, "actor.spawn from requires a non-empty actor reference");
-        if (from != NULL && !name_table_contains(&names->entities, from) &&
-            !name_table_contains(&names->actor_pool_actors, from))
-        {
-            return validation_error(ctx, json_path, "unknown actor.spawn from actor reference '%s'", from);
-        }
-        yyjson_val *from_payload = obj_get(action, "from_payload");
-        if (from_payload != NULL && (!yyjson_is_str(from_payload) || yyjson_get_str(from_payload)[0] == '\0'))
-            return validation_error(ctx, json_path, "actor.spawn from_payload must be a non-empty string");
-        yyjson_val *position = obj_get(action, "position");
-        if (position != NULL && !is_vec_array(position, 3))
-            return validation_error(ctx, json_path, "actor.spawn position must be a vec3");
-        yyjson_val *position_from_payload = obj_get(action, "position_from_payload");
-        if (position_from_payload != NULL &&
-            (!yyjson_is_str(position_from_payload) || yyjson_get_str(position_from_payload)[0] == '\0'))
-        {
-            return validation_error(ctx, json_path, "actor.spawn position_from_payload must be a non-empty string");
-        }
-        yyjson_val *position_from_actor_properties = obj_get(action, "position_from_actor_properties");
-        if (position_from_actor_properties != NULL)
-        {
-            if (!yyjson_is_obj(position_from_actor_properties))
-                return validation_error(ctx, json_path, "actor.spawn position_from_actor_properties must be an object");
-            if (!require_actor_ref(ctx, names, json_string(position_from_actor_properties, "source"), json_path))
-                return false;
-            const char *x = json_string(position_from_actor_properties, "x");
-            const char *y = json_string(position_from_actor_properties, "y");
-            const char *z = json_string(position_from_actor_properties, "z");
-            if (x == NULL || x[0] == '\0' || y == NULL || y[0] == '\0' || z == NULL || z[0] == '\0')
-            {
-                return validation_error(ctx, json_path,
-                                        "actor.spawn position_from_actor_properties requires non-empty x, y, and z "
-                                        "property names");
-            }
-            yyjson_val *property_offset = obj_get(position_from_actor_properties, "offset");
-            if (property_offset != NULL && !is_vec_array(property_offset, 3))
-                return validation_error(ctx, json_path,
-                                        "actor.spawn position_from_actor_properties offset must be a vec3");
-            const char *additive_fields[] = {"x_add", "y_add", "z_add"};
-            for (size_t additive_index = 0; additive_index < SDL_arraysize(additive_fields); ++additive_index)
-            {
-                yyjson_val *additive = obj_get(position_from_actor_properties, additive_fields[additive_index]);
-                if (additive == NULL)
-                    continue;
-                if (!yyjson_is_arr(additive))
-                    return validation_error(
-                        ctx, json_path, "actor.spawn position_from_actor_properties additive fields must be arrays");
-                for (size_t property_index = 0; property_index < yyjson_arr_size(additive); ++property_index)
-                {
-                    yyjson_val *property = yyjson_arr_get(additive, property_index);
-                    if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
-                    {
-                        return validation_error(ctx, json_path,
-                                                "actor.spawn position_from_actor_properties additive fields must "
-                                                "contain non-empty strings");
-                    }
-                }
-            }
-        }
-        yyjson_val *offset = obj_get(action, "offset");
-        if (offset != NULL && !is_vec_array(offset, 3))
-            return validation_error(ctx, json_path, "actor.spawn offset must be a vec3");
-        yyjson_val *directional_offset = obj_get(action, "directional_offset");
-        if (directional_offset != NULL)
-        {
-            if (!yyjson_is_obj(directional_offset))
-                return validation_error(ctx, json_path, "actor.spawn directional_offset must be an object");
-            yyjson_val *property = obj_get(directional_offset, "property");
-            yyjson_val *distance = obj_get(directional_offset, "distance");
-            if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
-                return validation_error(ctx, json_path,
-                                        "actor.spawn directional_offset property must be a non-empty string");
-            if (!yyjson_is_num(distance))
-                return validation_error(ctx, json_path, "actor.spawn directional_offset distance must be numeric");
-        }
-        yyjson_val *payload_directional_offset = obj_get(action, "payload_directional_offset");
-        if (payload_directional_offset != NULL)
-        {
-            if (!yyjson_is_obj(payload_directional_offset))
-                return validation_error(ctx, json_path, "actor.spawn payload_directional_offset must be an object");
-            yyjson_val *property = obj_get(payload_directional_offset, "property");
-            yyjson_val *distance = obj_get(payload_directional_offset, "distance");
-            if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
-                return validation_error(ctx, json_path,
-                                        "actor.spawn payload_directional_offset property must be a non-empty string");
-            if (!yyjson_is_num(distance))
-                return validation_error(ctx, json_path,
-                                        "actor.spawn payload_directional_offset distance must be numeric");
-        }
-        yyjson_val *velocity_from_payload = obj_get(action, "velocity_from_payload");
-        if (velocity_from_payload != NULL &&
-            (!yyjson_is_str(velocity_from_payload) || yyjson_get_str(velocity_from_payload)[0] == '\0'))
-        {
-            return validation_error(ctx, json_path, "actor.spawn velocity_from_payload must be a non-empty string");
-        }
-        yyjson_val *velocity_property = obj_get(action, "velocity_property");
-        if (velocity_property != NULL &&
-            (!yyjson_is_str(velocity_property) || yyjson_get_str(velocity_property)[0] == '\0'))
-            return validation_error(ctx, json_path, "actor.spawn velocity_property must be a non-empty string");
-        yyjson_val *speed = obj_get(action, "speed");
-        if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
-            return validation_error(ctx, json_path, "actor.spawn speed must be non-negative");
-        yyjson_val *properties = obj_get(action, "properties");
-        if (properties != NULL && !yyjson_is_obj(properties))
-            return validation_error(ctx, json_path, "actor.spawn properties must be an object");
-        yyjson_val *properties_from_actor = obj_get(action, "properties_from_actor");
-        if (properties_from_actor != NULL)
-        {
-            if (!yyjson_is_obj(properties_from_actor))
-                return validation_error(ctx, json_path, "actor.spawn properties_from_actor must be an object");
-            if (!require_actor_ref(ctx, names, json_string(properties_from_actor, "source"), json_path))
-                return false;
-            yyjson_val *keys = obj_get(properties_from_actor, "keys");
-            if (!yyjson_is_arr(keys) || yyjson_arr_size(keys) == 0)
-                return validation_error(ctx, json_path,
-                                        "actor.spawn properties_from_actor keys must be a non-empty array");
-            for (size_t i = 0; i < yyjson_arr_size(keys); ++i)
-            {
-                yyjson_val *key = yyjson_arr_get(keys, i);
-                if (!yyjson_is_str(key) || yyjson_get_str(key)[0] == '\0')
-                    return validation_error(ctx, json_path,
-                                            "actor.spawn properties_from_actor keys must be non-empty strings");
-            }
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "actor.despawn") == 0)
-    {
-        yyjson_val *target_value = obj_get(action, "target");
-        yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
-        const char *target = json_string(action, "target");
-        const char *target_from_payload = json_string(action, "target_from_payload");
-        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
-            return validation_error(ctx, json_path,
-                                    "actor.despawn requires exactly one of target or target_from_payload");
-        if (target_value != NULL && !yyjson_is_str(target_value))
-            return validation_error(ctx, json_path, "actor.despawn target must be a string");
-        if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
-            return validation_error(ctx, json_path, "actor.despawn target_from_payload must be a string");
-        if (target != NULL && target[0] == '\0')
-            return validation_error(ctx, json_path, "actor.despawn target must be non-empty");
-        if (target_from_payload != NULL && target_from_payload[0] == '\0')
-            return validation_error(ctx, json_path, "actor.despawn target_from_payload must be non-empty");
-        if (target != NULL && !name_table_contains(&names->entities, target) &&
-            !name_table_contains(&names->actor_pool_actors, target))
-            return validation_error(ctx, json_path, "unknown actor.despawn target '%s'", target);
-        yyjson_val *reason = obj_get(action, "reason");
-        if (reason != NULL && !yyjson_is_str(reason))
-            return validation_error(ctx, json_path, "actor.despawn reason must be a string");
-        return true;
-    }
-    if (SDL_strcmp(type, "actor.despawn_by_tag") == 0)
-    {
-        if (!is_non_empty_string(action, "tag"))
-            return validation_error(ctx, json_path, "actor.despawn_by_tag requires a non-empty tag");
-        yyjson_val *reason = obj_get(action, "reason");
-        if (reason != NULL && !yyjson_is_str(reason))
-            return validation_error(ctx, json_path, "actor.despawn_by_tag reason must be a string");
-        return true;
-    }
-    if (SDL_strcmp(type, "noise.emit") == 0)
-    {
-        const char *source = json_string(action, "source");
-        const char *actor = json_string(action, "actor");
-        const char *target = json_string(action, "target");
-        if (source != NULL && !require_actor_ref(ctx, names, source, json_path))
-            return false;
-        if (actor != NULL && !require_actor_ref(ctx, names, actor, json_path))
-            return false;
-        if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
-            return false;
-
-        const char *payload_fields[] = {"source_from_payload", "actor_from_payload", "target_from_payload",
-                                        "from_payload"};
-        for (size_t i = 0; i < SDL_arraysize(payload_fields); ++i)
-        {
-            yyjson_val *value = obj_get(action, payload_fields[i]);
-            if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
-                return validation_error(ctx, json_path, "noise.emit %s must be a non-empty string", payload_fields[i]);
-        }
-
-        yyjson_val *from = obj_get(action, "from");
-        if (from != NULL && (!yyjson_is_str(from) || yyjson_get_str(from)[0] == '\0'))
-            return validation_error(ctx, json_path, "noise.emit from must be a non-empty actor reference");
-        const char *from_actor = json_string(action, "from");
-        if (from_actor != NULL && !require_actor_ref(ctx, names, from_actor, json_path))
-            return false;
-        yyjson_val *position = obj_get(action, "position");
-        yyjson_val *offset = obj_get(action, "offset");
-        if (position != NULL && !is_vec_array(position, 3))
-            return validation_error(ctx, json_path, "noise.emit position must be a vec3");
-        if (offset != NULL && !is_vec_array(offset, 3))
-            return validation_error(ctx, json_path, "noise.emit offset must be a vec3");
-        yyjson_val *radius = obj_get(action, "radius");
-        yyjson_val *range = obj_get(action, "range");
-        yyjson_val *loudness = obj_get(action, "loudness");
-        yyjson_val *duration = obj_get(action, "duration");
-        yyjson_val *duration_seconds = obj_get(action, "duration_seconds");
-        if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) <= 0.0))
-            return validation_error(ctx, json_path, "noise.emit radius must be positive");
-        if (range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) <= 0.0))
-            return validation_error(ctx, json_path, "noise.emit range must be positive");
-        if (loudness != NULL && (!yyjson_is_num(loudness) || yyjson_get_num(loudness) < 0.0))
-            return validation_error(ctx, json_path, "noise.emit loudness must be non-negative");
-        if (duration != NULL && (!yyjson_is_num(duration) || yyjson_get_num(duration) <= 0.0))
-            return validation_error(ctx, json_path, "noise.emit duration must be positive");
-        if (duration_seconds != NULL && (!yyjson_is_num(duration_seconds) || yyjson_get_num(duration_seconds) <= 0.0))
-            return validation_error(ctx, json_path, "noise.emit duration_seconds must be positive");
-        return true;
-    }
-    if (SDL_strcmp(type, "sector_door.open") == 0 || SDL_strcmp(type, "sector_door.close") == 0 ||
-        SDL_strcmp(type, "sector_door.toggle") == 0)
-    {
-        const char *target = json_string(action, "target");
-        const char *target_from_payload = json_string(action, "target_from_payload");
-        if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
-        {
-            return validation_error(ctx, json_path,
-                                    "sector door action requires exactly one of target or target_from_payload");
-        }
-        if (target != NULL && !require_ref(ctx, &names->sector_doors, "sector door", target, json_path))
-            return false;
-        if (target_from_payload != NULL && target_from_payload[0] == '\0')
-            return validation_error(ctx, json_path, "sector door target_from_payload must be non-empty");
-        yyjson_val *stay = obj_get(action, "stay_open_seconds");
-        yyjson_val *auto_close = obj_get(action, "auto_close_seconds");
-        if ((stay != NULL && (!yyjson_is_num(stay) || yyjson_get_num(stay) < 0.0)) ||
-            (auto_close != NULL && (!yyjson_is_num(auto_close) || yyjson_get_num(auto_close) < 0.0)))
-        {
-            return validation_error(ctx, json_path, "sector door auto-close timing must be non-negative");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "sector_door.interact") == 0)
-    {
-        if (!require_actor_ref(ctx, names, json_string(action, "actor"), json_path))
-            return false;
-        yyjson_val *range = obj_get(action, "range");
-        yyjson_val *min_dot = obj_get(action, "min_dot");
-        if ((range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) < 0.0)) ||
-            (min_dot != NULL &&
-             (!yyjson_is_num(min_dot) || yyjson_get_num(min_dot) < -1.0 || yyjson_get_num(min_dot) > 1.0)))
-        {
-            return validation_error(ctx, json_path, "sector door interaction range/min_dot are invalid");
-        }
-        yyjson_val *yaw_property = obj_get(action, "yaw_property");
-        if (yaw_property != NULL && !is_non_empty_string(action, "yaw_property"))
-            return validation_error(ctx, json_path, "sector door yaw_property must be non-empty");
-        yyjson_val *actions = obj_get(action, "actions");
-        const char *signal = json_string(action, "signal");
-        if ((actions == NULL && signal == NULL) || (actions != NULL && signal != NULL))
-            return validation_error(ctx, json_path, "sector_door.interact requires exactly one of actions or signal");
-        if (actions != NULL)
-            return validate_action_array(ctx, actions, json_path, names);
-        return require_ref(ctx, &names->signals, "signal", signal, json_path);
-    }
-    if (SDL_strcmp(type, "sector_lighting.set") == 0)
-    {
-        const char *sector_level = json_string(action, "sector_level");
-        const char *sector = json_string(action, "sector");
-        yyjson_val *sector_index = obj_get(action, "sector_index");
-        if (!require_ref(ctx, &names->sector_levels, "sector level", sector_level, json_path))
-            return false;
-        if ((sector == NULL && sector_index == NULL) || (sector != NULL && sector_index != NULL))
-            return validation_error(ctx, json_path,
-                                    "sector_lighting.set requires exactly one of sector or sector_index");
-        if (sector != NULL && sector[0] == '\0')
-            return validation_error(ctx, json_path, "sector_lighting.set sector must be non-empty");
-        if (sector_index != NULL && (!yyjson_is_int(sector_index) || yyjson_get_int(sector_index) < 0))
-            return validation_error(ctx, json_path, "sector_lighting.set sector_index must be non-negative");
-        yyjson_val *level = obj_get(action, "level");
-        if (level != NULL && (!yyjson_is_num(level) || yyjson_get_num(level) < 0.0 || yyjson_get_num(level) > 255.0))
-            return validation_error(ctx, json_path, "sector_lighting.set level must be in [0, 255]");
-        yyjson_val *color = obj_get(action, "color");
-        if (color != NULL && (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 1.0)))
-        {
-            return validation_error(ctx, json_path,
-                                    "sector_lighting.set color must be a vec3 or vec4 with values in [0, 1]");
-        }
-        return true;
-    }
-    if (SDL_strcmp(type, "projectile.fire") == 0)
-    {
-        return validate_projectile_fire_shape(ctx, action, json_path, names, true);
-    }
     if (SDL_strcmp(type, "controller.fps.launch") == 0 || SDL_strcmp(type, "controller.fps.teleport") == 0 ||
         SDL_strcmp(type, "controller.fps.push") == 0 || SDL_strcmp(type, "controller.fps_sector.launch") == 0 ||
         SDL_strcmp(type, "controller.fps_sector.teleport") == 0)
@@ -2416,6 +2125,22 @@ static bool validate_property_reset_defaults_action(validation_context *ctx, yyj
 static bool validate_debug_write_actor_properties_action(validation_context *ctx, yyjson_val *action,
                                                          const char *json_path, validation_names *names,
                                                          const char *type);
+static bool validate_actor_spawn_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type);
+static bool validate_actor_despawn_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type);
+static bool validate_actor_despawn_by_tag_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type);
+static bool validate_noise_emit_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type);
+static bool validate_sector_door_motion_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type);
+static bool validate_sector_door_interact_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type);
+static bool validate_sector_lighting_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type);
+static bool validate_projectile_fire_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type);
 static bool validate_combat_kill_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                         validation_names *names, const char *type);
 static bool validate_combat_revive_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -2481,9 +2206,9 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("property.animate", validate_property_animate_action),
         ACTION_RULE_EXACT_HANDLER("property.reset_defaults", validate_property_reset_defaults_action),
         ACTION_RULE_EXACT_HANDLER("debug.write_actor_properties", validate_debug_write_actor_properties_action),
-        ACTION_RULE_EXACT_ENTRY("actor.spawn"),
-        ACTION_RULE_EXACT_ENTRY("actor.despawn"),
-        ACTION_RULE_EXACT_ENTRY("actor.despawn_by_tag"),
+        ACTION_RULE_EXACT_HANDLER("actor.spawn", validate_actor_spawn_action),
+        ACTION_RULE_EXACT_HANDLER("actor.despawn", validate_actor_despawn_action),
+        ACTION_RULE_EXACT_HANDLER("actor.despawn_by_tag", validate_actor_despawn_by_tag_action),
         ACTION_RULE_EXACT_HANDLER("combat.damage", validate_combat_damage_or_heal_action),
         ACTION_RULE_EXACT_HANDLER("combat.heal", validate_combat_damage_or_heal_action),
         ACTION_RULE_EXACT_HANDLER("combat.kill", validate_combat_kill_action),
@@ -2498,13 +2223,13 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("weapon.hitscan", validate_weapon_hitscan_action_dispatch),
         ACTION_RULE_EXACT_HANDLER("interaction.use", validate_interaction_use_action_dispatch),
         ACTION_RULE_EXACT_HANDLER("effect.explosion", validate_effect_explosion_action_dispatch),
-        ACTION_RULE_EXACT_ENTRY("noise.emit"),
-        ACTION_RULE_EXACT_ENTRY("sector_door.open"),
-        ACTION_RULE_EXACT_ENTRY("sector_door.close"),
-        ACTION_RULE_EXACT_ENTRY("sector_door.toggle"),
-        ACTION_RULE_EXACT_ENTRY("sector_door.interact"),
-        ACTION_RULE_EXACT_ENTRY("sector_lighting.set"),
-        ACTION_RULE_EXACT_ENTRY("projectile.fire"),
+        ACTION_RULE_EXACT_HANDLER("noise.emit", validate_noise_emit_action),
+        ACTION_RULE_EXACT_HANDLER("sector_door.open", validate_sector_door_motion_action),
+        ACTION_RULE_EXACT_HANDLER("sector_door.close", validate_sector_door_motion_action),
+        ACTION_RULE_EXACT_HANDLER("sector_door.toggle", validate_sector_door_motion_action),
+        ACTION_RULE_EXACT_HANDLER("sector_door.interact", validate_sector_door_interact_action),
+        ACTION_RULE_EXACT_HANDLER("sector_lighting.set", validate_sector_lighting_set_action),
+        ACTION_RULE_EXACT_HANDLER("projectile.fire", validate_projectile_fire_action),
         ACTION_RULE_EXACT_ENTRY("controller.fps.launch"),
         ACTION_RULE_EXACT_ENTRY("controller.fps.teleport"),
         ACTION_RULE_EXACT_ENTRY("controller.fps.push"),
@@ -2732,6 +2457,315 @@ static bool validate_debug_write_actor_properties_action(validation_context *ctx
                                     "debug.write_actor_properties properties must be non-empty strings");
     }
     return true;
+}
+
+static bool validate_actor_spawn_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    (void)type;
+    if (!require_ref(ctx, &names->actor_pools, "actor pool", json_string(action, "pool"), json_path))
+        return false;
+    const char *from = json_string(action, "from");
+    if (from != NULL && from[0] == '\0')
+        return validation_error(ctx, json_path, "actor.spawn from requires a non-empty actor reference");
+    if (from != NULL && !name_table_contains(&names->entities, from) &&
+        !name_table_contains(&names->actor_pool_actors, from))
+    {
+        return validation_error(ctx, json_path, "unknown actor.spawn from actor reference '%s'", from);
+    }
+    yyjson_val *from_payload = obj_get(action, "from_payload");
+    if (from_payload != NULL && (!yyjson_is_str(from_payload) || yyjson_get_str(from_payload)[0] == '\0'))
+        return validation_error(ctx, json_path, "actor.spawn from_payload must be a non-empty string");
+    yyjson_val *position = obj_get(action, "position");
+    if (position != NULL && !is_vec_array(position, 3))
+        return validation_error(ctx, json_path, "actor.spawn position must be a vec3");
+    yyjson_val *position_from_payload = obj_get(action, "position_from_payload");
+    if (position_from_payload != NULL &&
+        (!yyjson_is_str(position_from_payload) || yyjson_get_str(position_from_payload)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "actor.spawn position_from_payload must be a non-empty string");
+    }
+    yyjson_val *position_from_actor_properties = obj_get(action, "position_from_actor_properties");
+    if (position_from_actor_properties != NULL)
+    {
+        if (!yyjson_is_obj(position_from_actor_properties))
+            return validation_error(ctx, json_path, "actor.spawn position_from_actor_properties must be an object");
+        if (!require_actor_ref(ctx, names, json_string(position_from_actor_properties, "source"), json_path))
+            return false;
+        const char *x = json_string(position_from_actor_properties, "x");
+        const char *y = json_string(position_from_actor_properties, "y");
+        const char *z = json_string(position_from_actor_properties, "z");
+        if (x == NULL || x[0] == '\0' || y == NULL || y[0] == '\0' || z == NULL || z[0] == '\0')
+        {
+            return validation_error(ctx, json_path,
+                                    "actor.spawn position_from_actor_properties requires non-empty x, y, and z "
+                                    "property names");
+        }
+        yyjson_val *property_offset = obj_get(position_from_actor_properties, "offset");
+        if (property_offset != NULL && !is_vec_array(property_offset, 3))
+            return validation_error(ctx, json_path, "actor.spawn position_from_actor_properties offset must be a vec3");
+        const char *additive_fields[] = {"x_add", "y_add", "z_add"};
+        for (size_t additive_index = 0; additive_index < SDL_arraysize(additive_fields); ++additive_index)
+        {
+            yyjson_val *additive = obj_get(position_from_actor_properties, additive_fields[additive_index]);
+            if (additive == NULL)
+                continue;
+            if (!yyjson_is_arr(additive))
+                return validation_error(ctx, json_path,
+                                        "actor.spawn position_from_actor_properties additive fields must be arrays");
+            for (size_t property_index = 0; property_index < yyjson_arr_size(additive); ++property_index)
+            {
+                yyjson_val *property = yyjson_arr_get(additive, property_index);
+                if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+                {
+                    return validation_error(ctx, json_path,
+                                            "actor.spawn position_from_actor_properties additive fields must "
+                                            "contain non-empty strings");
+                }
+            }
+        }
+    }
+    yyjson_val *offset = obj_get(action, "offset");
+    if (offset != NULL && !is_vec_array(offset, 3))
+        return validation_error(ctx, json_path, "actor.spawn offset must be a vec3");
+    yyjson_val *directional_offset = obj_get(action, "directional_offset");
+    if (directional_offset != NULL)
+    {
+        if (!yyjson_is_obj(directional_offset))
+            return validation_error(ctx, json_path, "actor.spawn directional_offset must be an object");
+        yyjson_val *property = obj_get(directional_offset, "property");
+        yyjson_val *distance = obj_get(directional_offset, "distance");
+        if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+            return validation_error(ctx, json_path,
+                                    "actor.spawn directional_offset property must be a non-empty string");
+        if (!yyjson_is_num(distance))
+            return validation_error(ctx, json_path, "actor.spawn directional_offset distance must be numeric");
+    }
+    yyjson_val *payload_directional_offset = obj_get(action, "payload_directional_offset");
+    if (payload_directional_offset != NULL)
+    {
+        if (!yyjson_is_obj(payload_directional_offset))
+            return validation_error(ctx, json_path, "actor.spawn payload_directional_offset must be an object");
+        yyjson_val *property = obj_get(payload_directional_offset, "property");
+        yyjson_val *distance = obj_get(payload_directional_offset, "distance");
+        if (!yyjson_is_str(property) || yyjson_get_str(property)[0] == '\0')
+            return validation_error(ctx, json_path,
+                                    "actor.spawn payload_directional_offset property must be a non-empty string");
+        if (!yyjson_is_num(distance))
+            return validation_error(ctx, json_path, "actor.spawn payload_directional_offset distance must be numeric");
+    }
+    yyjson_val *velocity_from_payload = obj_get(action, "velocity_from_payload");
+    if (velocity_from_payload != NULL &&
+        (!yyjson_is_str(velocity_from_payload) || yyjson_get_str(velocity_from_payload)[0] == '\0'))
+    {
+        return validation_error(ctx, json_path, "actor.spawn velocity_from_payload must be a non-empty string");
+    }
+    yyjson_val *velocity_property = obj_get(action, "velocity_property");
+    if (velocity_property != NULL &&
+        (!yyjson_is_str(velocity_property) || yyjson_get_str(velocity_property)[0] == '\0'))
+        return validation_error(ctx, json_path, "actor.spawn velocity_property must be a non-empty string");
+    yyjson_val *speed = obj_get(action, "speed");
+    if (speed != NULL && (!yyjson_is_num(speed) || yyjson_get_num(speed) < 0.0))
+        return validation_error(ctx, json_path, "actor.spawn speed must be non-negative");
+    yyjson_val *properties = obj_get(action, "properties");
+    if (properties != NULL && !yyjson_is_obj(properties))
+        return validation_error(ctx, json_path, "actor.spawn properties must be an object");
+    yyjson_val *properties_from_actor = obj_get(action, "properties_from_actor");
+    if (properties_from_actor != NULL)
+    {
+        if (!yyjson_is_obj(properties_from_actor))
+            return validation_error(ctx, json_path, "actor.spawn properties_from_actor must be an object");
+        if (!require_actor_ref(ctx, names, json_string(properties_from_actor, "source"), json_path))
+            return false;
+        yyjson_val *keys = obj_get(properties_from_actor, "keys");
+        if (!yyjson_is_arr(keys) || yyjson_arr_size(keys) == 0)
+            return validation_error(ctx, json_path, "actor.spawn properties_from_actor keys must be a non-empty array");
+        for (size_t i = 0; i < yyjson_arr_size(keys); ++i)
+        {
+            yyjson_val *key = yyjson_arr_get(keys, i);
+            if (!yyjson_is_str(key) || yyjson_get_str(key)[0] == '\0')
+                return validation_error(ctx, json_path,
+                                        "actor.spawn properties_from_actor keys must be non-empty strings");
+        }
+    }
+    return true;
+}
+
+static bool validate_actor_despawn_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                          validation_names *names, const char *type)
+{
+    (void)type;
+    yyjson_val *target_value = obj_get(action, "target");
+    yyjson_val *target_from_payload_value = obj_get(action, "target_from_payload");
+    const char *target = json_string(action, "target");
+    const char *target_from_payload = json_string(action, "target_from_payload");
+    if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+        return validation_error(ctx, json_path, "actor.despawn requires exactly one of target or target_from_payload");
+    if (target_value != NULL && !yyjson_is_str(target_value))
+        return validation_error(ctx, json_path, "actor.despawn target must be a string");
+    if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
+        return validation_error(ctx, json_path, "actor.despawn target_from_payload must be a string");
+    if (target != NULL && target[0] == '\0')
+        return validation_error(ctx, json_path, "actor.despawn target must be non-empty");
+    if (target_from_payload != NULL && target_from_payload[0] == '\0')
+        return validation_error(ctx, json_path, "actor.despawn target_from_payload must be non-empty");
+    if (target != NULL && !name_table_contains(&names->entities, target) &&
+        !name_table_contains(&names->actor_pool_actors, target))
+        return validation_error(ctx, json_path, "unknown actor.despawn target '%s'", target);
+    yyjson_val *reason = obj_get(action, "reason");
+    if (reason != NULL && !yyjson_is_str(reason))
+        return validation_error(ctx, json_path, "actor.despawn reason must be a string");
+    return true;
+}
+
+static bool validate_actor_despawn_by_tag_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    if (!is_non_empty_string(action, "tag"))
+        return validation_error(ctx, json_path, "actor.despawn_by_tag requires a non-empty tag");
+    yyjson_val *reason = obj_get(action, "reason");
+    if (reason != NULL && !yyjson_is_str(reason))
+        return validation_error(ctx, json_path, "actor.despawn_by_tag reason must be a string");
+    return true;
+}
+
+static bool validate_noise_emit_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                       validation_names *names, const char *type)
+{
+    (void)type;
+    const char *source = json_string(action, "source");
+    const char *actor = json_string(action, "actor");
+    const char *target = json_string(action, "target");
+    if (source != NULL && !require_actor_ref(ctx, names, source, json_path))
+        return false;
+    if (actor != NULL && !require_actor_ref(ctx, names, actor, json_path))
+        return false;
+    if (target != NULL && !require_actor_ref(ctx, names, target, json_path))
+        return false;
+
+    const char *payload_fields[] = {"source_from_payload", "actor_from_payload", "target_from_payload", "from_payload"};
+    for (size_t i = 0; i < SDL_arraysize(payload_fields); ++i)
+    {
+        yyjson_val *value = obj_get(action, payload_fields[i]);
+        if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
+            return validation_error(ctx, json_path, "noise.emit %s must be a non-empty string", payload_fields[i]);
+    }
+
+    yyjson_val *from = obj_get(action, "from");
+    if (from != NULL && (!yyjson_is_str(from) || yyjson_get_str(from)[0] == '\0'))
+        return validation_error(ctx, json_path, "noise.emit from must be a non-empty actor reference");
+    const char *from_actor = json_string(action, "from");
+    if (from_actor != NULL && !require_actor_ref(ctx, names, from_actor, json_path))
+        return false;
+    yyjson_val *position = obj_get(action, "position");
+    yyjson_val *offset = obj_get(action, "offset");
+    if (position != NULL && !is_vec_array(position, 3))
+        return validation_error(ctx, json_path, "noise.emit position must be a vec3");
+    if (offset != NULL && !is_vec_array(offset, 3))
+        return validation_error(ctx, json_path, "noise.emit offset must be a vec3");
+    yyjson_val *radius = obj_get(action, "radius");
+    yyjson_val *range = obj_get(action, "range");
+    yyjson_val *loudness = obj_get(action, "loudness");
+    yyjson_val *duration = obj_get(action, "duration");
+    yyjson_val *duration_seconds = obj_get(action, "duration_seconds");
+    if (radius != NULL && (!yyjson_is_num(radius) || yyjson_get_num(radius) <= 0.0))
+        return validation_error(ctx, json_path, "noise.emit radius must be positive");
+    if (range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) <= 0.0))
+        return validation_error(ctx, json_path, "noise.emit range must be positive");
+    if (loudness != NULL && (!yyjson_is_num(loudness) || yyjson_get_num(loudness) < 0.0))
+        return validation_error(ctx, json_path, "noise.emit loudness must be non-negative");
+    if (duration != NULL && (!yyjson_is_num(duration) || yyjson_get_num(duration) <= 0.0))
+        return validation_error(ctx, json_path, "noise.emit duration must be positive");
+    if (duration_seconds != NULL && (!yyjson_is_num(duration_seconds) || yyjson_get_num(duration_seconds) <= 0.0))
+        return validation_error(ctx, json_path, "noise.emit duration_seconds must be positive");
+    return true;
+}
+
+static bool validate_sector_door_motion_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                               validation_names *names, const char *type)
+{
+    (void)type;
+    const char *target = json_string(action, "target");
+    const char *target_from_payload = json_string(action, "target_from_payload");
+    if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
+    {
+        return validation_error(ctx, json_path,
+                                "sector door action requires exactly one of target or target_from_payload");
+    }
+    if (target != NULL && !require_ref(ctx, &names->sector_doors, "sector door", target, json_path))
+        return false;
+    if (target_from_payload != NULL && target_from_payload[0] == '\0')
+        return validation_error(ctx, json_path, "sector door target_from_payload must be non-empty");
+    yyjson_val *stay = obj_get(action, "stay_open_seconds");
+    yyjson_val *auto_close = obj_get(action, "auto_close_seconds");
+    if ((stay != NULL && (!yyjson_is_num(stay) || yyjson_get_num(stay) < 0.0)) ||
+        (auto_close != NULL && (!yyjson_is_num(auto_close) || yyjson_get_num(auto_close) < 0.0)))
+    {
+        return validation_error(ctx, json_path, "sector door auto-close timing must be non-negative");
+    }
+    return true;
+}
+
+static bool validate_sector_door_interact_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                 validation_names *names, const char *type)
+{
+    (void)type;
+    if (!require_actor_ref(ctx, names, json_string(action, "actor"), json_path))
+        return false;
+    yyjson_val *range = obj_get(action, "range");
+    yyjson_val *min_dot = obj_get(action, "min_dot");
+    if ((range != NULL && (!yyjson_is_num(range) || yyjson_get_num(range) < 0.0)) ||
+        (min_dot != NULL &&
+         (!yyjson_is_num(min_dot) || yyjson_get_num(min_dot) < -1.0 || yyjson_get_num(min_dot) > 1.0)))
+    {
+        return validation_error(ctx, json_path, "sector door interaction range/min_dot are invalid");
+    }
+    yyjson_val *yaw_property = obj_get(action, "yaw_property");
+    if (yaw_property != NULL && !is_non_empty_string(action, "yaw_property"))
+        return validation_error(ctx, json_path, "sector door yaw_property must be non-empty");
+    yyjson_val *actions = obj_get(action, "actions");
+    const char *signal = json_string(action, "signal");
+    if ((actions == NULL && signal == NULL) || (actions != NULL && signal != NULL))
+        return validation_error(ctx, json_path, "sector_door.interact requires exactly one of actions or signal");
+    if (actions != NULL)
+        return validate_action_array(ctx, actions, json_path, names);
+    return require_ref(ctx, &names->signals, "signal", signal, json_path);
+}
+
+static bool validate_sector_lighting_set_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                validation_names *names, const char *type)
+{
+    (void)type;
+    const char *sector_level = json_string(action, "sector_level");
+    const char *sector = json_string(action, "sector");
+    yyjson_val *sector_index = obj_get(action, "sector_index");
+    if (!require_ref(ctx, &names->sector_levels, "sector level", sector_level, json_path))
+        return false;
+    if ((sector == NULL && sector_index == NULL) || (sector != NULL && sector_index != NULL))
+        return validation_error(ctx, json_path, "sector_lighting.set requires exactly one of sector or sector_index");
+    if (sector != NULL && sector[0] == '\0')
+        return validation_error(ctx, json_path, "sector_lighting.set sector must be non-empty");
+    if (sector_index != NULL && (!yyjson_is_int(sector_index) || yyjson_get_int(sector_index) < 0))
+        return validation_error(ctx, json_path, "sector_lighting.set sector_index must be non-negative");
+    yyjson_val *level = obj_get(action, "level");
+    if (level != NULL && (!yyjson_is_num(level) || yyjson_get_num(level) < 0.0 || yyjson_get_num(level) > 255.0))
+        return validation_error(ctx, json_path, "sector_lighting.set level must be in [0, 255]");
+    yyjson_val *color = obj_get(action, "color");
+    if (color != NULL && (!is_exact_vec3_or_vec4_array(color) || !numeric_array_values_in_range(color, 0.0, 1.0)))
+    {
+        return validation_error(ctx, json_path,
+                                "sector_lighting.set color must be a vec3 or vec4 with values in [0, 1]");
+    }
+    return true;
+}
+
+static bool validate_projectile_fire_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type)
+{
+    (void)type;
+    return validate_projectile_fire_shape(ctx, action, json_path, names, true);
 }
 
 static bool validate_combat_damage_or_heal_action(validation_context *ctx, yyjson_val *action, const char *json_path,
