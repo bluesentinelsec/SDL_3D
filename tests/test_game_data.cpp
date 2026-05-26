@@ -17405,6 +17405,31 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
 
     SDL_SetModState(SDL_KMOD_SHIFT);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.preview.active", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.preview.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.vertex.add.preview.message", ""),
+                 "vertex add preview");
+
+    struct AddPreviewCapture
+    {
+        int previews = 0;
+        bool saw_valid_preview = false;
+    } add_preview;
+    auto capture_add_preview = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<AddPreviewCapture *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_ADD_PREVIEW)
+        {
+            capture->previews++;
+            if (primitive->color.g == 255 && primitive->color.r == 96)
+                capture->saw_valid_preview = true;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_add_preview, &add_preview));
+    EXPECT_GE(add_preview.previews, 1);
+    EXPECT_TRUE(add_preview.saw_valid_preview);
+
     SDL_Event click{};
     click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
     click.button.button = SDL_BUTTON_LEFT;
@@ -17423,6 +17448,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.added_count", 0), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.vertex_count", 0), 9);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.preview.active", true));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "added source vertex");
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");

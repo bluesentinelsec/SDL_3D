@@ -357,6 +357,11 @@ static void editor_begin_vertex_drag(slayer3d_game_data_runtime *runtime, slayer
                                      const slayer3d_game_data_editor_selection *hover_selection);
 static void publish_editor_vertex_add_result(slayer3d_game_data_runtime *runtime, yyjson_val *action, bool valid,
                                              int vertex_count, int added_count, const char *message);
+static void publish_editor_vertex_add_preview(slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_selection *selection, const int coord[3],
+                                              bool active, bool valid, const char *message);
+static bool editor_preview_add_vertex_to_source_coord(brush_world_runtime *world, int source_index, const int coord[3],
+                                                      int *out_vertex_count, char *message, size_t message_size);
 static bool editor_add_vertex_to_source_coord(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                               brush_world_runtime *world_runtime, int source_index, const int coord[3]);
 static int editor_source_units_from_meters(const brush_world_runtime *world_runtime, float meters);
@@ -490,10 +495,13 @@ bool editor_handle_vertex_add_to_source(slayer3d_game_data_runtime *runtime,
 {
     if (out_consumed != NULL)
         *out_consumed = false;
-    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_vertex(runtime) || !select_requested ||
-        (SDL_GetModState() & SDL_KMOD_SHIFT) == 0 || !editor_selection_is_selectable_brush(hover_selection) ||
-        hover_selection->face_index < 0)
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return true;
+
+    if (!editor_mode_is_vertex(runtime) || (SDL_GetModState() & SDL_KMOD_SHIFT) == 0 ||
+        !editor_selection_is_selectable_brush(hover_selection) || hover_selection->face_index < 0)
     {
+        publish_editor_vertex_add_preview(runtime, NULL, NULL, false, false, NULL);
         return true;
     }
 
@@ -504,18 +512,44 @@ bool editor_handle_vertex_add_to_source(slayer3d_game_data_runtime *runtime,
         SDL_max(slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f), 0.001f);
     const float handle_radius = SDL_max(grid_size * 0.75f, 0.05f);
     if (nearest_distance_sq <= handle_radius * handle_radius)
+    {
+        publish_editor_vertex_add_preview(runtime, NULL, NULL, false, false, NULL);
         return true;
+    }
 
     const slayer3d_game_data_editor_selection resolved = resolved_editor_selection(runtime, hover_selection);
     if (editor_selected_brush_index(runtime, &resolved) < 0)
+    {
+        publish_editor_vertex_add_preview(runtime, NULL, NULL, false, false, NULL);
         return true;
+    }
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, resolved.world_name);
     const int source_index = editor_source_index_for_selection(world_runtime, &resolved);
     int coord[3] = {0, 0, 0};
     if (world_runtime == NULL || source_index < 0 ||
         !editor_vertex_add_coord_from_selection(world_runtime, runtime, &resolved, coord))
     {
-        publish_editor_vertex_add_result(runtime, NULL, false, 0, 0, "vertex add requires a source face");
+        publish_editor_vertex_add_preview(runtime, &resolved, coord, true, false, "vertex add requires a source face");
+        if (select_requested)
+        {
+            publish_editor_vertex_add_result(runtime, NULL, false, 0, 0, "vertex add requires a source face");
+            if (out_consumed != NULL)
+                *out_consumed = true;
+        }
+        return true;
+    }
+
+    int preview_vertex_count = 0;
+    char preview_message[256];
+    SDL_zeroa(preview_message);
+    const bool preview_valid = editor_preview_add_vertex_to_source_coord(
+        world_runtime, source_index, coord, &preview_vertex_count, preview_message, sizeof(preview_message));
+    publish_editor_vertex_add_preview(runtime, &resolved, coord, true, preview_valid, preview_message);
+    if (!select_requested)
+        return true;
+    if (!preview_valid)
+    {
+        publish_editor_vertex_add_result(runtime, NULL, false, preview_vertex_count, 0, preview_message);
         if (out_consumed != NULL)
             *out_consumed = true;
         return true;
@@ -524,6 +558,7 @@ bool editor_handle_vertex_add_to_source(slayer3d_game_data_runtime *runtime,
     if (!editor_add_vertex_to_source_coord(runtime, NULL, world_runtime, source_index, coord))
         return false;
     clear_editor_vertex_hover_state(runtime);
+    publish_editor_vertex_add_preview(runtime, NULL, NULL, false, false, NULL);
     if (out_consumed != NULL)
         *out_consumed = true;
     return true;
@@ -1575,6 +1610,88 @@ static void publish_editor_vertex_add_result(slayer3d_game_data_runtime *runtime
         slayer3d_properties_set_int(runtime->scene_state, vertex_count_key, vertex_count);
     if (added_count_key != NULL)
         slayer3d_properties_set_int(runtime->scene_state, added_count_key, added_count);
+}
+
+static slayer3d_vec3 editor_source_coord_to_world_position(const brush_world_runtime *world_runtime,
+                                                           const slayer3d_game_data_editor_selection *selection,
+                                                           const int coord[3])
+{
+    const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
+                                      ? world_runtime->editor_source_meters_per_unit
+                                      : 0.001f;
+    const slayer3d_vec3 local =
+        coord != NULL ? slayer3d_vec3_make((float)coord[0] * meters_per_unit, (float)coord[1] * meters_per_unit,
+                                           (float)coord[2] * meters_per_unit)
+                      : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 world_position =
+        selection != NULL ? selection->world_position : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    return slayer3d_vec3_add(world_position, local);
+}
+
+static void publish_editor_vertex_add_preview(slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_selection *selection, const int coord[3],
+                                              bool active, bool valid, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const brush_world_runtime *world_runtime =
+        selection != NULL ? find_brush_world_runtime(runtime, selection->world_name) : NULL;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.add.preview.active", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.vertex.add.preview.valid", active ? valid : false);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.add.preview.world",
+                                   active && selection != NULL && selection->world_name != NULL ? selection->world_name
+                                                                                                : "");
+    slayer3d_properties_set_string(
+        runtime->scene_state, "editor.vertex.add.preview.brush",
+        active && selection != NULL && selection->element_name != NULL ? selection->element_name : "");
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.add.preview.x",
+                                active && coord != NULL ? coord[0] : 0);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.add.preview.y",
+                                active && coord != NULL ? coord[1] : 0);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.add.preview.z",
+                                active && coord != NULL ? coord[2] : 0);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.vertex.add.preview.position",
+                                 active ? editor_source_coord_to_world_position(world_runtime, selection, coord)
+                                        : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_string(runtime->scene_state, "editor.vertex.add.preview.message",
+                                   active && message != NULL ? message : "");
+}
+
+static bool editor_preview_add_vertex_to_source_coord(brush_world_runtime *world, int source_index, const int coord[3],
+                                                      int *out_vertex_count, char *message, size_t message_size)
+{
+    if (out_vertex_count != NULL)
+        *out_vertex_count = 0;
+    if (message != NULL && message_size > 0)
+        message[0] = '\0';
+    if (world == NULL || coord == NULL || source_index < 0 || source_index >= world->editor_source_box_count)
+    {
+        if (message != NULL && message_size > 0)
+            SDL_strlcpy(message, "vertex add requires a source brush", message_size);
+        return false;
+    }
+
+    const editor_brush_source_box_runtime *box = &world->editor_source_boxes[source_index];
+    const char *identity = box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
+    editor_brush_source_vertex_operation_desc desc;
+    SDL_zero(desc);
+    desc.brush_identity = identity;
+    desc.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD;
+    for (int axis = 0; axis < 3; ++axis)
+        desc.coord[axis] = coord[axis];
+
+    char error[256];
+    SDL_zeroa(error);
+    editor_brush_source_vertex_operation_result preview;
+    SDL_zero(preview);
+    const bool valid = editor_brush_world_preview_source_vertex_operation(world, &desc, &preview, error, sizeof(error));
+    if (out_vertex_count != NULL)
+        *out_vertex_count = preview.vertex_count;
+    if (message != NULL && message_size > 0)
+        SDL_strlcpy(message, valid ? "vertex add preview" : (error[0] != '\0' ? error : "invalid source edit"),
+                    message_size);
+    editor_brush_source_free_runtime_brush(&preview.brush);
+    return valid;
 }
 
 static bool editor_add_vertex_to_source_coord(slayer3d_game_data_runtime *runtime, yyjson_val *action,

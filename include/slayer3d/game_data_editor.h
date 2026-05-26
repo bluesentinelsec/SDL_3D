@@ -87,6 +87,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE = 11,
         /** @brief Active source vertex drag guide line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_DRAG_GUIDE = 12,
+        /** @brief Pending add-vertex preview handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_ADD_PREVIEW = 13,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
