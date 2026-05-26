@@ -92,46 +92,6 @@ static bool validate_scene_editor_outputs(validation_context *ctx, yyjson_val *o
     return true;
 }
 
-static bool validate_optional_non_empty_string(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                               const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0')
-        return validation_error(ctx, json_path, "%s must be a non-empty string", description);
-    return true;
-}
-
-static bool validate_optional_number(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                     const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_num(value))
-        return validation_error(ctx, json_path, "%s must be a number", description);
-    return true;
-}
-
-static bool validate_optional_positive_number(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                              const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_num(value) || yyjson_get_num(value) <= 0.0)
-        return validation_error(ctx, json_path, "%s must be positive", description);
-    return true;
-}
-
-static bool validate_optional_non_negative_number(validation_context *ctx, yyjson_val *value, const char *json_path,
-                                                  const char *description)
-{
-    if (value == NULL)
-        return true;
-    if (!yyjson_is_num(value) || yyjson_get_num(value) < 0.0)
-        return validation_error(ctx, json_path, "%s must be non-negative", description);
-    return true;
-}
-
 static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val *trace, const char *trace_path);
 
 static bool validate_scene_editor_trace_screen(validation_context *ctx, yyjson_val *screen, const char *json_path)
@@ -149,7 +109,8 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
                                                       const char *trace_path, validation_names *names)
 {
     yyjson_val *camera_value = obj_get(trace, "camera");
-    if (!validate_optional_non_empty_string(ctx, camera_value, trace_path, "scene editor camera_screen trace camera"))
+    if (!validate_optional_non_empty_string_value(ctx, camera_value, trace_path,
+                                                  "scene editor camera_screen trace camera"))
         return false;
     const char *camera = json_string(trace, "camera");
     if (camera != NULL && !require_ref(ctx, &names->cameras, "camera", camera, trace_path))
@@ -169,8 +130,8 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     for (size_t i = 0; i < SDL_arraysize(numeric_keys); ++i)
     {
         format_path(field_path, sizeof(field_path), "%s.%s", trace_path, numeric_keys[i]);
-        if (!validate_optional_number(ctx, obj_get(trace, numeric_keys[i]), field_path,
-                                      "scene editor camera_screen trace coordinate"))
+        if (!validate_optional_number_value(ctx, obj_get(trace, numeric_keys[i]), field_path,
+                                            "scene editor camera_screen trace coordinate"))
             return false;
     }
 
@@ -178,13 +139,13 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     for (size_t i = 0; i < SDL_arraysize(positive_keys); ++i)
     {
         format_path(field_path, sizeof(field_path), "%s.%s", trace_path, positive_keys[i]);
-        if (!validate_optional_positive_number(ctx, obj_get(trace, positive_keys[i]), field_path,
-                                               "scene editor camera_screen trace value"))
+        if (!validate_optional_positive_number_value(ctx, obj_get(trace, positive_keys[i]), field_path,
+                                                     "scene editor camera_screen trace value"))
             return false;
     }
     format_path(field_path, sizeof(field_path), "%s.near", trace_path);
-    if (!validate_optional_non_negative_number(ctx, obj_get(trace, "near"), field_path,
-                                               "scene editor camera_screen trace near"))
+    if (!validate_optional_non_negative_number_value(ctx, obj_get(trace, "near"), field_path,
+                                                     "scene editor camera_screen trace near"))
         return false;
 
     static const char *const string_keys[] = {"screen_x_key", "screen_y_key", "viewport_width_key",
@@ -192,8 +153,8 @@ static bool validate_scene_editor_camera_screen_trace(validation_context *ctx, y
     for (size_t i = 0; i < SDL_arraysize(string_keys); ++i)
     {
         format_path(field_path, sizeof(field_path), "%s.%s", trace_path, string_keys[i]);
-        if (!validate_optional_non_empty_string(ctx, obj_get(trace, string_keys[i]), field_path,
-                                                "scene editor camera_screen trace key"))
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(trace, string_keys[i]), field_path,
+                                                      "scene editor camera_screen trace key"))
             return false;
     }
 
@@ -263,8 +224,8 @@ static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val
 
     char distance_path[PATH_BUFFER_SIZE];
     format_path(distance_path, sizeof(distance_path), "%s.distance", work_plane_path);
-    if (!validate_optional_number(ctx, obj_get(work_plane, "distance"), distance_path,
-                                  "scene editor selection work_plane distance"))
+    if (!validate_optional_number_value(ctx, obj_get(work_plane, "distance"), distance_path,
+                                        "scene editor selection work_plane distance"))
     {
         return false;
     }
@@ -274,8 +235,8 @@ static bool validate_scene_editor_work_plane(validation_context *ctx, yyjson_val
     for (size_t i = 0; i < SDL_arraysize(string_keys); ++i)
     {
         format_path(key_path, sizeof(key_path), "%s.%s", work_plane_path, string_keys[i]);
-        if (!validate_optional_non_empty_string(ctx, obj_get(work_plane, string_keys[i]), key_path,
-                                                "scene editor selection work_plane key"))
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(work_plane, string_keys[i]), key_path,
+                                                      "scene editor selection work_plane key"))
             return false;
     }
     return true;
@@ -285,7 +246,7 @@ static bool validate_scene_editor_trace(validation_context *ctx, yyjson_val *tra
                                         validation_names *names)
 {
     yyjson_val *source_value = obj_get(trace, "source");
-    if (!validate_optional_non_empty_string(ctx, source_value, trace_path, "scene editor selection trace source"))
+    if (!validate_optional_non_empty_string_value(ctx, source_value, trace_path, "scene editor selection trace source"))
         return false;
     const char *source = source_value != NULL ? yyjson_get_str(source_value) : "world";
     if (SDL_strcmp(source, "world") == 0)
@@ -364,8 +325,8 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
     {
         char field_path[PATH_BUFFER_SIZE];
         format_path(field_path, sizeof(field_path), "%s.%s", placement_path, string_fields[i]);
-        if (!validate_optional_non_empty_string(ctx, obj_get(placement, string_fields[i]), field_path,
-                                                "scene editor placement field"))
+        if (!validate_optional_non_empty_string_value(ctx, obj_get(placement, string_fields[i]), field_path,
+                                                      "scene editor placement field"))
             return false;
     }
     yyjson_val *default_snap = obj_get(placement, "default_snap");
@@ -376,23 +337,16 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         return validation_error(ctx, placement_path, "scene editor placement default_grid_size must be positive");
     char default_elevation_path[PATH_BUFFER_SIZE];
     format_path(default_elevation_path, sizeof(default_elevation_path), "%s.default_elevation", placement_path);
-    if (!validate_optional_number(ctx, obj_get(placement, "default_elevation"), default_elevation_path,
-                                  "scene editor placement default_elevation"))
+    if (!validate_optional_number_value(ctx, obj_get(placement, "default_elevation"), default_elevation_path,
+                                        "scene editor placement default_elevation"))
         return false;
 
-    yyjson_val *outputs = obj_get(placement, "outputs");
-    if (outputs != NULL && !yyjson_is_obj(outputs))
-        return validation_error(ctx, placement_path, "scene editor placement outputs must be an object");
     static const char *const output_keys[] = {"active_key", "valid_key", "mode_key",       "kind_key",
                                               "axis_key",   "world_key", "material_key",   "message_key",
                                               "anchor_key", "snap_key",  "bounds_min_key", "bounds_max_key"};
-    for (size_t i = 0; yyjson_is_obj(outputs) && i < SDL_arraysize(output_keys); ++i)
-    {
-        yyjson_val *output = obj_get(outputs, output_keys[i]);
-        if (output != NULL && (!yyjson_is_str(output) || yyjson_get_str(output)[0] == '\0'))
-            return validation_error(ctx, placement_path,
-                                    "scene editor placement output keys must be non-empty strings");
-    }
+    if (!validate_optional_output_keys(ctx, placement, placement_path, "scene editor placement", output_keys,
+                                       SDL_arraysize(output_keys)))
+        return false;
 
     yyjson_val *previews = obj_get(placement, "previews");
     if (!yyjson_is_arr(previews) || yyjson_arr_size(previews) == 0)
@@ -418,8 +372,8 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
         {
             char field_path[PATH_BUFFER_SIZE];
             format_path(field_path, sizeof(field_path), "%s.%s", preview_path, preview_string_fields[field_index]);
-            if (!validate_optional_non_empty_string(ctx, obj_get(preview, preview_string_fields[field_index]),
-                                                    field_path, "scene editor placement preview field"))
+            if (!validate_optional_non_empty_string_value(ctx, obj_get(preview, preview_string_fields[field_index]),
+                                                          field_path, "scene editor placement preview field"))
             {
                 return false;
             }
@@ -535,8 +489,8 @@ static bool validate_scene_editor_palette(validation_context *ctx, yyjson_val *p
 
     char field_path[PATH_BUFFER_SIZE];
     format_path(field_path, sizeof(field_path), "%s.selected_key", palette_path);
-    if (!validate_optional_non_empty_string(ctx, obj_get(palette, "selected_key"), field_path,
-                                            "scene editor palette selected_key"))
+    if (!validate_optional_non_empty_string_value(ctx, obj_get(palette, "selected_key"), field_path,
+                                                  "scene editor palette selected_key"))
         return false;
 
     yyjson_val *entries = obj_get(palette, "entries");
@@ -559,8 +513,8 @@ static bool validate_scene_editor_palette(validation_context *ctx, yyjson_val *p
         for (size_t field_index = 0; field_index < SDL_arraysize(optional_string_fields); ++field_index)
         {
             format_path(field_path, sizeof(field_path), "%s.%s", entry_path, optional_string_fields[field_index]);
-            if (!validate_optional_non_empty_string(ctx, obj_get(entry, optional_string_fields[field_index]),
-                                                    field_path, "scene editor palette entry field"))
+            if (!validate_optional_non_empty_string_value(ctx, obj_get(entry, optional_string_fields[field_index]),
+                                                          field_path, "scene editor palette entry field"))
                 return false;
         }
 

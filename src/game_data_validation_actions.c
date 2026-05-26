@@ -135,12 +135,15 @@ static bool validate_audio_action(validation_context *ctx, yyjson_val *action, c
     else if (SDL_strcmp(type, "audio.set_ambient") == 0)
     {
         yyjson_val *ambient_id = obj_get(action, "ambient_id");
+        yyjson_val *ambient_id_from_payload_value = obj_get(action, "ambient_id_from_payload");
         const char *ambient_id_from_payload = json_string(action, "ambient_id_from_payload");
-        if ((ambient_id == NULL) == (ambient_id_from_payload == NULL))
-            return validation_error(ctx, json_path,
-                                    "audio.set_ambient requires exactly one of ambient_id or ambient_id_from_payload");
+        if (!validate_exactly_one_field_present(ctx, action, json_path, "audio.set_ambient", "ambient_id",
+                                                "ambient_id_from_payload"))
+            return false;
         if (ambient_id != NULL && (!yyjson_is_int(ambient_id) || yyjson_get_int(ambient_id) < 0))
             return validation_error(ctx, json_path, "audio.set_ambient ambient_id must be non-negative");
+        if (ambient_id_from_payload_value != NULL && !yyjson_is_str(ambient_id_from_payload_value))
+            return validation_error(ctx, json_path, "audio.set_ambient ambient_id_from_payload must be a string");
         if (ambient_id_from_payload != NULL && ambient_id_from_payload[0] == '\0')
             return validation_error(ctx, json_path, "audio.set_ambient ambient_id_from_payload must be non-empty");
     }
@@ -258,9 +261,8 @@ static bool validate_combat_amount_action(validation_context *ctx, yyjson_val *a
         return false;
     yyjson_val *amount = obj_get(action, field);
     yyjson_val *amount_from_payload_value = obj_get(action, payload_field);
-    const char *amount_from_payload = json_string(action, payload_field);
-    if ((amount == NULL && amount_from_payload == NULL) || (amount != NULL && amount_from_payload != NULL))
-        return validation_error(ctx, json_path, "%s requires exactly one of %s or %s", type, field, payload_field);
+    if (!validate_exactly_one_field_present(ctx, action, json_path, type, field, payload_field))
+        return false;
     if (amount != NULL && (!yyjson_is_num(amount) || yyjson_get_num(amount) < 0.0))
         return validation_error(ctx, json_path, "%s %s must be a non-negative number", type, field);
     if (amount_from_payload_value != NULL &&
@@ -279,8 +281,8 @@ static bool validate_actor_target_action(validation_context *ctx, yyjson_val *ac
     yyjson_val *target_from_payload_value = obj_get(action, payload_key);
     const char *target = json_string(action, target_key);
     const char *target_from_payload = json_string(action, payload_key);
-    if ((target == NULL && target_from_payload == NULL) || (target != NULL && target_from_payload != NULL))
-        return validation_error(ctx, json_path, "%s requires exactly one of %s or %s", type, target_key, payload_key);
+    if (!validate_exactly_one_field_present(ctx, action, json_path, type, target_key, payload_key))
+        return false;
     if (target_value != NULL && !yyjson_is_str(target_value))
         return validation_error(ctx, json_path, "%s %s must be a string", type, target_key);
     if (target_from_payload_value != NULL && !yyjson_is_str(target_from_payload_value))
@@ -295,22 +297,6 @@ static bool validate_actor_target_action(validation_context *ctx, yyjson_val *ac
         return validation_error(ctx, json_path, "unknown %s %s '%s'", type, target_key, target);
     }
     return true;
-}
-
-bool validate_non_empty_string_field(validation_context *ctx, yyjson_val *json, const char *json_path, const char *type,
-                                     const char *field)
-{
-    yyjson_val *value = obj_get(json, field);
-    if (value != NULL && (!yyjson_is_str(value) || yyjson_get_str(value)[0] == '\0'))
-        return validation_error(ctx, json_path, "%s %s must be a non-empty string", type, field);
-    return true;
-}
-
-bool validate_optional_signal_field(validation_context *ctx, yyjson_val *json, const char *json_path,
-                                    validation_names *names, const char *field)
-{
-    const char *signal = json_string(json, field);
-    return signal == NULL || require_ref(ctx, &names->signals, "signal", signal, json_path);
 }
 
 static bool faction_relationship_valid(const char *value)
@@ -788,23 +774,6 @@ static bool validate_effect_explosion_action(validation_context *ctx, yyjson_val
            validate_optional_signal_field(ctx, action, json_path, names, "on_hit");
 }
 
-static bool validate_optional_outputs(validation_context *ctx, yyjson_val *action, const char *json_path,
-                                      const char *type, const char *const *fields, size_t field_count)
-{
-    yyjson_val *outputs = obj_get(action, "outputs");
-    if (outputs == NULL)
-        return true;
-    if (!yyjson_is_obj(outputs))
-        return validation_error(ctx, json_path, "%s outputs must be an object", type);
-    for (size_t i = 0; i < field_count; ++i)
-    {
-        yyjson_val *field = obj_get(outputs, fields[i]);
-        if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
-            return validation_error(ctx, json_path, "%s output keys must be non-empty strings", type);
-    }
-    return true;
-}
-
 static bool validate_noop_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                  validation_names *names, const char *type)
 {
@@ -822,7 +791,7 @@ static bool validate_editor_vertex_delete_selected_action(validation_context *ct
 {
     (void)names;
     const char *output_fields[] = {"valid_key", "message_key", "deleted_count_key", "source_count_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
 }
 
 static bool validate_editor_vertex_merge_selected_to_hover_action(validation_context *ctx, yyjson_val *action,
@@ -845,7 +814,7 @@ static bool validate_editor_vertex_merge_selected_to_hover_action(validation_con
         return validation_error(ctx, json_path,
                                 "editor.vertex.merge_selected_to_hover brush_stable_id must be non-empty");
     const char *output_fields[] = {"valid_key", "message_key", "merged_count_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
 }
 
 static bool validate_editor_vertex_add_to_source_action(validation_context *ctx, yyjson_val *action,
@@ -880,7 +849,7 @@ static bool validate_editor_vertex_add_to_source_action(validation_context *ctx,
     if (brush_stable_id != NULL && (!yyjson_is_str(brush_stable_id) || yyjson_get_str(brush_stable_id)[0] == '\0'))
         return validation_error(ctx, json_path, "editor.vertex.add_to_source brush_stable_id must be non-empty");
     const char *output_fields[] = {"valid_key", "message_key", "vertex_count_key", "added_count_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
 }
 
 static bool validate_editor_vertex_validate_source_action(validation_context *ctx, yyjson_val *action,
@@ -906,7 +875,7 @@ static bool validate_editor_vertex_validate_source_action(validation_context *ct
                                    "off_snap_count_key", "degenerate_count_key",
                                    "concave_count_key",  "non_finite_count_key",
                                    "first_issue_key",    "first_issue_stable_id_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
 }
 
 static bool validate_editor_vertex_snap_selected_action(validation_context *ctx, yyjson_val *action,
@@ -928,7 +897,7 @@ static bool validate_editor_vertex_snap_selected_action(validation_context *ctx,
         return validation_error(ctx, json_path, "editor.vertex.snap_selected grid_key must be non-empty");
     const char *output_fields[] = {"valid_key", "message_key", "changed_count_key", "source_count_key",
                                    "snap_units_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_fields, SDL_arraysize(output_fields));
 }
 
 static bool validate_optional_action_branches(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1020,8 +989,8 @@ static bool validate_editor_selection_select_brush_action(validation_context *ct
         return validation_error(ctx, json_path, "editor.selection.select_brush additive must be a boolean");
 
     const char *output_keys[] = {"valid_key", "message_key"};
-    return validate_optional_outputs(ctx, action, json_path, "editor.selection.select_brush", output_keys,
-                                     SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, "editor.selection.select_brush", output_keys,
+                                         SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_selection_delete_selected_action(validation_context *ctx, yyjson_val *action,
@@ -1124,8 +1093,8 @@ static bool validate_editor_command_preview_action(validation_context *ctx, yyjs
         return validation_error(ctx, json_path, "editor.command.preview message must be a string");
     const char *output_keys[] = {"active_key", "valid_key",   "command_key",    "target_key",     "message_key",
                                  "world_key",  "element_key", "face_index_key", "bounds_min_key", "bounds_max_key"};
-    return validate_optional_outputs(ctx, action, json_path, "editor.command.preview", output_keys,
-                                     SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, "editor.command.preview", output_keys,
+                                         SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_command_clear_preview_action(validation_context *ctx, yyjson_val *action,
@@ -1139,8 +1108,8 @@ static bool validate_editor_command_clear_preview_action(validation_context *ctx
         return validation_error(ctx, json_path, "editor.command.clear_preview message must be a string");
     const char *output_keys[] = {"active_key", "valid_key",   "command_key",    "target_key",     "message_key",
                                  "world_key",  "element_key", "face_index_key", "bounds_min_key", "bounds_max_key"};
-    return validate_optional_outputs(ctx, action, json_path, "editor.command.clear_preview", output_keys,
-                                     SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, "editor.command.clear_preview", output_keys,
+                                         SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_command_history_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1156,7 +1125,7 @@ static bool validate_editor_command_history_action(validation_context *ctx, yyjs
         "valid_key",      "event_key",       "message_key", "transaction_id_key", "undo_count_key",    "redo_count_key",
         "command_key",    "target_key",      "world_key",   "element_key",        "face_index_key",    "bounds_min_key",
         "bounds_max_key", "source_path_key", "dirty_key",   "revision_key",       "saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys)) &&
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys)) &&
            validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
@@ -1167,7 +1136,7 @@ static bool validate_editor_brush_world_export_action(validation_context *ctx, y
         return false;
     const char *output_keys[] = {"valid_key",       "message_key", "json_key",     "size_key",          "world_key",
                                  "source_path_key", "dirty_key",   "revision_key", "saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_level_export_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1189,7 +1158,7 @@ static bool validate_editor_level_export_action(validation_context *ctx, yyjson_
                                  "player_start_dirty_key",
                                  "player_start_revision_key",
                                  "player_start_saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_level_path_pair(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1228,7 +1197,7 @@ static bool validate_editor_level_save_action(validation_context *ctx, yyjson_va
                                  "player_start_dirty_key",
                                  "player_start_revision_key",
                                  "player_start_saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_level_load_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1255,7 +1224,7 @@ static bool validate_editor_level_load_action(validation_context *ctx, yyjson_va
                                  "player_start_dirty_key",
                                  "player_start_revision_key",
                                  "player_start_saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_test_run_common(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1302,7 +1271,7 @@ static bool validate_editor_test_run_prepare_action(validation_context *ctx, yyj
         return false;
     const char *output_keys[] = {"valid_key", "message_key",      "manifest_json_key", "size_key",   "data_asset_key",
                                  "scene_key", "player_start_key", "target_key",        "command_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_test_run_save_manifest_action(validation_context *ctx, yyjson_val *action,
@@ -1314,7 +1283,7 @@ static bool validate_editor_test_run_save_manifest_action(validation_context *ct
     const char *output_keys[] = {"valid_key",  "message_key",    "path_key",  "manifest_json_key",
                                  "size_key",   "data_asset_key", "scene_key", "player_start_key",
                                  "target_key", "command_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_brush_world_status_action(validation_context *ctx, yyjson_val *action,
@@ -1327,7 +1296,7 @@ static bool validate_editor_brush_world_status_action(validation_context *ctx, y
         return validation_error(ctx, json_path, "%s message must be a string", type);
     const char *output_keys[] = {"valid_key", "message_key",  "world_key",         "source_path_key",
                                  "dirty_key", "revision_key", "saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_brush_world_validate_source_action(validation_context *ctx, yyjson_val *action,
@@ -1374,7 +1343,7 @@ static bool validate_editor_brush_world_validate_source_action(validation_contex
                                  "dirty_key",
                                  "revision_key",
                                  "saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_brush_world_validate_enclosure_action(validation_context *ctx, yyjson_val *action,
@@ -1426,7 +1395,7 @@ static bool validate_editor_brush_world_validate_enclosure_action(validation_con
                                  "dirty_key",
                                  "revision_key",
                                  "saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_brush_world_create_box_action(validation_context *ctx, yyjson_val *action,
@@ -1481,7 +1450,7 @@ static bool validate_editor_brush_world_create_box_action(validation_context *ct
     }
     const char *output_keys[] = {"valid_key", "message_key",  "brush_key",          "world_key",      "source_path_key",
                                  "dirty_key", "revision_key", "saved_revision_key", "bounds_min_key", "bounds_max_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_player_start_outputs(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -1490,7 +1459,7 @@ static bool validate_editor_player_start_outputs(validation_context *ctx, yyjson
     const char *output_keys[] = {"valid_key",  "message_key",  "player_start_key",  "scene_key",
                                  "target_key", "position_key", "yaw_key",           "pitch_key",
                                  "dirty_key",  "revision_key", "saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 static bool validate_editor_player_start_place_action(validation_context *ctx, yyjson_val *action,
@@ -1561,7 +1530,7 @@ static bool validate_editor_player_start_delete_action(validation_context *ctx, 
         return false;
     const char *output_keys[] = {"valid_key", "message_key",  "player_start_key",
                                  "dirty_key", "revision_key", "saved_revision_key"};
-    return validate_optional_outputs(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys));
 }
 
 typedef enum action_validation_rule_match
