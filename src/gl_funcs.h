@@ -183,6 +183,12 @@ typedef void (*PFNGLBEGINQUERYPROC)(GLenum, GLuint);
 typedef void (*PFNGLENDQUERYPROC)(GLenum);
 typedef void (*PFNGLGETQUERYOBJECTUIVPROC)(GLuint, GLenum, GLuint *);
 /* Global function pointers. */
+#if defined(__GNUC__) || defined(__clang__)
+#define SLAYER3D_GL_FUNCS_MAYBE_UNUSED __attribute__((unused))
+#else
+#define SLAYER3D_GL_FUNCS_MAYBE_UNUSED
+#endif
+
 typedef struct slayer3d_gl_funcs
 {
     PFNGLCLEARPROC Clear;
@@ -272,7 +278,7 @@ typedef struct slayer3d_gl_funcs
     PFNGLGETQUERYOBJECTUIVPROC GetQueryObjectuiv;
 } slayer3d_gl_funcs;
 
-static bool slayer3d_gl_load_funcs(slayer3d_gl_funcs *gl)
+static SLAYER3D_GL_FUNCS_MAYBE_UNUSED bool slayer3d_gl_load_funcs(slayer3d_gl_funcs *gl)
 {
 #define LOAD(name)                                                                                                     \
     do                                                                                                                 \

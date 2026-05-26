@@ -149,6 +149,7 @@ target_sources(
         src/game_data_brush_editor_export.c
         src/game_data_brush_editor_import.c
         src/game_data_brush_editor_mutation.c
+        src/game_data_brush_source_enclosure.c
         src/game_data_brush_source_model.c
         src/game_data_brush_source_vertices.c
         src/game_data_brush_trace_queries.c
@@ -165,14 +166,21 @@ target_sources(
         src/game_data_controller_runtime.c
         src/game_data_controller_binding_helpers.c
         src/game_data_editor_active_selection.c
+        src/game_data_editor_trace.c
         src/game_data_editor_create_box_actions.c
         src/game_data_editor_command_preview.c
         src/game_data_editor_command_transactions.c
         src/game_data_editor_output_actions.c
         src/game_data_editor_placement_preview.c
         src/game_data_editor_player_start.c
+        src/game_data_editor_selection_output.c
+        src/game_data_editor_selection_helpers.c
+        src/game_data_editor_selection_state.c
+        src/game_data_editor_vertex_mode.c
         src/game_data_editor_selection_queries.c
         src/game_data_editor_debug_primitives.c
+        src/game_data_editor_grid_widget.c
+        src/game_data_editor_toolbar.c
         src/game_data_grid_actions.c
         src/game_data_grid_runtime.c
         src/game_data_world_model_instances.c
@@ -206,15 +214,48 @@ target_sources(
         src/game_data_world_queries.c
         src/game_data_standard_options.c
         src/game_presentation.c
+        src/game_presentation_app_flow.c
+        src/game_presentation_cache.c
+        src/game_presentation_brush_worlds.c
+        src/game_presentation_cache_lifecycle.c
+        src/game_presentation_frame_state.c
+        src/game_presentation_menus.c
+        src/game_presentation_particles.c
+        src/game_presentation_scene_flow.c
+        src/game_presentation_sector_levels.c
+        src/game_presentation_ui.c
+        src/game_data_validation_actions.c
         src/game_data_validation_brush_common.c
+        src/game_data_validation_app_world.c
+        src/game_data_validation_actors.c
+        src/game_data_validation_assets.c
+        src/game_data_validation_conditions.c
         src/game_data_validation_controller_components.c
+        src/game_data_validation_factions.c
         src/game_data_validation_brush_worlds.c
+        src/game_data_validation_components.c
         src/game_data_validation_editor_metadata.c
+        src/game_data_validation_grid.c
+        src/game_data_validation_haptics.c
+        src/game_data_validation_input.c
+        src/game_data_validation_imports.c
+        src/game_data_validation_logic.c
+        src/game_data_validation_network.c
+        src/game_data_validation_persistence.c
+        src/game_data_validation_render.c
         src/game_data_validation_render_components.c
+        src/game_data_validation_scenes.c
         src/game_data_validation_scene_editor.c
+        src/game_data_validation_sectors.c
+        src/game_data_validation_ui.c
         src/game_data_validation.c
         src/gltf_loader.c
         src/gl_renderer.c
+        src/gl_renderer_draw_lists.c
+        src/gl_renderer_mesh_cache.c
+        src/gl_renderer_programs.c
+        src/gl_renderer_shaders.c
+        src/gl_renderer_texture_cache.c
         src/image.c
         src/input.c
         src/lighting.c

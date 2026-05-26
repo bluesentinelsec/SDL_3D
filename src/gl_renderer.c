@@ -6,1452 +6,20 @@
  * fullscreen-triangle copy pass for letterboxed presentation.
  */
 
-#include "gl_renderer.h"
+#include "gl_renderer_internal.h"
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_video.h>
 
-#include "gl_funcs.h"
-#include "render_context_internal.h"
-#include "slayer3d/lighting.h"
-#include "slayer3d/texture.h"
+#include "gl_renderer_programs.h"
+#include "gl_renderer_shaders.h"
 
 #include <string.h>
 
-/* ------------------------------------------------------------------ */
-/* Texture cache                                                       */
-/* ------------------------------------------------------------------ */
-
-#define SLAYER3D_MAX_POINT_SHADOWS 2
-#define SLAYER3D_SKIN_PALETTE_BINDING 1
-#define SLAYER3D_GPU_SKINNING_PALETTE_MATRICES 256
-
-typedef struct slayer3d_gl_tex_entry
-{
-    const slayer3d_texture2d *key;
-    Uint32 generation; /* generation at upload time */
-    GLuint gl_tex;
-    struct slayer3d_gl_tex_entry *next;
-} slayer3d_gl_tex_entry;
-
-/* ------------------------------------------------------------------ */
-/* Scene UBO (std140 layout, must match GLSL SceneUBO)                 */
-/* ------------------------------------------------------------------ */
-
-typedef struct slayer3d_scene_ubo_data
-{
-    float view_projection[16];
-    float camera_pos[3];
-    float _pad0;
-    float ambient[3];
-    int light_count;
-    struct
-    {
-        int type;
-        float _pad[3];
-        float position[3];
-        float _pad1;
-        float direction[3];
-        float _pad2;
-        float color[3];
-        float intensity;
-        float range;
-        float inner_cutoff;
-        float outer_cutoff;
-        float _pad3;
-    } lights[SLAYER3D_MAX_SHADER_LIGHTS];
-    int fog_mode;
-    float fog_start;
-    float fog_end;
-    float fog_density;
-    float fog_color[3];
-    int tonemap_mode;
-} slayer3d_scene_ubo_data;
-
-/* ------------------------------------------------------------------ */
-/* Draw list entry                                                     */
-/* ------------------------------------------------------------------ */
-
-/* Overlay entries are rendered directly to the default framebuffer
- * after the FBO blit, bypassing all post-processing. Used for UI text
- * and other screen-space elements that must not be affected by bloom,
- * SSAO, vignette, etc. Each entry owns its vertex data (copied at
- * submission time) so the caller can free/reload textures freely. */
-
-/* Persistent overlay atlas — uploaded to GL once, re-uploaded only
- * when the source texture's generation changes. */
-typedef struct slayer3d_overlay_atlas
-{
-    const slayer3d_texture2d *source; /* source texture pointer */
-    Uint32 generation;                /* generation at last upload */
-    GLuint gl_tex;                    /* persistent GL texture */
-} slayer3d_overlay_atlas;
-
-typedef struct slayer3d_overlay_entry
-{
-    float *positions; /* 3 floats per vertex, heap-allocated copy */
-    float *uvs;       /* 2 floats per vertex, heap-allocated copy */
-    int vertex_count;
-    float mvp[16];
-    float tint[4];
-    slayer3d_overlay_effect effect;
-    float effect_progress;
-    float effect_seed;
-    float effect_columns;
-    const char *shader_vertex_source;
-    const char *shader_fragment_source;
-    bool scissor_enabled;
-    SDL_Rect scissor_rect;
-    int atlas_index; /* index into overlay_atlases */
-} slayer3d_overlay_entry;
-
-typedef struct slayer3d_draw_entry
-{
-    const float *positions;
-    const float *normals;
-    const float *uvs;
-    const float *lightmap_uvs;
-    const float *colors;
-    const unsigned int *indices;
-    int vertex_count;
-    int index_count;
-    float view_matrix[16];
-    float view_projection[16];
-    float camera_pos[3];
-    float model_matrix[16];
-    float normal_matrix[9];
-    float tint[4];
-    float metallic;
-    float roughness;
-    float emissive[3];
-    const slayer3d_texture2d *texture;
-    const slayer3d_texture2d *lightmap_texture;
-    bool lit;
-    bool baked_light_mode;
-    bool has_lightmap;
-    GLenum primitive_mode;
-    const char *shader_vertex_source;
-    const char *shader_fragment_source;
-    float mvp[16];
-    bool owns_arrays;
-    bool depth_prepass_eligible;
-    bool bounds_valid;
-    slayer3d_vec3 bounds_center;
-    float bounds_radius;
-    struct slayer3d_gl_mesh_cache_entry *mesh_cache;
-    const unsigned short *joint_indices;
-    const float *joint_weights;
-    float *joint_matrices;
-    int joint_count;
-    int joint_palette_offset;
-    bool use_joint_palette_buffer;
-    bool gpu_skinned;
-    bool viewport_enabled;
-    SDL_Rect viewport_rect;
-    bool scissor_enabled;
-    SDL_Rect scissor_rect;
-} slayer3d_draw_entry;
-
 static void draw_entry_capture_viewport(slayer3d_draw_entry *entry, const slayer3d_render_context *context);
 
-typedef struct slayer3d_custom_shader_cache_entry
-{
-    bool lit;
-    char *vertex_source;
-    char *fragment_source;
-    GLuint program;
-    GLint mvp_loc;
-    GLint texture_loc;
-    GLint has_texture_loc;
-    GLint tint_loc;
-    GLint model_loc;
-    GLint normal_matrix_loc;
-    GLint metallic_loc;
-    GLint roughness_loc;
-    GLint emissive_loc;
-    GLint baked_light_mode_loc;
-    GLint pbr_texture_loc;
-    GLint pbr_has_texture_loc;
-    GLint pbr_lightmap_loc;
-    GLint pbr_has_lightmap_loc;
-    GLint pbr_shadow_map_loc;
-    GLint pbr_shadow_vp_loc;
-    GLint pbr_shadow_enabled_loc;
-    GLint pbr_shadow_bias_loc;
-    GLint pbr_csm_vp_loc[4];
-    GLint pbr_csm_splits_loc;
-    GLint pbr_csm_enabled_loc;
-    GLint pbr_view_matrix_loc;
-    GLint pbr_point_shadow_map_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_light_pos_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_far_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_count_loc;
-    GLint pbr_irradiance_map_loc;
-    GLint pbr_prefilter_map_loc;
-    GLint pbr_brdf_lut_loc;
-    GLint pbr_ibl_enabled_loc;
-    GLint pbr_max_reflection_lod_loc;
-    GLint overlay_effect_loc;
-    GLint overlay_effect_progress_loc;
-    GLint overlay_effect_seed_loc;
-    GLint overlay_effect_columns_loc;
-    struct slayer3d_custom_shader_cache_entry *next;
-} slayer3d_custom_shader_cache_entry;
-
-typedef struct slayer3d_gl_mesh_cache_entry
-{
-    bool lit;
-    GLenum primitive_mode;
-    const float *positions;
-    const float *normals;
-    const float *uvs;
-    const float *lightmap_uvs;
-    const float *colors;
-    const unsigned int *indices;
-    const unsigned short *joint_indices;
-    const float *joint_weights;
-    int vertex_count;
-    int index_count;
-    bool has_lightmap_uvs;
-    bool gpu_skinned;
-    GLuint vao;
-    GLuint position_vbo;
-    GLuint normal_vbo;
-    GLuint uv_vbo;
-    GLuint lightmap_uv_vbo;
-    GLuint color_vbo;
-    GLuint joint_index_vbo;
-    GLuint joint_weight_vbo;
-    GLuint ebo;
-    GLuint shadow_vao;
-    GLuint shadow_position_vbo;
-    GLuint shadow_joint_index_vbo;
-    GLuint shadow_joint_weight_vbo;
-    GLuint shadow_ebo;
-    struct slayer3d_gl_mesh_cache_entry *next;
-} slayer3d_gl_mesh_cache_entry;
-
-/* ------------------------------------------------------------------ */
-/* Context                                                             */
-/* ------------------------------------------------------------------ */
-
-#define SLAYER3D_MAX_POINT_SHADOWS 2
-#define SLAYER3D_POINT_SHADOWS_ENABLED 1
-
-struct slayer3d_gl_context
-{
-    SDL_Window *window;
-    SDL_GLContext gl_context;
-    slayer3d_gl_funcs gl;
-    bool is_es;
-    bool sample_queries_supported;
-    Uint64 frame_index;
-    bool ubo_dirty;
-
-    GLuint pbr_program;
-    GLuint unlit_program;
-    GLuint copy_program;
-    slayer3d_custom_shader_cache_entry *custom_shader_cache;
-    GLuint depth_prepass_query;
-    GLuint geometry_query;
-
-    /* PBR uniform locations */
-    GLint pbr_model_loc;
-    GLint pbr_normal_matrix_loc;
-    GLint pbr_use_instancing_loc;
-    GLint pbr_use_skinning_loc;
-    GLint pbr_use_skin_palette_loc;
-    GLint pbr_joint_palette_offset_loc;
-    GLint pbr_joint_matrices_loc;
-    GLint pbr_texture_loc;
-    GLint pbr_has_texture_loc;
-    GLint pbr_tint_loc;
-    GLint pbr_metallic_loc;
-    GLint pbr_roughness_loc;
-    GLint pbr_emissive_loc;
-    GLint pbr_baked_light_mode_loc;
-    GLint pbr_lightmap_loc;
-    GLint pbr_has_lightmap_loc;
-
-    /* Unlit uniform locations */
-    GLint unlit_mvp_loc;
-    GLint unlit_texture_loc;
-    GLint unlit_has_texture_loc;
-    GLint unlit_tint_loc;
-    GLint unlit_overlay_effect_loc;
-    GLint unlit_overlay_effect_progress_loc;
-    GLint unlit_overlay_effect_seed_loc;
-    GLint unlit_overlay_effect_columns_loc;
-
-    /* Copy uniform locations */
-    GLint copy_texture_loc;
-
-    /* Transition pass */
-    GLuint transition_program;
-    GLint transition_scene_loc;
-    GLint transition_type_loc;
-    GLint transition_direction_loc;
-    GLint transition_progress_loc;
-    GLint transition_color_loc;
-    GLint transition_resolution_loc;
-    GLint transition_melt_offsets_loc;
-    GLuint transition_melt_offsets_tex;
-    bool transition_pending;
-    slayer3d_transition pending_transition;
-
-    /* Scene UBO */
-    GLuint scene_ubo;
-    GLuint skin_palette_ubo;
-    float skin_palette_matrices[SLAYER3D_GPU_SKINNING_PALETTE_MATRICES * 16];
-    int skin_palette_matrix_count;
-
-    /* Lit streaming buffers */
-    GLuint lit_vao;
-    GLuint lit_position_vbo;
-    GLuint lit_normal_vbo;
-    GLuint lit_uv_vbo;
-    GLuint lit_lightmap_uv_vbo;
-    GLuint lit_color_vbo;
-    GLuint lit_ebo;
-    GLuint instance_model_vbo;
-    GLuint instance_normal_vbo;
-
-    /* Unlit streaming buffers */
-    GLuint unlit_vao;
-    GLuint unlit_position_vbo;
-    GLuint unlit_uv_vbo;
-    GLuint unlit_color_vbo;
-    GLuint unlit_ebo;
-
-    GLuint fullscreen_vao;
-
-    /* Shadow mapping */
-    GLuint shadow_fbo;
-    GLuint shadow_depth_tex;
-    GLuint shadow_program;
-    GLint shadow_light_vp_loc;
-    GLint shadow_model_loc;
-    GLint shadow_use_instancing_loc;
-    GLint shadow_use_skinning_loc;
-    GLint shadow_use_skin_palette_loc;
-    GLint shadow_joint_palette_offset_loc;
-    GLint shadow_joint_matrices_loc;
-    GLuint shadow_vao;
-    GLuint shadow_position_vbo;
-    GLuint shadow_ebo;
-    bool in_shadow_pass;
-    float shadow_light_vp[16];
-    float shadow_bias;
-
-#define SLAYER3D_CSM_CASCADE_COUNT 4
-    float csm_light_vp[SLAYER3D_CSM_CASCADE_COUNT][16];
-    float csm_split_depths[SLAYER3D_CSM_CASCADE_COUNT];
-    bool csm_fragment_enabled;
-
-    /* PBR shadow uniform locations */
-    GLint pbr_shadow_map_loc;
-    GLint pbr_shadow_vp_loc;
-    GLint pbr_shadow_enabled_loc;
-    GLint pbr_shadow_bias_loc;
-
-    /* CSM uniform locations */
-    GLint pbr_csm_vp_loc[4];
-    GLint pbr_csm_splits_loc;
-    GLint pbr_view_matrix_loc;
-    GLint pbr_csm_enabled_loc;
-
-    /* Point light shadows */
-    GLuint point_shadow_fbo;
-    GLuint point_shadow_cubemap[SLAYER3D_MAX_POINT_SHADOWS];
-    GLuint point_shadow_program;
-    GLint point_shadow_model_loc;
-    GLint point_shadow_light_vp_loc;
-    GLint point_shadow_light_pos_loc;
-    GLint point_shadow_far_loc;
-    GLint point_shadow_use_skinning_loc;
-    GLint point_shadow_use_skin_palette_loc;
-    GLint point_shadow_joint_palette_offset_loc;
-    GLint point_shadow_joint_matrices_loc;
-    int point_shadow_light_index[SLAYER3D_MAX_POINT_SHADOWS];
-    float point_shadow_far_plane[SLAYER3D_MAX_POINT_SHADOWS];
-    float point_shadow_vp[SLAYER3D_MAX_POINT_SHADOWS][6][16];
-    int point_shadow_count;
-
-    GLint pbr_point_shadow_map_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_light_pos_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_far_loc[SLAYER3D_MAX_POINT_SHADOWS];
-    GLint pbr_point_shadow_count_loc;
-
-    /* Deferred draw list */
-    slayer3d_draw_entry *draw_list;
-    int draw_count;
-    int draw_capacity;
-    slayer3d_gl_mesh_cache_entry *mesh_cache;
-
-    /* Overlay draw list — rendered after FBO blit, no post-processing */
-    slayer3d_overlay_entry *overlay_list;
-    int overlay_count;
-    int overlay_capacity;
-
-    /* Per-frame atlas snapshots shared across overlay entries */
-    slayer3d_overlay_atlas *overlay_atlases;
-    int overlay_atlas_count;
-    int overlay_atlas_capacity;
-
-    GLuint white_texture;
-    GLuint black_texture;
-    GLuint black_cubemap;
-
-    slayer3d_gl_tex_entry *tex_cache;
-
-    float *white_colors;
-    int white_colors_capacity;
-
-    GLuint fbo;
-    GLuint fbo_color;
-    GLuint fbo_depth;
-    int logical_w;
-    int logical_h;
-    int world_w;
-    int world_h;
-    float world_render_scale;
-
-    /* Post-process */
-    GLuint pp_fbo_a, pp_fbo_b;
-    GLuint pp_tex_a, pp_tex_b;
-    GLuint bloom_program;
-    GLuint bloom_blur_program;
-    GLuint composite_program;
-    GLint bloom_scene_loc, bloom_threshold_loc;
-    GLint blur_image_loc, blur_horizontal_loc;
-    GLint comp_scene_loc, comp_bloom_loc, comp_vignette_loc, comp_contrast_loc, comp_saturation_loc;
-    GLuint final_color_tex;
-
-    /* Retro profile post-process */
-    GLuint retro_program;
-    GLint retro_scene_loc;
-    GLint retro_profile_loc;
-    GLint retro_virtual_resolution_loc;
-    GLint retro_output_resolution_loc;
-    int active_retro_profile; /* 0=modern, 1=PS1, 2=N64, 3=DOS, 4=SNES, 5=grayscale, 6=Game Boy */
-    int active_retro_virtual_w;
-    int active_retro_virtual_h;
-    int active_retro_filter;
-
-    /* SSAO post-process */
-    GLuint ssao_program;
-    GLint ssao_scene_loc, ssao_depth_loc, ssao_texel_size_loc, ssao_near_loc, ssao_far_loc;
-
-    /* Cached render context pointer for lazy UBO upload */
-    slayer3d_render_context *current_ctx;
-
-    /* IBL (Image-Based Lighting) */
-    GLuint ibl_irradiance_map; /* diffuse irradiance cubemap */
-    GLuint ibl_prefilter_map;  /* specular prefiltered cubemap */
-    GLuint ibl_brdf_lut;       /* 2D BRDF integration LUT */
-    GLint pbr_irradiance_map_loc;
-    GLint pbr_prefilter_map_loc;
-    GLint pbr_brdf_lut_loc;
-    GLint pbr_ibl_enabled_loc;
-    GLint pbr_max_reflection_lod_loc;
-    bool ibl_ready;
-
-    /* IBL processing shaders */
-    GLuint equirect_to_cube_program;
-    GLuint irradiance_program;
-    GLuint prefilter_program;
-    GLuint brdf_program;
-    GLuint capture_fbo;
-    GLuint capture_rbo;
-};
-
-/* ------------------------------------------------------------------ */
-/* Embedded shader source (without #version line)                      */
-/* ------------------------------------------------------------------ */
-
-static const char k_pbr_vert[] = "layout(location = 0) in vec3 aPosition;\n"
-                                 "layout(location = 1) in vec3 aNormal;\n"
-                                 "layout(location = 2) in vec2 aTexCoord;\n"
-                                 "layout(location = 3) in vec4 aColor;\n"
-                                 "layout(location = 4) in vec2 aLightmapUV;\n"
-                                 "layout(location = 5) in vec4 aInstanceModel0;\n"
-                                 "layout(location = 6) in vec4 aInstanceModel1;\n"
-                                 "layout(location = 7) in vec4 aInstanceModel2;\n"
-                                 "layout(location = 8) in vec4 aInstanceModel3;\n"
-                                 "layout(location = 9) in vec3 aInstanceNormal0;\n"
-                                 "layout(location = 10) in vec3 aInstanceNormal1;\n"
-                                 "layout(location = 11) in vec3 aInstanceNormal2;\n"
-                                 "layout(location = 12) in vec4 aJointIndices;\n"
-                                 "layout(location = 13) in vec4 aJointWeights;\n"
-                                 "\n"
-                                 "#define MAX_LIGHTS 8\n"
-                                 "#define MAX_SKIN_JOINTS 64\n"
-                                 "#define MAX_SKIN_PALETTE_MATRICES 256\n"
-                                 "struct Light {\n"
-                                 "    int type;\n"
-                                 "    vec3 position;\n"
-                                 "    vec3 direction;\n"
-                                 "    vec3 color;\n"
-                                 "    float intensity;\n"
-                                 "    float range;\n"
-                                 "    float innerCutoff;\n"
-                                 "    float outerCutoff;\n"
-                                 "};\n"
-                                 "layout(std140) uniform SceneUBO {\n"
-                                 "    mat4 uViewProjection;\n"
-                                 "    vec3 uCameraPos;\n"
-                                 "    float _pad0;\n"
-                                 "    vec3 uAmbient;\n"
-                                 "    int uLightCount;\n"
-                                 "    Light uLights[MAX_LIGHTS];\n"
-                                 "    int uFogMode;\n"
-                                 "    float uFogStart;\n"
-                                 "    float uFogEnd;\n"
-                                 "    float uFogDensity;\n"
-                                 "    vec3 uFogColor;\n"
-                                 "    int uTonemapMode;\n"
-                                 "};\n"
-                                 "\n"
-                                 "uniform mat4 uModel;\n"
-                                 "uniform mat3 uNormalMatrix;\n"
-                                 "uniform int uUseInstancing;\n"
-                                 "uniform int uUseSkinning;\n"
-                                 "uniform int uUseSkinPalette;\n"
-                                 "uniform int uJointPaletteOffset;\n"
-                                 "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
-                                 "layout(std140) uniform SkinPaletteUBO {\n"
-                                 "    mat4 uSkinPalette[MAX_SKIN_PALETTE_MATRICES];\n"
-                                 "};\n"
-                                 "\n"
-                                 "out vec3 vWorldPos;\n"
-                                 "out vec3 vWorldNormal;\n"
-                                 "out vec2 vTexCoord;\n"
-                                 "out vec2 vLightmapUV;\n"
-                                 "out vec4 vColor;\n"
-                                 "\n"
-                                 "mat4 skinJointMatrix(float jointIndex) {\n"
-                                 "    int uniformJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_JOINTS - 1)));\n"
-                                 "    int paletteJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_PALETTE_MATRICES - "
-                                 "1)));\n"
-                                 "    return (uUseSkinPalette != 0) ? uSkinPalette[uJointPaletteOffset + "
-                                 "paletteJoint] : uJointMatrices[uniformJoint];\n"
-                                 "}\n"
-                                 "\n"
-                                 "void main() {\n"
-                                 "    mat4 model = (uUseInstancing != 0) ? mat4(aInstanceModel0, aInstanceModel1, "
-                                 "aInstanceModel2, aInstanceModel3) : uModel;\n"
-                                 "    mat3 normalMatrix = (uUseInstancing != 0) ? mat3(aInstanceNormal0, "
-                                 "aInstanceNormal1, aInstanceNormal2) : uNormalMatrix;\n"
-                                 "    vec4 localPos = vec4(aPosition, 1.0);\n"
-                                 "    vec3 localNormal = aNormal;\n"
-                                 "    if (uUseSkinning != 0) {\n"
-                                 "        mat4 skin = aJointWeights.x * skinJointMatrix(aJointIndices.x)\n"
-                                 "                  + aJointWeights.y * skinJointMatrix(aJointIndices.y)\n"
-                                 "                  + aJointWeights.z * skinJointMatrix(aJointIndices.z)\n"
-                                 "                  + aJointWeights.w * skinJointMatrix(aJointIndices.w);\n"
-                                 "        localPos = skin * localPos;\n"
-                                 "        localNormal = mat3(skin) * localNormal;\n"
-                                 "    }\n"
-                                 "    vec4 worldPos = model * localPos;\n"
-                                 "    vWorldPos = worldPos.xyz;\n"
-                                 "    vWorldNormal = normalize(normalMatrix * localNormal);\n"
-                                 "    vTexCoord = aTexCoord;\n"
-                                 "    vLightmapUV = aLightmapUV;\n"
-                                 "    vColor = aColor;\n"
-                                 "    gl_Position = uViewProjection * worldPos;\n"
-                                 "}\n";
-
-static const char k_pbr_frag_decl[] =
-    "#define MAX_LIGHTS 8\n"
-    "#define PI 3.14159265\n"
-    "\n"
-    "struct Light {\n"
-    "    int type;\n"
-    "    vec3 position;\n"
-    "    vec3 direction;\n"
-    "    vec3 color;\n"
-    "    float intensity;\n"
-    "    float range;\n"
-    "    float innerCutoff;\n"
-    "    float outerCutoff;\n"
-    "};\n"
-    "\n"
-    "layout(std140) uniform SceneUBO {\n"
-    "    mat4 uViewProjection;\n"
-    "    vec3 uCameraPos;\n"
-    "    float _pad0;\n"
-    "    vec3 uAmbient;\n"
-    "    int uLightCount;\n"
-    "    Light uLights[MAX_LIGHTS];\n"
-    "    int uFogMode;\n"
-    "    float uFogStart;\n"
-    "    float uFogEnd;\n"
-    "    float uFogDensity;\n"
-    "    vec3 uFogColor;\n"
-    "    int uTonemapMode;\n"
-    "};\n"
-    "\n"
-    "in vec3 vWorldPos;\n"
-    "in vec3 vWorldNormal;\n"
-    "in vec2 vTexCoord;\n"
-    "in vec2 vLightmapUV;\n"
-    "in vec4 vColor;\n"
-    "\n"
-    "uniform sampler2D uTexture;\n"
-    "uniform int uHasTexture;\n"
-    "uniform sampler2D uLightmap;\n"
-    "uniform int uHasLightmap;\n"
-    "uniform vec4 uTint;\n"
-    "uniform float uMetallic;\n"
-    "uniform float uRoughness;\n"
-    "uniform vec3 uEmissive;\n"
-    "uniform int uBakedLightMode;\n"
-    "\n"
-    "uniform sampler2DArray uShadowMap;\n"
-    "uniform mat4 uShadowVP;\n"
-    "uniform int uShadowEnabled;\n"
-    "uniform float uShadowBias;\n"
-    "uniform mat4 uCSMVP[4];\n"
-    "uniform float uCSMSplits[4];\n"
-    "uniform mat4 uViewMatrix;\n"
-    "uniform int uCSMEnabled;\n"
-    "\n"
-    "uniform samplerCube uPointShadowMap[2];\n"
-    "uniform vec3 uPointShadowLightPos[2];\n"
-    "uniform float uPointShadowFar[2];\n"
-    "uniform int uPointShadowCount;\n"
-    "\n"
-    "uniform samplerCube uIrradianceMap;\n"
-    "uniform samplerCube uPrefilterMap;\n"
-    "uniform sampler2D uBrdfLUT;\n"
-    "uniform int uIBLEnabled;\n"
-    "uniform float uMaxReflectionLod;\n"
-    "\n"
-    "out vec4 fragColor;\n"
-    "\n"
-    "float DistributionGGX(float NdotH, float r) {\n"
-    "    float a = r * r;\n"
-    "    float a2 = a * a;\n"
-    "    float d = NdotH * NdotH * (a2 - 1.0) + 1.0;\n"
-    "    return a2 / (PI * d * d + 0.0001);\n"
-    "}\n"
-    "\n"
-    "float GeometrySchlickGGX(float NdotV, float r) {\n"
-    "    float k = (r + 1.0) * (r + 1.0) / 8.0;\n"
-    "    return NdotV / (NdotV * (1.0 - k) + k + 0.0001);\n"
-    "}\n"
-    "\n"
-    "vec3 FresnelSchlick(float cosTheta, vec3 F0) {\n"
-    "    return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
-    "}\n"
-    "vec3 FresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {\n"
-    "    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);\n"
-    "}\n";
-
-static const char k_pbr_frag_main[] =
-    "void main() {\n"
-    "    vec2 uv = vTexCoord;\n"
-    "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
-    "    vec3 albedo = texel.rgb * ((uBakedLightMode != 0) ? uTint.rgb : (vColor.rgb * uTint.rgb));\n"
-    "    float alpha = texel.a * vColor.a * uTint.a;\n"
-    "    if (alpha <= 0.0) discard;\n"
-    "\n"
-    "    vec3 N = normalize(vWorldNormal);\n"
-    "    vec3 V = normalize(uCameraPos - vWorldPos);\n"
-    "    float NdotV = max(dot(N, V), 0.0);\n"
-    "    vec3 F0 = mix(vec3(0.04), albedo, uMetallic);\n"
-    "\n"
-    "    vec3 Lo = vec3(0.0);\n"
-    "    for (int i = 0; i < uLightCount && i < MAX_LIGHTS; i++) {\n"
-    "        vec3 L;\n"
-    "        float attenuation = 1.0;\n"
-    "\n"
-    "        if (uLights[i].type == 0) {\n"
-    "            L = normalize(-uLights[i].direction);\n"
-    "        } else {\n"
-    "            vec3 toLight = uLights[i].position - vWorldPos;\n"
-    "            float dist = length(toLight);\n"
-    "            L = toLight / max(dist, 0.0001);\n"
-    "            if (uLights[i].range > 0.0) {\n"
-    "                float r = dist / uLights[i].range;\n"
-    "                attenuation = max(1.0 - r * r, 0.0);\n"
-    "                attenuation *= attenuation;\n"
-    "            }\n"
-    "            if (uLights[i].type == 2) {\n"
-    "                float cosA = dot(-L, normalize(uLights[i].direction));\n"
-    "                float eps = uLights[i].innerCutoff - uLights[i].outerCutoff;\n"
-    "                attenuation *= clamp((cosA - uLights[i].outerCutoff) / max(eps, 0.0001), 0.0, 1.0);\n"
-    "            }\n"
-    "        }\n"
-    "\n"
-    "        vec3 radiance = uLights[i].color * uLights[i].intensity * attenuation;\n"
-    "        float NdotL = (uBakedLightMode != 0) ? abs(dot(N, L)) : max(dot(N, L), 0.0);\n"
-    "        if (NdotL <= 0.0) continue;\n"
-    "        if (uBakedLightMode != 0) {\n"
-    "            Lo += albedo * radiance * NdotL;\n"
-    "            continue;\n"
-    "        }\n"
-    "\n"
-    "        vec3 H = normalize(L + V);\n"
-    "        float NdotH = max(dot(N, H), 0.0);\n"
-    "        float HdotV = max(dot(H, V), 0.0);\n"
-    "\n"
-    "        float NDF = DistributionGGX(NdotH, uRoughness);\n"
-    "        float G = GeometrySchlickGGX(NdotV, uRoughness) * GeometrySchlickGGX(NdotL, uRoughness);\n"
-    "        vec3 F = FresnelSchlick(HdotV, F0);\n"
-    "\n"
-    "        vec3 spec = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);\n"
-    "        vec3 kD = (1.0 - F) * (1.0 - uMetallic);\n"
-    "        vec3 diff = kD * albedo / PI;\n"
-    "\n"
-    "        Lo += (diff + spec) * radiance * NdotL;\n"
-    "    }\n";
-
-static const char k_pbr_frag_shadow_post[] =
-    "\n"
-    "    vec3 color;\n"
-    "    if (uBakedLightMode != 0) {\n"
-    "        vec3 bakedLight = (uHasLightmap != 0) ? texture(uLightmap, vLightmapUV).rgb : vColor.rgb;\n"
-    "        vec3 bakedBaseColor = texel.rgb * bakedLight * uTint.rgb;\n"
-    "        color = bakedBaseColor + Lo + uEmissive;\n"
-    "    } else {\n"
-    "        /* Shadow (CSM cascade selection with PCF 3x3). */\n"
-    "        if (uShadowEnabled != 0) {\n"
-    "            int layer = 0;\n"
-    "            if (uCSMEnabled != 0) {\n"
-    "                float fragDepth = abs((uViewMatrix * vec4(vWorldPos, 1.0)).z);\n"
-    "                layer = 3;\n"
-    "                for (int i = 0; i < 4; ++i) {\n"
-    "                    if (fragDepth < uCSMSplits[i]) { layer = i; break; }\n"
-    "                }\n"
-    "            }\n"
-    "            mat4 shadowVP = (uCSMEnabled != 0) ? uCSMVP[layer] : uShadowVP;\n"
-    "            vec4 lpos = shadowVP * vec4(vWorldPos, 1.0);\n"
-    "            vec3 projCoords = lpos.xyz / lpos.w * 0.5 + 0.5;\n"
-    "            float currentDepth = projCoords.z;\n"
-    "            vec3 lightDir = normalize(-uLights[0].direction);\n"
-    "            float bias = max(0.05 * (1.0 - dot(N, lightDir)), 0.005);\n"
-    "            float shadow = 0.0;\n"
-    "            vec2 texelSize = 1.0 / vec2(2048.0);\n"
-    "            for (int x = -1; x <= 1; ++x) {\n"
-    "                for (int y = -1; y <= 1; ++y) {\n"
-    "                    float pcfDepth = texture(uShadowMap, vec3(projCoords.xy + vec2(x, y) * texelSize, "
-    "float(layer))).r;\n"
-    "                    shadow += currentDepth - bias > pcfDepth ? 1.0 : 0.0;\n"
-    "                }\n"
-    "            }\n"
-    "            shadow /= 9.0;\n"
-    "            if (projCoords.z > 1.0) shadow = 0.0;\n"
-    "            Lo *= (1.0 - shadow);\n"
-    "        }\n"
-    "\n"
-    "        /* Point light shadows. Keep sampler indexes constant for GLSL drivers\n"
-    "         * that reject dynamic indexing into sampler arrays. */\n"
-    "        if (uPointShadowCount > 0) {\n"
-    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[0];\n"
-    "            float closestDepth = texture(uPointShadowMap[0], fragToLight).r * uPointShadowFar[0];\n"
-    "            float currentDepth = length(fragToLight);\n"
-    "            float pbias = 0.15;\n"
-    "            if (currentDepth - pbias > closestDepth) {\n"
-    "                Lo *= 0.5;\n"
-    "            }\n"
-    "        }\n"
-    "        if (uPointShadowCount > 1) {\n"
-    "            vec3 fragToLight = vWorldPos - uPointShadowLightPos[1];\n"
-    "            float closestDepth = texture(uPointShadowMap[1], fragToLight).r * uPointShadowFar[1];\n"
-    "            float currentDepth = length(fragToLight);\n"
-    "            float pbias = 0.15;\n"
-    "            if (currentDepth - pbias > closestDepth) {\n"
-    "                Lo *= 0.5;\n"
-    "            }\n"
-    "        }\n";
-
-static const char k_pbr_frag_light_post[] =
-    "\n"
-    "        /* Ambient: IBL when available, hemisphere fallback. */\n"
-    "        vec3 ambient;\n"
-    "        if (uIBLEnabled != 0) {\n"
-    "            vec3 F_ibl = FresnelSchlickRoughness(NdotV, F0, uRoughness);\n"
-    "            vec3 kS_ibl = F_ibl;\n"
-    "            vec3 kD_ibl = (1.0 - kS_ibl) * (1.0 - uMetallic);\n"
-    "            vec3 irradiance = texture(uIrradianceMap, N).rgb;\n"
-    "            vec3 diffuse_ibl = irradiance * albedo;\n"
-    "            vec3 R = reflect(-V, N);\n"
-    "            vec3 prefilteredColor = textureLod(uPrefilterMap, R, uRoughness * uMaxReflectionLod).rgb;\n"
-    "            vec2 brdf = texture(uBrdfLUT, vec2(NdotV, uRoughness)).rg;\n"
-    "            vec3 specular_ibl = prefilteredColor * (F_ibl * brdf.x + brdf.y);\n"
-    "            ambient = kD_ibl * diffuse_ibl + specular_ibl;\n"
-    "        } else {\n"
-    "            vec3 skyColor = uAmbient * 1.2;\n"
-    "            vec3 groundColor = uAmbient * vec3(0.6, 0.5, 0.4);\n"
-    "            float hemi = dot(N, vec3(0.0, 1.0, 0.0)) * 0.5 + 0.5;\n"
-    "            ambient = mix(groundColor, skyColor, hemi) * albedo;\n"
-    "        }\n"
-    "        color = ambient + Lo + uEmissive;\n"
-    "    }\n"
-    "\n"
-    "    if (uFogMode > 0) {\n"
-    "        float dist = length(uCameraPos - vWorldPos);\n"
-    "        float fogFactor = 0.0;\n"
-    "        if (uFogMode == 1) fogFactor = clamp((dist - uFogStart) / (uFogEnd - uFogStart), 0.0, 1.0);\n"
-    "        else if (uFogMode == 2) fogFactor = 1.0 - exp(-uFogDensity * dist);\n"
-    "        else if (uFogMode == 3) { float d = uFogDensity * dist; fogFactor = 1.0 - exp(-d * d); }\n"
-    "        color = mix(color, uFogColor, fogFactor);\n"
-    "    }\n"
-    "\n"
-    "    if (uBakedLightMode == 0) {\n"
-    "        if (uTonemapMode == 1) color = color / (1.0 + color);\n"
-    "        else if (uTonemapMode == 2) {\n"
-    "            float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;\n"
-    "            color = clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);\n"
-    "        }\n"
-    "\n"
-    "        color = pow(clamp(color, 0.0, 1.0), vec3(1.0 / 2.2));\n"
-    "    } else {\n"
-    "        color = clamp(color, 0.0, 1.0);\n"
-    "    }\n"
-    "\n"
-    "    fragColor = vec4(color, alpha);\n"
-    "}\n";
-
-static const char k_unlit_vert[] = "layout(location = 0) in vec3 aPosition;\n"
-                                   "layout(location = 1) in vec2 aTexCoord;\n"
-                                   "layout(location = 2) in vec4 aColor;\n"
-                                   "\n"
-                                   "uniform mat4 uMVP;\n"
-                                   "\n"
-                                   "out vec2 vTexCoord;\n"
-                                   "out vec4 vColor;\n"
-                                   "\n"
-                                   "void main() {\n"
-                                   "    vTexCoord = aTexCoord;\n"
-                                   "    vColor = aColor;\n"
-                                   "    gl_Position = uMVP * vec4(aPosition, 1.0);\n"
-                                   "}\n";
-
-static const char k_unlit_frag[] = "in vec2 vTexCoord;\n"
-                                   "in vec4 vColor;\n"
-                                   "\n"
-                                   "uniform sampler2D uTexture;\n"
-                                   "uniform int uHasTexture;\n"
-                                   "uniform vec4 uTint;\n"
-                                   "uniform int uOverlayEffect;\n"
-                                   "uniform float uOverlayEffectProgress;\n"
-                                   "uniform float uOverlayEffectSeed;\n"
-                                   "uniform float uOverlayEffectColumns;\n"
-                                   "\n"
-                                   "out vec4 fragColor;\n"
-                                   "\n"
-                                   "float overlayHash(float n) {\n"
-                                   "    return fract(sin(n) * 43758.5453123);\n"
-                                   "}\n"
-                                   "\n"
-                                   "void main() {\n"
-                                   "    vec2 uv = vTexCoord;\n"
-                                   "    if (uOverlayEffect == 1) {\n"
-                                   "        float columns = max(uOverlayEffectColumns, 1.0);\n"
-                                   "        float column = floor(clamp(uv.x, 0.0, 0.999999) * columns);\n"
-                                   "        float rnd = overlayHash(column + uOverlayEffectSeed);\n"
-                                   "        float delay = rnd * 0.45;\n"
-                                   "        float melt = clamp((uOverlayEffectProgress - delay) / 0.55, 0.0, 1.0);\n"
-                                   "        float wobble = (rnd - 0.5) * 0.025 * melt;\n"
-                                   "        float yShift = melt * (1.05 + rnd * 0.6);\n"
-                                   "        uv = vec2(uv.x + wobble, uv.y - yShift);\n"
-                                   "        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) discard;\n"
-                                   "    }\n"
-                                   "    vec4 texel = (uHasTexture != 0) ? texture(uTexture, uv) : vec4(1.0);\n"
-                                   "    fragColor = texel * vColor * uTint;\n"
-                                   "    if (fragColor.a <= 0.0) discard;\n"
-                                   "}\n";
-
-static const char k_fullscreen_vert[] = "out vec2 vTexCoord;\n"
-                                        "\n"
-                                        "void main() {\n"
-                                        "    float x = float((gl_VertexID & 1) << 2) - 1.0;\n"
-                                        "    float y = float((gl_VertexID & 2) << 1) - 1.0;\n"
-                                        "    vTexCoord = vec2(x * 0.5 + 0.5, y * 0.5 + 0.5);\n"
-                                        "    gl_Position = vec4(x, y, 0.0, 1.0);\n"
-                                        "}\n";
-
-static const char k_copy_frag[] = "in vec2 vTexCoord;\n"
-                                  "uniform sampler2D uScene;\n"
-                                  "out vec4 fragColor;\n"
-                                  "\n"
-                                  "void main() {\n"
-                                  "    fragColor = texture(uScene, vTexCoord);\n"
-                                  "}\n";
-
-static const char k_transition_frag[] =
-    "in vec2 vTexCoord;\n"
-    "uniform sampler2D uScene;\n"
-    "uniform int uType;\n"
-    "uniform int uDirection;\n"
-    "uniform float uProgress;\n"
-    "uniform vec4 uColor;\n"
-    "uniform vec2 uResolution;\n"
-    "uniform sampler2D uMeltOffsets;\n"
-    "out vec4 fragColor;\n"
-    "\n"
-    "void main() {\n"
-    "    vec4 scene = texture(uScene, vTexCoord);\n"
-    "    float cover = (uDirection == 0) ? (1.0 - uProgress) : uProgress;\n"
-    "    cover = clamp(cover, 0.0, 1.0);\n"
-    "\n"
-    "    if (uType == 0) {\n"
-    "        fragColor = mix(scene, uColor, cover * uColor.a);\n"
-    "    } else if (uType == 1) {\n"
-    "        float aspect = uResolution.x / max(uResolution.y, 1.0);\n"
-    "        vec2 centered = vTexCoord - vec2(0.5);\n"
-    "        centered.x *= aspect;\n"
-    "        float maxRadius = length(vec2(0.5 * aspect, 0.5));\n"
-    "        float radius = maxRadius * (1.0 - cover);\n"
-    "        vec4 covered = mix(scene, uColor, uColor.a);\n"
-    "        fragColor = (length(centered) <= radius) ? scene : covered;\n"
-    "    } else if (uType == 2) {\n"
-    "        float offset = texture(uMeltOffsets, vec2(vTexCoord.x, 0.5)).r;\n"
-    "        float columnProgress = clamp((cover - offset * 0.3) / 0.7, 0.0, 1.0);\n"
-    "        float yShift = columnProgress * 1.5;\n"
-    "        vec2 sampleUV = vec2(vTexCoord.x, vTexCoord.y - yShift);\n"
-    "        vec4 covered = mix(scene, uColor, uColor.a);\n"
-    "        fragColor = (sampleUV.y < 0.0) ? covered : texture(uScene, sampleUV);\n"
-    "    } else if (uType == 3) {\n"
-    "        float blockSize = mix(1.0, 64.0, cover);\n"
-    "        vec2 safeResolution = max(uResolution, vec2(1.0));\n"
-    "        vec2 pixelUV = floor(vTexCoord * safeResolution / blockSize) * blockSize / safeResolution;\n"
-    "        vec4 pixelated = texture(uScene, pixelUV);\n"
-    "        float colorBlend = smoothstep(0.7, 1.0, cover) * uColor.a;\n"
-    "        fragColor = mix(pixelated, uColor, colorBlend);\n"
-    "    } else {\n"
-    "        fragColor = scene;\n"
-    "    }\n"
-    "}\n";
-
-static const char k_shadow_vert[] =
-    "layout(location = 0) in vec3 aPosition;\n"
-    "layout(location = 5) in vec4 iModel0;\n"
-    "layout(location = 6) in vec4 iModel1;\n"
-    "layout(location = 7) in vec4 iModel2;\n"
-    "layout(location = 8) in vec4 iModel3;\n"
-    "layout(location = 12) in vec4 aJointIndices;\n"
-    "layout(location = 13) in vec4 aJointWeights;\n"
-    "#define MAX_SKIN_JOINTS 64\n"
-    "#define MAX_SKIN_PALETTE_MATRICES 256\n"
-    "uniform mat4 uLightVP;\n"
-    "uniform mat4 uModel;\n"
-    "uniform int uUseInstancing;\n"
-    "uniform int uUseSkinning;\n"
-    "uniform int uUseSkinPalette;\n"
-    "uniform int uJointPaletteOffset;\n"
-    "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
-    "layout(std140) uniform SkinPaletteUBO {\n"
-    "    mat4 uSkinPalette[MAX_SKIN_PALETTE_MATRICES];\n"
-    "};\n"
-    "mat4 skinJointMatrix(float jointIndex) {\n"
-    "    int uniformJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_JOINTS - 1)));\n"
-    "    int paletteJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_PALETTE_MATRICES - 1)));\n"
-    "    return (uUseSkinPalette != 0) ? uSkinPalette[uJointPaletteOffset + paletteJoint] : "
-    "uJointMatrices[uniformJoint];\n"
-    "}\n"
-    "void main() {\n"
-    "    mat4 model = (uUseInstancing != 0) ? mat4(iModel0, iModel1, iModel2, iModel3) : uModel;\n"
-    "    vec4 localPos = vec4(aPosition, 1.0);\n"
-    "    if (uUseSkinning != 0) {\n"
-    "        mat4 skin = aJointWeights.x * skinJointMatrix(aJointIndices.x)\n"
-    "                  + aJointWeights.y * skinJointMatrix(aJointIndices.y)\n"
-    "                  + aJointWeights.z * skinJointMatrix(aJointIndices.z)\n"
-    "                  + aJointWeights.w * skinJointMatrix(aJointIndices.w);\n"
-    "        localPos = skin * localPos;\n"
-    "    }\n"
-    "    gl_Position = uLightVP * model * localPos;\n"
-    "}\n";
-
-static const char k_shadow_frag[] = "out vec4 fragColor;\nvoid main() { fragColor = vec4(1.0); }\n";
-
-static const char k_point_shadow_vert[] =
-    "layout(location = 0) in vec3 aPos;\n"
-    "layout(location = 12) in vec4 aJointIndices;\n"
-    "layout(location = 13) in vec4 aJointWeights;\n"
-    "#define MAX_SKIN_JOINTS 64\n"
-    "#define MAX_SKIN_PALETTE_MATRICES 256\n"
-    "uniform mat4 model;\n"
-    "uniform mat4 lightVP;\n"
-    "uniform int uUseSkinning;\n"
-    "uniform int uUseSkinPalette;\n"
-    "uniform int uJointPaletteOffset;\n"
-    "uniform mat4 uJointMatrices[MAX_SKIN_JOINTS];\n"
-    "layout(std140) uniform SkinPaletteUBO {\n"
-    "    mat4 uSkinPalette[MAX_SKIN_PALETTE_MATRICES];\n"
-    "};\n"
-    "out vec3 vWorldPos;\n"
-    "mat4 skinJointMatrix(float jointIndex) {\n"
-    "    int uniformJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_JOINTS - 1)));\n"
-    "    int paletteJoint = int(clamp(jointIndex, 0.0, float(MAX_SKIN_PALETTE_MATRICES - 1)));\n"
-    "    return (uUseSkinPalette != 0) ? uSkinPalette[uJointPaletteOffset + paletteJoint] : "
-    "uJointMatrices[uniformJoint];\n"
-    "}\n"
-    "void main() {\n"
-    "    vec4 localPos = vec4(aPos, 1.0);\n"
-    "    if (uUseSkinning != 0) {\n"
-    "        mat4 skin = aJointWeights.x * skinJointMatrix(aJointIndices.x)\n"
-    "                  + aJointWeights.y * skinJointMatrix(aJointIndices.y)\n"
-    "                  + aJointWeights.z * skinJointMatrix(aJointIndices.z)\n"
-    "                  + aJointWeights.w * skinJointMatrix(aJointIndices.w);\n"
-    "        localPos = skin * localPos;\n"
-    "    }\n"
-    "    vec4 wp = model * localPos;\n"
-    "    vWorldPos = wp.xyz;\n"
-    "    gl_Position = lightVP * wp;\n"
-    "}\n";
-
-static const char k_point_shadow_frag[] = "in vec3 vWorldPos;\n"
-                                          "uniform vec3 lightPos;\n"
-                                          "uniform float farPlane;\n"
-                                          "void main() {\n"
-                                          "    float dist = length(vWorldPos - lightPos);\n"
-                                          "    gl_FragDepth = dist / farPlane;\n"
-                                          "}\n";
-
-/* ---- Post-process fragment shaders ---- */
-
-static const char k_bloom_threshold_frag[] =
-    "in vec2 vTexCoord;\n"
-    "uniform sampler2D uScene;\n"
-    "uniform float uThreshold;\n"
-    "out vec4 fragColor;\n"
-    "void main() {\n"
-    "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
-    "    float brightness = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
-    "    fragColor = (brightness > uThreshold) ? vec4(color, 1.0) : vec4(0.0, 0.0, 0.0, 1.0);\n"
-    "}\n";
-
-static const char k_blur_frag[] =
-    "in vec2 vTexCoord;\n"
-    "uniform sampler2D uImage;\n"
-    "uniform int uHorizontal;\n"
-    "out vec4 fragColor;\n"
-    "void main() {\n"
-    "    float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);\n"
-    "    vec2 texOffset = 1.0 / vec2(textureSize(uImage, 0));\n"
-    "    vec3 result = texture(uImage, vTexCoord).rgb * weights[0];\n"
-    "    if (uHorizontal == 1) {\n"
-    "        for (int i = 1; i < 5; ++i) {\n"
-    "            result += texture(uImage, vTexCoord + vec2(texOffset.x * float(i), 0.0)).rgb * weights[i];\n"
-    "            result += texture(uImage, vTexCoord - vec2(texOffset.x * float(i), 0.0)).rgb * weights[i];\n"
-    "        }\n"
-    "    } else {\n"
-    "        for (int i = 1; i < 5; ++i) {\n"
-    "            result += texture(uImage, vTexCoord + vec2(0.0, texOffset.y * float(i))).rgb * weights[i];\n"
-    "            result += texture(uImage, vTexCoord - vec2(0.0, texOffset.y * float(i))).rgb * weights[i];\n"
-    "        }\n"
-    "    }\n"
-    "    fragColor = vec4(result, 1.0);\n"
-    "}\n";
-
-static const char k_composite_frag[] = "in vec2 vTexCoord;\n"
-                                       "uniform sampler2D uScene;\n"
-                                       "uniform sampler2D uBloom;\n"
-                                       "uniform float uVignetteStrength;\n"
-                                       "uniform float uContrast;\n"
-                                       "uniform float uSaturation;\n"
-                                       "out vec4 fragColor;\n"
-                                       "void main() {\n"
-                                       "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
-                                       "    vec3 bloom = texture(uBloom, vTexCoord).rgb;\n"
-                                       "    color += bloom * 0.3;\n"
-                                       "    vec2 uv = vTexCoord * 2.0 - 1.0;\n"
-                                       "    float vig = 1.0 - dot(uv, uv) * uVignetteStrength;\n"
-                                       "    color *= clamp(vig, 0.0, 1.0);\n"
-                                       "    color = (color - 0.5) * uContrast + 0.5;\n"
-                                       "    float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));\n"
-                                       "    color = mix(vec3(grey), color, uSaturation);\n"
-                                       "    fragColor = vec4(max(color, 0.0), 1.0);\n"
-                                       "}\n";
-
-static const char k_retro_frag_helpers[] =
-    "in vec2 vTexCoord;\n"
-    "uniform sampler2D uScene;\n"
-    "uniform int uProfile;\n"
-    "uniform vec2 uVirtualResolution;\n"
-    "uniform vec2 uOutputResolution;\n"
-    "out vec4 fragColor;\n"
-    "float retroBayer4(vec2 p) {\n"
-    "    int x = int(mod(p.x, 4.0));\n"
-    "    int y = int(mod(p.y, 4.0));\n"
-    "    int i = y * 4 + x;\n"
-    "    float bayer[16] = float[16](0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,\n"
-    "                                    12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,\n"
-    "                                    3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,\n"
-    "                                    15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);\n"
-    "    return bayer[i];\n"
-    "}\n"
-    "vec3 retroGrade(vec3 color, float contrast, float saturation) {\n"
-    "    color = (color - 0.5) * contrast + 0.5;\n"
-    "    float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
-    "    return mix(vec3(lum), color, saturation);\n"
-    "}\n"
-    "vec2 retroNearestUV(vec2 uv, vec2 virtualResolution) {\n"
-    "    vec2 res = max(virtualResolution, vec2(1.0));\n"
-    "    return clamp((floor(uv * res) + vec2(0.5)) / res, vec2(0.0), vec2(1.0));\n"
-    "}\n"
-    "vec3 retroSampleNearest(vec2 uv, vec2 virtualResolution) {\n"
-    "    return texture(uScene, retroNearestUV(uv, virtualResolution)).rgb;\n"
-    "}\n"
-    "vec3 retroSampleSoft(vec2 uv, vec2 virtualResolution) {\n"
-    "    vec2 res = max(virtualResolution, vec2(1.0));\n"
-    "    vec2 base = retroNearestUV(uv, res);\n"
-    "    vec2 texel = 1.0 / res;\n"
-    "    vec3 color = texture(uScene, base).rgb * 0.50;\n"
-    "    color += texture(uScene, clamp(base + vec2(texel.x, 0.0), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
-    "    color += texture(uScene, clamp(base - vec2(texel.x, 0.0), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
-    "    color += texture(uScene, clamp(base + vec2(0.0, texel.y), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
-    "    color += texture(uScene, clamp(base - vec2(0.0, texel.y), vec2(0.0), vec2(1.0))).rgb * 0.125;\n"
-    "    return color;\n"
-    "}\n"
-    "vec3 retroQuantize(vec3 color, float levels, float dither) {\n"
-    "    return floor(clamp(color + vec3(dither), vec3(0.0), vec3(1.0)) * levels + 0.5) / levels;\n"
-    "}\n"
-    "float retroVignette(vec2 uv, float strength) {\n"
-    "    vec2 centered = uv * 2.0 - 1.0;\n"
-    "    return clamp(1.0 - dot(centered, centered) * strength, 0.0, 1.0);\n"
-    "}\n";
-
-static const char k_retro_frag_main[] =
-    "void main() {\n"
-    "    vec2 uv = vTexCoord;\n"
-    "    vec2 outputCoord = vTexCoord * max(uOutputResolution, vec2(1.0));\n"
-    "    vec3 color;\n"
-    "    if (uProfile == 1) {\n"
-    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
-    "uVirtualResolution : vec2(320.0, 240.0);\n"
-    "        float row = floor(uv.y * res.y);\n"
-    "        float jitter = (fract(sin(row * 12.9898) * 43758.5453) - 0.5) * 1.35 / res.x;\n"
-    "        color = retroSampleNearest(vec2(clamp(uv.x + jitter, 0.0, 1.0), uv.y), res);\n"
-    "        float dither = (retroBayer4(outputCoord) - 0.5) / 10.0;\n"
-    "        color = retroQuantize(color, 31.0, dither);\n"
-    "        color = retroGrade(color, 1.22, 0.82) * vec3(1.05, 0.98, 0.92);\n"
-    "        color *= retroVignette(uv, 0.28);\n"
-    "    } else if (uProfile == 2) {\n"
-    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
-    "uVirtualResolution : vec2(320.0, 240.0);\n"
-    "        color = retroSampleSoft(uv, res);\n"
-    "        color = retroQuantize(color, 63.0, 0.0);\n"
-    "        color = retroGrade(color * vec3(1.08, 1.03, 0.92), 1.08, 1.12);\n"
-    "        color *= retroVignette(uv, 0.16);\n"
-    "    } else if (uProfile == 3) {\n"
-    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
-    "uVirtualResolution : vec2(320.0, 200.0);\n"
-    "        color = retroSampleNearest(uv, res);\n"
-    "        float dither = (retroBayer4(outputCoord) - 0.5) / 2.75;\n"
-    "        color = retroQuantize(color, 5.0, dither);\n"
-    "        color = retroGrade(color * vec3(1.13, 0.98, 0.82), 1.28, 0.72);\n"
-    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.76;\n"
-    "    } else if (uProfile == 4) {\n"
-    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
-    "uVirtualResolution : vec2(256.0, 224.0);\n"
-    "        color = retroSampleNearest(uv, res);\n"
-    "        color = retroQuantize(color, 31.0, (retroBayer4(outputCoord) - 0.5) / 18.0);\n"
-    "        color = retroGrade(color * vec3(0.90, 0.96, 1.14), 1.12, 1.18);\n"
-    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.82;\n"
-    "    } else if (uProfile == 5) {\n"
-    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
-    "uVirtualResolution : vec2(512.0, 342.0);\n"
-    "        color = retroSampleNearest(uv, res);\n"
-    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
-    "        float dither = (retroBayer4(outputCoord) - 0.5) / 3.0;\n"
-    "        float grey = floor(clamp(lum + dither, 0.0, 1.0) * 3.0 + 0.5) / 3.0;\n"
-    "        color = vec3(grey);\n"
-    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.90;\n"
-    "    } else if (uProfile == 6) {\n"
-    "        vec2 res = (uVirtualResolution.x > 0.0 && uVirtualResolution.y > 0.0) ? "
-    "uVirtualResolution : vec2(160.0, 144.0);\n"
-    "        color = retroSampleNearest(uv, res);\n"
-    "        float lum = dot(color, vec3(0.299, 0.587, 0.114));\n"
-    "        float dither = (retroBayer4(outputCoord) - 0.5) / 14.0;\n"
-    "        float ramp = floor(clamp(pow(lum, 0.86) + dither, 0.0, 1.0) * 11.0 + 0.5) / 11.0;\n"
-    "        vec3 shadow = vec3(0.045, 0.105, 0.045);\n"
-    "        vec3 mid = vec3(0.360, 0.565, 0.190);\n"
-    "        vec3 highlight = vec3(0.790, 0.880, 0.485);\n"
-    "        color = mix(shadow, mid, smoothstep(0.0, 0.62, ramp));\n"
-    "        color = mix(color, highlight, smoothstep(0.40, 1.0, ramp));\n"
-    "        color = retroGrade(color, 1.08, 1.0);\n"
-    "        if (mod(outputCoord.y, 2.0) < 1.0) color *= 0.92;\n"
-    "    } else {\n"
-    "        color = texture(uScene, uv).rgb;\n"
-    "    }\n"
-    "    fragColor = vec4(clamp(color, 0.0, 1.0), 1.0);\n"
-    "}\n";
-
-static const char k_ssao_frag[] = "in vec2 vTexCoord;\n"
-                                  "uniform sampler2D uScene;\n"
-                                  "uniform sampler2D uDepth;\n"
-                                  "uniform vec2 uTexelSize;\n"
-                                  "uniform float uNear;\n"
-                                  "uniform float uFar;\n"
-                                  "out vec4 fragColor;\n"
-                                  "float linearizeDepth(float d) {\n"
-                                  "    float z = d * 2.0 - 1.0;\n"
-                                  "    return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));\n"
-                                  "}\n"
-                                  "void main() {\n"
-                                  "    float rawDepth = texture(uDepth, vTexCoord).r;\n"
-                                  "    vec3 color = texture(uScene, vTexCoord).rgb;\n"
-                                  "    if (rawDepth > 0.999) { fragColor = vec4(color, 1.0); return; }\n"
-                                  "    float depth = linearizeDepth(rawDepth);\n"
-                                  "    /* Scattered sample offsets (avoids grid banding). */\n"
-                                  "    const vec2 offsets[8] = vec2[8](\n"
-                                  "        vec2(-0.94, -0.34), vec2( 0.76,  0.65),\n"
-                                  "        vec2(-0.09, -0.93), vec2( 0.97, -0.22),\n"
-                                  "        vec2(-0.71,  0.71), vec2( 0.33,  0.94),\n"
-                                  "        vec2( 0.52, -0.85), vec2(-0.86,  0.12)\n"
-                                  "    );\n"
-                                  "    float radius = clamp(1.0 / depth, 1.0, 8.0);\n"
-                                  "    float ao = 0.0;\n"
-                                  "    for (int i = 0; i < 8; i++) {\n"
-                                  "        vec2 sampleUV = vTexCoord + offsets[i] * uTexelSize * radius;\n"
-                                  "        float sd = linearizeDepth(texture(uDepth, sampleUV).r);\n"
-                                  "        float diff = depth - sd;\n"
-                                  "        if (diff > 0.1 && diff < 2.0) ao += 1.0;\n"
-                                  "    }\n"
-                                  "    ao /= 8.0;\n"
-                                  "    color *= (1.0 - ao * 0.35);\n"
-                                  "    fragColor = vec4(color, 1.0);\n"
-                                  "}\n";
-
-static GLuint compile_shader(slayer3d_gl_funcs *gl, GLenum type, const char *version, const char *body)
-{
-    GLuint s = gl->CreateShader(type);
-    const char *srcs[2] = {version, body};
-    gl->ShaderSource(s, 2, srcs, NULL);
-    gl->CompileShader(s);
-
-    GLint ok = 0;
-    gl->GetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok)
-    {
-        char buf[1024];
-        gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
-        gl->DeleteShader(s);
-        return 0;
-    }
-    return s;
-}
-
-static GLuint compile_shader_multi(slayer3d_gl_funcs *gl, GLenum type, int count, const char **srcs)
-{
-    GLuint s = gl->CreateShader(type);
-    gl->ShaderSource(s, count, srcs, NULL);
-    gl->CompileShader(s);
-
-    GLint ok = 0;
-    gl->GetShaderiv(s, GL_COMPILE_STATUS, &ok);
-    if (!ok)
-    {
-        char buf[1024];
-        gl->GetShaderInfoLog(s, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
-        gl->DeleteShader(s);
-        return 0;
-    }
-    return s;
-}
-
-static GLuint link_program(slayer3d_gl_funcs *gl, GLuint vert, GLuint frag)
-{
-    GLuint p = gl->CreateProgram();
-    gl->AttachShader(p, vert);
-    gl->AttachShader(p, frag);
-    gl->LinkProgram(p);
-
-    GLint ok = 0;
-    gl->GetProgramiv(p, GL_LINK_STATUS, &ok);
-    if (!ok)
-    {
-        char buf[1024];
-        gl->GetProgramInfoLog(p, sizeof(buf), NULL, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL program link error: %s", buf);
-        gl->DeleteProgram(p);
-        return 0;
-    }
-    return p;
-}
-
-/* ------------------------------------------------------------------ */
-/* IBL shader sources                                                  */
-/* ------------------------------------------------------------------ */
-
-static const char k_cube_vert[] = "layout(location = 0) in vec3 aPosition;\n"
-                                  "out vec3 vLocalPos;\n"
-                                  "uniform mat4 uProjection;\n"
-                                  "uniform mat4 uView;\n"
-                                  "void main() {\n"
-                                  "    vLocalPos = aPosition;\n"
-                                  "    gl_Position = uProjection * uView * vec4(aPosition, 1.0);\n"
-                                  "}\n";
-
-static const char k_equirect_to_cube_frag[] = "in vec3 vLocalPos;\n"
-                                              "out vec4 fragColor;\n"
-                                              "uniform sampler2D uEquirectMap;\n"
-                                              "const vec2 invAtan = vec2(0.1591, 0.3183);\n"
-                                              "void main() {\n"
-                                              "    vec3 d = normalize(vLocalPos);\n"
-                                              "    vec2 uv = vec2(atan(d.z, d.x), asin(d.y));\n"
-                                              "    uv *= invAtan;\n"
-                                              "    uv += 0.5;\n"
-                                              "    vec3 color = texture(uEquirectMap, uv).rgb;\n"
-                                              "    fragColor = vec4(color, 1.0);\n"
-                                              "}\n";
-
-static const char k_irradiance_frag[] =
-    "in vec3 vLocalPos;\n"
-    "out vec4 fragColor;\n"
-    "uniform samplerCube uEnvironmentMap;\n"
-    "const float PI = 3.14159265;\n"
-    "void main() {\n"
-    "    vec3 N = normalize(vLocalPos);\n"
-    "    vec3 irradiance = vec3(0.0);\n"
-    "    vec3 up = vec3(0.0, 1.0, 0.0);\n"
-    "    vec3 right = normalize(cross(up, N));\n"
-    "    up = normalize(cross(N, right));\n"
-    "    float sampleDelta = 0.025;\n"
-    "    float nrSamples = 0.0;\n"
-    "    for (float phi = 0.0; phi < 2.0 * PI; phi += sampleDelta) {\n"
-    "        for (float theta = 0.0; theta < 0.5 * PI; theta += sampleDelta) {\n"
-    "            vec3 tangentSample = vec3(sin(theta)*cos(phi), sin(theta)*sin(phi), cos(theta));\n"
-    "            vec3 sampleVec = tangentSample.x * right + tangentSample.y * up + tangentSample.z * N;\n"
-    "            irradiance += texture(uEnvironmentMap, sampleVec).rgb * cos(theta) * sin(theta);\n"
-    "            nrSamples++;\n"
-    "        }\n"
-    "    }\n"
-    "    irradiance = PI * irradiance * (1.0 / nrSamples);\n"
-    "    fragColor = vec4(irradiance, 1.0);\n"
-    "}\n";
-
-static const char k_prefilter_frag[] = "in vec3 vLocalPos;\n"
-                                       "out vec4 fragColor;\n"
-                                       "uniform samplerCube uEnvironmentMap;\n"
-                                       "uniform float uRoughness;\n"
-                                       "const float PI = 3.14159265;\n"
-                                       "float RadicalInverse_VdC(uint bits) {\n"
-                                       "    bits = (bits << 16u) | (bits >> 16u);\n"
-                                       "    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);\n"
-                                       "    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);\n"
-                                       "    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);\n"
-                                       "    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);\n"
-                                       "    return float(bits) * 2.3283064365386963e-10;\n"
-                                       "}\n"
-                                       "vec2 Hammersley(uint i, uint N) {\n"
-                                       "    return vec2(float(i)/float(N), RadicalInverse_VdC(i));\n"
-                                       "}\n"
-                                       "vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {\n"
-                                       "    float a = roughness * roughness;\n"
-                                       "    float phi = 2.0 * PI * Xi.x;\n"
-                                       "    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));\n"
-                                       "    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);\n"
-                                       "    vec3 H = vec3(cos(phi)*sinTheta, sin(phi)*sinTheta, cosTheta);\n"
-                                       "    vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);\n"
-                                       "    vec3 tangent = normalize(cross(up, N));\n"
-                                       "    vec3 bitangent = cross(N, tangent);\n"
-                                       "    return tangent * H.x + bitangent * H.y + N * H.z;\n"
-                                       "}\n"
-                                       "void main() {\n"
-                                       "    vec3 N = normalize(vLocalPos);\n"
-                                       "    vec3 R = N;\n"
-                                       "    vec3 V = R;\n"
-                                       "    const uint SAMPLE_COUNT = 1024u;\n"
-                                       "    float totalWeight = 0.0;\n"
-                                       "    vec3 prefilteredColor = vec3(0.0);\n"
-                                       "    for (uint i = 0u; i < SAMPLE_COUNT; ++i) {\n"
-                                       "        vec2 Xi = Hammersley(i, SAMPLE_COUNT);\n"
-                                       "        vec3 H = ImportanceSampleGGX(Xi, N, uRoughness);\n"
-                                       "        vec3 L = normalize(2.0 * dot(V, H) * H - V);\n"
-                                       "        float NdotL = max(dot(N, L), 0.0);\n"
-                                       "        if (NdotL > 0.0) {\n"
-                                       "            prefilteredColor += texture(uEnvironmentMap, L).rgb * NdotL;\n"
-                                       "            totalWeight += NdotL;\n"
-                                       "        }\n"
-                                       "    }\n"
-                                       "    prefilteredColor /= totalWeight;\n"
-                                       "    fragColor = vec4(prefilteredColor, 1.0);\n"
-                                       "}\n";
-
-static const char k_brdf_vert[] = "layout(location = 0) in vec3 aPosition;\n"
-                                  "layout(location = 2) in vec2 aTexCoord;\n"
-                                  "out vec2 vTexCoord;\n"
-                                  "void main() {\n"
-                                  "    vTexCoord = aTexCoord;\n"
-                                  "    gl_Position = vec4(aPosition, 1.0);\n"
-                                  "}\n";
-
-static const char k_brdf_frag[] =
-    "in vec2 vTexCoord;\n"
-    "out vec4 fragColor;\n"
-    "const float PI = 3.14159265;\n"
-    "float RadicalInverse_VdC(uint bits) {\n"
-    "    bits = (bits << 16u) | (bits >> 16u);\n"
-    "    bits = ((bits & 0x55555555u) << 1u) | ((bits & 0xAAAAAAAAu) >> 1u);\n"
-    "    bits = ((bits & 0x33333333u) << 2u) | ((bits & 0xCCCCCCCCu) >> 2u);\n"
-    "    bits = ((bits & 0x0F0F0F0Fu) << 4u) | ((bits & 0xF0F0F0F0u) >> 4u);\n"
-    "    bits = ((bits & 0x00FF00FFu) << 8u) | ((bits & 0xFF00FF00u) >> 8u);\n"
-    "    return float(bits) * 2.3283064365386963e-10;\n"
-    "}\n"
-    "vec2 Hammersley(uint i, uint N) {\n"
-    "    return vec2(float(i)/float(N), RadicalInverse_VdC(i));\n"
-    "}\n"
-    "vec3 ImportanceSampleGGX(vec2 Xi, vec3 N, float roughness) {\n"
-    "    float a = roughness * roughness;\n"
-    "    float phi = 2.0 * PI * Xi.x;\n"
-    "    float cosTheta = sqrt((1.0 - Xi.y) / (1.0 + (a*a - 1.0) * Xi.y));\n"
-    "    float sinTheta = sqrt(1.0 - cosTheta*cosTheta);\n"
-    "    vec3 H = vec3(cos(phi)*sinTheta, sin(phi)*sinTheta, cosTheta);\n"
-    "    vec3 up = abs(N.z) < 0.999 ? vec3(0,0,1) : vec3(1,0,0);\n"
-    "    vec3 tangent = normalize(cross(up, N));\n"
-    "    vec3 bitangent = cross(N, tangent);\n"
-    "    return tangent * H.x + bitangent * H.y + N * H.z;\n"
-    "}\n"
-    "float GeometrySchlickGGX(float NdotV, float roughness) {\n"
-    "    float a = roughness;\n"
-    "    float k = (a * a) / 2.0;\n"
-    "    return NdotV / (NdotV * (1.0 - k) + k);\n"
-    "}\n"
-    "float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {\n"
-    "    float NdotV = max(dot(N, V), 0.0);\n"
-    "    float NdotL = max(dot(N, L), 0.0);\n"
-    "    return GeometrySchlickGGX(NdotV, roughness) * GeometrySchlickGGX(NdotL, roughness);\n"
-    "}\n"
-    "vec2 IntegrateBRDF(float NdotV, float roughness) {\n"
-    "    vec3 V = vec3(sqrt(1.0 - NdotV*NdotV), 0.0, NdotV);\n"
-    "    float A = 0.0;\n"
-    "    float B = 0.0;\n"
-    "    vec3 N = vec3(0.0, 0.0, 1.0);\n"
-    "    const uint SAMPLE_COUNT = 1024u;\n"
-    "    for (uint i = 0u; i < SAMPLE_COUNT; ++i) {\n"
-    "        vec2 Xi = Hammersley(i, SAMPLE_COUNT);\n"
-    "        vec3 H = ImportanceSampleGGX(Xi, N, roughness);\n"
-    "        vec3 L = normalize(2.0 * dot(V, H) * H - V);\n"
-    "        float NdotL = max(L.z, 0.0);\n"
-    "        float NdotH = max(H.z, 0.0);\n"
-    "        float VdotH = max(dot(V, H), 0.0);\n"
-    "        if (NdotL > 0.0) {\n"
-    "            float G = GeometrySmith(N, V, L, roughness);\n"
-    "            float G_Vis = (G * VdotH) / (NdotH * NdotV);\n"
-    "            float Fc = pow(1.0 - VdotH, 5.0);\n"
-    "            A += (1.0 - Fc) * G_Vis;\n"
-    "            B += Fc * G_Vis;\n"
-    "        }\n"
-    "    }\n"
-    "    A /= float(SAMPLE_COUNT);\n"
-    "    B /= float(SAMPLE_COUNT);\n"
-    "    return vec2(A, B);\n"
-    "}\n"
-    "void main() {\n"
-    "    vec2 integratedBRDF = IntegrateBRDF(vTexCoord.x, vTexCoord.y);\n"
-    "    fragColor = vec4(integratedBRDF, 0.0, 1.0);\n"
-    "}\n";
-
-/* Unit cube vertices for cubemap rendering. */
 static const float k_cube_vertices[] = {
     -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1, -1, -1, 1, 1, -1, 1, 1, 1, 1, -1, 1, 1,
 };
@@ -1459,175 +27,9 @@ static const unsigned int k_cube_indices[] = {
     0, 1, 2, 2, 3, 0, 1, 5, 6, 6, 2, 1, 5, 4, 7, 7, 6, 5, 4, 0, 3, 3, 7, 4, 3, 2, 6, 6, 7, 3, 4, 5, 1, 1, 0, 4,
 };
 
-static GLuint build_program(slayer3d_gl_funcs *gl, const char *version, const char *vert_body, const char *frag_body)
-{
-    GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version, vert_body);
-    if (!vs)
-        return 0;
-    GLuint fs = compile_shader(gl, GL_FRAGMENT_SHADER, version, frag_body);
-    if (!fs)
-    {
-        gl->DeleteShader(vs);
-        return 0;
-    }
-    GLuint prog = link_program(gl, vs, fs);
-    gl->DeleteShader(vs);
-    gl->DeleteShader(fs);
-    return prog;
-}
-
 static const char *gl_version_prefix_for_context(const slayer3d_gl_context *ctx)
 {
     return (ctx != NULL && ctx->is_es) ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
-}
-
-static bool shader_source_has_version_prefix(const char *source)
-{
-    if (source == NULL)
-        return false;
-    while (*source != '\0' && (*source == ' ' || *source == '\t' || *source == '\r' || *source == '\n'))
-        ++source;
-    return SDL_strncmp(source, "#version", 8) == 0;
-}
-
-static GLuint compile_shader_source(slayer3d_gl_funcs *gl, GLenum type, const char *version, const char *source)
-{
-    GLuint shader;
-    const char *srcs[2];
-    int count = 0;
-
-    if (source == NULL || source[0] == '\0')
-        return 0;
-
-    shader = gl->CreateShader(type);
-    if (!shader)
-        return 0;
-
-    if (shader_source_has_version_prefix(source))
-    {
-        srcs[0] = source;
-        count = 1;
-    }
-    else if (version != NULL)
-    {
-        srcs[0] = version;
-        srcs[1] = source;
-        count = 2;
-    }
-    else
-    {
-        srcs[0] = source;
-        count = 1;
-    }
-
-    gl->ShaderSource(shader, count, srcs, NULL);
-    gl->CompileShader(shader);
-
-    GLint compiled = 0;
-    gl->GetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
-    if (!compiled)
-    {
-        char buf[1024];
-        GLsizei len = 0;
-        gl->GetShaderInfoLog(shader, (GLsizei)sizeof(buf), &len, buf);
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL shader compile error: %s", buf);
-        gl->DeleteShader(shader);
-        return 0;
-    }
-    return shader;
-}
-
-static GLuint build_program_from_sources(slayer3d_gl_funcs *gl, const char *version, const char *default_vert_source,
-                                         const char *vertex_source, const char *fragment_source)
-{
-    GLuint vs = compile_shader_source(gl, GL_VERTEX_SHADER, version,
-                                      (vertex_source != NULL && vertex_source[0] != '\0') ? vertex_source
-                                                                                          : default_vert_source);
-    if (!vs)
-        return 0;
-    GLuint fs = compile_shader_source(gl, GL_FRAGMENT_SHADER, version, fragment_source);
-    if (!fs)
-    {
-        gl->DeleteShader(vs);
-        return 0;
-    }
-    GLuint prog = link_program(gl, vs, fs);
-    gl->DeleteShader(vs);
-    gl->DeleteShader(fs);
-    return prog;
-}
-
-/* ------------------------------------------------------------------ */
-/* Texture cache                                                       */
-/* ------------------------------------------------------------------ */
-
-static GLuint tex_cache_lookup(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
-{
-    slayer3d_gl_tex_entry **prev = &ctx->tex_cache;
-    for (slayer3d_gl_tex_entry *e = ctx->tex_cache; e; prev = &e->next, e = e->next)
-    {
-        if (e->key == tex)
-        {
-            if (e->generation != tex->generation)
-            {
-                ctx->gl.DeleteTextures(1, &e->gl_tex);
-                *prev = e->next;
-                SDL_free(e);
-                return 0;
-            }
-            return e->gl_tex;
-        }
-    }
-    return 0;
-}
-
-static GLuint tex_cache_upload(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    GLuint id;
-    gl->GenTextures(1, &id);
-    gl->BindTexture(GL_TEXTURE_2D, id);
-    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, tex->width, tex->height, 0, GL_RGBA, GL_UNSIGNED_BYTE, tex->pixels);
-    gl->GenerateMipmap(GL_TEXTURE_2D);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, 0x2703 /* GL_LINEAR_MIPMAP_LINEAR */);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    /* Anisotropic filtering if available. */
-    {
-        float aniso = 16.0f;
-        gl->TexParameterfv(GL_TEXTURE_2D, 0x84FE /* GL_TEXTURE_MAX_ANISOTROPY_EXT */, &aniso);
-    }
-
-    slayer3d_gl_tex_entry *entry = SDL_calloc(1, sizeof(*entry));
-    entry->key = tex;
-    entry->generation = tex->generation;
-    entry->gl_tex = id;
-    entry->next = ctx->tex_cache;
-    ctx->tex_cache = entry;
-    return id;
-}
-
-static GLuint resolve_texture(slayer3d_gl_context *ctx, const slayer3d_texture2d *tex)
-{
-    if (!tex)
-        return ctx->white_texture;
-    GLuint id = tex_cache_lookup(ctx, tex);
-    return id ? id : tex_cache_upload(ctx, tex);
-}
-
-static void tex_cache_free(slayer3d_gl_context *ctx)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    slayer3d_gl_tex_entry *e = ctx->tex_cache;
-    while (e)
-    {
-        slayer3d_gl_tex_entry *next = e->next;
-        gl->DeleteTextures(1, &e->gl_tex);
-        SDL_free(e);
-        e = next;
-    }
-    ctx->tex_cache = NULL;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1647,168 +49,7 @@ static const float *ensure_white_colors(slayer3d_gl_context *ctx, int vertex_cou
     return ctx->white_colors;
 }
 
-/* ------------------------------------------------------------------ */
-/* Draw list helpers                                                   */
-/* ------------------------------------------------------------------ */
-
-static void free_draw_list(slayer3d_gl_context *ctx)
-{
-    for (int i = 0; i < ctx->draw_count; i++)
-    {
-        slayer3d_draw_entry *e = &ctx->draw_list[i];
-        if (e->owns_arrays)
-        {
-            SDL_free((void *)e->positions);
-            SDL_free((void *)e->normals);
-            SDL_free((void *)e->uvs);
-            SDL_free((void *)e->lightmap_uvs);
-            SDL_free((void *)e->colors);
-            SDL_free((void *)e->indices);
-        }
-        SDL_free(e->joint_matrices);
-    }
-    ctx->draw_count = 0;
-}
-
-static slayer3d_draw_entry *append_draw_entry(slayer3d_gl_context *ctx)
-{
-    if (ctx->draw_count == ctx->draw_capacity)
-    {
-        int cap = ctx->draw_capacity ? ctx->draw_capacity * 2 : 64;
-        slayer3d_draw_entry *buf = SDL_realloc(ctx->draw_list, (size_t)cap * sizeof(slayer3d_draw_entry));
-        if (!buf)
-            return NULL;
-        ctx->draw_list = buf;
-        ctx->draw_capacity = cap;
-    }
-    slayer3d_draw_entry *e = &ctx->draw_list[ctx->draw_count++];
-    SDL_memset(e, 0, sizeof(*e));
-    return e;
-}
-
-/* ------------------------------------------------------------------ */
-/* Overlay draw list helpers                                           */
-/* ------------------------------------------------------------------ */
-
-static void free_overlay_list(slayer3d_gl_context *ctx)
-{
-    for (int i = 0; i < ctx->overlay_count; i++)
-    {
-        slayer3d_overlay_entry *e = &ctx->overlay_list[i];
-        SDL_free(e->positions);
-        SDL_free(e->uvs);
-    }
-    ctx->overlay_count = 0;
-    /* Atlases are persistent — not freed per frame. */
-}
-
-static slayer3d_overlay_entry *append_overlay_entry(slayer3d_gl_context *ctx)
-{
-    if (ctx->overlay_count == ctx->overlay_capacity)
-    {
-        int cap = ctx->overlay_capacity ? ctx->overlay_capacity * 2 : 64;
-        slayer3d_overlay_entry *buf = SDL_realloc(ctx->overlay_list, (size_t)cap * sizeof(slayer3d_overlay_entry));
-        if (!buf)
-            return NULL;
-        ctx->overlay_list = buf;
-        ctx->overlay_capacity = cap;
-    }
-    slayer3d_overlay_entry *e = &ctx->overlay_list[ctx->overlay_count++];
-    SDL_memset(e, 0, sizeof(*e));
-    return e;
-}
-
 static float *copy_floats(const float *src, size_t count);
-
-bool slayer3d_gl_append_overlay(slayer3d_gl_context *ctx, const float *positions, const float *uvs, int vertex_count,
-                                const float *mvp, const float *tint, const slayer3d_texture2d *texture,
-                                bool scissor_enabled, const SDL_Rect *scissor_rect, slayer3d_overlay_effect effect,
-                                float effect_progress, Uint32 effect_seed, const char *shader_vertex_source,
-                                const char *shader_fragment_source)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-
-    int atlas_idx = -1;
-    if (texture != NULL)
-    {
-        /* Find or create a persistent GL texture for this atlas. */
-        for (int i = 0; i < ctx->overlay_atlas_count; i++)
-        {
-            slayer3d_overlay_atlas *a = &ctx->overlay_atlases[i];
-            if (a->source == texture)
-            {
-                /* Re-upload if the texture has changed. */
-                if (a->generation != texture->generation)
-                {
-                    gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
-                    gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA,
-                                   GL_UNSIGNED_BYTE, texture->pixels);
-                    a->generation = texture->generation;
-                }
-                atlas_idx = i;
-                break;
-            }
-        }
-        if (atlas_idx < 0)
-        {
-            if (ctx->overlay_atlas_count == ctx->overlay_atlas_capacity)
-            {
-                int cap = ctx->overlay_atlas_capacity ? ctx->overlay_atlas_capacity * 2 : 16;
-                slayer3d_overlay_atlas *buf =
-                    SDL_realloc(ctx->overlay_atlases, (size_t)cap * sizeof(slayer3d_overlay_atlas));
-                if (!buf)
-                    return SDL_OutOfMemory();
-                ctx->overlay_atlases = buf;
-                ctx->overlay_atlas_capacity = cap;
-            }
-            atlas_idx = ctx->overlay_atlas_count++;
-            slayer3d_overlay_atlas *a = &ctx->overlay_atlases[atlas_idx];
-            a->source = texture;
-            a->generation = texture->generation;
-            gl->GenTextures(1, &a->gl_tex);
-            gl->BindTexture(GL_TEXTURE_2D, a->gl_tex);
-            gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture->width, texture->height, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                           texture->pixels);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        }
-    }
-
-    slayer3d_overlay_entry *e = append_overlay_entry(ctx);
-    if (!e)
-        return SDL_OutOfMemory();
-
-    size_t pos_bytes = (size_t)vertex_count * 3 * sizeof(float);
-    size_t uv_bytes = (size_t)vertex_count * 2 * sizeof(float);
-
-    e->positions = SDL_malloc(pos_bytes);
-    e->uvs = SDL_malloc(uv_bytes);
-    if (!e->positions || !e->uvs)
-    {
-        SDL_free(e->positions);
-        SDL_free(e->uvs);
-        ctx->overlay_count--;
-        return SDL_OutOfMemory();
-    }
-
-    SDL_memcpy(e->positions, positions, pos_bytes);
-    SDL_memcpy(e->uvs, uvs, uv_bytes);
-    SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
-    SDL_memcpy(e->tint, tint, 4 * sizeof(float));
-    e->vertex_count = vertex_count;
-    e->scissor_enabled = scissor_enabled;
-    e->scissor_rect = scissor_rect ? *scissor_rect : (SDL_Rect){0, 0, 0, 0};
-    e->atlas_index = atlas_idx;
-    e->effect = effect;
-    e->effect_progress = effect_progress;
-    e->effect_seed = (float)effect_seed * (1.0f / 4294967295.0f);
-    e->effect_columns = texture != NULL ? (float)SDL_max(24, texture->width / 16) : 1.0f;
-    e->shader_vertex_source = shader_vertex_source;
-    e->shader_fragment_source = shader_fragment_source;
-    return true;
-}
 
 bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp)
 {
@@ -1820,7 +61,7 @@ bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, c
         return false;
     }
 
-    slayer3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = slayer3d_gl_append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -1977,161 +218,6 @@ static unsigned int *copy_indices(const unsigned int *src, size_t count)
     return dst;
 }
 
-static bool mesh_cache_matches(const slayer3d_gl_mesh_cache_entry *entry, bool lit, GLenum primitive_mode,
-                               const float *positions, const float *normals, const float *uvs,
-                               const float *lightmap_uvs, const float *colors, const unsigned int *indices,
-                               const unsigned short *joint_indices, const float *joint_weights, int vertex_count,
-                               int index_count, bool has_lightmap_uvs, bool gpu_skinned)
-{
-    return entry->lit == lit && entry->primitive_mode == primitive_mode && entry->positions == positions &&
-           entry->normals == normals && entry->uvs == uvs && entry->lightmap_uvs == lightmap_uvs &&
-           entry->colors == colors && entry->indices == indices && entry->joint_indices == joint_indices &&
-           entry->joint_weights == joint_weights && entry->vertex_count == vertex_count &&
-           entry->index_count == index_count && entry->has_lightmap_uvs == has_lightmap_uvs &&
-           entry->gpu_skinned == gpu_skinned;
-}
-
-static void mesh_cache_bind_float_attrib(slayer3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
-                                         const float *data, size_t count)
-{
-    gl->GenBuffers(1, buffer);
-    gl->BindBuffer(GL_ARRAY_BUFFER, *buffer);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(count * sizeof(float)), data, GL_STATIC_DRAW);
-    gl->EnableVertexAttribArray(attrib);
-    gl->VertexAttribPointer(attrib, components, GL_FLOAT, GL_FALSE, 0, NULL);
-}
-
-static void mesh_cache_bind_ushort_attrib(slayer3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
-                                          const unsigned short *data, size_t count)
-{
-    gl->GenBuffers(1, buffer);
-    gl->BindBuffer(GL_ARRAY_BUFFER, *buffer);
-    gl->BufferData(GL_ARRAY_BUFFER, (GLsizeiptr)(count * sizeof(unsigned short)), data, GL_STATIC_DRAW);
-    gl->EnableVertexAttribArray(attrib);
-    gl->VertexAttribPointer(attrib, components, GL_UNSIGNED_SHORT, GL_FALSE, 0, NULL);
-}
-
-static slayer3d_gl_mesh_cache_entry *mesh_cache_lookup_or_create(
-    slayer3d_gl_context *ctx, bool lit, GLenum primitive_mode, const float *positions, const float *normals,
-    const float *uvs, const float *lightmap_uvs, const float *colors, const unsigned int *indices,
-    const unsigned short *joint_indices, const float *joint_weights, int vertex_count, int index_count,
-    bool has_lightmap_uvs, bool gpu_skinned)
-{
-    for (slayer3d_gl_mesh_cache_entry *entry = ctx->mesh_cache; entry != NULL; entry = entry->next)
-    {
-        if (mesh_cache_matches(entry, lit, primitive_mode, positions, normals, uvs, lightmap_uvs, colors, indices,
-                               joint_indices, joint_weights, vertex_count, index_count, has_lightmap_uvs, gpu_skinned))
-        {
-            return entry;
-        }
-    }
-
-    slayer3d_gl_mesh_cache_entry *entry = (slayer3d_gl_mesh_cache_entry *)SDL_calloc(1, sizeof(*entry));
-    if (entry == NULL)
-    {
-        SDL_OutOfMemory();
-        return NULL;
-    }
-
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    entry->lit = lit;
-    entry->primitive_mode = primitive_mode;
-    entry->positions = positions;
-    entry->normals = normals;
-    entry->uvs = uvs;
-    entry->lightmap_uvs = lightmap_uvs;
-    entry->colors = colors;
-    entry->indices = indices;
-    entry->joint_indices = joint_indices;
-    entry->joint_weights = joint_weights;
-    entry->vertex_count = vertex_count;
-    entry->index_count = index_count;
-    entry->has_lightmap_uvs = has_lightmap_uvs;
-    entry->gpu_skinned = gpu_skinned;
-
-    gl->GenVertexArrays(1, &entry->vao);
-    gl->BindVertexArray(entry->vao);
-    mesh_cache_bind_float_attrib(gl, &entry->position_vbo, 0, 3, positions, (size_t)vertex_count * 3);
-    if (lit)
-    {
-        mesh_cache_bind_float_attrib(gl, &entry->normal_vbo, 1, 3, normals, (size_t)vertex_count * 3);
-        mesh_cache_bind_float_attrib(gl, &entry->uv_vbo, 2, 2, uvs, (size_t)vertex_count * 2);
-        mesh_cache_bind_float_attrib(gl, &entry->lightmap_uv_vbo, 4, 2, has_lightmap_uvs ? lightmap_uvs : uvs,
-                                     (size_t)vertex_count * 2);
-        mesh_cache_bind_float_attrib(gl, &entry->color_vbo, 3, 4, colors, (size_t)vertex_count * 4);
-        if (gpu_skinned)
-        {
-            mesh_cache_bind_ushort_attrib(gl, &entry->joint_index_vbo, 12, 4, joint_indices, (size_t)vertex_count * 4);
-            mesh_cache_bind_float_attrib(gl, &entry->joint_weight_vbo, 13, 4, joint_weights, (size_t)vertex_count * 4);
-        }
-    }
-    else
-    {
-        mesh_cache_bind_float_attrib(gl, &entry->uv_vbo, 1, 2, uvs, (size_t)vertex_count * 2);
-        mesh_cache_bind_float_attrib(gl, &entry->color_vbo, 2, 4, colors, (size_t)vertex_count * 4);
-    }
-    if (indices != NULL && index_count > 0)
-    {
-        gl->GenBuffers(1, &entry->ebo);
-        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry->ebo);
-        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
-                       GL_STATIC_DRAW);
-    }
-
-    gl->GenVertexArrays(1, &entry->shadow_vao);
-    gl->BindVertexArray(entry->shadow_vao);
-    mesh_cache_bind_float_attrib(gl, &entry->shadow_position_vbo, 0, 3, positions, (size_t)vertex_count * 3);
-    if (gpu_skinned)
-    {
-        mesh_cache_bind_ushort_attrib(gl, &entry->shadow_joint_index_vbo, 12, 4, joint_indices,
-                                      (size_t)vertex_count * 4);
-        mesh_cache_bind_float_attrib(gl, &entry->shadow_joint_weight_vbo, 13, 4, joint_weights,
-                                     (size_t)vertex_count * 4);
-    }
-    if (indices != NULL && index_count > 0)
-    {
-        gl->GenBuffers(1, &entry->shadow_ebo);
-        gl->BindBuffer(GL_ELEMENT_ARRAY_BUFFER, entry->shadow_ebo);
-        gl->BufferData(GL_ELEMENT_ARRAY_BUFFER, (GLsizeiptr)((size_t)index_count * sizeof(unsigned int)), indices,
-                       GL_STATIC_DRAW);
-    }
-    gl->BindVertexArray(0);
-
-    entry->next = ctx->mesh_cache;
-    ctx->mesh_cache = entry;
-    return entry;
-}
-
-static void mesh_cache_free(slayer3d_gl_context *ctx)
-{
-    slayer3d_gl_funcs *gl = &ctx->gl;
-    slayer3d_gl_mesh_cache_entry *entry = ctx->mesh_cache;
-    while (entry != NULL)
-    {
-        slayer3d_gl_mesh_cache_entry *next = entry->next;
-        GLuint buffers[] = {entry->position_vbo,
-                            entry->normal_vbo,
-                            entry->uv_vbo,
-                            entry->lightmap_uv_vbo,
-                            entry->color_vbo,
-                            entry->joint_index_vbo,
-                            entry->joint_weight_vbo,
-                            entry->ebo,
-                            entry->shadow_position_vbo,
-                            entry->shadow_joint_index_vbo,
-                            entry->shadow_joint_weight_vbo,
-                            entry->shadow_ebo};
-        gl->DeleteBuffers(12, buffers);
-        if (entry->vao)
-            gl->DeleteVertexArrays(1, &entry->vao);
-        if (entry->shadow_vao)
-            gl->DeleteVertexArrays(1, &entry->shadow_vao);
-        SDL_free(entry);
-        entry = next;
-    }
-    ctx->mesh_cache = NULL;
-}
-
 static void custom_shader_cache_free(slayer3d_gl_context *ctx)
 {
     slayer3d_custom_shader_cache_entry *entry = ctx->custom_shader_cache;
@@ -2203,8 +289,8 @@ static slayer3d_custom_shader_cache_entry *custom_shader_lookup_or_create(slayer
         }
     }
     entry->lit = lit;
-    entry->program =
-        build_program_from_sources(gl, version, default_vertex, entry->vertex_source, entry->fragment_source);
+    entry->program = slayer3d_gl_build_program_from_sources(gl, version, default_vertex, entry->vertex_source,
+                                                            entry->fragment_source);
     if (entry->program == 0)
     {
         SDL_free(entry->vertex_source);
@@ -3072,7 +1158,8 @@ static void bind_builtin_pbr_entry(slayer3d_gl_context *ctx, const slayer3d_draw
     gl->Uniform1i(ctx->pbr_texture_loc, 0);
     gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
     gl->ActiveTexture(GL_TEXTURE0 + 7);
-    gl->BindTexture(GL_TEXTURE_2D, e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+    gl->BindTexture(GL_TEXTURE_2D,
+                    e->has_lightmap ? slayer3d_gl_resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
     gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
     gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
     gl->ActiveTexture(GL_TEXTURE0);
@@ -3307,7 +1394,7 @@ static bool draw_static_mesh_instance_batch(slayer3d_gl_context *ctx, int start,
         return false;
     slayer3d_gl_funcs *gl = &ctx->gl;
     slayer3d_draw_entry *e = &ctx->draw_list[start];
-    GLuint tex = resolve_texture(ctx, e->texture);
+    GLuint tex = slayer3d_gl_resolve_texture(ctx, e->texture);
 
     apply_draw_entry_viewport(ctx, e);
     flush_scene_ubo_for_draw_entry(ctx, e);
@@ -3338,7 +1425,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
     for (int i = 0; i < ctx->draw_count; i++)
     {
         slayer3d_draw_entry *e = &ctx->draw_list[i];
-        GLuint tex = resolve_texture(ctx, e->texture);
+        GLuint tex = slayer3d_gl_resolve_texture(ctx, e->texture);
         apply_draw_entry_viewport(ctx, e);
 
         if (e->lit)
@@ -3381,8 +1468,8 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                 if (custom->pbr_has_texture_loc >= 0)
                     gl->Uniform1i(custom->pbr_has_texture_loc, e->texture ? 1 : 0);
                 gl->ActiveTexture(GL_TEXTURE0 + 7);
-                gl->BindTexture(GL_TEXTURE_2D,
-                                e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+                gl->BindTexture(GL_TEXTURE_2D, e->has_lightmap ? slayer3d_gl_resolve_texture(ctx, e->lightmap_texture)
+                                                               : ctx->black_texture);
                 if (custom->pbr_lightmap_loc >= 0)
                     gl->Uniform1i(custom->pbr_lightmap_loc, 7);
                 if (custom->pbr_has_lightmap_loc >= 0)
@@ -3503,8 +1590,8 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
                 gl->Uniform1i(ctx->pbr_texture_loc, 0);
                 gl->Uniform1i(ctx->pbr_has_texture_loc, e->texture ? 1 : 0);
                 gl->ActiveTexture(GL_TEXTURE0 + 7);
-                gl->BindTexture(GL_TEXTURE_2D,
-                                e->has_lightmap ? resolve_texture(ctx, e->lightmap_texture) : ctx->black_texture);
+                gl->BindTexture(GL_TEXTURE_2D, e->has_lightmap ? slayer3d_gl_resolve_texture(ctx, e->lightmap_texture)
+                                                               : ctx->black_texture);
                 gl->Uniform1i(ctx->pbr_lightmap_loc, 7);
                 gl->Uniform1i(ctx->pbr_has_lightmap_loc, e->has_lightmap ? 1 : 0);
                 gl->ActiveTexture(GL_TEXTURE0);
@@ -3980,7 +2067,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     gl->Enable(GL_DEPTH_TEST);
 
     /* ---- Step 1: Equirect -> Cubemap (512) ---- */
-    GLuint eq_prog = build_program(gl, ver, k_cube_vert, k_equirect_to_cube_frag);
+    GLuint eq_prog = slayer3d_gl_build_program(gl, ver, k_cube_vert, k_equirect_to_cube_frag);
     GLuint env_cubemap;
     gl->GenTextures(1, &env_cubemap);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, env_cubemap);
@@ -4015,7 +2102,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: equirect -> cubemap done");
 
     /* ---- Step 2: Irradiance convolution (32x32) ---- */
-    GLuint irr_prog = build_program(gl, ver, k_cube_vert, k_irradiance_frag);
+    GLuint irr_prog = slayer3d_gl_build_program(gl, ver, k_cube_vert, k_irradiance_frag);
     gl->GenTextures(1, &ctx->ibl_irradiance_map);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_irradiance_map);
     for (int i = 0; i < 6; i++)
@@ -4045,7 +2132,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: irradiance done");
 
     /* ---- Step 3: Prefilter (128, 5 mip levels) ---- */
-    GLuint pf_prog = build_program(gl, ver, k_cube_vert, k_prefilter_frag);
+    GLuint pf_prog = slayer3d_gl_build_program(gl, ver, k_cube_vert, k_prefilter_frag);
     gl->GenTextures(1, &ctx->ibl_prefilter_map);
     gl->BindTexture(GL_TEXTURE_CUBE_MAP, ctx->ibl_prefilter_map);
     for (int i = 0; i < 6; i++)
@@ -4082,7 +2169,7 @@ bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_
     SDL_LogDebug(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D IBL: prefilter done");
 
     /* ---- Step 4: BRDF LUT (512x512) ---- */
-    GLuint brdf_prog = build_program(gl, ver, k_brdf_vert, k_brdf_frag);
+    GLuint brdf_prog = slayer3d_gl_build_program(gl, ver, k_brdf_vert, k_brdf_frag);
     gl->GenTextures(1, &ctx->ibl_brdf_lut);
     gl->BindTexture(GL_TEXTURE_2D, ctx->ibl_brdf_lut);
     gl->TexImage2D(GL_TEXTURE_2D, 0, GL_RG16F, 512, 512, 0, GL_RG, GL_FLOAT, NULL);
@@ -4183,19 +2270,19 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     /* Compile shader programs. */
     /* PBR frag is split into chunks to stay under C99 string length limits. */
     {
-        GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
+        GLuint vs = slayer3d_gl_compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_pbr_vert);
         const char *frag_srcs[5] = {version_prefix, k_pbr_frag_decl, k_pbr_frag_main, k_pbr_frag_shadow_post,
                                     k_pbr_frag_light_post};
-        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 5, frag_srcs) : 0;
-        ctx->pbr_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
+        GLuint fs = vs ? slayer3d_gl_compile_shader_multi(gl, GL_FRAGMENT_SHADER, 5, frag_srcs) : 0;
+        ctx->pbr_program = (vs && fs) ? slayer3d_gl_link_program(gl, vs, fs) : 0;
         if (vs)
             gl->DeleteShader(vs);
         if (fs)
             gl->DeleteShader(fs);
     }
-    ctx->unlit_program = build_program(gl, version_prefix, k_unlit_vert, k_unlit_frag);
-    ctx->copy_program = build_program(gl, version_prefix, k_fullscreen_vert, k_copy_frag);
-    ctx->transition_program = build_program(gl, version_prefix, k_fullscreen_vert, k_transition_frag);
+    ctx->unlit_program = slayer3d_gl_build_program(gl, version_prefix, k_unlit_vert, k_unlit_frag);
+    ctx->copy_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_copy_frag);
+    ctx->transition_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_transition_frag);
 
     if (!ctx->pbr_program || !ctx->unlit_program || !ctx->copy_program || !ctx->transition_program)
     {
@@ -4406,7 +2493,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     gl->BindVertexArray(0);
 
     /* Compile shadow program. */
-    ctx->shadow_program = build_program(gl, version_prefix, k_shadow_vert, k_shadow_frag);
+    ctx->shadow_program = slayer3d_gl_build_program(gl, version_prefix, k_shadow_vert, k_shadow_frag);
     if (ctx->shadow_program)
     {
         ctx->shadow_light_vp_loc = gl->GetUniformLocation(ctx->shadow_program, "uLightVP");
@@ -4443,7 +2530,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
         gl->TexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     }
 
-    ctx->point_shadow_program = build_program(gl, version_prefix, k_point_shadow_vert, k_point_shadow_frag);
+    ctx->point_shadow_program = slayer3d_gl_build_program(gl, version_prefix, k_point_shadow_vert, k_point_shadow_frag);
     if (ctx->point_shadow_program)
     {
         ctx->point_shadow_model_loc = gl->GetUniformLocation(ctx->point_shadow_program, "model");
@@ -4513,9 +2600,9 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     }
 
     /* ---- Post-process shaders ---- */
-    ctx->bloom_program = build_program(gl, version_prefix, k_fullscreen_vert, k_bloom_threshold_frag);
-    ctx->bloom_blur_program = build_program(gl, version_prefix, k_fullscreen_vert, k_blur_frag);
-    ctx->composite_program = build_program(gl, version_prefix, k_fullscreen_vert, k_composite_frag);
+    ctx->bloom_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_bloom_threshold_frag);
+    ctx->bloom_blur_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_blur_frag);
+    ctx->composite_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_composite_frag);
     if (!ctx->bloom_program || !ctx->bloom_blur_program || !ctx->composite_program)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: post-process shader compilation failed");
@@ -4534,10 +2621,10 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
 
     /* ---- Retro profile shader ---- */
     {
-        GLuint vs = compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_fullscreen_vert);
+        GLuint vs = slayer3d_gl_compile_shader(gl, GL_VERTEX_SHADER, version_prefix, k_fullscreen_vert);
         const char *frag_srcs[3] = {version_prefix, k_retro_frag_helpers, k_retro_frag_main};
-        GLuint fs = vs ? compile_shader_multi(gl, GL_FRAGMENT_SHADER, 3, frag_srcs) : 0;
-        ctx->retro_program = (vs && fs) ? link_program(gl, vs, fs) : 0;
+        GLuint fs = vs ? slayer3d_gl_compile_shader_multi(gl, GL_FRAGMENT_SHADER, 3, frag_srcs) : 0;
+        ctx->retro_program = (vs && fs) ? slayer3d_gl_link_program(gl, vs, fs) : 0;
         if (vs)
             gl->DeleteShader(vs);
         if (fs)
@@ -4555,7 +2642,7 @@ slayer3d_gl_context *slayer3d_gl_create(SDL_Window *window, int width, int heigh
     ctx->retro_output_resolution_loc = gl->GetUniformLocation(ctx->retro_program, "uOutputResolution");
 
     /* ---- SSAO shader ---- */
-    ctx->ssao_program = build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
+    ctx->ssao_program = slayer3d_gl_build_program(gl, version_prefix, k_fullscreen_vert, k_ssao_frag);
     if (!ctx->ssao_program)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SLAYER3D GL: SSAO shader compilation failed");
@@ -4590,18 +2677,18 @@ void slayer3d_gl_destroy(slayer3d_gl_context *ctx)
         return;
     slayer3d_gl_funcs *gl = &ctx->gl;
 
-    free_draw_list(ctx);
+    slayer3d_gl_free_draw_list(ctx);
     SDL_free(ctx->draw_list);
-    mesh_cache_free(ctx);
+    slayer3d_gl_mesh_cache_free(ctx);
     custom_shader_cache_free(ctx);
 
-    free_overlay_list(ctx);
+    slayer3d_gl_free_overlay_list(ctx);
     SDL_free(ctx->overlay_list);
     for (int i = 0; i < ctx->overlay_atlas_count; i++)
         gl->DeleteTextures(1, &ctx->overlay_atlases[i].gl_tex);
     SDL_free(ctx->overlay_atlases);
 
-    tex_cache_free(ctx);
+    slayer3d_gl_tex_cache_free(ctx);
     SDL_free(ctx->white_colors);
 
     if (ctx->pbr_program)
@@ -4764,7 +2851,7 @@ static bool gl_clear(slayer3d_render_context *context, slayer3d_color color)
     slayer3d_gl_context *ctx = context->gl;
     slayer3d_gl_funcs *gl = &ctx->gl;
 
-    free_draw_list(ctx);
+    slayer3d_gl_free_draw_list(ctx);
 
     ctx->frame_index++;
     ctx->current_ctx = context;
@@ -4800,7 +2887,7 @@ static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_
 
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    slayer3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = slayer3d_gl_append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -4822,9 +2909,9 @@ static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_
         e->uvs = params->uvs;
         e->colors = colors;
         e->indices = params->indices;
-        e->mesh_cache =
-            mesh_cache_lookup_or_create(ctx, false, e->primitive_mode, e->positions, NULL, e->uvs, NULL, e->colors,
-                                        e->indices, NULL, NULL, e->vertex_count, e->index_count, false, false);
+        e->mesh_cache = slayer3d_gl_mesh_cache_lookup_or_create(ctx, false, e->primitive_mode, e->positions, NULL,
+                                                                e->uvs, NULL, e->colors, e->indices, NULL, NULL,
+                                                                e->vertex_count, e->index_count, false, false);
         return e->mesh_cache != NULL;
     }
 
@@ -4841,7 +2928,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
 
     const float *colors = params->colors ? params->colors : ensure_white_colors(ctx, params->vertex_count);
 
-    slayer3d_draw_entry *e = append_draw_entry(ctx);
+    slayer3d_draw_entry *e = slayer3d_gl_append_draw_entry(ctx);
     if (!e)
         return false;
 
@@ -4893,7 +2980,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
         e->colors = colors;
         e->indices = params->indices;
         draw_entry_compute_bounds(e);
-        e->mesh_cache = mesh_cache_lookup_or_create(
+        e->mesh_cache = slayer3d_gl_mesh_cache_lookup_or_create(
             ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs, e->lightmap_uvs, e->colors, e->indices,
             e->joint_indices, e->joint_weights, e->vertex_count, e->index_count, e->has_lightmap, e->gpu_skinned);
         return e->mesh_cache != NULL;
@@ -5396,7 +3483,7 @@ static bool gl_present(slayer3d_render_context *context)
     /* Overlay pass: UI text rendered directly to the default framebuffer,
      * after the FBO blit, bypassing all post-processing. */
     replay_overlay_list(ctx, vp_x, vp_y, vp_w, vp_h);
-    free_overlay_list(ctx);
+    slayer3d_gl_free_overlay_list(ctx);
 
     SDL_GL_SwapWindow(ctx->window);
     return true;
