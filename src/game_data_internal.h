@@ -9,6 +9,7 @@
 
 #include "game_data_actor_pool_types.h"
 #include "game_data_brush_internal.h"
+#include "game_data_network_types.h"
 #include "script_internal.h"
 #include "slayer3d/actor_controller.h"
 #include "slayer3d/asset.h"
@@ -464,31 +465,6 @@ typedef struct game_data_input_value
     int action_id;
     float value;
 } game_data_input_value;
-
-typedef struct runtime_direct_connect_session
-{
-    char *name;
-    slayer3d_network_session *session;
-} runtime_direct_connect_session;
-
-typedef struct runtime_host_session
-{
-    char *name;
-    slayer3d_network_session *session;
-} runtime_host_session;
-
-typedef struct runtime_discovery_session
-{
-    char *name;
-    slayer3d_network_discovery_session *session;
-} runtime_discovery_session;
-
-typedef struct network_diagnostic_runtime_state
-{
-    char *name;
-    Uint64 last_log_ms;
-    bool logged;
-} network_diagnostic_runtime_state;
 
 typedef struct scene_activity_state
 {
