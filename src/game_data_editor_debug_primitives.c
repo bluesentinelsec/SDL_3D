@@ -44,6 +44,7 @@ static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
 static bool emit_editor_debug_marker_cross(editor_debug_iteration_context *context, slayer3d_vec3 center, float size);
 static bool emit_editor_debug_marker_orb(editor_debug_iteration_context *context, slayer3d_vec3 center, float radius);
+static bool emit_editor_debug_selected_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center);
 
 static slayer3d_color editor_debug_color_or_default(slayer3d_color color, slayer3d_color fallback)
 {
@@ -361,7 +362,7 @@ static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_
             {
                 context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE;
                 context.color = (slayer3d_color){255, 32, 32, 255};
-                if (!emit_editor_debug_marker_orb(&context, center, 0.155f))
+                if (!emit_editor_debug_selected_vertex_outline(&context, center))
                     return false;
             }
         }
@@ -776,6 +777,13 @@ static bool emit_editor_debug_marker_orb(editor_debug_iteration_context *context
     return emit_editor_debug_line(context, slayer3d_vec3_sub(center, x), slayer3d_vec3_add(center, x)) &&
            emit_editor_debug_line(context, slayer3d_vec3_sub(center, y), slayer3d_vec3_add(center, y)) &&
            emit_editor_debug_line(context, slayer3d_vec3_sub(center, z), slayer3d_vec3_add(center, z));
+}
+
+static bool emit_editor_debug_selected_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center)
+{
+    return emit_editor_debug_marker_orb(context, center, 0.16f) &&
+           emit_editor_debug_marker_orb(context, center, 0.205f) &&
+           emit_editor_debug_marker_cross(context, center, 0.23f);
 }
 
 static bool emit_editor_debug_overlay_marker(const slayer3d_game_data_runtime *runtime, yyjson_val *marker,

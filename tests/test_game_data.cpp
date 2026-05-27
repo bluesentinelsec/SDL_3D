@@ -16643,6 +16643,12 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "vertex selection cleared");
+    SelectedVertexHandleCapture deselected_vertex_debug{};
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_selected_vertex_handles,
+                                                                          &deselected_vertex_debug));
+    EXPECT_EQ(deselected_vertex_debug.selected_handles, 0);
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
@@ -17052,7 +17058,9 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
     const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
     ASSERT_GE(vertex_signal, 0);
+    ASSERT_GE(escape_signal, 0);
     slayer3d_signal_emit(bus, vertex_signal, nullptr);
 
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
@@ -17115,6 +17123,37 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 8);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.selection.multiple", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex lasso selected");
+
+    struct LassoSelectedVertexDebugCapture
+    {
+        int selected_handles = 0;
+        bool selected_handle_is_red = false;
+    } selected_vertex_debug;
+    auto capture_selected_vertex_handles = [](void *userdata,
+                                              const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<LassoSelectedVertexDebugCapture *>(userdata);
+        if (primitive == nullptr || primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE)
+            return true;
+        capture->selected_handles++;
+        if (primitive->color.r >= 240 && primitive->color.g <= 64 && primitive->color.b <= 64)
+            capture->selected_handle_is_red = true;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_selected_vertex_handles,
+                                                                          &selected_vertex_debug));
+    EXPECT_GE(selected_vertex_debug.selected_handles,
+              slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0));
+    EXPECT_TRUE(selected_vertex_debug.selected_handle_is_red);
+
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "vertex selection cleared");
+    LassoSelectedVertexDebugCapture cleared_vertex_debug;
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_selected_vertex_handles,
+                                                                          &cleared_vertex_debug));
+    EXPECT_EQ(cleared_vertex_debug.selected_handles, 0);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
