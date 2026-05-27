@@ -17549,6 +17549,24 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAllowsConvexNonCuboidVertexMove)
     EXPECT_TRUE(diagnostics.valid) << diagnostics.first_issue;
     EXPECT_GT(diagnostics.face_count, 6);
 
+    struct SelectionOutlineCapture
+    {
+        int edges = 0;
+    } outline;
+    auto capture_selection_outline = [](void *userdata,
+                                        const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<SelectionOutlineCapture *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SELECTION_BOUNDS_EDGE &&
+            primitive->element_name != nullptr && SDL_strcmp(primitive->element_name, "brush.target.cube") == 0)
+        {
+            capture->edges++;
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_selection_outline, &outline));
+    EXPECT_GT(outline.edges, 12);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
