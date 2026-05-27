@@ -442,9 +442,13 @@ bool editor_handle_vertex_lasso(slayer3d_game_data_runtime *runtime, yyjson_val 
             const bool meaningful_drag = dx * dx + dy * dy >= 16.0f;
             const int selected_count =
                 meaningful_drag ? editor_select_vertices_in_lasso(runtime, selection_json, drag) : 0;
+            if (!meaningful_drag)
+                clear_editor_selected_vertices(runtime);
             slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
-                                           meaningful_drag ? "vertex lasso selected" : "vertex lasso canceled");
-            publish_editor_vertex_lasso_state(runtime, NULL, selected_count);
+                                           meaningful_drag ? "vertex lasso selected" : "vertex selection cleared");
+            publish_editor_selected_vertex_count(runtime);
+            publish_editor_vertex_lasso_state(runtime, NULL,
+                                              meaningful_drag ? selected_count : runtime->editor_selected_vertex_count);
             clear_editor_drag_move(runtime);
         }
         return true;

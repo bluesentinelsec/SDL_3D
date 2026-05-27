@@ -17930,6 +17930,30 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeClickTogglesAndClearsVertexSelect
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
                  "vertex selection cleared");
 
+    consumed = false;
+    ASSERT_TRUE(editor_handle_vertex_selection(runtime, &first_hover, true, &consumed));
+    EXPECT_TRUE(consumed);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event empty_down{};
+    empty_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    empty_down.button.button = SDL_BUTTON_LEFT;
+    empty_down.button.x = 8.0f;
+    empty_down.button.y = 88.0f;
+    slayer3d_input_process_event(input, &empty_down);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    SDL_Event empty_up = empty_down;
+    empty_up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &empty_up);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "vertex selection cleared");
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
