@@ -159,6 +159,50 @@ bool editor_hover_source_vertex_selection(const slayer3d_game_data_runtime *runt
     return editor_hover_source_vertex_selection_with_distance(runtime, hover_selection, out_selection, NULL);
 }
 
+static bool editor_vertex_toggle_modifier(SDL_Keymod modifiers)
+{
+    return (modifiers & (SDL_KMOD_SHIFT | SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+}
+
+static void editor_clear_vertex_selection_from_click(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    if (runtime->editor_selected_vertex_count > 0)
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex selection cleared");
+    clear_editor_selected_vertices(runtime);
+    publish_editor_selected_vertex_count(runtime);
+}
+
+static void editor_copy_vertex_selection_to_drag_origin(editor_drag_vertex_origin *origin,
+                                                        const editor_source_vertex_selection *selection)
+{
+    if (origin == NULL || selection == NULL)
+        return;
+    SDL_zero(*origin);
+    SDL_strlcpy(origin->world_name, selection->world_name, sizeof(origin->world_name));
+    SDL_strlcpy(origin->brush_name, selection->brush_name, sizeof(origin->brush_name));
+    SDL_strlcpy(origin->brush_stable_id, selection->brush_stable_id, sizeof(origin->brush_stable_id));
+    SDL_strlcpy(origin->vertex_stable_id, selection->vertex_stable_id, sizeof(origin->vertex_stable_id));
+    origin->source_index = selection->source_index;
+    origin->vertex_index = selection->vertex_index;
+    origin->coord[0] = selection->coord[0];
+    origin->coord[1] = selection->coord[1];
+    origin->coord[2] = selection->coord[2];
+}
+
+static void editor_mark_vertex_drag_toggle_on_click(slayer3d_game_data_runtime *runtime,
+                                                    const editor_source_vertex_selection *selection)
+{
+    if (runtime == NULL || selection == NULL || !runtime->editor_drag_move.active ||
+        !runtime->editor_drag_move.vertex_drag)
+    {
+        return;
+    }
+    runtime->editor_drag_move.vertex_toggle_on_click = true;
+    editor_copy_vertex_selection_to_drag_origin(&runtime->editor_drag_move.vertex_toggle_origin, selection);
+}
+
 bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
                                     const slayer3d_game_data_editor_selection *hover_selection, bool select_requested,
                                     bool *out_consumed)
@@ -175,7 +219,7 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
         {
             if (!editor_select_mode_primary_click(runtime, &resolved))
                 return false;
-            clear_editor_selected_vertices(runtime);
+            editor_clear_vertex_selection_from_click(runtime);
             slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "brush selected");
             if (out_consumed != NULL)
                 *out_consumed = true;
@@ -187,8 +231,7 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
     float nearest_distance_sq = FLT_MAX;
     if (!editor_hover_source_vertex_selection_with_distance(runtime, hover_selection, &hovered, &nearest_distance_sq))
     {
-        if ((SDL_GetModState() & SDL_KMOD_SHIFT) == 0)
-            clear_editor_selected_vertices(runtime);
+        editor_clear_vertex_selection_from_click(runtime);
         if (out_consumed != NULL)
             *out_consumed = true;
         return true;
@@ -196,8 +239,7 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
     const float handle_radius = editor_vertex_handle_pick_radius(runtime);
     if (nearest_distance_sq > handle_radius * handle_radius)
     {
-        if ((SDL_GetModState() & SDL_KMOD_SHIFT) == 0)
-            clear_editor_selected_vertices(runtime);
+        editor_clear_vertex_selection_from_click(runtime);
         if (editor_selection_is_selectable_brush(hover_selection))
         {
             runtime->editor_active_selection = resolved_editor_selection(runtime, hover_selection);
@@ -209,9 +251,11 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
         return true;
     }
 
-    const bool quick_merge =
-        (SDL_GetModState() & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) != 0 && (SDL_GetModState() & SDL_KMOD_SHIFT) == 0 &&
-        editor_selected_vertices_active_for_scene(runtime) && runtime->editor_selected_vertex_count > 0;
+    const SDL_Keymod modifiers = SDL_GetModState();
+    const bool additive_toggle = editor_vertex_toggle_modifier(modifiers);
+    const bool quick_merge = (modifiers & SDL_KMOD_ALT) != 0 && !additive_toggle &&
+                             editor_selected_vertices_active_for_scene(runtime) &&
+                             runtime->editor_selected_vertex_count > 0;
     if (quick_merge && editor_selected_vertex_index(runtime, &hovered) < 0)
     {
         if (!editor_merge_selected_vertices_to_target(runtime, NULL, &hovered))
@@ -223,26 +267,29 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
         return true;
     }
 
-    const bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
     const bool already_selected = editor_selected_vertex_index(runtime, &hovered) >= 0;
-    if (shift && already_selected)
+    if (already_selected)
     {
-        (void)editor_remove_shared_vertex_selection_group(runtime, &hovered);
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex deselected");
-    }
-    else if (already_selected)
-    {
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex selection drag");
-        editor_begin_vertex_drag(runtime, runtime_input(runtime), hover_selection);
+        if (additive_toggle)
+        {
+            (void)editor_remove_shared_vertex_selection_group(runtime, &hovered);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex deselected");
+        }
+        else
+        {
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex selection drag");
+            editor_begin_vertex_drag(runtime, runtime_input(runtime), hover_selection);
+            editor_mark_vertex_drag_toggle_on_click(runtime, &hovered);
+        }
     }
     else
     {
-        if (!shift)
+        if (!additive_toggle)
             clear_editor_selected_vertices(runtime);
         if (!editor_add_shared_vertex_selection_group(runtime, &hovered))
             return false;
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
-                                       shift ? "vertex added to selection" : "vertex selected");
+                                       additive_toggle ? "vertex added to selection" : "vertex selected");
         editor_begin_vertex_drag(runtime, runtime_input(runtime), hover_selection);
     }
 

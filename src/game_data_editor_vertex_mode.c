@@ -1573,11 +1573,31 @@ static void editor_capture_vertex_drag_origins(slayer3d_game_data_runtime *runti
         editor_drag_vertex_origin *origin = &drag->vertex_origins[i];
         SDL_strlcpy(origin->world_name, selection->world_name, sizeof(origin->world_name));
         SDL_strlcpy(origin->brush_name, selection->brush_name, sizeof(origin->brush_name));
+        SDL_strlcpy(origin->brush_stable_id, selection->brush_stable_id, sizeof(origin->brush_stable_id));
         SDL_strlcpy(origin->vertex_stable_id, selection->vertex_stable_id, sizeof(origin->vertex_stable_id));
+        origin->source_index = selection->source_index;
+        origin->vertex_index = selection->vertex_index;
         origin->coord[0] = selection->coord[0];
         origin->coord[1] = selection->coord[1];
         origin->coord[2] = selection->coord[2];
     }
+}
+
+static void editor_source_vertex_selection_from_drag_origin(const editor_drag_vertex_origin *origin,
+                                                            editor_source_vertex_selection *selection)
+{
+    if (origin == NULL || selection == NULL)
+        return;
+    init_editor_source_vertex_selection(selection);
+    SDL_strlcpy(selection->world_name, origin->world_name, sizeof(selection->world_name));
+    SDL_strlcpy(selection->brush_name, origin->brush_name, sizeof(selection->brush_name));
+    SDL_strlcpy(selection->brush_stable_id, origin->brush_stable_id, sizeof(selection->brush_stable_id));
+    SDL_strlcpy(selection->vertex_stable_id, origin->vertex_stable_id, sizeof(selection->vertex_stable_id));
+    selection->source_index = origin->source_index;
+    selection->vertex_index = origin->vertex_index;
+    selection->coord[0] = origin->coord[0];
+    selection->coord[1] = origin->coord[1];
+    selection->coord[2] = origin->coord[2];
 }
 
 void editor_begin_vertex_drag(slayer3d_game_data_runtime *runtime, slayer3d_input_manager *input,
@@ -1662,8 +1682,20 @@ bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
         const float dx = drag->current_mouse_x - drag->start_mouse_x;
         const float dy = drag->current_mouse_y - drag->start_mouse_y;
         const bool meaningful_drag = dx * dx + dy * dy >= 16.0f;
-        if (meaningful_drag)
+        if (drag->vertex_toggle_on_click && !meaningful_drag && !drag->moved)
+        {
+            editor_source_vertex_selection toggle_selection;
+            editor_source_vertex_selection_from_drag_origin(&drag->vertex_toggle_origin, &toggle_selection);
+            if (editor_remove_shared_vertex_selection_group(runtime, &toggle_selection))
+            {
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex deselected");
+                publish_editor_selected_vertex_count(runtime);
+            }
+        }
+        else if (meaningful_drag)
+        {
             (void)editor_try_merge_selected_vertices_to_hover(runtime, hover_selection);
+        }
         clear_editor_drag_move(runtime);
     }
     return true;
