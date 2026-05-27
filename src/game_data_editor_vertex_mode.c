@@ -476,6 +476,11 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
         (void)editor_remove_shared_vertex_selection_group(runtime, &hovered);
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex deselected");
     }
+    else if (already_selected)
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex selection drag");
+        editor_begin_vertex_drag(runtime, runtime_input(runtime), hover_selection);
+    }
     else
     {
         if (!shift)

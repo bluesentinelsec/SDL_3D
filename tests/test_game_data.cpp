@@ -16591,6 +16591,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
     {
         int selected_handles = 0;
         int hovered_handles = 0;
+        int base_handles = 0;
         bool selected_handle_is_red = false;
     } selected_vertex_debug;
     auto capture_selected_vertex_handles = [](void *userdata,
@@ -16598,6 +16599,8 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
         auto *capture = static_cast<SelectedVertexHandleCapture *>(userdata);
         if (primitive == nullptr)
             return true;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE)
+            capture->base_handles++;
         if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE)
         {
             capture->selected_handles++;
@@ -16612,6 +16615,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
                                                                           &selected_vertex_debug));
     EXPECT_GE(selected_vertex_debug.selected_handles, 1);
     EXPECT_GE(selected_vertex_debug.hovered_handles, 1);
+    EXPECT_LT(selected_vertex_debug.base_handles, vertex_debug.handles);
     EXPECT_TRUE(selected_vertex_debug.selected_handle_is_red);
 
     click.type = SDL_EVENT_MOUSE_BUTTON_UP;
@@ -17127,12 +17131,17 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
     struct LassoSelectedVertexDebugCapture
     {
         int selected_handles = 0;
+        int base_handles = 0;
         bool selected_handle_is_red = false;
     } selected_vertex_debug;
     auto capture_selected_vertex_handles = [](void *userdata,
                                               const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
         auto *capture = static_cast<LassoSelectedVertexDebugCapture *>(userdata);
-        if (primitive == nullptr || primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE)
+        if (primitive == nullptr)
+            return true;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE)
+            capture->base_handles++;
+        if (primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE)
             return true;
         capture->selected_handles++;
         if (primitive->color.r >= 240 && primitive->color.g <= 64 && primitive->color.b <= 64)
@@ -17143,7 +17152,34 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeLassoSelectsProjectedVertices)
                                                                           &selected_vertex_debug));
     EXPECT_GE(selected_vertex_debug.selected_handles,
               slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", 0));
+    EXPECT_EQ(selected_vertex_debug.base_handles, 0);
     EXPECT_TRUE(selected_vertex_debug.selected_handle_is_red);
+
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event drag_down{};
+    drag_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    drag_down.button.button = SDL_BUTTON_LEFT;
+    drag_down.button.x = motion.motion.x;
+    drag_down.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &drag_down);
+    slayer3d_input_update(input, 5);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 8);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.drag.guide_count", -1), 8);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "vertex selection drag");
+
+    drag_down.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &drag_down);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 8);
 
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 0);

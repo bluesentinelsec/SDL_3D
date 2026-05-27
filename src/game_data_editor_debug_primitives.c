@@ -346,11 +346,6 @@ static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_
             const bool hovered =
                 editor_debug_vertex_is_hovered(runtime, selection.world_name, model.vertices[vertex].stable_id);
 
-            context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE;
-            context.color = editor_debug_selection_flash_color(
-                editor_debug_color_or_default(desc->vertex_handle_color, (slayer3d_color){255, 224, 64, 255}));
-            if (!emit_editor_debug_marker_cross(&context, center, 0.12f))
-                return false;
             if (hovered)
             {
                 context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_HANDLE;
@@ -363,6 +358,14 @@ static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_
                 context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE;
                 context.color = (slayer3d_color){255, 32, 32, 255};
                 if (!emit_editor_debug_selected_vertex_outline(&context, center))
+                    return false;
+            }
+            else
+            {
+                context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE;
+                context.color = editor_debug_selection_flash_color(
+                    editor_debug_color_or_default(desc->vertex_handle_color, (slayer3d_color){255, 224, 64, 255}));
+                if (!emit_editor_debug_marker_cross(&context, center, 0.12f))
                     return false;
             }
         }
