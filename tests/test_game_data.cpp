@@ -17523,6 +17523,10 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAllowsConvexNonCuboidVertexMove)
     slayer3d_game_data_brush_world before_world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &before_world));
     ASSERT_EQ(before_world.brush_count, 1);
+    ASSERT_NE(before_world.render_model, nullptr);
+    ASSERT_GT(before_world.render_model->mesh_count, 0);
+    const Uint32 before_render_generation = before_world.render_model->meshes[0].generation;
+    EXPECT_GT(before_render_generation, 0u);
     const slayer3d_bounding_box before = before_world.brushes[0].bounds;
 
     SDL_Event key{};
@@ -17535,6 +17539,10 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAllowsConvexNonCuboidVertexMove)
     slayer3d_game_data_brush_world after_world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &after_world));
     ASSERT_EQ(after_world.brush_count, 1);
+    ASSERT_NE(after_world.render_model, nullptr);
+    ASSERT_GT(after_world.render_model->mesh_count, 0);
+    EXPECT_GT(after_world.render_model->meshes[0].generation, 0u);
+    EXPECT_NE(after_world.render_model->meshes[0].generation, before_render_generation);
     const slayer3d_bounding_box after = after_world.brushes[0].bounds;
     EXPECT_NEAR(after.min.x, selected_x <= 1000 ? before.min.x : before.min.x - 2.0f, 0.001f);
     EXPECT_NEAR(after.max.x, selected_x <= 1000 ? before.max.x + 2.0f : before.max.x, 0.001f);

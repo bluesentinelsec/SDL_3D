@@ -1142,6 +1142,7 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
 
     for (int i = 0; i < target_count; ++i)
     {
+        editor_brush_world_mark_dirty(targets[i].world_runtime);
         editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
         editor_refresh_selected_brushes_after_source_edit(runtime);
     }

@@ -53,6 +53,7 @@ typedef struct brush_world_compile_artifacts
     int visibility_grid_visible_cache_start[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
     Uint64 visibility_grid_visible_cache_tick[SLAYER3D_BRUSH_VISIBILITY_CACHE_SLOTS];
     Uint64 visibility_grid_visible_cache_clock;
+    Uint32 render_generation;
 } brush_world_compile_artifacts;
 
 typedef struct brush_world_runtime

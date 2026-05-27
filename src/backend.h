@@ -48,6 +48,7 @@ typedef struct slayer3d_draw_params_unlit
     float tint[4];
     int texture_filter; /* 0=nearest, 1=bilinear */
     bool static_geometry;
+    Uint32 generation;
 } slayer3d_draw_params_unlit;
 
 typedef struct slayer3d_draw_params_lit
@@ -96,6 +97,7 @@ typedef struct slayer3d_draw_params_lit
     const float *joint_weights;
     const slayer3d_mat4 *joint_matrices;
     int joint_count;
+    Uint32 generation;
 } slayer3d_draw_params_lit;
 
 /* ------------------------------------------------------------------ */

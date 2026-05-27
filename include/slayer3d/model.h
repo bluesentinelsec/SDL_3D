@@ -72,6 +72,7 @@ extern "C"
         bool has_local_bounds;
         slayer3d_bounding_box local_bounds;
         bool dynamic_geometry; /* true when vertex data is expected to mutate at runtime */
+        Uint32 generation;     /* incremented when static CPU buffers are rebuilt in-place */
 
         /* Skinning attributes (NULL when no skeleton). Up to 4 joints
          * per vertex. joint_indices indexes into the model's skeleton

@@ -2719,6 +2719,7 @@ static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_
     SDL_memcpy(e->mvp, params->mvp, 16 * sizeof(float));
     SDL_memcpy(e->tint, params->tint, 4 * sizeof(float));
     e->owns_arrays = !params->static_geometry;
+    e->generation = params->generation;
     draw_entry_capture_viewport(e, context);
 
     if (params->static_geometry)
@@ -2727,9 +2728,9 @@ static bool gl_draw_mesh_unlit(slayer3d_render_context *context, const slayer3d_
         e->uvs = params->uvs;
         e->colors = colors;
         e->indices = params->indices;
-        e->mesh_cache = slayer3d_gl_mesh_cache_lookup_or_create(ctx, false, e->primitive_mode, e->positions, NULL,
-                                                                e->uvs, NULL, e->colors, e->indices, NULL, NULL,
-                                                                e->vertex_count, e->index_count, false, false);
+        e->mesh_cache = slayer3d_gl_mesh_cache_lookup_or_create(
+            ctx, false, e->primitive_mode, e->positions, NULL, e->uvs, NULL, e->colors, e->indices, NULL, NULL,
+            e->vertex_count, e->index_count, e->generation, false, false);
         return e->mesh_cache != NULL;
     }
 
@@ -2770,6 +2771,7 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
     e->baked_light_mode = params->baked_light_mode;
     e->has_lightmap = params->lightmap_uvs != NULL && params->lightmap != NULL;
     e->owns_arrays = !params->static_geometry;
+    e->generation = params->generation;
     draw_entry_capture_viewport(e, context);
     e->depth_prepass_eligible = params->depth_prepass_eligible;
     e->gpu_skinned = params->static_geometry && params->joint_matrices != NULL && params->joint_indices != NULL &&
@@ -2800,7 +2802,8 @@ static bool gl_draw_mesh_lit(slayer3d_render_context *context, const slayer3d_dr
         draw_entry_compute_bounds(e);
         e->mesh_cache = slayer3d_gl_mesh_cache_lookup_or_create(
             ctx, true, e->primitive_mode, e->positions, e->normals, e->uvs, e->lightmap_uvs, e->colors, e->indices,
-            e->joint_indices, e->joint_weights, e->vertex_count, e->index_count, e->has_lightmap, e->gpu_skinned);
+            e->joint_indices, e->joint_weights, e->vertex_count, e->index_count, e->generation, e->has_lightmap,
+            e->gpu_skinned);
         return e->mesh_cache != NULL;
     }
 
