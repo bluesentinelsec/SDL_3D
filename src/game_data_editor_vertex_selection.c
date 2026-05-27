@@ -252,11 +252,11 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
     }
 
     const SDL_Keymod modifiers = SDL_GetModState();
-    const bool additive_toggle = editor_vertex_toggle_modifier(modifiers);
-    const bool quick_merge = (modifiers & SDL_KMOD_ALT) != 0 && !additive_toggle &&
-                             editor_selected_vertices_active_for_scene(runtime) &&
-                             runtime->editor_selected_vertex_count > 0;
-    if (quick_merge && editor_selected_vertex_index(runtime, &hovered) < 0)
+    const bool instant_merge = (modifiers & SDL_KMOD_ALT) != 0 && (modifiers & SDL_KMOD_SHIFT) != 0 &&
+                               (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) == 0 &&
+                               editor_selected_vertices_active_for_scene(runtime) &&
+                               runtime->editor_selected_vertex_count > 0;
+    if (instant_merge)
     {
         if (!editor_merge_selected_vertices_to_target(runtime, NULL, &hovered))
             return false;
@@ -267,6 +267,7 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
         return true;
     }
 
+    const bool additive_toggle = editor_vertex_toggle_modifier(modifiers);
     const bool already_selected = editor_selected_vertex_index(runtime, &hovered) >= 0;
     if (already_selected)
     {

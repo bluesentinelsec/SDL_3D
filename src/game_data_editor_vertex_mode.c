@@ -291,6 +291,28 @@ static bool editor_vertex_move_target_add(editor_source_vertex_move_target *targ
     return true;
 }
 
+static bool editor_vertex_move_target_add_coord(editor_source_vertex_move_target *target,
+                                                const editor_source_vertex_selection *selection,
+                                                const int target_coord[3])
+{
+    if (target == NULL || selection == NULL || target_coord == NULL || selection->vertex_index < 0)
+        return false;
+
+    for (int i = 0; i < target->vertex_index_count; ++i)
+    {
+        if (target->vertex_indices[i] == selection->vertex_index)
+            return true;
+    }
+    if (target->vertex_index_count >= SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+        return false;
+
+    const int index = target->vertex_index_count++;
+    target->vertex_indices[index] = selection->vertex_index;
+    for (int axis = 0; axis < 3; ++axis)
+        target->coords[index][axis] = target_coord[axis];
+    return true;
+}
+
 static const char *editor_source_move_target_identity(const editor_source_vertex_move_target *target)
 {
     if (target == NULL || target->world_runtime == NULL || target->source_index < 0 ||
@@ -365,6 +387,162 @@ static void editor_refresh_selected_vertices_after_source_edit(slayer3d_game_dat
     publish_editor_selected_vertex_count(runtime);
 }
 
+static bool editor_add_world_vertex_selection_group(slayer3d_game_data_runtime *runtime,
+                                                    const brush_world_runtime *world_runtime, const int coord[3])
+{
+    if (runtime == NULL || world_runtime == NULL || coord == NULL)
+        return false;
+
+    bool added_any = false;
+    for (int source_index = 0; source_index < world_runtime->editor_source_box_count; ++source_index)
+    {
+        editor_brush_source_vertex_model model;
+        if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, NULL, 0))
+            continue;
+
+        for (int vertex_index = 0; vertex_index < model.vertex_count; ++vertex_index)
+        {
+            if (!editor_coord_equal(model.vertices[vertex_index].coord, coord))
+                continue;
+
+            editor_source_vertex_selection selection;
+            if (editor_source_vertex_selection_from_model(world_runtime, &model, vertex_index, &selection) &&
+                add_editor_selected_vertex(runtime, &selection))
+            {
+                added_any = true;
+            }
+        }
+    }
+    return added_any;
+}
+
+static bool editor_target_coord_already_seen(const editor_source_vertex_move_target *targets, int target_count,
+                                             const brush_world_runtime *world_runtime, const int coord[3])
+{
+    if (targets == NULL || world_runtime == NULL || coord == NULL)
+        return false;
+    for (int i = 0; i < target_count; ++i)
+    {
+        if (targets[i].world_runtime != world_runtime)
+            continue;
+        for (int coord_index = 0; coord_index < targets[i].vertex_index_count; ++coord_index)
+        {
+            if (editor_coord_equal(targets[i].coords[coord_index], coord))
+                return true;
+        }
+    }
+    return false;
+}
+
+static void editor_reselect_vertices_from_move_targets(slayer3d_game_data_runtime *runtime,
+                                                       const editor_source_vertex_move_target *targets,
+                                                       int target_count)
+{
+    if (runtime == NULL || targets == NULL || target_count <= 0)
+        return;
+
+    clear_editor_selected_vertices(runtime);
+    for (int i = 0; i < target_count; ++i)
+    {
+        const editor_source_vertex_move_target *target = &targets[i];
+        if (target->world_runtime == NULL)
+            continue;
+        for (int coord_index = 0; coord_index < target->vertex_index_count; ++coord_index)
+        {
+            if (editor_target_coord_already_seen(targets, i, target->world_runtime, target->coords[coord_index]))
+                continue;
+            (void)editor_add_world_vertex_selection_group(runtime, target->world_runtime, target->coords[coord_index]);
+        }
+    }
+    publish_editor_selected_vertex_count(runtime);
+}
+
+static void editor_mark_dirty_and_refresh_after_vertex_targets(slayer3d_game_data_runtime *runtime,
+                                                               const editor_source_vertex_move_target *targets,
+                                                               int target_count)
+{
+    if (runtime == NULL || targets == NULL || target_count <= 0)
+        return;
+
+    for (int i = 0; i < target_count; ++i)
+    {
+        if (targets[i].world_runtime == NULL)
+            continue;
+
+        bool already_refreshed = false;
+        for (int previous = 0; previous < i; ++previous)
+        {
+            if (targets[previous].world_runtime == targets[i].world_runtime)
+                already_refreshed = true;
+        }
+        if (already_refreshed)
+            continue;
+
+        editor_brush_world_mark_dirty(targets[i].world_runtime);
+        editor_refresh_selected_brushes_after_source_edit(runtime);
+    }
+}
+
+static bool editor_apply_vertex_move_targets(const editor_source_vertex_move_target *targets, int target_count,
+                                             int *out_changed_count, char *error, size_t error_size)
+{
+    if (out_changed_count != NULL)
+        *out_changed_count = 0;
+    if (error != NULL && error_size > 0)
+        error[0] = '\0';
+    if (targets == NULL || target_count <= 0)
+    {
+        set_error(error, (int)error_size, "vertex move requires target vertices");
+        return false;
+    }
+
+    int total_changed = 0;
+    for (int i = 0; i < target_count; ++i)
+    {
+        editor_brush_source_vertex_operation_desc desc;
+        editor_init_vertex_move_desc(&targets[i], &desc);
+        editor_brush_source_vertex_operation_result preview;
+        SDL_zero(preview);
+        if (!editor_brush_world_preview_source_vertex_operation(targets[i].world_runtime, &desc, &preview, error,
+                                                                (int)error_size))
+        {
+            editor_brush_source_free_runtime_brush(&preview.brush);
+            return false;
+        }
+        total_changed += preview.changed_count;
+        editor_brush_source_free_runtime_brush(&preview.brush);
+    }
+
+    editor_source_vertex_move_rollback rollbacks[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    SDL_zeroa(rollbacks);
+    if (!editor_capture_vertex_move_rollbacks(targets, target_count, rollbacks, SDL_arraysize(rollbacks), error,
+                                              (int)error_size))
+    {
+        editor_dispose_vertex_move_rollbacks(rollbacks, target_count);
+        return false;
+    }
+
+    for (int i = 0; i < target_count; ++i)
+    {
+        editor_brush_source_vertex_operation_desc desc;
+        editor_init_vertex_move_desc(&targets[i], &desc);
+        editor_brush_source_vertex_operation_result result;
+        SDL_zero(result);
+        if (!editor_brush_world_apply_source_vertex_operation(targets[i].world_runtime, &desc, &result, error,
+                                                              (int)error_size))
+        {
+            editor_restore_vertex_move_rollbacks(rollbacks, target_count);
+            editor_brush_source_free_runtime_brush(&result.brush);
+            return false;
+        }
+        editor_brush_source_free_runtime_brush(&result.brush);
+    }
+    editor_dispose_vertex_move_rollbacks(rollbacks, target_count);
+    if (out_changed_count != NULL)
+        *out_changed_count = total_changed;
+    return true;
+}
+
 bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset)
 {
     if (runtime == NULL || runtime->scene_state == NULL || !editor_selected_vertices_active_for_scene(runtime) ||
@@ -420,70 +598,20 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
     char error[256];
     SDL_zeroa(error);
     int total_changed = 0;
-    for (int i = 0; i < target_count; ++i)
-    {
-        editor_brush_source_vertex_operation_desc desc;
-        editor_init_vertex_move_desc(&targets[i], &desc);
-        editor_brush_source_vertex_operation_result preview;
-        SDL_zero(preview);
-        if (!editor_brush_world_preview_source_vertex_operation(targets[i].world_runtime, &desc, &preview, error,
-                                                                sizeof(error)))
-        {
-            char message[320];
-            SDL_snprintf(message, sizeof(message), "vertex move blocked: %s",
-                         error[0] != '\0' ? error : "invalid source edit");
-            publish_editor_vertex_move_result(runtime, false, target_count, total_changed, message);
-            editor_brush_source_free_runtime_brush(&preview.brush);
-            editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
-            editor_refresh_selected_brushes_after_source_edit(runtime);
-            return false;
-        }
-        total_changed += preview.changed_count;
-        editor_brush_source_free_runtime_brush(&preview.brush);
-    }
-
-    editor_source_vertex_move_rollback rollbacks[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(rollbacks);
-    if (!editor_capture_vertex_move_rollbacks(targets, target_count, rollbacks, SDL_arraysize(rollbacks), error,
-                                              sizeof(error)))
+    if (!editor_apply_vertex_move_targets(targets, target_count, &total_changed, error, sizeof(error)))
     {
         char message[320];
         SDL_snprintf(message, sizeof(message), "vertex move blocked: %s",
-                     error[0] != '\0' ? error : "rollback capture failed");
+                     error[0] != '\0' ? error : "invalid source edit");
         publish_editor_vertex_move_result(runtime, false, target_count, total_changed, message);
-        editor_dispose_vertex_move_rollbacks(rollbacks, target_count);
+        for (int i = 0; i < target_count; ++i)
+            editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
+        editor_refresh_selected_brushes_after_source_edit(runtime);
         return false;
     }
 
-    for (int i = 0; i < target_count; ++i)
-    {
-        editor_brush_source_vertex_operation_desc desc;
-        editor_init_vertex_move_desc(&targets[i], &desc);
-        editor_brush_source_vertex_operation_result result;
-        SDL_zero(result);
-        if (!editor_brush_world_apply_source_vertex_operation(targets[i].world_runtime, &desc, &result, error,
-                                                              sizeof(error)))
-        {
-            char message[320];
-            SDL_snprintf(message, sizeof(message), "vertex move blocked: %s",
-                         error[0] != '\0' ? error : "invalid source edit");
-            editor_restore_vertex_move_rollbacks(rollbacks, target_count);
-            publish_editor_vertex_move_result(runtime, false, target_count, total_changed, message);
-            editor_brush_source_free_runtime_brush(&result.brush);
-            editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
-            editor_refresh_selected_brushes_after_source_edit(runtime);
-            return false;
-        }
-        editor_brush_source_free_runtime_brush(&result.brush);
-    }
-    editor_dispose_vertex_move_rollbacks(rollbacks, target_count);
-
-    for (int i = 0; i < target_count; ++i)
-    {
-        editor_brush_world_mark_dirty(targets[i].world_runtime);
-        editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
-        editor_refresh_selected_brushes_after_source_edit(runtime);
-    }
+    editor_mark_dirty_and_refresh_after_vertex_targets(runtime, targets, target_count);
+    editor_reselect_vertices_from_move_targets(runtime, targets, target_count);
     publish_editor_vertex_move_result(runtime, true, target_count, total_changed, "moved selected vertices");
     return true;
 }
@@ -897,35 +1025,71 @@ static bool editor_vertex_merge_target_from_action(slayer3d_game_data_runtime *r
     return editor_source_vertex_selection_from_model(world_runtime, &model, target_vertex_index, out_target);
 }
 
-static int editor_collect_vertex_merge_indices(const slayer3d_game_data_runtime *runtime,
-                                               const editor_source_vertex_selection *target, int *vertex_indices,
-                                               int vertex_capacity)
+static bool editor_collect_vertex_merge_move_targets(slayer3d_game_data_runtime *runtime,
+                                                     const editor_source_vertex_selection *merge_target,
+                                                     editor_source_vertex_move_target *targets, int target_capacity,
+                                                     int *out_target_count, char *message_buffer,
+                                                     size_t message_buffer_size)
 {
-    if (runtime == NULL || target == NULL || vertex_indices == NULL || vertex_capacity <= 0 ||
+    if (out_target_count != NULL)
+        *out_target_count = 0;
+    if (runtime == NULL || merge_target == NULL || targets == NULL || target_capacity <= 0 ||
         !editor_selected_vertices_active_for_scene(runtime))
     {
-        return 0;
+        set_error(message_buffer, (int)message_buffer_size, "vertex merge requires selected vertices");
+        return false;
     }
 
-    int count = 0;
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, merge_target->world_name);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(message_buffer, (int)message_buffer_size, "vertex merge source brush not found");
+        return false;
+    }
+
+    int target_count = 0;
+    int merge_count = 0;
     for (int i = 0; i < runtime->editor_selected_vertex_count; ++i)
     {
         const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[i];
-        if (SDL_strcmp(selection->world_name, target->world_name) != 0 ||
-            selection->source_index != target->source_index || selection->vertex_index == target->vertex_index)
+        if (SDL_strcmp(selection->world_name, world_runtime->desc.name) != 0 || selection->source_index < 0 ||
+            selection->source_index >= world_runtime->editor_source_box_count)
         {
-            continue;
+            set_error(message_buffer, (int)message_buffer_size, "vertex merge blocked: invalid source selection");
+            return false;
         }
-        bool duplicate = false;
-        for (int v = 0; v < count; ++v)
-            duplicate = duplicate || vertex_indices[v] == selection->vertex_index;
-        if (duplicate)
+        if (editor_coord_equal(selection->coord, merge_target->coord))
             continue;
-        if (count >= vertex_capacity)
-            break;
-        vertex_indices[count++] = selection->vertex_index;
+
+        editor_source_vertex_move_target *target =
+            editor_find_vertex_move_target(targets, target_count, world_runtime, selection->source_index);
+        if (target == NULL)
+        {
+            if (target_count >= target_capacity)
+            {
+                set_error(message_buffer, (int)message_buffer_size, "vertex merge blocked: too many source brushes");
+                return false;
+            }
+            target = &targets[target_count++];
+            target->world_runtime = world_runtime;
+            target->source_index = selection->source_index;
+        }
+        if (!editor_vertex_move_target_add_coord(target, selection, merge_target->coord))
+        {
+            set_error(message_buffer, (int)message_buffer_size, "vertex merge blocked: too many selected vertices");
+            return false;
+        }
+        ++merge_count;
     }
-    return count;
+
+    if (merge_count <= 0)
+    {
+        set_error(message_buffer, (int)message_buffer_size, "vertex merge requires selected vertices away from target");
+        return false;
+    }
+    if (out_target_count != NULL)
+        *out_target_count = target_count;
+    return true;
 }
 
 static void publish_editor_vertex_merge_result(slayer3d_game_data_runtime *runtime, yyjson_val *action, bool valid,
@@ -974,14 +1138,16 @@ bool editor_merge_selected_vertices_to_target(slayer3d_game_data_runtime *runtim
         return true;
     }
 
-    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
-    SDL_zeroa(vertex_indices);
-    const int vertex_index_count =
-        editor_collect_vertex_merge_indices(runtime, target, vertex_indices, SDL_arraysize(vertex_indices));
-    if (vertex_index_count <= 0)
+    editor_source_vertex_move_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
+    SDL_zeroa(targets);
+    int target_count = 0;
+    char error[256];
+    SDL_zeroa(error);
+    if (!editor_collect_vertex_merge_move_targets(runtime, target, targets, SDL_arraysize(targets), &target_count,
+                                                  error, sizeof(error)))
     {
         publish_editor_vertex_merge_result(runtime, action, false, 0,
-                                           "vertex merge requires selected vertices in the target source brush");
+                                           error[0] != '\0' ? error : "vertex merge requires selected vertices");
         return true;
     }
 
@@ -992,57 +1158,26 @@ bool editor_merge_selected_vertices_to_target(slayer3d_game_data_runtime *runtim
         publish_editor_vertex_merge_result(runtime, action, false, 0, "vertex merge source brush not found");
         return true;
     }
-    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[target->source_index];
-    const char *identity = box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
 
-    editor_brush_source_vertex_operation_desc desc;
-    SDL_zero(desc);
-    desc.brush_identity = identity;
-    desc.type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MERGE_MANY_TO_TARGET;
-    desc.target_vertex_index = target->vertex_index;
-    desc.vertex_index_count = vertex_index_count;
-    for (int i = 0; i < vertex_index_count; ++i)
-        desc.vertex_indices[i] = vertex_indices[i];
-
-    char error[256];
-    SDL_zeroa(error);
-    editor_brush_source_vertex_operation_result preview;
-    SDL_zero(preview);
-    if (!editor_brush_world_preview_source_vertex_operation(world_runtime, &desc, &preview, error, sizeof(error)))
+    int changed_count = 0;
+    if (!editor_apply_vertex_move_targets(targets, target_count, &changed_count, error, sizeof(error)))
     {
         char message[320];
         SDL_snprintf(message, sizeof(message), "vertex merge blocked: %s",
                      error[0] != '\0' ? error : "invalid source edit");
         publish_editor_vertex_merge_result(runtime, action, false, 0, message);
-        editor_brush_source_free_runtime_brush(&preview.brush);
         return true;
     }
-    editor_brush_source_free_runtime_brush(&preview.brush);
 
-    editor_brush_source_vertex_operation_result result;
-    SDL_zero(result);
-    if (!editor_brush_world_apply_source_vertex_operation(world_runtime, &desc, &result, error, sizeof(error)))
-    {
-        char message[320];
-        SDL_snprintf(message, sizeof(message), "vertex merge blocked: %s",
-                     error[0] != '\0' ? error : "invalid source edit");
-        publish_editor_vertex_merge_result(runtime, action, false, 0, message);
-        editor_brush_source_free_runtime_brush(&result.brush);
-        return true;
-    }
-    const int merged_count = result.changed_count;
-    editor_brush_source_free_runtime_brush(&result.brush);
-
-    editor_refresh_selected_vertices_after_source_edit(runtime, world_runtime);
-    editor_refresh_selected_brushes_after_source_edit(runtime);
+    editor_mark_dirty_and_refresh_after_vertex_targets(runtime, targets, target_count);
     clear_editor_selected_vertices(runtime);
-    (void)editor_add_shared_vertex_selection_group(runtime, target);
+    (void)editor_add_world_vertex_selection_group(runtime, world_runtime, target->coord);
     publish_editor_selected_vertex_count(runtime);
 
     char message[160];
-    SDL_snprintf(message, sizeof(message), "merged %d selected source vert%s", merged_count,
-                 merged_count == 1 ? "ex" : "ices");
-    publish_editor_vertex_merge_result(runtime, action, true, merged_count, message);
+    SDL_snprintf(message, sizeof(message), "merged %d selected source vert%s", changed_count,
+                 changed_count == 1 ? "ex" : "ices");
+    publish_editor_vertex_merge_result(runtime, action, true, changed_count, message);
     return true;
 }
 
@@ -1541,25 +1676,6 @@ bool slayer3d_game_data_validate_editor_vertex_source(slayer3d_game_data_runtime
     return true;
 }
 
-static bool editor_try_merge_selected_vertices_to_hover(slayer3d_game_data_runtime *runtime,
-                                                        const slayer3d_game_data_editor_selection *hover_selection)
-{
-    if (runtime == NULL || hover_selection == NULL || !editor_selected_vertices_active_for_scene(runtime) ||
-        runtime->editor_selected_vertex_count <= 0)
-    {
-        return false;
-    }
-
-    editor_source_vertex_selection target;
-    init_editor_source_vertex_selection(&target);
-    if (!editor_hover_source_vertex_selection(runtime, hover_selection, &target))
-        return false;
-    if (editor_selected_vertex_index(runtime, &target) >= 0)
-        return false;
-
-    return slayer3d_game_data_merge_selected_editor_vertices_to_hover(runtime, NULL);
-}
-
 static void editor_capture_vertex_drag_origins(slayer3d_game_data_runtime *runtime, editor_drag_move_state *drag)
 {
     if (runtime == NULL || drag == NULL || !editor_selected_vertices_active_for_scene(runtime))
@@ -1691,10 +1807,6 @@ bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
                 slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex deselected");
                 publish_editor_selected_vertex_count(runtime);
             }
-        }
-        else if (meaningful_drag)
-        {
-            (void)editor_try_merge_selected_vertices_to_hover(runtime, hover_selection);
         }
         clear_editor_drag_move(runtime);
     }

@@ -17586,6 +17586,97 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAllowsConvexNonCuboidVertexMove)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoVertexModeAutoFusesVertexWhenDraggedOntoVertex)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
+    ASSERT_GE(vertex_signal, 0);
+    slayer3d_signal_emit(bus, vertex_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    const int selected_index = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.index", -1);
+    ASSERT_GE(selected_index, 0);
+    const int selected_x = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.x", -1);
+    const int selected_y = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1);
+    const int selected_z = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.z", -1);
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    ASSERT_EQ(model.vertex_count, 8);
+    const int target_index = selected_index ^ 1;
+    ASSERT_GE(target_index, 0);
+    ASSERT_LT(target_index, model.vertex_count);
+    const int target_x = model.vertices[target_index].coord[0];
+    const int target_y = model.vertices[target_index].coord[1];
+    const int target_z = model.vertices[target_index].coord[2];
+
+    const slayer3d_vec3 offset =
+        slayer3d_vec3_make((float)(target_x - selected_x) * 0.001f, (float)(target_y - selected_y) * 0.001f,
+                           (float)(target_z - selected_z) * 0.001f);
+    ASSERT_TRUE(editor_translate_selected_vertices(runtime, offset));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.move.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.x", -1), target_x);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1), target_y);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.z", -1), target_z);
+
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 7);
+    int target_coord_count = 0;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        if (model.vertices[i].coord[0] == target_x && model.vertices[i].coord[1] == target_y &&
+            model.vertices[i].coord[2] == target_z)
+        {
+            ++target_coord_count;
+        }
+    }
+    EXPECT_EQ(target_coord_count, 1);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoVertexModeDeleteSelectedVertexUsesSourceValidation)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -17742,7 +17833,7 @@ TEST(GameDataRuntime, EditorVertexMergeSelectedToTargetUsesSourceValidation)
     slayer3d_game_session_destroy(session);
 }
 
-TEST(GameDataRuntime, EditorShellDojoVertexModeAltClickFusesSelectedVertex)
+TEST(GameDataRuntime, EditorShellDojoVertexModeAltShiftClickFusesSelectedVertex)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
@@ -17815,7 +17906,7 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeAltClickFusesSelectedVertex)
     target_hover.bounds.max = slayer3d_vec3_make(2.0f, 2.0f, 2.0f);
     target_hover.has_bounds = true;
 
-    SDL_SetModState(SDL_KMOD_ALT);
+    SDL_SetModState((SDL_Keymod)(SDL_KMOD_ALT | SDL_KMOD_SHIFT));
     bool consumed = false;
     ASSERT_TRUE(editor_handle_vertex_selection(runtime, &target_hover, true, &consumed));
     SDL_SetModState(SDL_KMOD_NONE);
