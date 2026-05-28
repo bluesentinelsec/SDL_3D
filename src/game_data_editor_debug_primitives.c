@@ -44,7 +44,10 @@ static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
 static bool emit_editor_debug_marker_cross(editor_debug_iteration_context *context, slayer3d_vec3 center, float size);
 static bool emit_editor_debug_marker_orb(editor_debug_iteration_context *context, slayer3d_vec3 center, float radius);
+static bool emit_editor_debug_hover_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center);
 static bool emit_editor_debug_selected_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center);
+static bool emit_editor_debug_vertex_hover_label(editor_debug_iteration_context *context, slayer3d_vec3 center,
+                                                 const editor_brush_source_vertex *vertex);
 static bool emit_editor_debug_source_brush_edges(editor_debug_iteration_context *context,
                                                  const brush_world_runtime *world,
                                                  const slayer3d_game_data_editor_selection *selection);
@@ -205,6 +208,29 @@ static bool emit_editor_debug_line(editor_debug_iteration_context *context, slay
     return true;
 }
 
+static bool emit_editor_debug_label(editor_debug_iteration_context *context, slayer3d_vec3 position, const char *text)
+{
+    if (context == NULL || context->callback == NULL || text == NULL)
+        return false;
+
+    slayer3d_game_data_editor_debug_primitive primitive;
+    SDL_zero(primitive);
+    primitive.type = context->type;
+    primitive.start = position;
+    primitive.end = position;
+    primitive.color = context->color;
+    primitive.world_name = context->world_name;
+    primitive.element_name = context->element_name;
+    primitive.face_index = context->face_index;
+    SDL_strlcpy(primitive.text, text, sizeof(primitive.text));
+    if (!context->callback(context->userdata, &primitive))
+    {
+        context->stopped = true;
+        return false;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_game_data_runtime *runtime,
                                                                slayer3d_game_data_editor_debug_primitive_fn callback,
                                                                void *userdata)
@@ -353,8 +379,11 @@ static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_
             {
                 context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_HANDLE;
                 context.color = (slayer3d_color){255, 48, 48, 255};
-                if (!emit_editor_debug_marker_orb(&context, center, 0.115f))
+                if (!emit_editor_debug_hover_vertex_outline(&context, center) ||
+                    !emit_editor_debug_vertex_hover_label(&context, center, &model.vertices[vertex]))
+                {
                     return false;
+                }
             }
             if (selected)
             {
@@ -824,6 +853,25 @@ static bool emit_editor_debug_selected_vertex_outline(editor_debug_iteration_con
     return emit_editor_debug_marker_orb(context, center, 0.16f) &&
            emit_editor_debug_marker_orb(context, center, 0.205f) &&
            emit_editor_debug_marker_cross(context, center, 0.23f);
+}
+
+static bool emit_editor_debug_hover_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center)
+{
+    return emit_editor_debug_marker_orb(context, center, 0.18f);
+}
+
+static bool emit_editor_debug_vertex_hover_label(editor_debug_iteration_context *context, slayer3d_vec3 center,
+                                                 const editor_brush_source_vertex *vertex)
+{
+    if (context == NULL || vertex == NULL)
+        return false;
+
+    char label[64];
+    SDL_snprintf(label, sizeof(label), "X %d  Y %d  Z %d", vertex->coord[0], vertex->coord[1], vertex->coord[2]);
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL;
+    context->color = (slayer3d_color){255, 245, 210, 255};
+    const slayer3d_vec3 label_position = slayer3d_vec3_add(center, slayer3d_vec3_make(0.0f, 0.28f, 0.0f));
+    return emit_editor_debug_label(context, label_position, label);
 }
 
 static bool emit_editor_debug_overlay_marker(const slayer3d_game_data_runtime *runtime, yyjson_val *marker,

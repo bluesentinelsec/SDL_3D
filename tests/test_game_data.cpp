@@ -16591,8 +16591,10 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
     {
         int selected_handles = 0;
         int hovered_handles = 0;
+        int hover_labels = 0;
         int base_handles = 0;
         bool selected_handle_is_red = false;
+        bool hover_label_has_coordinates = false;
     } selected_vertex_debug;
     auto capture_selected_vertex_handles = [](void *userdata,
                                               const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
@@ -16609,14 +16611,26 @@ TEST(GameDataRuntime, EditorShellDojoVertexModePublishesSourceVertexHandles)
         }
         if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_HANDLE)
             capture->hovered_handles++;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL)
+        {
+            capture->hover_labels++;
+            const std::string label = primitive->text;
+            if (label.find("X ") != std::string::npos && label.find("Y ") != std::string::npos &&
+                label.find("Z ") != std::string::npos)
+            {
+                capture->hover_label_has_coordinates = true;
+            }
+        }
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_selected_vertex_handles,
                                                                           &selected_vertex_debug));
     EXPECT_GE(selected_vertex_debug.selected_handles, 1);
     EXPECT_GE(selected_vertex_debug.hovered_handles, 1);
+    EXPECT_GE(selected_vertex_debug.hover_labels, 1);
     EXPECT_LT(selected_vertex_debug.base_handles, vertex_debug.handles);
     EXPECT_TRUE(selected_vertex_debug.selected_handle_is_red);
+    EXPECT_TRUE(selected_vertex_debug.hover_label_has_coordinates);
 
     click.type = SDL_EVENT_MOUSE_BUTTON_UP;
     slayer3d_input_process_event(input, &click);
