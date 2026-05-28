@@ -55,6 +55,18 @@ static int editor_snap_source_coord_to_units(int coord, int snap_units)
     return coord >= 0 ? ((coord + half) / snap_units) * snap_units : ((coord - half) / snap_units) * snap_units;
 }
 
+static int editor_dominant_axis_from_normal(slayer3d_vec3 normal)
+{
+    const float abs_x = SDL_fabsf(normal.x);
+    const float abs_y = SDL_fabsf(normal.y);
+    const float abs_z = SDL_fabsf(normal.z);
+    if (abs_x >= abs_y && abs_x >= abs_z)
+        return 0;
+    if (abs_y >= abs_z)
+        return 1;
+    return 2;
+}
+
 static bool editor_vertex_add_coord_from_selection(const brush_world_runtime *world_runtime,
                                                    const slayer3d_game_data_runtime *runtime,
                                                    const slayer3d_game_data_editor_selection *selection,
@@ -68,14 +80,17 @@ static bool editor_vertex_add_coord_from_selection(const brush_world_runtime *wo
     const slayer3d_vec3 normal = slayer3d_vec3_length_squared(selection->normal) > 0.000001f
                                      ? slayer3d_vec3_normalize(selection->normal)
                                      : slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
-    const slayer3d_vec3 local_point = slayer3d_vec3_sub(
-        slayer3d_vec3_add(selection->point, slayer3d_vec3_scale(normal, grid_size)), selection->world_position);
-    out_coord[0] =
-        editor_snap_source_coord_to_units(editor_source_units_from_meters(world_runtime, local_point.x), snap_units);
-    out_coord[1] =
-        editor_snap_source_coord_to_units(editor_source_units_from_meters(world_runtime, local_point.y), snap_units);
-    out_coord[2] =
-        editor_snap_source_coord_to_units(editor_source_units_from_meters(world_runtime, local_point.z), snap_units);
+    const slayer3d_vec3 local_point = slayer3d_vec3_sub(selection->point, selection->world_position);
+    out_coord[0] = editor_source_units_from_meters(world_runtime, local_point.x);
+    out_coord[1] = editor_source_units_from_meters(world_runtime, local_point.y);
+    out_coord[2] = editor_source_units_from_meters(world_runtime, local_point.z);
+
+    const int fixed_axis = editor_dominant_axis_from_normal(normal);
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (axis != fixed_axis)
+            out_coord[axis] = editor_snap_source_coord_to_units(out_coord[axis], snap_units);
+    }
     return true;
 }
 

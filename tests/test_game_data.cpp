@@ -18173,6 +18173,16 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.preview.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.vertex.add.preview.message", ""),
                  "vertex add preview");
+    const slayer3d_vec3 hit_point =
+        slayer3d_properties_get_vec3(scene_state, "editor.selection.point", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 hit_normal =
+        slayer3d_properties_get_vec3(scene_state, "editor.selection.normal", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 preview_position = slayer3d_properties_get_vec3(
+        scene_state, "editor.vertex.add.preview.position", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 preview_delta = slayer3d_vec3_sub(preview_position, hit_point);
+    const float preview_normal_offset =
+        preview_delta.x * hit_normal.x + preview_delta.y * hit_normal.y + preview_delta.z * hit_normal.z;
+    EXPECT_NEAR(preview_normal_offset, 0.0f, 0.002f);
 
     struct AddPreviewCapture
     {
