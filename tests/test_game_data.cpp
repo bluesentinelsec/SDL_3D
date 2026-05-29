@@ -9219,8 +9219,24 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
         "padding": 4,
         "gap": 8,
         "children": [
-          { "id": "toolbar.file", "type": "button", "w": 96, "h": "fill" },
-          { "id": "toolbar.grid", "type": "dropdown", "w": "fill", "h": "fill", "layer": 10, "interactive": true }
+          {
+            "id": "toolbar.file",
+            "type": "button",
+            "w": 96,
+            "h": "fill",
+            "text": "File",
+            "action": "editor.file",
+            "selected": true
+          },
+          {
+            "id": "toolbar.grid",
+            "type": "dropdown",
+            "w": "fill",
+            "h": "fill",
+            "layer": 10,
+            "interactive": true,
+            "label": "Grid"
+          }
         ]
       }
     ]
@@ -9296,6 +9312,24 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
   ]
 })json",
             "UI widget interactive must be a boolean",
+        },
+        {
+            "bad_action",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "action": "" }
+  ]
+})json",
+            "UI widget action must be a non-empty string",
+        },
+        {
+            "bad_selected",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "selected": "true" }
+  ]
+})json",
+            "UI widget selected must be a boolean",
         },
     };
 

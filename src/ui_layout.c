@@ -22,6 +22,11 @@ typedef struct ui_layout_node
     float gap;
     int layer;
     bool interactive;
+    char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+    char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+    bool hovered;
+    bool active;
+    bool selected;
     bool resolved;
     bool resolving;
 } ui_layout_node;
@@ -39,6 +44,7 @@ struct slayer3d_ui_layout_model
     int generation;
     float resolved_viewport_w;
     float resolved_viewport_h;
+    char active_id[SLAYER3D_UI_LAYOUT_ID_MAX];
     bool dirty;
 };
 
@@ -50,6 +56,16 @@ static bool ui_layout_id_valid(const char *id)
 static void ui_layout_copy_id(char *dst, const char *src)
 {
     SDL_snprintf(dst, SLAYER3D_UI_LAYOUT_ID_MAX, "%s", src != NULL ? src : "");
+}
+
+static void ui_layout_copy_text(char *dst, const char *src)
+{
+    SDL_snprintf(dst, SLAYER3D_UI_LAYOUT_TEXT_MAX, "%s", src != NULL ? src : "");
+}
+
+static void ui_layout_copy_action(char *dst, const char *src)
+{
+    SDL_snprintf(dst, SLAYER3D_UI_LAYOUT_ACTION_MAX, "%s", src != NULL ? src : "");
 }
 
 static int ui_layout_find_node_index(const slayer3d_ui_layout_model *model, const char *id)
@@ -111,6 +127,16 @@ static bool ui_layout_type_interactive(slayer3d_ui_layout_node_type type)
            type == SLAYER3D_UI_LAYOUT_NODE_TAB_STRIP;
 }
 
+static bool ui_layout_text_valid(const char *text)
+{
+    return text == NULL || SDL_strlen(text) < SLAYER3D_UI_LAYOUT_TEXT_MAX;
+}
+
+static bool ui_layout_action_valid(const char *action)
+{
+    return action == NULL || SDL_strlen(action) < SLAYER3D_UI_LAYOUT_ACTION_MAX;
+}
+
 bool slayer3d_ui_layout_create(slayer3d_ui_layout_model **out_model)
 {
     if (out_model == NULL)
@@ -155,6 +181,8 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
         return false;
     if (desc->padding < 0.0f || desc->gap < 0.0f)
         return false;
+    if (!ui_layout_text_valid(desc->text) || !ui_layout_action_valid(desc->action))
+        return false;
     if ((desc->width_mode == SLAYER3D_UI_LAYOUT_SIZE_FIXED && desc->rect.w <= 0.0f) ||
         (desc->height_mode == SLAYER3D_UI_LAYOUT_SIZE_FIXED && desc->rect.h <= 0.0f))
     {
@@ -176,7 +204,10 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->padding = desc->padding;
     node->gap = desc->gap;
     node->layer = desc->layer;
-    node->interactive = desc->interactive || ui_layout_type_interactive(desc->type);
+    ui_layout_copy_text(node->text, desc->text);
+    ui_layout_copy_action(node->action, desc->action);
+    node->interactive = desc->interactive || desc->action != NULL || ui_layout_type_interactive(desc->type);
+    node->selected = desc->selected;
     model->dirty = true;
     return true;
 }
@@ -352,6 +383,11 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->rect = node->resolved_rect;
         resolved->layer = node->layer;
         resolved->interactive = node->interactive;
+        ui_layout_copy_text(resolved->text, node->text);
+        ui_layout_copy_action(resolved->action, node->action);
+        resolved->hovered = node->hovered;
+        resolved->active = node->active;
+        resolved->selected = node->selected;
     }
 }
 
@@ -401,6 +437,10 @@ static void ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
         render->type = node->type;
         render->rect = node->rect;
         render->layer = node->layer;
+        ui_layout_copy_text(render->text, node->text);
+        render->hovered = node->hovered;
+        render->active = node->active;
+        render->selected = node->selected;
 
         if (node->interactive)
         {
@@ -410,6 +450,10 @@ static void ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
             hit->type = node->type;
             hit->rect = node->rect;
             hit->layer = node->layer;
+            ui_layout_copy_action(hit->action, node->action);
+            hit->hovered = node->hovered;
+            hit->active = node->active;
+            hit->selected = node->selected;
         }
     }
     ui_layout_sort_flat_lists(model);
@@ -519,4 +563,59 @@ const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_test(const slayer3d_
             return region;
     }
     return NULL;
+}
+
+static void ui_layout_clear_pointer_state(slayer3d_ui_layout_model *model)
+{
+    for (int i = 0; i < model->count; ++i)
+    {
+        model->nodes[i].hovered = false;
+        model->nodes[i].active = false;
+    }
+}
+
+bool slayer3d_ui_layout_update_input(slayer3d_ui_layout_model *model, const slayer3d_ui_layout_input_state *input,
+                                     slayer3d_ui_layout_activation *out_activation)
+{
+    if (out_activation != NULL)
+        SDL_zero(*out_activation);
+    if (model == NULL || input == NULL || model->dirty)
+        return false;
+
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(model, input->pointer_x, input->pointer_y);
+    const char *hit_id = hit != NULL ? hit->id : NULL;
+    ui_layout_clear_pointer_state(model);
+
+    if (hit_id != NULL)
+    {
+        const int hit_index = ui_layout_find_node_index(model, hit_id);
+        if (hit_index >= 0)
+            model->nodes[hit_index].hovered = true;
+    }
+
+    if (input->primary_pressed)
+        ui_layout_copy_id(model->active_id, hit_id);
+
+    const int active_index = ui_layout_find_node_index(model, model->active_id);
+    if (active_index >= 0 && input->primary_down)
+        model->nodes[active_index].active = true;
+
+    if (input->primary_released)
+    {
+        const bool activated =
+            hit_id != NULL && model->active_id[0] != '\0' && SDL_strcmp(hit_id, model->active_id) == 0;
+        if (activated && out_activation != NULL)
+        {
+            const int index = ui_layout_find_node_index(model, hit_id);
+            out_activation->activated = true;
+            ui_layout_copy_id(out_activation->id, hit_id);
+            if (index >= 0)
+                ui_layout_copy_action(out_activation->action, model->nodes[index].action);
+        }
+        model->active_id[0] = '\0';
+    }
+
+    ui_layout_store_resolved_nodes(model);
+    ui_layout_compile_flat_lists(model);
+    return true;
 }

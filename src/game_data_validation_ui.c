@@ -169,6 +169,28 @@ static bool ui_widget_optional_bool(yyjson_val *object, const char *key)
     return value == NULL || yyjson_is_bool(value);
 }
 
+static bool ui_widget_optional_string_len(yyjson_val *object, const char *key, size_t max_size)
+{
+    yyjson_val *value = obj_get(object, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_str(value))
+        return false;
+    const char *text = yyjson_get_str(value);
+    return text != NULL && SDL_strlen(text) < max_size;
+}
+
+static bool ui_widget_optional_non_empty_string_len(yyjson_val *object, const char *key, size_t max_size)
+{
+    yyjson_val *value = obj_get(object, key);
+    if (value == NULL)
+        return true;
+    if (!yyjson_is_str(value))
+        return false;
+    const char *text = yyjson_get_str(value);
+    return text != NULL && text[0] != '\0' && SDL_strlen(text) < max_size;
+}
+
 typedef struct ui_widget_name_set
 {
     const char **ids;
@@ -245,6 +267,17 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI widget layer/z must be an integer when authored");
     if (!ui_widget_optional_bool(node, "interactive"))
         return validation_error(ctx, path, "UI widget interactive must be a boolean when authored");
+    if (!ui_widget_optional_string_len(node, "text", SLAYER3D_UI_LAYOUT_TEXT_MAX) ||
+        !ui_widget_optional_string_len(node, "label", SLAYER3D_UI_LAYOUT_TEXT_MAX))
+    {
+        return validation_error(ctx, path, "UI widget text/label must be a string shorter than %d bytes",
+                                SLAYER3D_UI_LAYOUT_TEXT_MAX);
+    }
+    if (!ui_widget_optional_non_empty_string_len(node, "action", SLAYER3D_UI_LAYOUT_ACTION_MAX))
+        return validation_error(ctx, path, "UI widget action must be a non-empty string shorter than %d bytes",
+                                SLAYER3D_UI_LAYOUT_ACTION_MAX);
+    if (!ui_widget_optional_bool(node, "selected"))
+        return validation_error(ctx, path, "UI widget selected must be a boolean when authored");
 
     yyjson_val *children = obj_get(node, "children");
     if (children != NULL && !yyjson_is_arr(children))
@@ -330,6 +363,12 @@ static bool parse_ui_widget_bool(yyjson_val *node, const char *key, bool fallbac
     return yyjson_is_bool(value) ? yyjson_get_bool(value) : fallback;
 }
 
+static const char *parse_ui_widget_string(yyjson_val *node, const char *primary_key, const char *secondary_key)
+{
+    const char *value = json_string(node, primary_key);
+    return value != NULL ? value : json_string(node, secondary_key);
+}
+
 static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, const char *path, const char *parent_id,
                                  slayer3d_ui_layout_model *layout)
 {
@@ -351,6 +390,9 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.gap = parse_ui_widget_float(node, "gap", 0.0f);
     desc.layer = parse_ui_widget_int(node, "layer", "z", 0);
     desc.interactive = parse_ui_widget_bool(node, "interactive", false);
+    desc.text = parse_ui_widget_string(node, "text", "label");
+    desc.action = json_string(node, "action");
+    desc.selected = parse_ui_widget_bool(node, "selected", false);
     if (!slayer3d_ui_layout_add_node(layout, &desc))
         return validation_error(ctx, path, "UI widget node could not be added to retained layout");
 

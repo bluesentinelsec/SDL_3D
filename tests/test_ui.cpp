@@ -301,6 +301,82 @@ TEST(SLAYER3DUI, RetainedLayoutDirtyGenerationAvoidsUnneededResolve)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedButtonReportsActionAndPointerState)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc button{};
+    button.id = "save";
+    button.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    button.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    button.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    button.rect = {10.0f, 20.0f, 100.0f, 30.0f};
+    button.text = "Save";
+    button.action = "editor.save";
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &button));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+
+    slayer3d_ui_layout_input_state input{};
+    input.pointer_x = 20.0f;
+    input.pointer_y = 25.0f;
+    input.primary_down = true;
+    input.primary_pressed = true;
+    slayer3d_ui_layout_activation activation{};
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, &activation));
+    EXPECT_FALSE(activation.activated);
+
+    const slayer3d_ui_layout_render_command *render = slayer3d_ui_layout_render_command_at(layout, 0);
+    ASSERT_NE(render, nullptr);
+    EXPECT_STREQ(render->id, "save");
+    EXPECT_STREQ(render->text, "Save");
+    EXPECT_TRUE(render->hovered);
+    EXPECT_TRUE(render->active);
+
+    input.primary_pressed = false;
+    input.primary_down = false;
+    input.primary_released = true;
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, &activation));
+    EXPECT_TRUE(activation.activated);
+    EXPECT_STREQ(activation.id, "save");
+    EXPECT_STREQ(activation.action, "editor.save");
+
+    render = slayer3d_ui_layout_render_command_at(layout, 0);
+    ASSERT_NE(render, nullptr);
+    EXPECT_TRUE(render->hovered);
+    EXPECT_FALSE(render->active);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedSelectedStateAppearsInRenderMetadata)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc selected{};
+    selected.id = "brush_tool";
+    selected.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    selected.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    selected.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    selected.rect = {0.0f, 0.0f, 80.0f, 24.0f};
+    selected.text = "Brush Tool";
+    selected.selected = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &selected));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_render_command *render = slayer3d_ui_layout_render_command_at(layout, 0);
+    ASSERT_NE(render, nullptr);
+    EXPECT_STREQ(render->text, "Brush Tool");
+    EXPECT_TRUE(render->selected);
+
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_region_at(layout, 0);
+    ASSERT_NE(hit, nullptr);
+    EXPECT_TRUE(hit->selected);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, MouseEventsUpdateInputState)
 {
     slayer3d_ui_context *ui = nullptr;

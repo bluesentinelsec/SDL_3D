@@ -16,6 +16,10 @@ extern "C"
 
     /** @brief Maximum bytes stored for a retained UI node id, including the terminator. */
 #define SLAYER3D_UI_LAYOUT_ID_MAX 64
+    /** @brief Maximum bytes stored for retained UI authored text, including the terminator. */
+#define SLAYER3D_UI_LAYOUT_TEXT_MAX 128
+    /** @brief Maximum bytes stored for retained UI action names, including the terminator. */
+#define SLAYER3D_UI_LAYOUT_ACTION_MAX 128
 
     /** @brief Authored retained UI widget type. */
     typedef enum slayer3d_ui_layout_node_type
@@ -70,6 +74,9 @@ extern "C"
         float gap;
         int layer;
         bool interactive;
+        const char *text;
+        const char *action;
+        bool selected;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -83,6 +90,11 @@ extern "C"
         slayer3d_ui_layout_rect rect;
         int layer;
         bool interactive;
+        char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+        char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        bool hovered;
+        bool active;
+        bool selected;
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */
@@ -92,6 +104,10 @@ extern "C"
         slayer3d_ui_layout_node_type type;
         slayer3d_ui_layout_rect rect;
         int layer;
+        char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+        bool hovered;
+        bool active;
+        bool selected;
     } slayer3d_ui_layout_render_command;
 
     /** @brief Flat retained UI hit region compiled from a resolved interactive node. */
@@ -101,7 +117,29 @@ extern "C"
         slayer3d_ui_layout_node_type type;
         slayer3d_ui_layout_rect rect;
         int layer;
+        char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        bool hovered;
+        bool active;
+        bool selected;
     } slayer3d_ui_layout_hit_region;
+
+    /** @brief Pointer input for retained UI hit testing and activation. */
+    typedef struct slayer3d_ui_layout_input_state
+    {
+        float pointer_x;
+        float pointer_y;
+        bool primary_down;
+        bool primary_pressed;
+        bool primary_released;
+    } slayer3d_ui_layout_input_state;
+
+    /** @brief Retained UI activation result for one input update. */
+    typedef struct slayer3d_ui_layout_activation
+    {
+        char id[SLAYER3D_UI_LAYOUT_ID_MAX];
+        char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        bool activated;
+    } slayer3d_ui_layout_activation;
 
     /** @brief Retained UI layout tree. */
     typedef struct slayer3d_ui_layout_model slayer3d_ui_layout_model;
@@ -158,6 +196,10 @@ extern "C"
     /** @brief Hit test retained UI regions, returning the front-most matching region or NULL. */
     const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_test(const slayer3d_ui_layout_model *model, float x,
                                                                      float y);
+
+    /** @brief Update retained widget hover/active state and return any activated action. */
+    bool slayer3d_ui_layout_update_input(slayer3d_ui_layout_model *model, const slayer3d_ui_layout_input_state *input,
+                                         slayer3d_ui_layout_activation *out_activation);
 
 #ifdef __cplusplus
 }
