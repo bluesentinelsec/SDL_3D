@@ -7,6 +7,8 @@
 
 #include <SDL3/SDL_stdinc.h>
 
+#include "slayer3d/ui_layout.h"
+
 static yyjson_val *obj_get(yyjson_val *object, const char *key)
 {
     return validation_obj_get(object, key);
@@ -107,6 +109,262 @@ bool ui_metric_name_valid(const char *metric)
 static bool is_json_scalar(yyjson_val *value)
 {
     return yyjson_is_str(value) || yyjson_is_int(value) || yyjson_is_real(value) || yyjson_is_bool(value);
+}
+
+static bool ui_widget_type_valid(const char *type)
+{
+    static const char *const types[] = {
+        "panel",    "toolbar",   "row",    "column",  "button",   "label",
+        "dropdown", "tab_strip", "spacer", "console", "log_view",
+    };
+    if (type == NULL || type[0] == '\0')
+        return false;
+    for (size_t i = 0; i < SDL_arraysize(types); ++i)
+    {
+        if (SDL_strcmp(type, types[i]) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool ui_widget_layout_valid(const char *layout)
+{
+    return layout == NULL || layout[0] == '\0' || SDL_strcmp(layout, "none") == 0 || SDL_strcmp(layout, "row") == 0 ||
+           SDL_strcmp(layout, "column") == 0;
+}
+
+static bool ui_widget_size_value_valid(yyjson_val *value)
+{
+    if (value == NULL)
+        return true;
+    if (yyjson_is_str(value))
+    {
+        const char *mode = yyjson_get_str(value);
+        return mode != NULL && SDL_strcmp(mode, "fill") == 0;
+    }
+    return yyjson_is_num(value) && yyjson_get_num(value) > 0.0;
+}
+
+static bool ui_widget_optional_number_non_negative(yyjson_val *object, const char *key)
+{
+    yyjson_val *value = obj_get(object, key);
+    return value == NULL || (yyjson_is_num(value) && yyjson_get_num(value) >= 0.0);
+}
+
+static bool ui_widget_optional_number(yyjson_val *object, const char *key)
+{
+    yyjson_val *value = obj_get(object, key);
+    return value == NULL || yyjson_is_num(value);
+}
+
+typedef struct ui_widget_name_set
+{
+    const char **ids;
+    size_t count;
+    size_t capacity;
+} ui_widget_name_set;
+
+static void ui_widget_name_set_destroy(ui_widget_name_set *set)
+{
+    if (set == NULL)
+        return;
+    SDL_free(set->ids);
+    set->ids = NULL;
+    set->count = 0;
+    set->capacity = 0;
+}
+
+static bool ui_widget_name_set_contains(const ui_widget_name_set *set, const char *id)
+{
+    if (set == NULL || id == NULL)
+        return false;
+    for (size_t i = 0; i < set->count; ++i)
+    {
+        if (SDL_strcmp(set->ids[i], id) == 0)
+            return true;
+    }
+    return false;
+}
+
+static bool ui_widget_name_set_add(ui_widget_name_set *set, const char *id)
+{
+    if (set == NULL || id == NULL || id[0] == '\0' || ui_widget_name_set_contains(set, id))
+        return false;
+    if (set->count >= set->capacity)
+    {
+        const size_t new_capacity = set->capacity > 0 ? set->capacity * 2U : 32U;
+        const char **ids = (const char **)SDL_realloc(set->ids, new_capacity * sizeof(*ids));
+        if (ids == NULL)
+            return false;
+        set->ids = ids;
+        set->capacity = new_capacity;
+    }
+    set->ids[set->count++] = id;
+    return true;
+}
+
+static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, const char *path,
+                                    ui_widget_name_set *ids)
+{
+    if (!yyjson_is_obj(node))
+        return validation_error(ctx, path, "UI widget nodes must be objects");
+    const char *id = json_string(node, "id");
+    if (id == NULL || id[0] == '\0')
+        return validation_error(ctx, path, "UI widget node requires a non-empty id");
+    if (!ui_widget_name_set_add(ids, id))
+        return validation_error(ctx, path, "UI widget id '%s' is duplicated", id);
+    const char *type = json_string(node, "type");
+    if (!ui_widget_type_valid(type))
+        return validation_error(ctx, path, "unsupported UI widget type '%s'", type != NULL ? type : "<missing>");
+    const char *layout = json_string(node, "layout");
+    if (!ui_widget_layout_valid(layout))
+        return validation_error(ctx, path, "unsupported UI widget layout '%s'", layout);
+    if (!ui_widget_size_value_valid(obj_get(node, "w")) || !ui_widget_size_value_valid(obj_get(node, "width")))
+        return validation_error(ctx, path, "UI widget width must be positive or 'fill'");
+    if (!ui_widget_size_value_valid(obj_get(node, "h")) || !ui_widget_size_value_valid(obj_get(node, "height")))
+        return validation_error(ctx, path, "UI widget height must be positive or 'fill'");
+    if (!ui_widget_optional_number(node, "x") || !ui_widget_optional_number(node, "y"))
+        return validation_error(ctx, path, "UI widget x/y must be numeric when authored");
+    if (!ui_widget_optional_number_non_negative(node, "padding"))
+        return validation_error(ctx, path, "UI widget padding must be non-negative");
+    if (!ui_widget_optional_number_non_negative(node, "gap"))
+        return validation_error(ctx, path, "UI widget gap must be non-negative");
+
+    yyjson_val *children = obj_get(node, "children");
+    if (children != NULL && !yyjson_is_arr(children))
+        return validation_error(ctx, path, "UI widget children must be an array");
+    for (size_t i = 0; yyjson_is_arr(children) && i < yyjson_arr_size(children); ++i)
+    {
+        char child_path[PATH_BUFFER_SIZE];
+        format_path(child_path, sizeof(child_path), "%s.children[%zu]", path, i);
+        if (!validate_ui_widget_node(ctx, yyjson_arr_get(children, i), child_path, ids))
+            return false;
+    }
+    return true;
+}
+
+static slayer3d_ui_layout_node_type parse_ui_widget_type(const char *type)
+{
+    if (type == NULL)
+        return SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    if (SDL_strcmp(type, "toolbar") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_TOOLBAR;
+    if (SDL_strcmp(type, "row") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_ROW;
+    if (SDL_strcmp(type, "column") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_COLUMN;
+    if (SDL_strcmp(type, "button") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    if (SDL_strcmp(type, "label") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_LABEL;
+    if (SDL_strcmp(type, "dropdown") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    if (SDL_strcmp(type, "tab_strip") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_TAB_STRIP;
+    if (SDL_strcmp(type, "spacer") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_SPACER;
+    if (SDL_strcmp(type, "console") == 0 || SDL_strcmp(type, "log_view") == 0)
+        return SLAYER3D_UI_LAYOUT_NODE_CONSOLE;
+    return SLAYER3D_UI_LAYOUT_NODE_PANEL;
+}
+
+static slayer3d_ui_layout_axis parse_ui_widget_axis(const char *layout)
+{
+    if (layout != NULL && SDL_strcmp(layout, "row") == 0)
+        return SLAYER3D_UI_LAYOUT_AXIS_ROW;
+    if (layout != NULL && SDL_strcmp(layout, "column") == 0)
+        return SLAYER3D_UI_LAYOUT_AXIS_COLUMN;
+    return SLAYER3D_UI_LAYOUT_AXIS_NONE;
+}
+
+static yyjson_val *ui_widget_size_value(yyjson_val *node, const char *short_key, const char *long_key)
+{
+    yyjson_val *value = obj_get(node, short_key);
+    return value != NULL ? value : obj_get(node, long_key);
+}
+
+static slayer3d_ui_layout_size_mode parse_ui_widget_size_mode(yyjson_val *value)
+{
+    return yyjson_is_str(value) && SDL_strcmp(yyjson_get_str(value), "fill") == 0 ? SLAYER3D_UI_LAYOUT_SIZE_FILL
+                                                                                  : SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+}
+
+static float parse_ui_widget_size_value(yyjson_val *value, float fallback)
+{
+    return yyjson_is_num(value) ? (float)yyjson_get_num(value) : fallback;
+}
+
+static float parse_ui_widget_float(yyjson_val *node, const char *key, float fallback)
+{
+    yyjson_val *value = obj_get(node, key);
+    return yyjson_is_num(value) ? (float)yyjson_get_num(value) : fallback;
+}
+
+static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, const char *path, const char *parent_id,
+                                 slayer3d_ui_layout_model *layout)
+{
+    yyjson_val *width = ui_widget_size_value(node, "w", "width");
+    yyjson_val *height = ui_widget_size_value(node, "h", "height");
+    slayer3d_ui_layout_node_desc desc;
+    SDL_zero(desc);
+    desc.id = json_string(node, "id");
+    desc.parent_id = parent_id;
+    desc.type = parse_ui_widget_type(json_string(node, "type"));
+    desc.axis = parse_ui_widget_axis(json_string(node, "layout"));
+    desc.width_mode = width != NULL ? parse_ui_widget_size_mode(width) : SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    desc.height_mode = height != NULL ? parse_ui_widget_size_mode(height) : SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    desc.rect.x = parse_ui_widget_float(node, "x", 0.0f);
+    desc.rect.y = parse_ui_widget_float(node, "y", 0.0f);
+    desc.rect.w = parse_ui_widget_size_value(width, 1.0f);
+    desc.rect.h = parse_ui_widget_size_value(height, 1.0f);
+    desc.padding = parse_ui_widget_float(node, "padding", 0.0f);
+    desc.gap = parse_ui_widget_float(node, "gap", 0.0f);
+    if (!slayer3d_ui_layout_add_node(layout, &desc))
+        return validation_error(ctx, path, "UI widget node could not be added to retained layout");
+
+    yyjson_val *children = obj_get(node, "children");
+    for (size_t i = 0; yyjson_is_arr(children) && i < yyjson_arr_size(children); ++i)
+    {
+        char child_path[PATH_BUFFER_SIZE];
+        format_path(child_path, sizeof(child_path), "%s.children[%zu]", path, i);
+        if (!parse_ui_widget_node(ctx, yyjson_arr_get(children, i), child_path, desc.id, layout))
+            return false;
+    }
+    return true;
+}
+
+static bool validate_ui_widgets(validation_context *ctx, yyjson_val *widgets, const char *path)
+{
+    if (widgets == NULL)
+        return true;
+    if (!yyjson_is_arr(widgets))
+        return validation_error(ctx, path, "UI widgets must be an array");
+    ui_widget_name_set ids = {0};
+    bool ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(widgets); ++i)
+    {
+        char widget_path[PATH_BUFFER_SIZE];
+        format_path(widget_path, sizeof(widget_path), "%s[%zu]", path, i);
+        ok = validate_ui_widget_node(ctx, yyjson_arr_get(widgets, i), widget_path, &ids);
+    }
+    ui_widget_name_set_destroy(&ids);
+    if (!ok)
+        return false;
+
+    slayer3d_ui_layout_model *layout = NULL;
+    if (!slayer3d_ui_layout_create(&layout))
+        return validation_error(ctx, path, "failed to allocate UI widget layout");
+    ok = true;
+    for (size_t i = 0; ok && i < yyjson_arr_size(widgets); ++i)
+    {
+        char widget_path[PATH_BUFFER_SIZE];
+        format_path(widget_path, sizeof(widget_path), "%s[%zu]", path, i);
+        ok = parse_ui_widget_node(ctx, yyjson_arr_get(widgets, i), widget_path, NULL, layout);
+    }
+    if (ok && !slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f))
+        ok = validation_error(ctx, path, "UI widget layout could not be resolved");
+    slayer3d_ui_layout_destroy(layout);
+    return ok;
 }
 
 bool validate_ui_tool_color(validation_context *ctx, yyjson_val *object, const char *key, const char *path)
@@ -272,8 +530,12 @@ bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *na
     yyjson_val *menus = obj_get(ui, "menus");
     yyjson_val *panels = obj_get(ui, "panels");
     yyjson_val *inspectors = obj_get(ui, "inspectors");
-    if (texts == NULL && images == NULL && rects == NULL && menus == NULL && panels == NULL && inspectors == NULL)
+    yyjson_val *widgets = obj_get(ui, "widgets");
+    if (texts == NULL && images == NULL && rects == NULL && menus == NULL && panels == NULL && inspectors == NULL &&
+        widgets == NULL)
+    {
         return true;
+    }
     if (texts != NULL && !yyjson_is_arr(texts))
         return validation_error(ctx, "$.ui.text", "UI text must be an array");
     if (images != NULL && !yyjson_is_arr(images))
@@ -283,8 +545,11 @@ bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *na
     if (menus != NULL && !yyjson_is_arr(menus))
         return validation_error(ctx, "$.ui.menus", "UI menus must be an array");
     if (!validate_ui_panels(ctx, panels, "$.ui.panels", names) ||
-        !validate_ui_inspectors(ctx, inspectors, "$.ui.inspectors", names))
+        !validate_ui_inspectors(ctx, inspectors, "$.ui.inspectors", names) ||
+        !validate_ui_widgets(ctx, widgets, "$.ui.widgets"))
+    {
         return false;
+    }
 
     for (size_t i = 0; i < yyjson_arr_size(texts); ++i)
     {

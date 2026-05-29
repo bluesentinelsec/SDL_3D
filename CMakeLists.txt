@@ -297,6 +297,7 @@ target_sources(
         src/transition.c
         src/transition_gl.c
         src/ui.c
+        src/ui_layout.c
         $<TARGET_OBJECTS:slayer3d_cgltf>
         $<TARGET_OBJECTS:slayer3d_ufbx>
         $<TARGET_OBJECTS:slayer3d_stb>

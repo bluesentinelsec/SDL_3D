@@ -9198,6 +9198,110 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RetainedUIWidgetsValidate)
+{
+    const std::filesystem::path dir = unique_test_dir("retained_ui_widgets");
+    write_text(dir / "retained_ui.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Retained UI Widgets", "id": "test.retained_ui", "version": "0.1.0" },
+  "world": { "name": "world.retained_ui", "kind": "fixed_screen" },
+  "ui": {
+    "widgets": [
+      {
+        "id": "toolbar.main",
+        "type": "toolbar",
+        "layout": "row",
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 40,
+        "padding": 4,
+        "gap": 8,
+        "children": [
+          { "id": "toolbar.file", "type": "button", "w": 96, "h": "fill" },
+          { "id": "toolbar.grid", "type": "dropdown", "w": "fill", "h": "fill" }
+        ]
+      }
+    ]
+  }
+})json");
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "retained_ui.game.json").string().c_str(), nullptr, error,
+                                                 sizeof(error)))
+        << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
+{
+    struct Case
+    {
+        const char *name;
+        const char *ui_json;
+        const char *expected_error;
+    };
+
+    const Case cases[] = {
+        {
+            "duplicate_id",
+            R"json({
+  "widgets": [
+    {
+      "id": "panel",
+      "type": "panel",
+      "w": 100,
+      "h": 100,
+      "children": [
+        { "id": "panel", "type": "button", "w": 40, "h": 20 }
+      ]
+    }
+  ]
+})json",
+            "duplicated",
+        },
+        {
+            "bad_layout",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "layout": "diagonal", "w": 100, "h": 100 }
+  ]
+})json",
+            "unsupported UI widget layout",
+        },
+        {
+            "bad_size",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 0, "h": 100 }
+  ]
+})json",
+            "UI widget width must be positive or 'fill'",
+        },
+    };
+
+    const std::filesystem::path dir = unique_test_dir("bad_retained_ui_widgets");
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        const std::string json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Retained UI Widgets", "id": "test.bad_retained_ui", "version": "0.1.0" },
+  "world": { "name": "world.bad_retained_ui", "kind": "fixed_screen" },
+  "ui": )json") + test_case.ui_json +
+                                 R"json(
+})json";
+        write_text(path, json.c_str());
+        char error[512]{};
+        EXPECT_FALSE(slayer3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
 {
     struct Case

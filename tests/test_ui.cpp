@@ -3,9 +3,19 @@
 #include <gtest/gtest.h>
 
 #include "slayer3d/ui.h"
+#include "slayer3d/ui_layout.h"
 
 namespace
 {
+
+void expect_rect(const slayer3d_ui_layout_resolved_node *node, float x, float y, float w, float h)
+{
+    ASSERT_NE(node, nullptr);
+    EXPECT_FLOAT_EQ(node->rect.x, x);
+    EXPECT_FLOAT_EQ(node->rect.y, y);
+    EXPECT_FLOAT_EQ(node->rect.w, w);
+    EXPECT_FLOAT_EQ(node->rect.h, h);
+}
 
 // A stub font isn't needed for the non-rendering unit tests — the UI
 // context accepts null fonts and simply skips text draws at render time.
@@ -56,6 +66,121 @@ TEST(SLAYER3DUI, HitTesting)
     EXPECT_FALSE(slayer3d_ui_point_in_rect(-1.0f, 10.0f, 0.0f, 0.0f, 100.0f, 100.0f));
     EXPECT_FALSE(slayer3d_ui_point_in_rect(100.0f, 50.0f, 0.0f, 0.0f, 100.0f, 100.0f));
     EXPECT_TRUE(slayer3d_ui_point_in_rect(99.0f, 99.0f, 0.0f, 0.0f, 100.0f, 100.0f));
+}
+
+TEST(SLAYER3DUI, RetainedLayoutChildMovesWithParent)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc root{};
+    root.id = "toolbar";
+    root.type = SLAYER3D_UI_LAYOUT_NODE_TOOLBAR;
+    root.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    root.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    root.rect = {10.0f, 20.0f, 200.0f, 40.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &root));
+
+    slayer3d_ui_layout_node_desc child{};
+    child.id = "grid";
+    child.parent_id = "toolbar";
+    child.type = SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    child.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    child.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    child.rect = {12.0f, 4.0f, 80.0f, 24.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &child));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "grid"), 22.0f, 24.0f, 80.0f, 24.0f);
+
+    slayer3d_ui_layout_clear(layout);
+    root.rect = {100.0f, 50.0f, 200.0f, 40.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &root));
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &child));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "grid"), 112.0f, 54.0f, 80.0f, 24.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedRowLayoutDistributesFillChildren)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc row{};
+    row.id = "row";
+    row.type = SLAYER3D_UI_LAYOUT_NODE_ROW;
+    row.axis = SLAYER3D_UI_LAYOUT_AXIS_ROW;
+    row.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    row.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    row.rect = {0.0f, 0.0f, 120.0f, 30.0f};
+    row.padding = 5.0f;
+    row.gap = 2.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &row));
+
+    slayer3d_ui_layout_node_desc fixed{};
+    fixed.id = "file";
+    fixed.parent_id = "row";
+    fixed.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    fixed.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    fixed.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    fixed.rect.w = 20.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &fixed));
+
+    slayer3d_ui_layout_node_desc fill{};
+    fill.id = "edit";
+    fill.parent_id = "row";
+    fill.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    fill.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    fill.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &fill));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "file"), 5.0f, 5.0f, 20.0f, 20.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "edit"), 27.0f, 5.0f, 88.0f, 20.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedColumnLayoutDistributesFillChildren)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc column{};
+    column.id = "panel";
+    column.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    column.axis = SLAYER3D_UI_LAYOUT_AXIS_COLUMN;
+    column.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    column.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    column.rect = {10.0f, 10.0f, 90.0f, 80.0f};
+    column.padding = 4.0f;
+    column.gap = 4.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &column));
+
+    slayer3d_ui_layout_node_desc title{};
+    title.id = "title";
+    title.parent_id = "panel";
+    title.type = SLAYER3D_UI_LAYOUT_NODE_LABEL;
+    title.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    title.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    title.rect.h = 20.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &title));
+
+    slayer3d_ui_layout_node_desc body{};
+    body.id = "body";
+    body.parent_id = "panel";
+    body.type = SLAYER3D_UI_LAYOUT_NODE_CONSOLE;
+    body.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    body.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &body));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "title"), 14.0f, 14.0f, 82.0f, 20.0f);
+    expect_rect(slayer3d_ui_layout_find_resolved_node(layout, "body"), 14.0f, 38.0f, 82.0f, 48.0f);
+
+    slayer3d_ui_layout_destroy(layout);
 }
 
 TEST(SLAYER3DUI, MouseEventsUpdateInputState)
