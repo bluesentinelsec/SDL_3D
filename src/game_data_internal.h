@@ -30,6 +30,7 @@
 #include "slayer3d/script.h"
 #include "slayer3d/signal_bus.h"
 #include "slayer3d/timer_pool.h"
+#include "slayer3d/ui_layout.h"
 #include "yyjson.h"
 
 #define SLAYER3D_GAME_DATA_SIGNAL_BASE 20000
@@ -252,6 +253,8 @@ slayer3d_tonemap_mode parse_tonemap(const char *value, slayer3d_tonemap_mode fal
 bool parse_render_profile(const char *value, slayer3d_render_profile *out_profile);
 char *path_basename(const char *path);
 const char *asset_path_without_scheme(const char *path);
+bool slayer3d_game_data_build_active_ui_widget_layout(const slayer3d_game_data_runtime *runtime, float viewport_w,
+                                                      float viewport_h, slayer3d_ui_layout_model *layout);
 bool ensure_runtime_storage(slayer3d_game_data_runtime *runtime, char *error_buffer, int error_buffer_size);
 float camera_fov_degrees(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json, float fallback);
 slayer3d_camera_fov_axis camera_fov_axis(const slayer3d_game_data_runtime *runtime, yyjson_val *camera_json);

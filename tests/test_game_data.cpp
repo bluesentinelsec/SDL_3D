@@ -18728,6 +18728,47 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
+    struct GridDropdownRects
+    {
+        bool button = false;
+        bool popup = false;
+        bool option = false;
+        slayer3d_game_data_ui_rect button_rect{};
+        slayer3d_game_data_ui_rect popup_rect{};
+        slayer3d_game_data_ui_rect option_rect{};
+    } grid_rects;
+    auto capture_grid_dropdown_rects = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+        auto *capture = static_cast<GridDropdownRects *>(userdata);
+        if (rect == nullptr || rect->name == nullptr)
+            return true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.button") == 0 && rect->w > 50.0f &&
+            rect->h > 10.0f && !capture->button)
+        {
+            capture->button = true;
+            capture->button_rect = *rect;
+        }
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.popup") == 0 && rect->w > 50.0f &&
+                 rect->h > 100.0f && !capture->popup)
+        {
+            capture->popup = true;
+            capture->popup_rect = *rect;
+        }
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+                 rect->h > 10.0f && !capture->option)
+        {
+            capture->option = true;
+            capture->option_rect = *rect;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
+    EXPECT_TRUE(grid_rects.button);
+    EXPECT_TRUE(grid_rects.popup);
+    EXPECT_TRUE(grid_rects.option);
+    EXPECT_NEAR(grid_rects.popup_rect.x, grid_rects.button_rect.x, 0.001f);
+    EXPECT_NEAR(grid_rects.popup_rect.y, grid_rects.button_rect.y + grid_rects.button_rect.h, 0.001f);
+    EXPECT_NEAR(grid_rects.option_rect.x, grid_rects.popup_rect.x, 0.001f);
+    EXPECT_GT(grid_rects.option_rect.y, grid_rects.popup_rect.y);
     click_editor(890.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);

@@ -1849,6 +1849,95 @@ static bool for_each_ui_menu_root(const slayer3d_game_data_runtime *runtime, con
     return true;
 }
 
+static bool ends_with_cstr(const char *value, const char *suffix)
+{
+    if (value == NULL || suffix == NULL)
+        return false;
+    const size_t value_len = SDL_strlen(value);
+    const size_t suffix_len = SDL_strlen(suffix);
+    return value_len >= suffix_len && SDL_strcmp(value + value_len - suffix_len, suffix) == 0;
+}
+
+static void retained_ui_compat_name(const char *id, bool text_name, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return;
+    buffer[0] = '\0';
+    if (id == NULL)
+        return;
+
+    if (ends_with_cstr(id, ".button.popup"))
+    {
+        const size_t prefix_len = SDL_strlen(id) - SDL_strlen(".button.popup");
+        SDL_snprintf(buffer, buffer_size, "%.*s.popup", (int)prefix_len, id);
+        return;
+    }
+
+    const char *option_segment = SDL_strstr(id, ".button.option.");
+    if (option_segment != NULL)
+    {
+        const size_t prefix_len = (size_t)(option_segment - id);
+        SDL_snprintf(buffer, buffer_size, "%.*s.option.%s", (int)prefix_len, id,
+                     option_segment + SDL_strlen(".button.option."));
+        return;
+    }
+
+    if (text_name && ends_with_cstr(id, ".button"))
+    {
+        const size_t prefix_len = SDL_strlen(id) - SDL_strlen(".button");
+        SDL_snprintf(buffer, buffer_size, "%.*s.label", (int)prefix_len, id);
+        return;
+    }
+
+    SDL_strlcpy(buffer, id, buffer_size);
+}
+
+static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runtime,
+                                         slayer3d_game_data_ui_text_fn callback, void *userdata)
+{
+    slayer3d_ui_layout_model *layout = NULL;
+    if (!slayer3d_ui_layout_create(&layout))
+        return false;
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, layout))
+    {
+        slayer3d_ui_layout_destroy(layout);
+        return false;
+    }
+
+    bool ok = true;
+    for (int i = 0; ok && i < slayer3d_ui_layout_render_command_count(layout); ++i)
+    {
+        const slayer3d_ui_layout_render_command *command = slayer3d_ui_layout_render_command_at(layout, i);
+        if (command == NULL || command->text[0] == '\0' || command->type == SLAYER3D_UI_LAYOUT_NODE_PANEL ||
+            command->type == SLAYER3D_UI_LAYOUT_NODE_TOOLBAR || command->type == SLAYER3D_UI_LAYOUT_NODE_ROW ||
+            command->type == SLAYER3D_UI_LAYOUT_NODE_COLUMN || command->type == SLAYER3D_UI_LAYOUT_NODE_SPACER)
+        {
+            continue;
+        }
+
+        char name[SLAYER3D_UI_LAYOUT_ID_MAX];
+        retained_ui_compat_name(command->id, true, name, sizeof(name));
+
+        slayer3d_game_data_ui_text text;
+        SDL_zero(text);
+        text.name = name;
+        text.font = "font.editor_shell.ui";
+        text.text = command->text;
+        text.visible = "always";
+        text.x = command->rect.x + command->rect.w * 0.5f;
+        text.y = command->rect.y + command->rect.h * 0.35f;
+        text.normalized = false;
+        text.align = SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
+        text.centered = true;
+        text.scale = command->option_index >= 0 ? 0.46f : 0.5f;
+        text.color = command->selected ? (slayer3d_color){255, 255, 255, 255} : (slayer3d_color){215, 224, 238, 245};
+        ok = callback(userdata, &text);
+    }
+
+    slayer3d_ui_layout_destroy(layout);
+    return ok;
+}
+
 bool slayer3d_game_data_for_each_ui_text_for_metrics(const slayer3d_game_data_runtime *runtime,
                                                      const slayer3d_game_data_ui_metrics *metrics,
                                                      slayer3d_game_data_ui_text_fn callback, void *userdata)
@@ -1866,6 +1955,8 @@ bool slayer3d_game_data_for_each_ui_text_for_metrics(const slayer3d_game_data_ru
             !for_each_ui_inspector_text_root(runtime, metrics, roots[root_index], callback, userdata) ||
             !for_each_ui_menu_root(runtime, scene, metrics, roots[root_index], callback, userdata))
             return true;
+    if (!retained_ui_text_from_layout(runtime, callback, userdata))
+        return true;
     return true;
 }
 
@@ -2016,6 +2107,109 @@ static bool for_each_ui_panel_rect_root(const slayer3d_game_data_runtime *runtim
     return true;
 }
 
+static bool emit_retained_ui_rect_border(const char *name, const slayer3d_ui_layout_rect *rect, float border,
+                                         slayer3d_color color, slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    if (name == NULL || rect == NULL || border <= 0.0f || color.a == 0)
+        return true;
+    return emit_ui_rect_from_values(NULL, name, rect->x, rect->y, rect->w, border, color, callback, userdata) &&
+           emit_ui_rect_from_values(NULL, name, rect->x, rect->y + rect->h - border, rect->w, border, color, callback,
+                                    userdata) &&
+           emit_ui_rect_from_values(NULL, name, rect->x, rect->y, border, rect->h, color, callback, userdata) &&
+           emit_ui_rect_from_values(NULL, name, rect->x + rect->w - border, rect->y, border, rect->h, color, callback,
+                                    userdata);
+}
+
+static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_command *command)
+{
+    if (command == NULL)
+        return (slayer3d_color){0, 0, 0, 0};
+    if (command->popup)
+        return (slayer3d_color){14, 20, 30, 248};
+    if (command->option_index >= 0 && command->selected)
+        return (slayer3d_color){36, 82, 136, 248};
+    if (command->option_index >= 0)
+        return (slayer3d_color){17, 24, 35, 244};
+    if (command->type == SLAYER3D_UI_LAYOUT_NODE_TOOLBAR)
+        return (slayer3d_color){7, 10, 17, 245};
+    if (command->type == SLAYER3D_UI_LAYOUT_NODE_BUTTON || command->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN)
+        return command->active ? (slayer3d_color){42, 58, 78, 248} : (slayer3d_color){26, 35, 48, 242};
+    if (command->type == SLAYER3D_UI_LAYOUT_NODE_PANEL)
+        return (slayer3d_color){10, 15, 23, 228};
+    return (slayer3d_color){0, 0, 0, 0};
+}
+
+static slayer3d_color retained_ui_command_border(const slayer3d_ui_layout_render_command *command)
+{
+    if (command == NULL)
+        return (slayer3d_color){0, 0, 0, 0};
+    if (command->selected)
+        return (slayer3d_color){102, 255, 135, 255};
+    if (command->popup)
+        return (slayer3d_color){105, 142, 178, 245};
+    if (command->type == SLAYER3D_UI_LAYOUT_NODE_BUTTON || command->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN ||
+        command->type == SLAYER3D_UI_LAYOUT_NODE_TOOLBAR)
+    {
+        return (slayer3d_color){82, 115, 154, 235};
+    }
+    return (slayer3d_color){0, 0, 0, 0};
+}
+
+static bool retained_ui_selected_name(const char *id, char *buffer, size_t buffer_size)
+{
+    if (id == NULL || buffer == NULL || buffer_size == 0U || !ends_with_cstr(id, ".button"))
+        return false;
+    const size_t prefix_len = SDL_strlen(id) - SDL_strlen(".button");
+    SDL_snprintf(buffer, buffer_size, "%.*s.selected", (int)prefix_len, id);
+    return true;
+}
+
+static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runtime,
+                                          slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    slayer3d_ui_layout_model *layout = NULL;
+    if (!slayer3d_ui_layout_create(&layout))
+        return false;
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, layout))
+    {
+        slayer3d_ui_layout_destroy(layout);
+        return false;
+    }
+
+    bool ok = true;
+    for (int i = 0; ok && i < slayer3d_ui_layout_render_command_count(layout); ++i)
+    {
+        const slayer3d_ui_layout_render_command *command = slayer3d_ui_layout_render_command_at(layout, i);
+        if (command == NULL || command->type == SLAYER3D_UI_LAYOUT_NODE_LABEL ||
+            command->type == SLAYER3D_UI_LAYOUT_NODE_SPACER || command->type == SLAYER3D_UI_LAYOUT_NODE_ROW ||
+            command->type == SLAYER3D_UI_LAYOUT_NODE_COLUMN)
+        {
+            continue;
+        }
+
+        char name[SLAYER3D_UI_LAYOUT_ID_MAX];
+        retained_ui_compat_name(command->id, false, name, sizeof(name));
+        const slayer3d_color fill = retained_ui_command_fill(command);
+        const slayer3d_color border = retained_ui_command_border(command);
+        ok = emit_ui_rect_from_values(NULL, name, command->rect.x, command->rect.y, command->rect.w, command->rect.h,
+                                      fill, callback, userdata) &&
+             emit_retained_ui_rect_border(name, &command->rect, command->selected ? 3.0f : 1.0f, border, callback,
+                                          userdata);
+        if (ok && command->selected)
+        {
+            char selected_name[SLAYER3D_UI_LAYOUT_ID_MAX];
+            if (retained_ui_selected_name(command->id, selected_name, sizeof(selected_name)))
+            {
+                ok = emit_retained_ui_rect_border(selected_name, &command->rect, 3.0f,
+                                                  (slayer3d_color){102, 255, 135, 255}, callback, userdata);
+            }
+        }
+    }
+
+    slayer3d_ui_layout_destroy(layout);
+    return ok;
+}
+
 static bool for_each_ui_inspector_rect_root(const slayer3d_game_data_runtime *runtime, yyjson_val *root,
                                             slayer3d_game_data_ui_rect_fn callback, void *userdata)
 {
@@ -2144,6 +2338,8 @@ bool slayer3d_game_data_for_each_ui_rect(const slayer3d_game_data_runtime *runti
             !for_each_ui_panel_rect_root(runtime, roots[root_index], callback, userdata) ||
             !for_each_ui_inspector_rect_root(runtime, roots[root_index], callback, userdata))
             return true;
+    if (!retained_ui_rects_from_layout(runtime, callback, userdata))
+        return true;
     if (!for_each_editor_vertex_lasso_rect(runtime, callback, userdata))
         return true;
     return true;
