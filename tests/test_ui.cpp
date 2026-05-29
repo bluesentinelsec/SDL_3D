@@ -2,6 +2,8 @@
 #include <SDL3/SDL_rect.h>
 #include <gtest/gtest.h>
 
+#include <string>
+
 #include "slayer3d/ui.h"
 #include "slayer3d/ui_layout.h"
 
@@ -15,6 +17,28 @@ void expect_rect(const slayer3d_ui_layout_resolved_node *node, float x, float y,
     EXPECT_FLOAT_EQ(node->rect.y, y);
     EXPECT_FLOAT_EQ(node->rect.w, w);
     EXPECT_FLOAT_EQ(node->rect.h, h);
+}
+
+const slayer3d_ui_layout_render_command *find_render_command(const slayer3d_ui_layout_model *layout, const char *id)
+{
+    for (int i = 0; i < slayer3d_ui_layout_render_command_count(layout); ++i)
+    {
+        const slayer3d_ui_layout_render_command *command = slayer3d_ui_layout_render_command_at(layout, i);
+        if (command != nullptr && std::string(command->id) == id)
+            return command;
+    }
+    return nullptr;
+}
+
+const slayer3d_ui_layout_hit_region *find_hit_region(const slayer3d_ui_layout_model *layout, const char *id)
+{
+    for (int i = 0; i < slayer3d_ui_layout_hit_region_count(layout); ++i)
+    {
+        const slayer3d_ui_layout_hit_region *region = slayer3d_ui_layout_hit_region_at(layout, i);
+        if (region != nullptr && std::string(region->id) == id)
+            return region;
+    }
+    return nullptr;
 }
 
 // A stub font isn't needed for the non-rendering unit tests — the UI
@@ -373,6 +397,140 @@ TEST(SLAYER3DUI, RetainedSelectedStateAppearsInRenderMetadata)
     const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_region_at(layout, 0);
     ASSERT_NE(hit, nullptr);
     EXPECT_TRUE(hit->selected);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedDropdownPopupMovesWithButton)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    const char *options[] = {"Grid 1", "Grid 2", "Grid 4"};
+    slayer3d_ui_layout_node_desc dropdown{};
+    dropdown.id = "grid";
+    dropdown.type = SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    dropdown.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.rect = {10.0f, 20.0f, 100.0f, 24.0f};
+    dropdown.layer = 4;
+    dropdown.text = "Grid 1";
+    dropdown.action = "editor.grid";
+    dropdown.options = options;
+    dropdown.option_count = 3;
+    dropdown.selected_index = 0;
+    dropdown.open = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &dropdown));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 320.0f, 200.0f));
+
+    const slayer3d_ui_layout_render_command *first_option = find_render_command(layout, "grid.option.0");
+    ASSERT_NE(first_option, nullptr);
+    EXPECT_FLOAT_EQ(first_option->rect.x, 10.0f);
+    EXPECT_FLOAT_EQ(first_option->rect.y, 44.0f);
+    EXPECT_STREQ(first_option->text, "Grid 1");
+    EXPECT_STREQ(first_option->owner_id, "grid");
+    EXPECT_EQ(first_option->option_index, 0);
+    EXPECT_TRUE(first_option->selected);
+    const slayer3d_ui_layout_hit_region *first_hit = find_hit_region(layout, "grid.option.0");
+    ASSERT_NE(first_hit, nullptr);
+    EXPECT_FLOAT_EQ(first_hit->rect.x, first_option->rect.x);
+    EXPECT_FLOAT_EQ(first_hit->rect.y, first_option->rect.y);
+
+    slayer3d_ui_layout_clear(layout);
+    dropdown.rect = {180.0f, 50.0f, 100.0f, 24.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &dropdown));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 320.0f, 200.0f));
+    first_option = find_render_command(layout, "grid.option.0");
+    ASSERT_NE(first_option, nullptr);
+    EXPECT_FLOAT_EQ(first_option->rect.x, 180.0f);
+    EXPECT_FLOAT_EQ(first_option->rect.y, 74.0f);
+    first_hit = find_hit_region(layout, "grid.option.0");
+    ASSERT_NE(first_hit, nullptr);
+    EXPECT_FLOAT_EQ(first_hit->rect.x, 180.0f);
+    EXPECT_FLOAT_EQ(first_hit->rect.y, 74.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedDropdownPopupClampsToViewport)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    const char *options[] = {"Grid 1", "Grid 2", "Grid 4"};
+    slayer3d_ui_layout_node_desc dropdown{};
+    dropdown.id = "grid";
+    dropdown.type = SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    dropdown.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.rect = {240.0f, 90.0f, 100.0f, 20.0f};
+    dropdown.options = options;
+    dropdown.option_count = 3;
+    dropdown.open = true;
+    dropdown.option_height = 20.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &dropdown));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 300.0f, 120.0f));
+
+    const slayer3d_ui_layout_render_command *popup = find_render_command(layout, "grid.popup");
+    ASSERT_NE(popup, nullptr);
+    EXPECT_TRUE(popup->popup);
+    EXPECT_FLOAT_EQ(popup->rect.x, 200.0f);
+    EXPECT_FLOAT_EQ(popup->rect.y, 30.0f);
+    EXPECT_FLOAT_EQ(popup->rect.w, 100.0f);
+    EXPECT_FLOAT_EQ(popup->rect.h, 60.0f);
+    const slayer3d_ui_layout_render_command *third_option = find_render_command(layout, "grid.option.2");
+    ASSERT_NE(third_option, nullptr);
+    EXPECT_FLOAT_EQ(third_option->rect.x, 200.0f);
+    EXPECT_FLOAT_EQ(third_option->rect.y, 70.0f);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedDropdownOptionReportsActivation)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    const char *options[] = {"Grid 1", "Grid 2", "Grid 4"};
+    slayer3d_ui_layout_node_desc dropdown{};
+    dropdown.id = "grid";
+    dropdown.type = SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    dropdown.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.rect = {10.0f, 10.0f, 100.0f, 24.0f};
+    dropdown.text = "Grid 1";
+    dropdown.action = "editor.grid";
+    dropdown.options = options;
+    dropdown.option_count = 3;
+    dropdown.selected_index = 1;
+    dropdown.open = true;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &dropdown));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 320.0f, 200.0f));
+
+    slayer3d_ui_layout_input_state input{};
+    input.pointer_x = 20.0f;
+    input.pointer_y = 62.0f;
+    input.primary_down = true;
+    input.primary_pressed = true;
+    slayer3d_ui_layout_activation activation{};
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, &activation));
+    EXPECT_FALSE(activation.activated);
+
+    const slayer3d_ui_layout_render_command *second_option = find_render_command(layout, "grid.option.1");
+    ASSERT_NE(second_option, nullptr);
+    EXPECT_TRUE(second_option->hovered);
+    EXPECT_TRUE(second_option->active);
+    EXPECT_TRUE(second_option->selected);
+
+    input.primary_pressed = false;
+    input.primary_down = false;
+    input.primary_released = true;
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, &activation));
+    EXPECT_TRUE(activation.activated);
+    EXPECT_STREQ(activation.id, "grid.option.1");
+    EXPECT_STREQ(activation.owner_id, "grid");
+    EXPECT_STREQ(activation.action, "editor.grid");
+    EXPECT_EQ(activation.option_index, 1);
 
     slayer3d_ui_layout_destroy(layout);
 }

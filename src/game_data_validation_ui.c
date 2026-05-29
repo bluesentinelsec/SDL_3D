@@ -169,6 +169,12 @@ static bool ui_widget_optional_bool(yyjson_val *object, const char *key)
     return value == NULL || yyjson_is_bool(value);
 }
 
+static bool ui_widget_optional_positive_number(yyjson_val *object, const char *key)
+{
+    yyjson_val *value = obj_get(object, key);
+    return value == NULL || (yyjson_is_num(value) && yyjson_get_num(value) > 0.0);
+}
+
 static bool ui_widget_optional_string_len(yyjson_val *object, const char *key, size_t max_size)
 {
     yyjson_val *value = obj_get(object, key);
@@ -278,6 +284,56 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
                                 SLAYER3D_UI_LAYOUT_ACTION_MAX);
     if (!ui_widget_optional_bool(node, "selected"))
         return validation_error(ctx, path, "UI widget selected must be a boolean when authored");
+    yyjson_val *options = obj_get(node, "options");
+    if (options != NULL)
+    {
+        if (SDL_strcmp(type, "dropdown") != 0)
+            return validation_error(ctx, path, "UI widget options are only supported by dropdown widgets");
+        if (!yyjson_is_arr(options))
+            return validation_error(ctx, path, "UI dropdown options must be an array");
+        if (yyjson_arr_size(options) > SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX)
+        {
+            return validation_error(ctx, path, "UI dropdown options must contain at most %d entries",
+                                    SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX);
+        }
+        for (size_t option_index = 0; option_index < yyjson_arr_size(options); ++option_index)
+        {
+            yyjson_val *option = yyjson_arr_get(options, option_index);
+            if (!yyjson_is_str(option))
+                return validation_error(ctx, path, "UI dropdown options must be strings");
+            const char *text = yyjson_get_str(option);
+            if (text == NULL || text[0] == '\0' || SDL_strlen(text) >= SLAYER3D_UI_LAYOUT_TEXT_MAX)
+            {
+                return validation_error(ctx, path,
+                                        "UI dropdown options must be non-empty strings shorter than %d bytes",
+                                        SLAYER3D_UI_LAYOUT_TEXT_MAX);
+            }
+        }
+        yyjson_val *selected_index = obj_get(node, "selected_index");
+        if (selected_index != NULL)
+        {
+            if (!yyjson_is_int(selected_index))
+                return validation_error(ctx, path, "UI dropdown selected_index must be an integer");
+            const int index = (int)yyjson_get_int(selected_index);
+            if (index < -1 || (yyjson_arr_size(options) == 0 && index > 0) ||
+                (yyjson_arr_size(options) > 0 && (size_t)index >= yyjson_arr_size(options)))
+            {
+                return validation_error(ctx, path, "UI dropdown selected_index is out of range");
+            }
+        }
+    }
+    else if (obj_get(node, "selected_index") != NULL)
+    {
+        return validation_error(ctx, path, "UI dropdown selected_index requires options");
+    }
+    if (SDL_strcmp(type, "dropdown") != 0 && obj_get(node, "open") != NULL)
+        return validation_error(ctx, path, "UI widget open is only supported by dropdown widgets");
+    if (!ui_widget_optional_bool(node, "open"))
+        return validation_error(ctx, path, "UI dropdown open must be a boolean when authored");
+    if (SDL_strcmp(type, "dropdown") != 0 && obj_get(node, "option_height") != NULL)
+        return validation_error(ctx, path, "UI widget option_height is only supported by dropdown widgets");
+    if (!ui_widget_optional_positive_number(node, "option_height"))
+        return validation_error(ctx, path, "UI dropdown option_height must be positive when authored");
 
     yyjson_val *children = obj_get(node, "children");
     if (children != NULL && !yyjson_is_arr(children))
@@ -393,6 +449,18 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.text = parse_ui_widget_string(node, "text", "label");
     desc.action = json_string(node, "action");
     desc.selected = parse_ui_widget_bool(node, "selected", false);
+    desc.selected_index = parse_ui_widget_int(node, "selected_index", "selected_index", 0);
+    desc.open = parse_ui_widget_bool(node, "open", false);
+    desc.option_height = parse_ui_widget_float(node, "option_height", 0.0f);
+    const char *options[SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX];
+    yyjson_val *option_values = obj_get(node, "options");
+    if (yyjson_is_arr(option_values))
+    {
+        desc.option_count = (int)yyjson_arr_size(option_values);
+        desc.options = options;
+        for (int i = 0; i < desc.option_count; ++i)
+            options[i] = yyjson_get_str(yyjson_arr_get(option_values, (size_t)i));
+    }
     if (!slayer3d_ui_layout_add_node(layout, &desc))
         return validation_error(ctx, path, "UI widget node could not be added to retained layout");
 

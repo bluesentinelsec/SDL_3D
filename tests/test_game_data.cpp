@@ -9235,7 +9235,12 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
             "h": "fill",
             "layer": 10,
             "interactive": true,
-            "label": "Grid"
+            "label": "Grid",
+            "action": "editor.grid",
+            "options": ["Grid 0.5", "Grid 1", "Grid 2"],
+            "selected_index": 1,
+            "open": true,
+            "option_height": 24
           }
         ]
       }
@@ -9330,6 +9335,33 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
   ]
 })json",
             "UI widget selected must be a boolean",
+        },
+        {
+            "bad_dropdown_options",
+            R"json({
+  "widgets": [
+    { "id": "grid", "type": "dropdown", "w": 100, "h": 24, "options": ["Grid 1", 2] }
+  ]
+})json",
+            "UI dropdown options must be strings",
+        },
+        {
+            "bad_dropdown_selected_index",
+            R"json({
+  "widgets": [
+    { "id": "grid", "type": "dropdown", "w": 100, "h": 24, "options": ["Grid 1"], "selected_index": 3 }
+  ]
+})json",
+            "UI dropdown selected_index is out of range",
+        },
+        {
+            "non_dropdown_options",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "options": ["Grid 1"] }
+  ]
+})json",
+            "UI widget options are only supported by dropdown widgets",
         },
     };
 

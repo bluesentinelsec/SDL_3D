@@ -20,6 +20,8 @@ extern "C"
 #define SLAYER3D_UI_LAYOUT_TEXT_MAX 128
     /** @brief Maximum bytes stored for retained UI action names, including the terminator. */
 #define SLAYER3D_UI_LAYOUT_ACTION_MAX 128
+    /** @brief Maximum inline options stored by one retained UI dropdown. */
+#define SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX 64
 
     /** @brief Authored retained UI widget type. */
     typedef enum slayer3d_ui_layout_node_type
@@ -77,6 +79,11 @@ extern "C"
         const char *text;
         const char *action;
         bool selected;
+        const char *const *options;
+        int option_count;
+        int selected_index;
+        bool open;
+        float option_height;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -108,6 +115,9 @@ extern "C"
         bool hovered;
         bool active;
         bool selected;
+        char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+        int option_index;
+        bool popup;
     } slayer3d_ui_layout_render_command;
 
     /** @brief Flat retained UI hit region compiled from a resolved interactive node. */
@@ -121,6 +131,8 @@ extern "C"
         bool hovered;
         bool active;
         bool selected;
+        char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+        int option_index;
     } slayer3d_ui_layout_hit_region;
 
     /** @brief Pointer input for retained UI hit testing and activation. */
@@ -137,7 +149,9 @@ extern "C"
     typedef struct slayer3d_ui_layout_activation
     {
         char id[SLAYER3D_UI_LAYOUT_ID_MAX];
+        char owner_id[SLAYER3D_UI_LAYOUT_ID_MAX];
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        int option_index;
         bool activated;
     } slayer3d_ui_layout_activation;
 

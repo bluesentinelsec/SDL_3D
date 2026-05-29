@@ -24,6 +24,11 @@ typedef struct ui_layout_node
     bool interactive;
     char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
     char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+    char options[SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX][SLAYER3D_UI_LAYOUT_TEXT_MAX];
+    int option_count;
+    int selected_index;
+    bool open;
+    float option_height;
     bool hovered;
     bool active;
     bool selected;
@@ -39,13 +44,20 @@ struct slayer3d_ui_layout_model
     slayer3d_ui_layout_hit_region *hit_regions;
     int count;
     int capacity;
+    int flat_capacity;
     int render_count;
     int hit_region_count;
     int generation;
     float resolved_viewport_w;
     float resolved_viewport_h;
     char active_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+    char hover_id[SLAYER3D_UI_LAYOUT_ID_MAX];
     bool dirty;
+};
+
+enum
+{
+    UI_LAYOUT_POPUP_LAYER_OFFSET = 1000,
 };
 
 static bool ui_layout_id_valid(const char *id)
@@ -90,34 +102,49 @@ static bool ui_layout_reserve(slayer3d_ui_layout_model *model, int capacity)
     ui_layout_node *nodes = (ui_layout_node *)SDL_calloc((size_t)new_capacity, sizeof(*nodes));
     slayer3d_ui_layout_resolved_node *resolved_nodes =
         (slayer3d_ui_layout_resolved_node *)SDL_calloc((size_t)new_capacity, sizeof(*resolved_nodes));
-    slayer3d_ui_layout_render_command *render_commands =
-        (slayer3d_ui_layout_render_command *)SDL_calloc((size_t)new_capacity, sizeof(*render_commands));
-    slayer3d_ui_layout_hit_region *hit_regions =
-        (slayer3d_ui_layout_hit_region *)SDL_calloc((size_t)new_capacity, sizeof(*hit_regions));
-    if (nodes == NULL || resolved_nodes == NULL || render_commands == NULL || hit_regions == NULL)
+    if (nodes == NULL || resolved_nodes == NULL)
     {
         SDL_free(nodes);
         SDL_free(resolved_nodes);
-        SDL_free(render_commands);
-        SDL_free(hit_regions);
         return false;
     }
     if (model->count > 0)
     {
         SDL_memcpy(nodes, model->nodes, (size_t)model->count * sizeof(*nodes));
         SDL_memcpy(resolved_nodes, model->resolved_nodes, (size_t)model->count * sizeof(*resolved_nodes));
-        SDL_memcpy(render_commands, model->render_commands, (size_t)model->render_count * sizeof(*render_commands));
-        SDL_memcpy(hit_regions, model->hit_regions, (size_t)model->hit_region_count * sizeof(*hit_regions));
     }
     SDL_free(model->nodes);
     SDL_free(model->resolved_nodes);
-    SDL_free(model->render_commands);
-    SDL_free(model->hit_regions);
     model->nodes = nodes;
     model->resolved_nodes = resolved_nodes;
+    model->capacity = new_capacity;
+    return true;
+}
+
+static bool ui_layout_reserve_flat_lists(slayer3d_ui_layout_model *model, int capacity)
+{
+    if (model->flat_capacity >= capacity)
+        return true;
+    int new_capacity = model->flat_capacity > 0 ? model->flat_capacity * 2 : 16;
+    while (new_capacity < capacity)
+        new_capacity *= 2;
+    slayer3d_ui_layout_render_command *render_commands =
+        (slayer3d_ui_layout_render_command *)SDL_calloc((size_t)new_capacity, sizeof(*render_commands));
+    slayer3d_ui_layout_hit_region *hit_regions =
+        (slayer3d_ui_layout_hit_region *)SDL_calloc((size_t)new_capacity, sizeof(*hit_regions));
+    if (render_commands == NULL || hit_regions == NULL)
+    {
+        SDL_free(render_commands);
+        SDL_free(hit_regions);
+        return false;
+    }
+    SDL_free(model->render_commands);
+    SDL_free(model->hit_regions);
     model->render_commands = render_commands;
     model->hit_regions = hit_regions;
-    model->capacity = new_capacity;
+    model->flat_capacity = new_capacity;
+    model->render_count = 0;
+    model->hit_region_count = 0;
     return true;
 }
 
@@ -135,6 +162,26 @@ static bool ui_layout_text_valid(const char *text)
 static bool ui_layout_action_valid(const char *action)
 {
     return action == NULL || SDL_strlen(action) < SLAYER3D_UI_LAYOUT_ACTION_MAX;
+}
+
+static bool ui_layout_dropdown_options_valid(const slayer3d_ui_layout_node_desc *desc)
+{
+    if (desc->option_count < 0 || desc->option_count > SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX)
+        return false;
+    if (desc->option_count > 0 && desc->options == NULL)
+        return false;
+    if (desc->selected_index < -1 || (desc->option_count == 0 && desc->selected_index > 0) ||
+        (desc->option_count > 0 && desc->selected_index >= desc->option_count))
+        return false;
+    if (desc->option_height < 0.0f)
+        return false;
+    for (int i = 0; i < desc->option_count; ++i)
+    {
+        const char *option = desc->options[i];
+        if (option == NULL || option[0] == '\0' || SDL_strlen(option) >= SLAYER3D_UI_LAYOUT_TEXT_MAX)
+            return false;
+    }
+    return true;
 }
 
 bool slayer3d_ui_layout_create(slayer3d_ui_layout_model **out_model)
@@ -167,6 +214,8 @@ void slayer3d_ui_layout_clear(slayer3d_ui_layout_model *model)
     model->count = 0;
     model->render_count = 0;
     model->hit_region_count = 0;
+    model->active_id[0] = '\0';
+    model->hover_id[0] = '\0';
     model->dirty = true;
 }
 
@@ -182,6 +231,10 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     if (desc->padding < 0.0f || desc->gap < 0.0f)
         return false;
     if (!ui_layout_text_valid(desc->text) || !ui_layout_action_valid(desc->action))
+        return false;
+    if (desc->type != SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && desc->option_count > 0)
+        return false;
+    if (!ui_layout_dropdown_options_valid(desc))
         return false;
     if ((desc->width_mode == SLAYER3D_UI_LAYOUT_SIZE_FIXED && desc->rect.w <= 0.0f) ||
         (desc->height_mode == SLAYER3D_UI_LAYOUT_SIZE_FIXED && desc->rect.h <= 0.0f))
@@ -206,6 +259,12 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->layer = desc->layer;
     ui_layout_copy_text(node->text, desc->text);
     ui_layout_copy_action(node->action, desc->action);
+    node->option_count = desc->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN ? desc->option_count : 0;
+    node->selected_index = desc->selected_index;
+    node->open = desc->open;
+    node->option_height = desc->option_height;
+    for (int i = 0; i < node->option_count; ++i)
+        ui_layout_copy_text(node->options[i], desc->options[i]);
     node->interactive = desc->interactive || desc->action != NULL || ui_layout_type_interactive(desc->type);
     node->selected = desc->selected;
     model->dirty = true;
@@ -424,39 +483,132 @@ static void ui_layout_sort_flat_lists(slayer3d_ui_layout_model *model)
     }
 }
 
-static void ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
+static int ui_layout_required_flat_capacity(const slayer3d_ui_layout_model *model)
 {
+    int required = model->count;
+    for (int i = 0; i < model->count; ++i)
+    {
+        const ui_layout_node *node = &model->nodes[i];
+        if (node->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && node->open && node->option_count > 0)
+            required += 1 + node->option_count;
+    }
+    return required;
+}
+
+static bool ui_layout_id_matches(const char *a, const char *b)
+{
+    return a != NULL && b != NULL && a[0] != '\0' && SDL_strcmp(a, b) == 0;
+}
+
+static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
+                                           slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
+                                           const char *text, bool selected, bool popup, int option_index)
+{
+    slayer3d_ui_layout_render_command *render = &model->render_commands[model->render_count++];
+    SDL_zero(*render);
+    ui_layout_copy_id(render->id, id);
+    ui_layout_copy_id(render->owner_id, owner_id != NULL ? owner_id : id);
+    render->type = type;
+    render->rect = rect;
+    render->layer = layer;
+    ui_layout_copy_text(render->text, text);
+    render->hovered = ui_layout_id_matches(model->hover_id, id);
+    render->active = ui_layout_id_matches(model->active_id, id);
+    render->selected = selected;
+    render->popup = popup;
+    render->option_index = option_index;
+}
+
+static void ui_layout_store_hit_region(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
+                                       slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
+                                       const char *action, bool selected, int option_index)
+{
+    slayer3d_ui_layout_hit_region *hit = &model->hit_regions[model->hit_region_count++];
+    SDL_zero(*hit);
+    ui_layout_copy_id(hit->id, id);
+    ui_layout_copy_id(hit->owner_id, owner_id != NULL ? owner_id : id);
+    hit->type = type;
+    hit->rect = rect;
+    hit->layer = layer;
+    ui_layout_copy_action(hit->action, action);
+    hit->hovered = ui_layout_id_matches(model->hover_id, id);
+    hit->active = ui_layout_id_matches(model->active_id, id);
+    hit->selected = selected;
+    hit->option_index = option_index;
+}
+
+static slayer3d_ui_layout_rect ui_layout_dropdown_popup_rect(const slayer3d_ui_layout_model *model,
+                                                             const ui_layout_node *node)
+{
+    const float option_height = node->option_height > 0.0f ? node->option_height : node->resolved_rect.h;
+    slayer3d_ui_layout_rect rect = {
+        node->resolved_rect.x,
+        node->resolved_rect.y + node->resolved_rect.h,
+        node->resolved_rect.w,
+        option_height * (float)node->option_count,
+    };
+    if (rect.x + rect.w > model->resolved_viewport_w)
+        rect.x = SDL_max(0.0f, model->resolved_viewport_w - rect.w);
+    if (rect.y + rect.h > model->resolved_viewport_h)
+        rect.y = SDL_max(0.0f, node->resolved_rect.y - rect.h);
+    return rect;
+}
+
+static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui_layout_node *node)
+{
+    if (!node->open || node->option_count <= 0)
+        return true;
+
+    char popup_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+    SDL_snprintf(popup_id, sizeof(popup_id), "%s.popup", node->id);
+    const int popup_layer = node->layer + UI_LAYOUT_POPUP_LAYER_OFFSET;
+    const slayer3d_ui_layout_rect popup_rect = ui_layout_dropdown_popup_rect(model, node);
+    ui_layout_store_render_command(model, popup_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, popup_rect, popup_layer,
+                                   "", false, true, -1);
+
+    const float option_height = node->option_height > 0.0f ? node->option_height : node->resolved_rect.h;
+    for (int i = 0; i < node->option_count; ++i)
+    {
+        char option_id[SLAYER3D_UI_LAYOUT_ID_MAX];
+        SDL_snprintf(option_id, sizeof(option_id), "%s.option.%d", node->id, i);
+        slayer3d_ui_layout_rect option_rect = {
+            popup_rect.x,
+            popup_rect.y + option_height * (float)i,
+            popup_rect.w,
+            option_height,
+        };
+        const bool selected = i == node->selected_index;
+        ui_layout_store_render_command(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
+                                       popup_layer + 1, node->options[i], selected, false, i);
+        ui_layout_store_hit_region(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
+                                   popup_layer + 1, node->action, selected, i);
+    }
+    return true;
+}
+
+static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
+{
+    if (!ui_layout_reserve_flat_lists(model, ui_layout_required_flat_capacity(model)))
+        return false;
     model->render_count = 0;
     model->hit_region_count = 0;
     for (int i = 0; i < model->count; ++i)
     {
         const slayer3d_ui_layout_resolved_node *node = &model->resolved_nodes[i];
-        slayer3d_ui_layout_render_command *render = &model->render_commands[model->render_count++];
-        SDL_zero(*render);
-        ui_layout_copy_id(render->id, node->id);
-        render->type = node->type;
-        render->rect = node->rect;
-        render->layer = node->layer;
-        ui_layout_copy_text(render->text, node->text);
-        render->hovered = node->hovered;
-        render->active = node->active;
-        render->selected = node->selected;
+        const ui_layout_node *source = &model->nodes[i];
+        ui_layout_store_render_command(model, node->id, node->id, node->type, node->rect, node->layer, node->text,
+                                       node->selected, false, -1);
 
         if (node->interactive)
         {
-            slayer3d_ui_layout_hit_region *hit = &model->hit_regions[model->hit_region_count++];
-            SDL_zero(*hit);
-            ui_layout_copy_id(hit->id, node->id);
-            hit->type = node->type;
-            hit->rect = node->rect;
-            hit->layer = node->layer;
-            ui_layout_copy_action(hit->action, node->action);
-            hit->hovered = node->hovered;
-            hit->active = node->active;
-            hit->selected = node->selected;
+            ui_layout_store_hit_region(model, node->id, node->id, node->type, node->rect, node->layer, node->action,
+                                       node->selected, -1);
         }
+        if (source->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && !ui_layout_compile_dropdown(model, source))
+            return false;
     }
     ui_layout_sort_flat_lists(model);
+    return true;
 }
 
 bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_w, float viewport_h)
@@ -482,9 +634,10 @@ bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_
             return false;
     }
     ui_layout_store_resolved_nodes(model);
-    ui_layout_compile_flat_lists(model);
     model->resolved_viewport_w = viewport_w;
     model->resolved_viewport_h = viewport_h;
+    if (!ui_layout_compile_flat_lists(model))
+        return false;
     model->dirty = false;
     ++model->generation;
     return true;
@@ -584,11 +737,12 @@ bool slayer3d_ui_layout_update_input(slayer3d_ui_layout_model *model, const slay
 
     const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(model, input->pointer_x, input->pointer_y);
     const char *hit_id = hit != NULL ? hit->id : NULL;
+    ui_layout_copy_id(model->hover_id, hit_id);
     ui_layout_clear_pointer_state(model);
 
     if (hit_id != NULL)
     {
-        const int hit_index = ui_layout_find_node_index(model, hit_id);
+        const int hit_index = ui_layout_find_node_index(model, hit->owner_id);
         if (hit_index >= 0)
             model->nodes[hit_index].hovered = true;
     }
@@ -606,16 +760,15 @@ bool slayer3d_ui_layout_update_input(slayer3d_ui_layout_model *model, const slay
             hit_id != NULL && model->active_id[0] != '\0' && SDL_strcmp(hit_id, model->active_id) == 0;
         if (activated && out_activation != NULL)
         {
-            const int index = ui_layout_find_node_index(model, hit_id);
             out_activation->activated = true;
             ui_layout_copy_id(out_activation->id, hit_id);
-            if (index >= 0)
-                ui_layout_copy_action(out_activation->action, model->nodes[index].action);
+            ui_layout_copy_id(out_activation->owner_id, hit->owner_id);
+            ui_layout_copy_action(out_activation->action, hit->action);
+            out_activation->option_index = hit->option_index;
         }
         model->active_id[0] = '\0';
     }
 
     ui_layout_store_resolved_nodes(model);
-    ui_layout_compile_flat_lists(model);
-    return true;
+    return ui_layout_compile_flat_lists(model);
 }
