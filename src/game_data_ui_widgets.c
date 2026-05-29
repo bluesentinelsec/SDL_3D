@@ -76,6 +76,57 @@ static const char *ui_widget_string(yyjson_val *node, const char *primary_key, c
     return value != NULL ? value : json_string(node, secondary_key, NULL);
 }
 
+static bool ui_widget_json_scalar_to_string(yyjson_val *value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (yyjson_is_str(value))
+        SDL_snprintf(buffer, buffer_size, "%s", yyjson_get_str(value));
+    else if (yyjson_is_int(value))
+        SDL_snprintf(buffer, buffer_size, "%lld", (long long)yyjson_get_sint(value));
+    else if (yyjson_is_real(value))
+        SDL_snprintf(buffer, buffer_size, "%.3f", yyjson_get_real(value));
+    else if (yyjson_is_bool(value))
+        SDL_snprintf(buffer, buffer_size, "%s", yyjson_get_bool(value) ? "true" : "false");
+    else
+        return false;
+    return true;
+}
+
+static bool ui_widget_scene_value_to_string(const slayer3d_value *value, char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (value == NULL)
+        return false;
+
+    switch (value->type)
+    {
+    case SLAYER3D_VALUE_INT:
+        SDL_snprintf(buffer, buffer_size, "%d", value->as_int);
+        return true;
+    case SLAYER3D_VALUE_FLOAT:
+        SDL_snprintf(buffer, buffer_size, "%.3f", value->as_float);
+        return true;
+    case SLAYER3D_VALUE_BOOL:
+        SDL_snprintf(buffer, buffer_size, "%s", value->as_bool ? "true" : "false");
+        return true;
+    case SLAYER3D_VALUE_STRING:
+        SDL_snprintf(buffer, buffer_size, "%s", value->as_string != NULL ? value->as_string : "");
+        return true;
+    case SLAYER3D_VALUE_VEC3:
+        SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f", value->as_vec3.x, value->as_vec3.y, value->as_vec3.z);
+        return true;
+    case SLAYER3D_VALUE_COLOR:
+        SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", (unsigned)value->as_color.r, (unsigned)value->as_color.g,
+                     (unsigned)value->as_color.b, (unsigned)value->as_color.a);
+        return true;
+    }
+    return false;
+}
+
 static bool ui_widget_scene_float(const slayer3d_game_data_runtime *runtime, const char *key, float *out_value)
 {
     if (runtime == NULL || runtime->scene_state == NULL || key == NULL || key[0] == '\0' || out_value == NULL)
@@ -95,6 +146,77 @@ static bool ui_widget_scene_float(const slayer3d_game_data_runtime *runtime, con
         return true;
     }
     return false;
+}
+
+static bool ui_widget_binding_to_string(const slayer3d_game_data_runtime *runtime, yyjson_val *binding, char *buffer,
+                                        size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+    if (!yyjson_is_obj(binding))
+        return false;
+
+    const char *type = json_string(binding, "type", "");
+    if (SDL_strcmp(type, "scene_state") != 0)
+        return ui_widget_json_scalar_to_string(obj_get(binding, "default"), buffer, buffer_size);
+
+    const char *key = json_string(binding, "key", NULL);
+    const slayer3d_value *value = runtime != NULL && runtime->scene_state != NULL && key != NULL
+                                      ? slayer3d_properties_get_value(runtime->scene_state, key)
+                                      : NULL;
+    if (ui_widget_scene_value_to_string(value, buffer, buffer_size))
+        return true;
+    return ui_widget_json_scalar_to_string(obj_get(binding, "default"), buffer, buffer_size);
+}
+
+static bool ui_widget_format_bound_text(const slayer3d_game_data_runtime *runtime, yyjson_val *node, char *buffer,
+                                        size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0U)
+        return false;
+    buffer[0] = '\0';
+
+    const char *format = json_string(node, "format", NULL);
+    yyjson_val *bindings = obj_get(node, "bindings");
+    if (format == NULL || !yyjson_is_arr(bindings) || yyjson_arr_size(bindings) == 0)
+        return false;
+    for (const char *cursor = format; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor != '%')
+            continue;
+        ++cursor;
+        if (*cursor != '%' && *cursor != 's')
+            return false;
+        if (*cursor == '\0')
+            return false;
+    }
+
+    char values[4][64];
+    const int value_count = (int)SDL_min(yyjson_arr_size(bindings), SDL_arraysize(values));
+    for (int i = 0; i < value_count; ++i)
+    {
+        if (!ui_widget_binding_to_string(runtime, yyjson_arr_get(bindings, (size_t)i), values[i], sizeof(values[i])))
+            return false;
+    }
+
+    switch (value_count)
+    {
+    case 1:
+        SDL_snprintf(buffer, buffer_size, format, values[0]);
+        return true;
+    case 2:
+        SDL_snprintf(buffer, buffer_size, format, values[0], values[1]);
+        return true;
+    case 3:
+        SDL_snprintf(buffer, buffer_size, format, values[0], values[1], values[2]);
+        return true;
+    case 4:
+        SDL_snprintf(buffer, buffer_size, format, values[0], values[1], values[2], values[3]);
+        return true;
+    default:
+        return false;
+    }
 }
 
 static int ui_widget_selected_index_from_values(const slayer3d_game_data_runtime *runtime, yyjson_val *node,
@@ -118,6 +240,9 @@ static int ui_widget_selected_index_from_values(const slayer3d_game_data_runtime
 static const char *ui_widget_dynamic_text(const slayer3d_game_data_runtime *runtime, yyjson_val *node, char *buffer,
                                           size_t buffer_size)
 {
+    if (ui_widget_format_bound_text(runtime, node, buffer, buffer_size))
+        return buffer;
+
     const char *format = json_string(node, "text_format", NULL);
     const char *key = json_string(node, "text_value_key", NULL);
     float value = 0.0f;
@@ -134,6 +259,10 @@ static const char *ui_widget_dynamic_text(const slayer3d_game_data_runtime *runt
 static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, yyjson_val *node, const char *parent_id,
                                slayer3d_ui_layout_model *layout)
 {
+    yyjson_val *visible_if = obj_get(node, "visible_if");
+    if (visible_if != NULL && !eval_data_condition(runtime, visible_if, NULL))
+        return true;
+
     yyjson_val *width = ui_widget_size_value(node, "w", "width");
     yyjson_val *height = ui_widget_size_value(node, "h", "height");
 

@@ -1892,6 +1892,18 @@ static void retained_ui_compat_name(const char *id, bool text_name, char *buffer
     SDL_strlcpy(buffer, id, buffer_size);
 }
 
+static bool retained_ui_text_is_left_aligned(const char *id)
+{
+    return id != NULL &&
+           (ends_with_cstr(id, ".label") || ends_with_cstr(id, ".title") || SDL_strstr(id, ".console.line") != NULL);
+}
+
+static bool retained_ui_text_is_right_aligned(const char *id)
+{
+    return id != NULL &&
+           (ends_with_cstr(id, ".value") || ends_with_cstr(id, ".toggle") || ends_with_cstr(id, ".placeholder"));
+}
+
 static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runtime,
                                          slayer3d_game_data_ui_text_fn callback, void *userdata)
 {
@@ -1924,11 +1936,26 @@ static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runti
         text.font = "font.editor_shell.ui";
         text.text = command->text;
         text.visible = "always";
-        text.x = command->rect.x + command->rect.w * 0.5f;
+        if (retained_ui_text_is_left_aligned(command->id))
+        {
+            text.x = command->rect.x + 8.0f;
+            text.align = SLAYER3D_GAME_DATA_UI_ALIGN_LEFT;
+            text.centered = false;
+        }
+        else if (retained_ui_text_is_right_aligned(command->id))
+        {
+            text.x = command->rect.x + command->rect.w - 8.0f;
+            text.align = SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT;
+            text.centered = false;
+        }
+        else
+        {
+            text.x = command->rect.x + command->rect.w * 0.5f;
+            text.align = SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
+            text.centered = true;
+        }
         text.y = command->rect.y + command->rect.h * 0.35f;
         text.normalized = false;
-        text.align = SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
-        text.centered = true;
         text.scale = command->option_index >= 0 ? 0.46f : 0.5f;
         text.color = command->selected ? (slayer3d_color){255, 255, 255, 255} : (slayer3d_color){215, 224, 238, 245};
         ok = callback(userdata, &text);

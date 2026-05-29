@@ -19,6 +19,9 @@ static const char *json_string(yyjson_val *object, const char *key)
     return validation_json_string(object, key);
 }
 
+static bool validate_ui_tool_binding(validation_context *ctx, yyjson_val *binding, const char *path,
+                                     validation_names *names);
+
 static bool is_non_empty_string(yyjson_val *object, const char *key)
 {
     const char *value = json_string(object, key);
@@ -186,6 +189,23 @@ static bool ui_widget_optional_string_len(yyjson_val *object, const char *key, s
     return text != NULL && SDL_strlen(text) < max_size;
 }
 
+static bool ui_widget_string_format_valid(const char *format)
+{
+    if (format == NULL)
+        return true;
+    for (const char *cursor = format; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor != '%')
+            continue;
+        ++cursor;
+        if (*cursor != '%' && *cursor != 's')
+            return false;
+        if (*cursor == '\0')
+            return false;
+    }
+    return true;
+}
+
 static bool ui_widget_optional_non_empty_string_len(yyjson_val *object, const char *key, size_t max_size)
 {
     yyjson_val *value = obj_get(object, key);
@@ -244,7 +264,7 @@ static bool ui_widget_name_set_add(ui_widget_name_set *set, const char *id)
 }
 
 static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, const char *path,
-                                    ui_widget_name_set *ids)
+                                    ui_widget_name_set *ids, validation_names *names)
 {
     if (!yyjson_is_obj(node))
         return validation_error(ctx, path, "UI widget nodes must be objects");
@@ -279,11 +299,47 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI widget text/label must be a string shorter than %d bytes",
                                 SLAYER3D_UI_LAYOUT_TEXT_MAX);
     }
+    if (!ui_widget_optional_string_len(node, "format", SLAYER3D_UI_LAYOUT_TEXT_MAX) ||
+        !ui_widget_optional_string_len(node, "text_format", SLAYER3D_UI_LAYOUT_TEXT_MAX))
+    {
+        return validation_error(ctx, path, "UI widget format/text_format must be a string shorter than %d bytes",
+                                SLAYER3D_UI_LAYOUT_TEXT_MAX);
+    }
+    if (!ui_widget_string_format_valid(json_string(node, "format")))
+        return validation_error(ctx, path, "UI widget format may only use %%s string placeholders");
+    if (!ui_widget_optional_non_empty_string_len(node, "text_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "open_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
+        !ui_widget_optional_non_empty_string_len(node, "selected_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX))
+    {
+        return validation_error(ctx, path, "UI widget state keys must be non-empty strings shorter than %d bytes",
+                                SLAYER3D_UI_LAYOUT_ACTION_MAX);
+    }
     if (!ui_widget_optional_non_empty_string_len(node, "action", SLAYER3D_UI_LAYOUT_ACTION_MAX))
         return validation_error(ctx, path, "UI widget action must be a non-empty string shorter than %d bytes",
                                 SLAYER3D_UI_LAYOUT_ACTION_MAX);
     if (!ui_widget_optional_bool(node, "selected"))
         return validation_error(ctx, path, "UI widget selected must be a boolean when authored");
+
+    char condition_path[PATH_BUFFER_SIZE];
+    format_path(condition_path, sizeof(condition_path), "%s.visible_if", path);
+    if (!validate_data_condition(ctx, obj_get(node, "visible_if"), condition_path, names))
+        return false;
+    format_path(condition_path, sizeof(condition_path), "%s.selected_if", path);
+    if (!validate_data_condition(ctx, obj_get(node, "selected_if"), condition_path, names))
+        return false;
+
+    yyjson_val *bindings = obj_get(node, "bindings");
+    if (bindings != NULL && !yyjson_is_arr(bindings))
+        return validation_error(ctx, path, "UI widget bindings must be an array");
+    for (size_t binding_index = 0; yyjson_is_arr(bindings) && binding_index < yyjson_arr_size(bindings);
+         ++binding_index)
+    {
+        char binding_path[PATH_BUFFER_SIZE];
+        format_path(binding_path, sizeof(binding_path), "%s.bindings[%zu]", path, binding_index);
+        if (!validate_ui_tool_binding(ctx, yyjson_arr_get(bindings, binding_index), binding_path, names))
+            return false;
+    }
+
     yyjson_val *options = obj_get(node, "options");
     if (options != NULL)
     {
@@ -342,7 +398,7 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     {
         char child_path[PATH_BUFFER_SIZE];
         format_path(child_path, sizeof(child_path), "%s.children[%zu]", path, i);
-        if (!validate_ui_widget_node(ctx, yyjson_arr_get(children, i), child_path, ids))
+        if (!validate_ui_widget_node(ctx, yyjson_arr_get(children, i), child_path, ids, names))
             return false;
     }
     return true;
@@ -475,7 +531,7 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     return true;
 }
 
-static bool validate_ui_widgets(validation_context *ctx, yyjson_val *widgets, const char *path)
+static bool validate_ui_widgets(validation_context *ctx, yyjson_val *widgets, const char *path, validation_names *names)
 {
     if (widgets == NULL)
         return true;
@@ -487,7 +543,7 @@ static bool validate_ui_widgets(validation_context *ctx, yyjson_val *widgets, co
     {
         char widget_path[PATH_BUFFER_SIZE];
         format_path(widget_path, sizeof(widget_path), "%s[%zu]", path, i);
-        ok = validate_ui_widget_node(ctx, yyjson_arr_get(widgets, i), widget_path, &ids);
+        ok = validate_ui_widget_node(ctx, yyjson_arr_get(widgets, i), widget_path, &ids, names);
     }
     ui_widget_name_set_destroy(&ids);
     if (!ok)
@@ -517,7 +573,8 @@ bool validate_ui_tool_color(validation_context *ctx, yyjson_val *object, const c
     return true;
 }
 
-bool validate_ui_tool_binding(validation_context *ctx, yyjson_val *binding, const char *path, validation_names *names)
+static bool validate_ui_tool_binding(validation_context *ctx, yyjson_val *binding, const char *path,
+                                     validation_names *names)
 {
     if (!yyjson_is_obj(binding))
         return validation_error(ctx, path, "UI tooling binding must be an object");
@@ -688,7 +745,7 @@ bool validate_ui(validation_context *ctx, yyjson_val *root, validation_names *na
         return validation_error(ctx, "$.ui.menus", "UI menus must be an array");
     if (!validate_ui_panels(ctx, panels, "$.ui.panels", names) ||
         !validate_ui_inspectors(ctx, inspectors, "$.ui.inspectors", names) ||
-        !validate_ui_widgets(ctx, widgets, "$.ui.widgets"))
+        !validate_ui_widgets(ctx, widgets, "$.ui.widgets", names))
     {
         return false;
     }

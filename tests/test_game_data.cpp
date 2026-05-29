@@ -24487,6 +24487,9 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool grid_label = false;
         bool inspector_panel = false;
         bool inspector_header = false;
+        slayer3d_game_data_ui_rect inspector_panel_rect{};
+        slayer3d_game_data_ui_rect inspector_header_rect{};
+        slayer3d_game_data_ui_rect inspector_row_rect{};
         bool inspector_tabs[3]{};
         bool inspector_rows[4]{};
         bool inspector_collapsed = false;
@@ -24512,9 +24515,15 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.button") == 0)
             capture->grid_widget = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.panel") == 0)
+        {
             capture->inspector_panel = true;
+            capture->inspector_panel_rect = *rect;
+        }
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.header") == 0)
+        {
             capture->inspector_header = true;
+            capture->inspector_header_rect = *rect;
+        }
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.collapsed") == 0)
             capture->inspector_collapsed = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.console.panel") == 0)
@@ -24546,7 +24555,10 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             else if (name == "ui.editor_shell.left_inspector.face.tab")
                 capture->inspector_tabs[2] = true;
             else if (name == "ui.editor_shell.left_inspector.row.name")
+            {
                 capture->inspector_rows[0] = true;
+                capture->inspector_row_rect = *rect;
+            }
             else if (name == "ui.editor_shell.left_inspector.row.selection")
                 capture->inspector_rows[1] = true;
             else if (name == "ui.editor_shell.left_inspector.row.brushes")
@@ -24710,6 +24722,10 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_TRUE(toolbar_capture.inspector_panel);
     EXPECT_TRUE(toolbar_capture.inspector_header);
     EXPECT_TRUE(toolbar_capture.inspector_title);
+    EXPECT_GE(toolbar_capture.inspector_header_rect.x, toolbar_capture.inspector_panel_rect.x);
+    EXPECT_GE(toolbar_capture.inspector_header_rect.y, toolbar_capture.inspector_panel_rect.y);
+    EXPECT_LE(toolbar_capture.inspector_header_rect.x + toolbar_capture.inspector_header_rect.w,
+              toolbar_capture.inspector_panel_rect.x + toolbar_capture.inspector_panel_rect.w);
     for (int i = 0; i < 3; ++i)
     {
         EXPECT_TRUE(toolbar_capture.inspector_tabs[i]) << i;
@@ -24717,8 +24733,11 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     }
     for (int i = 0; i < 4; ++i)
         EXPECT_TRUE(toolbar_capture.inspector_rows[i]) << i;
+    EXPECT_GT(toolbar_capture.inspector_row_rect.y, toolbar_capture.inspector_header_rect.y);
+    EXPECT_LE(toolbar_capture.inspector_row_rect.x + toolbar_capture.inspector_row_rect.w,
+              toolbar_capture.inspector_panel_rect.x + toolbar_capture.inspector_panel_rect.w);
     EXPECT_FALSE(toolbar_capture.inspector_collapsed);
-    EXPECT_TRUE(toolbar_capture.inspector_collapsed_label);
+    EXPECT_FALSE(toolbar_capture.inspector_collapsed_label);
     EXPECT_TRUE(toolbar_capture.console_panel);
     for (int i = 0; i < 2; ++i)
     {
@@ -24732,6 +24751,18 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     }
     EXPECT_FALSE(toolbar_capture.old_sidebar);
     EXPECT_FALSE(toolbar_capture.old_inspector);
+
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.collapsed", true);
+    ToolbarCapture collapsed_capture;
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_toolbar_rect, &collapsed_capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &toolbar_metrics, capture_toolbar_text,
+                                                                &collapsed_capture));
+    EXPECT_FALSE(collapsed_capture.inspector_panel);
+    EXPECT_FALSE(collapsed_capture.inspector_header);
+    EXPECT_TRUE(collapsed_capture.inspector_collapsed);
+    EXPECT_TRUE(collapsed_capture.inspector_collapsed_label);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.collapsed", false);
+
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "flyby_3d");
