@@ -70,6 +70,17 @@ static bool ui_widget_bool(yyjson_val *node, const char *key, bool fallback)
     return yyjson_is_bool(value) ? yyjson_get_bool(value) : fallback;
 }
 
+static slayer3d_ui_layout_text_align ui_widget_text_align_from_string(const char *align)
+{
+    if (align != NULL && SDL_strcmp(align, "left") == 0)
+        return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_LEFT;
+    if (align != NULL && SDL_strcmp(align, "center") == 0)
+        return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_CENTER;
+    if (align != NULL && SDL_strcmp(align, "right") == 0)
+        return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT;
+    return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO;
+}
+
 static const char *ui_widget_string(yyjson_val *node, const char *primary_key, const char *secondary_key)
 {
     const char *value = json_string(node, primary_key, NULL);
@@ -222,6 +233,18 @@ static bool ui_widget_add_node(const slayer3d_game_data_runtime *runtime, const 
     desc.text = ui_widget_dynamic_text(runtime, metrics, node, text_buffer, sizeof(text_buffer));
     desc.font = json_string(node, "font", NULL);
     desc.action = json_string(node, "action", NULL);
+    desc.has_text_color = obj_get(node, "text_color") != NULL;
+    desc.text_color = json_color(node, "text_color", (slayer3d_color){0, 0, 0, 0});
+    desc.text_scale = json_float(node, "text_scale", 0.0f);
+    desc.text_align = ui_widget_text_align_from_string(json_string(node, "align", NULL));
+    yyjson_val *fill_color = obj_get(node, "color");
+    if (fill_color == NULL)
+        fill_color = obj_get(node, "fill_color");
+    desc.has_fill_color = fill_color != NULL;
+    desc.fill_color = json_color_value(fill_color, (slayer3d_color){0, 0, 0, 0});
+    desc.has_border_color = obj_get(node, "border_color") != NULL;
+    desc.border_color = json_color(node, "border_color", (slayer3d_color){0, 0, 0, 0});
+    desc.border_thickness = json_float(node, "border_thickness", 0.0f);
     yyjson_val *selected_if = obj_get(node, "selected_if");
     desc.selected = ui_widget_bool(node, "selected", false) ||
                     (selected_if != NULL && eval_data_condition(runtime, selected_if, metrics));

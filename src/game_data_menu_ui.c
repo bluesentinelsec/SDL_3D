@@ -1749,6 +1749,24 @@ static bool retained_ui_text_is_right_aligned(const char *id)
            (ends_with_cstr(id, ".value") || ends_with_cstr(id, ".toggle") || ends_with_cstr(id, ".placeholder"));
 }
 
+static slayer3d_game_data_ui_align retained_ui_text_align(const slayer3d_ui_layout_render_command *command)
+{
+    if (command != NULL)
+    {
+        if (command->text_align == SLAYER3D_UI_LAYOUT_TEXT_ALIGN_LEFT)
+            return SLAYER3D_GAME_DATA_UI_ALIGN_LEFT;
+        if (command->text_align == SLAYER3D_UI_LAYOUT_TEXT_ALIGN_CENTER)
+            return SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
+        if (command->text_align == SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT)
+            return SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT;
+    }
+    if (command != NULL && retained_ui_text_is_left_aligned(command->id))
+        return SLAYER3D_GAME_DATA_UI_ALIGN_LEFT;
+    if (command != NULL && retained_ui_text_is_right_aligned(command->id))
+        return SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT;
+    return SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
+}
+
 static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runtime,
                                          const slayer3d_game_data_ui_metrics *metrics,
                                          slayer3d_game_data_ui_text_fn callback, void *userdata)
@@ -1782,28 +1800,28 @@ static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runti
         text.font = command->font[0] != '\0' ? command->font : "font.editor_shell.ui";
         text.text = command->text;
         text.visible = "always";
-        if (retained_ui_text_is_left_aligned(command->id))
+        text.align = retained_ui_text_align(command);
+        if (text.align == SLAYER3D_GAME_DATA_UI_ALIGN_LEFT)
         {
             text.x = command->rect.x + 8.0f;
-            text.align = SLAYER3D_GAME_DATA_UI_ALIGN_LEFT;
             text.centered = false;
         }
-        else if (retained_ui_text_is_right_aligned(command->id))
+        else if (text.align == SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT)
         {
             text.x = command->rect.x + command->rect.w - 8.0f;
-            text.align = SLAYER3D_GAME_DATA_UI_ALIGN_RIGHT;
             text.centered = false;
         }
         else
         {
             text.x = command->rect.x + command->rect.w * 0.5f;
-            text.align = SLAYER3D_GAME_DATA_UI_ALIGN_CENTER;
             text.centered = true;
         }
         text.y = command->rect.y + command->rect.h * 0.35f;
         text.normalized = false;
-        text.scale = command->option_index >= 0 ? 0.46f : 0.5f;
-        text.color = command->selected ? (slayer3d_color){255, 255, 255, 255} : (slayer3d_color){215, 224, 238, 245};
+        text.scale = command->text_scale > 0.0f ? command->text_scale : (command->option_index >= 0 ? 0.46f : 0.5f);
+        text.color = command->has_text_color ? command->text_color
+                                             : (command->selected ? (slayer3d_color){255, 255, 255, 255}
+                                                                  : (slayer3d_color){215, 224, 238, 245});
         ok = callback(userdata, &text);
     }
 
@@ -1997,6 +2015,8 @@ static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_c
 {
     if (command == NULL)
         return (slayer3d_color){0, 0, 0, 0};
+    if (command->has_fill_color)
+        return command->fill_color;
     if (command->popup)
         return (slayer3d_color){14, 20, 30, 248};
     if (command->option_index >= 0 && command->selected)
@@ -2016,6 +2036,8 @@ static slayer3d_color retained_ui_command_border(const slayer3d_ui_layout_render
 {
     if (command == NULL)
         return (slayer3d_color){0, 0, 0, 0};
+    if (command->has_border_color)
+        return command->border_color;
     if (command->selected)
         return (slayer3d_color){102, 255, 135, 255};
     if (command->popup)
@@ -2064,10 +2086,11 @@ static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runt
         retained_ui_compat_name(command->id, false, name, sizeof(name));
         const slayer3d_color fill = retained_ui_command_fill(command);
         const slayer3d_color border = retained_ui_command_border(command);
+        const float border_thickness =
+            command->border_thickness > 0.0f ? command->border_thickness : (command->selected ? 3.0f : 1.0f);
         ok = emit_ui_rect_from_values(NULL, name, command->rect.x, command->rect.y, command->rect.w, command->rect.h,
                                       fill, callback, userdata) &&
-             emit_retained_ui_rect_border(name, &command->rect, command->selected ? 3.0f : 1.0f, border, callback,
-                                          userdata);
+             emit_retained_ui_rect_border(name, &command->rect, border_thickness, border, callback, userdata);
         if (ok && command->selected)
         {
             char selected_name[SLAYER3D_UI_LAYOUT_ID_MAX];

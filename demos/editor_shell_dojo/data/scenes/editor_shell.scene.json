@@ -854,432 +854,1037 @@
             ]
           }
         ]
-      }
-    ],
-    "panels": [
-      {
-        "name": "ui.editor_shell.handoff.panel",
+      },
+{
+        "id": "ui.editor_shell.handoff.panel",
+        "type": "panel",
         "x": 18,
         "y": 494,
         "w": 1244,
         "h": 92,
-        "color": [8, 10, 16, 210],
-        "border_color": [80, 170, 170, 190],
+        "color": [
+                8,
+                10,
+                16,
+                210
+        ],
+        "border_color": [
+                80,
+                170,
+                170,
+                190
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
-      },
-      {
-        "name": "ui.editor_shell.palette.modal",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.test_run.command",
+                "op": "!=",
+                "value": ""
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.modal",
+        "type": "panel",
         "x": 368,
         "y": 150,
         "w": 544,
         "h": 318,
-        "color": [8, 12, 20, 235],
-        "border_color": [100, 180, 255, 235],
+        "color": [
+                8,
+                12,
+                20,
+                235
+        ],
+        "border_color": [
+                100,
+                180,
+                255,
+                235
+        ],
         "border_thickness": 2,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "!=", "value": "", "default": "" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.floor.cell",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "!=",
+                "value": "",
+                "default": ""
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.floor.cell",
+        "type": "panel",
         "x": 398,
         "y": 236,
         "w": 104,
         "h": 104,
-        "color": [38, 44, 54, 235],
-        "border_color": [95, 115, 145, 230],
+        "color": [
+                38,
+                44,
+                54,
+                235
+        ],
+        "border_color": [
+                95,
+                115,
+                145,
+                230
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.floor.preview",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.floor.preview",
+        "type": "panel",
         "x": 422,
         "y": 270,
         "w": 56,
         "h": 22,
-        "color": [105, 110, 118, 255],
-        "border_color": [170, 178, 190, 255],
+        "color": [
+                105,
+                110,
+                118,
+                255
+        ],
+        "border_color": [
+                170,
+                178,
+                190,
+                255
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.floor.selected",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.floor.selected",
+        "type": "panel",
         "x": 394,
         "y": 232,
         "w": 112,
         "h": 112,
-        "color": [0, 0, 0, 0],
-        "border_color": [95, 255, 210, 255],
+        "color": [
+                0,
+                0,
+                0,
+                0
+        ],
+        "border_color": [
+                95,
+                255,
+                210,
+                255
+        ],
         "border_thickness": 3,
         "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
-            { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "floor", "default": "floor" }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.wall.cell",
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "brush"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.brush.cursor",
+                                "op": "==",
+                                "value": "floor",
+                                "default": "floor"
+                        }
+                ]
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.wall.cell",
+        "type": "panel",
         "x": 522,
         "y": 236,
         "w": 104,
         "h": 104,
-        "color": [38, 44, 54, 235],
-        "border_color": [95, 115, 145, 230],
+        "color": [
+                38,
+                44,
+                54,
+                235
+        ],
+        "border_color": [
+                95,
+                115,
+                145,
+                230
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.wall.preview",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.wall.preview",
+        "type": "panel",
         "x": 564,
         "y": 254,
         "w": 20,
         "h": 70,
-        "color": [128, 132, 142, 255],
-        "border_color": [195, 202, 214, 255],
+        "color": [
+                128,
+                132,
+                142,
+                255
+        ],
+        "border_color": [
+                195,
+                202,
+                214,
+                255
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.wall.selected",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.wall.selected",
+        "type": "panel",
         "x": 518,
         "y": 232,
         "w": 112,
         "h": 112,
-        "color": [0, 0, 0, 0],
-        "border_color": [95, 255, 210, 255],
+        "color": [
+                0,
+                0,
+                0,
+                0
+        ],
+        "border_color": [
+                95,
+                255,
+                210,
+                255
+        ],
         "border_thickness": 3,
         "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
-            { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "wall" }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.ceiling.cell",
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "brush"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.brush.cursor",
+                                "op": "==",
+                                "value": "wall"
+                        }
+                ]
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.ceiling.cell",
+        "type": "panel",
         "x": 646,
         "y": 236,
         "w": 104,
         "h": 104,
-        "color": [38, 44, 54, 235],
-        "border_color": [95, 115, 145, 230],
+        "color": [
+                38,
+                44,
+                54,
+                235
+        ],
+        "border_color": [
+                95,
+                115,
+                145,
+                230
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.ceiling.preview",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.ceiling.preview",
+        "type": "panel",
         "x": 670,
         "y": 256,
         "w": 56,
         "h": 22,
-        "color": [152, 154, 164, 255],
-        "border_color": [215, 218, 226, 255],
+        "color": [
+                152,
+                154,
+                164,
+                255
+        ],
+        "border_color": [
+                215,
+                218,
+                226,
+                255
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.ceiling.selected",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.ceiling.selected",
+        "type": "panel",
         "x": 642,
         "y": 232,
         "w": 112,
         "h": 112,
-        "color": [0, 0, 0, 0],
-        "border_color": [95, 255, 210, 255],
+        "color": [
+                0,
+                0,
+                0,
+                0
+        ],
+        "border_color": [
+                95,
+                255,
+                210,
+                255
+        ],
         "border_thickness": 3,
         "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
-            { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "ceiling" }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.sky.cell",
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "brush"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.brush.cursor",
+                                "op": "==",
+                                "value": "ceiling"
+                        }
+                ]
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.sky.cell",
+        "type": "panel",
         "x": 770,
         "y": 236,
         "w": 104,
         "h": 104,
-        "color": [34, 56, 86, 235],
-        "border_color": [95, 135, 180, 230],
+        "color": [
+                34,
+                56,
+                86,
+                235
+        ],
+        "border_color": [
+                95,
+                135,
+                180,
+                230
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.sky.preview",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.sky.preview",
+        "type": "panel",
         "x": 794,
         "y": 256,
         "w": 56,
         "h": 22,
-        "color": [74, 132, 205, 255],
-        "border_color": [165, 215, 255, 255],
+        "color": [
+                74,
+                132,
+                205,
+                255
+        ],
+        "border_color": [
+                165,
+                215,
+                255,
+                255
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.sky.selected",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.brush.sky.selected",
+        "type": "panel",
         "x": 766,
         "y": 232,
         "w": 112,
         "h": 112,
-        "color": [0, 0, 0, 0],
-        "border_color": [95, 255, 210, 255],
+        "color": [
+                0,
+                0,
+                0,
+                0
+        ],
+        "border_color": [
+                95,
+                255,
+                210,
+                255
+        ],
         "border_thickness": 3,
         "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" },
-            { "type": "scene_state.compare", "key": "editor.palette.brush.cursor", "op": "==", "value": "sky" }
-          ]
-        }
-      },
-      {
-        "name": "ui.editor_shell.palette.game_object.player.cell",
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "brush"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.brush.cursor",
+                                "op": "==",
+                                "value": "sky"
+                        }
+                ]
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.player.cell",
+        "type": "panel",
         "x": 574,
         "y": 236,
         "w": 132,
         "h": 132,
-        "color": [38, 44, 54, 235],
-        "border_color": [95, 115, 145, 230],
+        "color": [
+                38,
+                44,
+                54,
+                235
+        ],
+        "border_color": [
+                95,
+                115,
+                145,
+                230
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
-      },
-      {
-        "name": "ui.editor_shell.palette.game_object.player.preview.body",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.player.preview.body",
+        "type": "panel",
         "x": 624,
         "y": 266,
         "w": 32,
         "h": 64,
-        "color": [80, 235, 130, 255],
-        "border_color": [160, 255, 190, 255],
+        "color": [
+                80,
+                235,
+                130,
+                255
+        ],
+        "border_color": [
+                160,
+                255,
+                190,
+                255
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
-      },
-      {
-        "name": "ui.editor_shell.palette.game_object.player.preview.head",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.player.preview.head",
+        "type": "panel",
         "x": 616,
         "y": 250,
         "w": 48,
         "h": 20,
-        "color": [92, 255, 148, 255],
-        "border_color": [175, 255, 205, 255],
+        "color": [
+                92,
+                255,
+                148,
+                255
+        ],
+        "border_color": [
+                175,
+                255,
+                205,
+                255
+        ],
         "border_thickness": 1,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
-      },
-      {
-        "name": "ui.editor_shell.palette.game_object.player.selected",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.player.selected",
+        "type": "panel",
         "x": 570,
         "y": 232,
         "w": 140,
         "h": 140,
-        "color": [0, 0, 0, 0],
-        "border_color": [95, 255, 210, 255],
+        "color": [
+                0,
+                0,
+                0,
+                0
+        ],
+        "border_color": [
+                95,
+                255,
+                210,
+                255
+        ],
         "border_thickness": 3,
         "visible_if": {
-          "type": "all",
-          "conditions": [
-            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
-            { "type": "scene_state.compare", "key": "editor.palette.game_object.cursor", "op": "==", "value": "player_start", "default": "player_start" }
-          ]
-        }
-      }
-    ],
-    "text": [
-      {
-        "name": "ui.editor_shell.title",
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.game_object.cursor",
+                                "op": "==",
+                                "value": "player_start",
+                                "default": "player_start"
+                        }
+                ]
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.title",
+        "type": "label",
+        "x": 954.4,
+        "y": 93.6,
+        "w": 300,
+        "h": 35,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
         "text": "Editor Shell Dojo",
+        "text_color": [
+                235,
+                242,
+                255,
+                230
+        ],
+        "text_scale": 0.8,
+        "align": "right"
+},
+{
+        "id": "ui.editor_shell.view_label.perspective",
+        "type": "label",
+        "x": 1004.4,
+        "y": 144.0,
+        "w": 250,
+        "h": 26,
+        "layer": 141,
         "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.13,
-        "normalized": true,
-        "align": "right",
-        "color": [235, 242, 255, 230],
-        "scale": 0.8
-      },
-      {
-        "name": "ui.editor_shell.view_label.perspective",
         "text": "3D Perspective / Flyby",
+        "text_color": [
+                160,
+                220,
+                255,
+                235
+        ],
+        "text_scale": 0.6,
+        "align": "right"
+},
+{
+        "id": "ui.editor_shell.palette.modal.title.brush",
+        "type": "label",
+        "x": 394,
+        "y": 172,
+        "w": 250,
+        "h": 34,
+        "layer": 141,
         "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.20,
-        "normalized": true,
-        "align": "right",
-        "color": [160, 220, 255, 235],
-        "scale": 0.6
-      },
-      {
-        "name": "ui.editor_shell.palette.modal.title.brush",
         "text": "Prefabs",
-        "font": "font.editor_shell.ui",
+        "text_color": [
+                235,
+                245,
+                255,
+                255
+        ],
+        "text_scale": 0.78,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.modal.title.material",
+        "type": "label",
         "x": 394,
         "y": 172,
-        "color": [235, 245, 255, 255],
-        "scale": 0.78,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.modal.title.material",
+        "w": 250,
+        "h": 34,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
         "text": "Materials",
-        "font": "font.editor_shell.ui",
+        "text_color": [
+                235,
+                245,
+                255,
+                255
+        ],
+        "text_scale": 0.78,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "material"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.modal.title.game_object",
+        "type": "label",
         "x": 394,
         "y": 172,
-        "color": [235, 245, 255, 255],
-        "scale": 0.78,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" }
-      },
-      {
-        "name": "ui.editor_shell.palette.modal.title.game_object",
+        "w": 250,
+        "h": 34,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
         "text": "Game Objects",
+        "text_color": [
+                235,
+                245,
+                255,
+                255
+        ],
+        "text_scale": 0.78,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.brush.floor.label",
+        "type": "label",
+        "x": 385.0,
+        "y": 326,
+        "w": 130,
+        "h": 26,
+        "layer": 141,
         "font": "font.editor_shell.ui",
-        "x": 394,
-        "y": 172,
-        "color": [235, 245, 255, 255],
-        "scale": 0.78,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.floor.label",
         "text": "Floor",
-        "font": "font.editor_shell.ui",
-        "x": 450,
-        "y": 326,
+        "text_color": [
+                230,
+                238,
+                248,
+                245
+        ],
+        "text_scale": 0.58,
         "align": "center",
-        "color": [230, 238, 248, 245],
-        "scale": 0.58,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.wall.label",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.brush.wall.label",
+        "type": "label",
+        "x": 509.0,
+        "y": 326,
+        "w": 130,
+        "h": 26,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
         "text": "Wall",
-        "font": "font.editor_shell.ui",
-        "x": 574,
-        "y": 326,
+        "text_color": [
+                230,
+                238,
+                248,
+                245
+        ],
+        "text_scale": 0.58,
         "align": "center",
-        "color": [230, 238, 248, 245],
-        "scale": 0.58,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.ceiling.label",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.brush.ceiling.label",
+        "type": "label",
+        "x": 633.0,
+        "y": 326,
+        "w": 130,
+        "h": 26,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
         "text": "Ceiling",
-        "font": "font.editor_shell.ui",
-        "x": 698,
-        "y": 326,
+        "text_color": [
+                230,
+                238,
+                248,
+                245
+        ],
+        "text_scale": 0.58,
         "align": "center",
-        "color": [230, 238, 248, 245],
-        "scale": 0.58,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.brush.sky.label",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.brush.sky.label",
+        "type": "label",
+        "x": 757.0,
+        "y": 326,
+        "w": 130,
+        "h": 26,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
         "text": "Sky",
-        "font": "font.editor_shell.ui",
-        "x": 822,
-        "y": 326,
+        "text_color": [
+                230,
+                238,
+                248,
+                245
+        ],
+        "text_scale": 0.58,
         "align": "center",
-        "color": [230, 238, 248, 245],
-        "scale": 0.58,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.game_object.player.label",
-        "text": "Player Start",
-        "font": "font.editor_shell.ui",
-        "x": 640,
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.player.label",
+        "type": "label",
+        "x": 575.0,
         "y": 334,
+        "w": 130,
+        "h": 26,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Player Start",
+        "text_color": [
+                230,
+                238,
+                248,
+                245
+        ],
+        "text_scale": 0.58,
         "align": "center",
-        "color": [230, 238, 248, 245],
-        "scale": 0.58,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
-      },
-      {
-        "name": "ui.editor_shell.palette.selected.brush",
-        "font": "font.editor_shell.ui",
-        "format": "Selected: %s",
-        "bindings": [{ "type": "scene_state", "key": "editor.palette.brush.cursor", "default": "floor" }],
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.selected.brush",
+        "type": "label",
         "x": 394,
         "y": 398,
-        "color": [160, 230, 255, 245],
-        "scale": 0.56,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "brush" }
-      },
-      {
-        "name": "ui.editor_shell.palette.selected.game_object",
+        "w": 500,
+        "h": 25,
+        "layer": 141,
         "font": "font.editor_shell.ui",
         "format": "Selected: %s",
-        "bindings": [{ "type": "scene_state", "key": "editor.palette.game_object.cursor", "default": "player_start" }],
+        "bindings": [
+                {
+                        "type": "scene_state",
+                        "key": "editor.palette.brush.cursor",
+                        "default": "floor"
+                }
+        ],
+        "text_color": [
+                160,
+                230,
+                255,
+                245
+        ],
+        "text_scale": 0.56,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "brush"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.selected.game_object",
+        "type": "label",
         "x": 394,
         "y": 398,
-        "color": [160, 230, 255, 245],
-        "scale": 0.56,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" }
-      },
-      {
-        "name": "ui.editor_shell.palette.help",
-        "text": "Arrow keys move selection. Enter chooses. Esc closes.",
+        "w": 500,
+        "h": 25,
+        "layer": 141,
         "font": "font.editor_shell.ui",
+        "format": "Selected: %s",
+        "bindings": [
+                {
+                        "type": "scene_state",
+                        "key": "editor.palette.game_object.cursor",
+                        "default": "player_start"
+                }
+        ],
+        "text_color": [
+                160,
+                230,
+                255,
+                245
+        ],
+        "text_scale": 0.56,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.help",
+        "type": "label",
         "x": 394,
         "y": 428,
-        "color": [200, 214, 235, 220],
-        "scale": 0.48,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "!=", "value": "", "default": "" }
-      },
-      {
-        "name": "ui.editor_shell.handoff.title",
-        "text": "Test Run Handoff",
+        "w": 860,
+        "h": 21,
+        "layer": 141,
         "font": "font.editor_shell.ui",
+        "text": "Arrow keys move selection. Enter chooses. Esc closes.",
+        "text_color": [
+                200,
+                214,
+                235,
+                220
+        ],
+        "text_scale": 0.48,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "!=",
+                "value": "",
+                "default": ""
+        }
+},
+{
+        "id": "ui.editor_shell.handoff.title",
+        "type": "label",
         "x": 34,
         "y": 504,
-        "color": [160, 230, 230, 240],
-        "scale": 0.56,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
-      },
-      {
-        "name": "ui.editor_shell.handoff.level",
+        "w": 900,
+        "h": 25,
+        "layer": 141,
         "font": "font.editor_shell.ui",
-        "format": "Level: %s",
-        "bindings": [{ "type": "scene_state", "key": "editor.save.path", "default": "none" }],
+        "text": "Test Run Handoff",
+        "text_color": [
+                160,
+                230,
+                230,
+                240
+        ],
+        "text_scale": 0.56,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.test_run.command",
+                "op": "!=",
+                "value": ""
+        }
+},
+{
+        "id": "ui.editor_shell.handoff.level",
+        "type": "label",
         "x": 34,
         "y": 528,
-        "color": [220, 232, 245, 225],
-        "scale": 0.46,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
-      },
-      {
-        "name": "ui.editor_shell.handoff.manifest",
+        "w": 900,
+        "h": 20,
+        "layer": 141,
         "font": "font.editor_shell.ui",
-        "format": "Manifest: %s",
-        "bindings": [{ "type": "scene_state", "key": "editor.test_run.path", "default": "none" }],
+        "format": "Level: %s",
+        "bindings": [
+                {
+                        "type": "scene_state",
+                        "key": "editor.save.path",
+                        "default": "none"
+                }
+        ],
+        "text_color": [
+                220,
+                232,
+                245,
+                225
+        ],
+        "text_scale": 0.46,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.test_run.command",
+                "op": "!=",
+                "value": ""
+        }
+},
+{
+        "id": "ui.editor_shell.handoff.manifest",
+        "type": "label",
         "x": 34,
         "y": 550,
-        "color": [220, 232, 245, 225],
-        "scale": 0.46,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
-      },
-      {
-        "name": "ui.editor_shell.handoff.command",
+        "w": 900,
+        "h": 20,
+        "layer": 141,
         "font": "font.editor_shell.ui",
-        "format": "Command: %s",
-        "bindings": [{ "type": "scene_state", "key": "editor.test_run.command", "default": "none" }],
+        "format": "Manifest: %s",
+        "bindings": [
+                {
+                        "type": "scene_state",
+                        "key": "editor.test_run.path",
+                        "default": "none"
+                }
+        ],
+        "text_color": [
+                220,
+                232,
+                245,
+                225
+        ],
+        "text_scale": 0.46,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.test_run.command",
+                "op": "!=",
+                "value": ""
+        }
+},
+{
+        "id": "ui.editor_shell.handoff.command",
+        "type": "label",
         "x": 34,
         "y": 572,
-        "color": [235, 245, 255, 235],
-        "scale": 0.42,
-        "visible_if": { "type": "scene_state.compare", "key": "editor.test_run.command", "op": "!=", "value": "" }
-      },
-      {
-        "name": "ui.editor_shell.help",
-        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, V vertex, M texture, G objects. Prefabs button opens blockout shapes. Esc clears selection/back to select.",
+        "w": 1180,
+        "h": 18,
+        "layer": 141,
         "font": "font.editor_shell.ui",
-        "x": 0.98,
-        "y": 0.17,
-        "normalized": true,
-        "align": "right",
-        "color": [190, 205, 230, 215],
-        "scale": 0.6
-      }
+        "format": "Command: %s",
+        "bindings": [
+                {
+                        "type": "scene_state",
+                        "key": "editor.test_run.command",
+                        "default": "none"
+                }
+        ],
+        "text_color": [
+                235,
+                245,
+                255,
+                235
+        ],
+        "text_scale": 0.42,
+        "align": "left",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.test_run.command",
+                "op": "!=",
+                "value": ""
+        }
+},
+{
+        "id": "ui.editor_shell.help",
+        "type": "label",
+        "x": 394.4,
+        "y": 122.4,
+        "w": 860,
+        "h": 26,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, V vertex, M texture, G objects. Prefabs button opens blockout shapes. Esc clears selection/back to select.",
+        "text_color": [
+                190,
+                205,
+                230,
+                215
+        ],
+        "text_scale": 0.6,
+        "align": "right"
+}
     ]
   }
 }

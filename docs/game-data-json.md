@@ -3455,70 +3455,83 @@ visibility counters
 `brush.visibility_grid_cache_hits`, and
 `brush.visibility_grid_cache_misses`.
 
-For editor-like tools and diagnostics, `ui.panels` and `ui.inspectors` provide
-reusable higher-level overlay widgets while still rendering through the normal
-UI rectangle and text path. A panel emits one filled rectangle plus optional
-border rectangles. An inspector emits a background panel, optional row
-backgrounds, a title, and label/value rows. Inspector row values can be scalar
-literals or bindings to scene state, actor properties, or UI metrics:
+For structured UI, prefer retained `ui.widgets`. Widgets are authored as a tree
+and resolved to one flat render and hit-test stream each frame. This makes
+layout, rendering, hit testing, dropdown popups, and dynamic text share one
+source of truth. `ui.rects`, `ui.text`, and `ui.images` remain available for
+small one-off overlays. `ui.panels` and `ui.inspectors` remain supported as
+simple/legacy diagnostic helpers, but new editor shells, menus, and toolbars
+should use `ui.widgets`.
 
 ```json
 {
   "ui": {
-    "panels": [
+    "widgets": [
       {
-        "name": "ui.editor.sidebar",
-        "x": 12,
-        "y": 12,
-        "w": 280,
-        "h": 180,
-        "color": [20, 28, 40, 220],
-        "border_color": [90, 130, 210, 255],
-        "border_thickness": 2
-      }
-    ],
-    "inspectors": [
-      {
-        "name": "ui.editor.selection",
-        "font": "font.hud",
-        "x": 24,
-        "y": 24,
-        "w": 248,
-        "row_height": 22,
+        "id": "ui.tools",
+        "type": "toolbar",
+        "layout": "row",
+        "x": 0,
+        "y": 0,
+        "w": "fill",
+        "h": 48,
         "padding": 8,
-        "title": "Selection",
-        "rows": [
+        "gap": 8,
+        "color": [8, 12, 18, 235],
+        "border_color": [88, 118, 160, 255],
+        "border_thickness": 1,
+        "children": [
           {
-            "label": "World",
-            "binding": { "type": "scene_state", "key": "editor.world", "default": "none" }
+            "id": "ui.tools.select",
+            "type": "button",
+            "text": "Select",
+            "font": "font.hud",
+            "w": 120,
+            "h": 32,
+            "action": "signal.editor.mode.select",
+            "text_color": [230, 236, 245, 255],
+            "align": "center"
           },
           {
-            "label": "Health",
-            "binding": { "type": "property", "entity": "entity.player", "key": "health" }
-          },
-          {
-            "label": "FPS",
-            "binding": { "type": "metric", "metric": "fps", "default": 0 }
+            "id": "ui.tools.grid",
+            "type": "dropdown",
+            "font": "font.hud",
+            "w": 160,
+            "h": 32,
+            "options": ["Grid 1", "Grid 2", "Grid 4", "Grid 8"],
+            "values": [1, 2, 4, 8],
+            "open_key": "editor.grid.menu.open",
+            "selected_value_key": "editor.grid.size"
           }
         ]
+      },
+      {
+        "id": "ui.editor.fps",
+        "type": "label",
+        "font": "font.hud",
+        "format": "FPS %s",
+        "bindings": [{ "type": "metric", "metric": "fps", "default": 0 }],
+        "x": 1100,
+        "y": 16,
+        "w": 160,
+        "h": 28,
+        "align": "right"
       }
     ]
   }
 }
 ```
 
-These widgets are project-agnostic. Use them for debug HUDs, editor shells,
-inspectors, and simple tool panels before reaching for custom native UI code.
-
-For game HUDs and pause overlays, prefer retained `ui.widgets`. Widgets are
-resolved as a tree each frame, then compiled to the same UI text and rectangle
-streams used by the renderer. This keeps layout, hit testing, and render output
-on one path, which avoids the drift that can happen with hand-positioned
-parallel `ui.text` / `ui.rects` overlays. A widget may author a `font` asset id,
-static `text` / `label`, or dynamic text with `format` plus `bindings`. Dynamic
-bindings support `scene_state`, actor `property`, and runtime `metric` values.
-The number of `%s` placeholders in `format` must exactly match the number of
-bindings.
+Widgets support `panel`, `toolbar`, `row`, `column`, `button`, `label`,
+`dropdown`, `tab_strip`, `spacer`, `console`, and `log_view` nodes. `w` and `h`
+may be positive numbers or `"fill"`. Nodes may author `color` / `fill_color`,
+`border_color`, `border_thickness`, `text_color`, `text_scale`, and `align`
+(`left`, `center`, or `right`). Dynamic text supports `format` plus `bindings`;
+the number of `%s` placeholders must exactly match the number of bindings.
+Single numeric scene-state labels can use `text_format` plus `text_value_key`.
+Dropdown popup and option commands are synthesized from the authored dropdown
+node and keep the dropdown `owner_id` for input and rendering. See
+[`ui-widgets.md`](ui-widgets.md) for the retained UI authoring contract.
 
 ```json
 {

@@ -250,6 +250,53 @@ TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedRenderCommandsCarryAuthoredStyle)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc panel{};
+    panel.id = "panel";
+    panel.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    panel.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    panel.rect = {10.0f, 20.0f, 120.0f, 40.0f};
+    panel.fill_color = {11, 22, 33, 44};
+    panel.has_fill_color = true;
+    panel.border_color = {55, 66, 77, 88};
+    panel.has_border_color = true;
+    panel.border_thickness = 3.0f;
+    panel.text_color = {210, 220, 230, 240};
+    panel.has_text_color = true;
+    panel.text_scale = 0.75f;
+    panel.text_align = SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &panel));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_render_command *command = find_render_command(layout, "panel");
+    ASSERT_NE(command, nullptr);
+    EXPECT_TRUE(command->has_fill_color);
+    EXPECT_EQ(command->fill_color.r, 11);
+    EXPECT_EQ(command->fill_color.g, 22);
+    EXPECT_EQ(command->fill_color.b, 33);
+    EXPECT_EQ(command->fill_color.a, 44);
+    EXPECT_TRUE(command->has_border_color);
+    EXPECT_EQ(command->border_color.r, 55);
+    EXPECT_EQ(command->border_color.g, 66);
+    EXPECT_EQ(command->border_color.b, 77);
+    EXPECT_EQ(command->border_color.a, 88);
+    EXPECT_FLOAT_EQ(command->border_thickness, 3.0f);
+    EXPECT_TRUE(command->has_text_color);
+    EXPECT_EQ(command->text_color.r, 210);
+    EXPECT_EQ(command->text_color.g, 220);
+    EXPECT_EQ(command->text_color.b, 230);
+    EXPECT_EQ(command->text_color.a, 240);
+    EXPECT_FLOAT_EQ(command->text_scale, 0.75f);
+    EXPECT_EQ(command->text_align, SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedHitTestingUsesFrontMostLayer)
 {
     slayer3d_ui_layout_model *layout = nullptr;

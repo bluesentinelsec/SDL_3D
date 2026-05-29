@@ -9,6 +9,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 
+#include "slayer3d/types.h"
+
 #ifdef __cplusplus
 extern "C"
 {
@@ -17,7 +19,7 @@ extern "C"
     /** @brief Maximum bytes stored for a retained UI node id, including the terminator. */
 #define SLAYER3D_UI_LAYOUT_ID_MAX 64
     /** @brief Maximum bytes stored for retained UI authored text, including the terminator. */
-#define SLAYER3D_UI_LAYOUT_TEXT_MAX 128
+#define SLAYER3D_UI_LAYOUT_TEXT_MAX 256
     /** @brief Maximum bytes stored for a retained UI font asset id, including the terminator. */
 #define SLAYER3D_UI_LAYOUT_FONT_MAX 64
     /** @brief Maximum bytes stored for retained UI action names, including the terminator. */
@@ -55,6 +57,15 @@ extern "C"
         SLAYER3D_UI_LAYOUT_SIZE_FILL,
     } slayer3d_ui_layout_size_mode;
 
+    /** @brief Optional retained UI text alignment. */
+    typedef enum slayer3d_ui_layout_text_align
+    {
+        SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO = 0,
+        SLAYER3D_UI_LAYOUT_TEXT_ALIGN_LEFT,
+        SLAYER3D_UI_LAYOUT_TEXT_ALIGN_CENTER,
+        SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT,
+    } slayer3d_ui_layout_text_align;
+
     /** @brief Simple logical-pixel rectangle. */
     typedef struct slayer3d_ui_layout_rect
     {
@@ -81,6 +92,15 @@ extern "C"
         const char *text;
         const char *font;
         const char *action;
+        slayer3d_color text_color;
+        bool has_text_color;
+        float text_scale;
+        slayer3d_ui_layout_text_align text_align;
+        slayer3d_color fill_color;
+        bool has_fill_color;
+        slayer3d_color border_color;
+        bool has_border_color;
+        float border_thickness;
         bool selected;
         const char *const *options;
         int option_count;
@@ -102,10 +122,19 @@ extern "C"
         bool interactive;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+        slayer3d_color text_color;
+        bool has_text_color;
+        float text_scale;
+        slayer3d_ui_layout_text_align text_align;
         bool hovered;
         bool active;
         bool selected;
         char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
+        slayer3d_color fill_color;
+        bool has_fill_color;
+        slayer3d_color border_color;
+        bool has_border_color;
+        float border_thickness;
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */
@@ -117,6 +146,15 @@ extern "C"
         int layer;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
         char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
+        slayer3d_color text_color;
+        bool has_text_color;
+        float text_scale;
+        slayer3d_ui_layout_text_align text_align;
+        slayer3d_color fill_color;
+        bool has_fill_color;
+        slayer3d_color border_color;
+        bool has_border_color;
+        float border_thickness;
         bool hovered;
         bool active;
         bool selected;

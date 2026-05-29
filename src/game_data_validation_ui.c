@@ -19,8 +19,34 @@ static const char *json_string(yyjson_val *object, const char *key)
     return validation_json_string(object, key);
 }
 
+static slayer3d_color ui_widget_color_value(yyjson_val *value, slayer3d_color fallback)
+{
+    if (!yyjson_is_arr(value) || yyjson_arr_size(value) < 3)
+        return fallback;
+
+    yyjson_val *r = yyjson_arr_get(value, 0);
+    yyjson_val *g = yyjson_arr_get(value, 1);
+    yyjson_val *b = yyjson_arr_get(value, 2);
+    yyjson_val *a = yyjson_arr_get(value, 3);
+    if (!yyjson_is_num(r) || !yyjson_is_num(g) || !yyjson_is_num(b))
+        return fallback;
+
+    return (slayer3d_color){
+        (Uint8)SDL_clamp((int)yyjson_get_num(r), 0, 255),
+        (Uint8)SDL_clamp((int)yyjson_get_num(g), 0, 255),
+        (Uint8)SDL_clamp((int)yyjson_get_num(b), 0, 255),
+        yyjson_is_num(a) ? (Uint8)SDL_clamp((int)yyjson_get_num(a), 0, 255) : fallback.a,
+    };
+}
+
+static slayer3d_color ui_widget_color(yyjson_val *object, const char *key, slayer3d_color fallback)
+{
+    return ui_widget_color_value(obj_get(object, key), fallback);
+}
+
 static bool validate_ui_tool_binding(validation_context *ctx, yyjson_val *binding, const char *path,
                                      validation_names *names);
+bool validate_ui_tool_color(validation_context *ctx, yyjson_val *object, const char *key, const char *path);
 
 static bool is_non_empty_string(yyjson_val *object, const char *key)
 {
@@ -178,6 +204,12 @@ static bool ui_widget_optional_positive_number(yyjson_val *object, const char *k
     return value == NULL || (yyjson_is_num(value) && yyjson_get_num(value) > 0.0);
 }
 
+static bool ui_widget_text_align_valid(const char *align)
+{
+    return align == NULL || SDL_strcmp(align, "left") == 0 || SDL_strcmp(align, "center") == 0 ||
+           SDL_strcmp(align, "right") == 0;
+}
+
 static bool ui_widget_optional_string_len(yyjson_val *object, const char *key, size_t max_size)
 {
     yyjson_val *value = obj_get(object, key);
@@ -311,6 +343,18 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI widget padding must be non-negative");
     if (!ui_widget_optional_number_non_negative(node, "gap"))
         return validation_error(ctx, path, "UI widget gap must be non-negative");
+    if (!ui_widget_optional_number_non_negative(node, "border_thickness"))
+        return validation_error(ctx, path, "UI widget border_thickness must be non-negative");
+    if (!validate_ui_tool_color(ctx, node, "color", path) || !validate_ui_tool_color(ctx, node, "fill_color", path) ||
+        !validate_ui_tool_color(ctx, node, "border_color", path) ||
+        !validate_ui_tool_color(ctx, node, "text_color", path))
+    {
+        return false;
+    }
+    if (!ui_widget_optional_positive_number(node, "text_scale"))
+        return validation_error(ctx, path, "UI widget text_scale must be positive when authored");
+    if (!ui_widget_text_align_valid(json_string(node, "align")))
+        return validation_error(ctx, path, "UI widget align must be left, center, or right when authored");
     if (!ui_widget_optional_integer(node, "layer") || !ui_widget_optional_integer(node, "z"))
         return validation_error(ctx, path, "UI widget layer/z must be an integer when authored");
     if (!ui_widget_optional_bool(node, "interactive"))
@@ -517,6 +561,17 @@ static bool parse_ui_widget_bool(yyjson_val *node, const char *key, bool fallbac
     return yyjson_is_bool(value) ? yyjson_get_bool(value) : fallback;
 }
 
+static slayer3d_ui_layout_text_align parse_ui_widget_text_align(const char *align)
+{
+    if (align != NULL && SDL_strcmp(align, "left") == 0)
+        return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_LEFT;
+    if (align != NULL && SDL_strcmp(align, "center") == 0)
+        return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_CENTER;
+    if (align != NULL && SDL_strcmp(align, "right") == 0)
+        return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT;
+    return SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO;
+}
+
 static const char *parse_ui_widget_string(yyjson_val *node, const char *primary_key, const char *secondary_key)
 {
     const char *value = json_string(node, primary_key);
@@ -547,6 +602,18 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.text = parse_ui_widget_string(node, "text", "label");
     desc.font = json_string(node, "font");
     desc.action = json_string(node, "action");
+    desc.has_text_color = obj_get(node, "text_color") != NULL;
+    desc.text_color = ui_widget_color(node, "text_color", (slayer3d_color){0, 0, 0, 0});
+    desc.text_scale = parse_ui_widget_float(node, "text_scale", 0.0f);
+    desc.text_align = parse_ui_widget_text_align(json_string(node, "align"));
+    yyjson_val *fill_color = obj_get(node, "color");
+    if (fill_color == NULL)
+        fill_color = obj_get(node, "fill_color");
+    desc.has_fill_color = fill_color != NULL;
+    desc.fill_color = ui_widget_color_value(fill_color, (slayer3d_color){0, 0, 0, 0});
+    desc.has_border_color = obj_get(node, "border_color") != NULL;
+    desc.border_color = ui_widget_color(node, "border_color", (slayer3d_color){0, 0, 0, 0});
+    desc.border_thickness = parse_ui_widget_float(node, "border_thickness", 0.0f);
     desc.selected = parse_ui_widget_bool(node, "selected", false);
     desc.selected_index = parse_ui_widget_int(node, "selected_index", "selected_index", 0);
     desc.open = parse_ui_widget_bool(node, "open", false);

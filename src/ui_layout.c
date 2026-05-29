@@ -25,6 +25,15 @@ typedef struct ui_layout_node
     char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
     char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
     char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
+    slayer3d_color text_color;
+    bool has_text_color;
+    float text_scale;
+    slayer3d_ui_layout_text_align text_align;
+    slayer3d_color fill_color;
+    bool has_fill_color;
+    slayer3d_color border_color;
+    bool has_border_color;
+    float border_thickness;
     char options[SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX][SLAYER3D_UI_LAYOUT_TEXT_MAX];
     int option_count;
     int selected_index;
@@ -239,8 +248,13 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     }
     if (desc->parent_id != NULL && desc->parent_id[0] != '\0' && !ui_layout_id_valid(desc->parent_id))
         return false;
-    if (desc->padding < 0.0f || desc->gap < 0.0f)
+    if (desc->padding < 0.0f || desc->gap < 0.0f || desc->border_thickness < 0.0f)
         return false;
+    if (desc->text_scale < 0.0f || desc->text_align < SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO ||
+        desc->text_align > SLAYER3D_UI_LAYOUT_TEXT_ALIGN_RIGHT)
+    {
+        return false;
+    }
     if (!ui_layout_text_valid(desc->text) || !ui_layout_font_valid(desc->font) || !ui_layout_action_valid(desc->action))
         return false;
     if (desc->type != SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && desc->option_count > 0)
@@ -271,6 +285,15 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     ui_layout_copy_text(node->text, desc->text);
     ui_layout_copy_font(node->font, desc->font);
     ui_layout_copy_action(node->action, desc->action);
+    node->text_color = desc->text_color;
+    node->has_text_color = desc->has_text_color;
+    node->text_scale = desc->text_scale;
+    node->text_align = desc->text_align;
+    node->fill_color = desc->fill_color;
+    node->has_fill_color = desc->has_fill_color;
+    node->border_color = desc->border_color;
+    node->has_border_color = desc->has_border_color;
+    node->border_thickness = desc->border_thickness;
     node->option_count = desc->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN ? desc->option_count : 0;
     node->selected_index = desc->selected_index;
     node->open = desc->open;
@@ -457,9 +480,18 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         ui_layout_copy_text(resolved->text, node->text);
         ui_layout_copy_font(resolved->font, node->font);
         ui_layout_copy_action(resolved->action, node->action);
+        resolved->text_color = node->text_color;
+        resolved->has_text_color = node->has_text_color;
+        resolved->text_scale = node->text_scale;
+        resolved->text_align = node->text_align;
         resolved->hovered = node->hovered;
         resolved->active = node->active;
         resolved->selected = node->selected;
+        resolved->fill_color = node->fill_color;
+        resolved->has_fill_color = node->has_fill_color;
+        resolved->border_color = node->border_color;
+        resolved->has_border_color = node->has_border_color;
+        resolved->border_thickness = node->border_thickness;
     }
 }
 
@@ -516,7 +548,10 @@ static bool ui_layout_id_matches(const char *a, const char *b)
 static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
                                            slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
                                            const char *text, const char *font, bool selected, bool popup,
-                                           int option_index)
+                                           int option_index, slayer3d_color text_color, bool has_text_color,
+                                           float text_scale, slayer3d_ui_layout_text_align text_align,
+                                           slayer3d_color fill_color, bool has_fill_color, slayer3d_color border_color,
+                                           bool has_border_color, float border_thickness)
 {
     slayer3d_ui_layout_render_command *render = &model->render_commands[model->render_count++];
     SDL_zero(*render);
@@ -527,6 +562,15 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
     render->layer = layer;
     ui_layout_copy_text(render->text, text);
     ui_layout_copy_font(render->font, font);
+    render->text_color = text_color;
+    render->has_text_color = has_text_color;
+    render->text_scale = text_scale;
+    render->text_align = text_align;
+    render->fill_color = fill_color;
+    render->has_fill_color = has_fill_color;
+    render->border_color = border_color;
+    render->has_border_color = has_border_color;
+    render->border_thickness = border_thickness;
     render->hovered = ui_layout_id_matches(model->hover_id, id);
     render->active = ui_layout_id_matches(model->active_id, id);
     render->selected = selected;
@@ -579,7 +623,9 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
     const int popup_layer = node->layer + UI_LAYOUT_POPUP_LAYER_OFFSET;
     const slayer3d_ui_layout_rect popup_rect = ui_layout_dropdown_popup_rect(model, node);
     ui_layout_store_render_command(model, popup_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, popup_rect, popup_layer,
-                                   "", node->font, false, true, -1);
+                                   "", node->font, false, true, -1, (slayer3d_color){0}, false, 0.0f,
+                                   SLAYER3D_UI_LAYOUT_TEXT_ALIGN_AUTO, (slayer3d_color){0}, false, (slayer3d_color){0},
+                                   false, 0.0f);
 
     const float option_height = node->option_height > 0.0f ? node->option_height : node->resolved_rect.h;
     for (int i = 0; i < node->option_count; ++i)
@@ -594,7 +640,9 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
         };
         const bool selected = i == node->selected_index;
         ui_layout_store_render_command(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
-                                       popup_layer + 1, node->options[i], node->font, selected, false, i);
+                                       popup_layer + 1, node->options[i], node->font, selected, false, i,
+                                       node->text_color, node->has_text_color, node->text_scale, node->text_align,
+                                       (slayer3d_color){0}, false, (slayer3d_color){0}, false, 0.0f);
         ui_layout_store_hit_region(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
                                    popup_layer + 1, node->action, selected, i);
     }
@@ -612,7 +660,9 @@ static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
         const slayer3d_ui_layout_resolved_node *node = &model->resolved_nodes[i];
         const ui_layout_node *source = &model->nodes[i];
         ui_layout_store_render_command(model, node->id, node->id, node->type, node->rect, node->layer, node->text,
-                                       node->font, node->selected, false, -1);
+                                       node->font, node->selected, false, -1, node->text_color, node->has_text_color,
+                                       node->text_scale, node->text_align, node->fill_color, node->has_fill_color,
+                                       node->border_color, node->has_border_color, node->border_thickness);
 
         if (node->interactive)
         {

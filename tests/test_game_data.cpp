@@ -9225,6 +9225,12 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
             "w": 96,
             "h": "fill",
             "text": "File",
+            "color": [18, 24, 32, 230],
+            "border_color": [96, 128, 180, 255],
+            "border_thickness": 2,
+            "text_color": [230, 236, 245, 255],
+            "text_scale": 0.75,
+            "align": "center",
             "action": "editor.file",
             "selected": true
           },
@@ -9360,6 +9366,33 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
   ]
 })json",
             "UI widget selected must be a boolean",
+        },
+        {
+            "bad_text_color",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "text_color": [255, 255] }
+  ]
+})json",
+            "UI tooling text_color must be a vec3 or vec4 color",
+        },
+        {
+            "bad_text_scale",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "text_scale": 0 }
+  ]
+})json",
+            "UI widget text_scale must be positive",
+        },
+        {
+            "bad_text_align",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "align": "middle" }
+  ]
+})json",
+            "UI widget align must be left, center, or right",
         },
         {
             "bad_dropdown_options",
@@ -18715,6 +18748,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "floor");
     std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.modal"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.floor.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.floor.selected"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Prefabs"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Floor"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Sky"));
@@ -18722,6 +18758,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, palette_next_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "wall");
     modal_text = visible_ui_text("ui.editor_shell.palette.");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.wall.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.wall.selected"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Selected: wall"));
     slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
@@ -18732,6 +18770,14 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.selected", ""), "wall");
     slayer3d_signal_emit(bus, palette_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "brush");
+    slayer3d_signal_emit(bus, palette_close_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
+
+    slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.modal"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.selected"));
     slayer3d_signal_emit(bus, palette_close_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
 
