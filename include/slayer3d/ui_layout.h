@@ -18,6 +18,8 @@ extern "C"
 #define SLAYER3D_UI_LAYOUT_ID_MAX 64
     /** @brief Maximum bytes stored for retained UI authored text, including the terminator. */
 #define SLAYER3D_UI_LAYOUT_TEXT_MAX 128
+    /** @brief Maximum bytes stored for a retained UI font asset id, including the terminator. */
+#define SLAYER3D_UI_LAYOUT_FONT_MAX 64
     /** @brief Maximum bytes stored for retained UI action names, including the terminator. */
 #define SLAYER3D_UI_LAYOUT_ACTION_MAX 128
     /** @brief Maximum inline options stored by one retained UI dropdown. */
@@ -77,6 +79,7 @@ extern "C"
         int layer;
         bool interactive;
         const char *text;
+        const char *font;
         const char *action;
         bool selected;
         const char *const *options;
@@ -102,6 +105,7 @@ extern "C"
         bool hovered;
         bool active;
         bool selected;
+        char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
     } slayer3d_ui_layout_resolved_node;
 
     /** @brief Flat retained UI draw command compiled from a resolved node. */
@@ -112,6 +116,7 @@ extern "C"
         slayer3d_ui_layout_rect rect;
         int layer;
         char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+        char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
         bool hovered;
         bool active;
         bool selected;

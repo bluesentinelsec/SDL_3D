@@ -3510,6 +3510,83 @@ literals or bindings to scene state, actor properties, or UI metrics:
 These widgets are project-agnostic. Use them for debug HUDs, editor shells,
 inspectors, and simple tool panels before reaching for custom native UI code.
 
+For game HUDs and pause overlays, prefer retained `ui.widgets`. Widgets are
+resolved as a tree each frame, then compiled to the same UI text and rectangle
+streams used by the renderer. This keeps layout, hit testing, and render output
+on one path, which avoids the drift that can happen with hand-positioned
+parallel `ui.text` / `ui.rects` overlays. A widget may author a `font` asset id,
+static `text` / `label`, or dynamic text with `format` plus `bindings`. Dynamic
+bindings support `scene_state`, actor `property`, and runtime `metric` values.
+The number of `%s` placeholders in `format` must exactly match the number of
+bindings.
+
+```json
+{
+  "assets": {
+    "fonts": [
+      { "id": "font.hud", "builtin": "Inter", "size": 22 },
+      { "id": "font.pause", "builtin": "Inter", "size": 34 }
+    ]
+  },
+  "ui": {
+    "widgets": [
+      {
+        "id": "ui.hud.reticle",
+        "type": "label",
+        "font": "font.hud",
+        "text": "+",
+        "x": 630,
+        "y": 338,
+        "w": 20,
+        "h": 44
+      },
+      {
+        "id": "ui.hud.fps",
+        "type": "label",
+        "font": "font.hud",
+        "format": "FPS %s",
+        "bindings": [{ "type": "metric", "metric": "fps", "default": 0 }],
+        "x": 1110,
+        "y": 18,
+        "w": 150,
+        "h": 28
+      },
+      {
+        "id": "ui.hud.resources",
+        "type": "label",
+        "font": "font.hud",
+        "format": "HP %s/%s  Ammo %s/%s",
+        "bindings": [
+          { "type": "property", "entity": "entity.player", "key": "health", "default": 0 },
+          { "type": "property", "entity": "entity.player", "key": "max_health", "default": 0 },
+          { "type": "property", "entity": "entity.player", "key": "ammo", "default": 0 },
+          { "type": "property", "entity": "entity.player", "key": "max_ammo", "default": 0 }
+        ],
+        "x": 24,
+        "y": 668,
+        "w": 480,
+        "h": 28
+      },
+      {
+        "id": "ui.pause.title",
+        "type": "label",
+        "font": "font.pause",
+        "text": "PAUSED",
+        "x": 530,
+        "y": 300,
+        "w": 220,
+        "h": 44,
+        "visible_if": { "type": "app.paused", "equals": true }
+      }
+    ]
+  }
+}
+```
+
+Retained widgets are authored in logical pixels. The presentation layer still
+scales the final UI stream to the active logical/display resolution, so game
+HUDs stay sharp while world rendering can use independent render scaling.
+
 `property.set` and `property.add` normally target a fixed actor:
 
 ```json

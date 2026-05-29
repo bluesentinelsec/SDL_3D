@@ -9328,6 +9328,31 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
             "UI widget action must be a non-empty string",
         },
         {
+            "bad_font",
+            R"json({
+  "widgets": [
+    { "id": "label", "type": "label", "w": 100, "h": 24, "font": "font.missing", "text": "HUD" }
+  ]
+})json",
+            "unknown font asset",
+        },
+        {
+            "bad_format_bindings",
+            R"json({
+  "widgets": [
+    {
+      "id": "label",
+      "type": "label",
+      "w": 100,
+      "h": 24,
+      "format": "HP %s/%s",
+      "bindings": [{ "type": "scene_state", "key": "hp", "default": 0 }]
+    }
+  ]
+})json",
+            "placeholder count must match",
+        },
+        {
             "bad_selected",
             R"json({
   "widgets": [
@@ -25849,28 +25874,58 @@ TEST(GameDataRuntime, FpsTemplateLoadsDataOnlyStarter)
 
     struct FpsTemplateUiCapture
     {
+        slayer3d_game_data_runtime *runtime = nullptr;
+        slayer3d_game_data_ui_metrics metrics{};
         bool saw_reticle = false;
         bool saw_fps = false;
         bool saw_resources = false;
         bool saw_pause = false;
+        std::string fps_text;
+        std::string resources_text;
     } ui_capture;
     auto capture_fps_template_ui = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *capture = static_cast<FpsTemplateUiCapture *>(userdata);
         if (std::string(text->name) == "ui.fps.reticle")
+        {
             capture->saw_reticle = true;
+            EXPECT_STREQ(text->font, "font.fps.hud");
+        }
         else if (std::string(text->name) == "ui.fps.fps_counter")
+        {
             capture->saw_fps = true;
+            char formatted[128]{};
+            EXPECT_TRUE(slayer3d_game_data_format_ui_text(capture->runtime, text, &capture->metrics, formatted,
+                                                          sizeof(formatted)));
+            capture->fps_text = formatted;
+            EXPECT_STREQ(text->font, "font.fps.hud");
+        }
         else if (std::string(text->name) == "ui.fps.resources")
+        {
             capture->saw_resources = true;
+            char formatted[256]{};
+            EXPECT_TRUE(slayer3d_game_data_format_ui_text(capture->runtime, text, &capture->metrics, formatted,
+                                                          sizeof(formatted)));
+            capture->resources_text = formatted;
+            EXPECT_STREQ(text->font, "font.fps.hud");
+        }
         else if (std::string(text->name) == "ui.fps.pause.title")
+        {
             capture->saw_pause = true;
+            EXPECT_STREQ(text->font, "font.fps.title");
+        }
         return true;
     };
-    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, capture_fps_template_ui, &ui_capture));
+    ui_capture.runtime = runtime;
+    ui_capture.metrics.fps = 59.9f;
+    ui_capture.metrics.paused = true;
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &ui_capture.metrics, capture_fps_template_ui,
+                                                                &ui_capture));
     EXPECT_TRUE(ui_capture.saw_reticle);
     EXPECT_TRUE(ui_capture.saw_fps);
     EXPECT_TRUE(ui_capture.saw_resources);
     EXPECT_TRUE(ui_capture.saw_pause);
+    EXPECT_EQ(ui_capture.fps_text, "FPS 59.9");
+    EXPECT_EQ(ui_capture.resources_text, "HP 100.000/100.000  Armor 0.000  Ammo 24/48");
 
     const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
     ASSERT_GE(fire_action, 0);

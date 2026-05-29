@@ -23,6 +23,7 @@ typedef struct ui_layout_node
     int layer;
     bool interactive;
     char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
+    char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
     char action[SLAYER3D_UI_LAYOUT_ACTION_MAX];
     char options[SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX][SLAYER3D_UI_LAYOUT_TEXT_MAX];
     int option_count;
@@ -73,6 +74,11 @@ static void ui_layout_copy_id(char *dst, const char *src)
 static void ui_layout_copy_text(char *dst, const char *src)
 {
     SDL_snprintf(dst, SLAYER3D_UI_LAYOUT_TEXT_MAX, "%s", src != NULL ? src : "");
+}
+
+static void ui_layout_copy_font(char *dst, const char *src)
+{
+    SDL_snprintf(dst, SLAYER3D_UI_LAYOUT_FONT_MAX, "%s", src != NULL ? src : "");
 }
 
 static void ui_layout_copy_action(char *dst, const char *src)
@@ -164,6 +170,11 @@ static bool ui_layout_action_valid(const char *action)
     return action == NULL || SDL_strlen(action) < SLAYER3D_UI_LAYOUT_ACTION_MAX;
 }
 
+static bool ui_layout_font_valid(const char *font)
+{
+    return font == NULL || SDL_strlen(font) < SLAYER3D_UI_LAYOUT_FONT_MAX;
+}
+
 static bool ui_layout_dropdown_options_valid(const slayer3d_ui_layout_node_desc *desc)
 {
     if (desc->option_count < 0 || desc->option_count > SLAYER3D_UI_LAYOUT_DROPDOWN_OPTION_MAX)
@@ -230,7 +241,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
         return false;
     if (desc->padding < 0.0f || desc->gap < 0.0f)
         return false;
-    if (!ui_layout_text_valid(desc->text) || !ui_layout_action_valid(desc->action))
+    if (!ui_layout_text_valid(desc->text) || !ui_layout_font_valid(desc->font) || !ui_layout_action_valid(desc->action))
         return false;
     if (desc->type != SLAYER3D_UI_LAYOUT_NODE_DROPDOWN && desc->option_count > 0)
         return false;
@@ -258,6 +269,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->gap = desc->gap;
     node->layer = desc->layer;
     ui_layout_copy_text(node->text, desc->text);
+    ui_layout_copy_font(node->font, desc->font);
     ui_layout_copy_action(node->action, desc->action);
     node->option_count = desc->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN ? desc->option_count : 0;
     node->selected_index = desc->selected_index;
@@ -443,6 +455,7 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->layer = node->layer;
         resolved->interactive = node->interactive;
         ui_layout_copy_text(resolved->text, node->text);
+        ui_layout_copy_font(resolved->font, node->font);
         ui_layout_copy_action(resolved->action, node->action);
         resolved->hovered = node->hovered;
         resolved->active = node->active;
@@ -502,7 +515,8 @@ static bool ui_layout_id_matches(const char *a, const char *b)
 
 static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, const char *id, const char *owner_id,
                                            slayer3d_ui_layout_node_type type, slayer3d_ui_layout_rect rect, int layer,
-                                           const char *text, bool selected, bool popup, int option_index)
+                                           const char *text, const char *font, bool selected, bool popup,
+                                           int option_index)
 {
     slayer3d_ui_layout_render_command *render = &model->render_commands[model->render_count++];
     SDL_zero(*render);
@@ -512,6 +526,7 @@ static void ui_layout_store_render_command(slayer3d_ui_layout_model *model, cons
     render->rect = rect;
     render->layer = layer;
     ui_layout_copy_text(render->text, text);
+    ui_layout_copy_font(render->font, font);
     render->hovered = ui_layout_id_matches(model->hover_id, id);
     render->active = ui_layout_id_matches(model->active_id, id);
     render->selected = selected;
@@ -564,7 +579,7 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
     const int popup_layer = node->layer + UI_LAYOUT_POPUP_LAYER_OFFSET;
     const slayer3d_ui_layout_rect popup_rect = ui_layout_dropdown_popup_rect(model, node);
     ui_layout_store_render_command(model, popup_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, popup_rect, popup_layer,
-                                   "", false, true, -1);
+                                   "", node->font, false, true, -1);
 
     const float option_height = node->option_height > 0.0f ? node->option_height : node->resolved_rect.h;
     for (int i = 0; i < node->option_count; ++i)
@@ -579,7 +594,7 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
         };
         const bool selected = i == node->selected_index;
         ui_layout_store_render_command(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
-                                       popup_layer + 1, node->options[i], selected, false, i);
+                                       popup_layer + 1, node->options[i], node->font, selected, false, i);
         ui_layout_store_hit_region(model, option_id, node->id, SLAYER3D_UI_LAYOUT_NODE_BUTTON, option_rect,
                                    popup_layer + 1, node->action, selected, i);
     }
@@ -597,7 +612,7 @@ static bool ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
         const slayer3d_ui_layout_resolved_node *node = &model->resolved_nodes[i];
         const ui_layout_node *source = &model->nodes[i];
         ui_layout_store_render_command(model, node->id, node->id, node->type, node->rect, node->layer, node->text,
-                                       node->selected, false, -1);
+                                       node->font, node->selected, false, -1);
 
         if (node->interactive)
         {

@@ -1357,161 +1357,6 @@ static bool for_each_authored_ui_text_root(yyjson_val *root, slayer3d_game_data_
     return true;
 }
 
-static bool ui_tool_value_to_string(const slayer3d_value *value, char *buffer, size_t buffer_size)
-{
-    if (buffer == NULL || buffer_size == 0)
-        return false;
-    buffer[0] = '\0';
-    if (value == NULL)
-        return false;
-
-    switch (value->type)
-    {
-    case SLAYER3D_VALUE_INT:
-        SDL_snprintf(buffer, buffer_size, "%d", value->as_int);
-        return true;
-    case SLAYER3D_VALUE_FLOAT:
-        SDL_snprintf(buffer, buffer_size, "%.3f", value->as_float);
-        return true;
-    case SLAYER3D_VALUE_BOOL:
-        SDL_snprintf(buffer, buffer_size, "%s", value->as_bool ? "true" : "false");
-        return true;
-    case SLAYER3D_VALUE_VEC3:
-        SDL_snprintf(buffer, buffer_size, "%.3f, %.3f, %.3f", value->as_vec3.x, value->as_vec3.y, value->as_vec3.z);
-        return true;
-    case SLAYER3D_VALUE_STRING:
-        SDL_snprintf(buffer, buffer_size, "%s", value->as_string != NULL ? value->as_string : "");
-        return true;
-    case SLAYER3D_VALUE_COLOR:
-        SDL_snprintf(buffer, buffer_size, "%u, %u, %u, %u", (unsigned)value->as_color.r, (unsigned)value->as_color.g,
-                     (unsigned)value->as_color.b, (unsigned)value->as_color.a);
-        return true;
-    }
-    return false;
-}
-
-static bool ui_tool_json_scalar_to_string(yyjson_val *value, char *buffer, size_t buffer_size)
-{
-    if (buffer == NULL || buffer_size == 0)
-        return false;
-    buffer[0] = '\0';
-    if (yyjson_is_str(value))
-        SDL_snprintf(buffer, buffer_size, "%s", yyjson_get_str(value));
-    else if (yyjson_is_int(value))
-        SDL_snprintf(buffer, buffer_size, "%lld", (long long)yyjson_get_sint(value));
-    else if (yyjson_is_real(value))
-        SDL_snprintf(buffer, buffer_size, "%.3f", yyjson_get_real(value));
-    else if (yyjson_is_bool(value))
-        SDL_snprintf(buffer, buffer_size, "%s", yyjson_get_bool(value) ? "true" : "false");
-    else
-        return false;
-    return true;
-}
-
-static bool ui_tool_metric_to_string(const slayer3d_game_data_ui_metrics *metrics, const char *metric, char *buffer,
-                                     size_t buffer_size)
-{
-    if (buffer == NULL || buffer_size == 0)
-        return false;
-    buffer[0] = '\0';
-    if (metrics == NULL || metric == NULL)
-        return false;
-    if (SDL_strcmp(metric, "fps") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->fps);
-    else if (SDL_strcmp(metric, "frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%llu", (unsigned long long)metrics->frame);
-    else if (SDL_strcmp(metric, "paused") == 0)
-        SDL_snprintf(buffer, buffer_size, "%s", metrics->paused ? "true" : "false");
-    else if (SDL_strcmp(metric, "perf.frame_ms") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->frame_ms);
-    else if (SDL_strcmp(metric, "perf.update_cpu_ms") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->update_cpu_ms);
-    else if (SDL_strcmp(metric, "perf.render_cpu_ms") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_cpu_ms);
-    else if (SDL_strcmp(metric, "render.model_mesh_submissions_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_mesh_submissions_per_frame);
-    else if (SDL_strcmp(metric, "render.model_mesh_draws_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_mesh_draws_per_frame);
-    else if (SDL_strcmp(metric, "render.model_triangles_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_triangles_per_frame);
-    else if (SDL_strcmp(metric, "render.geometry_draw_calls_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_geometry_draw_calls_per_frame);
-    else if (SDL_strcmp(metric, "render.static_mesh_instanced_draw_calls_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_static_mesh_instanced_draw_calls_per_frame);
-    else if (SDL_strcmp(metric, "render.static_mesh_instances_batched_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_static_mesh_instances_batched_per_frame);
-    else if (SDL_strcmp(metric, "render.static_mesh_draw_calls_saved_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_static_mesh_draw_calls_saved_per_frame);
-    else if (SDL_strcmp(metric, "render.procedural_lod_candidates_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_candidates_per_frame);
-    else if (SDL_strcmp(metric, "render.procedural_lod_reduced_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_reduced_per_frame);
-    else if (SDL_strcmp(metric, "render.procedural_lod_authored_triangles_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_authored_triangles_per_frame);
-    else if (SDL_strcmp(metric, "render.procedural_lod_resolved_triangles_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_resolved_triangles_per_frame);
-    else if (SDL_strcmp(metric, "render.procedural_lod_triangles_saved_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_procedural_lod_triangles_saved_per_frame);
-    else if (SDL_strcmp(metric, "render.model_lod_candidates_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_candidates_per_frame);
-    else if (SDL_strcmp(metric, "render.model_lod_culled_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_culled_per_frame);
-    else if (SDL_strcmp(metric, "render.model_lod_triangles_saved_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_model_lod_triangles_saved_per_frame);
-    else if (SDL_strcmp(metric, "render.depth_prepass_draws_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_draws_per_frame);
-    else if (SDL_strcmp(metric, "render.depth_prepass_triangles_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_triangles_per_frame);
-    else if (SDL_strcmp(metric, "render.depth_prepass_samples_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_depth_prepass_samples_per_frame);
-    else if (SDL_strcmp(metric, "render.geometry_samples_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_geometry_samples_per_frame);
-    else if (SDL_strcmp(metric, "render.light_candidates_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_light_candidates_per_frame);
-    else if (SDL_strcmp(metric, "render.lights_selected_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_lights_selected_per_frame);
-    else if (SDL_strcmp(metric, "render.light_selection_draws_per_frame") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.1f", metrics->render_light_selection_draws_per_frame);
-    else if (SDL_strcmp(metric, "render.light_selection_ratio") == 0)
-        SDL_snprintf(buffer, buffer_size, "%.3f", metrics->render_light_selection_ratio);
-    else
-        return false;
-    return true;
-}
-
-static bool ui_tool_binding_to_string(const slayer3d_game_data_runtime *runtime,
-                                      const slayer3d_game_data_ui_metrics *metrics, yyjson_val *binding, char *buffer,
-                                      size_t buffer_size)
-{
-    if (buffer == NULL || buffer_size == 0)
-        return false;
-    buffer[0] = '\0';
-    const char *type = json_string(binding, "type", "");
-    bool formatted = false;
-    if (SDL_strcmp(type, "scene_state") == 0)
-    {
-        const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
-        const slayer3d_value *value =
-            scene_state != NULL ? slayer3d_properties_get_value(scene_state, json_string(binding, "key", NULL)) : NULL;
-        formatted = ui_tool_value_to_string(value, buffer, buffer_size);
-    }
-    else if (SDL_strcmp(type, "property") == 0)
-    {
-        const slayer3d_registered_actor *actor =
-            slayer3d_game_data_find_actor(runtime, json_string(binding, "entity", NULL));
-        const slayer3d_value *value =
-            actor != NULL ? slayer3d_properties_get_value(actor->props, json_string(binding, "key", NULL)) : NULL;
-        formatted = ui_tool_value_to_string(value, buffer, buffer_size);
-    }
-    else if (SDL_strcmp(type, "metric") == 0)
-    {
-        formatted = ui_tool_metric_to_string(metrics, json_string(binding, "metric", NULL), buffer, buffer_size);
-    }
-    if (!formatted)
-        formatted = ui_tool_json_scalar_to_string(obj_get(binding, "default"), buffer, buffer_size);
-    return formatted;
-}
-
 static bool ui_tool_row_value_to_string(const slayer3d_game_data_runtime *runtime,
                                         const slayer3d_game_data_ui_metrics *metrics, yyjson_val *row, char *buffer,
                                         size_t buffer_size)
@@ -1521,8 +1366,8 @@ static bool ui_tool_row_value_to_string(const slayer3d_game_data_runtime *runtim
     buffer[0] = '\0';
     yyjson_val *binding = obj_get(row, "binding");
     if (yyjson_is_obj(binding))
-        return ui_tool_binding_to_string(runtime, metrics, binding, buffer, buffer_size);
-    return ui_tool_json_scalar_to_string(obj_get(row, "value"), buffer, buffer_size);
+        return slayer3d_game_data_ui_binding_to_string(runtime, metrics, binding, buffer, buffer_size);
+    return slayer3d_game_data_ui_json_scalar_to_string(obj_get(row, "value"), buffer, buffer_size);
 }
 
 static bool emit_inspector_text(const slayer3d_game_data_runtime *runtime, const slayer3d_game_data_ui_metrics *metrics,
@@ -1905,12 +1750,13 @@ static bool retained_ui_text_is_right_aligned(const char *id)
 }
 
 static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runtime,
+                                         const slayer3d_game_data_ui_metrics *metrics,
                                          slayer3d_game_data_ui_text_fn callback, void *userdata)
 {
     slayer3d_ui_layout_model *layout = NULL;
     if (!slayer3d_ui_layout_create(&layout))
         return false;
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, layout))
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, metrics, layout))
     {
         slayer3d_ui_layout_destroy(layout);
         return false;
@@ -1933,7 +1779,7 @@ static bool retained_ui_text_from_layout(const slayer3d_game_data_runtime *runti
         slayer3d_game_data_ui_text text;
         SDL_zero(text);
         text.name = name;
-        text.font = "font.editor_shell.ui";
+        text.font = command->font[0] != '\0' ? command->font : "font.editor_shell.ui";
         text.text = command->text;
         text.visible = "always";
         if (retained_ui_text_is_left_aligned(command->id))
@@ -1982,7 +1828,7 @@ bool slayer3d_game_data_for_each_ui_text_for_metrics(const slayer3d_game_data_ru
             !for_each_ui_inspector_text_root(runtime, metrics, roots[root_index], callback, userdata) ||
             !for_each_ui_menu_root(runtime, scene, metrics, roots[root_index], callback, userdata))
             return true;
-    if (!retained_ui_text_from_layout(runtime, callback, userdata))
+    if (!retained_ui_text_from_layout(runtime, metrics, callback, userdata))
         return true;
     return true;
 }
@@ -2197,7 +2043,7 @@ static bool retained_ui_rects_from_layout(const slayer3d_game_data_runtime *runt
     slayer3d_ui_layout_model *layout = NULL;
     if (!slayer3d_ui_layout_create(&layout))
         return false;
-    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, layout))
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
     {
         slayer3d_ui_layout_destroy(layout);
         return false;

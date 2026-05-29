@@ -206,6 +206,28 @@ static bool ui_widget_string_format_valid(const char *format)
     return true;
 }
 
+static bool ui_widget_string_placeholder_count(const char *format, size_t *out_count)
+{
+    if (out_count != NULL)
+        *out_count = 0;
+    if (format == NULL)
+        return true;
+    size_t count = 0;
+    for (const char *cursor = format; *cursor != '\0'; ++cursor)
+    {
+        if (*cursor != '%')
+            continue;
+        ++cursor;
+        if (*cursor == '\0')
+            return false;
+        if (*cursor == 's')
+            ++count;
+    }
+    if (out_count != NULL)
+        *out_count = count;
+    return true;
+}
+
 static bool ui_widget_optional_non_empty_string_len(yyjson_val *object, const char *key, size_t max_size)
 {
     yyjson_val *value = obj_get(object, key);
@@ -307,6 +329,17 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     }
     if (!ui_widget_string_format_valid(json_string(node, "format")))
         return validation_error(ctx, path, "UI widget format may only use %%s string placeholders");
+    const char *font = json_string(node, "font");
+    if (obj_get(node, "font") != NULL &&
+        !ui_widget_optional_non_empty_string_len(node, "font", SLAYER3D_UI_LAYOUT_FONT_MAX))
+    {
+        return validation_error(ctx, path, "UI widget font must be a non-empty string shorter than %d bytes",
+                                SLAYER3D_UI_LAYOUT_FONT_MAX);
+    }
+    if (font != NULL && !require_ref(ctx, &names->fonts, "font asset", font, path))
+    {
+        return false;
+    }
     if (!ui_widget_optional_non_empty_string_len(node, "text_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "open_key", SLAYER3D_UI_LAYOUT_ACTION_MAX) ||
         !ui_widget_optional_non_empty_string_len(node, "selected_value_key", SLAYER3D_UI_LAYOUT_ACTION_MAX))
@@ -331,6 +364,15 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
     yyjson_val *bindings = obj_get(node, "bindings");
     if (bindings != NULL && !yyjson_is_arr(bindings))
         return validation_error(ctx, path, "UI widget bindings must be an array");
+    size_t placeholder_count = 0;
+    const char *format = json_string(node, "format");
+    if (!ui_widget_string_placeholder_count(format, &placeholder_count))
+        return validation_error(ctx, path, "UI widget format may only use %%s string placeholders");
+    if (format != NULL && (!yyjson_is_arr(bindings) || yyjson_arr_size(bindings) != placeholder_count))
+    {
+        return validation_error(ctx, path,
+                                "UI widget format placeholder count must match the number of authored bindings");
+    }
     for (size_t binding_index = 0; yyjson_is_arr(bindings) && binding_index < yyjson_arr_size(bindings);
          ++binding_index)
     {
@@ -503,6 +545,7 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.layer = parse_ui_widget_int(node, "layer", "z", 0);
     desc.interactive = parse_ui_widget_bool(node, "interactive", false);
     desc.text = parse_ui_widget_string(node, "text", "label");
+    desc.font = json_string(node, "font");
     desc.action = json_string(node, "action");
     desc.selected = parse_ui_widget_bool(node, "selected", false);
     desc.selected_index = parse_ui_widget_int(node, "selected_index", "selected_index", 0);

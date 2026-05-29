@@ -7,52 +7,54 @@
     ]
   },
   "ui": {
-    "text": [
+    "widgets": [
       {
-        "name": "ui.fps.reticle",
+        "id": "ui.fps.reticle",
+        "type": "label",
         "font": "font.fps.hud",
         "text": "+",
-        "x": 0.5,
-        "y": 0.5,
-        "scale": 1.1,
-        "centered": true,
-        "normalized": true,
-        "color": [255, 255, 255, 210]
+        "x": 630,
+        "y": 338,
+        "w": 20,
+        "h": 44
       },
       {
-        "name": "ui.fps.fps_counter",
+        "id": "ui.fps.fps_counter",
+        "type": "label",
         "font": "font.fps.hud",
-        "format": "FPS %.0f",
-        "bindings": [{ "type": "metric", "metric": "fps" }],
-        "x": 0.985,
-        "y": 0.035,
-        "scale": 0.8,
-        "align": "right",
-        "normalized": true,
-        "color": [180, 235, 190, 230]
+        "format": "FPS %s",
+        "bindings": [{ "type": "metric", "metric": "fps", "default": 0 }],
+        "x": 1110,
+        "y": 18,
+        "w": 150,
+        "h": 28
       },
       {
-        "name": "ui.fps.resources",
+        "id": "ui.fps.resources",
+        "type": "label",
         "font": "font.fps.hud",
-        "text": "HP {target.entity.player.health}/{target.entity.player.max_health}  Armor {target.entity.player.armor}  Ammo {target.entity.player.ammo}/{target.entity.player.max_ammo}",
-        "x": 0.02,
-        "y": 0.93,
-        "scale": 0.8,
-        "align": "left",
-        "normalized": true,
-        "color": [215, 245, 225, 235]
+        "format": "HP %s/%s  Armor %s  Ammo %s/%s",
+        "bindings": [
+          { "type": "property", "entity": "entity.player", "key": "health", "default": 0 },
+          { "type": "property", "entity": "entity.player", "key": "max_health", "default": 0 },
+          { "type": "property", "entity": "entity.player", "key": "armor", "default": 0 },
+          { "type": "property", "entity": "entity.player", "key": "ammo", "default": 0 },
+          { "type": "property", "entity": "entity.player", "key": "max_ammo", "default": 0 }
+        ],
+        "x": 24,
+        "y": 668,
+        "w": 560,
+        "h": 28
       },
       {
-        "name": "ui.fps.pause.title",
+        "id": "ui.fps.pause.title",
+        "type": "label",
         "font": "font.fps.title",
         "text": "PAUSED",
-        "x": 0.5,
-        "y": 0.42,
-        "scale": 1.2,
-        "centered": true,
-        "normalized": true,
-        "color": [245, 248, 255, 255],
-        "pulse_alpha": true,
+        "x": 530,
+        "y": 300,
+        "w": 220,
+        "h": 44,
         "visible_if": { "type": "app.paused", "equals": true }
       }
     ]

@@ -37,7 +37,7 @@ static const slayer3d_ui_layout_hit_region *editor_retained_grid_hit(const slaye
                                                                      slayer3d_ui_layout_model *layout, float mouse_x,
                                                                      float mouse_y)
 {
-    if (layout == NULL || !slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, layout))
+    if (layout == NULL || !slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
         return NULL;
     const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, mouse_x, mouse_y);
     if (hit == NULL)
