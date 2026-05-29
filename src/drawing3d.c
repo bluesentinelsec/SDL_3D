@@ -938,6 +938,7 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
         lp.vertex_snap_precision = context->vertex_snap_precision;
         lp.texture_filter = (int)context->texture_filter;
         lp.static_geometry = static_geometry && !cpu_skinning && !mesh->dynamic_geometry;
+        lp.generation = mesh->generation;
         lp.depth_prepass_eligible = context->depth_prepass_scope_enabled && lp.static_geometry;
         if (gpu_skinning)
         {
@@ -981,6 +982,7 @@ static bool slayer3d_draw_mesh_internal(slayer3d_render_context *context, const 
         up.tint[3] = base_modulate.w;
         up.texture_filter = (int)context->texture_filter;
         up.static_geometry = static_geometry && !skinned && !mesh->dynamic_geometry;
+        up.generation = mesh->generation;
 
         if (context->backend_iface.draw_mesh_unlit(context, &up))
         {

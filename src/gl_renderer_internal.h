@@ -125,6 +125,7 @@ typedef struct slayer3d_draw_entry
     bool bounds_valid;
     slayer3d_vec3 bounds_center;
     float bounds_radius;
+    Uint32 generation;
     struct slayer3d_gl_mesh_cache_entry *mesh_cache;
     const unsigned short *joint_indices;
     const float *joint_weights;
@@ -197,6 +198,7 @@ typedef struct slayer3d_gl_mesh_cache_entry
     const float *joint_weights;
     int vertex_count;
     int index_count;
+    Uint32 generation;
     bool has_lightmap_uvs;
     bool gpu_skinned;
     GLuint vao;
@@ -428,7 +430,7 @@ slayer3d_gl_mesh_cache_entry *slayer3d_gl_mesh_cache_lookup_or_create(
     slayer3d_gl_context *ctx, bool lit, GLenum primitive_mode, const float *positions, const float *normals,
     const float *uvs, const float *lightmap_uvs, const float *colors, const unsigned int *indices,
     const unsigned short *joint_indices, const float *joint_weights, int vertex_count, int index_count,
-    bool has_lightmap_uvs, bool gpu_skinned);
+    Uint32 generation, bool has_lightmap_uvs, bool gpu_skinned);
 void slayer3d_gl_mesh_cache_free(slayer3d_gl_context *ctx);
 void slayer3d_gl_free_draw_list(slayer3d_gl_context *ctx);
 slayer3d_draw_entry *slayer3d_gl_append_draw_entry(slayer3d_gl_context *ctx);

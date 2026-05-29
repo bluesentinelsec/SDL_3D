@@ -2059,6 +2059,58 @@ static bool for_each_ui_inspector_rect_root(const slayer3d_game_data_runtime *ru
     return true;
 }
 
+static bool emit_editor_vertex_lasso_rect(slayer3d_game_data_ui_rect_fn callback, void *userdata, const char *name,
+                                          float x, float y, float w, float h, slayer3d_color color)
+{
+    if (w <= 0.0f || h <= 0.0f)
+        return true;
+
+    slayer3d_game_data_ui_rect rect;
+    SDL_zero(rect);
+    rect.name = name;
+    rect.x = x;
+    rect.y = y;
+    rect.w = w;
+    rect.h = h;
+    rect.scale = 1.0f;
+    rect.color = color;
+    return callback(userdata, &rect);
+}
+
+static bool for_each_editor_vertex_lasso_rect(const slayer3d_game_data_runtime *runtime,
+                                              slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL || runtime->scene_state == NULL ||
+        !slayer3d_properties_get_bool(runtime->scene_state, "editor.vertex.lasso.active", false))
+    {
+        return true;
+    }
+
+    const float start_x = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.start_x", 0.0f);
+    const float start_y = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.start_y", 0.0f);
+    const float end_x = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.end_x", start_x);
+    const float end_y = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.end_y", start_y);
+    const float x = SDL_min(start_x, end_x);
+    const float y = SDL_min(start_y, end_y);
+    const float w = SDL_fabsf(end_x - start_x);
+    const float h = SDL_fabsf(end_y - start_y);
+    if (w < 1.0f || h < 1.0f)
+        return true;
+
+    const bool additive = slayer3d_properties_get_bool(runtime->scene_state, "editor.vertex.lasso.additive", false);
+    const slayer3d_color fill = additive ? (slayer3d_color){80, 255, 160, 48} : (slayer3d_color){255, 224, 64, 42};
+    const slayer3d_color border = additive ? (slayer3d_color){80, 255, 160, 235} : (slayer3d_color){255, 224, 64, 235};
+    const float t = 2.0f;
+
+    return emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.fill", x, y, w, h, fill) &&
+           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.top", x, y, w, t, border) &&
+           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.bottom", x, y + h - t, w, t,
+                                         border) &&
+           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.left", x, y, t, h, border) &&
+           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.right", x + w - t, y, t, h,
+                                         border);
+}
+
 bool slayer3d_game_data_for_each_ui_image(const slayer3d_game_data_runtime *runtime,
                                           slayer3d_game_data_ui_image_fn callback, void *userdata)
 {
@@ -2092,5 +2144,7 @@ bool slayer3d_game_data_for_each_ui_rect(const slayer3d_game_data_runtime *runti
             !for_each_ui_panel_rect_root(runtime, roots[root_index], callback, userdata) ||
             !for_each_ui_inspector_rect_root(runtime, roots[root_index], callback, userdata))
             return true;
+    if (!for_each_editor_vertex_lasso_rect(runtime, callback, userdata))
+        return true;
     return true;
 }

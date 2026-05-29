@@ -64,7 +64,10 @@ typedef struct editor_drag_vertex_origin
 {
     char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
     char brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
     char vertex_stable_id[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    int source_index;
+    int vertex_index;
     int coord[3];
 } editor_drag_vertex_origin;
 
@@ -77,12 +80,14 @@ typedef struct editor_drag_move_state
     bool face_resize;
     bool vertex_drag;
     bool vertex_lasso;
+    bool vertex_toggle_on_click;
     bool lasso_additive;
     const char *scene;
     slayer3d_vec3 start_point;
     slayer3d_vec3 applied_offset;
     slayer3d_game_data_editor_selection face_selection;
     int vertex_origin_count;
+    editor_drag_vertex_origin vertex_toggle_origin;
     editor_drag_vertex_origin vertex_origins[SLAYER3D_EDITOR_DRAG_VERTEX_ORIGIN_CAPACITY];
     float grid_size;
     float start_mouse_x;

@@ -7,14 +7,14 @@ static bool mesh_cache_matches(const slayer3d_gl_mesh_cache_entry *entry, bool l
                                const float *positions, const float *normals, const float *uvs,
                                const float *lightmap_uvs, const float *colors, const unsigned int *indices,
                                const unsigned short *joint_indices, const float *joint_weights, int vertex_count,
-                               int index_count, bool has_lightmap_uvs, bool gpu_skinned)
+                               int index_count, Uint32 generation, bool has_lightmap_uvs, bool gpu_skinned)
 {
     return entry->lit == lit && entry->primitive_mode == primitive_mode && entry->positions == positions &&
            entry->normals == normals && entry->uvs == uvs && entry->lightmap_uvs == lightmap_uvs &&
            entry->colors == colors && entry->indices == indices && entry->joint_indices == joint_indices &&
            entry->joint_weights == joint_weights && entry->vertex_count == vertex_count &&
-           entry->index_count == index_count && entry->has_lightmap_uvs == has_lightmap_uvs &&
-           entry->gpu_skinned == gpu_skinned;
+           entry->index_count == index_count && entry->generation == generation &&
+           entry->has_lightmap_uvs == has_lightmap_uvs && entry->gpu_skinned == gpu_skinned;
 }
 
 static void mesh_cache_bind_float_attrib(slayer3d_gl_funcs *gl, GLuint *buffer, GLuint attrib, GLint components,
@@ -41,12 +41,13 @@ slayer3d_gl_mesh_cache_entry *slayer3d_gl_mesh_cache_lookup_or_create(
     slayer3d_gl_context *ctx, bool lit, GLenum primitive_mode, const float *positions, const float *normals,
     const float *uvs, const float *lightmap_uvs, const float *colors, const unsigned int *indices,
     const unsigned short *joint_indices, const float *joint_weights, int vertex_count, int index_count,
-    bool has_lightmap_uvs, bool gpu_skinned)
+    Uint32 generation, bool has_lightmap_uvs, bool gpu_skinned)
 {
     for (slayer3d_gl_mesh_cache_entry *entry = ctx->mesh_cache; entry != NULL; entry = entry->next)
     {
         if (mesh_cache_matches(entry, lit, primitive_mode, positions, normals, uvs, lightmap_uvs, colors, indices,
-                               joint_indices, joint_weights, vertex_count, index_count, has_lightmap_uvs, gpu_skinned))
+                               joint_indices, joint_weights, vertex_count, index_count, generation, has_lightmap_uvs,
+                               gpu_skinned))
         {
             return entry;
         }
@@ -72,6 +73,7 @@ slayer3d_gl_mesh_cache_entry *slayer3d_gl_mesh_cache_lookup_or_create(
     entry->joint_weights = joint_weights;
     entry->vertex_count = vertex_count;
     entry->index_count = index_count;
+    entry->generation = generation;
     entry->has_lightmap_uvs = has_lightmap_uvs;
     entry->gpu_skinned = gpu_skinned;
 

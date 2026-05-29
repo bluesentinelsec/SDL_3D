@@ -220,6 +220,35 @@ static void free_brush_world_model_array(slayer3d_model *models, int model_count
     SDL_free(models);
 }
 
+static Uint32 next_brush_world_render_generation(brush_world_runtime *world_runtime)
+{
+    if (world_runtime == NULL)
+        return 0u;
+    if (world_runtime->artifacts.render_generation == SDL_MAX_UINT32)
+        world_runtime->artifacts.render_generation = 1u;
+    else
+        world_runtime->artifacts.render_generation++;
+    if (world_runtime->artifacts.render_generation == 0u)
+        world_runtime->artifacts.render_generation = 1u;
+    return world_runtime->artifacts.render_generation;
+}
+
+static void set_brush_world_model_generation(slayer3d_model *model, Uint32 generation)
+{
+    if (model == NULL)
+        return;
+    for (int mesh_index = 0; mesh_index < model->mesh_count; ++mesh_index)
+        model->meshes[mesh_index].generation = generation;
+}
+
+static void set_brush_world_model_array_generation(slayer3d_model *models, int model_count, Uint32 generation)
+{
+    if (models == NULL)
+        return;
+    for (int model_index = 0; model_index < model_count; ++model_index)
+        set_brush_world_model_generation(&models[model_index], generation);
+}
+
 bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, char *error_buffer,
                                            int error_buffer_size)
 {
@@ -289,6 +318,11 @@ bool rebuild_brush_world_runtime_artifacts(brush_world_runtime *world_runtime, c
         world->render_model = old_render_model;
         return false;
     }
+
+    const Uint32 render_generation = next_brush_world_render_generation(world_runtime);
+    set_brush_world_model_generation(&render_model, render_generation);
+    set_brush_world_model_array_generation(brush_render_models, brush_render_model_count, render_generation);
+    set_brush_world_model_array_generation(chunk_render_models, chunk_render_model_count, render_generation);
 
     slayer3d_free_model(&world_runtime->artifacts.render_model);
     free_brush_world_visibility_models(world_runtime);

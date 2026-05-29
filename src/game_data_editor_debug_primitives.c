@@ -43,6 +43,14 @@ static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
 static bool emit_editor_debug_marker_cross(editor_debug_iteration_context *context, slayer3d_vec3 center, float size);
+static bool emit_editor_debug_marker_orb(editor_debug_iteration_context *context, slayer3d_vec3 center, float radius);
+static bool emit_editor_debug_hover_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center);
+static bool emit_editor_debug_selected_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center);
+static bool emit_editor_debug_vertex_hover_label(editor_debug_iteration_context *context, slayer3d_vec3 center,
+                                                 const editor_brush_source_vertex *vertex);
+static bool emit_editor_debug_source_brush_edges(editor_debug_iteration_context *context,
+                                                 const brush_world_runtime *world,
+                                                 const slayer3d_game_data_editor_selection *selection);
 
 static slayer3d_color editor_debug_color_or_default(slayer3d_color color, slayer3d_color fallback)
 {
@@ -200,6 +208,29 @@ static bool emit_editor_debug_line(editor_debug_iteration_context *context, slay
     return true;
 }
 
+static bool emit_editor_debug_label(editor_debug_iteration_context *context, slayer3d_vec3 position, const char *text)
+{
+    if (context == NULL || context->callback == NULL || text == NULL)
+        return false;
+
+    slayer3d_game_data_editor_debug_primitive primitive;
+    SDL_zero(primitive);
+    primitive.type = context->type;
+    primitive.start = position;
+    primitive.end = position;
+    primitive.color = context->color;
+    primitive.world_name = context->world_name;
+    primitive.element_name = context->element_name;
+    primitive.face_index = context->face_index;
+    SDL_strlcpy(primitive.text, text, sizeof(primitive.text));
+    if (!context->callback(context->userdata, &primitive))
+    {
+        context->stopped = true;
+        return false;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_for_each_active_editor_debug_primitive(const slayer3d_game_data_runtime *runtime,
                                                                slayer3d_game_data_editor_debug_primitive_fn callback,
                                                                void *userdata)
@@ -257,6 +288,40 @@ static int editor_debug_source_index_for_selection(const brush_world_runtime *wo
                : -1;
 }
 
+static bool editor_debug_vertex_is_selected(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                            const char *vertex_stable_id)
+{
+    if (runtime == NULL || world_name == NULL || vertex_stable_id == NULL ||
+        !editor_selected_vertices_active_for_scene(runtime))
+    {
+        return false;
+    }
+
+    for (int i = 0; i < runtime->editor_selected_vertex_count; ++i)
+    {
+        const editor_source_vertex_selection *selection = &runtime->editor_selected_vertices[i];
+        if (SDL_strcmp(selection->world_name, world_name) == 0 &&
+            SDL_strcmp(selection->vertex_stable_id, vertex_stable_id) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool editor_debug_vertex_is_hovered(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                           const char *vertex_stable_id)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || world_name == NULL || vertex_stable_id == NULL ||
+        !slayer3d_properties_get_bool(runtime->scene_state, "editor.vertex.hover.hit", false))
+    {
+        return false;
+    }
+
+    const char *hover_vertex = slayer3d_properties_get_string(runtime->scene_state, "editor.vertex.hover.vertex", "");
+    return SDL_strcmp(hover_vertex, vertex_stable_id) == 0;
+}
+
 static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_runtime *runtime,
                                                        const slayer3d_game_data_editor_debug_desc *desc,
                                                        slayer3d_game_data_editor_debug_primitive_fn callback,
@@ -283,7 +348,6 @@ static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_
     context.userdata = userdata;
     context.color = editor_debug_selection_flash_color(
         editor_debug_color_or_default(desc->vertex_handle_color, (slayer3d_color){255, 224, 64, 255}));
-    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE;
     context.face_index = -1;
 
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
@@ -306,8 +370,36 @@ static bool emit_editor_selected_source_vertex_handles(const slayer3d_game_data_
             context.element_name = model.vertices[vertex].stable_id;
             const slayer3d_vec3 center = slayer3d_vec3_add(
                 selection.world_position, editor_source_vertex_coord_meters(world, &model.vertices[vertex]));
-            if (!emit_editor_debug_marker_cross(&context, center, 0.12f))
-                return false;
+            const bool selected =
+                editor_debug_vertex_is_selected(runtime, selection.world_name, model.vertices[vertex].stable_id);
+            const bool hovered =
+                editor_debug_vertex_is_hovered(runtime, selection.world_name, model.vertices[vertex].stable_id);
+
+            if (hovered)
+            {
+                context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_HANDLE;
+                context.color = (slayer3d_color){255, 48, 48, 255};
+                if (!emit_editor_debug_hover_vertex_outline(&context, center) ||
+                    !emit_editor_debug_vertex_hover_label(&context, center, &model.vertices[vertex]))
+                {
+                    return false;
+                }
+            }
+            if (selected)
+            {
+                context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE;
+                context.color = (slayer3d_color){255, 32, 32, 255};
+                if (!emit_editor_debug_selected_vertex_outline(&context, center))
+                    return false;
+            }
+            else
+            {
+                context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HANDLE;
+                context.color = editor_debug_selection_flash_color(
+                    editor_debug_color_or_default(desc->vertex_handle_color, (slayer3d_color){255, 224, 64, 255}));
+                if (!emit_editor_debug_marker_cross(&context, center, 0.12f))
+                    return false;
+            }
         }
     }
     return true;
@@ -448,6 +540,37 @@ static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, sl
     return true;
 }
 
+static bool emit_editor_debug_source_brush_edges(editor_debug_iteration_context *context,
+                                                 const brush_world_runtime *world,
+                                                 const slayer3d_game_data_editor_selection *selection)
+{
+    if (context == NULL || world == NULL || selection == NULL || !selection->hit)
+        return false;
+
+    const int source_index = editor_debug_source_index_for_selection(world, selection);
+    editor_brush_source_vertex_model model;
+    if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world, source_index, &model, NULL, 0))
+        return false;
+
+    context->world_name = selection->world_name;
+    context->element_name = selection->element_name;
+    for (int edge = 0; edge < model.edge_count; ++edge)
+    {
+        const editor_brush_source_edge *source_edge = &model.edges[edge];
+        const int a = source_edge->vertex_indices[0];
+        const int b = source_edge->vertex_indices[1];
+        if (a < 0 || a >= model.vertex_count || b < 0 || b >= model.vertex_count)
+            continue;
+        const slayer3d_vec3 start =
+            slayer3d_vec3_add(selection->world_position, editor_source_vertex_coord_meters(world, &model.vertices[a]));
+        const slayer3d_vec3 end =
+            slayer3d_vec3_add(selection->world_position, editor_source_vertex_coord_meters(world, &model.vertices[b]));
+        if (!emit_editor_debug_line(context, start, end))
+            return false;
+    }
+    return true;
+}
+
 static bool editor_source_box_contents_are_structural(unsigned int contents)
 {
     if (contents == 0u)
@@ -510,6 +633,9 @@ static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *
         context.world_name = selection.world_name;
         context.element_name = selection.element_name;
         context.face_index = selection.face_index;
+        const brush_world_runtime *world = find_brush_world_runtime(runtime, selection.world_name);
+        if (emit_editor_debug_source_brush_edges(&context, world, &selection))
+            continue;
         if (!emit_editor_debug_bounds(&context, selection.bounds))
             return false;
     }
@@ -687,6 +813,65 @@ static bool emit_editor_debug_marker_cross(editor_debug_iteration_context *conte
                                   slayer3d_vec3_add(slayer3d_vec3_add(center, x), z)) &&
            emit_editor_debug_line(context, slayer3d_vec3_add(slayer3d_vec3_sub(center, x), z),
                                   slayer3d_vec3_add(slayer3d_vec3_sub(center, z), x));
+}
+
+static bool emit_editor_debug_marker_orb(editor_debug_iteration_context *context, slayer3d_vec3 center, float radius)
+{
+    const float r = radius > 0.0f ? radius : 0.1f;
+    const int segments = 18;
+    const slayer3d_vec3 axes[3][2] = {
+        {slayer3d_vec3_make(1.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 1.0f, 0.0f)},
+        {slayer3d_vec3_make(1.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 1.0f)},
+        {slayer3d_vec3_make(0.0f, 1.0f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 1.0f)},
+    };
+
+    for (int plane = 0; plane < 3; ++plane)
+    {
+        slayer3d_vec3 previous = slayer3d_vec3_add(center, slayer3d_vec3_scale(axes[plane][0], r));
+        for (int segment = 1; segment <= segments; ++segment)
+        {
+            const float angle = ((float)segment / (float)segments) * SDL_PI_F * 2.0f;
+            const slayer3d_vec3 offset = slayer3d_vec3_add(slayer3d_vec3_scale(axes[plane][0], SDL_cosf(angle) * r),
+                                                           slayer3d_vec3_scale(axes[plane][1], SDL_sinf(angle) * r));
+            const slayer3d_vec3 current = slayer3d_vec3_add(center, offset);
+            if (!emit_editor_debug_line(context, previous, current))
+                return false;
+            previous = current;
+        }
+    }
+
+    const slayer3d_vec3 x = slayer3d_vec3_make(r, 0.0f, 0.0f);
+    const slayer3d_vec3 y = slayer3d_vec3_make(0.0f, r, 0.0f);
+    const slayer3d_vec3 z = slayer3d_vec3_make(0.0f, 0.0f, r);
+    return emit_editor_debug_line(context, slayer3d_vec3_sub(center, x), slayer3d_vec3_add(center, x)) &&
+           emit_editor_debug_line(context, slayer3d_vec3_sub(center, y), slayer3d_vec3_add(center, y)) &&
+           emit_editor_debug_line(context, slayer3d_vec3_sub(center, z), slayer3d_vec3_add(center, z));
+}
+
+static bool emit_editor_debug_selected_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center)
+{
+    return emit_editor_debug_marker_orb(context, center, 0.16f) &&
+           emit_editor_debug_marker_orb(context, center, 0.205f) &&
+           emit_editor_debug_marker_cross(context, center, 0.23f);
+}
+
+static bool emit_editor_debug_hover_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center)
+{
+    return emit_editor_debug_marker_orb(context, center, 0.18f);
+}
+
+static bool emit_editor_debug_vertex_hover_label(editor_debug_iteration_context *context, slayer3d_vec3 center,
+                                                 const editor_brush_source_vertex *vertex)
+{
+    if (context == NULL || vertex == NULL)
+        return false;
+
+    char label[64];
+    SDL_snprintf(label, sizeof(label), "X %d  Y %d  Z %d", vertex->coord[0], vertex->coord[1], vertex->coord[2]);
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL;
+    context->color = (slayer3d_color){255, 245, 210, 255};
+    const slayer3d_vec3 label_position = slayer3d_vec3_add(center, slayer3d_vec3_make(0.0f, 0.28f, 0.0f));
+    return emit_editor_debug_label(context, label_position, label);
 }
 
 static bool emit_editor_debug_overlay_marker(const slayer3d_game_data_runtime *runtime, yyjson_val *marker,
@@ -914,8 +1099,14 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         context.world_name = selection->world_name;
         context.element_name = selection->element_name;
         context.face_index = selection->face_index;
-        if (!emit_editor_debug_bounds(&context, selection->bounds))
+        const brush_world_runtime *world = selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD
+                                               ? find_brush_world_runtime(runtime, selection->world_name)
+                                               : NULL;
+        if (!emit_editor_debug_source_brush_edges(&context, world, selection) &&
+            !emit_editor_debug_bounds(&context, selection->bounds))
+        {
             return true;
+        }
     }
 
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE) != 0u &&

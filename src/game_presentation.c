@@ -481,6 +481,8 @@ static bool draw_editor_debug_primitive(void *userdata, const slayer3d_game_data
     editor_debug_draw_context *context = (editor_debug_draw_context *)userdata;
     if (context == NULL || context->renderer == NULL || primitive == NULL)
         return false;
+    if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL)
+        return true;
     if (!slayer3d_draw_line_3d(context->renderer, primitive->start, primitive->end, primitive->color))
     {
         context->ok = false;
@@ -516,6 +518,111 @@ bool slayer3d_game_data_draw_active_editor_debug_primitives(const slayer3d_game_
     context.renderer = renderer;
     context.ok = true;
     if (!slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, draw_editor_debug_primitive, &context))
+        return false;
+    return context.ok;
+}
+
+typedef struct editor_debug_label_context
+{
+    slayer3d_render_context *renderer;
+    const slayer3d_camera3d *camera;
+    slayer3d_font *font;
+    bool ok;
+} editor_debug_label_context;
+
+static const char *editor_debug_label_font_id(const slayer3d_game_data_runtime *runtime)
+{
+    yyjson_val *overlay = obj_get(active_editor_tooling_root(runtime), "debug_overlay");
+    const char *font = json_string(overlay, "label_font", NULL);
+    if (font != NULL)
+        return font;
+
+    yyjson_val *fonts = obj_get(obj_get(runtime_root(runtime), "assets"), "fonts");
+    yyjson_val *first = yyjson_is_arr(fonts) ? yyjson_arr_get(fonts, 0) : NULL;
+    return json_string(first, "id", NULL);
+}
+
+static bool editor_debug_project_world_to_screen(slayer3d_render_context *renderer, const slayer3d_camera3d *camera,
+                                                 slayer3d_vec3 point, float *out_x, float *out_y)
+{
+    if (renderer == NULL || camera == NULL || out_x == NULL || out_y == NULL)
+        return false;
+
+    SDL_Rect viewport;
+    if (!slayer3d_get_render_viewport(renderer, &viewport) || viewport.w <= 0 || viewport.h <= 0)
+        return false;
+
+    slayer3d_mat4 view;
+    slayer3d_mat4 projection;
+    if (!slayer3d_camera3d_compute_matrices(camera, viewport.w, viewport.h, renderer->near_plane, renderer->far_plane,
+                                            &view, &projection))
+    {
+        return false;
+    }
+
+    const slayer3d_mat4 view_projection = slayer3d_mat4_multiply(projection, view);
+    const slayer3d_vec4 clip = slayer3d_mat4_transform_vec4(view_projection, slayer3d_vec4_from_vec3(point, 1.0f));
+    if (SDL_fabsf(clip.w) <= 0.000001f)
+        return false;
+
+    const float ndc_x = clip.x / clip.w;
+    const float ndc_y = clip.y / clip.w;
+    const float ndc_z = clip.z / clip.w;
+    if (ndc_z < -1.0f || ndc_z > 1.0f)
+        return false;
+
+    *out_x = (float)viewport.x + (ndc_x + 1.0f) * 0.5f * (float)viewport.w;
+    *out_y = (float)viewport.y + (1.0f - ndc_y) * 0.5f * (float)viewport.h;
+    return true;
+}
+
+static bool draw_editor_debug_label_primitive(void *userdata,
+                                              const slayer3d_game_data_editor_debug_primitive *primitive)
+{
+    editor_debug_label_context *context = (editor_debug_label_context *)userdata;
+    if (context == NULL || primitive == NULL || primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL)
+        return true;
+    if (context->renderer == NULL || context->font == NULL || context->camera == NULL || primitive->text[0] == '\0')
+        return false;
+
+    float x = 0.0f;
+    float y = 0.0f;
+    if (!editor_debug_project_world_to_screen(context->renderer, context->camera, primitive->start, &x, &y))
+        return true;
+
+    const float label_x = x + 8.0f;
+    const float label_y = y - 26.0f;
+    if (!slayer3d_draw_text_overlay_scaled(context->renderer, context->font, primitive->text, label_x + 1.0f,
+                                           label_y + 1.0f, 0.82f, (slayer3d_color){0, 0, 0, 220}) ||
+        !slayer3d_draw_text_overlay_scaled(context->renderer, context->font, primitive->text, label_x, label_y, 0.82f,
+                                           primitive->color))
+    {
+        context->ok = false;
+        return false;
+    }
+    return true;
+}
+
+static bool draw_active_editor_debug_labels(const slayer3d_game_data_runtime *runtime,
+                                            slayer3d_render_context *renderer,
+                                            slayer3d_game_data_font_cache *font_cache, const slayer3d_camera3d *camera)
+{
+    if (runtime == NULL || renderer == NULL || font_cache == NULL || camera == NULL)
+        return false;
+
+    const char *font_id = editor_debug_label_font_id(runtime);
+    slayer3d_font *font = slayer3d_game_data_find_or_load_font(runtime, font_cache, font_id);
+    if (font == NULL)
+        return true;
+
+    editor_debug_label_context context;
+    SDL_zero(context);
+    context.renderer = renderer;
+    context.camera = camera;
+    context.font = font;
+    context.ok = true;
+    if (!slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, draw_editor_debug_label_primitive,
+                                                                   &context))
         return false;
     return context.ok;
 }
@@ -581,6 +688,8 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
         ok = slayer3d_game_data_draw_active_editor_debug_primitives(frame->runtime, frame->renderer) && ok;
         ok = run_frame_hook(frame, frame->after_world_3d) && ok;
         slayer3d_end_mode_3d(frame->renderer);
+        if (frame->font_cache != NULL)
+            ok = draw_active_editor_debug_labels(frame->runtime, frame->renderer, frame->font_cache, camera) && ok;
     }
     else
     {

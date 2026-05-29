@@ -89,6 +89,12 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_DRAG_GUIDE = 12,
         /** @brief Pending add-vertex preview handle line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_ADD_PREVIEW = 13,
+        /** @brief Selected source brush vertex handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_SELECTED_HANDLE = 14,
+        /** @brief Hovered source brush vertex handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_HANDLE = 15,
+        /** @brief Hovered source brush vertex coordinate label. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL = 16,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -142,6 +148,8 @@ extern "C"
         const char *element_name;
         /** @brief Associated brush face index, or -1. */
         int face_index;
+        /** @brief Optional overlay label text for non-line debug primitives. */
+        char text[64];
     } slayer3d_game_data_editor_debug_primitive;
 
     /** @brief Editor debug overlay generation options. */
