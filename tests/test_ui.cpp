@@ -183,6 +183,124 @@ TEST(SLAYER3DUI, RetainedColumnLayoutDistributesFillChildren)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc root{};
+    root.id = "panel";
+    root.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    root.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    root.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    root.rect = {10.0f, 20.0f, 200.0f, 80.0f};
+    root.padding = 5.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &root));
+
+    slayer3d_ui_layout_node_desc button{};
+    button.id = "button";
+    button.parent_id = "panel";
+    button.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    button.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    button.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    button.rect = {12.0f, 8.0f, 90.0f, 24.0f};
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &button));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    const slayer3d_ui_layout_resolved_node *resolved = slayer3d_ui_layout_find_resolved_node(layout, "button");
+    expect_rect(resolved, 27.0f, 33.0f, 90.0f, 24.0f);
+
+    ASSERT_EQ(slayer3d_ui_layout_render_command_count(layout), 2);
+    ASSERT_EQ(slayer3d_ui_layout_hit_region_count(layout), 1);
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_region_at(layout, 0);
+    ASSERT_NE(hit, nullptr);
+    EXPECT_STREQ(hit->id, "button");
+    EXPECT_FLOAT_EQ(hit->rect.x, resolved->rect.x);
+    EXPECT_FLOAT_EQ(hit->rect.y, resolved->rect.y);
+    EXPECT_FLOAT_EQ(hit->rect.w, resolved->rect.w);
+    EXPECT_FLOAT_EQ(hit->rect.h, resolved->rect.h);
+
+    ASSERT_EQ(slayer3d_ui_layout_hit_test(layout, 30.0f, 40.0f), hit);
+    EXPECT_EQ(slayer3d_ui_layout_hit_test(layout, 5.0f, 5.0f), nullptr);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedHitTestingUsesFrontMostLayer)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc back{};
+    back.id = "back";
+    back.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    back.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    back.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    back.rect = {0.0f, 0.0f, 100.0f, 100.0f};
+    back.layer = 0;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &back));
+
+    slayer3d_ui_layout_node_desc front{};
+    front.id = "front";
+    front.type = SLAYER3D_UI_LAYOUT_NODE_BUTTON;
+    front.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    front.rect = {20.0f, 20.0f, 100.0f, 100.0f};
+    front.layer = 10;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &front));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    ASSERT_EQ(slayer3d_ui_layout_render_command_count(layout), 2);
+    const slayer3d_ui_layout_render_command *render0 = slayer3d_ui_layout_render_command_at(layout, 0);
+    const slayer3d_ui_layout_render_command *render1 = slayer3d_ui_layout_render_command_at(layout, 1);
+    ASSERT_NE(render0, nullptr);
+    ASSERT_NE(render1, nullptr);
+    EXPECT_STREQ(render0->id, "back");
+    EXPECT_STREQ(render1->id, "front");
+
+    const slayer3d_ui_layout_hit_region *top = slayer3d_ui_layout_hit_test(layout, 30.0f, 30.0f);
+    ASSERT_NE(top, nullptr);
+    EXPECT_STREQ(top->id, "front");
+    const slayer3d_ui_layout_hit_region *back_only = slayer3d_ui_layout_hit_test(layout, 10.0f, 10.0f);
+    ASSERT_NE(back_only, nullptr);
+    EXPECT_STREQ(back_only->id, "back");
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
+TEST(SLAYER3DUI, RetainedLayoutDirtyGenerationAvoidsUnneededResolve)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    slayer3d_ui_layout_node_desc root{};
+    root.id = "root";
+    root.type = SLAYER3D_UI_LAYOUT_NODE_PANEL;
+    root.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    root.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FILL;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &root));
+    EXPECT_TRUE(slayer3d_ui_layout_is_dirty(layout));
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    EXPECT_FALSE(slayer3d_ui_layout_is_dirty(layout));
+    const int first_generation = slayer3d_ui_layout_generation(layout);
+    EXPECT_GT(first_generation, 0);
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 1280.0f, 720.0f));
+    EXPECT_EQ(slayer3d_ui_layout_generation(layout), first_generation);
+
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 640.0f, 360.0f));
+    const int resized_generation = slayer3d_ui_layout_generation(layout);
+    EXPECT_GT(resized_generation, first_generation);
+
+    slayer3d_ui_layout_mark_dirty(layout);
+    EXPECT_TRUE(slayer3d_ui_layout_is_dirty(layout));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 640.0f, 360.0f));
+    EXPECT_GT(slayer3d_ui_layout_generation(layout), resized_generation);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, MouseEventsUpdateInputState)
 {
     slayer3d_ui_context *ui = nullptr;

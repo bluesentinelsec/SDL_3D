@@ -9220,7 +9220,7 @@ TEST(GameDataRuntime, RetainedUIWidgetsValidate)
         "gap": 8,
         "children": [
           { "id": "toolbar.file", "type": "button", "w": 96, "h": "fill" },
-          { "id": "toolbar.grid", "type": "dropdown", "w": "fill", "h": "fill" }
+          { "id": "toolbar.grid", "type": "dropdown", "w": "fill", "h": "fill", "layer": 10, "interactive": true }
         ]
       }
     ]
@@ -9278,6 +9278,24 @@ TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
   ]
 })json",
             "UI widget width must be positive or 'fill'",
+        },
+        {
+            "bad_layer",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 100, "h": 100, "layer": 1.5 }
+  ]
+})json",
+            "UI widget layer/z must be an integer",
+        },
+        {
+            "bad_interactive",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 100, "h": 100, "interactive": "yes" }
+  ]
+})json",
+            "UI widget interactive must be a boolean",
         },
     };
 

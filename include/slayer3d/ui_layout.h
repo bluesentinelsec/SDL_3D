@@ -68,6 +68,8 @@ extern "C"
         slayer3d_ui_layout_rect rect;
         float padding;
         float gap;
+        int layer;
+        bool interactive;
     } slayer3d_ui_layout_node_desc;
 
     /** @brief Resolved retained UI node with final screen-space bounds. */
@@ -79,7 +81,27 @@ extern "C"
         slayer3d_ui_layout_node_type type;
         slayer3d_ui_layout_axis axis;
         slayer3d_ui_layout_rect rect;
+        int layer;
+        bool interactive;
     } slayer3d_ui_layout_resolved_node;
+
+    /** @brief Flat retained UI draw command compiled from a resolved node. */
+    typedef struct slayer3d_ui_layout_render_command
+    {
+        char id[SLAYER3D_UI_LAYOUT_ID_MAX];
+        slayer3d_ui_layout_node_type type;
+        slayer3d_ui_layout_rect rect;
+        int layer;
+    } slayer3d_ui_layout_render_command;
+
+    /** @brief Flat retained UI hit region compiled from a resolved interactive node. */
+    typedef struct slayer3d_ui_layout_hit_region
+    {
+        char id[SLAYER3D_UI_LAYOUT_ID_MAX];
+        slayer3d_ui_layout_node_type type;
+        slayer3d_ui_layout_rect rect;
+        int layer;
+    } slayer3d_ui_layout_hit_region;
 
     /** @brief Retained UI layout tree. */
     typedef struct slayer3d_ui_layout_model slayer3d_ui_layout_model;
@@ -99,6 +121,15 @@ extern "C"
     /** @brief Resolve all retained UI nodes into screen-space rectangles. */
     bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_w, float viewport_h);
 
+    /** @brief Mark the retained UI layout dirty so the next resolve recomputes cached lists. */
+    void slayer3d_ui_layout_mark_dirty(slayer3d_ui_layout_model *model);
+
+    /** @brief Return whether the retained UI layout needs recomputation. */
+    bool slayer3d_ui_layout_is_dirty(const slayer3d_ui_layout_model *model);
+
+    /** @brief Return the layout generation, incremented whenever cached layout is recomputed. */
+    int slayer3d_ui_layout_generation(const slayer3d_ui_layout_model *model);
+
     /** @brief Return the number of retained UI nodes in the model. */
     int slayer3d_ui_layout_node_count(const slayer3d_ui_layout_model *model);
 
@@ -109,6 +140,24 @@ extern "C"
     /** @brief Find one resolved retained UI node by id, or NULL when absent. */
     const slayer3d_ui_layout_resolved_node *slayer3d_ui_layout_find_resolved_node(const slayer3d_ui_layout_model *model,
                                                                                   const char *id);
+
+    /** @brief Return the number of flat retained UI render commands. */
+    int slayer3d_ui_layout_render_command_count(const slayer3d_ui_layout_model *model);
+
+    /** @brief Return one flat retained UI render command by index, or NULL when out of range. */
+    const slayer3d_ui_layout_render_command *slayer3d_ui_layout_render_command_at(const slayer3d_ui_layout_model *model,
+                                                                                  int index);
+
+    /** @brief Return the number of flat retained UI hit regions. */
+    int slayer3d_ui_layout_hit_region_count(const slayer3d_ui_layout_model *model);
+
+    /** @brief Return one flat retained UI hit region by index, or NULL when out of range. */
+    const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_region_at(const slayer3d_ui_layout_model *model,
+                                                                          int index);
+
+    /** @brief Hit test retained UI regions, returning the front-most matching region or NULL. */
+    const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_test(const slayer3d_ui_layout_model *model, float x,
+                                                                     float y);
 
 #ifdef __cplusplus
 }

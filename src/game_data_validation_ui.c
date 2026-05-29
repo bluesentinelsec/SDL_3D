@@ -157,6 +157,18 @@ static bool ui_widget_optional_number(yyjson_val *object, const char *key)
     return value == NULL || yyjson_is_num(value);
 }
 
+static bool ui_widget_optional_integer(yyjson_val *object, const char *key)
+{
+    yyjson_val *value = obj_get(object, key);
+    return value == NULL || yyjson_is_int(value);
+}
+
+static bool ui_widget_optional_bool(yyjson_val *object, const char *key)
+{
+    yyjson_val *value = obj_get(object, key);
+    return value == NULL || yyjson_is_bool(value);
+}
+
 typedef struct ui_widget_name_set
 {
     const char **ids;
@@ -229,6 +241,10 @@ static bool validate_ui_widget_node(validation_context *ctx, yyjson_val *node, c
         return validation_error(ctx, path, "UI widget padding must be non-negative");
     if (!ui_widget_optional_number_non_negative(node, "gap"))
         return validation_error(ctx, path, "UI widget gap must be non-negative");
+    if (!ui_widget_optional_integer(node, "layer") || !ui_widget_optional_integer(node, "z"))
+        return validation_error(ctx, path, "UI widget layer/z must be an integer when authored");
+    if (!ui_widget_optional_bool(node, "interactive"))
+        return validation_error(ctx, path, "UI widget interactive must be a boolean when authored");
 
     yyjson_val *children = obj_get(node, "children");
     if (children != NULL && !yyjson_is_arr(children))
@@ -300,6 +316,20 @@ static float parse_ui_widget_float(yyjson_val *node, const char *key, float fall
     return yyjson_is_num(value) ? (float)yyjson_get_num(value) : fallback;
 }
 
+static int parse_ui_widget_int(yyjson_val *node, const char *primary_key, const char *secondary_key, int fallback)
+{
+    yyjson_val *value = obj_get(node, primary_key);
+    if (value == NULL)
+        value = obj_get(node, secondary_key);
+    return yyjson_is_int(value) ? (int)yyjson_get_int(value) : fallback;
+}
+
+static bool parse_ui_widget_bool(yyjson_val *node, const char *key, bool fallback)
+{
+    yyjson_val *value = obj_get(node, key);
+    return yyjson_is_bool(value) ? yyjson_get_bool(value) : fallback;
+}
+
 static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, const char *path, const char *parent_id,
                                  slayer3d_ui_layout_model *layout)
 {
@@ -319,6 +349,8 @@ static bool parse_ui_widget_node(validation_context *ctx, yyjson_val *node, cons
     desc.rect.h = parse_ui_widget_size_value(height, 1.0f);
     desc.padding = parse_ui_widget_float(node, "padding", 0.0f);
     desc.gap = parse_ui_widget_float(node, "gap", 0.0f);
+    desc.layer = parse_ui_widget_int(node, "layer", "z", 0);
+    desc.interactive = parse_ui_widget_bool(node, "interactive", false);
     if (!slayer3d_ui_layout_add_node(layout, &desc))
         return validation_error(ctx, path, "UI widget node could not be added to retained layout");
 

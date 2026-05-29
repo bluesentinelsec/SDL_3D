@@ -20,6 +20,8 @@ typedef struct ui_layout_node
     slayer3d_ui_layout_rect resolved_rect;
     float padding;
     float gap;
+    int layer;
+    bool interactive;
     bool resolved;
     bool resolving;
 } ui_layout_node;
@@ -28,8 +30,16 @@ struct slayer3d_ui_layout_model
 {
     ui_layout_node *nodes;
     slayer3d_ui_layout_resolved_node *resolved_nodes;
+    slayer3d_ui_layout_render_command *render_commands;
+    slayer3d_ui_layout_hit_region *hit_regions;
     int count;
     int capacity;
+    int render_count;
+    int hit_region_count;
+    int generation;
+    float resolved_viewport_w;
+    float resolved_viewport_h;
+    bool dirty;
 };
 
 static bool ui_layout_id_valid(const char *id)
@@ -64,23 +74,41 @@ static bool ui_layout_reserve(slayer3d_ui_layout_model *model, int capacity)
     ui_layout_node *nodes = (ui_layout_node *)SDL_calloc((size_t)new_capacity, sizeof(*nodes));
     slayer3d_ui_layout_resolved_node *resolved_nodes =
         (slayer3d_ui_layout_resolved_node *)SDL_calloc((size_t)new_capacity, sizeof(*resolved_nodes));
-    if (nodes == NULL || resolved_nodes == NULL)
+    slayer3d_ui_layout_render_command *render_commands =
+        (slayer3d_ui_layout_render_command *)SDL_calloc((size_t)new_capacity, sizeof(*render_commands));
+    slayer3d_ui_layout_hit_region *hit_regions =
+        (slayer3d_ui_layout_hit_region *)SDL_calloc((size_t)new_capacity, sizeof(*hit_regions));
+    if (nodes == NULL || resolved_nodes == NULL || render_commands == NULL || hit_regions == NULL)
     {
         SDL_free(nodes);
         SDL_free(resolved_nodes);
+        SDL_free(render_commands);
+        SDL_free(hit_regions);
         return false;
     }
     if (model->count > 0)
     {
         SDL_memcpy(nodes, model->nodes, (size_t)model->count * sizeof(*nodes));
         SDL_memcpy(resolved_nodes, model->resolved_nodes, (size_t)model->count * sizeof(*resolved_nodes));
+        SDL_memcpy(render_commands, model->render_commands, (size_t)model->render_count * sizeof(*render_commands));
+        SDL_memcpy(hit_regions, model->hit_regions, (size_t)model->hit_region_count * sizeof(*hit_regions));
     }
     SDL_free(model->nodes);
     SDL_free(model->resolved_nodes);
+    SDL_free(model->render_commands);
+    SDL_free(model->hit_regions);
     model->nodes = nodes;
     model->resolved_nodes = resolved_nodes;
+    model->render_commands = render_commands;
+    model->hit_regions = hit_regions;
     model->capacity = new_capacity;
     return true;
+}
+
+static bool ui_layout_type_interactive(slayer3d_ui_layout_node_type type)
+{
+    return type == SLAYER3D_UI_LAYOUT_NODE_BUTTON || type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN ||
+           type == SLAYER3D_UI_LAYOUT_NODE_TAB_STRIP;
 }
 
 bool slayer3d_ui_layout_create(slayer3d_ui_layout_model **out_model)
@@ -90,6 +118,7 @@ bool slayer3d_ui_layout_create(slayer3d_ui_layout_model **out_model)
     slayer3d_ui_layout_model *model = (slayer3d_ui_layout_model *)SDL_calloc(1, sizeof(*model));
     if (model == NULL)
         return false;
+    model->dirty = true;
     *out_model = model;
     return true;
 }
@@ -100,6 +129,8 @@ void slayer3d_ui_layout_destroy(slayer3d_ui_layout_model *model)
         return;
     SDL_free(model->nodes);
     SDL_free(model->resolved_nodes);
+    SDL_free(model->render_commands);
+    SDL_free(model->hit_regions);
     SDL_free(model);
 }
 
@@ -108,6 +139,9 @@ void slayer3d_ui_layout_clear(slayer3d_ui_layout_model *model)
     if (model == NULL)
         return;
     model->count = 0;
+    model->render_count = 0;
+    model->hit_region_count = 0;
+    model->dirty = true;
 }
 
 bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d_ui_layout_node_desc *desc)
@@ -141,6 +175,9 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->local_rect = desc->rect;
     node->padding = desc->padding;
     node->gap = desc->gap;
+    node->layer = desc->layer;
+    node->interactive = desc->interactive || ui_layout_type_interactive(desc->type);
+    model->dirty = true;
     return true;
 }
 
@@ -313,13 +350,77 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->type = node->type;
         resolved->axis = node->axis;
         resolved->rect = node->resolved_rect;
+        resolved->layer = node->layer;
+        resolved->interactive = node->interactive;
     }
+}
+
+static bool ui_layout_rect_contains(slayer3d_ui_layout_rect rect, float x, float y)
+{
+    return x >= rect.x && y >= rect.y && x < rect.x + rect.w && y < rect.y + rect.h;
+}
+
+static void ui_layout_swap_render_commands(slayer3d_ui_layout_render_command *a, slayer3d_ui_layout_render_command *b)
+{
+    slayer3d_ui_layout_render_command tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+static void ui_layout_swap_hit_regions(slayer3d_ui_layout_hit_region *a, slayer3d_ui_layout_hit_region *b)
+{
+    slayer3d_ui_layout_hit_region tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+static void ui_layout_sort_flat_lists(slayer3d_ui_layout_model *model)
+{
+    for (int i = 1; i < model->render_count; ++i)
+    {
+        for (int j = i; j > 0 && model->render_commands[j - 1].layer > model->render_commands[j].layer; --j)
+            ui_layout_swap_render_commands(&model->render_commands[j - 1], &model->render_commands[j]);
+    }
+    for (int i = 1; i < model->hit_region_count; ++i)
+    {
+        for (int j = i; j > 0 && model->hit_regions[j - 1].layer > model->hit_regions[j].layer; --j)
+            ui_layout_swap_hit_regions(&model->hit_regions[j - 1], &model->hit_regions[j]);
+    }
+}
+
+static void ui_layout_compile_flat_lists(slayer3d_ui_layout_model *model)
+{
+    model->render_count = 0;
+    model->hit_region_count = 0;
+    for (int i = 0; i < model->count; ++i)
+    {
+        const slayer3d_ui_layout_resolved_node *node = &model->resolved_nodes[i];
+        slayer3d_ui_layout_render_command *render = &model->render_commands[model->render_count++];
+        SDL_zero(*render);
+        ui_layout_copy_id(render->id, node->id);
+        render->type = node->type;
+        render->rect = node->rect;
+        render->layer = node->layer;
+
+        if (node->interactive)
+        {
+            slayer3d_ui_layout_hit_region *hit = &model->hit_regions[model->hit_region_count++];
+            SDL_zero(*hit);
+            ui_layout_copy_id(hit->id, node->id);
+            hit->type = node->type;
+            hit->rect = node->rect;
+            hit->layer = node->layer;
+        }
+    }
+    ui_layout_sort_flat_lists(model);
 }
 
 bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_w, float viewport_h)
 {
     if (model == NULL || viewport_w <= 0.0f || viewport_h <= 0.0f)
         return false;
+    if (!model->dirty && model->resolved_viewport_w == viewport_w && model->resolved_viewport_h == viewport_h)
+        return true;
 
     for (int i = 0; i < model->count; ++i)
     {
@@ -337,7 +438,28 @@ bool slayer3d_ui_layout_resolve(slayer3d_ui_layout_model *model, float viewport_
             return false;
     }
     ui_layout_store_resolved_nodes(model);
+    ui_layout_compile_flat_lists(model);
+    model->resolved_viewport_w = viewport_w;
+    model->resolved_viewport_h = viewport_h;
+    model->dirty = false;
+    ++model->generation;
     return true;
+}
+
+void slayer3d_ui_layout_mark_dirty(slayer3d_ui_layout_model *model)
+{
+    if (model != NULL)
+        model->dirty = true;
+}
+
+bool slayer3d_ui_layout_is_dirty(const slayer3d_ui_layout_model *model)
+{
+    return model != NULL && model->dirty;
+}
+
+int slayer3d_ui_layout_generation(const slayer3d_ui_layout_model *model)
+{
+    return model != NULL ? model->generation : 0;
 }
 
 int slayer3d_ui_layout_node_count(const slayer3d_ui_layout_model *model)
@@ -358,4 +480,43 @@ const slayer3d_ui_layout_resolved_node *slayer3d_ui_layout_find_resolved_node(co
 {
     const int index = ui_layout_find_node_index(model, id);
     return index >= 0 ? slayer3d_ui_layout_resolved_node_at(model, index) : NULL;
+}
+
+int slayer3d_ui_layout_render_command_count(const slayer3d_ui_layout_model *model)
+{
+    return model != NULL ? model->render_count : 0;
+}
+
+const slayer3d_ui_layout_render_command *slayer3d_ui_layout_render_command_at(const slayer3d_ui_layout_model *model,
+                                                                              int index)
+{
+    if (model == NULL || index < 0 || index >= model->render_count)
+        return NULL;
+    return &model->render_commands[index];
+}
+
+int slayer3d_ui_layout_hit_region_count(const slayer3d_ui_layout_model *model)
+{
+    return model != NULL ? model->hit_region_count : 0;
+}
+
+const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_region_at(const slayer3d_ui_layout_model *model, int index)
+{
+    if (model == NULL || index < 0 || index >= model->hit_region_count)
+        return NULL;
+    return &model->hit_regions[index];
+}
+
+const slayer3d_ui_layout_hit_region *slayer3d_ui_layout_hit_test(const slayer3d_ui_layout_model *model, float x,
+                                                                 float y)
+{
+    if (model == NULL)
+        return NULL;
+    for (int i = model->hit_region_count - 1; i >= 0; --i)
+    {
+        const slayer3d_ui_layout_hit_region *region = &model->hit_regions[i];
+        if (ui_layout_rect_contains(region->rect, x, y))
+            return region;
+    }
+    return NULL;
 }
