@@ -28,7 +28,6 @@ function(slayer3d_add_test target_name source_file test_label)
         ${target_name}
         PRIVATE
             Slayer3D::slayer3d
-            GTest::gtest
             GTest::gtest_main
     )
 

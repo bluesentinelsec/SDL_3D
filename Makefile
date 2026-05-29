@@ -15,6 +15,7 @@
 
 BUILD_DIR    ?= build
 CMAKE_FLAGS  ?=
+BUILD_FLAGS  ?= --parallel
 
 .PHONY: all debug release sanitize test demos clean install format format-fix help
 
@@ -25,7 +26,7 @@ debug:
 		-DCMAKE_BUILD_TYPE=Debug \
 		-DSLAYER3D_BUILD_TESTS=ON \
 		$(CMAKE_FLAGS)
-	@cmake --build $(BUILD_DIR)/debug
+	@cmake --build $(BUILD_DIR)/debug $(BUILD_FLAGS)
 
 release:
 	@cmake -B $(BUILD_DIR)/release \
@@ -33,7 +34,7 @@ release:
 		-DSLAYER3D_BUILD_TESTS=ON \
 		-DSLAYER3D_BUILD_DEMOS=ON \
 		$(CMAKE_FLAGS)
-	@cmake --build $(BUILD_DIR)/release --parallel
+	@cmake --build $(BUILD_DIR)/release $(BUILD_FLAGS)
 
 sanitize:
 	@CC=clang cmake -B $(BUILD_DIR)/sanitize \
@@ -41,7 +42,7 @@ sanitize:
 		-DSLAYER3D_BUILD_TESTS=ON \
 		-DSLAYER3D_ENABLE_SANITIZERS=ON \
 		$(CMAKE_FLAGS)
-	@cmake --build $(BUILD_DIR)/sanitize
+	@cmake --build $(BUILD_DIR)/sanitize $(BUILD_FLAGS)
 
 test: debug
 	@cd $(BUILD_DIR)/debug && ctest --output-on-failure
@@ -55,7 +56,7 @@ demos:
 		-DSLAYER3D_BUILD_TESTS=ON \
 		-DSLAYER3D_BUILD_DEMOS=ON \
 		$(CMAKE_FLAGS)
-	@cmake --build $(BUILD_DIR)/debug
+	@cmake --build $(BUILD_DIR)/debug $(BUILD_FLAGS)
 
 install: release
 	@cmake --install $(BUILD_DIR)/release
