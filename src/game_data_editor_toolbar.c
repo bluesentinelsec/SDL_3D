@@ -86,51 +86,80 @@ bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_va
     return true;
 }
 
-static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const char *action)
+static const char *editor_mode_for_tool_action(const char *action)
 {
-    const char *mode = NULL;
-    const char *tool_mode = NULL;
-    const char *message = NULL;
     if (SDL_strcmp(action, "editor.tool.select") == 0)
+        return "select";
+    if (SDL_strcmp(action, "editor.tool.brush") == 0)
+        return "brush";
+    if (SDL_strcmp(action, "editor.tool.face") == 0)
+        return "face";
+    if (SDL_strcmp(action, "editor.tool.vertex") == 0)
+        return "vertex";
+    if (SDL_strcmp(action, "editor.tool.texture") == 0)
+        return "texture";
+    return NULL;
+}
+
+bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime, const char *mode,
+                                             const char *message_override)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || mode == NULL || mode[0] == '\0')
+        return false;
+
+    const char *tool_mode = mode;
+    const char *message = message_override;
+    if (SDL_strcmp(mode, "select") == 0)
     {
-        mode = "select";
         tool_mode = "select";
-        message = "select mode";
+        if (message == NULL || message[0] == '\0')
+            message = "select mode";
     }
-    else if (SDL_strcmp(action, "editor.tool.brush") == 0)
+    else if (SDL_strcmp(mode, "brush") == 0)
     {
-        mode = "brush";
         tool_mode = "brush";
-        message = "brush tool";
+        if (message == NULL || message[0] == '\0')
+            message = "brush tool";
     }
-    else if (SDL_strcmp(action, "editor.tool.face") == 0)
+    else if (SDL_strcmp(mode, "face") == 0)
     {
-        mode = "face";
         tool_mode = "face";
-        message = "face tool";
+        if (message == NULL || message[0] == '\0')
+            message = "face tool";
     }
-    else if (SDL_strcmp(action, "editor.tool.vertex") == 0)
+    else if (SDL_strcmp(mode, "vertex") == 0)
     {
-        mode = "vertex";
         tool_mode = "vertex";
-        message = "vertex tool";
+        if (message == NULL || message[0] == '\0')
+        {
+            const int selected_count = slayer3d_properties_get_int(runtime->scene_state, "editor.selection.count", 0);
+            message = selected_count > 0 ? "vertex tool" : "select a brush before vertex tool";
+        }
     }
-    else if (SDL_strcmp(action, "editor.tool.texture") == 0)
+    else if (SDL_strcmp(mode, "texture") == 0)
     {
-        mode = "texture";
         tool_mode = "paint";
-        message = "texture tool";
+        if (message == NULL || message[0] == '\0')
+            message = "texture tool";
     }
     else
     {
         return false;
     }
 
+    if (SDL_strcmp(mode, "vertex") != 0)
+        (void)slayer3d_game_data_clear_editor_vertex_selection(runtime);
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     clear_editor_command_preview(runtime);
     return true;
+}
+
+static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const char *action)
+{
+    const char *mode = editor_mode_for_tool_action(action);
+    return mode != NULL && slayer3d_game_data_set_editor_tool_mode(runtime, mode, NULL);
 }
 
 bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed)
@@ -173,14 +202,9 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
             return true;
 
         const char *mode = json_string(button, "mode", NULL);
-        const char *tool_mode = json_string(button, "tool_mode", mode);
-        if (mode == NULL || mode[0] == '\0' || tool_mode == NULL || tool_mode[0] == '\0')
+        if (mode == NULL || mode[0] == '\0')
             return true;
-        slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
-                                       json_string(button, "message", "tool mode"));
-        clear_editor_command_preview(runtime);
+        (void)slayer3d_game_data_set_editor_tool_mode(runtime, mode, json_string(button, "message", NULL));
         return true;
     }
     return true;
