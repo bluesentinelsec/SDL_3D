@@ -18626,6 +18626,14 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         slayer3d_input_update(input, frame + 1U);
         SDL_SetModState(SDL_KMOD_NONE);
     };
+    auto move_editor_mouse = [&](float x, float y, Uint64 frame) {
+        SDL_Event mouse_motion{};
+        mouse_motion.type = SDL_EVENT_MOUSE_MOTION;
+        mouse_motion.motion.x = x;
+        mouse_motion.motion.y = y;
+        slayer3d_input_process_event(input, &mouse_motion);
+        slayer3d_input_update(input, frame);
+    };
     slayer3d_vec3 placement_origin = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     slayer3d_vec3 player_start_origin = placement_origin;
     auto world = [&]() {
@@ -18707,6 +18715,33 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &capture));
         return capture.found;
     };
+    auto visible_ui_rect_color = [&](const char *name, slayer3d_color *out_color) {
+        struct RectColorCapture
+        {
+            const slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
+            slayer3d_color *out_color = nullptr;
+            bool found = false;
+        } capture{runtime, name, out_color, false};
+        auto capture_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<RectColorCapture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                SDL_strcmp(rect->name, capture->name) != 0)
+            {
+                return true;
+            }
+            if (slayer3d_game_data_ui_rect_is_visible(capture->runtime, rect, nullptr))
+            {
+                if (capture->out_color != nullptr)
+                    *capture->out_color = rect->color;
+                capture->found = true;
+                return false;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &capture));
+        return capture.found;
+    };
     const int initial_brush_count = world().brush_count;
     EXPECT_EQ(initial_brush_count, 0);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
@@ -18722,6 +18757,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "brush");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush tool");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.brush.selected"));
+    slayer3d_color selected_tool_border{};
+    ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.brush.selected", &selected_tool_border));
+    EXPECT_EQ(selected_tool_border.r, 96);
+    EXPECT_EQ(selected_tool_border.g, 255);
+    EXPECT_EQ(selected_tool_border.b, 128);
+    EXPECT_EQ(selected_tool_border.a, 255);
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
@@ -18804,9 +18845,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         bool button = false;
         bool popup = false;
         bool option = false;
+        bool hovered_option = false;
         slayer3d_game_data_ui_rect button_rect{};
         slayer3d_game_data_ui_rect popup_rect{};
         slayer3d_game_data_ui_rect option_rect{};
+        slayer3d_game_data_ui_rect hovered_option_rect{};
     } grid_rects;
     auto capture_grid_dropdown_rects = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
         auto *capture = static_cast<GridDropdownRects *>(userdata);
@@ -18830,6 +18873,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
             capture->option = true;
             capture->option_rect = *rect;
         }
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+                 rect->h > 10.0f && rect->color.r == 54 && rect->color.g == 102 && rect->color.b == 166)
+        {
+            capture->hovered_option = true;
+            capture->hovered_option_rect = *rect;
+        }
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
@@ -18840,6 +18889,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(grid_rects.popup_rect.y, grid_rects.button_rect.y + grid_rects.button_rect.h, 0.001f);
     EXPECT_NEAR(grid_rects.option_rect.x, grid_rects.popup_rect.x, 0.001f);
     EXPECT_GT(grid_rects.option_rect.y, grid_rects.popup_rect.y);
+    move_editor_mouse(grid_rects.option_rect.x + grid_rects.option_rect.w * 0.5f,
+                      grid_rects.option_rect.y + grid_rects.option_rect.h * 0.5f, 5);
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
+    EXPECT_TRUE(grid_rects.hovered_option);
+    EXPECT_EQ(grid_rects.hovered_option_rect.color.a, 248);
     click_editor(890.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);

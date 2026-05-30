@@ -499,6 +499,51 @@ TEST(SLAYER3DUI, RetainedDropdownPopupMovesWithButton)
     slayer3d_ui_layout_destroy(layout);
 }
 
+TEST(SLAYER3DUI, RetainedDropdownOptionHoverAppearsInRenderMetadata)
+{
+    slayer3d_ui_layout_model *layout = nullptr;
+    ASSERT_TRUE(slayer3d_ui_layout_create(&layout));
+
+    const char *options[] = {"Grid 1", "Grid 2", "Grid 4"};
+    slayer3d_ui_layout_node_desc dropdown{};
+    dropdown.id = "grid";
+    dropdown.type = SLAYER3D_UI_LAYOUT_NODE_DROPDOWN;
+    dropdown.width_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
+    dropdown.rect = {10.0f, 20.0f, 100.0f, 24.0f};
+    dropdown.action = "editor.grid";
+    dropdown.options = options;
+    dropdown.option_count = 3;
+    dropdown.selected_index = 0;
+    dropdown.open = true;
+    dropdown.option_height = 20.0f;
+    ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &dropdown));
+    ASSERT_TRUE(slayer3d_ui_layout_resolve(layout, 320.0f, 200.0f));
+
+    slayer3d_ui_layout_input_state input{};
+    input.pointer_x = 20.0f;
+    input.pointer_y = 66.0f;
+    slayer3d_ui_layout_activation activation{};
+    ASSERT_TRUE(slayer3d_ui_layout_update_input(layout, &input, &activation));
+    EXPECT_FALSE(activation.activated);
+
+    const slayer3d_ui_layout_render_command *first_option = find_render_command(layout, "grid.option.0");
+    const slayer3d_ui_layout_render_command *second_option = find_render_command(layout, "grid.option.1");
+    ASSERT_NE(first_option, nullptr);
+    ASSERT_NE(second_option, nullptr);
+    EXPECT_FALSE(first_option->hovered);
+    EXPECT_TRUE(second_option->hovered);
+    EXPECT_TRUE(first_option->selected);
+    EXPECT_FALSE(second_option->selected);
+
+    const slayer3d_ui_layout_hit_region *second_hit = find_hit_region(layout, "grid.option.1");
+    ASSERT_NE(second_hit, nullptr);
+    EXPECT_TRUE(second_hit->hovered);
+    EXPECT_EQ(second_hit->option_index, 1);
+
+    slayer3d_ui_layout_destroy(layout);
+}
+
 TEST(SLAYER3DUI, RetainedDropdownPopupClampsToViewport)
 {
     slayer3d_ui_layout_model *layout = nullptr;
