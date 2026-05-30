@@ -182,7 +182,8 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
 {
     if (out_consumed != NULL)
         *out_consumed = false;
-    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_select(runtime))
+    const bool movement_mode = editor_mode_is_select(runtime) || editor_mode_is_brush(runtime);
+    if (runtime == NULL || runtime->scene_state == NULL || !movement_mode)
     {
         clear_editor_drag_move(runtime);
         return true;
@@ -201,12 +202,21 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
     const bool can_start_from_hover = editor_selection_is_selectable_brush(hover_selection);
     const bool can_start_y_axis_drag =
         y_axis_lock && editor_selected_brushes_active_for_scene(runtime) && runtime->editor_selected_brush_count > 0;
-    bool just_started_without_consuming_click = false;
     if (!drag->active && left_pressed && (can_start_from_hover || can_start_y_axis_drag))
     {
         const bool hover_was_selected =
             can_start_from_hover && editor_hover_is_selected_brush(runtime, hover_selection);
-        const bool consume_start_click = hover_was_selected || can_start_y_axis_drag;
+        const bool additive = (modifiers & (SDL_KMOD_SHIFT | SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+        if (can_start_from_hover && !hover_was_selected)
+        {
+            const slayer3d_game_data_editor_selection resolved_hover =
+                resolved_editor_selection(runtime, hover_selection);
+            if (!additive)
+                clear_editor_selected_brushes(runtime);
+            if (!add_editor_selected_brush(runtime, &resolved_hover))
+                return false;
+            update_active_editor_selection_from_selected_brushes(runtime);
+        }
         SDL_zero(*drag);
         drag->active = true;
         drag->axis_lock_y = y_axis_lock;
@@ -217,13 +227,10 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
         drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
         (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
         if (out_consumed != NULL)
-            *out_consumed = consume_start_click;
-        just_started_without_consuming_click = !consume_start_click;
+            *out_consumed = true;
     }
 
     if (!drag->active)
-        return true;
-    if (just_started_without_consuming_click)
         return true;
     if (out_consumed != NULL)
         *out_consumed = true;
@@ -280,7 +287,8 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
     if (runtime == NULL || runtime->scene_state == NULL)
         return true;
     const bool vertex_mode = editor_mode_is_vertex(runtime);
-    if (!editor_mode_is_select(runtime) && !vertex_mode)
+    const bool brush_transform_mode = editor_mode_is_select(runtime) || editor_mode_is_brush(runtime);
+    if (!brush_transform_mode && !vertex_mode)
         return true;
 
     slayer3d_input_manager *input = runtime_input(runtime);
