@@ -884,6 +884,150 @@ static void refresh_editor_brush_selection_for_identity(const brush_world_runtim
     }
 }
 
+static void publish_editor_transaction_selection_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    yyjson_val *selection_json = obj_get(active_editor_tooling_root(runtime), "selection");
+    publish_editor_selection(runtime, obj_get(selection_json, "outputs"), &runtime->editor_active_selection);
+    publish_editor_selected_brush_count(runtime);
+}
+
+static void remove_editor_selected_brushes_for_transaction(slayer3d_game_data_runtime *runtime,
+                                                           const editor_command_transaction_entry *entry)
+{
+    if (runtime == NULL || entry == NULL)
+        return;
+
+    bool removed_any = false;
+    if (editor_selected_brushes_active_for_scene(runtime))
+    {
+        for (int i = runtime->editor_selected_brush_count - 1; i >= 0; --i)
+        {
+            if (editor_selection_matches_transaction_element(&runtime->editor_selected_brushes[i], entry))
+            {
+                remove_editor_selected_brush_at(runtime, i);
+                removed_any = true;
+            }
+        }
+    }
+
+    if (runtime->editor_active_selection.hit &&
+        editor_selection_matches_transaction_element(&runtime->editor_active_selection, entry))
+    {
+        init_editor_selection(&runtime->editor_active_selection);
+        runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+        removed_any = true;
+    }
+
+    if (removed_any)
+    {
+        clear_editor_selected_vertices(runtime);
+        update_active_editor_selection_from_selected_brushes(runtime);
+        publish_editor_transaction_selection_state(runtime);
+    }
+}
+
+static void refresh_editor_selected_brushes_for_transaction(slayer3d_game_data_runtime *runtime,
+                                                            const editor_command_transaction_entry *entry)
+{
+    if (runtime == NULL || entry == NULL)
+        return;
+
+    const brush_world_runtime *world_runtime =
+        entry->world_name != NULL ? find_brush_world_runtime(runtime, entry->world_name) : NULL;
+    if (world_runtime == NULL)
+        return;
+
+    bool changed = false;
+    if (editor_selected_brushes_active_for_scene(runtime))
+    {
+        for (int i = runtime->editor_selected_brush_count - 1; i >= 0; --i)
+        {
+            slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+            if (!editor_selection_matches_transaction_element(selection, entry))
+                continue;
+            const int face_index = selection->face_index;
+            refresh_editor_brush_selection_for_identity(world_runtime, selection, entry->element_name,
+                                                        entry->element_stable_id, face_index, entry->face_stable_id);
+            if (!selection->hit)
+                remove_editor_selected_brush_at(runtime, i);
+            changed = true;
+        }
+    }
+
+    if (runtime->editor_active_selection.hit &&
+        editor_selection_matches_transaction_element(&runtime->editor_active_selection, entry))
+    {
+        const int face_index = runtime->editor_active_selection.face_index;
+        refresh_editor_brush_selection_for_identity(world_runtime, &runtime->editor_active_selection,
+                                                    entry->element_name, entry->element_stable_id, face_index,
+                                                    entry->face_stable_id);
+        changed = true;
+    }
+    else if (changed)
+    {
+        update_active_editor_selection_from_selected_brushes(runtime);
+    }
+
+    if (changed)
+        publish_editor_transaction_selection_state(runtime);
+}
+
+static void select_editor_brush_for_transaction(slayer3d_game_data_runtime *runtime,
+                                                const editor_command_transaction_entry *entry)
+{
+    if (runtime == NULL || entry == NULL || entry->world_name == NULL)
+        return;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, entry->world_name);
+    slayer3d_game_data_editor_selection selection;
+    init_editor_selection(&selection);
+    refresh_editor_brush_selection_for_identity(world_runtime, &selection, entry->element_name,
+                                                entry->element_stable_id, -1, NULL);
+    if (!selection.hit)
+        return;
+
+    clear_editor_selected_brushes(runtime);
+    (void)add_editor_selected_brush(runtime, &selection);
+    update_active_editor_selection_from_selected_brushes(runtime);
+    publish_editor_transaction_selection_state(runtime);
+}
+
+static void sync_editor_selection_after_transaction(slayer3d_game_data_runtime *runtime,
+                                                    const editor_command_transaction_entry *entry, bool forward)
+{
+    if (runtime == NULL || entry == NULL || entry->command == NULL)
+        return;
+
+    if (SDL_strcmp(entry->command, "delete") == 0)
+    {
+        if (forward)
+            remove_editor_selected_brushes_for_transaction(runtime, entry);
+        else
+            select_editor_brush_for_transaction(runtime, entry);
+        return;
+    }
+
+    if (SDL_strcmp(entry->command, "duplicate") == 0)
+    {
+        if (forward)
+            select_editor_brush_for_transaction(runtime, entry);
+        else
+            remove_editor_selected_brushes_for_transaction(runtime, entry);
+        return;
+    }
+
+    if (SDL_strcmp(entry->command, "create") == 0)
+    {
+        if (!forward)
+            remove_editor_selected_brushes_for_transaction(runtime, entry);
+        return;
+    }
+
+    refresh_editor_selected_brushes_for_transaction(runtime, entry);
+}
+
 static bool delete_editor_floor_fill_brushes(brush_world_runtime *world_runtime, const char *brush_name, float low_y,
                                              float high_y)
 {
@@ -1125,16 +1269,38 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
         editor_selection_matches_transaction_face(&runtime->editor_active_selection, entry);
 
     if (SDL_strcmp(entry->command, "delete") == 0)
-        return apply_editor_brush_delete(runtime, entry, forward);
+    {
+        if (forward)
+            sync_editor_selection_after_transaction(runtime, entry, forward);
+        if (!apply_editor_brush_delete(runtime, entry, forward))
+            return false;
+        if (!forward)
+            sync_editor_selection_after_transaction(runtime, entry, forward);
+        return true;
+    }
     if (SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "duplicate") == 0)
-        return apply_editor_brush_create(runtime, entry, forward);
+    {
+        if (!forward)
+            sync_editor_selection_after_transaction(runtime, entry, forward);
+        if (!apply_editor_brush_create(runtime, entry, forward))
+            return false;
+        if (forward)
+            sync_editor_selection_after_transaction(runtime, entry, forward);
+        return true;
+    }
     if (SDL_strcmp(entry->command, "sector_floor") == 0)
-        return apply_editor_brush_sector_floor(runtime, entry, forward);
+    {
+        if (!apply_editor_brush_sector_floor(runtime, entry, forward))
+            return false;
+        sync_editor_selection_after_transaction(runtime, entry, forward);
+        return true;
+    }
     if (SDL_strcmp(entry->command, "paint") == 0)
     {
         if (!apply_editor_brush_paint(runtime, entry, forward))
             return false;
         update_active_editor_selection_material_for_transaction(runtime, entry, forward, active_face_matches);
+        sync_editor_selection_after_transaction(runtime, entry, forward);
         return true;
     }
     if (SDL_strcmp(entry->command, "resize") == 0 || SDL_strcmp(entry->command, "extrude") == 0)
@@ -1142,6 +1308,7 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
         if (!apply_editor_brush_face_resize(runtime, entry, forward))
             return false;
         resize_active_editor_selection_for_transaction(runtime, entry, forward, active_face_matches);
+        sync_editor_selection_after_transaction(runtime, entry, forward);
         return true;
     }
     if (SDL_strcmp(entry->command, "rotate_y") == 0)
@@ -1150,6 +1317,7 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
         if (!apply_editor_brush_rotate_y(runtime, entry, quarter_turns))
             return false;
         update_active_editor_selection_material_for_transaction(runtime, entry, forward, active_element_matches);
+        sync_editor_selection_after_transaction(runtime, entry, forward);
         return true;
     }
 
@@ -1157,6 +1325,7 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
     if (!apply_editor_brush_translate(runtime, entry, offset))
         return false;
     translate_active_editor_selection_for_transaction(runtime, entry, offset, active_element_matches);
+    sync_editor_selection_after_transaction(runtime, entry, forward);
     return true;
 }
 
