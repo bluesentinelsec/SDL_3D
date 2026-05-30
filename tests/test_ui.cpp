@@ -219,6 +219,7 @@ TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
     root.height_mode = SLAYER3D_UI_LAYOUT_SIZE_FIXED;
     root.rect = {10.0f, 20.0f, 200.0f, 80.0f};
     root.padding = 5.0f;
+    root.layer = 110;
     ASSERT_TRUE(slayer3d_ui_layout_add_node(layout, &root));
 
     slayer3d_ui_layout_node_desc button{};
@@ -239,6 +240,7 @@ TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
     const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_region_at(layout, 0);
     ASSERT_NE(hit, nullptr);
     EXPECT_STREQ(hit->id, "button");
+    EXPECT_EQ(hit->layer, 111);
     EXPECT_FLOAT_EQ(hit->rect.x, resolved->rect.x);
     EXPECT_FLOAT_EQ(hit->rect.y, resolved->rect.y);
     EXPECT_FLOAT_EQ(hit->rect.w, resolved->rect.w);
@@ -246,6 +248,15 @@ TEST(SLAYER3DUI, RetainedFlatListsUseResolvedRects)
 
     ASSERT_EQ(slayer3d_ui_layout_hit_test(layout, 30.0f, 40.0f), hit);
     EXPECT_EQ(slayer3d_ui_layout_hit_test(layout, 5.0f, 5.0f), nullptr);
+
+    const slayer3d_ui_layout_render_command *panel_render = slayer3d_ui_layout_render_command_at(layout, 0);
+    const slayer3d_ui_layout_render_command *button_render = slayer3d_ui_layout_render_command_at(layout, 1);
+    ASSERT_NE(panel_render, nullptr);
+    ASSERT_NE(button_render, nullptr);
+    EXPECT_STREQ(panel_render->id, "panel");
+    EXPECT_STREQ(button_render->id, "button");
+    EXPECT_EQ(panel_render->layer, 110);
+    EXPECT_EQ(button_render->layer, 111);
 
     slayer3d_ui_layout_destroy(layout);
 }

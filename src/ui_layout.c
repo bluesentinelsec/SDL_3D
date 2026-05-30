@@ -21,6 +21,7 @@ typedef struct ui_layout_node
     float padding;
     float gap;
     int layer;
+    int resolved_layer;
     bool interactive;
     char text[SLAYER3D_UI_LAYOUT_TEXT_MAX];
     char font[SLAYER3D_UI_LAYOUT_FONT_MAX];
@@ -282,6 +283,7 @@ bool slayer3d_ui_layout_add_node(slayer3d_ui_layout_model *model, const slayer3d
     node->padding = desc->padding;
     node->gap = desc->gap;
     node->layer = desc->layer;
+    node->resolved_layer = desc->layer;
     ui_layout_copy_text(node->text, desc->text);
     ui_layout_copy_font(node->font, desc->font);
     ui_layout_copy_action(node->action, desc->action);
@@ -427,6 +429,7 @@ static bool ui_layout_resolve_children(slayer3d_ui_layout_model *model, int pare
 
         child->resolved = true;
         child->resolving = false;
+        child->resolved_layer = SDL_max(child->layer, parent->resolved_layer + 1);
         if (!ui_layout_resolve_children(model, i, viewport_w, viewport_h))
             return false;
     }
@@ -453,6 +456,7 @@ static bool ui_layout_resolve_node(slayer3d_ui_layout_model *model, int index, f
         node->resolved_rect.y = node->local_rect.y;
         node->resolved_rect.w = ui_layout_node_width(node, viewport_w);
         node->resolved_rect.h = ui_layout_node_height(node, viewport_h);
+        node->resolved_layer = node->layer;
         node->resolved = true;
         node->resolving = false;
         return ui_layout_resolve_children(model, index, viewport_w, viewport_h);
@@ -475,7 +479,7 @@ static void ui_layout_store_resolved_nodes(slayer3d_ui_layout_model *model)
         resolved->type = node->type;
         resolved->axis = node->axis;
         resolved->rect = node->resolved_rect;
-        resolved->layer = node->layer;
+        resolved->layer = node->resolved_layer;
         resolved->interactive = node->interactive;
         ui_layout_copy_text(resolved->text, node->text);
         ui_layout_copy_font(resolved->font, node->font);
@@ -620,7 +624,7 @@ static bool ui_layout_compile_dropdown(slayer3d_ui_layout_model *model, const ui
 
     char popup_id[SLAYER3D_UI_LAYOUT_ID_MAX];
     SDL_snprintf(popup_id, sizeof(popup_id), "%s.popup", node->id);
-    const int popup_layer = node->layer + UI_LAYOUT_POPUP_LAYER_OFFSET;
+    const int popup_layer = node->resolved_layer + UI_LAYOUT_POPUP_LAYER_OFFSET;
     const slayer3d_ui_layout_rect popup_rect = ui_layout_dropdown_popup_rect(model, node);
     ui_layout_store_render_command(model, popup_id, node->id, SLAYER3D_UI_LAYOUT_NODE_PANEL, popup_rect, popup_layer,
                                    "", node->font, false, true, -1, (slayer3d_color){0}, false, 0.0f,
