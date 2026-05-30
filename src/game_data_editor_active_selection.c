@@ -219,6 +219,7 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
     const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
     const SDL_Keymod modifiers = SDL_GetModState();
     const bool y_axis_lock = (modifiers & SDL_KMOD_ALT) != 0;
+    const bool duplicate_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
     const bool can_start_from_hover = editor_selection_is_selectable_brush(hover_selection);
     const bool can_start_y_axis_drag =
         y_axis_lock && editor_selected_brushes_active_for_scene(runtime) && runtime->editor_selected_brush_count > 0;
@@ -231,18 +232,24 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
         {
             const slayer3d_game_data_editor_selection resolved_hover =
                 resolved_editor_selection(runtime, hover_selection);
-            if (!additive)
+            if (!additive || duplicate_modifier)
                 clear_editor_selected_brushes(runtime);
             if (!add_editor_selected_brush(runtime, &resolved_hover))
                 return false;
             update_active_editor_selection_from_selected_brushes(runtime);
         }
+        if (duplicate_modifier && runtime->editor_selected_brush_count > 0)
+            (void)slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                                       false);
         SDL_zero(*drag);
         drag->active = true;
         drag->axis_lock_y = y_axis_lock;
+        drag->duplicate_drag = duplicate_modifier;
         drag->scene = slayer3d_game_data_active_scene(runtime);
-        const slayer3d_game_data_editor_selection resolved = resolved_editor_selection(
-            runtime, can_start_from_hover ? hover_selection : &runtime->editor_active_selection);
+        const slayer3d_game_data_editor_selection *drag_selection =
+            duplicate_modifier ? &runtime->editor_active_selection
+                               : (can_start_from_hover ? hover_selection : &runtime->editor_active_selection);
+        const slayer3d_game_data_editor_selection resolved = resolved_editor_selection(runtime, drag_selection);
         drag->start_point = resolved.hit ? resolved.point : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
         drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
         (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
@@ -318,6 +325,14 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
 
     const SDL_Keymod modifiers = SDL_GetModState();
     const bool transform_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) != 0;
+    const bool duplicate_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+    if (!vertex_mode && duplicate_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_D))
+    {
+        (void)slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), true);
+        if (out_changed != NULL)
+            *out_changed = true;
+        return true;
+    }
     if (!vertex_mode && (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_HOME) ||
                          (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT))))
     {
