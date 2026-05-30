@@ -662,8 +662,8 @@ static bool apply_editor_brush_paint(slayer3d_game_data_runtime *runtime, const 
     return false;
 }
 
-static bool apply_editor_brush_face_resize(slayer3d_game_data_runtime *runtime,
-                                           const editor_command_transaction_entry *entry, bool forward)
+static bool apply_editor_brush_face_resize(slayer3d_game_data_runtime *runtime, editor_command_transaction_entry *entry,
+                                           bool forward)
 {
     if (runtime == NULL || entry == NULL || entry->world_name == NULL || entry->element_name == NULL ||
         entry->face_index < 0)
@@ -675,20 +675,49 @@ static bool apply_editor_brush_face_resize(slayer3d_game_data_runtime *runtime,
     const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
                                      ? entry->element_stable_id
                                      : entry->element_name;
-    slayer3d_vec3 face_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-    int face_index = -1;
     if (world_runtime == NULL || !world_runtime->editor_has_source_model)
         return false;
 
+    if (!forward)
+    {
+        if (!entry->has_source_box_snapshot)
+            return false;
+        const int current_index = editor_brush_world_find_source_box_index(world_runtime, brush_identity);
+        if (current_index >= 0 && !editor_brush_world_remove_source_box_at_index(world_runtime, current_index, NULL, 0))
+            return false;
+        const int restored_index = SDL_clamp(entry->brush_index, 0, world_runtime->editor_source_box_count);
+        if (!editor_brush_world_insert_source_box_at_index(world_runtime, restored_index, &entry->source_box_snapshot,
+                                                           NULL, 0))
+        {
+            return false;
+        }
+        editor_brush_world_mark_dirty(world_runtime);
+        return true;
+    }
+
+    if (!entry->has_source_box_snapshot)
+    {
+        if (!editor_brush_world_copy_source_box_by_identity(world_runtime, brush_identity, &entry->source_box_snapshot,
+                                                            &entry->brush_index, NULL, 0))
+        {
+            return false;
+        }
+        entry->has_source_box_snapshot = true;
+    }
+
+    slayer3d_vec3 face_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    int face_index = -1;
     if (!editor_brush_world_source_box_face_normal_for_identity(world_runtime, brush_identity, entry->face_index,
                                                                 entry->face_stable_id, &face_index, &face_normal))
     {
         return false;
     }
-    const float distance =
-        slayer3d_vec3_dot(face_normal, forward ? entry->offset : slayer3d_vec3_scale(entry->offset, -1.0f));
-    if (!editor_brush_world_resize_source_box_face(world_runtime, brush_identity, face_normal, distance, NULL, 0))
+    const float distance = slayer3d_vec3_dot(face_normal, entry->offset);
+    if (!editor_brush_world_resize_source_face(world_runtime, brush_identity, entry->face_index, entry->face_stable_id,
+                                               distance, NULL, NULL, 0))
+    {
         return false;
+    }
     editor_brush_world_mark_dirty(world_runtime);
     return true;
 }

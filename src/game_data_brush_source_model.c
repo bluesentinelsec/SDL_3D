@@ -41,6 +41,10 @@ typedef struct source_convex_plane
     int source_face_index;
 } source_convex_plane;
 
+static bool source_box_to_runtime_brush(const brush_world_runtime *world_runtime,
+                                        const editor_brush_source_box_runtime *box, slayer3d_game_data_brush *out_brush,
+                                        char *error_buffer, int error_buffer_size);
+
 static bool source_vec3i(yyjson_val *object, const char *key, int out_values[3])
 {
     yyjson_val *value = obj_get(object, key);
@@ -199,6 +203,23 @@ static int source_convex_rebuilt_face_index_for_identity(const editor_brush_sour
     return -1;
 }
 
+static int runtime_brush_face_index_for_identity(const slayer3d_game_data_brush *brush, const char *face_identity,
+                                                 int fallback_face_index)
+{
+    if (brush == NULL)
+        return -1;
+    if (face_identity != NULL && face_identity[0] != '\0')
+    {
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            const char *stable_id = brush->faces[face_index].editor.stable_id;
+            if (stable_id != NULL && SDL_strcmp(stable_id, face_identity) == 0)
+                return face_index;
+        }
+    }
+    return fallback_face_index >= 0 && fallback_face_index < brush->face_count ? fallback_face_index : -1;
+}
+
 int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
                                                           const char *brush_identity, int fallback_face_index,
                                                           const char *face_identity)
@@ -251,8 +272,28 @@ bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_ru
     if (out_face_index != NULL)
         *out_face_index = face_index;
     if (out_normal != NULL)
-        *out_normal = source_box_face_normal_for_index(face_index);
-    return face_index >= 0;
+        *out_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (face_index < 0)
+        return false;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+    if (source_index < 0)
+        return false;
+
+    slayer3d_game_data_brush brush;
+    if (!source_box_to_runtime_brush(world_runtime, &world_runtime->editor_source_boxes[source_index], &brush, NULL, 0))
+    {
+        if (out_normal != NULL)
+            *out_normal = source_box_face_normal_for_index(face_index);
+        return face_index >= 0 && face_index < (int)SDL_arraysize(editor_brush_source_box_face_keys);
+    }
+
+    const int runtime_face_index = runtime_brush_face_index_for_identity(&brush, face_identity, face_index);
+    const bool ok = runtime_face_index >= 0 && runtime_face_index < brush.face_count;
+    if (ok && out_normal != NULL)
+        *out_normal = slayer3d_vec3_normalize(brush.faces[runtime_face_index].normal);
+    editor_brush_source_free_runtime_brush(&brush);
+    return ok;
 }
 
 bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *world_runtime,
@@ -3070,6 +3111,189 @@ bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtim
         return false;
     }
     return true;
+}
+
+static bool source_face_resize_desc(const brush_world_runtime *world_runtime, const char *brush_name,
+                                    int fallback_face_index, const char *face_identity, float distance,
+                                    editor_brush_source_vertex_operation_desc *out_desc,
+                                    slayer3d_game_data_brush *out_brush, int *out_original_vertex_count,
+                                    char *error_buffer, int error_buffer_size)
+{
+    if (out_desc != NULL)
+        SDL_zero(*out_desc);
+    if (out_brush != NULL)
+        SDL_zero(*out_brush);
+    if (out_original_vertex_count != NULL)
+        *out_original_vertex_count = 0;
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || brush_name == NULL ||
+        brush_name[0] == '\0' || out_desc == NULL || out_brush == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed face resize requires a source brush");
+        return false;
+    }
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    editor_brush_source_vertex_model model;
+    if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
+                                                    error_buffer_size) ||
+        !source_box_to_runtime_brush(world_runtime, box, out_brush, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+
+    const int source_face_index = editor_brush_world_source_box_face_index_for_identity(
+        world_runtime, brush_name, fallback_face_index, face_identity);
+    const int runtime_face_index = runtime_brush_face_index_for_identity(out_brush, face_identity, source_face_index);
+    if (source_face_index < 0 || runtime_face_index < 0 || runtime_face_index >= out_brush->face_count)
+    {
+        editor_brush_source_free_runtime_brush(out_brush);
+        set_error(error_buffer, error_buffer_size, "source brush face not found");
+        return false;
+    }
+    int model_face_index = source_face_index;
+    if (box->vertex_count > 0)
+    {
+        model_face_index = -1;
+        const slayer3d_game_data_brush_face *runtime_face = &out_brush->faces[runtime_face_index];
+        for (int face_index = 0; face_index < model.face_count; ++face_index)
+        {
+            const editor_brush_source_face_ref *face = &model.faces[face_index];
+            bool matches = face->vertex_count > 0;
+            for (int vertex = 0; matches && vertex < face->vertex_count; ++vertex)
+            {
+                const int vertex_index = face->vertex_indices[vertex];
+                if (vertex_index < 0 || vertex_index >= model.vertex_count)
+                {
+                    matches = false;
+                    break;
+                }
+                const slayer3d_vec3 point =
+                    source_convex_vertex_meters(world_runtime, &model.vertices[vertex_index].coord[0]);
+                matches = SDL_fabsf(slayer3d_vec3_dot(runtime_face->normal, point) - runtime_face->distance) <= 0.001f;
+            }
+            if (matches)
+            {
+                model_face_index = face_index;
+                break;
+            }
+        }
+    }
+    if (model_face_index < 0 || model_face_index >= model.face_count)
+    {
+        editor_brush_source_free_runtime_brush(out_brush);
+        set_error(error_buffer, error_buffer_size, "source brush face vertices not found");
+        return false;
+    }
+    if (out_original_vertex_count != NULL)
+        *out_original_vertex_count = model.vertex_count;
+
+    const int distance_units = editor_brush_source_units_from_meters(world_runtime, distance);
+    const slayer3d_vec3 normal = slayer3d_vec3_normalize(out_brush->faces[runtime_face_index].normal);
+    int delta[3] = {
+        (int)SDL_lroundf(normal.x * (float)distance_units),
+        (int)SDL_lroundf(normal.y * (float)distance_units),
+        (int)SDL_lroundf(normal.z * (float)distance_units),
+    };
+    if (delta[0] == 0 && delta[1] == 0 && delta[2] == 0)
+    {
+        editor_brush_source_free_runtime_brush(out_brush);
+        set_error(error_buffer, error_buffer_size, "source brush face resize distance did not reach the source grid");
+        return false;
+    }
+
+    out_desc->brush_identity = brush_name;
+    out_desc->type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY;
+    const editor_brush_source_face_ref *face = &model.faces[model_face_index];
+    for (int i = 0; i < face->vertex_count; ++i)
+    {
+        const int vertex_index = face->vertex_indices[i];
+        if (vertex_index < 0 || vertex_index >= model.vertex_count ||
+            out_desc->vertex_index_count >= SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+        {
+            editor_brush_source_free_runtime_brush(out_brush);
+            set_error(error_buffer, error_buffer_size, "source brush face resize vertex index out of range");
+            return false;
+        }
+        out_desc->vertex_indices[out_desc->vertex_index_count] = vertex_index;
+        for (int axis = 0; axis < 3; ++axis)
+            out_desc->coords[out_desc->vertex_index_count][axis] =
+                model.vertices[vertex_index].coord[axis] + delta[axis];
+        out_desc->vertex_index_count++;
+    }
+    return true;
+}
+
+bool editor_brush_world_preview_resize_source_face(const brush_world_runtime *world_runtime, const char *brush_name,
+                                                   int fallback_face_index, const char *face_identity, float distance,
+                                                   editor_brush_source_vertex_operation_result *out_result,
+                                                   char *error_buffer, int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    editor_brush_source_vertex_operation_desc desc;
+    slayer3d_game_data_brush brush;
+    int original_vertex_count = 0;
+    if (!source_face_resize_desc(world_runtime, brush_name, fallback_face_index, face_identity, distance, &desc, &brush,
+                                 &original_vertex_count, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&brush);
+    if (!editor_brush_world_preview_source_vertex_operation(world_runtime, &desc, out_result, error_buffer,
+                                                            error_buffer_size))
+    {
+        return false;
+    }
+    if (out_result != NULL && out_result->valid && out_result->vertex_count != original_vertex_count)
+    {
+        editor_brush_source_free_runtime_brush(&out_result->brush);
+        source_vertex_operation_set_failure(out_result, "source brush face resize would collapse vertices");
+        set_error(error_buffer, error_buffer_size, "source brush face resize would collapse vertices");
+        return false;
+    }
+    return true;
+}
+
+bool editor_brush_world_resize_source_face(brush_world_runtime *world_runtime, const char *brush_name,
+                                           int fallback_face_index, const char *face_identity, float distance,
+                                           editor_brush_source_vertex_operation_result *out_result, char *error_buffer,
+                                           int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    editor_brush_source_vertex_operation_desc desc;
+    slayer3d_game_data_brush brush;
+    int original_vertex_count = 0;
+    if (!source_face_resize_desc(world_runtime, brush_name, fallback_face_index, face_identity, distance, &desc, &brush,
+                                 &original_vertex_count, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&brush);
+    editor_brush_source_vertex_operation_result result;
+    if (!editor_brush_world_preview_source_vertex_operation(world_runtime, &desc, &result, error_buffer,
+                                                            error_buffer_size))
+    {
+        return false;
+    }
+    if (result.valid && result.vertex_count != original_vertex_count)
+    {
+        editor_brush_source_free_runtime_brush(&result.brush);
+        if (out_result != NULL)
+            source_vertex_operation_set_failure(out_result, "source brush face resize would collapse vertices");
+        set_error(error_buffer, error_buffer_size, "source brush face resize would collapse vertices");
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&result.brush);
+    return editor_brush_world_apply_source_vertex_operation(world_runtime, &desc, out_result, error_buffer,
+                                                            error_buffer_size);
 }
 
 bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *world_runtime,

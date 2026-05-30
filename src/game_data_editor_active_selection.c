@@ -71,11 +71,28 @@ static void editor_set_face_drag_state(slayer3d_game_data_runtime *runtime, bool
                                  (SDL_GetModState() & SDL_KMOD_SHIFT) != 0);
 }
 
-static void editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
+static bool editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
                                            const slayer3d_game_data_editor_selection *selection, float distance)
 {
     if (runtime == NULL || selection == NULL || !selection->hit || selection->face_index < 0)
-        return;
+        return false;
+
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    const char *brush_identity = editor_metadata_stable_id(selection->element_editor);
+    if (brush_identity == NULL || brush_identity[0] == '\0')
+        brush_identity = selection->element_name;
+    const char *face_identity = editor_metadata_stable_id(selection->face_editor);
+    editor_brush_source_vertex_operation_result result;
+    char error[256];
+    SDL_zeroa(error);
+    if (!editor_brush_world_preview_resize_source_face(world_runtime, brush_identity, selection->face_index,
+                                                       face_identity, distance, &result, error, sizeof(error)))
+    {
+        clear_editor_command_preview(runtime);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
+                                       error[0] != '\0' ? error : "brush face resize invalid");
+        return false;
+    }
 
     editor_command_preview_state *preview = &runtime->editor_command_preview;
     SDL_zero(*preview);
@@ -93,10 +110,11 @@ static void editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
     preview->material_index = -1;
     preview->previous_material_index = -1;
     preview->offset = slayer3d_vec3_scale(slayer3d_vec3_normalize(selection->normal), distance);
-    preview->has_bounds = selection->has_bounds;
-    preview->bounds = selection->has_bounds
-                          ? editor_resized_preview_bounds(selection->bounds, selection->normal, distance)
-                          : (slayer3d_bounding_box){selection->point, selection->point};
+    preview->has_bounds = result.brush.has_bounds;
+    preview->bounds =
+        result.brush.has_bounds ? result.brush.bounds : (slayer3d_bounding_box){selection->point, selection->point};
+    editor_brush_source_free_runtime_brush(&result.brush);
+    return true;
 }
 
 static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
@@ -104,13 +122,16 @@ static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
 {
     if (out_consumed != NULL)
         *out_consumed = false;
-    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_face(runtime))
+    if (runtime == NULL || runtime->scene_state == NULL ||
+        !(editor_mode_is_face(runtime) || editor_mode_is_brush(runtime)))
     {
         editor_set_face_drag_state(runtime, false, false);
         return true;
     }
 
-    const bool can_resize_face = editor_selection_is_selectable_brush(hover_selection) &&
+    const bool brush_face_resize_modifier =
+        editor_mode_is_face(runtime) || (editor_mode_is_brush(runtime) && (SDL_GetModState() & SDL_KMOD_SHIFT) != 0);
+    const bool can_resize_face = brush_face_resize_modifier && editor_selection_is_selectable_brush(hover_selection) &&
                                  hover_selection->face_index >= 0 && hover_selection->has_bounds;
     slayer3d_input_manager *input = runtime_input(runtime);
     if (input == NULL)
@@ -155,8 +176,7 @@ static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
     const float distance = editor_snap_delta((mouse_y - drag->start_mouse_y) * units_per_pixel, drag->grid_size);
     if (SDL_fabsf(distance) > 0.000001f)
     {
-        editor_set_face_resize_preview(runtime, &drag->face_selection, distance);
-        drag->moved = true;
+        drag->moved = editor_set_face_resize_preview(runtime, &drag->face_selection, distance);
     }
     editor_set_face_drag_state(runtime, true, true);
 

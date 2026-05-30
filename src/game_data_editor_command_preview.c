@@ -273,6 +273,32 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
             ? (face_resize ? editor_resized_preview_bounds(selection.bounds, selection.normal, face_distance)
                            : translated_bounds(selection.bounds, offset))
             : (slayer3d_bounding_box){selection.point, selection.point};
+    editor_brush_source_vertex_operation_result source_face_preview;
+    SDL_zero(source_face_preview);
+    if (face_resize && selection.world_name != NULL)
+    {
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection.world_name);
+        const char *brush_identity = editor_metadata_stable_id(selection.element_editor);
+        if (brush_identity == NULL || brush_identity[0] == '\0')
+            brush_identity = selection.element_name;
+        const char *face_identity = editor_metadata_stable_id(selection.face_editor);
+        char error[256];
+        SDL_zeroa(error);
+        if (editor_brush_world_preview_resize_source_face(world_runtime, brush_identity, selection.face_index,
+                                                          face_identity, face_distance, &source_face_preview, error,
+                                                          sizeof(error)))
+        {
+            if (source_face_preview.brush.has_bounds)
+                bounds = source_face_preview.brush.bounds;
+        }
+        else
+        {
+            clear_editor_command_preview(runtime);
+            publish_editor_command_preview(runtime, outputs, false, command, target,
+                                           error[0] != '\0' ? error : "invalid source face resize", NULL, NULL);
+            return true;
+        }
+    }
 
     editor_command_preview_state *preview = &runtime->editor_command_preview;
     SDL_zero(*preview);
@@ -298,6 +324,7 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
     preview->offset = offset;
     preview->has_bounds = true;
     preview->bounds = bounds;
+    editor_brush_source_free_runtime_brush(&source_face_preview.brush);
 
     slayer3d_properties *payload = slayer3d_game_data_create_editor_selection_payload(&selection);
     char message[256];

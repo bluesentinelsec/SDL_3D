@@ -165,6 +165,11 @@ extern "C"
                                                                 const char *brush_identity, int fallback_face_index,
                                                                 const char *face_identity, int *out_face_index,
                                                                 slayer3d_vec3 *out_normal);
+    void free_editor_brush_source_box_runtime(editor_brush_source_box_runtime *box);
+    bool editor_brush_world_copy_source_box_by_identity(const brush_world_runtime *world_runtime,
+                                                        const char *brush_identity,
+                                                        editor_brush_source_box_runtime *out_box, int *out_index,
+                                                        char *error_buffer, int error_buffer_size);
     bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                                  slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
     bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime,
@@ -173,6 +178,15 @@ extern "C"
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
+    bool editor_brush_world_preview_resize_source_face(const brush_world_runtime *world_runtime, const char *brush_name,
+                                                       int fallback_face_index, const char *face_identity,
+                                                       float distance,
+                                                       editor_brush_source_vertex_operation_result *out_result,
+                                                       char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_resize_source_face(brush_world_runtime *world_runtime, const char *brush_name,
+                                               int fallback_face_index, const char *face_identity, float distance,
+                                               editor_brush_source_vertex_operation_result *out_result,
+                                               char *error_buffer, int error_buffer_size);
     bool editor_brush_world_build_source_convex_brush_from_vertices(const brush_world_runtime *world_runtime,
                                                                     const char *brush_identity, const int *vertices,
                                                                     int vertex_count,
@@ -24326,6 +24340,43 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
     ASSERT_TRUE(world.brushes[0].has_bounds);
     EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.1f, 0.001f);
     EXPECT_NEAR(world.brushes[0].bounds.max.x, 8.2f, 0.001f);
+
+    SDL_zeroa(error);
+    editor_brush_source_vertex_operation_result face_preview{};
+    ASSERT_TRUE(editor_brush_world_preview_resize_source_face(
+        world_runtime, "source.box.001", 0, "source.box.001.face.px", 0.1f, &face_preview, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(face_preview.valid);
+    ASSERT_TRUE(face_preview.brush.has_bounds);
+    EXPECT_NEAR(face_preview.brush.bounds.max.x, 8.3f, 0.001f);
+    editor_brush_source_free_runtime_brush(&face_preview.brush);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 8.2f, 0.001f) << "face resize preview must not mutate";
+
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_resize_source_face(world_runtime, "source.box.001", 0, "source.box.001.face.px",
+                                                      0.1f, &face_preview, error, sizeof(error)))
+        << error;
+    editor_brush_source_free_runtime_brush(&face_preview.brush);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.1f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 8.3f, 0.001f);
+
+    editor_brush_source_box_runtime resized_source{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, "source.box.001", &resized_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(resized_source.vertex_count, 8) << "face push/pull should persist through source vertices";
+    free_editor_brush_source_box_runtime(&resized_source);
+
+    SDL_zeroa(error);
+    EXPECT_FALSE(editor_brush_world_preview_resize_source_face(
+        world_runtime, "source.box.001", 0, "source.box.001.face.px", -8.2f, &face_preview, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("zero-volume"), std::string::npos) << error;
+    editor_brush_source_free_runtime_brush(&face_preview.brush);
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 8.3f, 0.001f) << "invalid face resize must be atomic";
 
     const char rotate_json[] = R"json({
   "schema": "slayer3d.fragment.v0",

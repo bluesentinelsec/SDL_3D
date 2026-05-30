@@ -114,6 +114,14 @@ bool editor_brush_world_source_box_face_normal_for_identity(const brush_world_ru
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size);
+bool editor_brush_world_preview_resize_source_face(const brush_world_runtime *world_runtime, const char *brush_name,
+                                                   int fallback_face_index, const char *face_identity, float distance,
+                                                   editor_brush_source_vertex_operation_result *out_result,
+                                                   char *error_buffer, int error_buffer_size);
+bool editor_brush_world_resize_source_face(brush_world_runtime *world_runtime, const char *brush_name,
+                                           int fallback_face_index, const char *face_identity, float distance,
+                                           editor_brush_source_vertex_operation_result *out_result, char *error_buffer,
+                                           int error_buffer_size);
 bool editor_brush_world_update_source_box_bounds_batch(brush_world_runtime *world_runtime,
                                                        const editor_source_box_bounds_update *updates, int update_count,
                                                        char *error_buffer, int error_buffer_size);
