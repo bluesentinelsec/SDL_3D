@@ -2015,6 +2015,11 @@ static slayer3d_color retained_ui_command_fill(const slayer3d_ui_layout_render_c
 {
     if (command == NULL)
         return (slayer3d_color){0, 0, 0, 0};
+    if (command->selected && command->option_index < 0 &&
+        (command->type == SLAYER3D_UI_LAYOUT_NODE_BUTTON || command->type == SLAYER3D_UI_LAYOUT_NODE_DROPDOWN))
+    {
+        return (slayer3d_color){38, 104, 56, 255};
+    }
     if (command->has_fill_color)
         return command->fill_color;
     if (command->popup)
