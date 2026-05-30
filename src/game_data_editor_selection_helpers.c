@@ -8,6 +8,11 @@
 #include <SDL3/SDL_keyboard.h>
 #include <SDL3/SDL_stdinc.h>
 
+static bool editor_selection_additive_modifier_active(void)
+{
+    return (SDL_GetModState() & (SDL_KMOD_SHIFT | SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
+}
+
 bool editor_selection_is_selectable_brush(const slayer3d_game_data_editor_selection *selection)
 {
     return selection != NULL && selection->hit && selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD &&
@@ -111,7 +116,7 @@ void update_active_editor_selection_from_selected_brushes(slayer3d_game_data_run
 bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime,
                                       const slayer3d_game_data_editor_selection *hover_selection)
 {
-    const bool shift = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+    const bool additive = editor_selection_additive_modifier_active();
     if (!editor_selection_is_selectable_brush(hover_selection))
     {
         if (hover_selection != NULL && hover_selection->hit &&
@@ -122,7 +127,7 @@ bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime,
             runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
             return true;
         }
-        if (!shift)
+        if (!additive)
             clear_editor_active_selection(runtime);
         return true;
     }
@@ -135,7 +140,7 @@ bool editor_select_mode_primary_click(slayer3d_game_data_runtime *runtime,
         return true;
     }
 
-    if (!shift)
+    if (!additive)
         clear_editor_selected_brushes(runtime);
     if (!add_editor_selected_brush(runtime, hover_selection))
         return false;
