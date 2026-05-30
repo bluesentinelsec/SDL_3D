@@ -18457,18 +18457,34 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
     slayer3d_input_process_event(input, &click);
     slayer3d_input_update(input, 2);
     const bool updated_after_shift_click = slayer3d_game_data_update_active_editor_tooling(runtime);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.axis_lock_dominant", true));
+    const int added_y = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1);
+
+    SDL_SetModState(SDL_KMOD_SHIFT | SDL_KMOD_CTRL);
+    motion.motion.y -= 48.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.axis_lock_y", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.axis_lock_dominant", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1), added_y + 1000);
+
     click.type = SDL_EVENT_MOUSE_BUTTON_UP;
     slayer3d_input_process_event(input, &click);
-    slayer3d_input_update(input, 3);
+    slayer3d_input_update(input, 4);
     SDL_SetModState(SDL_KMOD_NONE);
     ASSERT_TRUE(updated_after_shift_click);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
 
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.valid", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.added_count", 0), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.vertex_count", 0), 9);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.preview.active", true));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "added source vertex");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "moved selected vertices");
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
     ASSERT_NE(world_runtime, nullptr);

@@ -1476,10 +1476,10 @@ static bool source_convex_build_planes(const brush_world_runtime *world_runtime,
                 }
             }
         }
-        if (incident_planes < 3)
+        if (incident_planes <= 0)
         {
             set_error(error_buffer, error_buffer_size,
-                      "source vertex rebuild would discard a vertex outside the convex hull");
+                      "source vertex rebuild would discard a vertex outside the convex surface");
             return false;
         }
     }
