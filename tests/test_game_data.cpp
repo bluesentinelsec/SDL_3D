@@ -22368,18 +22368,21 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
         runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
         << error;
     ASSERT_NE(export_json, nullptr);
-    EXPECT_NE(std::string(export_json, export_size).find("\"editor_brush_sources\""), std::string::npos);
-    EXPECT_NE(std::string(export_json, export_size).find("\"room.sky.ceiling\""), std::string::npos);
+    const std::string exported_graybox(export_json, export_size);
+    SDL_free(export_json);
+    export_json = nullptr;
+    export_size = exported_graybox.size();
+    EXPECT_NE(exported_graybox.find("\"editor_brush_sources\""), std::string::npos);
+    EXPECT_NE(exported_graybox.find("\"room.sky.ceiling\""), std::string::npos);
 
     slayer3d_game_data_destroy(runtime);
     runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", export_json,
-                                                                     export_size, "/tmp/mvp-graybox-roundtrip.json",
-                                                                     error, sizeof(error)))
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", exported_graybox.c_str(), exported_graybox.size(),
+        "/tmp/mvp-graybox-roundtrip.json", error, sizeof(error)))
         << error;
-    SDL_free(export_json);
 
     SDL_zero(diagnostics);
     ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
@@ -22418,7 +22421,96 @@ TEST(GameDataRuntime, EditableLevelFragmentMvpGrayboxRoundTripsSourceOnlyForTest
     SDL_free(manifest_json);
 
     slayer3d_game_data_destroy(runtime);
+    runtime = nullptr;
     slayer3d_game_session_destroy(session);
+    session = nullptr;
+
+    const std::filesystem::path save_dir = unique_test_dir("mvp_graybox_acceptance");
+    const std::filesystem::path save_path = save_dir / "level.fragment.json";
+    const std::string root = dojo_path.parent_path().string();
+    const std::string asset_path = std::string("asset://") + dojo_path.filename().string();
+
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", exported_graybox.c_str(), exported_graybox.size(),
+        "/tmp/mvp-graybox-save-source.json", error, sizeof(error)))
+        << error;
+    size_t saved_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_save_editable_level_fragment_file(
+        runtime, "brush.editor_shell.target", save_path.string().c_str(), &saved_size, error, sizeof(error)))
+        << error;
+    EXPECT_GT(saved_size, 0u);
+    EXPECT_TRUE(std::filesystem::exists(save_path));
+    slayer3d_game_data_destroy(runtime);
+    runtime = nullptr;
+    slayer3d_game_session_destroy(session);
+    session = nullptr;
+
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_properties *initial_state = slayer3d_properties_create();
+    ASSERT_NE(initial_state, nullptr);
+    slayer3d_properties_set_string(initial_state, "editor.command", "open");
+    slayer3d_properties_set_string(initial_state, "editor.input.path", save_path.string().c_str());
+    slayer3d_properties_set_string(initial_state, "editor.save.path", save_path.string().c_str());
+
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.media_dir = SLAYER3D_MEDIA_DIR;
+    desc.data_asset_path = asset_path.c_str();
+    desc.mount_assets = mount_test_directory_assets;
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+    desc.initial_scene_state = initial_state;
+    desc.initial_scene_payload = initial_state;
+
+    slayer3d_data_game_runtime *host_runtime = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &host_runtime, error, sizeof(error))) << error;
+    slayer3d_properties_destroy(initial_state);
+    runtime = slayer3d_data_game_runtime_data(host_runtime);
+    ASSERT_NE(runtime, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.load.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.load.message", ""), "editable level loaded");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 15);
+    expect_compiled_brush_world_has_no_positive_coplanar_overlap(world);
+    slayer3d_game_data_brush_world_editor_state brush_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &brush_state));
+    EXPECT_STREQ(brush_state.source_path, save_path.string().c_str());
+    EXPECT_FALSE(brush_state.dirty);
+
+    SDL_zero(diagnostics);
+    ASSERT_TRUE(slayer3d_game_data_validate_editor_brush_source_model(runtime, "brush.editor_shell.target", 1,
+                                                                      &diagnostics, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(diagnostics.structurally_valid) << diagnostics.first_issue;
+    EXPECT_EQ(diagnostics.runtime_source_mismatch_count, 0);
+    EXPECT_EQ(diagnostics.compiled_face_missing_source_count, 0);
+    EXPECT_EQ(diagnostics.compiled_face_unknown_source_count, 0);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int test_run_enter_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.test_run.enter");
+    ASSERT_GE(test_run_enter_signal, 0);
+    ASSERT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.dojo");
+    slayer3d_signal_emit(bus, test_run_enter_signal, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.test_run.enter.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.test_run.enter.message", ""),
+                 "test run player start applied");
+    EXPECT_STREQ(slayer3d_game_data_active_scene(runtime), "scene.editor_shell.test_run");
+    slayer3d_registered_actor *player = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.player");
+    ASSERT_NE(player, nullptr);
+    EXPECT_NEAR(player->position.x, start.position.x, 0.001f);
+    EXPECT_NEAR(player->position.y, start.position.y, 0.001f);
+    EXPECT_NEAR(player->position.z, start.position.z, 0.001f);
+
+    slayer3d_data_game_runtime_destroy(host_runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(save_dir);
 }
 
 TEST(GameDataRuntime, EditableLevelFragmentRejectsRuntimeOnlyBrushLayout)

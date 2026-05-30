@@ -187,6 +187,30 @@ saves back to `--input` unless `--output` is supplied:
 build/debug/slayer3d_editor open --project path/to/project --input path/to/level.fragment.json
 ```
 
+For the current graybox editor workflow, the saved file is a source-backed
+editable level fragment. The editor source model is the truth: brush creation,
+movement, resizing, duplication, deletion, save/reopen, and test-run handoff all
+operate on `editor_brush_sources`, then compile runtime brush geometry from that
+source. A typical blockout loop is:
+
+```sh
+build/debug/slayer3d_editor new --project demos/editor_shell_dojo --output /tmp/level.fragment.json --overwrite
+```
+
+Inside the editor, use Brush Tool and Select mode to create and edit floors,
+walls, ceilings, pits, platforms, and corridors, place a player start, then save
+with the normal save command. Reopen the same source fragment with:
+
+```sh
+build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input /tmp/level.fragment.json
+```
+
+The editor test-run command validates the source model, warns about leaks,
+applies the selected player start, and switches into the playable test-run scene.
+Leak findings are warning-level during the graybox milestone, but source/compiled
+identity errors remain hard failures because stale runtime brush geometry must
+not become the shipped level.
+
 The manifest currently carries `data_root`, `editor_entry`, optional
 `media_root`, and optional `test_run_output`. The editor host translates those
 fields into a normal runner launch and injects `editor.command`,
