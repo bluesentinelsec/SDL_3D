@@ -202,6 +202,8 @@ target_sources(
         src/game_data_load_runtime.c
         src/game_data_lua_api.c
         src/game_data_menu_ui.c
+        src/game_data_ui_bindings.c
+        src/game_data_ui_widgets.c
         src/game_data_scene_flow_runtime.c
         src/game_data_scene_load_runtime.c
         src/game_data_scene_lookup.c
@@ -297,6 +299,7 @@ target_sources(
         src/transition.c
         src/transition_gl.c
         src/ui.c
+        src/ui_layout.c
         $<TARGET_OBJECTS:slayer3d_cgltf>
         $<TARGET_OBJECTS:slayer3d_ufbx>
         $<TARGET_OBJECTS:slayer3d_stb>

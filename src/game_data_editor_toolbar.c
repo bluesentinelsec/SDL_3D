@@ -8,6 +8,46 @@
 #include <SDL3/SDL_mouse.h>
 #include <SDL3/SDL_stdinc.h>
 
+static bool editor_retained_ui_hit(const slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
+                                   slayer3d_ui_layout_model **out_layout, const slayer3d_ui_layout_hit_region **out_hit)
+{
+    if (out_layout != NULL)
+        *out_layout = NULL;
+    if (out_hit != NULL)
+        *out_hit = NULL;
+
+    slayer3d_ui_layout_model *layout = NULL;
+    if (!slayer3d_ui_layout_create(&layout))
+        return false;
+    if (!slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
+    {
+        slayer3d_ui_layout_destroy(layout);
+        return false;
+    }
+
+    const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, mouse_x, mouse_y);
+    if (out_hit != NULL)
+        *out_hit = hit;
+    if (out_layout != NULL)
+        *out_layout = layout;
+    else
+        slayer3d_ui_layout_destroy(layout);
+    return hit != NULL;
+}
+
+static bool editor_hit_id_has_prefix(const slayer3d_ui_layout_hit_region *hit, const char *prefix)
+{
+    if (hit == NULL || prefix == NULL)
+        return false;
+    return SDL_strncmp(hit->id, prefix, SDL_strlen(prefix)) == 0;
+}
+
+static bool editor_hit_is_toolbar(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.toolbar.") ||
+           editor_hit_id_has_prefix(hit, "ui.editor_shell.tool_toolbar.");
+}
+
 bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed)
 {
     if (out_consumed != NULL)
@@ -22,11 +62,18 @@ bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_va
     if (input == NULL || !slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
         return true;
 
-    const bool over_button = editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button"));
+    slayer3d_ui_layout_model *layout = NULL;
+    const slayer3d_ui_layout_hit_region *hit = NULL;
+    (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
+    const bool over_button = (hit != NULL && SDL_strcmp(hit->action, "editor.palette.prefabs") == 0) ||
+                             editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button"));
     if (out_consumed != NULL)
         *out_consumed = over_button;
     if (!over_button || !slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT))
+    {
+        slayer3d_ui_layout_destroy(layout);
         return true;
+    }
 
     const char *active_key = json_string(widget, "active_key", "editor.palette.active");
     const char *cursor_key = json_string(widget, "cursor_key", "editor.palette.brush.cursor");
@@ -35,6 +82,54 @@ bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_va
     slayer3d_properties_set_string(runtime->scene_state, active_key, active_value);
     slayer3d_properties_set_string(runtime->scene_state, cursor_key, default_cursor);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "prefabs palette opened");
+    slayer3d_ui_layout_destroy(layout);
+    return true;
+}
+
+static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const char *action)
+{
+    const char *mode = NULL;
+    const char *tool_mode = NULL;
+    const char *message = NULL;
+    if (SDL_strcmp(action, "editor.tool.select") == 0)
+    {
+        mode = "select";
+        tool_mode = "select";
+        message = "select mode";
+    }
+    else if (SDL_strcmp(action, "editor.tool.brush") == 0)
+    {
+        mode = "brush";
+        tool_mode = "brush";
+        message = "brush tool";
+    }
+    else if (SDL_strcmp(action, "editor.tool.face") == 0)
+    {
+        mode = "face";
+        tool_mode = "face";
+        message = "face tool";
+    }
+    else if (SDL_strcmp(action, "editor.tool.vertex") == 0)
+    {
+        mode = "vertex";
+        tool_mode = "vertex";
+        message = "vertex tool";
+    }
+    else if (SDL_strcmp(action, "editor.tool.texture") == 0)
+    {
+        mode = "texture";
+        tool_mode = "paint";
+        message = "texture tool";
+    }
+    else
+    {
+        return false;
+    }
+
+    slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    clear_editor_command_preview(runtime);
     return true;
 }
 
@@ -53,6 +148,20 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
         return true;
 
     const bool clicked = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    slayer3d_ui_layout_model *layout = NULL;
+    const slayer3d_ui_layout_hit_region *hit = NULL;
+    (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
+    if (editor_hit_is_toolbar(hit))
+    {
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        if (clicked && hit->action[0] != '\0')
+            (void)editor_apply_tool_action(runtime, hit->action);
+        slayer3d_ui_layout_destroy(layout);
+        return true;
+    }
+    slayer3d_ui_layout_destroy(layout);
+
     for (size_t i = 0, count = yyjson_arr_size(buttons); i < count; ++i)
     {
         yyjson_val *button = yyjson_arr_get(buttons, i);

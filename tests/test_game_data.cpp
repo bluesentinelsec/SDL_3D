@@ -9198,6 +9198,252 @@ TEST(GameDataRuntime, RejectsInvalidEditorMetadata)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, RetainedUIWidgetsValidate)
+{
+    const std::filesystem::path dir = unique_test_dir("retained_ui_widgets");
+    write_text(dir / "retained_ui.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Retained UI Widgets", "id": "test.retained_ui", "version": "0.1.0" },
+  "world": { "name": "world.retained_ui", "kind": "fixed_screen" },
+  "ui": {
+    "widgets": [
+      {
+        "id": "toolbar.main",
+        "type": "toolbar",
+        "layout": "row",
+        "x": 0,
+        "y": 0,
+        "w": 320,
+        "h": 40,
+        "padding": 4,
+        "gap": 8,
+        "children": [
+          {
+            "id": "toolbar.file",
+            "type": "button",
+            "w": 96,
+            "h": "fill",
+            "text": "File",
+            "color": [18, 24, 32, 230],
+            "border_color": [96, 128, 180, 255],
+            "border_thickness": 2,
+            "text_color": [230, 236, 245, 255],
+            "text_scale": 0.75,
+            "align": "center",
+            "action": "editor.file",
+            "selected": true
+          },
+          {
+            "id": "toolbar.grid",
+            "type": "dropdown",
+            "w": "fill",
+            "h": "fill",
+            "layer": 10,
+            "interactive": true,
+            "label": "Grid",
+            "action": "editor.grid",
+            "options": ["Grid 0.5", "Grid 1", "Grid 2"],
+            "selected_index": 1,
+            "open": true,
+            "option_height": 24
+          }
+        ]
+      }
+    ]
+  }
+})json");
+
+    char error[512]{};
+    EXPECT_TRUE(slayer3d_game_data_validate_file((dir / "retained_ui.game.json").string().c_str(), nullptr, error,
+                                                 sizeof(error)))
+        << error;
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, RejectsInvalidRetainedUIWidgets)
+{
+    struct Case
+    {
+        const char *name;
+        const char *ui_json;
+        const char *expected_error;
+    };
+
+    const Case cases[] = {
+        {
+            "duplicate_id",
+            R"json({
+  "widgets": [
+    {
+      "id": "panel",
+      "type": "panel",
+      "w": 100,
+      "h": 100,
+      "children": [
+        { "id": "panel", "type": "button", "w": 40, "h": 20 }
+      ]
+    }
+  ]
+})json",
+            "duplicated",
+        },
+        {
+            "bad_layout",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "layout": "diagonal", "w": 100, "h": 100 }
+  ]
+})json",
+            "unsupported UI widget layout",
+        },
+        {
+            "bad_size",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 0, "h": 100 }
+  ]
+})json",
+            "UI widget width must be positive or 'fill'",
+        },
+        {
+            "bad_layer",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 100, "h": 100, "layer": 1.5 }
+  ]
+})json",
+            "UI widget layer/z must be an integer",
+        },
+        {
+            "bad_interactive",
+            R"json({
+  "widgets": [
+    { "id": "panel", "type": "panel", "w": 100, "h": 100, "interactive": "yes" }
+  ]
+})json",
+            "UI widget interactive must be a boolean",
+        },
+        {
+            "bad_action",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "action": "" }
+  ]
+})json",
+            "UI widget action must be a non-empty string",
+        },
+        {
+            "bad_font",
+            R"json({
+  "widgets": [
+    { "id": "label", "type": "label", "w": 100, "h": 24, "font": "font.missing", "text": "HUD" }
+  ]
+})json",
+            "unknown font asset",
+        },
+        {
+            "bad_format_bindings",
+            R"json({
+  "widgets": [
+    {
+      "id": "label",
+      "type": "label",
+      "w": 100,
+      "h": 24,
+      "format": "HP %s/%s",
+      "bindings": [{ "type": "scene_state", "key": "hp", "default": 0 }]
+    }
+  ]
+})json",
+            "placeholder count must match",
+        },
+        {
+            "bad_selected",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "selected": "true" }
+  ]
+})json",
+            "UI widget selected must be a boolean",
+        },
+        {
+            "bad_text_color",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "text_color": [255, 255] }
+  ]
+})json",
+            "UI tooling text_color must be a vec3 or vec4 color",
+        },
+        {
+            "bad_text_scale",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "text_scale": 0 }
+  ]
+})json",
+            "UI widget text_scale must be positive",
+        },
+        {
+            "bad_text_align",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "align": "middle" }
+  ]
+})json",
+            "UI widget align must be left, center, or right",
+        },
+        {
+            "bad_dropdown_options",
+            R"json({
+  "widgets": [
+    { "id": "grid", "type": "dropdown", "w": 100, "h": 24, "options": ["Grid 1", 2] }
+  ]
+})json",
+            "UI dropdown options must be strings",
+        },
+        {
+            "bad_dropdown_selected_index",
+            R"json({
+  "widgets": [
+    { "id": "grid", "type": "dropdown", "w": 100, "h": 24, "options": ["Grid 1"], "selected_index": 3 }
+  ]
+})json",
+            "UI dropdown selected_index is out of range",
+        },
+        {
+            "non_dropdown_options",
+            R"json({
+  "widgets": [
+    { "id": "button", "type": "button", "w": 100, "h": 24, "options": ["Grid 1"] }
+  ]
+})json",
+            "UI widget options are only supported by dropdown widgets",
+        },
+    };
+
+    const std::filesystem::path dir = unique_test_dir("bad_retained_ui_widgets");
+    for (const Case &test_case : cases)
+    {
+        const std::filesystem::path path = dir / (std::string(test_case.name) + ".game.json");
+        const std::string json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Bad Retained UI Widgets", "id": "test.bad_retained_ui", "version": "0.1.0" },
+  "world": { "name": "world.bad_retained_ui", "kind": "fixed_screen" },
+  "ui": )json") + test_case.ui_json +
+                                 R"json(
+})json";
+        write_text(path, json.c_str());
+        char error[512]{};
+        EXPECT_FALSE(slayer3d_game_data_validate_file(path.string().c_str(), nullptr, error, sizeof(error)))
+            << test_case.name;
+        EXPECT_NE(std::string(error).find(test_case.expected_error), std::string::npos)
+            << test_case.name << ": " << error;
+    }
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, RejectsInvalidSceneEditorTooling)
 {
     struct Case
@@ -18211,18 +18457,34 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeShiftClickFaceAddsSourceVertex)
     slayer3d_input_process_event(input, &click);
     slayer3d_input_update(input, 2);
     const bool updated_after_shift_click = slayer3d_game_data_update_active_editor_tooling(runtime);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.axis_lock_dominant", true));
+    const int added_y = slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1);
+
+    SDL_SetModState(SDL_KMOD_SHIFT | SDL_KMOD_CTRL);
+    motion.motion.y -= 48.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.axis_lock_y", false));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.axis_lock_dominant", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.y", -1), added_y + 1000);
+
     click.type = SDL_EVENT_MOUSE_BUTTON_UP;
     slayer3d_input_process_event(input, &click);
-    slayer3d_input_update(input, 3);
+    slayer3d_input_update(input, 4);
     SDL_SetModState(SDL_KMOD_NONE);
     ASSERT_TRUE(updated_after_shift_click);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
 
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.valid", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.added_count", 0), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.add.vertex_count", 0), 9);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.vertex.selection.count", -1), 1);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.add.preview.active", true));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "added source vertex");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.vertex.drag.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "moved selected vertices");
 
     brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
     ASSERT_NE(world_runtime, nullptr);
@@ -18268,6 +18530,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int mode_face_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.face");
     const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
     const int mode_texture_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.texture");
+    const int mode_vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
     const int undo_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.undo");
     const int redo_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.redo");
@@ -18292,6 +18555,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(mode_face_signal, 0);
     ASSERT_GE(mode_select_signal, 0);
     ASSERT_GE(mode_texture_signal, 0);
+    ASSERT_GE(mode_vertex_signal, 0);
     ASSERT_GE(commit_signal, 0);
     ASSERT_GE(undo_signal, 0);
     ASSERT_GE(redo_signal, 0);
@@ -18380,6 +18644,14 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         slayer3d_input_update(input, frame + 1U);
         SDL_SetModState(SDL_KMOD_NONE);
     };
+    auto move_editor_mouse = [&](float x, float y, Uint64 frame) {
+        SDL_Event mouse_motion{};
+        mouse_motion.type = SDL_EVENT_MOUSE_MOTION;
+        mouse_motion.motion.x = x;
+        mouse_motion.motion.y = y;
+        slayer3d_input_process_event(input, &mouse_motion);
+        slayer3d_input_update(input, frame);
+    };
     slayer3d_vec3 placement_origin = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
     slayer3d_vec3 player_start_origin = placement_origin;
     auto world = [&]() {
@@ -18461,6 +18733,33 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &capture));
         return capture.found;
     };
+    auto visible_ui_rect_color = [&](const char *name, slayer3d_color *out_color) {
+        struct RectColorCapture
+        {
+            const slayer3d_game_data_runtime *runtime = nullptr;
+            const char *name = nullptr;
+            slayer3d_color *out_color = nullptr;
+            bool found = false;
+        } capture{runtime, name, out_color, false};
+        auto capture_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<RectColorCapture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                SDL_strcmp(rect->name, capture->name) != 0)
+            {
+                return true;
+            }
+            if (slayer3d_game_data_ui_rect_is_visible(capture->runtime, rect, nullptr))
+            {
+                if (capture->out_color != nullptr)
+                    *capture->out_color = rect->color;
+                capture->found = true;
+                return false;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &capture));
+        return capture.found;
+    };
     const int initial_brush_count = world().brush_count;
     EXPECT_EQ(initial_brush_count, 0);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
@@ -18476,6 +18775,18 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "brush");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "brush tool");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.brush.selected"));
+    slayer3d_color selected_tool_fill{};
+    ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.brush.button", &selected_tool_fill));
+    EXPECT_EQ(selected_tool_fill.r, 38);
+    EXPECT_EQ(selected_tool_fill.g, 104);
+    EXPECT_EQ(selected_tool_fill.b, 56);
+    EXPECT_EQ(selected_tool_fill.a, 255);
+    slayer3d_color selected_tool_border{};
+    ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.brush.selected", &selected_tool_border));
+    EXPECT_EQ(selected_tool_border.r, 96);
+    EXPECT_EQ(selected_tool_border.g, 255);
+    EXPECT_EQ(selected_tool_border.b, 128);
+    EXPECT_EQ(selected_tool_border.a, 255);
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
@@ -18486,6 +18797,23 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "face");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "face");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.face.selected"));
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
+    slayer3d_signal_emit(bus, mode_vertex_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "vertex");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "vertex");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.vertex.selected"));
+    ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.vertex.button", &selected_tool_fill));
+    EXPECT_EQ(selected_tool_fill.r, 38);
+    EXPECT_EQ(selected_tool_fill.g, 104);
+    EXPECT_EQ(selected_tool_fill.b, 56);
+    EXPECT_EQ(selected_tool_fill.a, 255);
+    ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.vertex.selected", &selected_tool_border));
+    EXPECT_EQ(selected_tool_border.r, 96);
+    EXPECT_EQ(selected_tool_border.g, 255);
+    EXPECT_EQ(selected_tool_border.b, 128);
+    EXPECT_EQ(selected_tool_border.a, 255);
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
@@ -18502,6 +18830,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "floor");
     std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.modal"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.floor.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.floor.selected"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Prefabs"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Floor"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Sky"));
@@ -18509,6 +18840,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, palette_next_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.brush.cursor", ""), "wall");
     modal_text = visible_ui_text("ui.editor_shell.palette.");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.wall.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.brush.wall.selected"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Selected: wall"));
     slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
@@ -18519,6 +18852,14 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.selected", ""), "wall");
     slayer3d_signal_emit(bus, palette_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "brush");
+    slayer3d_signal_emit(bus, palette_close_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
+
+    slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.modal"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.selected"));
     slayer3d_signal_emit(bus, palette_close_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
 
@@ -18540,6 +18881,60 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
+    struct GridDropdownRects
+    {
+        bool button = false;
+        bool popup = false;
+        bool option = false;
+        bool hovered_option = false;
+        slayer3d_game_data_ui_rect button_rect{};
+        slayer3d_game_data_ui_rect popup_rect{};
+        slayer3d_game_data_ui_rect option_rect{};
+        slayer3d_game_data_ui_rect hovered_option_rect{};
+    } grid_rects;
+    auto capture_grid_dropdown_rects = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+        auto *capture = static_cast<GridDropdownRects *>(userdata);
+        if (rect == nullptr || rect->name == nullptr)
+            return true;
+        if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.button") == 0 && rect->w > 50.0f &&
+            rect->h > 10.0f && !capture->button)
+        {
+            capture->button = true;
+            capture->button_rect = *rect;
+        }
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.popup") == 0 && rect->w > 50.0f &&
+                 rect->h > 100.0f && !capture->popup)
+        {
+            capture->popup = true;
+            capture->popup_rect = *rect;
+        }
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+                 rect->h > 10.0f && !capture->option)
+        {
+            capture->option = true;
+            capture->option_rect = *rect;
+        }
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+                 rect->h > 10.0f && rect->color.r == 54 && rect->color.g == 102 && rect->color.b == 166)
+        {
+            capture->hovered_option = true;
+            capture->hovered_option_rect = *rect;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
+    EXPECT_TRUE(grid_rects.button);
+    EXPECT_TRUE(grid_rects.popup);
+    EXPECT_TRUE(grid_rects.option);
+    EXPECT_NEAR(grid_rects.popup_rect.x, grid_rects.button_rect.x, 0.001f);
+    EXPECT_NEAR(grid_rects.popup_rect.y, grid_rects.button_rect.y + grid_rects.button_rect.h, 0.001f);
+    EXPECT_NEAR(grid_rects.option_rect.x, grid_rects.popup_rect.x, 0.001f);
+    EXPECT_GT(grid_rects.option_rect.y, grid_rects.popup_rect.y);
+    move_editor_mouse(grid_rects.option_rect.x + grid_rects.option_rect.w * 0.5f,
+                      grid_rects.option_rect.y + grid_rects.option_rect.h * 0.5f, 5);
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
+    EXPECT_TRUE(grid_rects.hovered_option);
+    EXPECT_EQ(grid_rects.hovered_option_rect.color.a, 248);
     click_editor(890.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
@@ -24258,6 +24653,9 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool grid_label = false;
         bool inspector_panel = false;
         bool inspector_header = false;
+        slayer3d_game_data_ui_rect inspector_panel_rect{};
+        slayer3d_game_data_ui_rect inspector_header_rect{};
+        slayer3d_game_data_ui_rect inspector_row_rect{};
         bool inspector_tabs[3]{};
         bool inspector_rows[4]{};
         bool inspector_collapsed = false;
@@ -24283,9 +24681,15 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.button") == 0)
             capture->grid_widget = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.panel") == 0)
+        {
             capture->inspector_panel = true;
+            capture->inspector_panel_rect = *rect;
+        }
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.header") == 0)
+        {
             capture->inspector_header = true;
+            capture->inspector_header_rect = *rect;
+        }
         if (SDL_strcmp(rect->name, "ui.editor_shell.left_inspector.collapsed") == 0)
             capture->inspector_collapsed = true;
         if (SDL_strcmp(rect->name, "ui.editor_shell.console.panel") == 0)
@@ -24317,7 +24721,10 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
             else if (name == "ui.editor_shell.left_inspector.face.tab")
                 capture->inspector_tabs[2] = true;
             else if (name == "ui.editor_shell.left_inspector.row.name")
+            {
                 capture->inspector_rows[0] = true;
+                capture->inspector_row_rect = *rect;
+            }
             else if (name == "ui.editor_shell.left_inspector.row.selection")
                 capture->inspector_rows[1] = true;
             else if (name == "ui.editor_shell.left_inspector.row.brushes")
@@ -24481,6 +24888,10 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_TRUE(toolbar_capture.inspector_panel);
     EXPECT_TRUE(toolbar_capture.inspector_header);
     EXPECT_TRUE(toolbar_capture.inspector_title);
+    EXPECT_GE(toolbar_capture.inspector_header_rect.x, toolbar_capture.inspector_panel_rect.x);
+    EXPECT_GE(toolbar_capture.inspector_header_rect.y, toolbar_capture.inspector_panel_rect.y);
+    EXPECT_LE(toolbar_capture.inspector_header_rect.x + toolbar_capture.inspector_header_rect.w,
+              toolbar_capture.inspector_panel_rect.x + toolbar_capture.inspector_panel_rect.w);
     for (int i = 0; i < 3; ++i)
     {
         EXPECT_TRUE(toolbar_capture.inspector_tabs[i]) << i;
@@ -24488,8 +24899,11 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     }
     for (int i = 0; i < 4; ++i)
         EXPECT_TRUE(toolbar_capture.inspector_rows[i]) << i;
+    EXPECT_GT(toolbar_capture.inspector_row_rect.y, toolbar_capture.inspector_header_rect.y);
+    EXPECT_LE(toolbar_capture.inspector_row_rect.x + toolbar_capture.inspector_row_rect.w,
+              toolbar_capture.inspector_panel_rect.x + toolbar_capture.inspector_panel_rect.w);
     EXPECT_FALSE(toolbar_capture.inspector_collapsed);
-    EXPECT_TRUE(toolbar_capture.inspector_collapsed_label);
+    EXPECT_FALSE(toolbar_capture.inspector_collapsed_label);
     EXPECT_TRUE(toolbar_capture.console_panel);
     for (int i = 0; i < 2; ++i)
     {
@@ -24503,6 +24917,18 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     }
     EXPECT_FALSE(toolbar_capture.old_sidebar);
     EXPECT_FALSE(toolbar_capture.old_inspector);
+
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.collapsed", true);
+    ToolbarCapture collapsed_capture;
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_toolbar_rect, &collapsed_capture));
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &toolbar_metrics, capture_toolbar_text,
+                                                                &collapsed_capture));
+    EXPECT_FALSE(collapsed_capture.inspector_panel);
+    EXPECT_FALSE(collapsed_capture.inspector_header);
+    EXPECT_TRUE(collapsed_capture.inspector_collapsed);
+    EXPECT_TRUE(collapsed_capture.inspector_collapsed_label);
+    slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "editor.inspector.collapsed", false);
+
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     EXPECT_STREQ(slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), "editor.view.mode", ""),
                  "flyby_3d");
@@ -25589,28 +26015,58 @@ TEST(GameDataRuntime, FpsTemplateLoadsDataOnlyStarter)
 
     struct FpsTemplateUiCapture
     {
+        slayer3d_game_data_runtime *runtime = nullptr;
+        slayer3d_game_data_ui_metrics metrics{};
         bool saw_reticle = false;
         bool saw_fps = false;
         bool saw_resources = false;
         bool saw_pause = false;
+        std::string fps_text;
+        std::string resources_text;
     } ui_capture;
     auto capture_fps_template_ui = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
         auto *capture = static_cast<FpsTemplateUiCapture *>(userdata);
         if (std::string(text->name) == "ui.fps.reticle")
+        {
             capture->saw_reticle = true;
+            EXPECT_STREQ(text->font, "font.fps.hud");
+        }
         else if (std::string(text->name) == "ui.fps.fps_counter")
+        {
             capture->saw_fps = true;
+            char formatted[128]{};
+            EXPECT_TRUE(slayer3d_game_data_format_ui_text(capture->runtime, text, &capture->metrics, formatted,
+                                                          sizeof(formatted)));
+            capture->fps_text = formatted;
+            EXPECT_STREQ(text->font, "font.fps.hud");
+        }
         else if (std::string(text->name) == "ui.fps.resources")
+        {
             capture->saw_resources = true;
+            char formatted[256]{};
+            EXPECT_TRUE(slayer3d_game_data_format_ui_text(capture->runtime, text, &capture->metrics, formatted,
+                                                          sizeof(formatted)));
+            capture->resources_text = formatted;
+            EXPECT_STREQ(text->font, "font.fps.hud");
+        }
         else if (std::string(text->name) == "ui.fps.pause.title")
+        {
             capture->saw_pause = true;
+            EXPECT_STREQ(text->font, "font.fps.title");
+        }
         return true;
     };
-    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, capture_fps_template_ui, &ui_capture));
+    ui_capture.runtime = runtime;
+    ui_capture.metrics.fps = 59.9f;
+    ui_capture.metrics.paused = true;
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &ui_capture.metrics, capture_fps_template_ui,
+                                                                &ui_capture));
     EXPECT_TRUE(ui_capture.saw_reticle);
     EXPECT_TRUE(ui_capture.saw_fps);
     EXPECT_TRUE(ui_capture.saw_resources);
     EXPECT_TRUE(ui_capture.saw_pause);
+    EXPECT_EQ(ui_capture.fps_text, "FPS 59.9");
+    EXPECT_EQ(ui_capture.resources_text, "HP 100.000/100.000  Armor 0.000  Ammo 24/48");
 
     const int fire_action = slayer3d_game_data_find_action(runtime, "action.fire");
     ASSERT_GE(fire_action, 0);

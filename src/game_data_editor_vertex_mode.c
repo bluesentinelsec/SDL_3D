@@ -162,6 +162,8 @@ bool editor_handle_vertex_add_to_source(slayer3d_game_data_runtime *runtime,
 
     if (!editor_add_vertex_to_source_coord(runtime, NULL, world_runtime, source_index, coord))
         return false;
+    editor_begin_vertex_drag(runtime, runtime_input(runtime), &resolved);
+    runtime->editor_drag_move.vertex_add_drag = true;
     clear_editor_vertex_hover_state(runtime);
     publish_editor_vertex_add_preview(runtime, NULL, NULL, false, false, NULL);
     if (out_consumed != NULL)
@@ -1779,7 +1781,7 @@ bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
     {
         const SDL_Keymod modifiers = SDL_GetModState();
         const bool y_axis_lock = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) != 0;
-        const bool dominant_axis_lock = !y_axis_lock && (modifiers & SDL_KMOD_SHIFT) != 0;
+        const bool dominant_axis_lock = !drag->vertex_add_drag && !y_axis_lock && (modifiers & SDL_KMOD_SHIFT) != 0;
         drag->axis_lock_y = y_axis_lock;
         drag->axis_lock_dominant = dominant_axis_lock;
         slayer3d_vec3 desired = drag->applied_offset;
