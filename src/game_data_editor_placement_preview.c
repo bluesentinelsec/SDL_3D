@@ -412,7 +412,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         return false;
 
     const char *mode = scene_state_string(runtime, "editor.mode", "select");
-    if (SDL_strcmp(mode, "select") != 0)
+    if (SDL_strcmp(mode, "select") != 0 && SDL_strcmp(mode, "brush") != 0)
     {
         clear_editor_drag_create(runtime);
         return true;
