@@ -178,7 +178,12 @@
         "snap_key": "editor.placement_preview.snap",
         "bounds_min_key": "editor.placement_preview.bounds_min",
         "bounds_max_key": "editor.placement_preview.bounds_max",
-        "overlap_count_key": "editor.placement_preview.overlaps"
+        "overlap_count_key": "editor.placement_preview.overlaps",
+        "dimensions_key": "editor.placement_preview.dimensions",
+        "dimension_x_key": "editor.placement_preview.dimension_x",
+        "dimension_y_key": "editor.placement_preview.dimension_y",
+        "dimension_z_key": "editor.placement_preview.dimension_z",
+        "warning_key": "editor.placement_preview.warning"
       },
       "previews": [
         {
@@ -541,7 +546,7 @@
         "x": 12,
         "y": 92,
         "w": 308,
-        "h": 310,
+        "h": 400,
         "layer": 120,
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false },
         "children": [
@@ -734,6 +739,77 @@
                   { "type": "scene_state", "key": "editor.vertex.hover.y", "default": 0 },
                   { "type": "scene_state", "key": "editor.vertex.hover.z", "default": 0 },
                   { "type": "scene_state", "key": "editor.vertex.hover.shared_count", "default": 0 }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.preview",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 304,
+            "w": 272,
+            "h": 26,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.row.preview.label", "type": "label", "w": 96, "h": "fill", "text": "Preview" },
+              {
+                "id": "ui.editor_shell.left_inspector.row.preview.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.placement_preview.message", "default": "none" }]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.preview_dims",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 334,
+            "w": 272,
+            "h": 26,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.row.preview_dims.label", "type": "label", "w": 96, "h": "fill", "text": "Preview Dims" },
+              {
+                "id": "ui.editor_shell.left_inspector.row.preview_dims.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s x %s x %s",
+                "bindings": [
+                  { "type": "scene_state", "key": "editor.placement_preview.dimension_x", "default": 0.0 },
+                  { "type": "scene_state", "key": "editor.placement_preview.dimension_y", "default": 0.0 },
+                  { "type": "scene_state", "key": "editor.placement_preview.dimension_z", "default": 0.0 }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.move_delta",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 364,
+            "w": 272,
+            "h": 26,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.row.move_delta.label", "type": "label", "w": 96, "h": "fill", "text": "Move" },
+              {
+                "id": "ui.editor_shell.left_inspector.row.move_delta.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s, %s, %s",
+                "bindings": [
+                  { "type": "scene_state", "key": "editor.brush.drag.delta_x", "default": 0.0 },
+                  { "type": "scene_state", "key": "editor.brush.drag.delta_y", "default": 0.0 },
+                  { "type": "scene_state", "key": "editor.brush.drag.delta_z", "default": 0.0 }
                 ]
               }
             ]

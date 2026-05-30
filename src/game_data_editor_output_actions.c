@@ -1,5 +1,7 @@
 #include "game_data_internal.h"
 
+#include <SDL3/SDL_log.h>
+
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value)
 {
     const char *key = json_string(outputs, key_name, NULL);
@@ -33,6 +35,21 @@ void editor_set_vec3_output(slayer3d_properties *props, yyjson_val *outputs, con
     const char *key = json_string(outputs, key_name, NULL);
     if (props != NULL && key != NULL)
         slayer3d_properties_set_vec3(props, key, value);
+}
+
+void editor_publish_console_message(slayer3d_game_data_runtime *runtime, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || message == NULL || message[0] == '\0')
+        return;
+
+    const char *old_line0 = slayer3d_properties_get_string(runtime->scene_state, "editor.console.line0", "");
+    const char *old_line1 = slayer3d_properties_get_string(runtime->scene_state, "editor.console.line1", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.console.line2", old_line1);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.console.line1", old_line0);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.console.line0", message);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.console.count",
+                                slayer3d_properties_get_int(runtime->scene_state, "editor.console.count", 0) + 1);
+    SDL_LogInfo(SDL_LOG_CATEGORY_APPLICATION, "%s", message);
 }
 
 static int editor_revision_to_int(Uint64 revision)

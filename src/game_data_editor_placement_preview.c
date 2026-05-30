@@ -41,6 +41,15 @@ static yyjson_val *editor_drag_create_json(yyjson_val *placement)
     return yyjson_is_obj(drag) ? drag : NULL;
 }
 
+static slayer3d_vec3 editor_preview_dimensions(const editor_placement_preview_state *preview)
+{
+    if (preview == NULL || !preview->has_bounds)
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    return slayer3d_vec3_make(SDL_max(0.0f, preview->bounds.max.x - preview->bounds.min.x),
+                              SDL_max(0.0f, preview->bounds.max.y - preview->bounds.min.y),
+                              SDL_max(0.0f, preview->bounds.max.z - preview->bounds.min.z));
+}
+
 static void publish_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *outputs, bool valid,
                                              yyjson_val *preview_json, const editor_placement_preview_state *preview,
                                              const char *message)
@@ -68,6 +77,13 @@ static void publish_editor_placement_preview(slayer3d_game_data_runtime *runtime
                                                                            : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     editor_set_int_output(scene_state, outputs, "overlap_count_key",
                           valid && preview != NULL ? preview->source_positive_overlap_count : 0);
+    const slayer3d_vec3 dimensions = valid ? editor_preview_dimensions(preview) : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    editor_set_vec3_output(scene_state, outputs, "dimensions_key", dimensions);
+    editor_set_float_output(scene_state, outputs, "dimension_x_key", dimensions.x);
+    editor_set_float_output(scene_state, outputs, "dimension_y_key", dimensions.y);
+    editor_set_float_output(scene_state, outputs, "dimension_z_key", dimensions.z);
+    editor_set_string_output(scene_state, outputs, "warning_key",
+                             valid && preview != NULL ? preview->source_warning : "");
     const char *last_action_key = json_string(preview_json, "last_action_key", NULL);
     if (last_action_key != NULL && last_action_key[0] != '\0')
         slayer3d_properties_set_string(scene_state, last_action_key, message != NULL ? message : "");
@@ -488,7 +504,12 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
                 runtime->scene_state != NULL)
             {
                 slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "drag brush created");
+                editor_publish_console_message(runtime, "drag brush created");
             }
+        }
+        else if (drag->moved && message[0] != '\0')
+        {
+            editor_publish_console_message(runtime, message);
         }
         clear_editor_drag_create(runtime);
         clear_editor_placement_preview(runtime);

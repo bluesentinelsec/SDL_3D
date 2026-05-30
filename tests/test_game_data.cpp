@@ -19753,6 +19753,9 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     slayer3d_input_process_event(input, &motion);
     slayer3d_input_update(input, 7);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    const float live_drag_dx = slayer3d_properties_get_float(scene_state, "editor.brush.drag.delta_x", 0.0f);
+    const float live_drag_dz = slayer3d_properties_get_float(scene_state, "editor.brush.drag.delta_z", 0.0f);
+    EXPECT_GT(SDL_fabsf(live_drag_dx) + SDL_fabsf(live_drag_dz), 0.001f);
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
     mouse.button.x = motion.motion.x;
     mouse.button.y = motion.motion.y;
@@ -19766,6 +19769,7 @@ TEST(GameDataRuntime, EditorShellDojoDragCreatesAndNudgesSourceBrush)
     EXPECT_NEAR(drag_dx, SDL_roundf(drag_dx), 0.001f);
     EXPECT_NEAR(drag_dz, SDL_roundf(drag_dz), 0.001f);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "drag moved brush");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "drag moved brush");
 
     const slayer3d_bounding_box before_nudge = find_brush_bounds(created_name);
     SDL_Event key{};
@@ -19929,6 +19933,28 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragCreatesSourceBrushFromPreview)
     ASSERT_EQ(preview_max->type, SLAYER3D_VALUE_VEC3);
     const slayer3d_vec3 expected_min = preview_min->as_vec3;
     const slayer3d_vec3 expected_max = preview_max->as_vec3;
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.dimension_x", 0.0f),
+                expected_max.x - expected_min.x, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.dimension_y", 0.0f),
+                expected_max.y - expected_min.y, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.dimension_z", 0.0f),
+                expected_max.z - expected_min.z, 0.001f);
+    struct DragPreviewDebug
+    {
+        int edges = 0;
+    } drag_preview_debug;
+    auto count_drag_preview = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
+        auto *debug = static_cast<DragPreviewDebug *>(userdata);
+        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE &&
+            primitive->element_name != nullptr && SDL_strcmp(primitive->element_name, "drag_box") == 0)
+        {
+            debug->edges++;
+        }
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_drag_preview, &drag_preview_debug));
+    EXPECT_EQ(drag_preview_debug.edges, 24);
 
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
     mouse.button.x = motion.motion.x;
@@ -19949,6 +19975,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragCreatesSourceBrushFromPreview)
     ASSERT_NE(created_brush.faces, nullptr);
     EXPECT_STREQ(created_brush.faces[0].material_name, "mat.editor.floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "drag brush created");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "drag brush created");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

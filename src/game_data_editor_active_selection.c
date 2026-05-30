@@ -71,6 +71,36 @@ static void editor_set_face_drag_state(slayer3d_game_data_runtime *runtime, bool
                                  (SDL_GetModState() & SDL_KMOD_SHIFT) != 0);
 }
 
+static slayer3d_vec3 editor_bounds_dimensions(slayer3d_bounding_box bounds)
+{
+    return slayer3d_vec3_make(SDL_max(0.0f, bounds.max.x - bounds.min.x), SDL_max(0.0f, bounds.max.y - bounds.min.y),
+                              SDL_max(0.0f, bounds.max.z - bounds.min.z));
+}
+
+static void publish_editor_face_resize_feedback(slayer3d_game_data_runtime *runtime, float distance,
+                                                slayer3d_bounding_box bounds, bool has_bounds)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const slayer3d_vec3 dimensions =
+        has_bounds ? editor_bounds_dimensions(bounds) : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.brush.resize.distance", distance);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.brush.resize.dimension_x", dimensions.x);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.brush.resize.dimension_y", dimensions.y);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.brush.resize.dimension_z", dimensions.z);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.brush.resize.dimensions", dimensions);
+}
+
+static void publish_editor_drag_move_feedback(slayer3d_game_data_runtime *runtime, slayer3d_vec3 delta)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_float(runtime->scene_state, "editor.brush.drag.delta_x", delta.x);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.brush.drag.delta_y", delta.y);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.brush.drag.delta_z", delta.z);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.brush.drag.delta", delta);
+}
+
 static bool editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
                                            const slayer3d_game_data_editor_selection *selection, float distance)
 {
@@ -113,6 +143,7 @@ static bool editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
     preview->has_bounds = result.brush.has_bounds;
     preview->bounds =
         result.brush.has_bounds ? result.brush.bounds : (slayer3d_bounding_box){selection->point, selection->point};
+    publish_editor_face_resize_feedback(runtime, distance, preview->bounds, preview->has_bounds);
     editor_brush_source_free_runtime_brush(&result.brush);
     return true;
 }
@@ -278,6 +309,7 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
                 drag->applied_offset = desired;
                 drag->moved = true;
                 update_active_editor_selection_from_selected_brushes(runtime);
+                publish_editor_drag_move_feedback(runtime, drag->applied_offset);
             }
         }
     }
@@ -294,6 +326,7 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
                 drag->applied_offset = desired;
                 drag->moved = true;
                 update_active_editor_selection_from_selected_brushes(runtime);
+                publish_editor_drag_move_feedback(runtime, drag->applied_offset);
             }
         }
     }
@@ -301,7 +334,10 @@ static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
     if (left_released || !left_down)
     {
         if (runtime->scene_state != NULL && drag->moved)
+        {
             slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "drag moved brush");
+            editor_publish_console_message(runtime, "drag moved brush");
+        }
         clear_editor_drag_move(runtime);
     }
     return true;
