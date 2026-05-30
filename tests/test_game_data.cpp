@@ -97,6 +97,30 @@ extern "C"
         char first_issue[256];
         char first_issue_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
     } editor_brush_source_vertex_diagnostics;
+    typedef struct editor_brush_source_box_runtime
+    {
+        char *stable_id;
+        char *name;
+        char *prefab;
+        char *material;
+        char *face_materials[6];
+        int min[3];
+        int max[3];
+        int vertex_count;
+        int vertices[16][3];
+        unsigned int contents;
+    } editor_brush_source_box_runtime;
+    typedef struct editor_brush_source_prefab_result
+    {
+        bool valid;
+        bool no_op;
+        char brush_name[256];
+        slayer3d_bounding_box bounds;
+        int source_min[3];
+        int source_max[3];
+        int positive_overlap_count;
+        char warning[256];
+    } editor_brush_source_prefab_result;
     typedef enum editor_brush_source_vertex_operation_type
     {
         EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_ADD,
@@ -178,6 +202,16 @@ extern "C"
                                                         editor_brush_source_shared_vertex *out_vertices,
                                                         int out_capacity, int *out_count, char *error_buffer,
                                                         int error_buffer_size);
+    bool editor_brush_world_preview_source_box_create(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_box_runtime *box,
+                                                      int minimum_extent_units,
+                                                      editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                      int error_buffer_size);
+    bool editor_brush_world_apply_source_box_create(brush_world_runtime *world_runtime,
+                                                    const editor_brush_source_box_runtime *box,
+                                                    int minimum_extent_units,
+                                                    editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                    int error_buffer_size);
     bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
     bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action);
     bool slayer3d_game_data_merge_selected_editor_vertices_to_hover(slayer3d_game_data_runtime *runtime,
@@ -23868,6 +23902,117 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateRejectsOffSnapCoordina
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_EQ(world.brush_count, 1);
     EXPECT_STREQ(world.brushes[0].name, "brush.source.on_snap");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateCommandPreviewsAndAppliesAtomically)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const char import_json[] = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "materials": [{ "name": "mat.editor.floor", "albedo": [0.25, 0.5, 0.75, 1.0] }],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 100,
+      "boxes": []
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", import_json, sizeof(import_json) - 1u, "/tmp/source-create-command.json",
+        error, sizeof(error)))
+        << error;
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    auto world = [&]() {
+        slayer3d_game_data_brush_world brush_world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+        return brush_world;
+    };
+    auto make_box = [](const char *name, int min_x, int min_y, int min_z, int max_x, int max_y, int max_z) {
+        editor_brush_source_box_runtime box{};
+        box.stable_id = const_cast<char *>(name);
+        box.name = const_cast<char *>(name);
+        box.prefab = const_cast<char *>("editor.box");
+        box.material = const_cast<char *>("mat.editor.floor");
+        box.min[0] = min_x;
+        box.min[1] = min_y;
+        box.min[2] = min_z;
+        box.max[0] = max_x;
+        box.max[1] = max_y;
+        box.max[2] = max_z;
+        box.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID;
+        return box;
+    };
+
+    editor_brush_source_prefab_result result{};
+    editor_brush_source_box_runtime valid = make_box("source.box.valid", 0, -200, 0, 8000, 0, 8000);
+    ASSERT_TRUE(editor_brush_world_preview_source_box_create(world_runtime, &valid, 100, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_FALSE(result.no_op);
+    EXPECT_STREQ(result.brush_name, "source.box.valid");
+    EXPECT_EQ(world().brush_count, 0) << "preview must not mutate runtime geometry";
+
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_apply_source_box_create(world_runtime, &valid, 100, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.valid);
+    EXPECT_FALSE(result.no_op);
+    ASSERT_EQ(world().brush_count, 1);
+    EXPECT_STREQ(world().brushes[0].name, "source.box.valid");
+
+    SDL_zeroa(error);
+    editor_brush_source_box_runtime tiny = make_box("source.box.tiny", 8000, -200, 0, 8050, 0, 8000);
+    ASSERT_TRUE(editor_brush_world_apply_source_box_create(world_runtime, &tiny, 100, &result, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(result.no_op);
+    EXPECT_NE(std::string(result.warning).find("ignored tiny drag"), std::string::npos) << result.warning;
+    EXPECT_EQ(world().brush_count, 1);
+
+    SDL_zeroa(error);
+    editor_brush_source_box_runtime invalid = make_box("source.box.invalid", 0, -200, 0, 0, 0, 8000);
+    EXPECT_FALSE(
+        editor_brush_world_apply_source_box_create(world_runtime, &invalid, 100, &result, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("invalid geometry"), std::string::npos) << error;
+    EXPECT_EQ(world().brush_count, 1);
+
+    SDL_zeroa(error);
+    editor_brush_source_box_runtime off_snap = make_box("source.box.off_snap", 50, -200, 0, 8050, 0, 8000);
+    EXPECT_FALSE(
+        editor_brush_world_apply_source_box_create(world_runtime, &off_snap, 100, &result, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("not aligned to 100-unit source snap"), std::string::npos) << error;
+    EXPECT_EQ(world().brush_count, 1);
+
+    SDL_zeroa(error);
+    editor_brush_source_box_runtime duplicate = make_box("source.box.valid", 8000, -200, 0, 16000, 0, 8000);
+    EXPECT_FALSE(
+        editor_brush_world_apply_source_box_create(world_runtime, &duplicate, 100, &result, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("duplicate editor brush source stable id"), std::string::npos) << error;
+    EXPECT_EQ(world().brush_count, 1);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

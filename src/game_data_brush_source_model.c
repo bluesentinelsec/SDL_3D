@@ -496,6 +496,100 @@ bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime 
     return source_box_candidate_valid(world_runtime, box, exclude_index, error_buffer, error_buffer_size);
 }
 
+static bool source_box_create_below_minimum_extent(const editor_brush_source_box_runtime *box, int minimum_extent_units)
+{
+    if (box == NULL || minimum_extent_units <= 0)
+        return false;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (box->max[axis] - box->min[axis] < minimum_extent_units)
+            return true;
+    }
+    return false;
+}
+
+static void source_box_create_populate_result(const brush_world_runtime *world_runtime,
+                                              const editor_brush_source_box_runtime *box,
+                                              editor_brush_source_prefab_result *out_result)
+{
+    if (out_result == NULL || box == NULL)
+        return;
+    out_result->valid = true;
+    SDL_strlcpy(out_result->brush_name,
+                box->name != NULL && box->name[0] != '\0' ? box->name : (box->stable_id != NULL ? box->stable_id : ""),
+                sizeof(out_result->brush_name));
+    out_result->bounds = editor_brush_source_box_bounds_meters(world_runtime, box);
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        out_result->source_min[axis] = box->min[axis];
+        out_result->source_max[axis] = box->max[axis];
+    }
+}
+
+bool editor_brush_world_preview_source_box_create(const brush_world_runtime *world_runtime,
+                                                  const editor_brush_source_box_runtime *box, int minimum_extent_units,
+                                                  editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                  int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || box == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source box creation requires a source-backed brush world");
+        return false;
+    }
+    if (!source_box_extents_valid(box))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush edit would create invalid geometry");
+        return false;
+    }
+    if (source_box_create_below_minimum_extent(box, minimum_extent_units))
+    {
+        if (out_result != NULL)
+        {
+            out_result->valid = true;
+            out_result->no_op = true;
+            source_box_create_populate_result(world_runtime, box, out_result);
+            SDL_strlcpy(out_result->warning, "source box create ignored tiny drag", sizeof(out_result->warning));
+        }
+        return true;
+    }
+    if (!source_box_candidate_valid(world_runtime, box, -1, error_buffer, error_buffer_size))
+        return false;
+    source_box_create_populate_result(world_runtime, box, out_result);
+    source_box_candidate_collect_warnings(world_runtime, box, -1, out_result);
+    return true;
+}
+
+bool editor_brush_world_apply_source_box_create(brush_world_runtime *world_runtime,
+                                                const editor_brush_source_box_runtime *box, int minimum_extent_units,
+                                                editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                int error_buffer_size)
+{
+    editor_brush_source_prefab_result preview;
+    if (!editor_brush_world_preview_source_box_create(world_runtime, box, minimum_extent_units, &preview, error_buffer,
+                                                      error_buffer_size))
+    {
+        if (out_result != NULL)
+            *out_result = preview;
+        return false;
+    }
+    if (preview.no_op)
+    {
+        if (out_result != NULL)
+            *out_result = preview;
+        return true;
+    }
+    if (!editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count, box,
+                                                       error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (out_result != NULL)
+        *out_result = preview;
+    return true;
+}
+
 static bool source_box_overlaps_on_other_axes(const editor_brush_source_box_runtime *a,
                                               const editor_brush_source_box_runtime *b, int axis)
 {
@@ -2567,8 +2661,9 @@ bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_run
         return false;
     }
 
-    bool ok = editor_brush_world_validate_source_box_candidate(world_runtime, &source_box, -1, error_buffer,
-                                                               error_buffer_size);
+    editor_brush_source_prefab_result preview_result;
+    bool ok = editor_brush_world_preview_source_box_create(world_runtime, &source_box, 0, &preview_result, error_buffer,
+                                                           error_buffer_size);
     if (ok && out_result != NULL)
     {
         const int existing_index = find_matching_source_prefab_cell(world_runtime, &source_box);
@@ -2592,23 +2687,17 @@ bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_run
             free_editor_brush_source_box(&source_box);
             return true;
         }
-        source_box_candidate_collect_warnings(world_runtime, &source_box, -1, out_result);
+        *out_result = preview_result;
     }
     if (ok && apply)
     {
-        ok = editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
-                                                           &source_box, error_buffer, error_buffer_size);
+        ok = editor_brush_world_apply_source_box_create(world_runtime, &source_box, 0, &preview_result, error_buffer,
+                                                        error_buffer_size);
     }
     if (ok && out_result != NULL)
     {
-        out_result->valid = true;
+        *out_result = preview_result;
         SDL_strlcpy(out_result->brush_name, name, sizeof(out_result->brush_name));
-        out_result->bounds = editor_brush_source_box_bounds_meters(world_runtime, &source_box);
-        for (int axis = 0; axis < 3; ++axis)
-        {
-            out_result->source_min[axis] = source_box.min[axis];
-            out_result->source_max[axis] = source_box.max[axis];
-        }
     }
     free_editor_brush_source_box(&source_box);
     return ok;

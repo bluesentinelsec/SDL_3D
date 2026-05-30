@@ -79,6 +79,14 @@ slayer3d_bounding_box editor_brush_source_box_bounds_meters(const brush_world_ru
 bool editor_brush_world_validate_source_box_candidate(const brush_world_runtime *world_runtime,
                                                       const editor_brush_source_box_runtime *box, int exclude_index,
                                                       char *error_buffer, int error_buffer_size);
+bool editor_brush_world_preview_source_box_create(const brush_world_runtime *world_runtime,
+                                                  const editor_brush_source_box_runtime *box, int minimum_extent_units,
+                                                  editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                  int error_buffer_size);
+bool editor_brush_world_apply_source_box_create(brush_world_runtime *world_runtime,
+                                                const editor_brush_source_box_runtime *box, int minimum_extent_units,
+                                                editor_brush_source_prefab_result *out_result, char *error_buffer,
+                                                int error_buffer_size);
 bool editor_brush_world_run_source_prefab_command(brush_world_runtime *world_runtime,
                                                   const editor_brush_source_prefab_desc *desc, const char *brush_name,
                                                   const int *source_min, const int *source_max, bool apply,
