@@ -14,6 +14,26 @@ static void clear_editor_drag_create(slayer3d_game_data_runtime *runtime)
     SDL_zero(runtime->editor_drag_create);
 }
 
+static const char *editor_drag_create_phase_name(editor_drag_create_phase phase)
+{
+    switch (phase)
+    {
+    case EDITOR_DRAG_CREATE_DRAWING_FOOTPRINT:
+        return "drawing_footprint";
+    case EDITOR_DRAG_CREATE_PENDING_FOOTPRINT:
+        return "pending_footprint";
+    case EDITOR_DRAG_CREATE_ADJUSTING_DEPTH:
+        return "adjusting_depth";
+    case EDITOR_DRAG_CREATE_COMMITTED:
+        return "committed";
+    case EDITOR_DRAG_CREATE_CANCELED:
+        return "canceled";
+    case EDITOR_DRAG_CREATE_IDLE:
+    default:
+        return "idle";
+    }
+}
+
 bool editor_placement_preview_active_for_scene(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || !runtime->editor_placement_preview.active)
@@ -84,6 +104,9 @@ static void publish_editor_placement_preview(slayer3d_game_data_runtime *runtime
     editor_set_float_output(scene_state, outputs, "dimension_z_key", dimensions.z);
     editor_set_string_output(scene_state, outputs, "warning_key",
                              valid && preview != NULL ? preview->source_warning : "");
+    editor_set_string_output(scene_state, outputs, "state_key",
+                             runtime != NULL ? editor_drag_create_phase_name(runtime->editor_drag_create.phase)
+                                             : "idle");
     const char *last_action_key = json_string(preview_json, "last_action_key", NULL);
     if (last_action_key != NULL && last_action_key[0] != '\0')
         slayer3d_properties_set_string(scene_state, last_action_key, message != NULL ? message : "");
@@ -216,6 +239,17 @@ static void editor_drag_publish_preview(slayer3d_game_data_runtime *runtime, yyj
         SDL_strlcpy(preview->source_warning, result->warning, sizeof(preview->source_warning));
     }
     publish_editor_placement_preview(runtime, outputs, valid, drag_json, valid ? preview : NULL, message);
+}
+
+static void editor_drag_cancel_pending(slayer3d_game_data_runtime *runtime, yyjson_val *placement,
+                                       yyjson_val *drag_json, const char *message)
+{
+    if (runtime == NULL)
+        return;
+    runtime->editor_drag_create.phase = EDITOR_DRAG_CREATE_CANCELED;
+    clear_editor_placement_preview(runtime);
+    publish_editor_placement_preview(runtime, obj_get(placement, "outputs"), false, drag_json, NULL, message);
+    clear_editor_drag_create(runtime);
 }
 
 static float editor_placement_elevation(slayer3d_game_data_runtime *runtime, yyjson_val *placement)
@@ -443,7 +477,21 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
     const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
     const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
     const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+    const bool cancel_pressed = slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_ESCAPE);
     editor_drag_create_state *drag = &runtime->editor_drag_create;
+
+    if (drag->active && cancel_pressed)
+    {
+        editor_drag_cancel_pending(runtime, placement, drag_json, "brush preview cancelled");
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
+
+    if (drag->active && drag->phase == EDITOR_DRAG_CREATE_PENDING_FOOTPRINT && left_pressed)
+    {
+        editor_drag_cancel_pending(runtime, placement, drag_json, "brush preview replaced");
+    }
 
     if (!drag->active && left_pressed && hover_selection != NULL && hover_selection->hit &&
         hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID)
@@ -455,6 +503,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         (void)slayer3d_game_data_clear_active_editor_selection(runtime);
         SDL_zero(*drag);
         drag->active = true;
+        drag->phase = EDITOR_DRAG_CREATE_DRAWING_FOOTPRINT;
         drag->scene = slayer3d_game_data_active_scene(runtime);
         drag->world_name = json_string(drag_json, "world", "brush.editor_shell.target");
         drag->material_name =
@@ -478,11 +527,14 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
     if (out_consumed != NULL)
         *out_consumed = true;
 
-    editor_drag_update_current_cell(drag, hover_selection);
+    if (drag->phase == EDITOR_DRAG_CREATE_DRAWING_FOOTPRINT)
+        editor_drag_update_current_cell(drag, hover_selection);
 
     editor_brush_source_prefab_result result;
     const bool valid = editor_drag_preview_source_box(runtime, drag_json, drag, &result);
-    const char *base_message = json_string(drag_json, "message", "drag brush preview");
+    const char *base_message = drag->phase == EDITOR_DRAG_CREATE_PENDING_FOOTPRINT
+                                   ? "Hold Shift and move mouse to set brush depth"
+                                   : json_string(drag_json, "message", "drag brush preview");
     char message[256];
     if (valid && result.warning[0] != '\0')
         SDL_snprintf(message, sizeof(message), "%s; %s", base_message, result.warning);
@@ -492,29 +544,20 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         SDL_strlcpy(message, base_message, sizeof(message));
     editor_drag_publish_preview(runtime, placement, drag_json, drag, &result, message, valid);
 
-    if (left_released || !left_down)
+    if (drag->phase == EDITOR_DRAG_CREATE_DRAWING_FOOTPRINT && (left_released || !left_down))
     {
-        const bool should_commit = valid && drag->moved;
-        if (should_commit)
+        if (valid && drag->moved)
         {
-            editor_brush_source_prefab_result commit_result;
-            if (slayer3d_game_data_create_editor_source_box_brush(runtime, drag->world_name, drag->material_name,
-                                                                  drag->contents, drag->source_min, drag->source_max,
-                                                                  &commit_result) &&
-                runtime->scene_state != NULL)
-            {
-                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "drag brush created");
-                editor_publish_console_message(runtime, "drag brush created");
-            }
+            drag->phase = EDITOR_DRAG_CREATE_PENDING_FOOTPRINT;
+            editor_drag_publish_preview(runtime, placement, drag_json, drag, &result,
+                                        "Hold Shift and move mouse to set brush depth", valid);
         }
-        else if (drag->moved && message[0] != '\0')
+        else
         {
-            editor_publish_console_message(runtime, message);
+            if (drag->moved && message[0] != '\0')
+                editor_publish_console_message(runtime, message);
+            editor_drag_cancel_pending(runtime, placement, drag_json, "drag cancelled");
         }
-        clear_editor_drag_create(runtime);
-        clear_editor_placement_preview(runtime);
-        publish_editor_placement_preview(runtime, obj_get(placement, "outputs"), false, drag_json, NULL,
-                                         should_commit ? "drag brush created" : "drag cancelled");
     }
     return true;
 }

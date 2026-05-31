@@ -183,7 +183,8 @@
         "dimension_x_key": "editor.placement_preview.dimension_x",
         "dimension_y_key": "editor.placement_preview.dimension_y",
         "dimension_z_key": "editor.placement_preview.dimension_z",
-        "warning_key": "editor.placement_preview.warning"
+        "warning_key": "editor.placement_preview.warning",
+        "state_key": "editor.placement_preview.state"
       },
       "previews": [
         {

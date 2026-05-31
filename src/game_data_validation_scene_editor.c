@@ -341,9 +341,9 @@ static bool validate_scene_editor_placement(validation_context *ctx, yyjson_val 
                                         "scene editor placement default_elevation"))
         return false;
 
-    static const char *const output_keys[] = {"active_key", "valid_key", "mode_key",       "kind_key",
-                                              "axis_key",   "world_key", "material_key",   "message_key",
-                                              "anchor_key", "snap_key",  "bounds_min_key", "bounds_max_key"};
+    static const char *const output_keys[] = {
+        "active_key",  "valid_key",  "mode_key", "kind_key",       "axis_key",       "world_key", "material_key",
+        "message_key", "anchor_key", "snap_key", "bounds_min_key", "bounds_max_key", "state_key"};
     if (!validate_optional_output_keys(ctx, placement, placement_path, "scene editor placement", output_keys,
                                        SDL_arraysize(output_keys)))
         return false;
