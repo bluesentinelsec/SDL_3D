@@ -149,6 +149,7 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
 
     if (SDL_strcmp(mode, "vertex") != 0)
         (void)slayer3d_game_data_clear_editor_vertex_selection(runtime);
+    (void)editor_cancel_pending_brush_preview(runtime, "brush preview cancelled");
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);

@@ -385,6 +385,19 @@ static void editor_drag_cancel_pending(slayer3d_game_data_runtime *runtime, yyjs
     clear_editor_drag_create(runtime);
 }
 
+bool editor_cancel_pending_brush_preview(slayer3d_game_data_runtime *runtime, const char *message)
+{
+    if (runtime == NULL || !runtime->editor_drag_create.active)
+        return false;
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    yyjson_val *placement = obj_get(editor, "placement");
+    yyjson_val *drag_json = editor_drag_create_json(placement);
+    editor_drag_cancel_pending(runtime, placement, drag_json,
+                               message != NULL && message[0] != '\0' ? message : "brush preview cancelled");
+    return true;
+}
+
 static float editor_placement_elevation(slayer3d_game_data_runtime *runtime, yyjson_val *placement)
 {
     const float authored_elevation = json_float(placement, "default_elevation", 0.0f);
@@ -597,7 +610,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
     const char *mode = scene_state_string(runtime, "editor.mode", "select");
     if (SDL_strcmp(mode, "select") != 0 && SDL_strcmp(mode, "brush") != 0)
     {
-        clear_editor_drag_create(runtime);
+        (void)editor_cancel_pending_brush_preview(runtime, "brush preview cancelled");
         return true;
     }
 

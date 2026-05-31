@@ -444,6 +444,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return slayer3d_game_data_set_editor_tool_mode(runtime, json_string(action, "mode", NULL),
                                                        json_string(action, "message", NULL));
 
+    if (SDL_strcmp(type, "editor.placement_preview.cancel") == 0)
+        return editor_cancel_pending_brush_preview(runtime, json_string(action, "message", NULL));
+
     if (SDL_strcmp(type, "editor.vertex.snap_selected") == 0)
         return slayer3d_game_data_snap_selected_editor_vertices(runtime, action);
 

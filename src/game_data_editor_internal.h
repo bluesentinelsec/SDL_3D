@@ -91,6 +91,7 @@ bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_va
 bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed);
 void clear_editor_command_preview(slayer3d_game_data_runtime *runtime);
 void clear_editor_placement_preview(slayer3d_game_data_runtime *runtime);
+bool editor_cancel_pending_brush_preview(slayer3d_game_data_runtime *runtime, const char *message);
 void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                      const slayer3d_game_data_editor_selection *hover_selection);
 bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
