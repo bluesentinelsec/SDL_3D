@@ -204,7 +204,7 @@ static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
     float mouse_y = drag->start_mouse_y;
     (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
     const float units_per_pixel = SDL_max(drag->grid_size, 0.001f) / 48.0f;
-    const float distance = editor_snap_delta((mouse_y - drag->start_mouse_y) * units_per_pixel, drag->grid_size);
+    const float distance = editor_snap_delta((drag->start_mouse_y - mouse_y) * units_per_pixel, drag->grid_size);
     if (SDL_fabsf(distance) > 0.000001f)
     {
         drag->moved = editor_set_face_resize_preview(runtime, &drag->face_selection, distance);
