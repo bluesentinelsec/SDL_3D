@@ -81,6 +81,7 @@
             "work_plane": {
               "enabled": true,
               "normal": [0.0, 1.0, 0.0],
+              "normal_key": "editor.work_plane.normal",
               "distance": 0.0,
               "distance_key": "editor.work_plane.distance"
             }

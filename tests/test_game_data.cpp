@@ -20130,6 +20130,54 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragNormalizesReversedFootprint)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoBrushToolDragUsesActiveWorkPlaneAxis)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    configure_editor_shell_drag_camera(runtime);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_vec3(scene_state, "editor.work_plane.normal", slayer3d_vec3_make(0.0f, 0.0f, 1.0f));
+    slayer3d_properties_set_float(scene_state, "editor.work_plane.distance", 0.0f);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_brush_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.brush");
+    ASSERT_GE(mode_brush_signal, 0);
+    slayer3d_signal_emit(bus, mode_brush_signal, nullptr);
+
+    auto world = [&]() {
+        slayer3d_game_data_brush_world brush_world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+        return brush_world;
+    };
+    const int initial_brush_count = world().brush_count;
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    int frame = 0;
+    drag_editor_shell_pending_brush(runtime, input, 660.0f, 360.0f, 780.0f, 430.0f, frame);
+
+    EXPECT_EQ(world().brush_count, initial_brush_count);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.placement_preview.active", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.state", ""),
+                 "pending_footprint");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.axis", ""), "z");
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.dimension_z", 0.0f), 1.0f, 0.001f);
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.placement_preview.dimension_x", 0.0f), 0.0f);
+    EXPECT_GT(slayer3d_properties_get_float(scene_state, "editor.placement_preview.dimension_y", 0.0f), 0.0f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoBrushToolShiftAdjustsPendingFootprintDepth)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

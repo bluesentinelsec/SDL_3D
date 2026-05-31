@@ -159,6 +159,74 @@ static int editor_drag_extrusion_axis(const editor_drag_create_state *drag)
     return drag->extrusion_axis;
 }
 
+static const char *editor_drag_axis_name(int axis)
+{
+    switch (axis)
+    {
+    case 0:
+        return "x";
+    case 2:
+        return "z";
+    case 1:
+    default:
+        return "y";
+    }
+}
+
+static bool editor_drag_axis_from_name(const char *name, int *out_axis)
+{
+    if (name == NULL || out_axis == NULL)
+        return false;
+    if (SDL_strcmp(name, "x") == 0)
+        *out_axis = 0;
+    else if (SDL_strcmp(name, "y") == 0)
+        *out_axis = 1;
+    else if (SDL_strcmp(name, "z") == 0)
+        *out_axis = 2;
+    else
+        return false;
+    return true;
+}
+
+static int editor_drag_axis_from_normal(slayer3d_vec3 normal)
+{
+    normal.x = SDL_fabsf(normal.x);
+    normal.y = SDL_fabsf(normal.y);
+    normal.z = SDL_fabsf(normal.z);
+    if (normal.x >= normal.y && normal.x >= normal.z)
+        return 0;
+    if (normal.z >= normal.y)
+        return 2;
+    return 1;
+}
+
+static int editor_drag_extrusion_axis_from_work_plane(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
+                                                      yyjson_val *drag_json)
+{
+    int axis = 1;
+    const char *authored_axis = json_string(drag_json, "extrusion_axis", NULL);
+    if (editor_drag_axis_from_name(authored_axis, &axis))
+        return axis;
+
+    const char *axis_key = json_string(drag_json, "extrusion_axis_key", NULL);
+    if (runtime != NULL && axis_key != NULL && axis_key[0] != '\0' &&
+        editor_drag_axis_from_name(
+            slayer3d_properties_get_string(slayer3d_game_data_scene_state(runtime), axis_key, ""), &axis))
+    {
+        return axis;
+    }
+
+    yyjson_val *selection_json = obj_get(editor, "selection");
+    slayer3d_vec3 work_plane_normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    float work_plane_distance = 0.0f;
+    if (editor_work_plane_desc_from_trace_json(runtime, obj_get(selection_json, "trace"), &work_plane_normal,
+                                               &work_plane_distance))
+    {
+        axis = editor_drag_axis_from_normal(work_plane_normal);
+    }
+    return axis;
+}
+
 static int editor_drag_depth_cells(const editor_drag_create_state *drag)
 {
     if (drag == NULL || drag->depth_cells == 0)
@@ -195,14 +263,20 @@ static void editor_drag_update_current_cell(editor_drag_create_state *drag,
 {
     if (drag == NULL || hover_selection == NULL || !hover_selection->hit)
         return;
-    const int x = editor_drag_cell(hover_selection->point.x, drag->grid_size);
-    const int y = drag->start_cell[1];
-    const int z = editor_drag_cell(hover_selection->point.z, drag->grid_size);
-    if (drag->current_cell[0] != x || drag->current_cell[1] != y || drag->current_cell[2] != z)
+
+    const int extrusion_axis = editor_drag_extrusion_axis(drag);
+    const int next_cell[3] = {
+        extrusion_axis == 0 ? drag->start_cell[0] : editor_drag_cell(hover_selection->point.x, drag->grid_size),
+        extrusion_axis == 1 ? drag->start_cell[1] : editor_drag_cell(hover_selection->point.y, drag->grid_size),
+        extrusion_axis == 2 ? drag->start_cell[2] : editor_drag_cell(hover_selection->point.z, drag->grid_size)};
+    if (drag->current_cell[0] != next_cell[0] || drag->current_cell[1] != next_cell[1] ||
+        drag->current_cell[2] != next_cell[2])
+    {
         drag->moved = true;
-    drag->current_cell[0] = x;
-    drag->current_cell[1] = y;
-    drag->current_cell[2] = z;
+    }
+    drag->current_cell[0] = next_cell[0];
+    drag->current_cell[1] = next_cell[1];
+    drag->current_cell[2] = next_cell[2];
 }
 
 static float editor_drag_mouse_y(slayer3d_input_manager *input, float fallback)
@@ -355,7 +429,7 @@ static void editor_drag_publish_preview(slayer3d_game_data_runtime *runtime, yyj
         preview->scene = slayer3d_game_data_active_scene(runtime);
         preview->mode = json_string(drag_json, "mode", "drag_box");
         preview->kind = json_string(drag_json, "kind", "box");
-        preview->axis = "y";
+        preview->axis = editor_drag_axis_name(editor_drag_extrusion_axis(drag));
         preview->world_name = drag->world_name;
         preview->material_name = drag->material_name;
         preview->contents = drag->contents;
@@ -661,7 +735,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         drag->contents = brush_flags_from_json(obj_get(drag_json, "contents"), brush_content_flag_from_string,
                                                SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
         drag->grid_size = grid_size;
-        drag->extrusion_axis = 1;
+        drag->extrusion_axis = editor_drag_extrusion_axis_from_work_plane(runtime, editor, drag_json);
         drag->depth_cells = 1;
         drag->start_cell[0] = editor_drag_cell(hover_selection->point.x, grid_size);
         drag->start_cell[1] = editor_drag_cell(hover_selection->point.y, grid_size);

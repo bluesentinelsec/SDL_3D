@@ -1471,6 +1471,13 @@ path.
 `drag_create` optionally enables TrenchBroom-style brush creation in select and
 Brush Tool modes: the editor dry-runs the same source-box command while the
 pointer is dragged in empty space, then commits that exact command on release.
+The dragged footprint is projected onto the active editor work plane. The
+dominant work-plane normal becomes the extrusion axis, so a horizontal Y-up
+work plane draws an X/Z footprint and extrudes along Y, while front/side
+orthographic work planes can draw X/Y or Y/Z footprints and extrude along Z or
+X. `extrusion_axis` may be authored as `x`, `y`, or `z` to force an axis, or
+`extrusion_axis_key` may read the axis from scene state when a tool wants to
+override the active work plane.
 `grid_widget` can
 describe a small authored toolbar dropdown for selecting the active snap size.
 The widget writes both the general grid key and the brush grid key so previews,
