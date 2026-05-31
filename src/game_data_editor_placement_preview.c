@@ -200,6 +200,20 @@ static int editor_drag_axis_from_normal(slayer3d_vec3 normal)
     return 1;
 }
 
+static float editor_drag_normal_component(slayer3d_vec3 normal, int axis)
+{
+    switch (axis)
+    {
+    case 0:
+        return normal.x;
+    case 2:
+        return normal.z;
+    case 1:
+    default:
+        return normal.y;
+    }
+}
+
 static int editor_drag_extrusion_axis_from_work_plane(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                                       yyjson_val *drag_json)
 {
@@ -225,6 +239,36 @@ static int editor_drag_extrusion_axis_from_work_plane(slayer3d_game_data_runtime
         axis = editor_drag_axis_from_normal(work_plane_normal);
     }
     return axis;
+}
+
+static bool editor_drag_selection_can_start(const slayer3d_game_data_editor_selection *selection)
+{
+    return selection != NULL && selection->hit &&
+           (selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID ||
+            selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
+}
+
+static int editor_drag_extrusion_axis_from_selection(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
+                                                     yyjson_val *drag_json,
+                                                     const slayer3d_game_data_editor_selection *selection)
+{
+    if (selection != NULL && selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD &&
+        slayer3d_vec3_length_squared(selection->normal) > 0.000001f)
+    {
+        return editor_drag_axis_from_normal(selection->normal);
+    }
+    return editor_drag_extrusion_axis_from_work_plane(runtime, editor, drag_json);
+}
+
+static int editor_drag_initial_depth_cells(const slayer3d_game_data_editor_selection *selection, int extrusion_axis)
+{
+    if (selection != NULL && selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
+    {
+        const float normal_component = editor_drag_normal_component(selection->normal, extrusion_axis);
+        if (normal_component < -0.0001f)
+            return -1;
+    }
+    return 1;
 }
 
 static int editor_drag_depth_cells(const editor_drag_create_state *drag)
@@ -682,7 +726,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         return false;
 
     const char *mode = scene_state_string(runtime, "editor.mode", "select");
-    if (SDL_strcmp(mode, "select") != 0 && SDL_strcmp(mode, "brush") != 0)
+    if (SDL_strcmp(mode, "brush") != 0)
     {
         (void)editor_cancel_pending_brush_preview(runtime, "brush preview cancelled");
         return true;
@@ -716,8 +760,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         editor_drag_cancel_pending(runtime, placement, drag_json, "brush preview replaced");
     }
 
-    if (!drag->active && left_pressed && hover_selection != NULL && hover_selection->hit &&
-        hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID)
+    if (!drag->active && left_pressed && editor_drag_selection_can_start(hover_selection))
     {
         const float grid_size = editor_placement_grid_size(runtime, placement, drag_json,
                                                            json_float(placement, "default_grid_size", 16.0f));
@@ -735,8 +778,8 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         drag->contents = brush_flags_from_json(obj_get(drag_json, "contents"), brush_content_flag_from_string,
                                                SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID);
         drag->grid_size = grid_size;
-        drag->extrusion_axis = editor_drag_extrusion_axis_from_work_plane(runtime, editor, drag_json);
-        drag->depth_cells = 1;
+        drag->extrusion_axis = editor_drag_extrusion_axis_from_selection(runtime, editor, drag_json, hover_selection);
+        drag->depth_cells = editor_drag_initial_depth_cells(hover_selection, drag->extrusion_axis);
         drag->start_cell[0] = editor_drag_cell(hover_selection->point.x, grid_size);
         drag->start_cell[1] = editor_drag_cell(hover_selection->point.y, grid_size);
         drag->start_cell[2] = editor_drag_cell(hover_selection->point.z, grid_size);
