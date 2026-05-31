@@ -540,6 +540,112 @@ static bool emit_editor_debug_bounds(editor_debug_iteration_context *context, sl
     return true;
 }
 
+static int editor_preview_axis_index(const editor_placement_preview_state *preview)
+{
+    if (preview == NULL || preview->axis == NULL)
+        return 1;
+    if (SDL_strcmp(preview->axis, "x") == 0)
+        return 0;
+    if (SDL_strcmp(preview->axis, "z") == 0)
+        return 2;
+    return 1;
+}
+
+static float editor_vec3_component(slayer3d_vec3 value, int axis)
+{
+    if (axis == 0)
+        return value.x;
+    if (axis == 2)
+        return value.z;
+    return value.y;
+}
+
+static void editor_set_vec3_component(slayer3d_vec3 *value, int axis, float component)
+{
+    if (value == NULL)
+        return;
+    if (axis == 0)
+        value->x = component;
+    else if (axis == 2)
+        value->z = component;
+    else
+        value->y = component;
+}
+
+static float editor_preview_base_plane_coordinate(const slayer3d_game_data_runtime *runtime,
+                                                  const editor_placement_preview_state *preview, int axis)
+{
+    if (runtime != NULL && runtime->editor_drag_create.active && axis == runtime->editor_drag_create.extrusion_axis)
+    {
+        const editor_drag_create_state *drag = &runtime->editor_drag_create;
+        const float base = (float)drag->start_cell[axis] * SDL_max(drag->grid_size, 0.001f);
+        if (base >= editor_vec3_component(preview->bounds.min, axis) - 0.001f &&
+            base <= editor_vec3_component(preview->bounds.max, axis) + 0.001f)
+        {
+            return base;
+        }
+    }
+    return editor_vec3_component(preview->bounds.min, axis);
+}
+
+static bool emit_editor_debug_placement_footprint(editor_debug_iteration_context *context,
+                                                  const slayer3d_game_data_runtime *runtime,
+                                                  const editor_placement_preview_state *preview)
+{
+    if (context == NULL || preview == NULL || !preview->has_bounds)
+        return false;
+
+    const int axis = editor_preview_axis_index(preview);
+    const int u_axis = axis == 0 ? 1 : 0;
+    const int v_axis = axis == 2 ? 1 : 2;
+    const float base = editor_preview_base_plane_coordinate(runtime, preview, axis);
+    slayer3d_vec3 corners[4] = {preview->bounds.min, preview->bounds.min, preview->bounds.min, preview->bounds.min};
+    for (int corner = 0; corner < 4; ++corner)
+        editor_set_vec3_component(&corners[corner], axis, base);
+    editor_set_vec3_component(&corners[1], u_axis, editor_vec3_component(preview->bounds.max, u_axis));
+    editor_set_vec3_component(&corners[2], u_axis, editor_vec3_component(preview->bounds.max, u_axis));
+    editor_set_vec3_component(&corners[2], v_axis, editor_vec3_component(preview->bounds.max, v_axis));
+    editor_set_vec3_component(&corners[3], v_axis, editor_vec3_component(preview->bounds.max, v_axis));
+
+    for (int i = 0; i < 4; ++i)
+    {
+        if (!emit_editor_debug_line(context, corners[i], corners[(i + 1) % 4]))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_editor_debug_placement_axis(editor_debug_iteration_context *context,
+                                             const slayer3d_game_data_runtime *runtime,
+                                             const editor_placement_preview_state *preview)
+{
+    if (context == NULL || preview == NULL || !preview->has_bounds)
+        return false;
+
+    const int axis = editor_preview_axis_index(preview);
+    const int u_axis = axis == 0 ? 1 : 0;
+    const int v_axis = axis == 2 ? 1 : 2;
+    const float base = editor_preview_base_plane_coordinate(runtime, preview, axis);
+    const float min_axis = editor_vec3_component(preview->bounds.min, axis);
+    const float max_axis = editor_vec3_component(preview->bounds.max, axis);
+    const float end = SDL_fabsf(base - min_axis) <= SDL_fabsf(base - max_axis) ? max_axis : min_axis;
+
+    slayer3d_vec3 start = preview->bounds.min;
+    slayer3d_vec3 stop = preview->bounds.min;
+    editor_set_vec3_component(
+        &start, u_axis,
+        (editor_vec3_component(preview->bounds.min, u_axis) + editor_vec3_component(preview->bounds.max, u_axis)) *
+            0.5f);
+    editor_set_vec3_component(
+        &start, v_axis,
+        (editor_vec3_component(preview->bounds.min, v_axis) + editor_vec3_component(preview->bounds.max, v_axis)) *
+            0.5f);
+    editor_set_vec3_component(&start, axis, base);
+    stop = start;
+    editor_set_vec3_component(&stop, axis, end);
+    return emit_editor_debug_line(context, start, stop);
+}
+
 static bool emit_editor_debug_source_brush_edges(editor_debug_iteration_context *context,
                                                  const brush_world_runtime *world,
                                                  const slayer3d_game_data_editor_selection *selection)
@@ -1212,7 +1318,16 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         context.face_index = -1;
         if (!emit_editor_debug_bounds(&context, preview->bounds))
             return true;
+        context.color = (slayer3d_color){255, 220, 80, 230};
+        context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_FOOTPRINT_EDGE;
+        if (!emit_editor_debug_placement_footprint(&context, runtime, preview))
+            return true;
+        context.color = (slayer3d_color){255, 145, 40, 245};
+        context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_AXIS;
+        if (!emit_editor_debug_placement_axis(&context, runtime, preview))
+            return true;
         context.color = color;
+        context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE;
         if (!emit_editor_debug_bounds(&context, preview->bounds))
             return true;
     }

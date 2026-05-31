@@ -19920,19 +19920,35 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragLeavesPendingSourceBrushFootpr
     struct DragPreviewDebug
     {
         int edges = 0;
+        int footprint_edges = 0;
+        int axis_guides = 0;
     } drag_preview_debug;
     auto count_drag_preview = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) {
         auto *debug = static_cast<DragPreviewDebug *>(userdata);
-        if (primitive != nullptr && primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE &&
-            primitive->element_name != nullptr && SDL_strcmp(primitive->element_name, "drag_box") == 0)
+        if (primitive == nullptr || primitive->element_name == nullptr ||
+            SDL_strcmp(primitive->element_name, "drag_box") != 0)
         {
-            debug->edges++;
+            return true;
+        }
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE)
+        {
+            ++debug->edges;
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_FOOTPRINT_EDGE)
+        {
+            ++debug->footprint_edges;
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_AXIS)
+        {
+            ++debug->axis_guides;
         }
         return true;
     };
     ASSERT_TRUE(
         slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, count_drag_preview, &drag_preview_debug));
     EXPECT_EQ(drag_preview_debug.edges, 24);
+    EXPECT_EQ(drag_preview_debug.footprint_edges, 4);
+    EXPECT_EQ(drag_preview_debug.axis_guides, 1);
 
     mouse.type = SDL_EVENT_MOUSE_BUTTON_UP;
     mouse.button.x = motion.motion.x;

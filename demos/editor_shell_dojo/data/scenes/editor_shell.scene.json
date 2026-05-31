@@ -547,7 +547,7 @@
         "x": 12,
         "y": 92,
         "w": 308,
-        "h": 400,
+        "h": 460,
         "layer": 120,
         "visible_if": { "type": "scene_state.compare", "key": "editor.inspector.collapsed", "op": "==", "value": false, "default": false },
         "children": [
@@ -795,7 +795,7 @@
             "type": "panel",
             "layout": "row",
             "x": 12,
-            "y": 364,
+            "y": 424,
             "w": 272,
             "h": 26,
             "layer": 121,
@@ -811,6 +811,51 @@
                   { "type": "scene_state", "key": "editor.brush.drag.delta_x", "default": 0.0 },
                   { "type": "scene_state", "key": "editor.brush.drag.delta_y", "default": 0.0 },
                   { "type": "scene_state", "key": "editor.brush.drag.delta_z", "default": 0.0 }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.preview_state",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 364,
+            "w": 272,
+            "h": 26,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.row.preview_state.label", "type": "label", "w": 96, "h": "fill", "text": "Preview State" },
+              {
+                "id": "ui.editor_shell.left_inspector.row.preview_state.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s",
+                "bindings": [{ "type": "scene_state", "key": "editor.placement_preview.state", "default": "idle" }]
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.left_inspector.row.preview_grid_axis",
+            "type": "panel",
+            "layout": "row",
+            "x": 12,
+            "y": 394,
+            "w": 272,
+            "h": 26,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.label", "type": "label", "w": 96, "h": "fill", "text": "Grid / Axis" },
+              {
+                "id": "ui.editor_shell.left_inspector.row.preview_grid_axis.value",
+                "type": "label",
+                "w": "fill",
+                "h": "fill",
+                "format": "%s / %s",
+                "bindings": [
+                  { "type": "scene_state", "key": "editor.placement_preview.snap", "default": 0.0 },
+                  { "type": "scene_state", "key": "editor.placement_preview.axis", "default": "none" }
                 ]
               }
             ]

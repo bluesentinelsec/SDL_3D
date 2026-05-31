@@ -95,6 +95,10 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_HANDLE = 15,
         /** @brief Hovered source brush vertex coordinate label. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL = 16,
+        /** @brief Pending brush placement footprint edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_FOOTPRINT_EDGE = 17,
+        /** @brief Pending brush placement extrusion-axis guide. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_AXIS = 18,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
