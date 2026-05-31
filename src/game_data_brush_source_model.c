@@ -383,6 +383,22 @@ static void source_box_update_bounds_from_vertices(editor_brush_source_box_runti
     }
 }
 
+static void translate_source_box_coordinates(editor_brush_source_box_runtime *box, const int delta[3])
+{
+    if (box == NULL || delta == NULL)
+        return;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        box->min[axis] += delta[axis];
+        box->max[axis] += delta[axis];
+    }
+    for (int vertex = 0; vertex < box->vertex_count; ++vertex)
+    {
+        for (int axis = 0; axis < 3; ++axis)
+            box->vertices[vertex][axis] += delta[axis];
+    }
+}
+
 static bool source_intervals_overlap_positive(int a_min, int a_max, int b_min, int b_max)
 {
     return SDL_max(a_min, b_min) < SDL_min(a_max, b_max);
@@ -2942,20 +2958,20 @@ bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime,
     int old_min[3];
     int old_max[3];
     copy_source_box_coordinates(box, old_min, old_max);
-    for (int axis = 0; axis < 3; ++axis)
-    {
-        box->min[axis] += delta[axis];
-        box->max[axis] += delta[axis];
-    }
+    translate_source_box_coordinates(box, delta);
 
     if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size))
     {
+        const int rollback_delta[3] = {-delta[0], -delta[1], -delta[2]};
+        translate_source_box_coordinates(box, rollback_delta);
         restore_source_box_coordinates(box, old_min, old_max);
         return false;
     }
 
     if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
     {
+        const int rollback_delta[3] = {-delta[0], -delta[1], -delta[2]};
+        translate_source_box_coordinates(box, rollback_delta);
         restore_source_box_coordinates(box, old_min, old_max);
         (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
         return false;

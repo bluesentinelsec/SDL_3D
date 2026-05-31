@@ -16805,7 +16805,9 @@ TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
     const int mode_face_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.face");
+    const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
     ASSERT_GE(mode_face_signal, 0);
+    ASSERT_GE(mode_select_signal, 0);
     slayer3d_signal_emit(bus, mode_face_signal, nullptr);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
@@ -16869,6 +16871,52 @@ TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
     slayer3d_input_process_event(input, &up);
     slayer3d_input_update(input, 5);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    slayer3d_game_data_brush_world brush_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+    ASSERT_EQ(brush_world.brush_count, 1);
+    ASSERT_NE(brush_world.brushes[0].name, nullptr);
+    const std::string brush_name = brush_world.brushes[0].name;
+    const slayer3d_bounding_box before_select_drag = brush_world.brushes[0].bounds;
+    slayer3d_signal_emit(bus, mode_select_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 6);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    down.button.x = motion.motion.x;
+    down.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &down);
+    slayer3d_input_update(input, 7);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    motion.motion.x = 760.0f;
+    motion.motion.y = 430.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 8);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    up.button.x = motion.motion.x;
+    up.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &up);
+    slayer3d_input_update(input, 9);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+    const slayer3d_game_data_brush *after_drag_brush = nullptr;
+    for (int i = 0; i < brush_world.brush_count; ++i)
+    {
+        if (brush_world.brushes[i].name != nullptr && brush_name == brush_world.brushes[i].name)
+        {
+            after_drag_brush = &brush_world.brushes[i];
+            break;
+        }
+    }
+    ASSERT_NE(after_drag_brush, nullptr);
+    const float drag_dx = after_drag_brush->bounds.min.x - before_select_drag.min.x;
+    const float drag_dz = after_drag_brush->bounds.min.z - before_select_drag.min.z;
+    EXPECT_GT(SDL_fabsf(drag_dx) + SDL_fabsf(drag_dz), 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
