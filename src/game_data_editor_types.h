@@ -63,6 +63,10 @@ typedef struct editor_drag_create_state
     const char *material_name;
     unsigned int contents;
     float grid_size;
+    int extrusion_axis;
+    int depth_cells;
+    int depth_drag_start_cell;
+    float depth_drag_start_mouse_y;
     int start_cell[3];
     int current_cell[3];
     int source_min[3];
