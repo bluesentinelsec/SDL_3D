@@ -148,6 +148,41 @@ static bool editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
+static float editor_face_drag_distance(const slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
+                                       float mouse_x, float mouse_y)
+{
+    if (drag == NULL)
+        return 0.0f;
+
+    const float units_per_pixel = SDL_max(drag->grid_size, 0.001f) / 48.0f;
+    const slayer3d_vec3 normal = slayer3d_vec3_normalize(drag->face_selection.normal);
+    slayer3d_camera3d camera;
+    if (runtime != NULL && slayer3d_game_data_get_camera(runtime, slayer3d_game_data_active_camera(runtime), &camera))
+    {
+        const slayer3d_vec3 forward = slayer3d_vec3_normalize(slayer3d_vec3_sub(camera.target, camera.position));
+        const slayer3d_vec3 right = slayer3d_vec3_normalize(slayer3d_vec3_cross(forward, camera.up));
+        const slayer3d_vec3 up = slayer3d_vec3_normalize(slayer3d_vec3_cross(right, forward));
+        if (slayer3d_vec3_length_squared(normal) > 0.000001f && slayer3d_vec3_length_squared(right) > 0.000001f &&
+            slayer3d_vec3_length_squared(up) > 0.000001f)
+        {
+            const float projected_x = slayer3d_vec3_dot(normal, right);
+            const float projected_y = -slayer3d_vec3_dot(normal, up);
+            const float projected_length_squared = projected_x * projected_x + projected_y * projected_y;
+            if (projected_length_squared > 0.000001f)
+            {
+                const float inverse_projected_length = 1.0f / SDL_sqrtf(projected_length_squared);
+                const float mouse_dx = mouse_x - drag->start_mouse_x;
+                const float mouse_dy = mouse_y - drag->start_mouse_y;
+                const float pixel_distance =
+                    (mouse_dx * projected_x + mouse_dy * projected_y) * inverse_projected_length;
+                return editor_snap_delta(pixel_distance * units_per_pixel, drag->grid_size);
+            }
+        }
+    }
+
+    return editor_snap_delta((drag->start_mouse_y - mouse_y) * units_per_pixel, drag->grid_size);
+}
+
 static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
                                     const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
 {
@@ -203,8 +238,7 @@ static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
     float mouse_x = drag->start_mouse_x;
     float mouse_y = drag->start_mouse_y;
     (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
-    const float units_per_pixel = SDL_max(drag->grid_size, 0.001f) / 48.0f;
-    const float distance = editor_snap_delta((drag->start_mouse_y - mouse_y) * units_per_pixel, drag->grid_size);
+    const float distance = editor_face_drag_distance(runtime, drag, mouse_x, mouse_y);
     if (SDL_fabsf(distance) > 0.000001f)
     {
         drag->moved = editor_set_face_resize_preview(runtime, &drag->face_selection, distance);

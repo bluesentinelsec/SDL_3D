@@ -16788,7 +16788,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_session_destroy(session);
 }
 
-TEST(GameDataRuntime, EditorShellDojoFaceDragMapsUpwardMouseMotionToPositiveResize)
+TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
     ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
@@ -16822,6 +16822,21 @@ TEST(GameDataRuntime, EditorShellDojoFaceDragMapsUpwardMouseMotionToPositiveResi
     slayer3d_input_update(input, 1);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.hit", false));
+    const slayer3d_value *selection_normal = slayer3d_properties_get_value(scene_state, "editor.selection.normal");
+    ASSERT_NE(selection_normal, nullptr);
+    ASSERT_EQ(selection_normal->type, SLAYER3D_VALUE_VEC3);
+    slayer3d_camera3d camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, slayer3d_game_data_active_camera(runtime), &camera));
+    const slayer3d_vec3 forward = slayer3d_vec3_normalize(slayer3d_vec3_sub(camera.target, camera.position));
+    const slayer3d_vec3 right = slayer3d_vec3_normalize(slayer3d_vec3_cross(forward, camera.up));
+    const slayer3d_vec3 up_direction = slayer3d_vec3_normalize(slayer3d_vec3_cross(right, forward));
+    const float projected_x = slayer3d_vec3_dot(selection_normal->as_vec3, right);
+    const float projected_y = -slayer3d_vec3_dot(selection_normal->as_vec3, up_direction);
+    const float projected_length = SDL_sqrtf(projected_x * projected_x + projected_y * projected_y);
+    ASSERT_GT(projected_length, 0.000001f);
+    ASSERT_GT(SDL_fabsf(projected_x), SDL_fabsf(projected_y)) << "fixture should exercise horizontal face swipes";
+    const float drag_x = projected_x / projected_length * 48.0f;
+    const float drag_y = projected_y / projected_length * 48.0f;
 
     SDL_Event down{};
     down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
@@ -16832,13 +16847,15 @@ TEST(GameDataRuntime, EditorShellDojoFaceDragMapsUpwardMouseMotionToPositiveResi
     slayer3d_input_update(input, 2);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
 
-    motion.motion.y = 292.0f;
+    motion.motion.x = 640.0f + drag_x;
+    motion.motion.y = 340.0f + drag_y;
     slayer3d_input_process_event(input, &motion);
     slayer3d_input_update(input, 3);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.resize.distance", 0.0f), 1.0f, 0.001f);
 
-    motion.motion.y = 388.0f;
+    motion.motion.x = 640.0f - drag_x;
+    motion.motion.y = 340.0f - drag_y;
     slayer3d_input_process_event(input, &motion);
     slayer3d_input_update(input, 4);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
