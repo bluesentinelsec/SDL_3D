@@ -57,6 +57,7 @@ typedef struct editor_drag_create_state
 {
     bool active;
     bool moved;
+    bool commit_on_release;
     editor_drag_create_phase phase;
     const char *scene;
     const char *world_name;

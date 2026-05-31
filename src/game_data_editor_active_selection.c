@@ -819,19 +819,32 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         return true;
     }
     bool drag_move_consumed = false;
-    if (!editor_handle_drag_move(runtime, &hover_selection, &drag_move_consumed))
-        return false;
-    if (drag_move_consumed)
+    if (runtime->editor_drag_move.active)
     {
-        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
-        publish_editor_selected_brush_count(runtime);
-        return true;
+        if (!editor_handle_drag_move(runtime, &hover_selection, &drag_move_consumed))
+            return false;
+        if (drag_move_consumed)
+        {
+            publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+            publish_editor_selected_brush_count(runtime);
+            return true;
+        }
     }
     bool drag_consumed = false;
     if (!update_editor_drag_create(runtime, editor, &hover_selection, &drag_consumed))
         return false;
     if (!drag_consumed)
+    {
+        if (!editor_handle_drag_move(runtime, &hover_selection, &drag_move_consumed))
+            return false;
+        if (drag_move_consumed)
+        {
+            publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+            publish_editor_selected_brush_count(runtime);
+            return true;
+        }
         update_editor_placement_preview(runtime, editor, &hover_selection);
+    }
     bool grid_nudge_changed = false;
     if (!editor_handle_grid_nudge(runtime, &grid_nudge_changed))
         return false;

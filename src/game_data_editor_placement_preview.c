@@ -798,6 +798,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         (void)slayer3d_game_data_clear_active_editor_selection(runtime);
         SDL_zero(*drag);
         drag->active = true;
+        drag->commit_on_release = SDL_strcmp(mode, "select") == 0;
         drag->phase = EDITOR_DRAG_CREATE_DRAWING_FOOTPRINT;
         drag->scene = slayer3d_game_data_active_scene(runtime);
         drag->world_name = json_string(drag_json, "world", "brush.editor_shell.target");
@@ -862,6 +863,11 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
     {
         if (valid && drag->moved)
         {
+            if (drag->commit_on_release)
+            {
+                (void)editor_drag_commit_source_box(runtime, placement, drag_json, drag, &result);
+                return true;
+            }
             drag->phase = EDITOR_DRAG_CREATE_PENDING_FOOTPRINT;
             editor_drag_publish_preview(runtime, placement, drag_json, drag, &result,
                                         "Hold Shift and move mouse to set brush depth", valid);
