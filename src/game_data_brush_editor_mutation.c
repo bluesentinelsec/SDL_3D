@@ -222,9 +222,11 @@ bool slayer3d_game_data_create_box_brush(slayer3d_game_data_runtime *runtime,
         set_error(error_buffer, error_buffer_size, "failed to allocate source box brush");
         return false;
     }
+    editor_brush_source_prefab_result create_result;
     char rebuild_error[256] = {0};
-    if (!editor_brush_world_insert_source_box_at_index(world_runtime, world_runtime->editor_source_box_count,
-                                                       &source_box, rebuild_error, sizeof(rebuild_error)))
+    if (!editor_brush_world_apply_source_box_create(world_runtime, &source_box, 0, &create_result, rebuild_error,
+                                                    sizeof(rebuild_error)) ||
+        create_result.no_op)
     {
         free_editor_brush_source_box_runtime(&source_box);
         if (rebuild_error[0] != '\0')

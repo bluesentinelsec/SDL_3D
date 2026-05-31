@@ -1468,9 +1468,10 @@ boxes; runtime brush geometry is generated only after the source candidate
 passes validation. The preview reuses the editor debug overlay's
 `command_preview` flag and color, so editor hosts do not need a second rendering
 path.
-`drag_create` optionally enables TrenchBroom-style select-mode brush creation:
-the editor dry-runs the same source-box command while the pointer is dragged in
-empty space, then commits that exact command on release. `grid_widget` can
+`drag_create` optionally enables TrenchBroom-style brush creation in select and
+Brush Tool modes: the editor dry-runs the same source-box command while the
+pointer is dragged in empty space, then commits that exact command on release.
+`grid_widget` can
 describe a small authored toolbar dropdown for selecting the active snap size.
 The widget writes both the general grid key and the brush grid key so previews,
 drag creation, selected-brush dragging, and arrow-key nudging stay in sync.

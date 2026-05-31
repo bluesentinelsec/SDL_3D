@@ -530,54 +530,31 @@
       {
         "signal": "signal.editor.mode.brush",
         "actions": [
-          { "type": "editor.vertex.selection.clear" },
-          { "type": "scene_state.set", "key": "editor.mode", "value": "brush" },
-          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "brush" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "brush tool" }
+          { "type": "editor.tool.set_mode", "mode": "brush" }
         ]
       },
       {
         "signal": "signal.editor.mode.face",
         "actions": [
-          { "type": "editor.vertex.selection.clear" },
-          { "type": "scene_state.set", "key": "editor.mode", "value": "face" },
-          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "face" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "face tool" }
+          { "type": "editor.tool.set_mode", "mode": "face" }
         ]
       },
       {
         "signal": "signal.editor.mode.vertex",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.mode", "value": "vertex" },
-          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "vertex" },
-          {
-            "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
-            "then": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "vertex tool" }
-            ],
-            "else": [
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select a brush before vertex tool" }
-            ]
-          }
+          { "type": "editor.tool.set_mode", "mode": "vertex" }
         ]
       },
       {
         "signal": "signal.editor.mode.select",
         "actions": [
-          { "type": "editor.vertex.selection.clear" },
-          { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
-          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
+          { "type": "editor.tool.set_mode", "mode": "select" }
         ]
       },
       {
         "signal": "signal.editor.mode.texture",
         "actions": [
-          { "type": "editor.vertex.selection.clear" },
-          { "type": "scene_state.set", "key": "editor.mode", "value": "texture" },
-          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture mode" }
+          { "type": "editor.tool.set_mode", "mode": "texture", "message": "texture mode" }
         ]
       },
       {
@@ -705,10 +682,7 @@
                     "type": "branch",
                     "if": { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "vertex", "default": "select" },
                     "then": [
-                      { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
-                      { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-                      { "type": "editor.command.clear_preview", "message": "tool closed" },
-                      { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
+                      { "type": "editor.tool.set_mode", "mode": "select" }
                     ],
                     "else": [
                       {
@@ -730,10 +704,7 @@
                               ]
                             },
                             "then": [
-                              { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
-                              { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
-                              { "type": "editor.command.clear_preview", "message": "tool closed" },
-                              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "select mode" }
+                              { "type": "editor.tool.set_mode", "mode": "select" }
                             ],
                             "else": [
                               { "type": "editor.command.clear_preview", "message": "escape" }
@@ -1006,11 +977,13 @@
               "type": "all",
               "conditions": [
                 {
-                  "type": "scene_state.compare",
-                  "key": "editor.mode",
-                  "op": "==",
-                  "value": "select",
-                  "default": "select"
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "select", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "texture", "default": "select" }
+                  ]
                 },
                 {
                   "type": "scene_state.compare",

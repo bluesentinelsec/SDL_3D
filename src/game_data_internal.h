@@ -161,6 +161,8 @@ typedef struct slayer3d_game_data_runtime
     editor_drag_create_state editor_drag_create;
     editor_drag_move_state editor_drag_move;
     editor_camera_orbit_state editor_camera_orbit;
+    bool editor_has_last_duplicate_offset;
+    slayer3d_vec3 editor_last_duplicate_offset;
     editor_command_history_state editor_command_history;
     scene_activity_state activity;
     float current_dt;
