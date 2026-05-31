@@ -248,6 +248,35 @@ static bool editor_drag_selection_can_start(const slayer3d_game_data_editor_sele
             selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
 }
 
+static bool editor_drag_mode_supports_creation(const char *mode)
+{
+    return SDL_strcmp(mode, "select") == 0 || SDL_strcmp(mode, "brush") == 0;
+}
+
+static bool editor_drag_selection_can_start_for_mode(const char *mode,
+                                                     const slayer3d_game_data_editor_selection *selection)
+{
+    if (selection == NULL || !selection->hit)
+        return false;
+
+    if (SDL_strcmp(mode, "select") == 0)
+    {
+        /* Select mode mirrors TrenchBroom's default draw-shape behavior: empty/work-plane drags
+           can create a cuboid, but brush-face drags remain available for selection/move tools. */
+        return selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_INVALID;
+    }
+
+    if (SDL_strcmp(mode, "brush") == 0)
+    {
+        /* Brush Tool mirrors TrenchBroom's assemble-brush behavior: an existing brush face is a
+           valid reference surface for drawing a secondary brush footprint. Empty work-plane drags
+           remain valid for the current simple blockout workflow. */
+        return editor_drag_selection_can_start(selection);
+    }
+
+    return false;
+}
+
 static int editor_drag_extrusion_axis_from_selection(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                                      yyjson_val *drag_json,
                                                      const slayer3d_game_data_editor_selection *selection)
@@ -726,7 +755,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         return false;
 
     const char *mode = scene_state_string(runtime, "editor.mode", "select");
-    if (SDL_strcmp(mode, "brush") != 0)
+    if (!editor_drag_mode_supports_creation(mode))
     {
         (void)editor_cancel_pending_brush_preview(runtime, "brush preview cancelled");
         return true;
@@ -760,7 +789,7 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
         editor_drag_cancel_pending(runtime, placement, drag_json, "brush preview replaced");
     }
 
-    if (!drag->active && left_pressed && editor_drag_selection_can_start(hover_selection))
+    if (!drag->active && left_pressed && editor_drag_selection_can_start_for_mode(mode, hover_selection))
     {
         const float grid_size = editor_placement_grid_size(runtime, placement, drag_json,
                                                            json_float(placement, "default_grid_size", 16.0f));
