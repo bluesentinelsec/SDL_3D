@@ -41,6 +41,7 @@ extern "C"
 #define SLAYER3D_EDITOR_SOURCE_BOX_FACE_COUNT 6
 #define SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY 16
 #define SLAYER3D_EDITOR_SOURCE_CONVEX_FACE_CAPACITY 32
+#define SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY 64
 #define SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX 320
     typedef struct editor_brush_source_vertex
     {
@@ -154,6 +155,30 @@ extern "C"
         char diagnostic[256];
         slayer3d_game_data_brush brush;
     } editor_brush_source_vertex_operation_result;
+    typedef enum editor_brush_source_clip_keep_mode
+    {
+        EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT = 0,
+        EDITOR_BRUSH_SOURCE_CLIP_KEEP_BACK,
+        EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH
+    } editor_brush_source_clip_keep_mode;
+    typedef struct editor_brush_source_clip_desc
+    {
+        const char *const *brush_identities;
+        int brush_count;
+        slayer3d_vec3 normal;
+        float distance_source_units;
+        editor_brush_source_clip_keep_mode keep_mode;
+    } editor_brush_source_clip_desc;
+    typedef struct editor_brush_source_clip_result
+    {
+        bool valid;
+        int input_brush_count;
+        int output_brush_count;
+        int removed_brush_count;
+        int output_source_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+        editor_brush_source_box_runtime output_brushes[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+        char diagnostic[256];
+    } editor_brush_source_clip_result;
     yyjson_val *active_editor_tooling_root(const slayer3d_game_data_runtime *runtime);
     void update_editor_placement_preview(slayer3d_game_data_runtime *runtime, yyjson_val *editor,
                                          const slayer3d_game_data_editor_selection *hover_selection);
@@ -203,6 +228,15 @@ extern "C"
                                                           const editor_brush_source_vertex_operation_desc *desc,
                                                           editor_brush_source_vertex_operation_result *out_result,
                                                           char *error_buffer, int error_buffer_size);
+    void editor_brush_world_free_source_clip_result(editor_brush_source_clip_result *result);
+    bool editor_brush_world_preview_source_clip_operation(const brush_world_runtime *world_runtime,
+                                                          const editor_brush_source_clip_desc *desc,
+                                                          editor_brush_source_clip_result *out_result,
+                                                          char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_apply_source_clip_operation(brush_world_runtime *world_runtime,
+                                                        const editor_brush_source_clip_desc *desc,
+                                                        editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                        int error_buffer_size);
     bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
                                                           editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                           char *error_buffer, int error_buffer_size);
@@ -21956,6 +21990,290 @@ TEST(GameDataRuntime, EditorBrushSourceVertexTopologyRejectsOffGridCoordinates)
     EXPECT_GT(diagnostics.off_snap_count, 0);
     EXPECT_EQ(diagnostics.degenerate_count, 0);
     EXPECT_NE(std::string(error).find("off grid"), std::string::npos) << error;
+}
+
+static void load_editor_source_clip_fixture(slayer3d_game_session **out_session,
+                                            slayer3d_game_data_runtime **out_runtime,
+                                            brush_world_runtime **out_world_runtime, const std::string &boxes_json)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    char error[512]{};
+
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, out_session));
+    ASSERT_TRUE(
+        slayer3d_game_data_load_file(dojo_path.string().c_str(), *out_session, out_runtime, error, sizeof(error)))
+        << error;
+
+    const std::string import_json = R"json({
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "compile": { "hidden_face_culling": true },
+      "materials": [
+        { "name": "mat.editor.wall", "albedo": [0.5, 0.5, 0.5, 1.0] },
+        { "name": "mat.editor.ceiling", "albedo": [0.8, 0.8, 0.8, 1.0] }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 1000,
+      "boxes": [)json" + boxes_json +
+                                    R"json(]
+    }
+  ],
+  "editor_player_starts": []
+})json";
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(
+        *out_runtime, "brush.editor_shell.target", import_json.c_str(), import_json.size(),
+        "/tmp/source-clip-fixture.json", error, sizeof(error)))
+        << error;
+
+    *out_world_runtime = find_brush_world_runtime_mutable(*out_runtime, "brush.editor_shell.target");
+    ASSERT_NE(*out_world_runtime, nullptr);
+}
+
+static std::string source_clip_box_json(const char *stable_id, const char *name, int min_x, int min_y, int min_z,
+                                        int max_x, int max_y, int max_z)
+{
+    std::ostringstream stream;
+    stream << R"json({
+          "stable_id": ")json"
+           << stable_id << R"json(",
+          "name": ")json"
+           << name << R"json(",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "face_materials": { "py": "mat.editor.ceiling" },
+          "min": [)json"
+           << min_x << ", " << min_y << ", " << min_z << R"json(],
+          "max": [)json"
+           << max_x << ", " << max_y << ", " << max_z << R"json(],
+          "contents": ["solid"]
+        })json";
+    return stream.str();
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipPreviewKeepsFrontAndBackHalves)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.clip", "brush.source.clip", 0, 0, 0, 8000, 8000, 8000)));
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.clip"};
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    desc.distance_source_units = 4000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
+
+    editor_brush_source_clip_result result{};
+    ASSERT_TRUE(editor_brush_world_preview_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 1);
+    EXPECT_EQ(result.output_brushes[0].min[0], 4000);
+    EXPECT_EQ(result.output_brushes[0].max[0], 8000);
+    EXPECT_EQ(result.output_brushes[0].vertex_count, 8);
+    editor_brush_world_free_source_clip_result(&result);
+
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_BACK;
+    ASSERT_TRUE(editor_brush_world_preview_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 1);
+    EXPECT_EQ(result.output_brushes[0].min[0], 0);
+    EXPECT_EQ(result.output_brushes[0].max[0], 4000);
+    EXPECT_EQ(result.output_brushes[0].vertex_count, 8);
+    editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipPreviewSupportsDiagonalConvexCuts)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.diagonal", "brush.source.diagonal", 0, 0, 0, 8000, 8000, 8000)));
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.diagonal"};
+    const float inv_sqrt2 = 1.0f / std::sqrt(2.0f);
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(inv_sqrt2, 0.0f, inv_sqrt2);
+    desc.distance_source_units = 8000.0f * inv_sqrt2;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
+
+    editor_brush_source_clip_result result{};
+    ASSERT_TRUE(editor_brush_world_preview_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 1);
+    EXPECT_GE(result.output_brushes[0].vertex_count, 6);
+    EXPECT_EQ(result.output_brushes[0].min[0], 0);
+    EXPECT_EQ(result.output_brushes[0].max[0], 8000);
+    EXPECT_EQ(result.output_brushes[0].min[2], 0);
+    EXPECT_EQ(result.output_brushes[0].max[2], 8000);
+
+    slayer3d_game_data_brush rebuilt{};
+    ASSERT_TRUE(editor_brush_world_build_source_convex_brush_from_vertices(
+        world_runtime, "source.box.diagonal", &result.output_brushes[0].vertices[0][0],
+        result.output_brushes[0].vertex_count, &rebuilt, error, sizeof(error)))
+        << error;
+    EXPECT_GT(rebuilt.face_count, 4);
+    editor_brush_source_free_runtime_brush(&rebuilt);
+    editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipApplyKeepBothSplitsBrushAndRebuildsRuntimeWorld)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.split", "brush.source.split", 0, 0, 0, 8000, 8000, 8000)));
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.split"};
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    desc.distance_source_units = 4000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH;
+
+    editor_brush_source_clip_result result{};
+    ASSERT_TRUE(editor_brush_world_apply_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 2);
+    EXPECT_EQ(result.output_brushes[0].min[1], 4000);
+    EXPECT_EQ(result.output_brushes[0].max[1], 8000);
+    EXPECT_EQ(result.output_brushes[1].min[1], 0);
+    EXPECT_EQ(result.output_brushes[1].max[1], 4000);
+
+    slayer3d_game_data_brush_world public_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &public_world));
+    EXPECT_EQ(public_world.brush_count, 2);
+    EXPECT_EQ(public_world.compile_invalid_brush_count, 0);
+    editor_brush_source_vertex_model model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 8);
+    SDL_zero(model);
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 1, &model, error, sizeof(error))) << error;
+    EXPECT_EQ(model.vertex_count, 8);
+    editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipHandlesOutsideAndCoplanarPlanesPredictably)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.outside", "brush.source.outside", 0, 0, 0, 8000, 8000, 8000)));
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.outside"};
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    desc.distance_source_units = 9000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
+
+    editor_brush_source_clip_result result{};
+    EXPECT_FALSE(editor_brush_world_preview_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("remove all"), std::string::npos) << error;
+
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_BACK;
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_preview_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 1);
+    EXPECT_EQ(result.output_brushes[0].min[0], 0);
+    EXPECT_EQ(result.output_brushes[0].max[0], 8000);
+    editor_brush_world_free_source_clip_result(&result);
+
+    desc.distance_source_units = 8000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH;
+    ASSERT_TRUE(editor_brush_world_preview_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    EXPECT_EQ(result.output_brush_count, 1);
+    editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipApplyMultiBrushSelectionIsAtomic)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    const std::string boxes = source_clip_box_json("source.box.a", "brush.source.a", 0, 0, 0, 8000, 8000, 8000) + "," +
+                              source_clip_box_json("source.box.b", "brush.source.b", 10000, 0, 0, 18000, 8000, 8000);
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(&session, &runtime, &world_runtime, boxes));
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.a", "source.box.b"};
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 2;
+    desc.normal = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    desc.distance_source_units = 4000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
+
+    editor_brush_source_clip_result result{};
+    ASSERT_TRUE(editor_brush_world_apply_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 2);
+    EXPECT_EQ(result.output_brushes[0].min[0], 4000);
+    EXPECT_EQ(result.output_brushes[0].max[0], 8000);
+    EXPECT_EQ(result.output_brushes[1].min[0], 10000);
+    EXPECT_EQ(result.output_brushes[1].max[0], 18000);
+    editor_brush_world_free_source_clip_result(&result);
+
+    const char *duplicate_brushes[] = {"source.box.a", "source.box.a"};
+    desc.brush_identities = duplicate_brushes;
+    EXPECT_FALSE(editor_brush_world_apply_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)));
+
+    slayer3d_game_data_brush_world public_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &public_world));
+    EXPECT_EQ(public_world.brush_count, 2);
+    EXPECT_EQ(public_world.compile_invalid_brush_count, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
 }
 
 TEST(GameDataRuntime, EditorBrushSourceVertexRebuildCreatesSlopedConvexBrushAndPreservesMaterials)

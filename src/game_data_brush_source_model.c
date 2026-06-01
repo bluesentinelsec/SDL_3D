@@ -1812,6 +1812,563 @@ static bool source_vertex_operation_base_vertices(const brush_world_runtime *wor
     return true;
 }
 
+void editor_brush_world_free_source_clip_result(editor_brush_source_clip_result *result)
+{
+    if (result == NULL)
+        return;
+    for (int i = 0; i < result->output_brush_count && i < SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY; ++i)
+        free_editor_brush_source_box(&result->output_brushes[i]);
+    SDL_zero(*result);
+}
+
+static void source_clip_operation_set_failure(editor_brush_source_clip_result *result, const char *message)
+{
+    if (result == NULL)
+        return;
+    result->valid = false;
+    SDL_strlcpy(result->diagnostic, message != NULL ? message : "invalid source clip operation",
+                sizeof(result->diagnostic));
+}
+
+static float source_clip_signed_distance(const editor_brush_source_clip_desc *desc, const int coord[3])
+{
+    return desc != NULL && coord != NULL ? desc->normal.x * (float)coord[0] + desc->normal.y * (float)coord[1] +
+                                               desc->normal.z * (float)coord[2] - desc->distance_source_units
+                                         : 0.0f;
+}
+
+static bool source_clip_keep_signed_distance(float signed_distance, bool keep_front)
+{
+    return keep_front ? signed_distance >= -0.001f : signed_distance <= 0.001f;
+}
+
+static bool source_clip_append_intersection(int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                            int *vertex_count, const int a[3], const int b[3], float signed_a,
+                                            float signed_b, char *error_buffer, int error_buffer_size)
+{
+    const float denominator = signed_a - signed_b;
+    if (SDL_fabsf(denominator) <= 0.000001f)
+        return true;
+    const float t = signed_a / denominator;
+    if (t < -0.001f || t > 1.001f)
+        return true;
+
+    int intersection[3] = {
+        (int)SDL_lroundf((float)a[0] + ((float)b[0] - (float)a[0]) * t),
+        (int)SDL_lroundf((float)a[1] + ((float)b[1] - (float)a[1]) * t),
+        (int)SDL_lroundf((float)a[2] + ((float)b[2] - (float)a[2]) * t),
+    };
+    return source_vertex_operation_append_unique(vertices, vertex_count, intersection, error_buffer, error_buffer_size);
+}
+
+static bool source_clip_collect_side_vertices(const brush_world_runtime *world_runtime, int source_index,
+                                              const editor_brush_source_clip_desc *desc, bool keep_front,
+                                              int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                              int *out_vertex_count, char *error_buffer, int error_buffer_size)
+{
+    if (out_vertex_count != NULL)
+        *out_vertex_count = 0;
+    if (world_runtime == NULL || desc == NULL || vertices == NULL || out_vertex_count == NULL || source_index < 0 ||
+        source_index >= world_runtime->editor_source_box_count)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip requires a valid source brush");
+        return false;
+    }
+
+    editor_brush_source_vertex_model model;
+    if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
+                                                    error_buffer_size))
+    {
+        return false;
+    }
+
+    float signed_distances[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    SDL_zeroa(signed_distances);
+    int kept_source_vertices = 0;
+    int rejected_source_vertices = 0;
+    for (int i = 0; i < model.vertex_count; ++i)
+    {
+        signed_distances[i] = source_clip_signed_distance(desc, model.vertices[i].coord);
+        if (source_clip_keep_signed_distance(signed_distances[i], keep_front))
+        {
+            ++kept_source_vertices;
+            if (!source_vertex_operation_append_unique(vertices, out_vertex_count, model.vertices[i].coord,
+                                                       error_buffer, error_buffer_size))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            ++rejected_source_vertices;
+        }
+    }
+
+    if (kept_source_vertices == model.vertex_count)
+        return true;
+    if (rejected_source_vertices == model.vertex_count)
+        return true;
+
+    for (int edge = 0; edge < model.edge_count; ++edge)
+    {
+        const editor_brush_source_edge *source_edge = &model.edges[edge];
+        const int a_index = source_edge->vertex_indices[0];
+        const int b_index = source_edge->vertex_indices[1];
+        if (a_index < 0 || a_index >= model.vertex_count || b_index < 0 || b_index >= model.vertex_count)
+            continue;
+        const float signed_a = signed_distances[a_index];
+        const float signed_b = signed_distances[b_index];
+        if ((signed_a > 0.001f && signed_b < -0.001f) || (signed_a < -0.001f && signed_b > 0.001f))
+        {
+            if (!source_clip_append_intersection(vertices, out_vertex_count, model.vertices[a_index].coord,
+                                                 model.vertices[b_index].coord, signed_a, signed_b, error_buffer,
+                                                 error_buffer_size))
+            {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool source_clip_result_identity_exists(const editor_brush_source_clip_result *result, const char *identity)
+{
+    if (result == NULL || identity == NULL || identity[0] == '\0')
+        return false;
+    for (int i = 0; i < result->output_brush_count; ++i)
+    {
+        const editor_brush_source_box_runtime *box = &result->output_brushes[i];
+        if ((box->stable_id != NULL && SDL_strcmp(box->stable_id, identity) == 0) ||
+            (box->name != NULL && SDL_strcmp(box->name, identity) == 0))
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool source_clip_make_unique_split_identity(const brush_world_runtime *world_runtime,
+                                                   const editor_brush_source_clip_result *result, const char *base,
+                                                   char *buffer, size_t buffer_size)
+{
+    if (buffer == NULL || buffer_size == 0u)
+        return false;
+    const char *prefix = base != NULL && base[0] != '\0' ? base : "source.clip";
+    for (int i = 1; i < 10000; ++i)
+    {
+        SDL_snprintf(buffer, buffer_size, "%s.clip.%d", prefix, i);
+        if (find_editor_source_box_index_by_identity(world_runtime, buffer) < 0 &&
+            !source_clip_result_identity_exists(result, buffer))
+        {
+            return true;
+        }
+    }
+    buffer[0] = '\0';
+    return false;
+}
+
+static bool source_clip_set_box_identity(editor_brush_source_box_runtime *box, const char *identity, char *error_buffer,
+                                         int error_buffer_size)
+{
+    if (box == NULL || identity == NULL || identity[0] == '\0')
+    {
+        set_error(error_buffer, error_buffer_size, "source clip requires a brush identity");
+        return false;
+    }
+    char *stable_id = SDL_strdup(identity);
+    char *name = SDL_strdup(identity);
+    if (stable_id == NULL || name == NULL)
+    {
+        SDL_free(stable_id);
+        SDL_free(name);
+        set_error(error_buffer, error_buffer_size, "failed to allocate clipped source brush identity");
+        return false;
+    }
+    SDL_free(box->stable_id);
+    SDL_free(box->name);
+    box->stable_id = stable_id;
+    box->name = name;
+    return true;
+}
+
+static bool source_clip_output_box_from_vertices(const brush_world_runtime *world_runtime, int source_index,
+                                                 const char *identity,
+                                                 const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                                 int vertex_count, editor_brush_source_box_runtime *out_box,
+                                                 char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || out_box == NULL || source_index < 0 ||
+        source_index >= world_runtime->editor_source_box_count || vertex_count < 4)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip would not produce a solid brush");
+        return false;
+    }
+
+    const editor_brush_source_box_runtime *source_box = &world_runtime->editor_source_boxes[source_index];
+    slayer3d_game_data_brush rebuilt;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(
+            world_runtime,
+            source_box->stable_id != NULL && source_box->stable_id[0] != '\0' ? source_box->stable_id
+                                                                              : source_box->name,
+            &vertices[0][0], vertex_count, &rebuilt, error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&rebuilt);
+
+    if (!copy_editor_brush_source_box_runtime(source_box, out_box))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to copy clipped source brush");
+        return false;
+    }
+    if (!source_clip_set_box_identity(out_box, identity, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(out_box);
+        return false;
+    }
+    char *old_prefab = out_box->prefab;
+    out_box->prefab = SDL_strdup("convex");
+    if (out_box->prefab == NULL)
+    {
+        out_box->prefab = old_prefab;
+        free_editor_brush_source_box(out_box);
+        set_error(error_buffer, error_buffer_size, "failed to allocate clipped source prefab metadata");
+        return false;
+    }
+    SDL_free(old_prefab);
+    out_box->vertex_count = vertex_count;
+    for (int i = 0; i < vertex_count; ++i)
+    {
+        out_box->vertices[i][0] = vertices[i][0];
+        out_box->vertices[i][1] = vertices[i][1];
+        out_box->vertices[i][2] = vertices[i][2];
+    }
+    for (int i = vertex_count; i < SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY; ++i)
+    {
+        out_box->vertices[i][0] = 0;
+        out_box->vertices[i][1] = 0;
+        out_box->vertices[i][2] = 0;
+    }
+    source_box_update_bounds_from_vertices(out_box);
+    if (!source_box_candidate_valid(world_runtime, out_box, source_index, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(out_box);
+        return false;
+    }
+    return true;
+}
+
+static bool source_clip_append_output(const brush_world_runtime *world_runtime, int source_index, const char *identity,
+                                      const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                      int vertex_count, editor_brush_source_clip_result *out_result, char *error_buffer,
+                                      int error_buffer_size)
+{
+    if (out_result == NULL || out_result->output_brush_count >= SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip exceeded output brush capacity");
+        return false;
+    }
+
+    const int output_index = out_result->output_brush_count;
+    if (!source_clip_output_box_from_vertices(world_runtime, source_index, identity, vertices, vertex_count,
+                                              &out_result->output_brushes[output_index], error_buffer,
+                                              error_buffer_size))
+    {
+        return false;
+    }
+    out_result->output_source_indices[output_index] = source_index;
+    out_result->output_brush_count++;
+    return true;
+}
+
+static bool source_clip_vertices_are_coplanar_with_clip(
+    const editor_brush_source_clip_desc *desc, const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+    int vertex_count)
+{
+    if (desc == NULL || vertices == NULL || vertex_count <= 0)
+        return false;
+    for (int i = 0; i < vertex_count; ++i)
+    {
+        if (SDL_fabsf(source_clip_signed_distance(desc, vertices[i])) > 0.001f)
+            return false;
+    }
+    return true;
+}
+
+static bool source_clip_append_side(const brush_world_runtime *world_runtime, int source_index,
+                                    const editor_brush_source_clip_desc *desc, bool keep_front, const char *identity,
+                                    editor_brush_source_clip_result *out_result, char *error_buffer,
+                                    int error_buffer_size)
+{
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    SDL_zeroa(vertices);
+    int vertex_count = 0;
+    if (!source_clip_collect_side_vertices(world_runtime, source_index, desc, keep_front, vertices, &vertex_count,
+                                           error_buffer, error_buffer_size))
+    {
+        return false;
+    }
+    if (vertex_count < 4)
+        return true;
+    if (source_clip_vertices_are_coplanar_with_clip(desc, vertices, vertex_count))
+        return true;
+    return source_clip_append_output(world_runtime, source_index, identity, vertices, vertex_count, out_result,
+                                     error_buffer, error_buffer_size);
+}
+
+static bool source_clip_desc_valid(const brush_world_runtime *world_runtime, const editor_brush_source_clip_desc *desc,
+                                   char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || desc == NULL ||
+        desc->brush_identities == NULL || desc->brush_count <= 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip requires source-backed brush identities");
+        return false;
+    }
+    if (desc->brush_count * 2 > SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip selection exceeds output brush capacity");
+        return false;
+    }
+    if (slayer3d_vec3_length_squared(desc->normal) <= 0.000001f)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip requires a non-zero clip plane normal");
+        return false;
+    }
+    for (int i = 0; i < desc->brush_count; ++i)
+    {
+        const char *identity = desc->brush_identities[i];
+        if (identity == NULL || identity[0] == '\0' ||
+            find_editor_source_box_index_by_identity(world_runtime, identity) < 0)
+        {
+            set_error(error_buffer, error_buffer_size, "source clip brush not found");
+            return false;
+        }
+        for (int j = i + 1; j < desc->brush_count; ++j)
+        {
+            const char *other = desc->brush_identities[j];
+            if (other != NULL && SDL_strcmp(identity, other) == 0)
+            {
+                set_error(error_buffer, error_buffer_size, "source clip brush identities must be unique");
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool editor_brush_world_preview_source_clip_operation(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_clip_desc *desc,
+                                                      editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                      int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    if (out_result == NULL || !source_clip_desc_valid(world_runtime, desc, error_buffer, error_buffer_size))
+    {
+        source_clip_operation_set_failure(out_result, error_buffer != NULL ? error_buffer : "invalid source clip");
+        return false;
+    }
+
+    editor_brush_source_clip_desc normalized_desc = *desc;
+    normalized_desc.normal = slayer3d_vec3_normalize(desc->normal);
+    out_result->input_brush_count = desc->brush_count;
+
+    for (int i = 0; i < desc->brush_count; ++i)
+    {
+        const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identities[i]);
+        const editor_brush_source_box_runtime *source_box = &world_runtime->editor_source_boxes[source_index];
+        const char *base_identity = source_box->stable_id != NULL && source_box->stable_id[0] != '\0'
+                                        ? source_box->stable_id
+                                        : source_box->name;
+        const int output_count_before = out_result->output_brush_count;
+
+        switch (desc->keep_mode)
+        {
+        case EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT:
+            if (!source_clip_append_side(world_runtime, source_index, &normalized_desc, true, base_identity, out_result,
+                                         error_buffer, error_buffer_size))
+            {
+                editor_brush_world_free_source_clip_result(out_result);
+                source_clip_operation_set_failure(out_result, error_buffer);
+                return false;
+            }
+            break;
+        case EDITOR_BRUSH_SOURCE_CLIP_KEEP_BACK:
+            if (!source_clip_append_side(world_runtime, source_index, &normalized_desc, false, base_identity,
+                                         out_result, error_buffer, error_buffer_size))
+            {
+                editor_brush_world_free_source_clip_result(out_result);
+                source_clip_operation_set_failure(out_result, error_buffer);
+                return false;
+            }
+            break;
+        case EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH: {
+            if (!source_clip_append_side(world_runtime, source_index, &normalized_desc, true, base_identity, out_result,
+                                         error_buffer, error_buffer_size))
+            {
+                editor_brush_world_free_source_clip_result(out_result);
+                source_clip_operation_set_failure(out_result, error_buffer);
+                return false;
+            }
+            char split_identity[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+            if (!source_clip_make_unique_split_identity(world_runtime, out_result, base_identity, split_identity,
+                                                        sizeof(split_identity)) ||
+                !source_clip_append_side(world_runtime, source_index, &normalized_desc, false, split_identity,
+                                         out_result, error_buffer, error_buffer_size))
+            {
+                editor_brush_world_free_source_clip_result(out_result);
+                source_clip_operation_set_failure(out_result, error_buffer);
+                return false;
+            }
+            break;
+        }
+        default:
+            editor_brush_world_free_source_clip_result(out_result);
+            set_error(error_buffer, error_buffer_size, "unknown source clip keep mode");
+            source_clip_operation_set_failure(out_result, "unknown source clip keep mode");
+            return false;
+        }
+
+        if (out_result->output_brush_count == output_count_before)
+            out_result->removed_brush_count++;
+    }
+
+    if (out_result->output_brush_count <= 0)
+    {
+        editor_brush_world_free_source_clip_result(out_result);
+        set_error(error_buffer, error_buffer_size, "source clip would remove all selected brush geometry");
+        source_clip_operation_set_failure(out_result, "source clip would remove all selected brush geometry");
+        return false;
+    }
+
+    out_result->valid = true;
+    SDL_snprintf(out_result->diagnostic, sizeof(out_result->diagnostic), "source clip produced %d brush%s",
+                 out_result->output_brush_count, out_result->output_brush_count == 1 ? "" : "es");
+    return true;
+}
+
+static bool source_clip_output_for_source_index(const editor_brush_source_clip_result *result, int source_index,
+                                                int output_start_index, int *out_next_output_index)
+{
+    if (out_next_output_index != NULL)
+        *out_next_output_index = -1;
+    if (result == NULL)
+        return false;
+    for (int i = output_start_index; i < result->output_brush_count; ++i)
+    {
+        if (result->output_source_indices[i] == source_index)
+        {
+            if (out_next_output_index != NULL)
+                *out_next_output_index = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool editor_brush_world_apply_source_clip_operation(brush_world_runtime *world_runtime,
+                                                    const editor_brush_source_clip_desc *desc,
+                                                    editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                    int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    editor_brush_source_clip_result preview;
+    SDL_zero(preview);
+    if (!editor_brush_world_preview_source_clip_operation(world_runtime, desc, &preview, error_buffer,
+                                                          error_buffer_size))
+    {
+        if (out_result != NULL)
+            *out_result = preview;
+        return false;
+    }
+
+    const int old_count = world_runtime->editor_source_box_count;
+    bool *replace = old_count > 0 ? (bool *)SDL_calloc((size_t)old_count, sizeof(*replace)) : NULL;
+    editor_brush_source_box_runtime *new_boxes = (editor_brush_source_box_runtime *)SDL_calloc(
+        (size_t)(old_count - desc->brush_count + preview.output_brush_count), sizeof(*new_boxes));
+    if ((old_count > 0 && replace == NULL) || new_boxes == NULL)
+    {
+        SDL_free(replace);
+        SDL_free(new_boxes);
+        editor_brush_world_free_source_clip_result(&preview);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source clip transaction");
+        return false;
+    }
+
+    for (int i = 0; i < desc->brush_count; ++i)
+    {
+        const int source_index = find_editor_source_box_index_by_identity(world_runtime, desc->brush_identities[i]);
+        if (source_index >= 0)
+            replace[source_index] = true;
+    }
+
+    int write_index = 0;
+    for (int source_index = 0; source_index < old_count; ++source_index)
+    {
+        if (!replace[source_index])
+        {
+            if (!copy_editor_brush_source_box_runtime(&world_runtime->editor_source_boxes[source_index],
+                                                      &new_boxes[write_index++]))
+            {
+                set_error(error_buffer, error_buffer_size, "failed to copy source clip transaction");
+                goto fail_before_commit;
+            }
+            continue;
+        }
+
+        int output_index = -1;
+        int search_index = 0;
+        while (source_clip_output_for_source_index(&preview, source_index, search_index, &output_index))
+        {
+            if (!copy_editor_brush_source_box_runtime(&preview.output_brushes[output_index], &new_boxes[write_index++]))
+            {
+                set_error(error_buffer, error_buffer_size, "failed to copy clipped source brush");
+                goto fail_before_commit;
+            }
+            search_index = output_index + 1;
+        }
+    }
+
+    editor_brush_source_box_runtime *old_boxes = world_runtime->editor_source_boxes;
+    const int new_count = write_index;
+    world_runtime->editor_source_boxes = new_boxes;
+    world_runtime->editor_source_box_count = new_count;
+    world_runtime->editor_source_box_capacity = new_count;
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        world_runtime->editor_source_boxes = old_boxes;
+        world_runtime->editor_source_box_count = old_count;
+        world_runtime->editor_source_box_capacity = old_count;
+        for (int i = 0; i < new_count; ++i)
+            free_editor_brush_source_box(&new_boxes[i]);
+        SDL_free(new_boxes);
+        SDL_free(replace);
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        editor_brush_world_free_source_clip_result(&preview);
+        return false;
+    }
+
+    for (int i = 0; i < old_count; ++i)
+        free_editor_brush_source_box(&old_boxes[i]);
+    SDL_free(old_boxes);
+    SDL_free(replace);
+    if (out_result != NULL)
+        *out_result = preview;
+    else
+        editor_brush_world_free_source_clip_result(&preview);
+    return true;
+
+fail_before_commit:
+    for (int i = 0; i < write_index; ++i)
+        free_editor_brush_source_box(&new_boxes[i]);
+    SDL_free(new_boxes);
+    SDL_free(replace);
+    editor_brush_world_free_source_clip_result(&preview);
+    return false;
+}
+
 static bool source_vertex_operation_merge(const brush_world_runtime *world_runtime,
                                           const editor_brush_source_vertex_operation_desc *desc,
                                           int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],

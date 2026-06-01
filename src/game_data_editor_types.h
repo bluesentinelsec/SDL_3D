@@ -291,6 +291,35 @@ typedef struct editor_brush_source_vertex_operation_result
     slayer3d_game_data_brush brush;
 } editor_brush_source_vertex_operation_result;
 
+#define SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY 64
+
+typedef enum editor_brush_source_clip_keep_mode
+{
+    EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT = 0,
+    EDITOR_BRUSH_SOURCE_CLIP_KEEP_BACK,
+    EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH
+} editor_brush_source_clip_keep_mode;
+
+typedef struct editor_brush_source_clip_desc
+{
+    const char *const *brush_identities;
+    int brush_count;
+    slayer3d_vec3 normal;
+    float distance_source_units;
+    editor_brush_source_clip_keep_mode keep_mode;
+} editor_brush_source_clip_desc;
+
+typedef struct editor_brush_source_clip_result
+{
+    bool valid;
+    int input_brush_count;
+    int output_brush_count;
+    int removed_brush_count;
+    int output_source_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime output_brushes[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    char diagnostic[256];
+} editor_brush_source_clip_result;
+
 typedef struct editor_command_transaction_entry
 {
     int id;

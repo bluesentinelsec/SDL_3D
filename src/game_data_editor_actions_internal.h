@@ -147,6 +147,15 @@ bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world
                                                       const editor_brush_source_vertex_operation_desc *desc,
                                                       editor_brush_source_vertex_operation_result *out_result,
                                                       char *error_buffer, int error_buffer_size);
+void editor_brush_world_free_source_clip_result(editor_brush_source_clip_result *result);
+bool editor_brush_world_preview_source_clip_operation(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_clip_desc *desc,
+                                                      editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                      int error_buffer_size);
+bool editor_brush_world_apply_source_clip_operation(brush_world_runtime *world_runtime,
+                                                    const editor_brush_source_clip_desc *desc,
+                                                    editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                    int error_buffer_size);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);
