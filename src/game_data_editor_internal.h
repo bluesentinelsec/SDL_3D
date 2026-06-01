@@ -89,6 +89,8 @@ bool editor_mouse_in_rect(float mouse_x, float mouse_y, yyjson_val *rect);
 bool editor_handle_grid_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed);
 bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed);
 bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed);
+bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                   const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
 void clear_editor_command_preview(slayer3d_game_data_runtime *runtime);
 void clear_editor_placement_preview(slayer3d_game_data_runtime *runtime);
 bool editor_cancel_pending_brush_preview(slayer3d_game_data_runtime *runtime, const char *message);
@@ -110,6 +112,7 @@ bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_run
 bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, int quarter_turns);
 bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset,
                                                           bool use_last_offset);
+int editor_source_units_from_meters(const brush_world_runtime *world_runtime, float meters);
 void editor_set_string_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, const char *value);
 void editor_set_bool_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, bool value);
 void editor_set_int_output(slayer3d_properties *props, yyjson_val *outputs, const char *key_name, int value);

@@ -242,6 +242,13 @@ extern "C"
                                                       const editor_brush_source_clip_desc *desc,
                                                       editor_brush_source_clip_result *out_result, char *error_buffer,
                                                       int error_buffer_size);
+    bool slayer3d_game_data_commit_editor_clip_tool(slayer3d_game_data_runtime *runtime);
+    bool slayer3d_game_data_place_editor_clip_point_source(slayer3d_game_data_runtime *runtime, const int coord[3],
+                                                           slayer3d_vec3 work_plane_normal);
+    bool slayer3d_game_data_move_editor_clip_point_source(slayer3d_game_data_runtime *runtime, int point_index,
+                                                          const int coord[3], slayer3d_vec3 work_plane_normal);
+    bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                                       const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
     bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
                                                           editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                           char *error_buffer, int error_buffer_size);
@@ -22379,6 +22386,176 @@ TEST(GameDataRuntime, EditorBrushSourceClipCommitIsSingleUndoStepAndSelectsOutpu
     ASSERT_NE(active_selection.element_editor, nullptr);
     EXPECT_STREQ(active_selection.element_editor->stable_id, result.output_brushes[1].stable_id);
     editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorClipToolTwoPointPlacementUsesWorkPlaneNormal)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.clip.tool.two", "brush.source.clip.tool.two", 0, 0, 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.tool.two");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
+
+    const int point_a[3] = {4000, 0, 0};
+    const int point_b[3] = {4000, 0, 8000};
+    ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_a, slayer3d_vec3_make(0, 1, 0)));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", 0), 1);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", true));
+    ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_b, slayer3d_vec3_make(0, 1, 0)));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", 0), 2);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
+
+    ASSERT_TRUE(slayer3d_game_data_commit_editor_clip_tool(runtime));
+    slayer3d_game_data_brush_world brush_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+    ASSERT_EQ(brush_world.brush_count, 1);
+    EXPECT_NEAR(brush_world.brushes[0].bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_world.brushes[0].bounds.max.x, 4.0f, 0.001f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", true));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorClipToolThreePointPlacementUsesExactPlane)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.clip.tool.three", "brush.source.clip.tool.three", 0, 0, 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.tool.three");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    const int point_a[3] = {0, 4000, 0};
+    const int point_b[3] = {8000, 4000, 0};
+    const int point_c[3] = {0, 4000, 8000};
+    ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_a, slayer3d_vec3_make(0, 1, 0)));
+    ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_b, slayer3d_vec3_make(0, 1, 0)));
+    ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_c, slayer3d_vec3_make(0, 1, 0)));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", 0), 3);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
+
+    const int moved_point_c[3] = {0, 4000, 7000};
+    ASSERT_TRUE(
+        slayer3d_game_data_move_editor_clip_point_source(runtime, 2, moved_point_c, slayer3d_vec3_make(0, 1, 0)));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
+    const slayer3d_vec3 moved_point =
+        slayer3d_properties_get_vec3(scene_state, "editor.clip.point2", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(moved_point.z, 7000.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_move_editor_clip_point_source(runtime, 2, point_c, slayer3d_vec3_make(0, 1, 0)));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
+
+    ASSERT_TRUE(slayer3d_game_data_commit_editor_clip_tool(runtime));
+    slayer3d_game_data_brush_world brush_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+    ASSERT_EQ(brush_world.brush_count, 1);
+    EXPECT_NEAR(brush_world.brushes[0].bounds.min.y, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_world.brushes[0].bounds.max.y, 4.0f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorClipToolLeftClickPlacesAndDragsSnappedPoints)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.clip.tool.input", "brush.source.clip.tool.input", 0, 0, 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.tool.input");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    yyjson_val *selection_json = yyjson_obj_get(editor, "selection");
+    ASSERT_TRUE(yyjson_is_obj(selection_json));
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.world_name = "brush.editor_shell.target";
+    hover.world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    auto send_left = [&](Uint32 type, float x, float y, Uint64 frame) {
+        SDL_Event event{};
+        event.type = type;
+        event.button.button = SDL_BUTTON_LEFT;
+        event.button.x = x;
+        event.button.y = y;
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, frame);
+    };
+    auto handle_hover = [&](slayer3d_vec3 point) {
+        hover.point = point;
+        bool consumed = false;
+        EXPECT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+        return consumed;
+    };
+
+    send_left(SDL_EVENT_MOUSE_BUTTON_DOWN, 512.0f, 360.0f, 1);
+    EXPECT_TRUE(handle_hover(slayer3d_vec3_make(4.1f, 0.0f, 0.0f)));
+    send_left(SDL_EVENT_MOUSE_BUTTON_UP, 512.0f, 360.0f, 2);
+    EXPECT_TRUE(handle_hover(slayer3d_vec3_make(4.1f, 0.0f, 0.0f)));
+
+    send_left(SDL_EVENT_MOUSE_BUTTON_DOWN, 560.0f, 360.0f, 3);
+    EXPECT_TRUE(handle_hover(slayer3d_vec3_make(4.0f, 0.0f, 8.0f)));
+    send_left(SDL_EVENT_MOUSE_BUTTON_UP, 560.0f, 360.0f, 4);
+    EXPECT_TRUE(handle_hover(slayer3d_vec3_make(4.0f, 0.0f, 8.0f)));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", 0), 2);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
+    const slayer3d_vec3 point0 =
+        slayer3d_properties_get_vec3(scene_state, "editor.clip.point0", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(point0.x, 4000.0f, 0.001f);
+
+    send_left(SDL_EVENT_MOUSE_BUTTON_DOWN, 512.0f, 360.0f, 5);
+    EXPECT_TRUE(handle_hover(slayer3d_vec3_make(4.0f, 0.0f, 0.0f)));
+    slayer3d_input_update(input, 6);
+    EXPECT_TRUE(handle_hover(slayer3d_vec3_make(3.0f, 0.0f, 0.0f)));
+    send_left(SDL_EVENT_MOUSE_BUTTON_UP, 500.0f, 360.0f, 7);
+    EXPECT_TRUE(handle_hover(slayer3d_vec3_make(3.0f, 0.0f, 0.0f)));
+    const slayer3d_vec3 dragged_point0 =
+        slayer3d_properties_get_vec3(scene_state, "editor.clip.point0", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(dragged_point0.x, 3000.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.dragged_point", -2), -1);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

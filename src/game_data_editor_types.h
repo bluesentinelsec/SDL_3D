@@ -334,6 +334,8 @@ typedef struct editor_clip_tool_state
     int point_count;
     int hovered_point;
     int dragged_point;
+    bool has_work_plane_normal;
+    slayer3d_vec3 work_plane_normal;
     editor_brush_source_clip_keep_mode keep_mode;
     bool preview_valid;
     char message[256];
