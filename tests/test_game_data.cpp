@@ -21611,6 +21611,70 @@ TEST(GameDataRuntime, EditableLevelFragmentCompilesRuntimeBrushesFromSourceBoxes
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellClipToolFixtureLoadsAsEditableSourceLevel)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    const std::filesystem::path fixture_path = std::filesystem::path(SLAYER3D_DEMOS_ROOT) / "editor_shell_dojo" /
+                                               "data" / "fixtures" / "clip_tool.fragment.json";
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+    ASSERT_TRUE(std::filesystem::exists(fixture_path)) << fixture_path;
+    char error[512]{};
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_file(
+        runtime, "brush.editor_shell.target", fixture_path.string().c_str(), error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    EXPECT_EQ(world.brush_count, 6);
+    EXPECT_EQ(world.compile_invalid_brush_count, 0);
+    EXPECT_TRUE(world.compile_hidden_face_culling);
+    bool found_bevel_cube = false;
+    bool found_split_wall = false;
+    bool found_terrain_block = false;
+    for (int i = 0; i < world.brush_count; ++i)
+    {
+        ASSERT_NE(world.brushes[i].editor.stable_id, nullptr);
+        found_bevel_cube =
+            found_bevel_cube || SDL_strcmp(world.brushes[i].editor.stable_id, "clip.fixture.bevel_cube") == 0;
+        found_split_wall =
+            found_split_wall || SDL_strcmp(world.brushes[i].editor.stable_id, "clip.fixture.split_wall") == 0;
+        found_terrain_block =
+            found_terrain_block || SDL_strcmp(world.brushes[i].editor.stable_id, "clip.fixture.terrain_block") == 0;
+    }
+    EXPECT_TRUE(found_bevel_cube);
+    EXPECT_TRUE(found_split_wall);
+    EXPECT_TRUE(found_terrain_block);
+
+    slayer3d_game_data_brush_world_editor_state brush_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world_editor_state(runtime, "brush.editor_shell.target", &brush_state));
+    EXPECT_STREQ(brush_state.source_path, fixture_path.string().c_str());
+    EXPECT_FALSE(brush_state.dirty);
+    slayer3d_game_data_player_start_editor_state start_state{};
+    ASSERT_TRUE(slayer3d_game_data_get_player_start_editor_state(runtime, &start_state));
+    EXPECT_EQ(start_state.count, 1);
+    EXPECT_FALSE(start_state.dirty);
+
+    char *export_json = nullptr;
+    size_t export_size = 0u;
+    ASSERT_TRUE(slayer3d_game_data_export_editable_level_fragment_json(
+        runtime, "brush.editor_shell.target", &export_json, &export_size, error, sizeof(error)))
+        << error;
+    ASSERT_NE(export_json, nullptr);
+    EXPECT_GT(export_size, 0u);
+    EXPECT_NE(std::string(export_json).find("clip.fixture.bevel_cube"), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("player_start.clip_fixture"), std::string::npos);
+    SDL_free(export_json);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentIgnoresStaleRuntimeBrushesWhenSourceExists)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
