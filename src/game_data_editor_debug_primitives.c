@@ -862,6 +862,43 @@ static bool emit_editor_clip_status_label(editor_debug_iteration_context *contex
     return emit_editor_debug_label(context, label_position, label);
 }
 
+static slayer3d_color editor_clip_snap_target_color(const editor_clip_tool_state *tool)
+{
+    if (tool == NULL)
+        return (slayer3d_color){180, 220, 255, 255};
+    if (SDL_strcmp(tool->snap_kind, "vertex") == 0)
+        return (slayer3d_color){255, 70, 70, 255};
+    if (SDL_strcmp(tool->snap_kind, "edge") == 0)
+        return (slayer3d_color){80, 220, 255, 255};
+    if (SDL_strcmp(tool->snap_kind, "face") == 0)
+        return (slayer3d_color){230, 120, 255, 255};
+    return (slayer3d_color){180, 220, 255, 255};
+}
+
+static bool emit_editor_clip_snap_target(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                         const editor_clip_tool_state *tool, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || tool == NULL || !tool->has_snap_target ||
+        SDL_strcmp(tool->snap_kind, "grid") == 0)
+    {
+        return true;
+    }
+
+    char label[64];
+    SDL_snprintf(label, sizeof(label), "snap %s", tool->snap_kind);
+    const slayer3d_vec3 target_position = editor_clip_source_point_world(world, origin, tool->snap_point);
+
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_SNAP_TARGET;
+    context->color = editor_clip_snap_target_color(tool);
+    context->element_name = tool->snap_target;
+    if (!emit_editor_debug_marker_orb(context, target_position, 0.145f))
+        return false;
+
+    context->element_name = "clip.snap.label";
+    return emit_editor_debug_label(context, slayer3d_vec3_add(target_position, slayer3d_vec3_make(0.0f, 0.22f, 0.0f)),
+                                   label);
+}
+
 static bool emit_editor_clip_preview_box_edges(editor_debug_iteration_context *context,
                                                const brush_world_runtime *world,
                                                const editor_brush_source_box_runtime *box, slayer3d_vec3 origin)
@@ -944,6 +981,7 @@ static bool emit_editor_clip_tool_primitives(const slayer3d_game_data_runtime *r
         !emit_editor_clip_point_lines(&context, world, tool, origin) ||
         !emit_editor_clip_plane_indicator(&context, world, tool, origin) ||
         !emit_editor_clip_status_label(&context, world, tool, origin) ||
+        !emit_editor_clip_snap_target(&context, world, tool, origin) ||
         !emit_editor_clip_preview_edges(&context, world, tool, origin))
     {
         return true;

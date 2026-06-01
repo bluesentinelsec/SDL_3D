@@ -334,6 +334,10 @@ typedef struct editor_clip_tool_state
     int point_count;
     int hovered_point;
     int dragged_point;
+    bool has_snap_target;
+    char snap_kind[16];
+    char snap_target[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    slayer3d_vec3 snap_point;
     bool has_work_plane_normal;
     slayer3d_vec3 work_plane_normal;
     editor_brush_source_clip_keep_mode keep_mode;

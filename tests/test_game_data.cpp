@@ -22939,6 +22939,113 @@ TEST(GameDataRuntime, EditorClipToolLeftClickPlacesAndDragsSnappedPoints)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorClipToolMousePlacementSnapsToSourceVertexEdgeAndFace)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.clip.tool.snap", "brush.source.clip.tool.snap", 0, 0, 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.tool.snap");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    yyjson_val *selection_json = yyjson_obj_get(editor, "selection");
+    ASSERT_TRUE(yyjson_is_obj(selection_json));
+
+    slayer3d_game_data_brush_world brush_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+    ASSERT_GT(brush_world.brush_count, 0);
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.world_name = "brush.editor_shell.target";
+    hover.world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    hover.face_index = 2;
+    hover.element_editor = &brush_world.brushes[0].editor;
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    auto send_left = [&](Uint32 type, Uint64 frame) {
+        SDL_Event event{};
+        event.type = type;
+        event.button.button = SDL_BUTTON_LEFT;
+        event.button.x = 512.0f;
+        event.button.y = 360.0f;
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, frame);
+    };
+    auto place_point = [&](slayer3d_vec3 point, Uint64 frame) {
+        hover.point = point;
+        bool consumed = false;
+        send_left(SDL_EVENT_MOUSE_BUTTON_DOWN, frame);
+        EXPECT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+        send_left(SDL_EVENT_MOUSE_BUTTON_UP, frame + 1);
+        EXPECT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+    };
+
+    place_point(slayer3d_vec3_make(7.86f, 0.04f, 7.92f), 1);
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.snap.kind", ""), "vertex");
+    EXPECT_NE(nullptr,
+              SDL_strstr(slayer3d_properties_get_string(scene_state, "editor.clip.snap.target", ""), "vertex"));
+    slayer3d_vec3 snapped =
+        slayer3d_properties_get_vec3(scene_state, "editor.clip.point0", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(snapped.x, 8000.0f, 0.001f);
+    EXPECT_NEAR(snapped.y, 0.0f, 0.001f);
+    EXPECT_NEAR(snapped.z, 8000.0f, 0.001f);
+
+    struct ClipSnapDebug
+    {
+        int snap_markers = 0;
+        bool names_vertex_snap = false;
+    } debug;
+    auto capture_clip_snap = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<ClipSnapDebug *>(userdata);
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_SNAP_TARGET)
+        {
+            capture->snap_markers++;
+            capture->names_vertex_snap =
+                capture->names_vertex_snap || SDL_strstr(primitive->text, "snap vertex") != nullptr;
+        }
+        return true;
+    };
+    slayer3d_game_data_editor_debug_desc debug_desc{};
+    debug_desc.flags = SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW;
+    ASSERT_TRUE(slayer3d_game_data_for_each_editor_debug_primitive(runtime, &debug_desc, capture_clip_snap, &debug));
+    EXPECT_GT(debug.snap_markers, 0);
+    EXPECT_TRUE(debug.names_vertex_snap);
+
+    place_point(slayer3d_vec3_make(4.25f, 0.08f, 0.12f), 3);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.snap.kind", ""), "edge");
+    EXPECT_NE(nullptr, SDL_strstr(slayer3d_properties_get_string(scene_state, "editor.clip.snap.target", ""), "edge"));
+    snapped = slayer3d_properties_get_vec3(scene_state, "editor.clip.point1", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(snapped.x, 4000.0f, 0.001f);
+    EXPECT_NEAR(snapped.y, 0.0f, 0.001f);
+    EXPECT_NEAR(snapped.z, 0.0f, 0.001f);
+
+    place_point(slayer3d_vec3_make(4.2f, 0.0f, 4.2f), 5);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.snap.kind", ""), "face");
+    EXPECT_NE(nullptr, SDL_strstr(slayer3d_properties_get_string(scene_state, "editor.clip.snap.target", ""), "face"));
+    snapped = slayer3d_properties_get_vec3(scene_state, "editor.clip.point2", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(snapped.x, 4000.0f, 0.001f);
+    EXPECT_NEAR(snapped.y, 0.0f, 0.001f);
+    EXPECT_NEAR(snapped.z, 4000.0f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorBrushSourceClipUndoRedoRestoresSourceRuntimeAndSelection)
 {
     slayer3d_game_session *session = nullptr;

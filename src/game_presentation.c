@@ -582,7 +582,8 @@ static bool draw_editor_debug_label_primitive(void *userdata,
     editor_debug_label_context *context = (editor_debug_label_context *)userdata;
     if (context == NULL || primitive == NULL ||
         (primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL &&
-         primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL))
+         primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL &&
+         primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_SNAP_TARGET))
     {
         return true;
     }

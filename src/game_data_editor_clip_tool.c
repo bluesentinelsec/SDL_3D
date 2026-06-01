@@ -189,6 +189,15 @@ static void publish_editor_clip_tool_state(slayer3d_game_data_runtime *runtime)
                                 tool->active ? tool->preview_kept_count : 0);
     slayer3d_properties_set_int(runtime->scene_state, "editor.clip.preview.discarded_count",
                                 tool->active ? tool->preview_discarded_count : 0);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.clip.snap.active",
+                                 tool->active ? tool->has_snap_target : false);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.clip.snap.kind",
+                                   tool->active && tool->has_snap_target ? tool->snap_kind : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.clip.snap.target",
+                                   tool->active && tool->has_snap_target ? tool->snap_target : "");
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.clip.snap.point",
+                                 tool->active && tool->has_snap_target ? tool->snap_point
+                                                                       : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     slayer3d_properties_set_string(runtime->scene_state, "editor.clip.message", tool->message);
     for (int i = 0; i < SLAYER3D_EDITOR_CLIP_TOOL_MAX_POINTS; ++i)
     {
@@ -238,6 +247,120 @@ static int editor_clip_snap_source_coord(int coord, int snap_units)
     return coord >= 0 ? ((coord + half) / snap_units) * snap_units : ((coord - half) / snap_units) * snap_units;
 }
 
+typedef enum editor_clip_snap_kind
+{
+    EDITOR_CLIP_SNAP_NONE = 0,
+    EDITOR_CLIP_SNAP_GRID,
+    EDITOR_CLIP_SNAP_FACE,
+    EDITOR_CLIP_SNAP_EDGE,
+    EDITOR_CLIP_SNAP_VERTEX
+} editor_clip_snap_kind;
+
+typedef struct editor_clip_snap_target
+{
+    bool valid;
+    editor_clip_snap_kind kind;
+    int coord[3];
+    int distance_sq;
+    char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+} editor_clip_snap_target;
+
+static const char *editor_clip_snap_kind_name(editor_clip_snap_kind kind)
+{
+    switch (kind)
+    {
+    case EDITOR_CLIP_SNAP_GRID:
+        return "grid";
+    case EDITOR_CLIP_SNAP_FACE:
+        return "face";
+    case EDITOR_CLIP_SNAP_EDGE:
+        return "edge";
+    case EDITOR_CLIP_SNAP_VERTEX:
+        return "vertex";
+    case EDITOR_CLIP_SNAP_NONE:
+    default:
+        return "none";
+    }
+}
+
+static int editor_clip_snap_kind_priority(editor_clip_snap_kind kind)
+{
+    switch (kind)
+    {
+    case EDITOR_CLIP_SNAP_VERTEX:
+        return 4;
+    case EDITOR_CLIP_SNAP_EDGE:
+        return 3;
+    case EDITOR_CLIP_SNAP_FACE:
+        return 2;
+    case EDITOR_CLIP_SNAP_GRID:
+        return 1;
+    case EDITOR_CLIP_SNAP_NONE:
+    default:
+        return 0;
+    }
+}
+
+static int editor_clip_coord_distance_sq(const int a[3], const int b[3])
+{
+    if (a == NULL || b == NULL)
+        return 0;
+    const int dx = a[0] - b[0];
+    const int dy = a[1] - b[1];
+    const int dz = a[2] - b[2];
+    return dx * dx + dy * dy + dz * dz;
+}
+
+static bool editor_clip_snap_target_is_better(const editor_clip_snap_target *candidate,
+                                              const editor_clip_snap_target *current)
+{
+    if (candidate == NULL || !candidate->valid)
+        return false;
+    if (current == NULL || !current->valid)
+        return true;
+
+    const int candidate_priority = editor_clip_snap_kind_priority(candidate->kind);
+    const int current_priority = editor_clip_snap_kind_priority(current->kind);
+    if (candidate_priority != current_priority)
+        return candidate_priority > current_priority;
+    if (candidate->distance_sq != current->distance_sq)
+        return candidate->distance_sq < current->distance_sq;
+    return SDL_strcmp(candidate->stable_id, current->stable_id) < 0;
+}
+
+static void editor_clip_snap_target_init(editor_clip_snap_target *target, editor_clip_snap_kind kind,
+                                         const int coord[3], int distance_sq, const char *stable_id)
+{
+    if (target == NULL || coord == NULL)
+        return;
+    SDL_zero(*target);
+    target->valid = true;
+    target->kind = kind;
+    target->coord[0] = coord[0];
+    target->coord[1] = coord[1];
+    target->coord[2] = coord[2];
+    target->distance_sq = distance_sq;
+    SDL_snprintf(target->stable_id, sizeof(target->stable_id), "%s", stable_id != NULL ? stable_id : "");
+}
+
+static void editor_clip_tool_publish_snap_target(editor_clip_tool_state *tool, const editor_clip_snap_target *target)
+{
+    if (tool == NULL)
+        return;
+    if (target == NULL || !target->valid)
+    {
+        tool->has_snap_target = false;
+        tool->snap_kind[0] = '\0';
+        tool->snap_target[0] = '\0';
+        tool->snap_point = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        return;
+    }
+    tool->has_snap_target = true;
+    SDL_snprintf(tool->snap_kind, sizeof(tool->snap_kind), "%s", editor_clip_snap_kind_name(target->kind));
+    SDL_snprintf(tool->snap_target, sizeof(tool->snap_target), "%s", target->stable_id);
+    tool->snap_point = slayer3d_vec3_make((float)target->coord[0], (float)target->coord[1], (float)target->coord[2]);
+}
+
 static void editor_clip_snap_source_coord3(int coord[3], int snap_units)
 {
     if (coord == NULL)
@@ -259,6 +382,171 @@ static void editor_clip_coord_from_point(slayer3d_vec3 point, int out_coord[3])
     out_coord[0] = (int)SDL_roundf(point.x);
     out_coord[1] = (int)SDL_roundf(point.y);
     out_coord[2] = (int)SDL_roundf(point.z);
+}
+
+static int editor_clip_snap_threshold_units(int snap_units)
+{
+    return SDL_max(snap_units / 2, 1);
+}
+
+static bool editor_clip_edge_projection_coord(const int point[3], const int a[3], const int b[3], int out_coord[3])
+{
+    if (point == NULL || a == NULL || b == NULL || out_coord == NULL)
+        return false;
+
+    const float ab[3] = {(float)(b[0] - a[0]), (float)(b[1] - a[1]), (float)(b[2] - a[2])};
+    const float ap[3] = {(float)(point[0] - a[0]), (float)(point[1] - a[1]), (float)(point[2] - a[2])};
+    const float denom = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    if (denom <= 0.0001f)
+        return false;
+
+    const float t = (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / denom;
+    if (t < 0.0f || t > 1.0f)
+        return false;
+
+    out_coord[0] = (int)SDL_roundf((float)a[0] + ab[0] * t);
+    out_coord[1] = (int)SDL_roundf((float)a[1] + ab[1] * t);
+    out_coord[2] = (int)SDL_roundf((float)a[2] + ab[2] * t);
+    return true;
+}
+
+static void editor_clip_consider_snap_candidate(editor_clip_snap_target *best, const editor_clip_snap_target *candidate)
+{
+    if (editor_clip_snap_target_is_better(candidate, best))
+        *best = *candidate;
+}
+
+static void editor_clip_consider_model_vertices(const editor_brush_source_vertex_model *model, const int raw_coord[3],
+                                                int max_distance_sq, editor_clip_snap_target *best)
+{
+    if (model == NULL || raw_coord == NULL || best == NULL)
+        return;
+
+    for (int i = 0; i < model->vertex_count; ++i)
+    {
+        const int distance_sq = editor_clip_coord_distance_sq(raw_coord, model->vertices[i].coord);
+        if (distance_sq > max_distance_sq)
+            continue;
+
+        editor_clip_snap_target candidate;
+        editor_clip_snap_target_init(&candidate, EDITOR_CLIP_SNAP_VERTEX, model->vertices[i].coord, distance_sq,
+                                     model->vertices[i].stable_id);
+        editor_clip_consider_snap_candidate(best, &candidate);
+    }
+}
+
+static void editor_clip_consider_model_edges(const editor_brush_source_vertex_model *model, const int raw_coord[3],
+                                             int snap_units, int max_distance_sq, editor_clip_snap_target *best)
+{
+    if (model == NULL || raw_coord == NULL || best == NULL)
+        return;
+
+    for (int i = 0; i < model->edge_count; ++i)
+    {
+        const editor_brush_source_edge *edge = &model->edges[i];
+        const int a = edge->vertex_indices[0];
+        const int b = edge->vertex_indices[1];
+        if (a < 0 || a >= model->vertex_count || b < 0 || b >= model->vertex_count)
+            continue;
+
+        int projected[3];
+        if (!editor_clip_edge_projection_coord(raw_coord, model->vertices[a].coord, model->vertices[b].coord,
+                                               projected))
+        {
+            continue;
+        }
+        editor_clip_snap_source_coord3(projected, snap_units);
+        const int distance_sq = editor_clip_coord_distance_sq(raw_coord, projected);
+        if (distance_sq > max_distance_sq)
+            continue;
+
+        editor_clip_snap_target candidate;
+        editor_clip_snap_target_init(&candidate, EDITOR_CLIP_SNAP_EDGE, projected, distance_sq, edge->stable_id);
+        editor_clip_consider_snap_candidate(best, &candidate);
+    }
+}
+
+static bool editor_clip_hover_face_matches_source_index(const brush_world_runtime *world_runtime,
+                                                        const slayer3d_game_data_editor_selection *hover_selection,
+                                                        int source_index)
+{
+    if (world_runtime == NULL || hover_selection == NULL || hover_selection->element_editor == NULL ||
+        hover_selection->element_editor->stable_id == NULL || source_index < 0 ||
+        source_index >= world_runtime->editor_source_box_count)
+    {
+        return false;
+    }
+    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    const char *stable_id = box->stable_id != NULL ? box->stable_id : box->name;
+    return stable_id != NULL && SDL_strcmp(hover_selection->element_editor->stable_id, stable_id) == 0;
+}
+
+static void editor_clip_consider_hover_face(const brush_world_runtime *world_runtime,
+                                            const slayer3d_game_data_editor_selection *hover_selection,
+                                            const editor_brush_source_vertex_model *model, const int grid_coord[3],
+                                            const int raw_coord[3], editor_clip_snap_target *best)
+{
+    if (world_runtime == NULL || hover_selection == NULL || model == NULL || grid_coord == NULL || raw_coord == NULL ||
+        best == NULL || hover_selection->face_index < 0 ||
+        !editor_clip_hover_face_matches_source_index(world_runtime, hover_selection, model->brush_index))
+    {
+        return;
+    }
+
+    for (int i = 0; i < model->face_count; ++i)
+    {
+        if (model->faces[i].face_index != hover_selection->face_index)
+            continue;
+
+        editor_clip_snap_target candidate;
+        editor_clip_snap_target_init(&candidate, EDITOR_CLIP_SNAP_FACE, grid_coord,
+                                     editor_clip_coord_distance_sq(raw_coord, grid_coord), model->faces[i].stable_id);
+        editor_clip_consider_snap_candidate(best, &candidate);
+        return;
+    }
+}
+
+static bool editor_clip_resolve_snap_target(const slayer3d_game_data_runtime *runtime, editor_clip_tool_state *tool,
+                                            const slayer3d_game_data_editor_selection *hover_selection,
+                                            const brush_world_runtime *world_runtime, const int raw_coord[3],
+                                            int out_coord[3])
+{
+    if (tool == NULL || world_runtime == NULL || raw_coord == NULL || out_coord == NULL)
+    {
+        editor_clip_tool_publish_snap_target(tool, NULL);
+        return false;
+    }
+
+    const int snap_units = editor_clip_source_snap_units(runtime, world_runtime);
+    int grid_coord[3] = {raw_coord[0], raw_coord[1], raw_coord[2]};
+    editor_clip_snap_source_coord3(grid_coord, snap_units);
+
+    editor_clip_snap_target best;
+    editor_clip_snap_target_init(&best, EDITOR_CLIP_SNAP_GRID, grid_coord,
+                                 editor_clip_coord_distance_sq(raw_coord, grid_coord), "grid");
+
+    const int threshold = editor_clip_snap_threshold_units(snap_units);
+    const int max_distance_sq = threshold * threshold * 3;
+    for (int i = 0; i < tool->selected_brush_count; ++i)
+    {
+        const int source_index = editor_brush_world_find_source_box_index(world_runtime, tool->brush_identity_refs[i]);
+        if (source_index < 0 || source_index >= world_runtime->editor_source_box_count)
+            continue;
+
+        editor_brush_source_vertex_model model;
+        if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, NULL, 0))
+            continue;
+
+        editor_clip_consider_hover_face(world_runtime, hover_selection, &model, grid_coord, raw_coord, &best);
+        editor_clip_consider_model_edges(&model, raw_coord, snap_units, max_distance_sq, &best);
+        editor_clip_consider_model_vertices(&model, raw_coord, max_distance_sq, &best);
+    }
+
+    out_coord[0] = best.coord[0];
+    out_coord[1] = best.coord[1];
+    out_coord[2] = best.coord[2];
+    editor_clip_tool_publish_snap_target(tool, &best);
+    return true;
 }
 
 static slayer3d_vec3 editor_clip_world_origin_for_points(const slayer3d_game_data_runtime *runtime,
@@ -284,14 +572,14 @@ static slayer3d_vec3 editor_clip_world_origin_for_points(const slayer3d_game_dat
     return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
 }
 
-static bool editor_clip_coord_from_selection(const slayer3d_game_data_runtime *runtime,
-                                             const editor_clip_tool_state *tool,
+static bool editor_clip_coord_from_selection(const slayer3d_game_data_runtime *runtime, editor_clip_tool_state *tool,
                                              const slayer3d_game_data_editor_selection *hover_selection,
                                              const brush_world_runtime *world_runtime, int out_coord[3])
 {
     if (runtime == NULL || tool == NULL || hover_selection == NULL || !hover_selection->hit || world_runtime == NULL ||
         out_coord == NULL)
     {
+        editor_clip_tool_publish_snap_target(tool, NULL);
         return false;
     }
     const slayer3d_vec3 local_point =
@@ -299,8 +587,7 @@ static bool editor_clip_coord_from_selection(const slayer3d_game_data_runtime *r
     out_coord[0] = editor_source_units_from_meters(world_runtime, local_point.x);
     out_coord[1] = editor_source_units_from_meters(world_runtime, local_point.y);
     out_coord[2] = editor_source_units_from_meters(world_runtime, local_point.z);
-    editor_clip_snap_source_coord3(out_coord, editor_clip_source_snap_units(runtime, world_runtime));
-    return true;
+    return editor_clip_resolve_snap_target(runtime, tool, hover_selection, world_runtime, out_coord, out_coord);
 }
 
 static int editor_clip_hovered_point_index(const editor_clip_tool_state *tool, const int coord[3], int snap_units)

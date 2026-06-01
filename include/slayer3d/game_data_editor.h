@@ -113,6 +113,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PLANE_EDGE = 24,
         /** @brief Clip tool status label. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL = 25,
+        /** @brief Clip tool source-geometry snap target marker. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_SNAP_TARGET = 26,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
