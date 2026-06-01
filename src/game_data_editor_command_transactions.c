@@ -292,6 +292,10 @@ static void free_editor_command_transaction_entry(editor_command_transaction_ent
     SDL_free((void *)entry->face_stable_id);
     if (entry->has_source_box_snapshot)
         free_editor_brush_source_box_runtime(&entry->source_box_snapshot);
+    for (int i = 0; i < entry->source_clip_before_count; ++i)
+        free_editor_brush_source_box_runtime(&entry->source_clip_before[i]);
+    for (int i = 0; i < entry->source_clip_after_count; ++i)
+        free_editor_brush_source_box_runtime(&entry->source_clip_after[i]);
     SDL_zero(*entry);
 }
 
@@ -1192,6 +1196,256 @@ static void sync_editor_selection_after_transaction(slayer3d_game_data_runtime *
     refresh_editor_selected_brushes_for_transaction(runtime, entry);
 }
 
+static const char *editor_source_box_transaction_identity(const editor_brush_source_box_runtime *box)
+{
+    if (box == NULL)
+        return NULL;
+    if (box->stable_id != NULL && box->stable_id[0] != '\0')
+        return box->stable_id;
+    return box->name != NULL && box->name[0] != '\0' ? box->name : NULL;
+}
+
+static bool editor_source_box_transaction_identity_matches(const editor_brush_source_box_runtime *box,
+                                                           const char *identity)
+{
+    return box != NULL && identity != NULL && identity[0] != '\0' &&
+           ((box->stable_id != NULL && SDL_strcmp(box->stable_id, identity) == 0) ||
+            (box->name != NULL && SDL_strcmp(box->name, identity) == 0));
+}
+
+static int editor_source_box_transaction_index(const editor_brush_source_box_runtime *boxes, int count,
+                                               const editor_brush_source_box_runtime *box)
+{
+    const char *identity = editor_source_box_transaction_identity(box);
+    for (int i = 0; boxes != NULL && i < count; ++i)
+    {
+        if (editor_source_box_transaction_identity_matches(&boxes[i], identity))
+            return i;
+    }
+    return -1;
+}
+
+static bool editor_source_box_copy_to_array(const editor_brush_source_box_runtime *source,
+                                            editor_brush_source_box_runtime *dest, int *dest_count)
+{
+    if (source == NULL || dest == NULL || dest_count == NULL)
+        return false;
+    if (!copy_editor_brush_source_box_runtime(source, &dest[*dest_count]))
+        return false;
+    (*dest_count)++;
+    return true;
+}
+
+static void editor_source_box_free_array(editor_brush_source_box_runtime *boxes, int count)
+{
+    for (int i = 0; boxes != NULL && i < count; ++i)
+        free_editor_brush_source_box_runtime(&boxes[i]);
+}
+
+static bool editor_brush_world_commit_source_box_array(brush_world_runtime *world_runtime,
+                                                       editor_brush_source_box_runtime *new_boxes, int new_count)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model || new_count < 0 ||
+        (new_count > 0 && new_boxes == NULL))
+    {
+        return false;
+    }
+
+    editor_brush_source_box_runtime *old_boxes = world_runtime->editor_source_boxes;
+    const int old_count = world_runtime->editor_source_box_count;
+    world_runtime->editor_source_boxes = new_boxes;
+    world_runtime->editor_source_box_count = new_count;
+    world_runtime->editor_source_box_capacity = new_count;
+    if (!editor_brush_world_rebuild_from_source(world_runtime, NULL, 0))
+    {
+        world_runtime->editor_source_boxes = old_boxes;
+        world_runtime->editor_source_box_count = old_count;
+        world_runtime->editor_source_box_capacity = old_count;
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    for (int i = 0; i < old_count; ++i)
+        free_editor_brush_source_box_runtime(&old_boxes[i]);
+    SDL_free(old_boxes);
+    editor_brush_world_mark_dirty(world_runtime);
+    return true;
+}
+
+static bool apply_editor_source_clip_forward(brush_world_runtime *world_runtime,
+                                             const editor_command_transaction_entry *entry)
+{
+    if (world_runtime == NULL || entry == NULL || entry->source_clip_before_count <= 0 ||
+        entry->source_clip_after_count <= 0)
+    {
+        return false;
+    }
+
+    const int old_count = world_runtime->editor_source_box_count;
+    const int new_capacity = old_count - entry->source_clip_before_count + entry->source_clip_after_count;
+    if (new_capacity <= 0)
+        return false;
+    editor_brush_source_box_runtime *new_boxes =
+        (editor_brush_source_box_runtime *)SDL_calloc((size_t)new_capacity, sizeof(*new_boxes));
+    if (new_boxes == NULL)
+        return false;
+
+    int removed_count = 0;
+    int write_count = 0;
+    for (int i = 0; i < old_count; ++i)
+    {
+        const int before_index = editor_source_box_transaction_index(
+            entry->source_clip_before, entry->source_clip_before_count, &world_runtime->editor_source_boxes[i]);
+        if (before_index < 0)
+        {
+            if (!editor_source_box_copy_to_array(&world_runtime->editor_source_boxes[i], new_boxes, &write_count))
+                goto fail;
+            continue;
+        }
+
+        removed_count++;
+        const int source_index = entry->source_clip_before_indices[before_index];
+        for (int output_index = 0; output_index < entry->source_clip_after_count; ++output_index)
+        {
+            if (entry->source_clip_after_source_indices[output_index] == source_index &&
+                !editor_source_box_copy_to_array(&entry->source_clip_after[output_index], new_boxes, &write_count))
+            {
+                goto fail;
+            }
+        }
+    }
+
+    if (removed_count != entry->source_clip_before_count || write_count != new_capacity ||
+        !editor_brush_world_commit_source_box_array(world_runtime, new_boxes, write_count))
+    {
+        goto fail;
+    }
+    return true;
+
+fail:
+    editor_source_box_free_array(new_boxes, write_count);
+    SDL_free(new_boxes);
+    return false;
+}
+
+static int editor_source_clip_before_index_at_final_position(const editor_command_transaction_entry *entry,
+                                                             int final_index)
+{
+    for (int i = 0; entry != NULL && i < entry->source_clip_before_count; ++i)
+    {
+        if (entry->source_clip_before_indices[i] == final_index)
+            return i;
+    }
+    return -1;
+}
+
+static bool apply_editor_source_clip_undo(brush_world_runtime *world_runtime,
+                                          const editor_command_transaction_entry *entry)
+{
+    if (world_runtime == NULL || entry == NULL || entry->source_clip_before_count <= 0 ||
+        entry->source_clip_after_count <= 0)
+    {
+        return false;
+    }
+
+    const int old_count = world_runtime->editor_source_box_count;
+    const int base_capacity = old_count - entry->source_clip_after_count;
+    const int final_count = base_capacity + entry->source_clip_before_count;
+    if (base_capacity < 0 || final_count <= 0)
+        return false;
+    editor_brush_source_box_runtime *base_boxes =
+        base_capacity > 0 ? (editor_brush_source_box_runtime *)SDL_calloc((size_t)base_capacity, sizeof(*base_boxes))
+                          : NULL;
+    editor_brush_source_box_runtime *new_boxes =
+        (editor_brush_source_box_runtime *)SDL_calloc((size_t)final_count, sizeof(*new_boxes));
+    if ((base_capacity > 0 && base_boxes == NULL) || new_boxes == NULL)
+    {
+        SDL_free(base_boxes);
+        SDL_free(new_boxes);
+        return false;
+    }
+
+    int removed_count = 0;
+    int base_count = 0;
+    int write_count = 0;
+    for (int i = 0; i < old_count; ++i)
+    {
+        if (editor_source_box_transaction_index(entry->source_clip_after, entry->source_clip_after_count,
+                                                &world_runtime->editor_source_boxes[i]) >= 0)
+        {
+            removed_count++;
+            continue;
+        }
+        if (!editor_source_box_copy_to_array(&world_runtime->editor_source_boxes[i], base_boxes, &base_count))
+            goto fail;
+    }
+    if (removed_count != entry->source_clip_after_count || base_count != base_capacity)
+        goto fail;
+
+    int base_index = 0;
+    for (int final_index = 0; final_index < final_count; ++final_index)
+    {
+        const int before_index = editor_source_clip_before_index_at_final_position(entry, final_index);
+        const editor_brush_source_box_runtime *source =
+            before_index >= 0 ? &entry->source_clip_before[before_index]
+                              : (base_index < base_count ? &base_boxes[base_index++] : NULL);
+        if (source == NULL || !editor_source_box_copy_to_array(source, new_boxes, &write_count))
+            goto fail;
+    }
+
+    editor_source_box_free_array(base_boxes, base_count);
+    SDL_free(base_boxes);
+    if (write_count != final_count ||
+        !editor_brush_world_commit_source_box_array(world_runtime, new_boxes, write_count))
+        goto fail_new_only;
+    return true;
+
+fail:
+    editor_source_box_free_array(base_boxes, base_count);
+    SDL_free(base_boxes);
+fail_new_only:
+    editor_source_box_free_array(new_boxes, write_count);
+    SDL_free(new_boxes);
+    return false;
+}
+
+static bool apply_editor_source_clip_transaction(slayer3d_game_data_runtime *runtime,
+                                                 const editor_command_transaction_entry *entry, bool forward)
+{
+    if (runtime == NULL || entry == NULL || entry->world_name == NULL)
+        return false;
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+        return false;
+    return forward ? apply_editor_source_clip_forward(world_runtime, entry)
+                   : apply_editor_source_clip_undo(world_runtime, entry);
+}
+
+static void select_editor_source_clip_transaction_brushes(slayer3d_game_data_runtime *runtime,
+                                                          const editor_command_transaction_entry *entry, bool forward)
+{
+    if (runtime == NULL || entry == NULL || entry->world_name == NULL)
+        return;
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, entry->world_name);
+    if (world_runtime == NULL)
+        return;
+
+    const editor_brush_source_box_runtime *boxes = forward ? entry->source_clip_after : entry->source_clip_before;
+    const int count = forward ? entry->source_clip_after_count : entry->source_clip_before_count;
+    clear_editor_selected_brushes(runtime);
+    for (int i = 0; i < count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection;
+        init_editor_selection(&selection);
+        const char *identity = editor_source_box_transaction_identity(&boxes[i]);
+        refresh_editor_brush_selection_for_identity(world_runtime, &selection, identity, identity, -1, NULL);
+        if (selection.hit)
+            (void)add_editor_selected_brush(runtime, &selection);
+    }
+    update_active_editor_selection_from_selected_brushes(runtime);
+    publish_editor_transaction_selection_state(runtime);
+}
+
 static bool delete_editor_floor_fill_brushes(brush_world_runtime *world_runtime, const char *brush_name, float low_y,
                                              float high_y)
 {
@@ -1411,6 +1665,7 @@ static bool editor_transaction_has_brush_mutation(const editor_command_transacti
     return (SDL_strcmp(entry->command, "translate") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "rotate_y") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "sector_floor") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
+           (SDL_strcmp(entry->command, "clip") == 0 && SDL_strcmp(entry->target, "selection") == 0) ||
            ((SDL_strcmp(entry->command, "create") == 0 || SDL_strcmp(entry->command, "duplicate") == 0) &&
             SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "delete") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
@@ -1432,6 +1687,13 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
         runtime != NULL && runtime->editor_active_selection.hit &&
         editor_selection_matches_transaction_face(&runtime->editor_active_selection, entry);
 
+    if (SDL_strcmp(entry->command, "clip") == 0)
+    {
+        if (!apply_editor_source_clip_transaction(runtime, entry, forward))
+            return false;
+        select_editor_source_clip_transaction_brushes(runtime, entry, forward);
+        return true;
+    }
     if (SDL_strcmp(entry->command, "delete") == 0)
     {
         if (forward)
@@ -1798,6 +2060,46 @@ static bool editor_prepare_transaction_common(editor_command_transaction_entry *
            copy_editor_transaction_string(element_name, &entry->element_name);
 }
 
+static bool editor_source_clip_transaction_capture_before(const brush_world_runtime *world_runtime,
+                                                          const editor_brush_source_clip_desc *desc,
+                                                          editor_command_transaction_entry *entry)
+{
+    if (world_runtime == NULL || desc == NULL || entry == NULL || desc->brush_count <= 0 ||
+        desc->brush_count > SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
+    {
+        return false;
+    }
+    for (int i = 0; i < desc->brush_count; ++i)
+    {
+        if (!editor_brush_world_copy_source_box_by_identity(world_runtime, desc->brush_identities[i],
+                                                            &entry->source_clip_before[i],
+                                                            &entry->source_clip_before_indices[i], NULL, 0))
+        {
+            return false;
+        }
+        entry->source_clip_before_count++;
+    }
+    return true;
+}
+
+static bool editor_source_clip_transaction_capture_after(const editor_brush_source_clip_result *result,
+                                                         editor_command_transaction_entry *entry)
+{
+    if (result == NULL || entry == NULL || !result->valid || result->output_brush_count <= 0 ||
+        result->output_brush_count > SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
+    {
+        return false;
+    }
+    for (int i = 0; i < result->output_brush_count; ++i)
+    {
+        if (!copy_editor_brush_source_box_runtime(&result->output_brushes[i], &entry->source_clip_after[i]))
+            return false;
+        entry->source_clip_after_source_indices[i] = result->output_source_indices[i];
+        entry->source_clip_after_count++;
+    }
+    return true;
+}
+
 static bool editor_append_sector_floor_transaction(slayer3d_game_data_runtime *runtime, const char *active_scene,
                                                    const slayer3d_game_data_editor_selection *selection,
                                                    const slayer3d_game_data_brush *brush, float distance,
@@ -1857,6 +2159,85 @@ static bool editor_append_resize_y_transaction(slayer3d_game_data_runtime *runti
                  selection->element_name != NULL ? selection->element_name : "selected brush",
                  (double)SDL_fabsf(distance));
     *out_entry = entry;
+    return true;
+}
+
+static void editor_command_history_discard_last(slayer3d_game_data_runtime *runtime,
+                                                editor_command_transaction_entry *entry)
+{
+    if (runtime == NULL || entry == NULL)
+        return;
+    editor_command_history_state *history = &runtime->editor_command_history;
+    if (history->count <= 0 || entry != &history->entries[history->count - 1])
+        return;
+    free_editor_command_transaction_entry(entry);
+    history->count--;
+    history->cursor = history->count;
+}
+
+bool slayer3d_game_data_commit_editor_source_clip(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                  const editor_brush_source_clip_desc *desc,
+                                                  editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                  int error_buffer_size)
+{
+    if (out_result != NULL)
+        SDL_zero(*out_result);
+    if (runtime == NULL || world_name == NULL || world_name[0] == '\0' || desc == NULL || desc->brush_count <= 0 ||
+        desc->brush_identities == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip commit requires selected brushes");
+        return false;
+    }
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, world_name);
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source clip commit requires a source-backed brush world");
+        return false;
+    }
+
+    editor_brush_source_clip_result preview;
+    SDL_zero(preview);
+    if (!editor_brush_world_preview_source_clip_operation(world_runtime, desc, &preview, error_buffer,
+                                                          error_buffer_size))
+    {
+        if (out_result != NULL)
+            *out_result = preview;
+        return false;
+    }
+
+    editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+    if (entry == NULL ||
+        !editor_prepare_transaction_common(entry, slayer3d_game_data_active_scene(runtime), "clip", "selection",
+                                           world_name, desc->brush_identities[0]) ||
+        !copy_editor_transaction_string(desc->brush_identities[0], &entry->element_stable_id) ||
+        !editor_source_clip_transaction_capture_before(world_runtime, desc, entry) ||
+        !editor_source_clip_transaction_capture_after(&preview, entry))
+    {
+        editor_command_history_discard_last(runtime, entry);
+        editor_brush_world_free_source_clip_result(&preview);
+        set_error(error_buffer, error_buffer_size, "failed to record source clip transaction");
+        return false;
+    }
+
+    entry->has_bounds = true;
+    entry->bounds = editor_brush_source_box_bounds_meters(world_runtime, &entry->source_clip_after[0]);
+    SDL_snprintf(entry->message, sizeof(entry->message), "clipped %d brush%s into %d brush%s",
+                 entry->source_clip_before_count, entry->source_clip_before_count == 1 ? "" : "es",
+                 entry->source_clip_after_count, entry->source_clip_after_count == 1 ? "" : "es");
+
+    if (!apply_editor_transaction_mutation(runtime, entry, true))
+    {
+        editor_command_history_discard_last(runtime, entry);
+        editor_brush_world_free_source_clip_result(&preview);
+        set_error(error_buffer, error_buffer_size, "failed to apply source clip transaction");
+        return false;
+    }
+
+    if (out_result != NULL)
+        *out_result = preview;
+    else
+        editor_brush_world_free_source_clip_result(&preview);
     return true;
 }
 

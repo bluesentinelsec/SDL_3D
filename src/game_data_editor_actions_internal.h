@@ -156,6 +156,10 @@ bool editor_brush_world_apply_source_clip_operation(brush_world_runtime *world_r
                                                     const editor_brush_source_clip_desc *desc,
                                                     editor_brush_source_clip_result *out_result, char *error_buffer,
                                                     int error_buffer_size);
+bool slayer3d_game_data_commit_editor_source_clip(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                  const editor_brush_source_clip_desc *desc,
+                                                  editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                  int error_buffer_size);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);

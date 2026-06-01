@@ -197,6 +197,7 @@ extern "C"
                                                         const char *brush_identity,
                                                         editor_brush_source_box_runtime *out_box, int *out_index,
                                                         char *error_buffer, int error_buffer_size);
+    int editor_brush_world_find_source_box_index(const brush_world_runtime *world_runtime, const char *brush_identity);
     bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                                  slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
     bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime,
@@ -237,6 +238,10 @@ extern "C"
                                                         const editor_brush_source_clip_desc *desc,
                                                         editor_brush_source_clip_result *out_result, char *error_buffer,
                                                         int error_buffer_size);
+    bool slayer3d_game_data_commit_editor_source_clip(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                      const editor_brush_source_clip_desc *desc,
+                                                      editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                      int error_buffer_size);
     bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
                                                           editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                           char *error_buffer, int error_buffer_size);
@@ -22271,6 +22276,120 @@ TEST(GameDataRuntime, EditorBrushSourceClipApplyMultiBrushSelectionIsAtomic)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &public_world));
     EXPECT_EQ(public_world.brush_count, 2);
     EXPECT_EQ(public_world.compile_invalid_brush_count, 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipCommitIsSingleUndoStepAndSelectsOutputs)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.txn", "brush.source.txn", 0, 0, 0, 8000, 8000, 8000)));
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.txn"};
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    desc.distance_source_units = 4000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH;
+
+    editor_brush_source_clip_result result{};
+    ASSERT_TRUE(slayer3d_game_data_commit_editor_source_clip(runtime, "brush.editor_shell.target", &desc, &result,
+                                                             error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 2);
+    auto brush_world = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        return world;
+    };
+    EXPECT_EQ(brush_world().brush_count, 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 2);
+
+    ASSERT_NE(result.output_brushes[0].stable_id, nullptr);
+    ASSERT_NE(result.output_brushes[1].stable_id, nullptr);
+    slayer3d_game_data_editor_selection active_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_NE(active_selection.element_editor, nullptr);
+    EXPECT_STREQ(active_selection.element_editor->stable_id, result.output_brushes[1].stable_id);
+    editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipUndoRedoRestoresSourceRuntimeAndSelection)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.undo", "brush.source.undo", 0, 0, 0, 8000, 8000, 8000)));
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.undo"};
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    desc.distance_source_units = 4000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH;
+
+    editor_brush_source_clip_result result{};
+    ASSERT_TRUE(slayer3d_game_data_commit_editor_source_clip(runtime, "brush.editor_shell.target", &desc, &result,
+                                                             error, sizeof(error)))
+        << error;
+    auto brush_world = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        return world;
+    };
+    ASSERT_EQ(brush_world().brush_count, 2);
+    ASSERT_EQ(result.output_brush_count, 2);
+    const std::string first_output = result.output_brushes[0].stable_id;
+    const std::string second_output = result.output_brushes[1].stable_id;
+    editor_brush_world_free_source_clip_result(&result);
+
+    auto source_index = [&](const char *identity) {
+        return editor_brush_world_find_source_box_index(world_runtime, identity);
+    };
+    auto active_selection_name = [&]() {
+        slayer3d_game_data_editor_selection selection{};
+        EXPECT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &selection));
+        return std::string(selection.element_editor != nullptr && selection.element_editor->stable_id != nullptr
+                               ? selection.element_editor->stable_id
+                               : (selection.element_name != nullptr ? selection.element_name : ""));
+    };
+
+    EXPECT_GE(source_index(first_output.c_str()), 0);
+    EXPECT_GE(source_index(second_output.c_str()), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 2);
+
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_EQ(brush_world().brush_count, 1);
+    EXPECT_GE(source_index("source.box.undo"), 0);
+    EXPECT_LT(source_index(second_output.c_str()), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    EXPECT_EQ(active_selection_name(), "source.box.undo");
+
+    ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_EQ(brush_world().brush_count, 2);
+    EXPECT_GE(source_index(first_output.c_str()), 0);
+    EXPECT_GE(source_index(second_output.c_str()), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 2);
+    EXPECT_EQ(active_selection_name(), second_output);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

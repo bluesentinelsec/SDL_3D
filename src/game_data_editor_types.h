@@ -342,6 +342,12 @@ typedef struct editor_command_transaction_entry
     int brush_index;
     bool has_source_box_snapshot;
     editor_brush_source_box_runtime source_box_snapshot;
+    int source_clip_before_count;
+    int source_clip_after_count;
+    int source_clip_before_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    int source_clip_after_source_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime source_clip_before[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime source_clip_after[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
     char message[128];
 } editor_command_transaction_entry;
 
