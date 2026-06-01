@@ -338,6 +338,11 @@ typedef struct editor_clip_tool_state
     slayer3d_vec3 work_plane_normal;
     editor_brush_source_clip_keep_mode keep_mode;
     bool preview_valid;
+    bool preview_has_results;
+    int preview_kept_count;
+    int preview_discarded_count;
+    editor_brush_source_box_runtime preview_kept[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime preview_discarded[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
     char message[256];
 } editor_clip_tool_state;
 

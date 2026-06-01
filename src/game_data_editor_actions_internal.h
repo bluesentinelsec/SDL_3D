@@ -176,6 +176,10 @@ bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_
 bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
                                                       editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                       char *error_buffer, int error_buffer_size);
+bool editor_brush_source_box_runtime_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
+                                                        const editor_brush_source_box_runtime *box,
+                                                        editor_brush_source_vertex_model *out_model, char *error_buffer,
+                                                        int error_buffer_size);
 bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
                                                 editor_brush_source_vertex_model *out_model, char *error_buffer,
                                                 int error_buffer_size);

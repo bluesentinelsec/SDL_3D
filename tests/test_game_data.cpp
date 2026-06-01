@@ -22259,6 +22259,49 @@ TEST(GameDataRuntime, EditorBrushSourceClipApplyKeepBothSplitsBrushAndRebuildsRu
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorBrushSourceClipPreviewMatchesApplyOutput)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.preview.apply", "brush.source.preview.apply", 0, 0, 0, 8000, 8000, 8000)));
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.preview.apply"};
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    desc.distance_source_units = 4000.0f;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
+
+    editor_brush_source_clip_result preview{};
+    ASSERT_TRUE(editor_brush_world_preview_source_clip_operation(world_runtime, &desc, &preview, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(preview.valid);
+    ASSERT_EQ(preview.output_brush_count, 1);
+
+    editor_brush_source_clip_result applied{};
+    ASSERT_TRUE(editor_brush_world_apply_source_clip_operation(world_runtime, &desc, &applied, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(applied.valid);
+    ASSERT_EQ(applied.output_brush_count, preview.output_brush_count);
+    EXPECT_EQ(applied.output_brushes[0].min[0], preview.output_brushes[0].min[0]);
+    EXPECT_EQ(applied.output_brushes[0].min[1], preview.output_brushes[0].min[1]);
+    EXPECT_EQ(applied.output_brushes[0].min[2], preview.output_brushes[0].min[2]);
+    EXPECT_EQ(applied.output_brushes[0].max[0], preview.output_brushes[0].max[0]);
+    EXPECT_EQ(applied.output_brushes[0].max[1], preview.output_brushes[0].max[1]);
+    EXPECT_EQ(applied.output_brushes[0].max[2], preview.output_brushes[0].max[2]);
+    EXPECT_EQ(applied.output_brushes[0].vertex_count, preview.output_brushes[0].vertex_count);
+
+    editor_brush_world_free_source_clip_result(&preview);
+    editor_brush_world_free_source_clip_result(&applied);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorBrushSourceClipHandlesOutsideAndCoplanarPlanesPredictably)
 {
     slayer3d_game_session *session = nullptr;
@@ -22386,6 +22429,66 @@ TEST(GameDataRuntime, EditorBrushSourceClipCommitIsSingleUndoStepAndSelectsOutpu
     ASSERT_NE(active_selection.element_editor, nullptr);
     EXPECT_STREQ(active_selection.element_editor->stable_id, result.output_brushes[1].stable_id);
     editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.clip.preview", "brush.source.clip.preview", 0, 0, 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.preview");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    const int point_a[3] = {4000, 0, 0};
+    const int point_b[3] = {4000, 0, 8000};
+    ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_a, slayer3d_vec3_make(0, 1, 0)));
+    ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_b, slayer3d_vec3_make(0, 1, 0)));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.preview.has_results", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.kept_count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.discarded_count", 0), 1);
+
+    struct ClipPreviewDebug
+    {
+        int kept_edges = 0;
+        int discarded_edges = 0;
+    } debug;
+    auto capture_clip_preview = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<ClipPreviewDebug *>(userdata);
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_KEPT_EDGE)
+            capture->kept_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_DISCARDED_EDGE)
+            capture->discarded_edges++;
+        return true;
+    };
+    slayer3d_game_data_editor_debug_desc debug_desc{};
+    debug_desc.flags = SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW;
+    ASSERT_TRUE(slayer3d_game_data_for_each_editor_debug_primitive(runtime, &debug_desc, capture_clip_preview, &debug));
+    EXPECT_GT(debug.kept_edges, 0);
+    EXPECT_GT(debug.discarded_edges, 0);
+
+    const int cycle_keep_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.clip.cycle_keep_mode");
+    ASSERT_GE(cycle_keep_signal, 0);
+    slayer3d_signal_emit(bus, cycle_keep_signal, nullptr);
+    slayer3d_signal_emit(bus, cycle_keep_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "both");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.kept_count", 0), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.discarded_count", 0), 0);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
