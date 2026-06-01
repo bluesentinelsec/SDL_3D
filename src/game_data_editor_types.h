@@ -340,6 +340,9 @@ typedef struct editor_clip_tool_state
     slayer3d_vec3 snap_point;
     bool has_work_plane_normal;
     slayer3d_vec3 work_plane_normal;
+    bool has_drag_plane;
+    slayer3d_vec3 drag_plane_normal;
+    float drag_plane_distance_source_units;
     editor_brush_source_clip_keep_mode keep_mode;
     bool preview_valid;
     bool preview_has_results;

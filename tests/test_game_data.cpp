@@ -22303,6 +22303,43 @@ TEST(GameDataRuntime, EditorBrushSourceClipPreviewSupportsDiagonalConvexCuts)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorBrushSourceClipApplySingleSideCutCanCarveCubeIntoWedge)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.box.wedge", "brush.source.wedge", 0, 0, 0, 8000, 8000, 8000)));
+    char error[512]{};
+
+    const char *brushes[] = {"source.box.wedge"};
+    const float inv_sqrt2 = 1.0f / std::sqrt(2.0f);
+    editor_brush_source_clip_desc desc{};
+    desc.brush_identities = brushes;
+    desc.brush_count = 1;
+    desc.normal = slayer3d_vec3_make(inv_sqrt2, 0.0f, inv_sqrt2);
+    desc.distance_source_units = 8000.0f * inv_sqrt2;
+    desc.keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
+
+    editor_brush_source_clip_result result{};
+    ASSERT_TRUE(editor_brush_world_apply_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(result.valid);
+    ASSERT_EQ(result.output_brush_count, 1);
+    EXPECT_GE(result.output_brushes[0].vertex_count, 6);
+
+    slayer3d_game_data_brush_world public_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &public_world));
+    ASSERT_EQ(public_world.brush_count, 1);
+    EXPECT_GT(public_world.brushes[0].face_count, 4);
+    EXPECT_EQ(public_world.compile_invalid_brush_count, 0);
+
+    editor_brush_world_free_source_clip_result(&result);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorBrushSourceClipApplyKeepBothSplitsBrushAndRebuildsRuntimeWorld)
 {
     slayer3d_game_session *session = nullptr;
@@ -22342,6 +22379,77 @@ TEST(GameDataRuntime, EditorBrushSourceClipApplyKeepBothSplitsBrushAndRebuildsRu
     ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 1, &model, error, sizeof(error))) << error;
     EXPECT_EQ(model.vertex_count, 8);
     editor_brush_world_free_source_clip_result(&result);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorBrushSourceClipSequentialSplitsCanCarveDoorwayOpening)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(
+        &session, &runtime, &world_runtime,
+        source_clip_box_json("source.wall.door", "brush.source.wall.door", 0, 0, 0, 8000, 8000, 1000)));
+    char error[512]{};
+
+    auto apply_clip = [&](const char *brush, slayer3d_vec3 normal, float distance,
+                          editor_brush_source_clip_keep_mode keep_mode) {
+        const char *brushes[] = {brush};
+        editor_brush_source_clip_desc desc{};
+        desc.brush_identities = brushes;
+        desc.brush_count = 1;
+        desc.normal = normal;
+        desc.distance_source_units = distance;
+        desc.keep_mode = keep_mode;
+        editor_brush_source_clip_result result{};
+        const bool ok =
+            editor_brush_world_apply_source_clip_operation(world_runtime, &desc, &result, error, sizeof(error));
+        editor_brush_world_free_source_clip_result(&result);
+        return ok;
+    };
+
+    ASSERT_TRUE(apply_clip("source.wall.door", slayer3d_vec3_make(1.0f, 0.0f, 0.0f), 2000.0f,
+                           EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH))
+        << error;
+    ASSERT_TRUE(apply_clip("source.wall.door", slayer3d_vec3_make(1.0f, 0.0f, 0.0f), 6000.0f,
+                           EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH))
+        << error;
+    ASSERT_TRUE(apply_clip("source.wall.door.clip.2", slayer3d_vec3_make(0.0f, 1.0f, 0.0f), 4000.0f,
+                           EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT))
+        << error;
+
+    slayer3d_game_data_brush_world public_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &public_world));
+    ASSERT_EQ(public_world.brush_count, 3);
+    EXPECT_EQ(public_world.compile_invalid_brush_count, 0);
+
+    auto find_public_brush = [&](const char *stable_id) -> const slayer3d_game_data_brush * {
+        for (int i = 0; i < public_world.brush_count; ++i)
+        {
+            if (public_world.brushes[i].editor.stable_id != nullptr &&
+                SDL_strcmp(public_world.brushes[i].editor.stable_id, stable_id) == 0)
+            {
+                return &public_world.brushes[i];
+            }
+        }
+        return nullptr;
+    };
+    const slayer3d_game_data_brush *left = find_public_brush("source.wall.door.clip.1");
+    const slayer3d_game_data_brush *right = find_public_brush("source.wall.door");
+    const slayer3d_game_data_brush *top = find_public_brush("source.wall.door.clip.2");
+    ASSERT_NE(left, nullptr);
+    ASSERT_NE(right, nullptr);
+    ASSERT_NE(top, nullptr);
+    EXPECT_NEAR(left->bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(left->bounds.max.x, 2.0f, 0.001f);
+    EXPECT_NEAR(right->bounds.min.x, 6.0f, 0.001f);
+    EXPECT_NEAR(right->bounds.max.x, 8.0f, 0.001f);
+    EXPECT_NEAR(top->bounds.min.x, 2.0f, 0.001f);
+    EXPECT_NEAR(top->bounds.max.x, 6.0f, 0.001f);
+    EXPECT_NEAR(top->bounds.min.y, 4.0f, 0.001f);
+    EXPECT_NEAR(top->bounds.max.y, 8.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -22625,7 +22733,7 @@ TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.kept_count", 0), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.discarded_count", 0), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
-                 "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
+                 "Clip Tool: Enter applies, Ctrl/Cmd+Enter cycles keep mode");
     slayer3d_game_data_brush_world before_cycle_world{};
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &before_cycle_world));
     ASSERT_EQ(before_cycle_world.brush_count, 1);
@@ -22679,11 +22787,11 @@ TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
     slayer3d_signal_emit(bus, cycle_keep_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "back");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
-                 "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
+                 "Clip Tool: Enter applies, Ctrl/Cmd+Enter cycles keep mode");
     slayer3d_signal_emit(bus, cycle_keep_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "both");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
-                 "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
+                 "Clip Tool: Enter applies, Ctrl/Cmd+Enter cycles keep mode");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.kept_count", 0), 2);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.discarded_count", 0), 0);
     slayer3d_game_data_brush_world after_cycle_world{};
@@ -22999,6 +23107,87 @@ TEST(GameDataRuntime, EditorClipToolLeftClickPlacesAndDragsSnappedPoints)
     EXPECT_NEAR(dragged_point0.x, 3000.0f, 0.001f);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.dragged_point", -2), -1);
 
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorClipToolDraggingPointUsesCapturedPlaneWhenCursorLeavesBrush)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(&session, &runtime, &world_runtime,
+                                                            source_clip_box_json("source.box.clip.tool.drag.plane",
+                                                                                 "brush.source.clip.tool.drag.plane", 0,
+                                                                                 0, 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.tool.drag.plane");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    yyjson_val *selection_json = yyjson_obj_get(editor, "selection");
+    ASSERT_TRUE(yyjson_is_obj(selection_json));
+
+    static constexpr const char *drag_json =
+        R"json({"trace":{"source":"world","start":[3.0,1.0,0.0],"end":[3.0,-1.0,0.0]}})json";
+    yyjson_doc *drag_doc = yyjson_read(drag_json, SDL_strlen(drag_json), YYJSON_READ_NOFLAG);
+    ASSERT_NE(drag_doc, nullptr);
+    yyjson_val *drag_selection_json = yyjson_doc_get_root(drag_doc);
+    ASSERT_TRUE(yyjson_is_obj(drag_selection_json));
+
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD;
+    hover.world_name = "brush.editor_shell.target";
+    hover.world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    hover.point = slayer3d_vec3_make(4.0f, 0.0f, 0.0f);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    auto send_left = [&](Uint32 type, float x, float y, Uint64 frame) {
+        SDL_Event event{};
+        event.type = type;
+        event.button.button = SDL_BUTTON_LEFT;
+        event.button.x = x;
+        event.button.y = y;
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, frame);
+    };
+
+    bool consumed = false;
+    send_left(SDL_EVENT_MOUSE_BUTTON_DOWN, 512.0f, 360.0f, 1);
+    ASSERT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+    send_left(SDL_EVENT_MOUSE_BUTTON_UP, 512.0f, 360.0f, 2);
+    ASSERT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+
+    send_left(SDL_EVENT_MOUSE_BUTTON_DOWN, 512.0f, 360.0f, 3);
+    ASSERT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+    slayer3d_game_data_editor_selection no_hover{};
+    no_hover.hit = false;
+    no_hover.world_name = "brush.editor_shell.target";
+    no_hover.world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(editor_handle_clip_tool_input(runtime, drag_selection_json, &no_hover, &consumed));
+    send_left(SDL_EVENT_MOUSE_BUTTON_UP, 512.0f, 360.0f, 5);
+    ASSERT_TRUE(editor_handle_clip_tool_input(runtime, drag_selection_json, &no_hover, &consumed));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    const slayer3d_vec3 dragged_point =
+        slayer3d_properties_get_vec3(scene_state, "editor.clip.point0", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    EXPECT_NEAR(dragged_point.x, 3000.0f, 0.001f);
+    EXPECT_NEAR(dragged_point.y, 0.0f, 0.001f);
+    EXPECT_NEAR(dragged_point.z, 0.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.dragged_point", -2), -1);
+
+    yyjson_doc_free(drag_doc);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }

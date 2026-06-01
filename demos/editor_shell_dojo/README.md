@@ -49,10 +49,11 @@ round-trip behavior.
 Current clip-tool keys:
 
 - `C`: enter clip mode for the selected brush or brushes.
-- Left click: place clip points. Two points use the active work-plane normal;
-  three points define the clipping plane exactly.
-- Left-drag a clip point: move the point; points snap to source vertices,
-  edges, faces, and the grid.
+- Left click: place clip points. Two points use the brush face/work-plane
+  normal captured when the point is placed; three points define the clipping
+  plane exactly.
+- Left-drag a clip point: move the point on its captured plane; points snap to
+  source vertices, edges, faces, and the grid.
 - `Ctrl+Enter` or `Command+Enter`: cycle keep-front, keep-back, and keep-both
   split modes.
 - `Enter`: apply the clip as one undoable edit.
@@ -65,6 +66,8 @@ Current clip-tool keys:
 Manual clip-tool verification:
 
 - Bevel a cube corner.
+- Carve a doorway by splitting a wall into side/top pieces and removing the
+  opening.
 - Split the wall strip into two pieces with keep-both mode.
 - Clip the terrain block into a diagonal wedge.
 - Select and clip the two side-by-side blocks at once.

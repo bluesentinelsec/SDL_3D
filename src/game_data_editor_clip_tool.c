@@ -162,6 +162,26 @@ static slayer3d_vec3 editor_clip_tool_work_plane_normal(const editor_clip_tool_s
     return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
 }
 
+static void editor_clip_tool_clear_drag_plane(editor_clip_tool_state *tool)
+{
+    if (tool == NULL)
+        return;
+    tool->has_drag_plane = false;
+    tool->drag_plane_normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    tool->drag_plane_distance_source_units = 0.0f;
+}
+
+static void editor_clip_tool_set_drag_plane(editor_clip_tool_state *tool, slayer3d_vec3 normal, const int coord[3])
+{
+    if (tool == NULL || coord == NULL || slayer3d_vec3_length_squared(normal) <= 0.000001f)
+        return;
+    tool->has_drag_plane = true;
+    tool->drag_plane_normal = slayer3d_vec3_normalize(normal);
+    tool->drag_plane_distance_source_units = tool->drag_plane_normal.x * (float)coord[0] +
+                                             tool->drag_plane_normal.y * (float)coord[1] +
+                                             tool->drag_plane_normal.z * (float)coord[2];
+}
+
 static void publish_editor_clip_tool_state(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -221,6 +241,7 @@ void reset_editor_clip_tool_state(slayer3d_game_data_runtime *runtime, const cha
     tool->dragged_point = -1;
     tool->has_work_plane_normal = false;
     tool->work_plane_normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    editor_clip_tool_clear_drag_plane(tool);
     tool->keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
     SDL_snprintf(tool->message, sizeof(tool->message), "%s", message != NULL ? message : "");
     publish_editor_clip_tool_state(runtime);
@@ -572,9 +593,19 @@ static slayer3d_vec3 editor_clip_world_origin_for_points(const slayer3d_game_dat
     return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
 }
 
-static bool editor_clip_coord_from_selection(const slayer3d_game_data_runtime *runtime, editor_clip_tool_state *tool,
-                                             const slayer3d_game_data_editor_selection *hover_selection,
-                                             const brush_world_runtime *world_runtime, int out_coord[3])
+static void editor_clip_coord_from_world_point(const brush_world_runtime *world_runtime, slayer3d_vec3 world_point,
+                                               slayer3d_vec3 origin, int out_coord[3])
+{
+    const slayer3d_vec3 local_point = slayer3d_vec3_sub(world_point, origin);
+    out_coord[0] = editor_source_units_from_meters(world_runtime, local_point.x);
+    out_coord[1] = editor_source_units_from_meters(world_runtime, local_point.y);
+    out_coord[2] = editor_source_units_from_meters(world_runtime, local_point.z);
+}
+
+static bool editor_clip_coord_from_hover_selection(const slayer3d_game_data_runtime *runtime,
+                                                   editor_clip_tool_state *tool,
+                                                   const slayer3d_game_data_editor_selection *hover_selection,
+                                                   const brush_world_runtime *world_runtime, int out_coord[3])
 {
     if (runtime == NULL || tool == NULL || hover_selection == NULL || !hover_selection->hit || world_runtime == NULL ||
         out_coord == NULL)
@@ -582,12 +613,61 @@ static bool editor_clip_coord_from_selection(const slayer3d_game_data_runtime *r
         editor_clip_tool_publish_snap_target(tool, NULL);
         return false;
     }
-    const slayer3d_vec3 local_point =
-        slayer3d_vec3_sub(hover_selection->point, editor_clip_world_origin_for_points(runtime, tool, hover_selection));
-    out_coord[0] = editor_source_units_from_meters(world_runtime, local_point.x);
-    out_coord[1] = editor_source_units_from_meters(world_runtime, local_point.y);
-    out_coord[2] = editor_source_units_from_meters(world_runtime, local_point.z);
+    editor_clip_coord_from_world_point(world_runtime, hover_selection->point,
+                                       editor_clip_world_origin_for_points(runtime, tool, hover_selection), out_coord);
     return editor_clip_resolve_snap_target(runtime, tool, hover_selection, world_runtime, out_coord, out_coord);
+}
+
+static bool editor_clip_coord_from_drag_plane_trace(const slayer3d_game_data_runtime *runtime,
+                                                    editor_clip_tool_state *tool, yyjson_val *selection_json,
+                                                    const slayer3d_game_data_editor_selection *hover_selection,
+                                                    const brush_world_runtime *world_runtime, int out_coord[3])
+{
+    if (runtime == NULL || tool == NULL || !tool->has_drag_plane || selection_json == NULL || world_runtime == NULL ||
+        out_coord == NULL)
+    {
+        return false;
+    }
+
+    slayer3d_game_data_world_trace_desc trace;
+    if (!editor_trace_desc_from_json(runtime, selection_json, &trace))
+        return false;
+
+    const slayer3d_vec3 origin = editor_clip_world_origin_for_points(runtime, tool, hover_selection);
+    int start_coord[3];
+    int end_coord[3];
+    editor_clip_coord_from_world_point(world_runtime, trace.start, origin, start_coord);
+    editor_clip_coord_from_world_point(world_runtime, trace.end, origin, end_coord);
+
+    const slayer3d_vec3 start = slayer3d_vec3_make((float)start_coord[0], (float)start_coord[1], (float)start_coord[2]);
+    const slayer3d_vec3 end = slayer3d_vec3_make((float)end_coord[0], (float)end_coord[1], (float)end_coord[2]);
+    const slayer3d_vec3 delta = slayer3d_vec3_sub(end, start);
+    const float denom = slayer3d_vec3_dot(tool->drag_plane_normal, delta);
+    if (SDL_fabsf(denom) <= 0.000001f)
+        return false;
+
+    const float t =
+        (tool->drag_plane_distance_source_units - slayer3d_vec3_dot(tool->drag_plane_normal, start)) / denom;
+    if (t < -0.0001f || t > 1.0001f)
+        return false;
+
+    const slayer3d_vec3 hit = slayer3d_vec3_add(start, slayer3d_vec3_scale(delta, SDL_clamp(t, 0.0f, 1.0f)));
+    const int raw_coord[3] = {(int)SDL_lroundf(hit.x), (int)SDL_lroundf(hit.y), (int)SDL_lroundf(hit.z)};
+    return editor_clip_resolve_snap_target(runtime, tool, hover_selection, world_runtime, raw_coord, out_coord);
+}
+
+static bool editor_clip_coord_from_selection(const slayer3d_game_data_runtime *runtime, editor_clip_tool_state *tool,
+                                             yyjson_val *selection_json,
+                                             const slayer3d_game_data_editor_selection *hover_selection,
+                                             const brush_world_runtime *world_runtime, int out_coord[3])
+{
+    if (editor_clip_coord_from_hover_selection(runtime, tool, hover_selection, world_runtime, out_coord))
+        return true;
+    if (editor_clip_coord_from_drag_plane_trace(runtime, tool, selection_json, hover_selection, world_runtime,
+                                                out_coord))
+        return true;
+    editor_clip_tool_publish_snap_target(tool, NULL);
+    return false;
 }
 
 static int editor_clip_hovered_point_index(const editor_clip_tool_state *tool, const int coord[3], int snap_units)
@@ -720,6 +800,7 @@ bool slayer3d_game_data_cancel_editor_clip_tool(slayer3d_game_data_runtime *runt
     tool->point_count = 0;
     tool->hovered_point = -1;
     tool->dragged_point = -1;
+    editor_clip_tool_clear_drag_plane(tool);
     tool->preview_valid = false;
     editor_clip_tool_clear_preview(tool);
     editor_clip_tool_set_message(tool, message_override != NULL && message_override[0] != '\0' ? message_override
@@ -756,7 +837,7 @@ bool slayer3d_game_data_cycle_editor_clip_keep_mode(slayer3d_game_data_runtime *
     tool->keep_mode = editor_clip_next_keep_mode(tool->keep_mode);
     editor_clip_tool_refresh_preview(runtime);
     if (tool->preview_valid)
-        editor_clip_tool_set_message(tool, "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
+        editor_clip_tool_set_message(tool, "Clip Tool: Enter applies, Ctrl/Cmd+Enter cycles keep mode");
     else
     {
         char message[128];
@@ -887,7 +968,7 @@ static void editor_clip_tool_refresh_preview(slayer3d_game_data_runtime *runtime
             tool->preview_valid = true;
             tool->preview_has_results = tool->preview_kept_count > 0;
             editor_clip_tool_clear_issue(runtime);
-            editor_clip_tool_set_message(tool, "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
+            editor_clip_tool_set_message(tool, "Clip Tool: Enter applies, Ctrl/Cmd+Enter cycles keep mode");
         }
         else
         {
@@ -929,6 +1010,7 @@ bool slayer3d_game_data_place_editor_clip_point_source(slayer3d_game_data_runtim
     }
 
     editor_clip_tool_set_work_plane_normal(tool, work_plane_normal);
+    editor_clip_tool_set_drag_plane(tool, editor_clip_tool_work_plane_normal(tool), coord);
     tool->points[tool->point_count] = editor_clip_point_from_coord(coord);
     tool->dragged_point = tool->point_count;
     tool->hovered_point = tool->point_count;
@@ -957,6 +1039,13 @@ static slayer3d_vec3 editor_clip_work_plane_normal_from_selection_json(
     const slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
     const slayer3d_game_data_editor_selection *hover_selection)
 {
+    if (hover_selection != NULL && hover_selection->hit &&
+        hover_selection->type == SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD &&
+        slayer3d_vec3_length_squared(hover_selection->normal) > 0.000001f)
+    {
+        return slayer3d_vec3_normalize(hover_selection->normal);
+    }
+
     slayer3d_vec3 normal;
     float distance = 0.0f;
     if (editor_work_plane_desc_from_trace_json(runtime, obj_get(selection_json, "trace"), &normal, &distance))
@@ -986,7 +1075,8 @@ bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_v
     editor_clip_tool_state *tool = &runtime->editor_clip_tool;
     const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, tool->world_name);
     int coord[3] = {0, 0, 0};
-    const bool has_coord = editor_clip_coord_from_selection(runtime, tool, hover_selection, world_runtime, coord);
+    const bool has_coord =
+        editor_clip_coord_from_selection(runtime, tool, selection_json, hover_selection, world_runtime, coord);
     const int snap_units = editor_clip_source_snap_units(runtime, world_runtime);
     const slayer3d_vec3 work_plane_normal =
         editor_clip_work_plane_normal_from_selection_json(runtime, selection_json, hover_selection);
@@ -1008,7 +1098,12 @@ bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_v
             return true;
         }
         if (tool->hovered_point >= 0)
+        {
             tool->dragged_point = tool->hovered_point;
+            int point_coord[3];
+            editor_clip_coord_from_point(tool->points[tool->hovered_point], point_coord);
+            editor_clip_tool_set_drag_plane(tool, work_plane_normal, point_coord);
+        }
         else if (!slayer3d_game_data_place_editor_clip_point_source(runtime, coord, work_plane_normal))
             return false;
     }
@@ -1025,6 +1120,7 @@ bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_v
     else if (left_released && tool->dragged_point >= 0)
     {
         tool->dragged_point = -1;
+        editor_clip_tool_clear_drag_plane(tool);
         editor_clip_tool_refresh_preview(runtime);
         if (out_consumed != NULL)
             *out_consumed = true;
