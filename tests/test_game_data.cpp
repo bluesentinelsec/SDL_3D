@@ -19198,11 +19198,18 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "clip");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.world", ""), "brush.editor_shell.target");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip Tool: click to place clip points");
     slayer3d_signal_emit(bus, clip_cycle_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "back");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""), "Clip Tool: keep back");
     slayer3d_signal_emit(bus, commit_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
-                 "Clip Tool: place at least two clip points");
+                 "Clip invalid: place at least two clip points");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.issues.line0", ""),
+                 "Clip invalid: place at least two clip points");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
+                 "Clip invalid: place at least two clip points");
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
@@ -22462,6 +22469,11 @@ TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.preview.has_results", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.kept_count", 0), 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.discarded_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
+    slayer3d_game_data_brush_world before_cycle_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &before_cycle_world));
+    ASSERT_EQ(before_cycle_world.brush_count, 1);
 
     struct ClipPreviewDebug
     {
@@ -22510,10 +22522,18 @@ TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
     const int cycle_keep_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.clip.cycle_keep_mode");
     ASSERT_GE(cycle_keep_signal, 0);
     slayer3d_signal_emit(bus, cycle_keep_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "back");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
     slayer3d_signal_emit(bus, cycle_keep_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "both");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
+                 "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.kept_count", 0), 2);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.preview.discarded_count", 0), 0);
+    slayer3d_game_data_brush_world after_cycle_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &after_cycle_world));
+    EXPECT_EQ(after_cycle_world.brush_count, before_cycle_world.brush_count);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -22557,6 +22577,51 @@ TEST(GameDataRuntime, EditorClipToolTwoPointPlacementUsesWorkPlaneNormal)
     EXPECT_NEAR(brush_world.brushes[0].bounds.min.x, 0.0f, 0.001f);
     EXPECT_NEAR(brush_world.brushes[0].bounds.max.x, 4.0f, 0.001f);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""), "Clip applied");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "Clip applied");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.issues.line0", ""), "");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorClipToolInvalidPreviewPublishesIssueDiagnostic)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(&session, &runtime, &world_runtime,
+                                                            source_clip_box_json("source.box.clip.tool.invalid",
+                                                                                 "brush.source.clip.tool.invalid", 0, 0,
+                                                                                 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.tool.invalid");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    const int duplicate_point[3] = {4000, 0, 0};
+    ASSERT_TRUE(
+        slayer3d_game_data_place_editor_clip_point_source(runtime, duplicate_point, slayer3d_vec3_make(0, 1, 0)));
+    ASSERT_TRUE(
+        slayer3d_game_data_place_editor_clip_point_source(runtime, duplicate_point, slayer3d_vec3_make(0, 1, 0)));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip invalid: clip points do not define a plane");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.issues.line0", ""),
+                 "Clip invalid: clip points do not define a plane");
+    const int issue_count = slayer3d_properties_get_int(scene_state, "editor.issues.count", 0);
+
+    ASSERT_TRUE(slayer3d_game_data_commit_editor_clip_tool(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.issues.count", 0), issue_count);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
+                 "Clip invalid: clip points do not define a plane");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

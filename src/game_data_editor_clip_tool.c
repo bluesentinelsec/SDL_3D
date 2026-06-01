@@ -36,6 +36,60 @@ static editor_brush_source_clip_keep_mode editor_clip_next_keep_mode(editor_brus
     }
 }
 
+static const char *editor_clip_strip_tool_prefix(const char *message)
+{
+    const char *prefix = "Clip Tool: ";
+    const size_t prefix_len = SDL_strlen(prefix);
+    return message != NULL && SDL_strncmp(message, prefix, prefix_len) == 0 ? message + prefix_len : message;
+}
+
+static void editor_clip_tool_set_message(editor_clip_tool_state *tool, const char *message)
+{
+    if (tool == NULL)
+        return;
+    SDL_snprintf(tool->message, sizeof(tool->message), "%s", message != NULL ? message : "");
+}
+
+static void editor_clip_tool_set_invalid_message(editor_clip_tool_state *tool, const char *reason)
+{
+    if (tool == NULL)
+        return;
+    reason = editor_clip_strip_tool_prefix(reason);
+    SDL_snprintf(tool->message, sizeof(tool->message), "Clip invalid: %s",
+                 reason != NULL && reason[0] != '\0' ? reason : "invalid clip");
+}
+
+static void editor_clip_tool_publish_message(slayer3d_game_data_runtime *runtime, const char *message,
+                                             bool publish_console)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || message == NULL)
+        return;
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    if (publish_console)
+        editor_publish_console_message(runtime, message);
+}
+
+static void editor_clip_tool_publish_issue(slayer3d_game_data_runtime *runtime, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || message == NULL || message[0] == '\0')
+        return;
+    const char *current = slayer3d_properties_get_string(runtime->scene_state, "editor.issues.line0", "");
+    const bool changed = SDL_strcmp(current, message) != 0;
+    slayer3d_properties_set_string(runtime->scene_state, "editor.issues.line0", message);
+    if (changed)
+    {
+        slayer3d_properties_set_int(runtime->scene_state, "editor.issues.count",
+                                    slayer3d_properties_get_int(runtime->scene_state, "editor.issues.count", 0) + 1);
+    }
+}
+
+static void editor_clip_tool_clear_issue(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_string(runtime->scene_state, "editor.issues.line0", "");
+}
+
 static bool editor_clip_discard_keep_mode(editor_brush_source_clip_keep_mode mode,
                                           editor_brush_source_clip_keep_mode *out_mode)
 {
@@ -305,7 +359,7 @@ static bool capture_editor_clip_tool_selection(slayer3d_game_data_runtime *runti
             SDL_snprintf(tool->world_name, sizeof(tool->world_name), "%s", selection.world_name);
         else if (SDL_strcmp(tool->world_name, selection.world_name) != 0)
         {
-            SDL_snprintf(tool->message, sizeof(tool->message), "Clip Tool: select brushes from one world");
+            editor_clip_tool_set_message(tool, "Clip Tool: select brushes from one world");
             return false;
         }
 
@@ -314,7 +368,7 @@ static bool capture_editor_clip_tool_selection(slayer3d_game_data_runtime *runti
             continue;
         if (tool->selected_brush_count >= SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
         {
-            SDL_snprintf(tool->message, sizeof(tool->message), "Clip Tool: too many selected brushes");
+            editor_clip_tool_set_message(tool, "Clip Tool: too many selected brushes");
             return false;
         }
         SDL_snprintf(tool->brush_identities[tool->selected_brush_count],
@@ -346,19 +400,20 @@ bool slayer3d_game_data_enter_editor_clip_tool(slayer3d_game_data_runtime *runti
     }
     else if (tool->selected_brush_count <= 0)
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s",
-                     message_override != NULL && message_override[0] != '\0' ? message_override
-                                                                             : "Clip Tool: select brushes to clip");
+        editor_clip_tool_set_message(tool, message_override != NULL && message_override[0] != '\0'
+                                               ? message_override
+                                               : "Clip Tool: select brushes to clip");
     }
     else
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s",
-                     message_override != NULL && message_override[0] != '\0' ? message_override
-                                                                             : "Clip Tool: click to place points");
+        editor_clip_tool_set_message(tool, message_override != NULL && message_override[0] != '\0'
+                                               ? message_override
+                                               : "Clip Tool: click to place clip points");
     }
 
     publish_editor_clip_tool_state(runtime);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", tool->message);
+    editor_clip_tool_publish_message(runtime, tool->message, true);
+    editor_clip_tool_clear_issue(runtime);
     return selection_valid;
 }
 
@@ -371,8 +426,7 @@ bool slayer3d_game_data_cancel_editor_clip_tool(slayer3d_game_data_runtime *runt
     if (!tool->active)
     {
         reset_editor_clip_tool_state(runtime, message_override != NULL ? message_override : "Clip Tool inactive");
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
-                                       runtime->editor_clip_tool.message);
+        editor_clip_tool_publish_message(runtime, runtime->editor_clip_tool.message, true);
         return true;
     }
 
@@ -381,10 +435,10 @@ bool slayer3d_game_data_cancel_editor_clip_tool(slayer3d_game_data_runtime *runt
     tool->dragged_point = -1;
     tool->preview_valid = false;
     editor_clip_tool_clear_preview(tool);
-    SDL_snprintf(tool->message, sizeof(tool->message), "%s",
-                 message_override != NULL && message_override[0] != '\0' ? message_override : "Clip Tool cancelled");
+    editor_clip_tool_set_message(tool, message_override != NULL && message_override[0] != '\0' ? message_override
+                                                                                               : "Clip Tool cancelled");
     publish_editor_clip_tool_state(runtime);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", tool->message);
+    editor_clip_tool_publish_message(runtime, tool->message, true);
     return true;
 }
 
@@ -406,18 +460,24 @@ bool slayer3d_game_data_cycle_editor_clip_keep_mode(slayer3d_game_data_runtime *
     editor_clip_tool_state *tool = &runtime->editor_clip_tool;
     if (!tool->active)
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", "Clip Tool inactive");
+        editor_clip_tool_set_message(tool, "Clip Tool inactive");
         publish_editor_clip_tool_state(runtime);
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", tool->message);
+        editor_clip_tool_publish_message(runtime, tool->message, true);
         return true;
     }
 
     tool->keep_mode = editor_clip_next_keep_mode(tool->keep_mode);
-    SDL_snprintf(tool->message, sizeof(tool->message), "Clip Tool keep %s",
-                 editor_clip_keep_mode_name(tool->keep_mode));
     editor_clip_tool_refresh_preview(runtime);
+    if (tool->preview_valid)
+        editor_clip_tool_set_message(tool, "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
+    else
+    {
+        char message[128];
+        SDL_snprintf(message, sizeof(message), "Clip Tool: keep %s", editor_clip_keep_mode_name(tool->keep_mode));
+        editor_clip_tool_set_message(tool, message);
+    }
     publish_editor_clip_tool_state(runtime);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", tool->message);
+    editor_clip_tool_publish_message(runtime, tool->message, true);
     return true;
 }
 
@@ -477,19 +537,19 @@ static void editor_clip_tool_refresh_preview(slayer3d_game_data_runtime *runtime
     }
     if (tool->selected_brush_count <= 0)
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", "Clip Tool: select brushes to clip");
+        editor_clip_tool_set_message(tool, "Clip Tool: select brushes to clip");
         publish_editor_clip_tool_state(runtime);
         return;
     }
     if (tool->point_count == 0)
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", "Clip Tool: click to place points");
+        editor_clip_tool_set_message(tool, "Clip Tool: click to place clip points");
         publish_editor_clip_tool_state(runtime);
         return;
     }
     if (tool->point_count == 1)
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", "Clip Tool: place second point");
+        editor_clip_tool_set_message(tool, "Clip Tool: place second point");
         publish_editor_clip_tool_state(runtime);
         return;
     }
@@ -498,7 +558,8 @@ static void editor_clip_tool_refresh_preview(slayer3d_game_data_runtime *runtime
     char error_buffer[256];
     if (!editor_clip_tool_build_desc(tool, &desc, error_buffer, sizeof(error_buffer)))
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", error_buffer);
+        editor_clip_tool_set_invalid_message(tool, error_buffer);
+        editor_clip_tool_publish_issue(runtime, tool->message);
         publish_editor_clip_tool_state(runtime);
         return;
     }
@@ -526,8 +587,8 @@ static void editor_clip_tool_refresh_preview(slayer3d_game_data_runtime *runtime
                                                              &discard_result))
                     {
                         editor_clip_tool_clear_preview(tool);
-                        SDL_snprintf(tool->message, sizeof(tool->message), "%s",
-                                     "Clip Tool: preview allocation failed");
+                        editor_clip_tool_set_invalid_message(tool, "preview allocation failed");
+                        editor_clip_tool_publish_issue(runtime, tool->message);
                         editor_brush_world_free_source_clip_result(&discard_result);
                         editor_brush_world_free_source_clip_result(&result);
                         publish_editor_clip_tool_state(runtime);
@@ -538,19 +599,20 @@ static void editor_clip_tool_refresh_preview(slayer3d_game_data_runtime *runtime
             }
             tool->preview_valid = true;
             tool->preview_has_results = tool->preview_kept_count > 0;
-            SDL_snprintf(tool->message, sizeof(tool->message), "Clip Tool: %s, Enter applies",
-                         result.diagnostic[0] != '\0' ? result.diagnostic : "valid clip");
+            editor_clip_tool_clear_issue(runtime);
+            editor_clip_tool_set_message(tool, "Clip Tool: Enter applies, Ctrl+Enter cycles keep mode");
         }
         else
         {
             editor_clip_tool_clear_preview(tool);
-            SDL_snprintf(tool->message, sizeof(tool->message), "%s", "Clip Tool: preview allocation failed");
+            editor_clip_tool_set_invalid_message(tool, "preview allocation failed");
+            editor_clip_tool_publish_issue(runtime, tool->message);
         }
     }
     else
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s",
-                     error_buffer[0] != '\0' ? error_buffer : result.diagnostic);
+        editor_clip_tool_set_invalid_message(tool, error_buffer[0] != '\0' ? error_buffer : result.diagnostic);
+        editor_clip_tool_publish_issue(runtime, tool->message);
     }
     editor_brush_world_free_source_clip_result(&result);
     publish_editor_clip_tool_state(runtime);
@@ -574,7 +636,7 @@ bool slayer3d_game_data_place_editor_clip_point_source(slayer3d_game_data_runtim
         return true;
     if (tool->point_count >= SLAYER3D_EDITOR_CLIP_TOOL_MAX_POINTS)
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", "Clip Tool: maximum clip points placed");
+        editor_clip_tool_set_message(tool, "Clip Tool: maximum clip points placed");
         publish_editor_clip_tool_state(runtime);
         return true;
     }
@@ -653,8 +715,9 @@ bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_v
             *out_consumed = true;
         if (!has_coord || world_runtime == NULL)
         {
-            SDL_snprintf(tool->message, sizeof(tool->message), "%s", "Clip Tool: point placement requires a hit");
+            editor_clip_tool_set_message(tool, "Clip Tool: point placement requires a hit");
             publish_editor_clip_tool_state(runtime);
+            editor_clip_tool_publish_message(runtime, tool->message, true);
             return true;
         }
         if (tool->hovered_point >= 0)
@@ -695,10 +758,11 @@ bool slayer3d_game_data_commit_editor_clip_tool(slayer3d_game_data_runtime *runt
     char error_buffer[256];
     if (!editor_clip_tool_build_desc(tool, &desc, error_buffer, sizeof(error_buffer)))
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", error_buffer);
+        editor_clip_tool_set_invalid_message(tool, error_buffer);
         tool->preview_valid = false;
         publish_editor_clip_tool_state(runtime);
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", tool->message);
+        editor_clip_tool_publish_issue(runtime, tool->message);
+        editor_clip_tool_publish_message(runtime, tool->message, true);
         return true;
     }
 
@@ -707,19 +771,18 @@ bool slayer3d_game_data_commit_editor_clip_tool(slayer3d_game_data_runtime *runt
     if (!slayer3d_game_data_commit_editor_source_clip(runtime, tool->world_name, &desc, &result, error_buffer,
                                                       sizeof(error_buffer)))
     {
-        SDL_snprintf(tool->message, sizeof(tool->message), "%s", error_buffer);
+        editor_clip_tool_set_invalid_message(tool, error_buffer);
         tool->preview_valid = false;
         editor_brush_world_free_source_clip_result(&result);
         publish_editor_clip_tool_state(runtime);
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", tool->message);
+        editor_clip_tool_publish_issue(runtime, tool->message);
+        editor_clip_tool_publish_message(runtime, tool->message, true);
         return true;
     }
 
-    char message[256];
-    SDL_snprintf(message, sizeof(message), "Clip Tool committed %d brush%s", result.output_brush_count,
-                 result.output_brush_count == 1 ? "" : "es");
     editor_brush_world_free_source_clip_result(&result);
-    reset_editor_clip_tool_state(runtime, message);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", runtime->editor_clip_tool.message);
+    reset_editor_clip_tool_state(runtime, "Clip applied");
+    editor_clip_tool_clear_issue(runtime);
+    editor_clip_tool_publish_message(runtime, runtime->editor_clip_tool.message, true);
     return true;
 }

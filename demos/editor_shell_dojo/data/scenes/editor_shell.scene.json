@@ -929,7 +929,14 @@
             "y": 8,
             "w": 330,
             "h": 20,
-            "text": "Issues tab will list map leaks and validation findings."
+            "text": "Issues tab will list map leaks and validation findings.",
+            "bindings": [
+              {
+                "type": "scene_state",
+                "key": "editor.issues.line0",
+                "default": "Issues tab will list map leaks and validation findings."
+              }
+            ]
           },
           {
             "id": "ui.editor_shell.console.line0.row",
