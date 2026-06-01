@@ -152,7 +152,7 @@ static bool editor_tool_mode_valid(const char *mode)
 {
     return mode != NULL &&
            (SDL_strcmp(mode, "select") == 0 || SDL_strcmp(mode, "brush") == 0 || SDL_strcmp(mode, "face") == 0 ||
-            SDL_strcmp(mode, "vertex") == 0 || SDL_strcmp(mode, "texture") == 0);
+            SDL_strcmp(mode, "clip") == 0 || SDL_strcmp(mode, "vertex") == 0 || SDL_strcmp(mode, "texture") == 0);
 }
 
 bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -163,7 +163,7 @@ bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *a
     const char *mode = json_string(action, "mode");
     if (!editor_tool_mode_valid(mode))
         return validation_error(ctx, json_path,
-                                "editor.tool.set_mode mode must be one of select, brush, face, vertex, texture");
+                                "editor.tool.set_mode mode must be one of select, brush, face, clip, vertex, texture");
     yyjson_val *message = obj_get(action, "message");
     if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
         return validation_error(ctx, json_path, "editor.tool.set_mode message must be non-empty");

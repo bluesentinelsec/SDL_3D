@@ -444,6 +444,18 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return slayer3d_game_data_set_editor_tool_mode(runtime, json_string(action, "mode", NULL),
                                                        json_string(action, "message", NULL));
 
+    if (SDL_strcmp(type, "editor.clip.cancel") == 0)
+        return slayer3d_game_data_cancel_editor_clip_tool(runtime, json_string(action, "message", NULL));
+
+    if (SDL_strcmp(type, "editor.clip.escape") == 0)
+        return slayer3d_game_data_escape_editor_clip_tool(runtime);
+
+    if (SDL_strcmp(type, "editor.clip.cycle_keep_mode") == 0)
+        return slayer3d_game_data_cycle_editor_clip_keep_mode(runtime);
+
+    if (SDL_strcmp(type, "editor.clip.commit") == 0)
+        return slayer3d_game_data_commit_editor_clip_tool(runtime);
+
     if (SDL_strcmp(type, "editor.placement_preview.cancel") == 0)
         return editor_cancel_pending_brush_preview(runtime, json_string(action, "message", NULL));
 
@@ -493,7 +505,11 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return slayer3d_game_data_clear_editor_command_preview(runtime, action);
 
     if (SDL_strcmp(type, "editor.command.commit") == 0)
+    {
+        if (SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", ""), "clip") == 0)
+            return slayer3d_game_data_commit_editor_clip_tool(runtime);
         return slayer3d_game_data_commit_editor_command(runtime, action, payload);
+    }
 
     if (SDL_strcmp(type, "editor.command.undo") == 0)
         return slayer3d_game_data_undo_editor_command(runtime, action, payload);

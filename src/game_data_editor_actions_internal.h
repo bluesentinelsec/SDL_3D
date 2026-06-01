@@ -9,6 +9,12 @@ bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime
 bool slayer3d_game_data_clear_editor_vertex_selection(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime, const char *mode,
                                              const char *message_override);
+bool slayer3d_game_data_enter_editor_clip_tool(slayer3d_game_data_runtime *runtime, const char *message_override);
+bool slayer3d_game_data_cancel_editor_clip_tool(slayer3d_game_data_runtime *runtime, const char *message_override);
+bool slayer3d_game_data_escape_editor_clip_tool(slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_cycle_editor_clip_keep_mode(slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_commit_editor_clip_tool(slayer3d_game_data_runtime *runtime);
+void reset_editor_clip_tool_state(slayer3d_game_data_runtime *runtime, const char *message);
 slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                               const slayer3d_game_data_editor_selection *selection);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(

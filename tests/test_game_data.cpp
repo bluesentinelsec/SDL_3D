@@ -16496,10 +16496,12 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
     ASSERT_NE(bus, nullptr);
     const int preview_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.preview");
+    const int tool_cycle_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.tool.cycle");
     const int clear_selection_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.selection.clear");
     const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
     const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
     ASSERT_GE(preview_signal, 0);
+    ASSERT_GE(tool_cycle_signal, 0);
     ASSERT_GE(clear_selection_signal, 0);
     ASSERT_GE(escape_signal, 0);
     ASSERT_GE(mode_select_signal, 0);
@@ -16614,7 +16616,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "inspector toggled");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line1", ""), "Editor ready");
 
-    press_key(SDL_SCANCODE_C, 5);
+    slayer3d_signal_emit(bus, tool_cycle_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "move");
 
@@ -16743,7 +16745,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_NEAR(target_cube_min_y(), 0.35f, 0.001f);
 
-    press_key(SDL_SCANCODE_C, 10);
+    slayer3d_signal_emit(bus, tool_cycle_signal, nullptr);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
 
@@ -18818,11 +18820,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int delete_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.delete_selected");
     const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
     const int mode_brush_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.brush");
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
     const int mode_face_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.face");
     const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
     const int mode_texture_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.texture");
     const int mode_vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
+    const int clip_cycle_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.clip.cycle_keep_mode");
     const int undo_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.undo");
     const int redo_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.redo");
     const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
@@ -18844,11 +18848,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(delete_signal, 0);
     ASSERT_GE(escape_signal, 0);
     ASSERT_GE(mode_brush_signal, 0);
+    ASSERT_GE(mode_clip_signal, 0);
     ASSERT_GE(mode_face_signal, 0);
     ASSERT_GE(mode_select_signal, 0);
     ASSERT_GE(mode_texture_signal, 0);
     ASSERT_GE(mode_vertex_signal, 0);
     ASSERT_GE(commit_signal, 0);
+    ASSERT_GE(clip_cycle_signal, 0);
     ASSERT_GE(undo_signal, 0);
     ASSERT_GE(redo_signal, 0);
     ASSERT_GE(export_signal, 0);
@@ -18866,9 +18872,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_NE(input, nullptr);
     const int export_action_id = slayer3d_game_data_find_action(runtime, "action.editor.export");
     const int brush_mode_action_id = slayer3d_game_data_find_action(runtime, "action.editor.mode.brush");
+    const int clip_mode_action_id = slayer3d_game_data_find_action(runtime, "action.editor.mode.clip");
+    const int clip_cycle_action_id = slayer3d_game_data_find_action(runtime, "action.editor.clip.cycle_keep_mode");
     const int select_mode_action_id = slayer3d_game_data_find_action(runtime, "action.editor.mode.select");
     ASSERT_GE(export_action_id, 0);
     ASSERT_GE(brush_mode_action_id, 0);
+    ASSERT_GE(clip_mode_action_id, 0);
+    ASSERT_GE(clip_cycle_action_id, 0);
     ASSERT_GE(select_mode_action_id, 0);
     auto press_save_chord = [&](SDL_Keymod modifiers, Uint64 frame) {
         SDL_SetModState(modifiers);
@@ -18909,6 +18919,23 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
         key.type = SDL_EVENT_KEY_UP;
         slayer3d_input_process_event(input, &key);
         slayer3d_input_update(input, frame + 1U);
+        return pressed;
+    };
+    auto press_key_with_modifiers_for_action = [&](SDL_Scancode scancode, SDL_Keymod modifiers, int action_id,
+                                                   Uint64 frame) {
+        SDL_SetModState(modifiers);
+        SDL_Event key{};
+        key.type = SDL_EVENT_KEY_DOWN;
+        key.key.scancode = scancode;
+        key.key.mod = modifiers;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame);
+        const bool pressed = slayer3d_input_is_pressed(input, action_id);
+        EXPECT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+        key.type = SDL_EVENT_KEY_UP;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, frame + 1U);
+        SDL_SetModState(SDL_KMOD_NONE);
         return pressed;
     };
     EXPECT_FALSE(press_save_chord(SDL_KMOD_NONE, 100));
@@ -19106,6 +19133,24 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
     EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.brush.selected"));
+    EXPECT_TRUE(press_key_for_action(SDL_SCANCODE_C, clip_mode_action_id, 107));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "clip");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "clip");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", -1), 0);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "front");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip Tool: select brushes to clip");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.clip.selected"));
+    EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
+    EXPECT_TRUE(press_key_with_modifiers_for_action(SDL_SCANCODE_RETURN, SDL_KMOD_CTRL, clip_cycle_action_id, 109));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "back");
+    EXPECT_TRUE(press_key_with_modifiers_for_action(SDL_SCANCODE_RETURN, SDL_KMOD_GUI, clip_cycle_action_id, 111));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "both");
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", true));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
     slayer3d_signal_emit(bus, mode_face_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "face");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "face");
@@ -19133,7 +19178,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, mode_texture_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "texture");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
-    EXPECT_TRUE(press_key(SDL_SCANCODE_SPACE, 106));
+    EXPECT_TRUE(press_key(SDL_SCANCODE_SPACE, 113));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "select mode");
@@ -19142,6 +19187,18 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     select_editor_shell_test_cube(runtime);
     EXPECT_EQ(world().brush_count, 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "clip");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.world", ""), "brush.editor_shell.target");
+    slayer3d_signal_emit(bus, clip_cycle_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.keep_mode", ""), "back");
+    slayer3d_signal_emit(bus, commit_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip Tool: place at least two clip points");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     slayer3d_signal_emit(bus, mode_brush_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "brush");
     slayer3d_signal_emit(bus, delete_signal, nullptr);

@@ -320,6 +320,25 @@ typedef struct editor_brush_source_clip_result
     char diagnostic[256];
 } editor_brush_source_clip_result;
 
+#define SLAYER3D_EDITOR_CLIP_TOOL_MAX_POINTS 3
+
+typedef struct editor_clip_tool_state
+{
+    bool active;
+    char scene[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_identities[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY][SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    const char *brush_identity_refs[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    int selected_brush_count;
+    slayer3d_vec3 points[SLAYER3D_EDITOR_CLIP_TOOL_MAX_POINTS];
+    int point_count;
+    int hovered_point;
+    int dragged_point;
+    editor_brush_source_clip_keep_mode keep_mode;
+    bool preview_valid;
+    char message[256];
+} editor_clip_tool_state;
+
 typedef struct editor_command_transaction_entry
 {
     int id;
