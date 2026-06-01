@@ -43,15 +43,31 @@ typedef struct editor_placement_preview_state
     char source_warning[256];
 } editor_placement_preview_state;
 
+typedef enum editor_drag_create_phase
+{
+    EDITOR_DRAG_CREATE_IDLE = 0,
+    EDITOR_DRAG_CREATE_DRAWING_FOOTPRINT,
+    EDITOR_DRAG_CREATE_PENDING_FOOTPRINT,
+    EDITOR_DRAG_CREATE_ADJUSTING_DEPTH,
+    EDITOR_DRAG_CREATE_COMMITTED,
+    EDITOR_DRAG_CREATE_CANCELED
+} editor_drag_create_phase;
+
 typedef struct editor_drag_create_state
 {
     bool active;
     bool moved;
+    bool commit_on_release;
+    editor_drag_create_phase phase;
     const char *scene;
     const char *world_name;
     const char *material_name;
     unsigned int contents;
     float grid_size;
+    int extrusion_axis;
+    int depth_cells;
+    int depth_drag_start_cell;
+    float depth_drag_start_mouse_y;
     int start_cell[3];
     int current_cell[3];
     int source_min[3];
