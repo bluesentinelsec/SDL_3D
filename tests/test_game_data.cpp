@@ -22467,6 +22467,12 @@ TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
     {
         int kept_edges = 0;
         int discarded_edges = 0;
+        int point_handles = 0;
+        int hover_handles = 0;
+        int clip_lines = 0;
+        int plane_edges = 0;
+        int status_labels = 0;
+        bool status_label_names_clip = false;
     } debug;
     auto capture_clip_preview = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
         auto *capture = static_cast<ClipPreviewDebug *>(userdata);
@@ -22474,6 +22480,19 @@ TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
             capture->kept_edges++;
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_DISCARDED_EDGE)
             capture->discarded_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HANDLE)
+            capture->point_handles++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HOVER_HANDLE)
+            capture->hover_handles++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_LINE)
+            capture->clip_lines++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PLANE_EDGE)
+            capture->plane_edges++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL)
+        {
+            capture->status_labels++;
+            capture->status_label_names_clip = capture->status_label_names_clip || SDL_strstr(primitive->text, "Clip:");
+        }
         return true;
     };
     slayer3d_game_data_editor_debug_desc debug_desc{};
@@ -22481,6 +22500,12 @@ TEST(GameDataRuntime, EditorClipToolPreviewEmitsKeptAndDiscardedGeometry)
     ASSERT_TRUE(slayer3d_game_data_for_each_editor_debug_primitive(runtime, &debug_desc, capture_clip_preview, &debug));
     EXPECT_GT(debug.kept_edges, 0);
     EXPECT_GT(debug.discarded_edges, 0);
+    EXPECT_GT(debug.point_handles, 0);
+    EXPECT_GT(debug.hover_handles, 0);
+    EXPECT_GT(debug.clip_lines, 0);
+    EXPECT_GT(debug.plane_edges, 0);
+    EXPECT_GT(debug.status_labels, 0);
+    EXPECT_TRUE(debug.status_label_names_clip);
 
     const int cycle_keep_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.clip.cycle_keep_mode");
     ASSERT_GE(cycle_keep_signal, 0);

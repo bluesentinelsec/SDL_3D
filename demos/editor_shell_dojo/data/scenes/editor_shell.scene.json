@@ -356,6 +356,7 @@
         "selection_face",
         "vertex_handles",
         "command_preview",
+        "clip_preview",
         "markers"
       ],
       "world_bounds_color": [80, 170, 255, 190],

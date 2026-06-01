@@ -103,6 +103,16 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_KEPT_EDGE = 19,
         /** @brief Source clip preview edge for geometry that will be discarded. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_DISCARDED_EDGE = 20,
+        /** @brief Clip tool point handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HANDLE = 21,
+        /** @brief Hovered clip tool point handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HOVER_HANDLE = 22,
+        /** @brief Clip tool point-to-point line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_LINE = 23,
+        /** @brief Clip tool plane indicator edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PLANE_EDGE = 24,
+        /** @brief Clip tool status label. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL = 25,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum

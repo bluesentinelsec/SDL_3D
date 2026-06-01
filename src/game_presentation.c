@@ -580,8 +580,12 @@ static bool draw_editor_debug_label_primitive(void *userdata,
                                               const slayer3d_game_data_editor_debug_primitive *primitive)
 {
     editor_debug_label_context *context = (editor_debug_label_context *)userdata;
-    if (context == NULL || primitive == NULL || primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL)
+    if (context == NULL || primitive == NULL ||
+        (primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_VERTEX_HOVER_LABEL &&
+         primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL))
+    {
         return true;
+    }
     if (context->renderer == NULL || context->font == NULL || context->camera == NULL || primitive->text[0] == '\0')
         return false;
 
