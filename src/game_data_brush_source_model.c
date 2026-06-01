@@ -2125,7 +2125,8 @@ static bool source_clip_desc_valid(const brush_world_runtime *world_runtime, con
         set_error(error_buffer, error_buffer_size, "source clip requires source-backed brush identities");
         return false;
     }
-    if (desc->brush_count * 2 > SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
+    const int max_outputs_per_brush = desc->keep_mode == EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH ? 2 : 1;
+    if (desc->brush_count * max_outputs_per_brush > SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
     {
         set_error(error_buffer, error_buffer_size, "source clip selection exceeds output brush capacity");
         return false;
@@ -2231,7 +2232,12 @@ bool editor_brush_world_preview_source_clip_operation(const brush_world_runtime 
         }
 
         if (out_result->output_brush_count == output_count_before)
-            out_result->removed_brush_count++;
+        {
+            editor_brush_world_free_source_clip_result(out_result);
+            set_error(error_buffer, error_buffer_size, "source clip would remove a selected brush");
+            source_clip_operation_set_failure(out_result, "source clip would remove a selected brush");
+            return false;
+        }
     }
 
     if (out_result->output_brush_count <= 0)
