@@ -100,20 +100,27 @@ int editor_collect_selected_source_indices(const slayer3d_game_data_runtime *run
 int editor_source_vertex_shared_count(const brush_world_runtime *world_runtime, const int coord[3],
                                       const int *selected_indices, int selected_count)
 {
-    editor_brush_source_shared_vertex
-        shared[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY * SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    const int shared_capacity = SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY * SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY;
+    editor_brush_source_shared_vertex *shared =
+        (editor_brush_source_shared_vertex *)SDL_calloc((size_t)shared_capacity, sizeof(*shared));
     int shared_count = 0;
-    if (world_runtime == NULL || coord == NULL || selected_indices == NULL || selected_count <= 0 ||
+    if (world_runtime == NULL || coord == NULL || selected_indices == NULL || selected_count <= 0 || shared == NULL ||
         !editor_brush_world_find_shared_source_vertices(world_runtime, selected_indices, selected_count, shared,
-                                                        (int)SDL_arraysize(shared), &shared_count, NULL, 0))
+                                                        shared_capacity, &shared_count, NULL, 0))
     {
+        SDL_free(shared);
         return 1;
     }
     for (int i = 0; i < shared_count; ++i)
     {
         if (shared[i].coord[0] == coord[0] && shared[i].coord[1] == coord[1] && shared[i].coord[2] == coord[2])
-            return SDL_max(shared[i].reference_count, 1);
+        {
+            const int reference_count = SDL_max(shared[i].reference_count, 1);
+            SDL_free(shared);
+            return reference_count;
+        }
     }
+    SDL_free(shared);
     return 1;
 }
 
