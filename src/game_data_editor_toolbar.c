@@ -94,6 +94,8 @@ static const char *editor_mode_for_tool_action(const char *action)
         return "brush";
     if (SDL_strcmp(action, "editor.tool.face") == 0)
         return "face";
+    if (SDL_strcmp(action, "editor.tool.edge") == 0)
+        return "edge";
     if (SDL_strcmp(action, "editor.tool.clip") == 0)
         return "clip";
     if (SDL_strcmp(action, "editor.tool.vertex") == 0)
@@ -128,6 +130,15 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
         tool_mode = "face";
         if (message == NULL || message[0] == '\0')
             message = "face tool";
+    }
+    else if (SDL_strcmp(mode, "edge") == 0)
+    {
+        tool_mode = "edge";
+        if (message == NULL || message[0] == '\0')
+        {
+            const int selected_count = slayer3d_properties_get_int(runtime->scene_state, "editor.selection.count", 0);
+            message = selected_count > 0 ? "edge tool" : "select a brush before edge tool";
+        }
     }
     else if (SDL_strcmp(mode, "clip") == 0)
     {

@@ -54,6 +54,7 @@ bool editor_select_mode_secondary_click(slayer3d_game_data_runtime *runtime,
 bool editor_mode_is_select(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_brush(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_face(const slayer3d_game_data_runtime *runtime);
+bool editor_mode_is_edge(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_vertex(const slayer3d_game_data_runtime *runtime);
 bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,
                                     const char *element_name);

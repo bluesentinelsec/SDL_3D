@@ -17285,6 +17285,104 @@ TEST(GameDataRuntime, EditorShellDojoVertexModeActivatesToolbarWithoutSelection)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int edge_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.edge");
+    ASSERT_GE(edge_signal, 0);
+    slayer3d_signal_emit(bus, edge_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "edge");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "edge");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "edge tool");
+
+    struct RectNameCapture
+    {
+        const slayer3d_game_data_runtime *runtime = nullptr;
+        const char *name = nullptr;
+        bool found = false;
+    } selected_button{runtime, "ui.editor_shell.tool_toolbar.edge.selected", false};
+    auto capture_rect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+        auto *capture = static_cast<RectNameCapture *>(userdata);
+        if (rect != nullptr && rect->name != nullptr && SDL_strcmp(rect->name, capture->name) == 0 &&
+            slayer3d_game_data_ui_rect_is_visible(capture->runtime, rect, nullptr))
+        {
+            capture->found = true;
+            return false;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_rect, &selected_button));
+    EXPECT_TRUE(selected_button.found);
+
+    struct EdgeDebugCapture
+    {
+        int editable_edges = 0;
+        int handles = 0;
+        int hovered_handles = 0;
+        bool saw_edge_id = false;
+    } edge_debug;
+    auto capture_edge_handles = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<EdgeDebugCapture *>(userdata);
+        if (primitive == nullptr)
+            return true;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_EDITABLE_EDGE)
+            capture->editable_edges++;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE)
+            capture->handles++;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE)
+            capture->hovered_handles++;
+        if ((primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_EDITABLE_EDGE ||
+             primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE ||
+             primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE) &&
+            primitive->element_name != nullptr &&
+            std::string(primitive->element_name).find("brush.target.cube.edge.") == 0)
+        {
+            capture->saw_edge_id = true;
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_edge_handles, &edge_debug));
+    EXPECT_GE(edge_debug.editable_edges, 12);
+    EXPECT_GE(edge_debug.handles + edge_debug.hovered_handles, 12);
+    EXPECT_TRUE(edge_debug.saw_edge_id);
+
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    EdgeDebugCapture hovered_edge_debug{};
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_edge_handles, &hovered_edge_debug));
+    EXPECT_GE(hovered_edge_debug.editable_edges, 12);
+    EXPECT_GE(hovered_edge_debug.handles + hovered_edge_debug.hovered_handles, 12);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoVertexModeCanSelectBrushBeforeVertices)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -18828,6 +18926,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int escape_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.escape");
     const int mode_brush_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.brush");
     const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    const int mode_edge_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.edge");
     const int mode_face_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.face");
     const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
     const int mode_texture_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.texture");
@@ -18856,6 +18955,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(escape_signal, 0);
     ASSERT_GE(mode_brush_signal, 0);
     ASSERT_GE(mode_clip_signal, 0);
+    ASSERT_GE(mode_edge_signal, 0);
     ASSERT_GE(mode_face_signal, 0);
     ASSERT_GE(mode_select_signal, 0);
     ASSERT_GE(mode_texture_signal, 0);
@@ -19162,6 +19262,25 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "face");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "face");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.face.selected"));
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
+    slayer3d_signal_emit(bus, mode_edge_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "edge");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "edge");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "select a brush before edge tool");
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.edge.selected"));
+    ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.edge.button", &selected_tool_fill));
+    EXPECT_EQ(selected_tool_fill.r, 38);
+    EXPECT_EQ(selected_tool_fill.g, 104);
+    EXPECT_EQ(selected_tool_fill.b, 56);
+    EXPECT_EQ(selected_tool_fill.a, 255);
+    ASSERT_TRUE(visible_ui_rect_color("ui.editor_shell.tool_toolbar.edge.selected", &selected_tool_border));
+    EXPECT_EQ(selected_tool_border.r, 96);
+    EXPECT_EQ(selected_tool_border.g, 255);
+    EXPECT_EQ(selected_tool_border.b, 128);
+    EXPECT_EQ(selected_tool_border.a, 255);
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));

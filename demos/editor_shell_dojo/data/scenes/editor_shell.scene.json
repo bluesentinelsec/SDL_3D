@@ -277,6 +277,12 @@
         "button": { "x": 96, "y": 45, "w": 104, "h": 28 }
       },
       {
+        "mode": "edge",
+        "tool_mode": "edge",
+        "message": "edge tool",
+        "button": { "x": 206, "y": 45, "w": 92, "h": 28 }
+      },
+      {
         "mode": "clip",
         "tool_mode": "clip",
         "message": "clip tool",
@@ -355,6 +361,7 @@
         "selection_bounds",
         "selection_face",
         "vertex_handles",
+        "edge_handles",
         "command_preview",
         "clip_preview",
         "markers"
@@ -463,22 +470,14 @@
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "brush" }
           },
           {
-            "id": "ui.editor_shell.tool_toolbar.prefabs.button",
+            "id": "ui.editor_shell.tool_toolbar.edge.button",
             "type": "button",
             "w": 92,
             "h": 28,
-            "text": "Prefabs",
+            "text": "Edge Tool",
             "interactive": true,
-            "action": "editor.palette.prefabs",
-            "selected_if": {
-              "type": "any",
-              "conditions": [
-                { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "floor" },
-                { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "wall" },
-                { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "ceiling" },
-                { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "sky" }
-              ]
-            }
+            "action": "editor.tool.edge",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "edge" }
           },
           {
             "id": "ui.editor_shell.tool_toolbar.clip.button",
@@ -2023,7 +2022,7 @@
         "h": 26,
         "layer": 141,
         "font": "font.editor_shell.ui",
-        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, C clip, V vertex, M texture, G objects. Prefabs button opens blockout shapes. Esc clears selection/back to select.",
+        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, C clip, V vertex, M texture, G objects. Edge Tool exposes selected-brush edges. Esc clears selection/back to select.",
         "text_color": [
                 190,
                 205,

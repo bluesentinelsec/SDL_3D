@@ -119,6 +119,10 @@
             "bindings": []
           },
           {
+            "name": "action.editor.mode.edge",
+            "bindings": []
+          },
+          {
             "name": "action.editor.mode.clip",
             "bindings": [{ "device": "keyboard", "key": "C" }]
           },
@@ -280,6 +284,7 @@
     "signal.editor.wall_axis.toggle",
     "signal.editor.mode.brush",
     "signal.editor.mode.clip",
+    "signal.editor.mode.edge",
     "signal.editor.mode.face",
     "signal.editor.mode.select",
     "signal.editor.mode.texture",
@@ -574,6 +579,12 @@
         ]
       },
       {
+        "signal": "signal.editor.mode.edge",
+        "actions": [
+          { "type": "editor.tool.set_mode", "mode": "edge" }
+        ]
+      },
+      {
         "signal": "signal.editor.mode.clip",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "clip" }
@@ -753,6 +764,7 @@
 	                                  "type": "any",
 	                                  "conditions": [
 	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
+	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "edge", "default": "select" },
 	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" }
 	                                  ]
 	                                },
