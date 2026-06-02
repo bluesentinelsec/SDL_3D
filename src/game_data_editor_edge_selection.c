@@ -22,9 +22,9 @@ static bool editor_source_edge_selection_matches(const editor_source_edge_select
            SDL_strcmp(a->edge_stable_id, b->edge_stable_id) == 0;
 }
 
-static bool editor_source_edge_selection_from_model(const brush_world_runtime *world_runtime,
-                                                    const editor_brush_source_vertex_model *model, int edge_index,
-                                                    editor_source_edge_selection *out_selection)
+bool editor_source_edge_selection_from_model(const brush_world_runtime *world_runtime,
+                                             const editor_brush_source_vertex_model *model, int edge_index,
+                                             editor_source_edge_selection *out_selection)
 {
     if (world_runtime == NULL || model == NULL || out_selection == NULL || edge_index < 0 ||
         edge_index >= model->edge_count)
@@ -55,6 +55,21 @@ static bool editor_source_edge_selection_from_model(const brush_world_runtime *w
         out_selection->coord[1][axis] = model->vertices[b].coord[axis];
     }
     return true;
+}
+
+static bool editor_edge_coords_equal_unordered(const int a[2][3], const int b[2][3])
+{
+    if (a == NULL || b == NULL)
+        return false;
+    return (editor_coord_equal(a[0], b[0]) && editor_coord_equal(a[1], b[1])) ||
+           (editor_coord_equal(a[0], b[1]) && editor_coord_equal(a[1], b[0]));
+}
+
+static bool editor_source_edge_selection_coords_match(const editor_source_edge_selection *a,
+                                                      const editor_source_edge_selection *b)
+{
+    return a != NULL && b != NULL && SDL_strcmp(a->world_name, b->world_name) == 0 &&
+           editor_edge_coords_equal_unordered(a->coord, b->coord);
 }
 
 int editor_selected_edge_index(const slayer3d_game_data_runtime *runtime, const editor_source_edge_selection *selection)
@@ -93,18 +108,88 @@ static bool add_editor_selected_edge(slayer3d_game_data_runtime *runtime, const 
     return true;
 }
 
-static bool toggle_editor_selected_edge(slayer3d_game_data_runtime *runtime,
-                                        const editor_source_edge_selection *selection)
+static bool editor_selected_edge_group_contains(const slayer3d_game_data_runtime *runtime,
+                                                const editor_source_edge_selection *selection)
+{
+    if (runtime == NULL || selection == NULL || !editor_selected_edges_active_for_scene(runtime))
+        return false;
+    for (int i = 0; i < runtime->editor_selected_edge_count; ++i)
+    {
+        if (editor_source_edge_selection_coords_match(&runtime->editor_selected_edges[i], selection))
+            return true;
+    }
+    return false;
+}
+
+bool editor_add_shared_edge_selection_group(slayer3d_game_data_runtime *runtime,
+                                            const editor_source_edge_selection *selection)
 {
     if (runtime == NULL || selection == NULL)
         return false;
-    const int selected_index = editor_selected_edge_index(runtime, selection);
-    if (selected_index >= 0)
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    if (world_runtime == NULL)
+        return false;
+
+    int selected_indices[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+    const int selected_count = editor_collect_selected_source_indices(
+        runtime, world_runtime, selection->source_index, selected_indices, SDL_arraysize(selected_indices));
+    bool added_any = false;
+    for (int i = 0; i < selected_count; ++i)
     {
-        remove_editor_selected_edge_at(runtime, selected_index);
-        return true;
+        editor_brush_source_vertex_model model;
+        if (!editor_brush_source_box_build_vertex_model(world_runtime, selected_indices[i], &model, NULL, 0))
+            continue;
+        for (int edge_index = 0; edge_index < model.edge_count; ++edge_index)
+        {
+            editor_source_edge_selection candidate;
+            if (!editor_source_edge_selection_from_model(world_runtime, &model, edge_index, &candidate) ||
+                !editor_source_edge_selection_coords_match(selection, &candidate))
+            {
+                continue;
+            }
+            if (add_editor_selected_edge(runtime, &candidate))
+                added_any = true;
+        }
     }
-    return add_editor_selected_edge(runtime, selection);
+    return added_any;
+}
+
+bool editor_remove_shared_edge_selection_group(slayer3d_game_data_runtime *runtime,
+                                               const editor_source_edge_selection *selection)
+{
+    if (runtime == NULL || selection == NULL || !editor_selected_edges_active_for_scene(runtime))
+        return false;
+    bool removed_any = false;
+    for (int i = runtime->editor_selected_edge_count - 1; i >= 0; --i)
+    {
+        if (editor_source_edge_selection_coords_match(&runtime->editor_selected_edges[i], selection))
+        {
+            remove_editor_selected_edge_at(runtime, i);
+            removed_any = true;
+        }
+    }
+    return removed_any;
+}
+
+static bool toggle_editor_shared_edge_selection_group(slayer3d_game_data_runtime *runtime,
+                                                      const editor_source_edge_selection *selection)
+{
+    if (editor_selected_edge_group_contains(runtime, selection))
+        return editor_remove_shared_edge_selection_group(runtime, selection);
+    return editor_add_shared_edge_selection_group(runtime, selection);
+}
+
+static bool editor_edge_group_already_processed(const editor_source_edge_selection *processed, int processed_count,
+                                                const editor_source_edge_selection *selection)
+{
+    if (processed == NULL || selection == NULL)
+        return false;
+    for (int i = 0; i < processed_count; ++i)
+    {
+        if (editor_source_edge_selection_coords_match(&processed[i], selection))
+            return true;
+    }
+    return false;
 }
 
 static float editor_edge_snap_delta(float delta, float grid_size)
@@ -581,7 +666,7 @@ void publish_editor_edge_hover_state(slayer3d_game_data_runtime *runtime,
     slayer3d_properties_set_string(runtime->scene_state, "editor.edge.hover.edge", hovered.edge_stable_id);
     slayer3d_properties_set_int(runtime->scene_state, "editor.edge.hover.index", hovered.edge_index);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.hover.selected",
-                                 editor_selected_edge_index(runtime, &hovered) >= 0);
+                                 editor_selected_edge_group_contains(runtime, &hovered));
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.hover.start",
                                  slayer3d_vec3_make((float)hovered.coord[0][0] * meters_per_unit,
                                                     (float)hovered.coord[0][1] * meters_per_unit,
@@ -643,20 +728,17 @@ bool editor_handle_edge_selection(slayer3d_game_data_runtime *runtime,
     }
 
     const bool additive_toggle = editor_edge_toggle_modifier(SDL_GetModState());
-    const int selected_index = editor_selected_edge_index(runtime, &hovered);
+    const bool group_selected = editor_selected_edge_group_contains(runtime, &hovered);
     bool should_begin_drag = false;
-    if (selected_index >= 0)
+    if (group_selected)
     {
         if (additive_toggle)
         {
-            remove_editor_selected_edge_at(runtime, selected_index);
+            (void)editor_remove_shared_edge_selection_group(runtime, &hovered);
             slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "edge deselected");
         }
         else
         {
-            clear_editor_selected_edges(runtime);
-            if (!add_editor_selected_edge(runtime, &hovered))
-                return false;
             slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "edge selected");
             should_begin_drag = true;
         }
@@ -665,7 +747,7 @@ bool editor_handle_edge_selection(slayer3d_game_data_runtime *runtime,
     {
         if (!additive_toggle)
             clear_editor_selected_edges(runtime);
-        if (!add_editor_selected_edge(runtime, &hovered))
+        if (!editor_add_shared_edge_selection_group(runtime, &hovered))
             return false;
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
                                        additive_toggle ? "edge added to selection" : "edge selected");
@@ -761,6 +843,12 @@ static int editor_select_edges_in_lasso(slayer3d_game_data_runtime *runtime, yyj
     if (!slayer3d_game_data_get_camera(runtime, viewport.camera, &camera))
         return runtime->editor_selected_edge_count;
 
+    editor_source_edge_selection processed[SLAYER3D_EDITOR_SELECTED_EDGE_CAPACITY];
+    const int processed_capacity = SDL_arraysize(processed);
+    int processed_count = 0;
+    for (int i = 0; i < processed_capacity; ++i)
+        init_editor_source_edge_selection(&processed[i]);
+
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
     {
         slayer3d_game_data_editor_selection selection =
@@ -797,12 +885,17 @@ static int editor_select_edges_in_lasso(slayer3d_game_data_runtime *runtime, yyj
             editor_source_edge_selection candidate;
             if (!editor_source_edge_selection_from_model(world_runtime, &model, edge_index, &candidate))
                 continue;
+            if (editor_edge_group_already_processed(processed, processed_count, &candidate))
+                continue;
+            if (processed_count < processed_capacity)
+                processed[processed_count++] = candidate;
+
             if (drag->lasso_additive)
             {
-                if (!add_editor_selected_edge(runtime, &candidate))
+                if (!editor_add_shared_edge_selection_group(runtime, &candidate))
                     return runtime->editor_selected_edge_count;
             }
-            else if (!toggle_editor_selected_edge(runtime, &candidate))
+            else if (!toggle_editor_shared_edge_selection_group(runtime, &candidate))
             {
                 return runtime->editor_selected_edge_count;
             }

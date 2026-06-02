@@ -76,6 +76,13 @@ void publish_editor_edge_hover_state(slayer3d_game_data_runtime *runtime,
                                      const slayer3d_game_data_editor_selection *selection);
 int editor_selected_edge_index(const slayer3d_game_data_runtime *runtime,
                                const editor_source_edge_selection *selection);
+bool editor_source_edge_selection_from_model(const brush_world_runtime *world_runtime,
+                                             const editor_brush_source_vertex_model *model, int edge_index,
+                                             editor_source_edge_selection *out_selection);
+bool editor_add_shared_edge_selection_group(slayer3d_game_data_runtime *runtime,
+                                            const editor_source_edge_selection *selection);
+bool editor_remove_shared_edge_selection_group(slayer3d_game_data_runtime *runtime,
+                                               const editor_source_edge_selection *selection);
 bool editor_project_world_to_viewport(const slayer3d_camera3d *camera, const editor_trace_viewport_config *view,
                                       slayer3d_vec3 point, float *out_x, float *out_y);
 bool editor_lasso_contains_screen_point(const editor_drag_move_state *drag, const editor_trace_viewport_config *view,

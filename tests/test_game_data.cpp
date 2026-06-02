@@ -58,6 +58,16 @@ extern "C"
         int vertex_indices[2];
         char stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
     } editor_brush_source_edge;
+    typedef struct editor_source_edge_selection
+    {
+        char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        char brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+        char brush_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+        char edge_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+        int source_index;
+        int edge_index;
+        int coord[2][3];
+    } editor_source_edge_selection;
     typedef struct editor_brush_source_face_ref
     {
         int brush_index;
@@ -302,6 +312,11 @@ extern "C"
                                    const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
     bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
     bool editor_translate_selected_edges(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
+    bool editor_source_edge_selection_from_model(const brush_world_runtime *world_runtime,
+                                                 const editor_brush_source_vertex_model *model, int edge_index,
+                                                 editor_source_edge_selection *out_selection);
+    bool editor_add_shared_edge_selection_group(slayer3d_game_data_runtime *runtime,
+                                                const editor_source_edge_selection *selection);
     int editor_source_units_from_meters(const brush_world_runtime *world_runtime, float meters);
     float editor_brush_source_meters_from_units(const brush_world_runtime *world_runtime, int value);
     bool editor_selection_from_brush_index(const slayer3d_game_data_runtime *runtime, const char *world_name,
@@ -930,6 +945,50 @@ void lasso_select_editor_shell_edges(slayer3d_game_data_runtime *runtime, slayer
     slayer3d_input_process_event(input, &up);
     slayer3d_input_update(input, ++frame_counter);
     ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+}
+
+bool source_coord_equal(const int a[3], const int b[3])
+{
+    return a[0] == b[0] && a[1] == b[1] && a[2] == b[2];
+}
+
+bool source_edge_coords_equal_unordered(const int a[2][3], const int b[2][3])
+{
+    return (source_coord_equal(a[0], b[0]) && source_coord_equal(a[1], b[1])) ||
+           (source_coord_equal(a[0], b[1]) && source_coord_equal(a[1], b[0]));
+}
+
+int find_source_edge_on_axis_value(const editor_brush_source_vertex_model &model, int axis, int value)
+{
+    for (int edge_index = 0; edge_index < model.edge_count; ++edge_index)
+    {
+        const editor_brush_source_edge &edge = model.edges[edge_index];
+        const int a = edge.vertex_indices[0];
+        const int b = edge.vertex_indices[1];
+        if (a < 0 || b < 0 || a >= model.vertex_count || b >= model.vertex_count)
+            continue;
+        if (model.vertices[a].coord[axis] == value && model.vertices[b].coord[axis] == value)
+            return edge_index;
+    }
+    return -1;
+}
+
+bool model_has_edge_with_coords(const editor_brush_source_vertex_model &model, const int coords[2][3])
+{
+    for (int edge_index = 0; edge_index < model.edge_count; ++edge_index)
+    {
+        const editor_brush_source_edge &edge = model.edges[edge_index];
+        const int a = edge.vertex_indices[0];
+        const int b = edge.vertex_indices[1];
+        if (a < 0 || b < 0 || a >= model.vertex_count || b >= model.vertex_count)
+            continue;
+        const int edge_coords[2][3] = {
+            {model.vertices[a].coord[0], model.vertices[a].coord[1], model.vertices[a].coord[2]},
+            {model.vertices[b].coord[0], model.vertices[b].coord[1], model.vertices[b].coord[2]}};
+        if (source_edge_coords_equal_unordered(edge_coords, coords))
+            return true;
+    }
+    return false;
 }
 
 void configure_editor_shell_drag_camera(slayer3d_game_data_runtime *runtime)
@@ -17815,6 +17874,83 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesEdgesAcrossBrushes)
         EXPECT_EQ(after_second.vertices[i].coord[1], before_second.vertices[i].coord[1] + delta_units);
         EXPECT_EQ(after_second.vertices[i].coord[2], before_second.vertices[i].coord[2]);
     }
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesSharedCoincidentEdgesAsClump)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+
+    slayer3d_game_data_create_box_brush_desc neighbor{};
+    neighbor.world_name = "brush.editor_shell.target";
+    neighbor.brush_name = "brush.target.shared_neighbor";
+    neighbor.material_name = "mat.editor.wall";
+    neighbor.min = slayer3d_vec3_make(2.0f, 0.0f, 0.0f);
+    neighbor.max = slayer3d_vec3_make(4.0f, 2.0f, 2.0f);
+    neighbor.contents = SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID | SLAYER3D_GAME_DATA_BRUSH_CONTENT_PLAYER_CLIP;
+    ASSERT_TRUE(slayer3d_game_data_create_box_brush(runtime, &neighbor, nullptr, 0, error, sizeof(error))) << error;
+
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+    select_editor_shell_test_brush(runtime, "brush.target.shared_neighbor", true);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int edge_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.edge");
+    ASSERT_GE(edge_signal, 0);
+    slayer3d_signal_emit(bus, edge_signal, nullptr);
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+
+    editor_brush_source_vertex_model first_before{};
+    editor_brush_source_vertex_model second_before{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &first_before, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 1, &second_before, error, sizeof(error)))
+        << error;
+    const int shared_x_units = editor_source_units_from_meters(world_runtime, 2.0f);
+    ASSERT_GT(shared_x_units, 0);
+    const int shared_edge_index = find_source_edge_on_axis_value(first_before, 0, shared_x_units);
+    ASSERT_GE(shared_edge_index, 0);
+
+    editor_source_edge_selection shared_edge{};
+    ASSERT_TRUE(editor_source_edge_selection_from_model(world_runtime, &first_before, shared_edge_index, &shared_edge));
+    ASSERT_TRUE(model_has_edge_with_coords(second_before, shared_edge.coord));
+    ASSERT_TRUE(editor_add_shared_edge_selection_group(runtime, &shared_edge));
+
+    const int delta_units = editor_source_units_from_meters(world_runtime, 0.5f);
+    ASSERT_GT(delta_units, 0);
+    int expected_coords[2][3] = {
+        {shared_edge.coord[0][0] + delta_units, shared_edge.coord[0][1], shared_edge.coord[0][2]},
+        {shared_edge.coord[1][0] + delta_units, shared_edge.coord[1][1], shared_edge.coord[1][2]}};
+
+    ASSERT_TRUE(editor_translate_selected_edges(runtime, slayer3d_vec3_make(0.5f, 0.0f, 0.0f)));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.edge.move.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.move.edge_count", 0), 2);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", 0), 2);
+
+    editor_brush_source_vertex_model first_after{};
+    editor_brush_source_vertex_model second_after{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &first_after, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 1, &second_after, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(model_has_edge_with_coords(first_after, expected_coords));
+    EXPECT_TRUE(model_has_edge_with_coords(second_after, expected_coords));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
