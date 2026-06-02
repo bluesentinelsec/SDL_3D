@@ -121,6 +121,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE = 28,
         /** @brief Hovered source brush edge midpoint handle. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE = 29,
+        /** @brief Selected source brush edge midpoint handle. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_SELECTED_HANDLE = 30,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum

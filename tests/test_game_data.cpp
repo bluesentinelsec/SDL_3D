@@ -17336,6 +17336,8 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
         int editable_edges = 0;
         int handles = 0;
         int hovered_handles = 0;
+        int selected_handles = 0;
+        bool selected_handle_is_red = false;
         bool saw_edge_id = false;
     } edge_debug;
     auto capture_edge_handles = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
@@ -17348,9 +17350,16 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
             capture->handles++;
         if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE)
             capture->hovered_handles++;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_SELECTED_HANDLE)
+        {
+            capture->selected_handles++;
+            if (primitive->color.r >= 240 && primitive->color.g <= 64 && primitive->color.b <= 64)
+                capture->selected_handle_is_red = true;
+        }
         if ((primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_EDITABLE_EDGE ||
              primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE ||
-             primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE) &&
+             primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE ||
+             primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_SELECTED_HANDLE) &&
             primitive->element_name != nullptr &&
             std::string(primitive->element_name).find("brush.target.cube.edge.") == 0)
         {
@@ -17378,6 +17387,47 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
         slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_edge_handles, &hovered_edge_debug));
     EXPECT_GE(hovered_edge_debug.editable_edges, 12);
     EXPECT_GE(hovered_edge_debug.handles + hovered_edge_debug.hovered_handles, 12);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.edge.hover.hit", false));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.edge.hover.edge", ""))
+                  .find("brush.target.cube.edge."),
+              std::string::npos);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", -1), 0);
+
+    SDL_Event click{};
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    click.button.button = SDL_BUTTON_LEFT;
+    click.button.x = motion.motion.x;
+    click.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", 0), 1);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.edge.hover.selected", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "edge selected");
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.edge.selection.edge", ""))
+                  .find("brush.target.cube.edge."),
+              std::string::npos);
+
+    EdgeDebugCapture selected_edge_debug{};
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_edge_handles, &selected_edge_debug));
+    EXPECT_GE(selected_edge_debug.selected_handles, 1);
+    EXPECT_TRUE(selected_edge_debug.selected_handle_is_red);
+
+    click.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_SetModState(SDL_KMOD_SHIFT);
+    click.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    slayer3d_input_process_event(input, &click);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    SDL_SetModState(SDL_KMOD_NONE);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", -1), 0);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.edge.hover.selected", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "edge deselected");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

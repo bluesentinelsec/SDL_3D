@@ -399,6 +399,27 @@ static int editor_debug_hovered_edge_index(const slayer3d_game_data_editor_debug
     return nearest_edge;
 }
 
+static bool editor_debug_edge_is_selected(const slayer3d_game_data_runtime *runtime, const char *world_name,
+                                          const char *brush_stable_id, const char *edge_stable_id)
+{
+    if (runtime == NULL || world_name == NULL || brush_stable_id == NULL || edge_stable_id == NULL ||
+        !editor_selected_edges_active_for_scene(runtime))
+    {
+        return false;
+    }
+    for (int i = 0; i < runtime->editor_selected_edge_count; ++i)
+    {
+        const editor_source_edge_selection *selection = &runtime->editor_selected_edges[i];
+        if (SDL_strcmp(selection->world_name, world_name) == 0 &&
+            SDL_strcmp(selection->brush_stable_id, brush_stable_id) == 0 &&
+            SDL_strcmp(selection->edge_stable_id, edge_stable_id) == 0)
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool emit_editor_selected_source_edge_handles(const slayer3d_game_data_runtime *runtime,
                                                      const slayer3d_game_data_editor_debug_desc *desc,
                                                      slayer3d_game_data_editor_debug_primitive_fn callback,
@@ -461,11 +482,24 @@ static bool emit_editor_selected_source_edge_handles(const slayer3d_game_data_ru
             if (!emit_editor_debug_line(&context, start, end))
                 return false;
 
-            context.type = edge == hovered_edge ? SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE
-                                                : SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE;
-            context.color =
-                edge == hovered_edge ? (slayer3d_color){255, 48, 48, 255} : (slayer3d_color){255, 224, 64, 255};
-            if (!emit_editor_debug_marker_cross(&context, midpoint, edge == hovered_edge ? 0.16f : 0.11f))
+            const bool selected = editor_debug_edge_is_selected(runtime, selection.world_name, model.brush_stable_id,
+                                                                source_edge->stable_id);
+            if (selected)
+            {
+                context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_SELECTED_HANDLE;
+                context.color = (slayer3d_color){255, 48, 48, 255};
+            }
+            else if (edge == hovered_edge)
+            {
+                context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE;
+                context.color = (slayer3d_color){255, 48, 48, 255};
+            }
+            else
+            {
+                context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE;
+                context.color = (slayer3d_color){255, 224, 64, 255};
+            }
+            if (!emit_editor_debug_marker_cross(&context, midpoint, selected || edge == hovered_edge ? 0.16f : 0.11f))
                 return false;
         }
     }

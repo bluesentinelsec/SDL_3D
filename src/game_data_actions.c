@@ -440,6 +440,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.vertex.selection.clear") == 0)
         return slayer3d_game_data_clear_editor_vertex_selection(runtime);
 
+    if (SDL_strcmp(type, "editor.edge.selection.clear") == 0)
+        return slayer3d_game_data_clear_editor_edge_selection(runtime);
+
     if (SDL_strcmp(type, "editor.tool.set_mode") == 0)
         return slayer3d_game_data_set_editor_tool_mode(runtime, json_string(action, "mode", NULL),
                                                        json_string(action, "message", NULL));

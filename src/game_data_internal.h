@@ -156,6 +156,9 @@ typedef struct slayer3d_game_data_runtime
     editor_source_vertex_selection editor_selected_vertices[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
     int editor_selected_vertex_count;
     const char *editor_selected_vertex_scene;
+    editor_source_edge_selection editor_selected_edges[SLAYER3D_EDITOR_SELECTED_EDGE_CAPACITY];
+    int editor_selected_edge_count;
+    const char *editor_selected_edge_scene;
     editor_command_preview_state editor_command_preview;
     editor_placement_preview_state editor_placement_preview;
     editor_drag_create_state editor_drag_create;

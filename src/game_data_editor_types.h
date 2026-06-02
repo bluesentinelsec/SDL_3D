@@ -236,6 +236,7 @@ typedef struct editor_brush_source_prefab_result
 #define SLAYER3D_EDITOR_COMMAND_HISTORY_CAPACITY 32
 #define SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY 512
 #define SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY 512
+#define SLAYER3D_EDITOR_SELECTED_EDGE_CAPACITY 512
 
 typedef struct editor_source_vertex_selection
 {
@@ -247,6 +248,17 @@ typedef struct editor_source_vertex_selection
     int vertex_index;
     int coord[3];
 } editor_source_vertex_selection;
+
+typedef struct editor_source_edge_selection
+{
+    char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    char edge_stable_id[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    int source_index;
+    int edge_index;
+    int coord[2][3];
+} editor_source_edge_selection;
 
 typedef struct editor_source_box_bounds_update
 {

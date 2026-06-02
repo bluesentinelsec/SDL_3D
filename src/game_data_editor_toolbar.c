@@ -173,6 +173,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
 
     if (SDL_strcmp(mode, "vertex") != 0)
         (void)slayer3d_game_data_clear_editor_vertex_selection(runtime);
+    if (SDL_strcmp(mode, "edge") != 0)
+        (void)slayer3d_game_data_clear_editor_edge_selection(runtime);
     if (leaving_clip)
         reset_editor_clip_tool_state(runtime, "");
     (void)editor_cancel_pending_brush_preview(runtime, "brush preview cancelled");

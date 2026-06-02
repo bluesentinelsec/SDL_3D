@@ -727,6 +727,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         !editor_pick_selection_from_json(runtime, selection_json, &trace, &hover_selection))
     {
         clear_editor_vertex_hover_state(runtime);
+        clear_editor_edge_hover_state(runtime);
         return false;
     }
 
@@ -741,6 +742,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
 
     publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
     publish_editor_vertex_hover_state(runtime, &hover_selection);
+    publish_editor_edge_hover_state(runtime, &hover_selection);
     bool ui_consumed = false;
     if (!editor_handle_grid_widget(runtime, editor, &ui_consumed))
         return false;
@@ -818,6 +820,16 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_vertex_count(runtime);
         return true;
     }
+    bool edge_selection_consumed = false;
+    if (!editor_handle_edge_selection(runtime, &hover_selection, select_requested, &edge_selection_consumed))
+        return false;
+    if (edge_selection_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        publish_editor_selected_edge_count(runtime);
+        return true;
+    }
     bool face_drag_consumed = false;
     if (!editor_handle_face_drag(runtime, &hover_selection, &face_drag_consumed))
         return false;
@@ -862,6 +874,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
         publish_editor_selected_brush_count(runtime);
         publish_editor_selected_vertex_count(runtime);
+        publish_editor_selected_edge_count(runtime);
         return true;
     }
     if (drag_consumed)
@@ -899,7 +912,8 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         return true;
     }
 
-    if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime) || editor_mode_is_vertex(runtime)) &&
+    if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime) || editor_mode_is_edge(runtime) ||
+         editor_mode_is_vertex(runtime)) &&
         hover_selection.hit)
     {
         runtime->editor_active_selection = hover_selection;

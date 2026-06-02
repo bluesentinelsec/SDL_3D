@@ -179,6 +179,7 @@ target_sources(
         src/game_data_editor_selection_helpers.c
         src/game_data_editor_selection_state.c
         src/game_data_editor_vertex_mode.c
+        src/game_data_editor_edge_selection.c
         src/game_data_editor_vertex_selection.c
         src/game_data_editor_vertex_shared.c
         src/game_data_editor_selection_queries.c
