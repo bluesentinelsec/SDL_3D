@@ -22879,6 +22879,37 @@ TEST(GameDataRuntime, EditorClipToolStaysActiveForSequentialClipOperations)
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    ASSERT_NE(editor, nullptr);
+    yyjson_val *selection_json = yyjson_obj_get(editor, "selection");
+    ASSERT_TRUE(yyjson_is_obj(selection_json));
+    slayer3d_game_data_editor_selection hover{};
+    hover.hit = true;
+    hover.type = SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD;
+    hover.world_name = "brush.editor_shell.target";
+    hover.world_position = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    hover.normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    auto send_left = [&](Uint32 type, float x, float y, Uint64 frame) {
+        SDL_Event event{};
+        event.type = type;
+        event.button.button = SDL_BUTTON_LEFT;
+        event.button.x = x;
+        event.button.y = y;
+        slayer3d_input_process_event(input, &event);
+        slayer3d_input_update(input, frame);
+    };
+    auto place_point_with_input = [&](slayer3d_vec3 point, Uint64 down_frame, Uint64 up_frame) {
+        hover.point = point;
+        bool consumed = false;
+        send_left(SDL_EVENT_MOUSE_BUTTON_DOWN, 512.0f, 360.0f, down_frame);
+        ASSERT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+        EXPECT_TRUE(consumed);
+        send_left(SDL_EVENT_MOUSE_BUTTON_UP, 512.0f, 360.0f, up_frame);
+        ASSERT_TRUE(editor_handle_clip_tool_input(runtime, selection_json, &hover, &consumed));
+        EXPECT_TRUE(consumed);
+    };
 
     ASSERT_NO_FATAL_FAILURE(place_y_plane_clip(6000));
     ASSERT_TRUE(slayer3d_game_data_commit_editor_clip_tool(runtime));
@@ -22886,7 +22917,9 @@ TEST(GameDataRuntime, EditorClipToolStaysActiveForSequentialClipOperations)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
 
-    ASSERT_NO_FATAL_FAILURE(place_y_plane_clip(3000));
+    ASSERT_NO_FATAL_FAILURE(place_point_with_input(slayer3d_vec3_make(3.0f, 0.0f, 0.0f), 1, 2));
+    ASSERT_NO_FATAL_FAILURE(place_point_with_input(slayer3d_vec3_make(3.0f, 0.0f, 8.0f), 3, 4));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", 0), 2);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
     ASSERT_TRUE(slayer3d_game_data_commit_editor_clip_tool(runtime));
 

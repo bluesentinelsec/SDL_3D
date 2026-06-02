@@ -286,6 +286,24 @@ static bool reset_editor_clip_tool_for_next_operation(slayer3d_game_data_runtime
     return selection_valid;
 }
 
+static bool editor_clip_tool_ensure_selected_brushes(slayer3d_game_data_runtime *runtime, editor_clip_tool_state *tool)
+{
+    if (runtime == NULL || tool == NULL || !tool->active)
+        return false;
+    if (tool->selected_brush_count > 0 && tool->world_name[0] != '\0')
+        return true;
+
+    tool->selected_brush_count = 0;
+    tool->world_name[0] = '\0';
+    for (int i = 0; i < SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY; ++i)
+    {
+        tool->brush_identities[i][0] = '\0';
+        tool->brush_identity_refs[i] = NULL;
+    }
+    return capture_editor_clip_tool_selection(runtime, tool) && tool->selected_brush_count > 0 &&
+           tool->world_name[0] != '\0';
+}
+
 static int editor_clip_source_snap_units(const slayer3d_game_data_runtime *runtime,
                                          const brush_world_runtime *world_runtime)
 {
@@ -1112,10 +1130,13 @@ bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_v
     const bool has_left_event = left_pressed || left_down || left_released;
 
     editor_clip_tool_state *tool = &runtime->editor_clip_tool;
+    const bool has_selected_brushes = editor_clip_tool_ensure_selected_brushes(runtime, tool);
     const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, tool->world_name);
     int coord[3] = {0, 0, 0};
     const bool has_coord =
-        editor_clip_coord_from_selection(runtime, tool, selection_json, hover_selection, world_runtime, coord);
+        has_selected_brushes
+            ? editor_clip_coord_from_selection(runtime, tool, selection_json, hover_selection, world_runtime, coord)
+            : false;
     const int snap_units = editor_clip_source_snap_units(runtime, world_runtime);
     const slayer3d_vec3 work_plane_normal =
         editor_clip_work_plane_normal_from_selection_json(runtime, selection_json, hover_selection);
@@ -1128,7 +1149,13 @@ bool editor_handle_clip_tool_input(slayer3d_game_data_runtime *runtime, yyjson_v
     if (left_pressed)
     {
         if (out_consumed != NULL)
-            *out_consumed = true;
+            *out_consumed = has_selected_brushes;
+        if (!has_selected_brushes)
+        {
+            editor_clip_tool_set_message(tool, "Clip Tool: select brushes to clip");
+            publish_editor_clip_tool_state(runtime);
+            return true;
+        }
         if (!has_coord || world_runtime == NULL)
         {
             editor_clip_tool_set_message(tool, "Clip Tool: point placement requires a hit");
