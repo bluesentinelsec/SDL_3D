@@ -203,6 +203,22 @@ void publish_editor_edge_lasso_state(slayer3d_game_data_runtime *runtime, const 
     slayer3d_properties_set_int(runtime->scene_state, "editor.edge.lasso.selected_count", selected_count);
 }
 
+void publish_editor_edge_drag_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const bool active = drag != NULL && drag->active && drag->edge_drag;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.active", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.moved", active ? drag->moved : false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.axis_lock_y",
+                                 active ? drag->axis_lock_y : false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.axis_lock_dominant",
+                                 active ? drag->axis_lock_dominant : false);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.drag.offset",
+                                 active ? drag->applied_offset : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+}
+
 void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)

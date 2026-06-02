@@ -820,6 +820,16 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_vertex_count(runtime);
         return true;
     }
+    bool edge_drag_consumed = false;
+    if (!editor_handle_edge_drag(runtime, &hover_selection, &edge_drag_consumed))
+        return false;
+    if (edge_drag_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        publish_editor_selected_edge_count(runtime);
+        return true;
+    }
     bool edge_lasso_consumed = false;
     if (!editor_handle_edge_lasso(runtime, selection_json, &hover_selection, &edge_lasso_consumed))
         return false;
