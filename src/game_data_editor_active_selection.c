@@ -766,6 +766,15 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_brush_count(runtime);
         return true;
     }
+    bool clip_tool_consumed = false;
+    if (!editor_handle_clip_tool_input(runtime, selection_json, &hover_selection, &clip_tool_consumed))
+        return false;
+    if (clip_tool_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);

@@ -374,20 +374,19 @@ static bool editor_brush_source_convex_build_vertex_model(const brush_world_runt
     return true;
 }
 
-bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
-                                                editor_brush_source_vertex_model *out_model, char *error_buffer,
-                                                int error_buffer_size)
+bool editor_brush_source_box_runtime_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
+                                                        const editor_brush_source_box_runtime *box,
+                                                        editor_brush_source_vertex_model *out_model, char *error_buffer,
+                                                        int error_buffer_size)
 {
     if (out_model != NULL)
         SDL_zero(*out_model);
-    if (world_runtime == NULL || out_model == NULL || source_index < 0 ||
-        source_index >= world_runtime->editor_source_box_count)
+    if (world_runtime == NULL || out_model == NULL || box == NULL)
     {
-        set_error(error_buffer, error_buffer_size, "source brush vertex model requires a valid source index");
+        set_error(error_buffer, error_buffer_size, "source brush vertex model requires a world and source box");
         return false;
     }
 
-    const editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
     if (box->vertex_count > 0)
         return editor_brush_source_convex_build_vertex_model(world_runtime, source_index, box, out_model, error_buffer,
                                                              error_buffer_size);
@@ -440,6 +439,23 @@ bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world
                          source_box_face_labels[face]);
     }
     return true;
+}
+
+bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
+                                                editor_brush_source_vertex_model *out_model, char *error_buffer,
+                                                int error_buffer_size)
+{
+    if (world_runtime == NULL || source_index < 0 || source_index >= world_runtime->editor_source_box_count)
+    {
+        if (out_model != NULL)
+            SDL_zero(*out_model);
+        set_error(error_buffer, error_buffer_size, "source brush vertex model requires a valid source index");
+        return false;
+    }
+
+    return editor_brush_source_box_runtime_build_vertex_model(world_runtime, source_index,
+                                                              &world_runtime->editor_source_boxes[source_index],
+                                                              out_model, error_buffer, error_buffer_size);
 }
 
 static int source_selection_count(const brush_world_runtime *world_runtime, const int *source_indices,

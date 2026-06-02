@@ -1,0 +1,122 @@
+{
+  "schema": "slayer3d.fragment.v0",
+  "brush_worlds": [
+    {
+      "name": "brush.editor_shell.target",
+      "compile": {
+        "hidden_face_culling": true
+      },
+      "materials": [
+        {
+          "name": "mat.editor.floor",
+          "albedo": [0.22, 0.24, 0.27, 1.0]
+        },
+        {
+          "name": "mat.editor.wall",
+          "albedo": [0.42, 0.44, 0.48, 1.0]
+        },
+        {
+          "name": "mat.editor.ceiling",
+          "albedo": [0.30, 0.31, 0.34, 1.0]
+        },
+        {
+          "name": "mat.editor.sky",
+          "albedo": [0.20, 0.42, 0.78, 1.0]
+        }
+      ],
+      "brushes": []
+    }
+  ],
+  "editor_brush_sources": [
+    {
+      "world": "brush.editor_shell.target",
+      "coordinate_system": "fixed_millimeters",
+      "meters_per_unit": 0.001,
+      "snap_units": 100,
+      "boxes": [
+        {
+          "stable_id": "clip.fixture.floor",
+          "name": "brush.clip.fixture.floor",
+          "kind": "box",
+          "prefab": "floor",
+          "material": "mat.editor.floor",
+          "min": [0, -1000, 0],
+          "max": [16000, 0, 16000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "clip.fixture.bevel_cube",
+          "name": "brush.clip.fixture.bevel_cube",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "face_materials": {
+            "py": "mat.editor.ceiling"
+          },
+          "min": [1000, 0, 1000],
+          "max": [5000, 4000, 5000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "clip.fixture.split_wall",
+          "name": "brush.clip.fixture.split_wall",
+          "kind": "box",
+          "prefab": "wall",
+          "material": "mat.editor.wall",
+          "min": [7000, 0, 1000],
+          "max": [7200, 4000, 9000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "clip.fixture.terrain_block",
+          "name": "brush.clip.fixture.terrain_block",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "face_materials": {
+            "py": "mat.editor.ceiling"
+          },
+          "min": [10000, 0, 1000],
+          "max": [14000, 3000, 5000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "clip.fixture.multi_a",
+          "name": "brush.clip.fixture.multi_a",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "face_materials": {
+            "py": "mat.editor.ceiling"
+          },
+          "min": [1000, 0, 10000],
+          "max": [5000, 3000, 14000],
+          "contents": ["solid"]
+        },
+        {
+          "stable_id": "clip.fixture.multi_b",
+          "name": "brush.clip.fixture.multi_b",
+          "kind": "box",
+          "prefab": "box",
+          "material": "mat.editor.wall",
+          "face_materials": {
+            "py": "mat.editor.ceiling"
+          },
+          "min": [6000, 0, 10000],
+          "max": [10000, 3000, 14000],
+          "contents": ["solid"]
+        }
+      ]
+    }
+  ],
+  "editor_player_starts": [
+    {
+      "name": "player_start.clip_fixture",
+      "scene": "scene.editor_shell.test_run",
+      "target": "entity.editor_shell.player",
+      "position": [2.0, 1.6, 2.0],
+      "yaw": 0.785398,
+      "pitch": 0.0
+    }
+  ]
+}

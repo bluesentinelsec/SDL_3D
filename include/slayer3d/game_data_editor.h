@@ -99,6 +99,22 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_FOOTPRINT_EDGE = 17,
         /** @brief Pending brush placement extrusion-axis guide. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLACEMENT_PREVIEW_AXIS = 18,
+        /** @brief Source clip preview edge for geometry that will be kept. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_KEPT_EDGE = 19,
+        /** @brief Source clip preview edge for geometry that will be discarded. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_DISCARDED_EDGE = 20,
+        /** @brief Clip tool point handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HANDLE = 21,
+        /** @brief Hovered clip tool point handle line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HOVER_HANDLE = 22,
+        /** @brief Clip tool point-to-point line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_LINE = 23,
+        /** @brief Clip tool plane indicator edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PLANE_EDGE = 24,
+        /** @brief Clip tool status label. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL = 25,
+        /** @brief Clip tool source-geometry snap target marker. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_SNAP_TARGET = 26,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -125,6 +141,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE = 1u << 9,
         /** @brief Emit source vertex handles for selected brushes. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES = 1u << 10,
+        /** @brief Emit active source clip preview edges. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW = 1u << 11,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
@@ -132,7 +150,8 @@ extern "C"
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES |
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */

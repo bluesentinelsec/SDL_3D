@@ -94,6 +94,8 @@ static const char *editor_mode_for_tool_action(const char *action)
         return "brush";
     if (SDL_strcmp(action, "editor.tool.face") == 0)
         return "face";
+    if (SDL_strcmp(action, "editor.tool.clip") == 0)
+        return "clip";
     if (SDL_strcmp(action, "editor.tool.vertex") == 0)
         return "vertex";
     if (SDL_strcmp(action, "editor.tool.texture") == 0)
@@ -127,6 +129,12 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
         if (message == NULL || message[0] == '\0')
             message = "face tool";
     }
+    else if (SDL_strcmp(mode, "clip") == 0)
+    {
+        tool_mode = "clip";
+        if (message == NULL || message[0] == '\0')
+            message = "";
+    }
     else if (SDL_strcmp(mode, "vertex") == 0)
     {
         tool_mode = "vertex";
@@ -147,13 +155,22 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
         return false;
     }
 
+    const bool entering_clip = SDL_strcmp(mode, "clip") == 0;
+    const bool leaving_clip =
+        SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", ""), "clip") == 0 &&
+        !entering_clip;
+
     if (SDL_strcmp(mode, "vertex") != 0)
         (void)slayer3d_game_data_clear_editor_vertex_selection(runtime);
+    if (leaving_clip)
+        reset_editor_clip_tool_state(runtime, "");
     (void)editor_cancel_pending_brush_preview(runtime, "brush preview cancelled");
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     clear_editor_command_preview(runtime);
+    if (entering_clip)
+        return slayer3d_game_data_enter_editor_clip_tool(runtime, message);
     return true;
 }
 

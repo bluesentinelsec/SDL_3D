@@ -291,6 +291,68 @@ typedef struct editor_brush_source_vertex_operation_result
     slayer3d_game_data_brush brush;
 } editor_brush_source_vertex_operation_result;
 
+#define SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY 64
+
+typedef enum editor_brush_source_clip_keep_mode
+{
+    EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT = 0,
+    EDITOR_BRUSH_SOURCE_CLIP_KEEP_BACK,
+    EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH
+} editor_brush_source_clip_keep_mode;
+
+typedef struct editor_brush_source_clip_desc
+{
+    const char *const *brush_identities;
+    int brush_count;
+    slayer3d_vec3 normal;
+    float distance_source_units;
+    editor_brush_source_clip_keep_mode keep_mode;
+} editor_brush_source_clip_desc;
+
+typedef struct editor_brush_source_clip_result
+{
+    bool valid;
+    int input_brush_count;
+    int output_brush_count;
+    int removed_brush_count;
+    int output_source_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime output_brushes[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    char diagnostic[256];
+} editor_brush_source_clip_result;
+
+#define SLAYER3D_EDITOR_CLIP_TOOL_MAX_POINTS 3
+
+typedef struct editor_clip_tool_state
+{
+    bool active;
+    char scene[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char world_name[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    char brush_identities[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY][SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    const char *brush_identity_refs[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    int selected_brush_count;
+    slayer3d_vec3 points[SLAYER3D_EDITOR_CLIP_TOOL_MAX_POINTS];
+    int point_count;
+    int hovered_point;
+    int dragged_point;
+    bool has_snap_target;
+    char snap_kind[16];
+    char snap_target[SLAYER3D_EDITOR_SOURCE_STABLE_ID_MAX];
+    slayer3d_vec3 snap_point;
+    bool has_work_plane_normal;
+    slayer3d_vec3 work_plane_normal;
+    bool has_drag_plane;
+    slayer3d_vec3 drag_plane_normal;
+    float drag_plane_distance_source_units;
+    editor_brush_source_clip_keep_mode keep_mode;
+    bool preview_valid;
+    bool preview_has_results;
+    int preview_kept_count;
+    int preview_discarded_count;
+    editor_brush_source_box_runtime preview_kept[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime preview_discarded[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    char message[256];
+} editor_clip_tool_state;
+
 typedef struct editor_command_transaction_entry
 {
     int id;
@@ -313,6 +375,12 @@ typedef struct editor_command_transaction_entry
     int brush_index;
     bool has_source_box_snapshot;
     editor_brush_source_box_runtime source_box_snapshot;
+    int source_clip_before_count;
+    int source_clip_after_count;
+    int source_clip_before_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    int source_clip_after_source_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime source_clip_before[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
+    editor_brush_source_box_runtime source_clip_after[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];
     char message[128];
 } editor_command_transaction_entry;
 

@@ -137,21 +137,28 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
         return false;
     }
 
-    slayer3d_game_data_runtime staged;
-    SDL_zero(staged);
-    if (!load_brush_worlds(&staged, root, error_buffer, error_buffer_size) ||
-        !load_editor_player_starts(&staged, root, error_buffer, error_buffer_size))
+    slayer3d_game_data_runtime *staged = (slayer3d_game_data_runtime *)SDL_calloc(1u, sizeof(*staged));
+    if (staged == NULL)
     {
-        free_staged_import_runtime(&staged);
+        set_error(error_buffer, error_buffer_size, "failed to allocate editable level import staging runtime");
+        yyjson_doc_free(doc);
+        return false;
+    }
+    if (!load_brush_worlds(staged, root, error_buffer, error_buffer_size) ||
+        !load_editor_player_starts(staged, root, error_buffer, error_buffer_size))
+    {
+        free_staged_import_runtime(staged);
+        SDL_free(staged);
         yyjson_doc_free(doc);
         return false;
     }
 
-    const int staged_index = find_loaded_brush_world_index(&staged, world_name);
+    const int staged_index = find_loaded_brush_world_index(staged, world_name);
     if (staged_index < 0)
     {
         set_errorf(error_buffer, error_buffer_size, "editable level does not contain brush world '%s'", world_name);
-        free_staged_import_runtime(&staged);
+        free_staged_import_runtime(staged);
+        SDL_free(staged);
         yyjson_doc_free(doc);
         return false;
     }
@@ -159,23 +166,26 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
     if (target == NULL)
     {
         set_errorf(error_buffer, error_buffer_size, "runtime brush world '%s' not found", world_name);
-        free_staged_import_runtime(&staged);
+        free_staged_import_runtime(staged);
+        SDL_free(staged);
         yyjson_doc_free(doc);
         return false;
     }
-    if (!staged.brush_worlds[staged_index].editor_has_source_model)
+    if (!staged->brush_worlds[staged_index].editor_has_source_model)
     {
         set_errorf(error_buffer, error_buffer_size,
                    "editable level brush world '%s' requires a matching editor_brush_sources source model", world_name);
-        free_staged_import_runtime(&staged);
+        free_staged_import_runtime(staged);
+        SDL_free(staged);
         yyjson_doc_free(doc);
         return false;
     }
     slayer3d_game_data_editor_brush_source_diagnostics diagnostics;
-    if (!slayer3d_game_data_validate_editor_brush_source_model(&staged, world_name, 1, &diagnostics, error_buffer,
+    if (!slayer3d_game_data_validate_editor_brush_source_model(staged, world_name, 1, &diagnostics, error_buffer,
                                                                error_buffer_size))
     {
-        free_staged_import_runtime(&staged);
+        free_staged_import_runtime(staged);
+        SDL_free(staged);
         yyjson_doc_free(doc);
         return false;
     }
@@ -184,26 +194,28 @@ bool slayer3d_game_data_load_editable_level_fragment_json(slayer3d_game_data_run
         set_errorf(error_buffer, error_buffer_size, "editable level brush world '%s' source model is invalid: %s",
                    world_name,
                    diagnostics.first_issue[0] != '\0' ? diagnostics.first_issue : "source integrity check failed");
-        free_staged_import_runtime(&staged);
+        free_staged_import_runtime(staged);
+        SDL_free(staged);
         yyjson_doc_free(doc);
         return false;
     }
 
-    brush_world_runtime replacement = staged.brush_worlds[staged_index];
-    SDL_zero(staged.brush_worlds[staged_index]);
+    brush_world_runtime replacement = staged->brush_worlds[staged_index];
+    SDL_zero(staged->brush_worlds[staged_index]);
     free_brush_world_runtime(target);
     *target = replacement;
     target->desc.render_model = &target->artifacts.render_model;
 
     free_editor_player_starts_runtime(runtime);
-    runtime->editor_player_starts = staged.editor_player_starts;
-    runtime->editor_player_start_count = staged.editor_player_start_count;
-    runtime->editor_player_start_capacity = staged.editor_player_start_capacity;
-    staged.editor_player_starts = NULL;
-    staged.editor_player_start_count = 0;
-    staged.editor_player_start_capacity = 0;
+    runtime->editor_player_starts = staged->editor_player_starts;
+    runtime->editor_player_start_count = staged->editor_player_start_count;
+    runtime->editor_player_start_capacity = staged->editor_player_start_capacity;
+    staged->editor_player_starts = NULL;
+    staged->editor_player_start_count = 0;
+    staged->editor_player_start_capacity = 0;
 
-    free_staged_import_runtime(&staged);
+    free_staged_import_runtime(staged);
+    SDL_free(staged);
     yyjson_doc_free(doc);
 
     if (source_path != NULL && source_path[0] != '\0' &&

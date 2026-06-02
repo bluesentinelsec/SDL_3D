@@ -9,6 +9,16 @@ bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime
 bool slayer3d_game_data_clear_editor_vertex_selection(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime, const char *mode,
                                              const char *message_override);
+bool slayer3d_game_data_enter_editor_clip_tool(slayer3d_game_data_runtime *runtime, const char *message_override);
+bool slayer3d_game_data_cancel_editor_clip_tool(slayer3d_game_data_runtime *runtime, const char *message_override);
+bool slayer3d_game_data_escape_editor_clip_tool(slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_cycle_editor_clip_keep_mode(slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_commit_editor_clip_tool(slayer3d_game_data_runtime *runtime);
+void reset_editor_clip_tool_state(slayer3d_game_data_runtime *runtime, const char *message);
+bool slayer3d_game_data_place_editor_clip_point_source(slayer3d_game_data_runtime *runtime, const int coord[3],
+                                                       slayer3d_vec3 work_plane_normal);
+bool slayer3d_game_data_move_editor_clip_point_source(slayer3d_game_data_runtime *runtime, int point_index,
+                                                      const int coord[3], slayer3d_vec3 work_plane_normal);
 slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                               const slayer3d_game_data_editor_selection *selection);
 slayer3d_properties *slayer3d_game_data_create_editor_selection_payload(
@@ -147,12 +157,29 @@ bool editor_brush_world_apply_source_vertex_operation(brush_world_runtime *world
                                                       const editor_brush_source_vertex_operation_desc *desc,
                                                       editor_brush_source_vertex_operation_result *out_result,
                                                       char *error_buffer, int error_buffer_size);
+void editor_brush_world_free_source_clip_result(editor_brush_source_clip_result *result);
+bool editor_brush_world_preview_source_clip_operation(const brush_world_runtime *world_runtime,
+                                                      const editor_brush_source_clip_desc *desc,
+                                                      editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                      int error_buffer_size);
+bool editor_brush_world_apply_source_clip_operation(brush_world_runtime *world_runtime,
+                                                    const editor_brush_source_clip_desc *desc,
+                                                    editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                    int error_buffer_size);
+bool slayer3d_game_data_commit_editor_source_clip(slayer3d_game_data_runtime *runtime, const char *world_name,
+                                                  const editor_brush_source_clip_desc *desc,
+                                                  editor_brush_source_clip_result *out_result, char *error_buffer,
+                                                  int error_buffer_size);
 bool editor_brush_world_set_source_box_face_material(brush_world_runtime *world_runtime, const char *brush_name,
                                                      int face_index, const char *material_name, char *error_buffer,
                                                      int error_buffer_size);
 bool editor_brush_source_validate_box_vertex_topology(const int *vertices, int snap_units,
                                                       editor_brush_source_vertex_diagnostics *out_diagnostics,
                                                       char *error_buffer, int error_buffer_size);
+bool editor_brush_source_box_runtime_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
+                                                        const editor_brush_source_box_runtime *box,
+                                                        editor_brush_source_vertex_model *out_model, char *error_buffer,
+                                                        int error_buffer_size);
 bool editor_brush_source_box_build_vertex_model(const brush_world_runtime *world_runtime, int source_index,
                                                 editor_brush_source_vertex_model *out_model, char *error_buffer,
                                                 int error_buffer_size);

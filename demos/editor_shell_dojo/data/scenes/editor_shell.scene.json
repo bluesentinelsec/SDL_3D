@@ -31,7 +31,9 @@
       "action.editor.wall_axis.toggle",
       "action.editor.mode.select",
       "action.editor.mode.brush",
+      "action.editor.mode.clip",
       "action.editor.mode.vertex",
+      "action.editor.clip.cycle_keep_mode",
       "action.editor.brush.lower_y",
       "action.editor.brush.raise_y",
       "action.editor.palette.brush",
@@ -275,6 +277,12 @@
         "button": { "x": 96, "y": 45, "w": 104, "h": 28 }
       },
       {
+        "mode": "clip",
+        "tool_mode": "clip",
+        "message": "clip tool",
+        "button": { "x": 304, "y": 45, "w": 88, "h": 28 }
+      },
+      {
         "mode": "face",
         "tool_mode": "face",
         "message": "face tool",
@@ -348,6 +356,7 @@
         "selection_face",
         "vertex_handles",
         "command_preview",
+        "clip_preview",
         "markers"
       ],
       "world_bounds_color": [80, 170, 255, 190],
@@ -471,7 +480,16 @@
               ]
             }
           },
-          { "id": "ui.editor_shell.tool_toolbar.clip.button", "type": "button", "w": 88, "h": 28, "text": "Clip Tool", "interactive": true },
+          {
+            "id": "ui.editor_shell.tool_toolbar.clip.button",
+            "type": "button",
+            "w": 88,
+            "h": 28,
+            "text": "Clip Tool",
+            "interactive": true,
+            "action": "editor.tool.clip",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "clip" }
+          },
           {
             "id": "ui.editor_shell.tool_toolbar.face.button",
             "type": "button",
@@ -911,7 +929,14 @@
             "y": 8,
             "w": 330,
             "h": 20,
-            "text": "Issues tab will list map leaks and validation findings."
+            "text": "Issues tab will list map leaks and validation findings.",
+            "bindings": [
+              {
+                "type": "scene_state",
+                "key": "editor.issues.line0",
+                "default": "Issues tab will list map leaks and validation findings."
+              }
+            ]
           },
           {
             "id": "ui.editor_shell.console.line0.row",
@@ -1998,7 +2023,7 @@
         "h": 26,
         "layer": 141,
         "font": "font.editor_shell.ui",
-        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, V vertex, M texture, G objects. Prefabs button opens blockout shapes. Esc clears selection/back to select.",
+        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, C clip, V vertex, M texture, G objects. Prefabs button opens blockout shapes. Esc clears selection/back to select.",
         "text_color": [
                 190,
                 205,

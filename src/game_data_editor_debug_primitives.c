@@ -42,6 +42,9 @@ static bool emit_editor_source_vertex_add_preview(const slayer3d_game_data_runti
 static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
+static bool emit_editor_clip_tool_primitives(const slayer3d_game_data_runtime *runtime,
+                                             const slayer3d_game_data_editor_debug_desc *desc,
+                                             slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
 static bool emit_editor_debug_marker_cross(editor_debug_iteration_context *context, slayer3d_vec3 center, float size);
 static bool emit_editor_debug_marker_orb(editor_debug_iteration_context *context, slayer3d_vec3 center, float radius);
 static bool emit_editor_debug_hover_vertex_outline(editor_debug_iteration_context *context, slayer3d_vec3 center);
@@ -113,6 +116,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
     }
     if (SDL_strcmp(value != NULL ? value : "", "vertex_handles") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES;
+    if (SDL_strcmp(value != NULL ? value : "", "clip_preview") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW;
     return 0u;
 }
 
@@ -272,6 +277,15 @@ static slayer3d_vec3 editor_source_vertex_coord_meters(const brush_world_runtime
         world != NULL && world->editor_source_meters_per_unit > 0.0f ? world->editor_source_meters_per_unit : 0.001f;
     return slayer3d_vec3_make((float)vertex->coord[0] * meters_per_unit, (float)vertex->coord[1] * meters_per_unit,
                               (float)vertex->coord[2] * meters_per_unit);
+}
+
+static slayer3d_vec3 editor_source_coord_meters(const brush_world_runtime *world, const int coord[3])
+{
+    const float meters_per_unit =
+        world != NULL && world->editor_source_meters_per_unit > 0.0f ? world->editor_source_meters_per_unit : 0.001f;
+    return coord != NULL ? slayer3d_vec3_make((float)coord[0] * meters_per_unit, (float)coord[1] * meters_per_unit,
+                                              (float)coord[2] * meters_per_unit)
+                         : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
 }
 
 static int editor_debug_source_index_for_selection(const brush_world_runtime *world,
@@ -673,6 +687,304 @@ static bool emit_editor_debug_source_brush_edges(editor_debug_iteration_context 
             slayer3d_vec3_add(selection->world_position, editor_source_vertex_coord_meters(world, &model.vertices[b]));
         if (!emit_editor_debug_line(context, start, end))
             return false;
+    }
+    return true;
+}
+
+static bool editor_clip_preview_origin(const slayer3d_game_data_runtime *runtime, const editor_clip_tool_state *tool,
+                                       slayer3d_vec3 *out_origin)
+{
+    if (out_origin != NULL)
+        *out_origin = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (runtime == NULL || tool == NULL || out_origin == NULL || !editor_selected_brushes_active_for_scene(runtime))
+        return false;
+
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        if (selection.hit && selection.world_name != NULL && SDL_strcmp(selection.world_name, tool->world_name) == 0)
+        {
+            *out_origin = selection.world_position;
+            return true;
+        }
+    }
+    return false;
+}
+
+static const char *editor_debug_clip_keep_mode_name(editor_brush_source_clip_keep_mode mode)
+{
+    switch (mode)
+    {
+    case EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT:
+        return "front";
+    case EDITOR_BRUSH_SOURCE_CLIP_KEEP_BACK:
+        return "back";
+    case EDITOR_BRUSH_SOURCE_CLIP_KEEP_BOTH:
+        return "both";
+    default:
+        return "front";
+    }
+}
+
+static slayer3d_vec3 editor_clip_source_point_world(const brush_world_runtime *world, slayer3d_vec3 origin,
+                                                    slayer3d_vec3 point)
+{
+    const float meters_per_unit =
+        world != NULL && world->editor_source_meters_per_unit > 0.0f ? world->editor_source_meters_per_unit : 0.001f;
+    return slayer3d_vec3_add(
+        origin, slayer3d_vec3_make(point.x * meters_per_unit, point.y * meters_per_unit, point.z * meters_per_unit));
+}
+
+static slayer3d_vec3 editor_clip_source_normal(const editor_clip_tool_state *tool)
+{
+    if (tool == NULL)
+        return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    if (tool->point_count >= 3)
+    {
+        const slayer3d_vec3 ab = slayer3d_vec3_sub(tool->points[1], tool->points[0]);
+        const slayer3d_vec3 ac = slayer3d_vec3_sub(tool->points[2], tool->points[0]);
+        const slayer3d_vec3 normal = slayer3d_vec3_cross(ab, ac);
+        if (slayer3d_vec3_length_squared(normal) > 0.000001f)
+            return slayer3d_vec3_normalize(normal);
+    }
+    if (tool->has_work_plane_normal && slayer3d_vec3_length_squared(tool->work_plane_normal) > 0.000001f)
+        return slayer3d_vec3_normalize(tool->work_plane_normal);
+    return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+}
+
+static bool emit_editor_clip_point_handles(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                           const editor_clip_tool_state *tool, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || tool == NULL)
+        return false;
+
+    for (int i = 0; i < tool->point_count && i < SLAYER3D_EDITOR_CLIP_TOOL_MAX_POINTS; ++i)
+    {
+        char element_name[48];
+        SDL_snprintf(element_name, sizeof(element_name), "clip.point.%d", i);
+        context->element_name = element_name;
+        context->type = i == tool->hovered_point ? SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HOVER_HANDLE
+                                                 : SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_POINT_HANDLE;
+        context->color =
+            i == tool->hovered_point ? (slayer3d_color){255, 230, 80, 255} : (slayer3d_color){255, 150, 40, 255};
+        const float radius = i == tool->hovered_point ? 0.17f : 0.125f;
+        if (!emit_editor_debug_marker_orb(context, editor_clip_source_point_world(world, origin, tool->points[i]),
+                                          radius))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool emit_editor_clip_point_lines(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                         const editor_clip_tool_state *tool, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || tool == NULL || tool->point_count < 2)
+        return true;
+
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_LINE;
+    context->color = (slayer3d_color){255, 200, 60, 255};
+    context->element_name = "clip.line";
+    const slayer3d_vec3 p0 = editor_clip_source_point_world(world, origin, tool->points[0]);
+    const slayer3d_vec3 p1 = editor_clip_source_point_world(world, origin, tool->points[1]);
+    if (!emit_editor_debug_line(context, p0, p1))
+        return false;
+    if (tool->point_count < 3)
+        return true;
+    const slayer3d_vec3 p2 = editor_clip_source_point_world(world, origin, tool->points[2]);
+    return emit_editor_debug_line(context, p1, p2) && emit_editor_debug_line(context, p2, p0);
+}
+
+static bool emit_editor_clip_plane_indicator(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                             const editor_clip_tool_state *tool, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || tool == NULL || tool->point_count < 2)
+        return true;
+
+    const slayer3d_vec3 p0 = editor_clip_source_point_world(world, origin, tool->points[0]);
+    const slayer3d_vec3 p1 = editor_clip_source_point_world(world, origin, tool->points[1]);
+    const slayer3d_vec3 line = slayer3d_vec3_sub(p1, p0);
+    const float line_length = slayer3d_vec3_length(line);
+    if (line_length <= 0.0001f)
+        return true;
+
+    const slayer3d_vec3 line_dir = slayer3d_vec3_normalize(line);
+    slayer3d_vec3 normal = editor_clip_source_normal(tool);
+    if (slayer3d_vec3_length_squared(normal) <= 0.000001f)
+        normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    slayer3d_vec3 side = slayer3d_vec3_cross(normal, line_dir);
+    if (slayer3d_vec3_length_squared(side) <= 0.000001f)
+        side = slayer3d_vec3_cross(slayer3d_vec3_make(0.0f, 1.0f, 0.0f), line_dir);
+    if (slayer3d_vec3_length_squared(side) <= 0.000001f)
+        side = slayer3d_vec3_cross(slayer3d_vec3_make(1.0f, 0.0f, 0.0f), line_dir);
+    if (slayer3d_vec3_length_squared(side) <= 0.000001f)
+        return true;
+    side = slayer3d_vec3_normalize(side);
+
+    const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(p0, p1), 0.5f);
+    const slayer3d_vec3 half_line = slayer3d_vec3_scale(line_dir, SDL_max(line_length * 0.55f, 0.45f));
+    const slayer3d_vec3 half_side = slayer3d_vec3_scale(side, SDL_max(line_length * 0.35f, 0.35f));
+    const slayer3d_vec3 a = slayer3d_vec3_add(slayer3d_vec3_sub(center, half_line), half_side);
+    const slayer3d_vec3 b = slayer3d_vec3_add(slayer3d_vec3_add(center, half_line), half_side);
+    const slayer3d_vec3 c = slayer3d_vec3_sub(slayer3d_vec3_add(center, half_line), half_side);
+    const slayer3d_vec3 d = slayer3d_vec3_sub(slayer3d_vec3_sub(center, half_line), half_side);
+
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PLANE_EDGE;
+    context->color = (slayer3d_color){95, 220, 255, 210};
+    context->element_name = "clip.plane";
+    return emit_editor_debug_line(context, a, b) && emit_editor_debug_line(context, b, c) &&
+           emit_editor_debug_line(context, c, d) && emit_editor_debug_line(context, d, a);
+}
+
+static bool emit_editor_clip_status_label(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                          const editor_clip_tool_state *tool, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || tool == NULL || tool->point_count <= 0)
+        return true;
+
+    char label[96];
+    SDL_snprintf(label, sizeof(label), "Clip: %d pts  keep %s  %s", tool->point_count,
+                 editor_debug_clip_keep_mode_name(tool->keep_mode), tool->preview_valid ? "valid" : "invalid");
+
+    slayer3d_vec3 label_position = editor_clip_source_point_world(world, origin, tool->points[0]);
+    if (tool->point_count >= 2)
+    {
+        const slayer3d_vec3 p1 = editor_clip_source_point_world(world, origin, tool->points[1]);
+        label_position = slayer3d_vec3_scale(slayer3d_vec3_add(label_position, p1), 0.5f);
+    }
+    label_position = slayer3d_vec3_add(label_position, slayer3d_vec3_make(0.0f, 0.32f, 0.0f));
+
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL;
+    context->color = tool->preview_valid ? (slayer3d_color){220, 250, 255, 255} : (slayer3d_color){255, 105, 105, 255};
+    context->element_name = "clip.status";
+    return emit_editor_debug_label(context, label_position, label);
+}
+
+static slayer3d_color editor_clip_snap_target_color(const editor_clip_tool_state *tool)
+{
+    if (tool == NULL)
+        return (slayer3d_color){180, 220, 255, 255};
+    if (SDL_strcmp(tool->snap_kind, "vertex") == 0)
+        return (slayer3d_color){255, 70, 70, 255};
+    if (SDL_strcmp(tool->snap_kind, "edge") == 0)
+        return (slayer3d_color){80, 220, 255, 255};
+    if (SDL_strcmp(tool->snap_kind, "face") == 0)
+        return (slayer3d_color){230, 120, 255, 255};
+    return (slayer3d_color){180, 220, 255, 255};
+}
+
+static bool emit_editor_clip_snap_target(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                         const editor_clip_tool_state *tool, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || tool == NULL || !tool->has_snap_target ||
+        SDL_strcmp(tool->snap_kind, "grid") == 0)
+    {
+        return true;
+    }
+
+    char label[64];
+    SDL_snprintf(label, sizeof(label), "snap %s", tool->snap_kind);
+    const slayer3d_vec3 target_position = editor_clip_source_point_world(world, origin, tool->snap_point);
+
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_SNAP_TARGET;
+    context->color = editor_clip_snap_target_color(tool);
+    context->element_name = tool->snap_target;
+    if (!emit_editor_debug_marker_orb(context, target_position, 0.145f))
+        return false;
+
+    context->element_name = "clip.snap.label";
+    return emit_editor_debug_label(context, slayer3d_vec3_add(target_position, slayer3d_vec3_make(0.0f, 0.22f, 0.0f)),
+                                   label);
+}
+
+static bool emit_editor_clip_preview_box_edges(editor_debug_iteration_context *context,
+                                               const brush_world_runtime *world,
+                                               const editor_brush_source_box_runtime *box, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || box == NULL)
+        return false;
+
+    editor_brush_source_vertex_model model;
+    if (!editor_brush_source_box_runtime_build_vertex_model(world, -1, box, &model, NULL, 0))
+        return false;
+
+    context->element_name = box->stable_id != NULL ? box->stable_id : box->name;
+    for (int edge = 0; edge < model.edge_count; ++edge)
+    {
+        const editor_brush_source_edge *source_edge = &model.edges[edge];
+        const int a = source_edge->vertex_indices[0];
+        const int b = source_edge->vertex_indices[1];
+        if (a < 0 || a >= model.vertex_count || b < 0 || b >= model.vertex_count)
+            continue;
+        const slayer3d_vec3 start =
+            slayer3d_vec3_add(origin, editor_source_coord_meters(world, model.vertices[a].coord));
+        const slayer3d_vec3 end = slayer3d_vec3_add(origin, editor_source_coord_meters(world, model.vertices[b].coord));
+        if (!emit_editor_debug_line(context, start, end))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_editor_clip_preview_edges(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                           const editor_clip_tool_state *tool, slayer3d_vec3 origin)
+{
+    if (context == NULL || world == NULL || tool == NULL || !tool->preview_valid || !tool->preview_has_results)
+        return true;
+
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_KEPT_EDGE;
+    context->color = (slayer3d_color){80, 255, 120, 245};
+    for (int i = 0; i < tool->preview_kept_count && i < SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY; ++i)
+    {
+        if (!emit_editor_clip_preview_box_edges(context, world, &tool->preview_kept[i], origin))
+            return true;
+    }
+
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_PREVIEW_DISCARDED_EDGE;
+    context->color = (slayer3d_color){255, 80, 80, 150};
+    for (int i = 0; i < tool->preview_discarded_count && i < SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY; ++i)
+    {
+        if (!emit_editor_clip_preview_box_edges(context, world, &tool->preview_discarded[i], origin))
+            return true;
+    }
+    return true;
+}
+
+static bool emit_editor_clip_tool_primitives(const slayer3d_game_data_runtime *runtime,
+                                             const slayer3d_game_data_editor_debug_desc *desc,
+                                             slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || desc == NULL || callback == NULL)
+        return true;
+    (void)desc;
+
+    const editor_clip_tool_state *tool = &runtime->editor_clip_tool;
+    if (!tool->active)
+        return true;
+
+    const brush_world_runtime *world = find_brush_world_runtime(runtime, tool->world_name);
+    if (world == NULL)
+        return true;
+
+    slayer3d_vec3 origin;
+    editor_clip_preview_origin(runtime, tool, &origin);
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.world_name = tool->world_name;
+    context.face_index = -1;
+
+    if (!emit_editor_clip_point_handles(&context, world, tool, origin) ||
+        !emit_editor_clip_point_lines(&context, world, tool, origin) ||
+        !emit_editor_clip_plane_indicator(&context, world, tool, origin) ||
+        !emit_editor_clip_status_label(&context, world, tool, origin) ||
+        !emit_editor_clip_snap_target(&context, world, tool, origin) ||
+        !emit_editor_clip_preview_edges(&context, world, tool, origin))
+    {
+        return true;
     }
     return true;
 }
@@ -1282,6 +1594,12 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
         {
             return true;
         }
+    }
+
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW) != 0u &&
+        !emit_editor_clip_tool_primitives(runtime, desc, callback, userdata))
+    {
+        return true;
     }
 
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW) != 0u &&

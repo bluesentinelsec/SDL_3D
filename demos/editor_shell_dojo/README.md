@@ -33,6 +33,46 @@ The equivalent raw runner command remains useful for data/runtime debugging:
 ./build/debug/slayer3d_runner --root demos/editor_shell_dojo/data --data asset://editor_shell_dojo.game.json --state editor.command=open --state editor.input.path=/tmp/slayer3d-editor-level.fragment.json --state editor.save.path=/tmp/slayer3d-editor-level.fragment.json
 ```
 
-The editor UI exposes the current keybindings in its in-scene help text. Keep
-this dojo README focused on launch/save behavior so editor workflow details can
-evolve in the authored data and engine tests.
+## Clip Tool Fixture
+
+Open the clip-tool verification fixture into a scratch output file:
+
+```sh
+./build/debug/slayer3d_editor open --project demos/editor_shell_dojo --input demos/editor_shell_dojo/data/fixtures/clip_tool.fragment.json --output /tmp/slayer3d-clip-tool.fragment.json --overwrite
+```
+
+The fixture loads a small source-backed brush world with a floor, a bevel cube,
+a wall strip, a terrain block, and two side-by-side blocks for multi-brush
+checks. Save and reopen the scratch file, not the fixture, when validating
+round-trip behavior.
+
+Current clip-tool keys:
+
+- `C`: enter clip mode for the selected brush or brushes.
+- Left click: place clip points. Two points use the brush face/work-plane
+  normal captured when the point is placed; three points define the clipping
+  plane exactly.
+- Left-drag a clip point: move the point on its captured plane; points snap to
+  source vertices, edges, faces, and the grid.
+- `Ctrl+Enter` or `Command+Enter`: cycle keep-front, keep-back, and keep-both
+  split modes.
+- `Enter`: apply the clip as one undoable edit.
+- `Esc`: cancel the active clip operation or exit the tool.
+- `U`: undo the last editor transaction.
+- `Y`: redo the last undone editor transaction.
+- `Ctrl+S` or `Command+S`: save the editable fragment atomically.
+- `F5`: test-run the current in-memory level.
+
+Manual clip-tool verification:
+
+- Bevel a cube corner.
+- Carve a doorway by splitting a wall into side/top pieces and removing the
+  opening.
+- Split the wall strip into two pieces with keep-both mode.
+- Clip the terrain block into a diagonal wedge.
+- Select and clip the two side-by-side blocks at once.
+- Undo and redo each operation.
+- Save the scratch fragment, reopen it, and verify the clipped source brushes
+  still match the edited shapes.
+- Press `F5` and inspect the compiled test-run output for visible z-fighting,
+  corrupt geometry, or collision anomalies.

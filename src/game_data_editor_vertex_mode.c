@@ -530,12 +530,17 @@ static bool editor_apply_vertex_move_targets(const editor_source_vertex_move_tar
         editor_brush_source_free_runtime_brush(&preview.brush);
     }
 
-    editor_source_vertex_move_rollback rollbacks[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(rollbacks);
-    if (!editor_capture_vertex_move_rollbacks(targets, target_count, rollbacks, SDL_arraysize(rollbacks), error,
-                                              (int)error_size))
+    editor_source_vertex_move_rollback *rollbacks =
+        (editor_source_vertex_move_rollback *)SDL_calloc((size_t)target_count, sizeof(*rollbacks));
+    if (rollbacks == NULL)
+    {
+        set_error(error, (int)error_size, "failed to allocate vertex move rollback state");
+        return false;
+    }
+    if (!editor_capture_vertex_move_rollbacks(targets, target_count, rollbacks, target_count, error, (int)error_size))
     {
         editor_dispose_vertex_move_rollbacks(rollbacks, target_count);
+        SDL_free(rollbacks);
         return false;
     }
 
@@ -550,11 +555,14 @@ static bool editor_apply_vertex_move_targets(const editor_source_vertex_move_tar
         {
             editor_restore_vertex_move_rollbacks(rollbacks, target_count);
             editor_brush_source_free_runtime_brush(&result.brush);
+            editor_dispose_vertex_move_rollbacks(rollbacks, target_count);
+            SDL_free(rollbacks);
             return false;
         }
         editor_brush_source_free_runtime_brush(&result.brush);
     }
     editor_dispose_vertex_move_rollbacks(rollbacks, target_count);
+    SDL_free(rollbacks);
     if (out_changed_count != NULL)
         *out_changed_count = total_changed;
     return true;
@@ -579,8 +587,13 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
     if (delta[0] == 0 && delta[1] == 0 && delta[2] == 0)
         return false;
 
-    editor_source_vertex_move_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(targets);
+    editor_source_vertex_move_target *targets =
+        (editor_source_vertex_move_target *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY, sizeof(*targets));
+    if (targets == NULL)
+    {
+        publish_editor_vertex_move_result(runtime, false, 0, 0, "vertex move blocked: allocation failed");
+        return false;
+    }
     int target_count = 0;
     for (int i = 0; i < runtime->editor_selected_vertex_count; ++i)
     {
@@ -590,6 +603,7 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
         {
             publish_editor_vertex_move_result(runtime, false, target_count, 0,
                                               "vertex move blocked: invalid source selection");
+            SDL_free(targets);
             return false;
         }
 
@@ -597,8 +611,11 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
             editor_find_vertex_move_target(targets, target_count, world_runtime, selection->source_index);
         if (target == NULL)
         {
-            if (target_count >= (int)SDL_arraysize(targets))
+            if (target_count >= SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY)
+            {
+                SDL_free(targets);
                 return false;
+            }
             target = &targets[target_count++];
             target->world_runtime = world_runtime;
             target->source_index = selection->source_index;
@@ -608,6 +625,7 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
         {
             publish_editor_vertex_move_result(runtime, false, target_count, 0,
                                               "vertex move blocked: too many selected vertices");
+            SDL_free(targets);
             return false;
         }
     }
@@ -624,11 +642,13 @@ bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, sla
         for (int i = 0; i < target_count; ++i)
             editor_refresh_selected_vertices_after_source_edit(runtime, targets[i].world_runtime);
         editor_refresh_selected_brushes_after_source_edit(runtime);
+        SDL_free(targets);
         return false;
     }
 
     editor_mark_dirty_and_refresh_after_vertex_targets(runtime, targets, target_count);
     editor_reselect_vertices_from_move_targets(runtime, targets, target_count);
+    SDL_free(targets);
     publish_editor_vertex_move_result(runtime, true, target_count, total_changed, "moved selected vertices");
     return true;
 }
@@ -749,14 +769,20 @@ static void publish_editor_vertex_snap_result(slayer3d_game_data_runtime *runtim
 
 bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
-    editor_source_snap_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(targets);
-    int target_count = editor_collect_vertex_snap_targets(runtime, targets, SDL_arraysize(targets));
+    editor_source_snap_target *targets =
+        (editor_source_snap_target *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY, sizeof(*targets));
+    if (targets == NULL)
+    {
+        publish_editor_vertex_snap_result(runtime, action, false, 0, 0, 0, "vertex snap allocation failed");
+        return true;
+    }
+    int target_count = editor_collect_vertex_snap_targets(runtime, targets, SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY);
     if (target_count <= 0)
-        target_count = editor_collect_brush_snap_targets(runtime, targets, SDL_arraysize(targets));
+        target_count = editor_collect_brush_snap_targets(runtime, targets, SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY);
     if (runtime == NULL || target_count <= 0)
     {
         publish_editor_vertex_snap_result(runtime, action, false, 0, 0, 0, "vertex snap requires a selection");
+        SDL_free(targets);
         return true;
     }
 
@@ -785,6 +811,7 @@ bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime
             publish_editor_vertex_snap_result(runtime, action, false, target_count, total_changed, last_snap_units,
                                               message);
             editor_brush_source_free_runtime_brush(&result.brush);
+            SDL_free(targets);
             return true;
         }
         total_changed += result.changed_count;
@@ -801,6 +828,7 @@ bool slayer3d_game_data_snap_selected_editor_vertices(slayer3d_game_data_runtime
     SDL_snprintf(message, sizeof(message), "snapped %d source brush%s to grid", target_count,
                  target_count == 1 ? "" : "es");
     publish_editor_vertex_snap_result(runtime, action, true, target_count, total_changed, last_snap_units, message);
+    SDL_free(targets);
     return true;
 }
 
@@ -920,12 +948,19 @@ static void publish_editor_vertex_delete_result(slayer3d_game_data_runtime *runt
 
 bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runtime *runtime, yyjson_val *action)
 {
-    editor_source_vertex_delete_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(targets);
-    const int target_count = editor_collect_vertex_delete_targets(runtime, targets, SDL_arraysize(targets));
+    editor_source_vertex_delete_target *targets =
+        (editor_source_vertex_delete_target *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY, sizeof(*targets));
+    if (targets == NULL)
+    {
+        publish_editor_vertex_delete_result(runtime, action, false, 0, 0, "vertex delete allocation failed");
+        return true;
+    }
+    const int target_count =
+        editor_collect_vertex_delete_targets(runtime, targets, SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY);
     if (runtime == NULL || target_count <= 0)
     {
         publish_editor_vertex_delete_result(runtime, action, false, 0, 0, "vertex delete requires a selection");
+        SDL_free(targets);
         return true;
     }
 
@@ -953,6 +988,7 @@ bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runti
                          error[0] != '\0' ? error : "invalid source edit");
             publish_editor_vertex_delete_result(runtime, action, false, target_count, total_deleted, message);
             editor_brush_source_free_runtime_brush(&preview.brush);
+            SDL_free(targets);
             return true;
         }
         total_deleted += preview.changed_count;
@@ -981,6 +1017,7 @@ bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runti
                          error[0] != '\0' ? error : "invalid source edit");
             publish_editor_vertex_delete_result(runtime, action, false, target_count, total_deleted, message);
             editor_brush_source_free_runtime_brush(&result.brush);
+            SDL_free(targets);
             return true;
         }
         total_deleted += result.changed_count;
@@ -998,6 +1035,7 @@ bool slayer3d_game_data_delete_selected_editor_vertices(slayer3d_game_data_runti
     SDL_snprintf(message, sizeof(message), "deleted %d selected source vert%s", total_deleted,
                  total_deleted == 1 ? "ex" : "ices");
     publish_editor_vertex_delete_result(runtime, action, true, target_count, total_deleted, message);
+    SDL_free(targets);
     return true;
 }
 
@@ -1155,16 +1193,22 @@ bool editor_merge_selected_vertices_to_target(slayer3d_game_data_runtime *runtim
         return true;
     }
 
-    editor_source_vertex_move_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(targets);
+    editor_source_vertex_move_target *targets =
+        (editor_source_vertex_move_target *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY, sizeof(*targets));
+    if (targets == NULL)
+    {
+        publish_editor_vertex_merge_result(runtime, action, false, 0, "vertex merge allocation failed");
+        return true;
+    }
     int target_count = 0;
     char error[256];
     SDL_zeroa(error);
-    if (!editor_collect_vertex_merge_move_targets(runtime, target, targets, SDL_arraysize(targets), &target_count,
-                                                  error, sizeof(error)))
+    if (!editor_collect_vertex_merge_move_targets(runtime, target, targets, SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY,
+                                                  &target_count, error, sizeof(error)))
     {
         publish_editor_vertex_merge_result(runtime, action, false, 0,
                                            error[0] != '\0' ? error : "vertex merge requires selected vertices");
+        SDL_free(targets);
         return true;
     }
 
@@ -1173,6 +1217,7 @@ bool editor_merge_selected_vertices_to_target(slayer3d_game_data_runtime *runtim
         target->source_index >= world_runtime->editor_source_box_count)
     {
         publish_editor_vertex_merge_result(runtime, action, false, 0, "vertex merge source brush not found");
+        SDL_free(targets);
         return true;
     }
 
@@ -1183,6 +1228,7 @@ bool editor_merge_selected_vertices_to_target(slayer3d_game_data_runtime *runtim
         SDL_snprintf(message, sizeof(message), "vertex merge blocked: %s",
                      error[0] != '\0' ? error : "invalid source edit");
         publish_editor_vertex_merge_result(runtime, action, false, 0, message);
+        SDL_free(targets);
         return true;
     }
 
@@ -1195,6 +1241,7 @@ bool editor_merge_selected_vertices_to_target(slayer3d_game_data_runtime *runtim
     SDL_snprintf(message, sizeof(message), "merged %d selected source vert%s", changed_count,
                  changed_count == 1 ? "ex" : "ices");
     publish_editor_vertex_merge_result(runtime, action, true, changed_count, message);
+    SDL_free(targets);
     return true;
 }
 
@@ -1657,10 +1704,18 @@ bool slayer3d_game_data_validate_editor_vertex_source(slayer3d_game_data_runtime
         }
     }
 
-    editor_source_snap_target targets[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(targets);
-    int source_indices[SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY];
-    SDL_zeroa(source_indices);
+    editor_source_snap_target *targets =
+        (editor_source_snap_target *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY, sizeof(*targets));
+    int *source_indices = (int *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY, sizeof(*source_indices));
+    if (targets == NULL || source_indices == NULL)
+    {
+        SDL_free(targets);
+        SDL_free(source_indices);
+        SDL_strlcpy(diagnostics.first_issue, "source vertex diagnostics allocation failed",
+                    sizeof(diagnostics.first_issue));
+        publish_editor_vertex_diagnostics_result(runtime, action, world_runtime, &diagnostics, diagnostics.first_issue);
+        return true;
+    }
     int source_index_count = 0;
     if (explicit_source_index >= 0)
     {
@@ -1668,8 +1723,8 @@ bool slayer3d_game_data_validate_editor_vertex_source(slayer3d_game_data_runtime
     }
     else
     {
-        source_index_count =
-            editor_collect_vertex_diagnostic_targets(runtime, world_runtime, targets, SDL_arraysize(targets));
+        source_index_count = editor_collect_vertex_diagnostic_targets(runtime, world_runtime, targets,
+                                                                      SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY);
         for (int i = 0; i < source_index_count; ++i)
             source_indices[i] = targets[i].source_index;
     }
@@ -1690,6 +1745,8 @@ bool slayer3d_game_data_validate_editor_vertex_source(slayer3d_game_data_runtime
                           : diagnostics.first_issue[0] != '\0' ? diagnostics.first_issue
                                                                : "source vertex model invalid";
     publish_editor_vertex_diagnostics_result(runtime, action, world_runtime, &diagnostics, message);
+    SDL_free(source_indices);
+    SDL_free(targets);
     return true;
 }
 
