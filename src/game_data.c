@@ -352,6 +352,10 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
         SDL_free(runtime->grid_pickup_layers[i].cells);
         SDL_free(runtime->grid_pickup_layers[i].render_positions);
     }
+    clear_menu_text_entry_capture(runtime);
+    reset_editor_clip_tool_state(runtime, "");
+    free_editor_command_history(&runtime->editor_command_history);
+
     for (int i = 0; i < runtime->sector_level_count; ++i)
     {
         SDL_free(runtime->sector_levels[i].name);
@@ -397,9 +401,6 @@ void slayer3d_game_data_destroy(slayer3d_game_data_runtime *runtime)
     for (int i = 0; i < runtime->network_diagnostic_count; ++i)
         SDL_free(runtime->network_diagnostics[i].name);
 
-    clear_menu_text_entry_capture(runtime);
-    reset_editor_clip_tool_state(runtime, "");
-    free_editor_command_history(&runtime->editor_command_history);
     slayer3d_script_engine_destroy(runtime->scripts);
     slayer3d_properties_destroy(runtime->scene_state);
     slayer3d_storage_destroy(runtime->storage);
