@@ -794,7 +794,7 @@ TEST_F(SLAYER3DDrawingFixture, BillboardRespondsToPointLight)
     ASSERT_TRUE(slayer3d_clear_render_context(ctx, kBlack));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        (slayer3d_vec2){2.0f, 2.0f}, (slayer3d_color){255, 255, 255, 255}));
+                                        slayer3d_vec2{2.0f, 2.0f}, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     const SDL_Point billboard_center = ProjectPointToFramebuffer(ctx, cam, slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
@@ -819,7 +819,7 @@ TEST_F(SLAYER3DDrawingFixture, BillboardRespondsToPointLight)
     ASSERT_TRUE(slayer3d_clear_render_context(ctx, kBlack));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        (slayer3d_vec2){2.0f, 2.0f}, (slayer3d_color){255, 255, 255, 255}));
+                                        slayer3d_vec2{2.0f, 2.0f}, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     const ColorRegionStats lit = SampleColorRegion(ctx, billboard_center, sample_radius);

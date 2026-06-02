@@ -32,6 +32,11 @@ static const char *gl_version_prefix_for_context(const slayer3d_gl_context *ctx)
     return (ctx != NULL && ctx->is_es) ? "#version 300 es\nprecision highp float;\n" : "#version 330\n";
 }
 
+static bool csm_shadow_pass_enabled(void)
+{
+    return false;
+}
+
 /* ------------------------------------------------------------------ */
 /* White color buffer                                                  */
 /* ------------------------------------------------------------------ */
@@ -1885,13 +1890,14 @@ static void ibl_render_cube(slayer3d_gl_funcs *gl, GLuint vao)
     gl->DrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, NULL);
 }
 
+extern float *stbi_loadf(const char *, int *, int *, int *, int);
+extern void stbi_image_free(void *);
+
 bool slayer3d_gl_load_environment_map(slayer3d_gl_context *ctx, const char *hdr_path)
 {
     slayer3d_gl_funcs *gl = &ctx->gl;
     int w, h, nc;
 
-    extern float *stbi_loadf(const char *, int *, int *, int *, int);
-    extern void stbi_image_free(void *);
     float *data = stbi_loadf(hdr_path, &w, &h, &nc, 0);
     if (!data)
     {
@@ -2986,7 +2992,7 @@ static bool gl_present(slayer3d_render_context *context)
 
     /* Shadow pass: render original VP into layer 0 (backward compatible),
      * then CSM cascades 1-3 into layers 1-3 for Slice 3. */
-    if (0 && ctx->shadow_program)
+    if (ctx->shadow_program && csm_shadow_pass_enabled())
     {
         compute_csm_matrices(ctx, context);
 
@@ -3267,7 +3273,7 @@ void slayer3d_gl_read_pixel(slayer3d_gl_context *ctx, int x, int y, unsigned cha
         slayer3d_gl_funcs *gl = &ctx->gl;
         flush_scene_ubo(ctx);
         prepare_skin_palette_buffer(ctx);
-        if (0 && ctx->shadow_program)
+        if (ctx->shadow_program && csm_shadow_pass_enabled())
         {
             compute_csm_matrices(ctx, ctx->current_ctx);
 

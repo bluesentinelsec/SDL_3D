@@ -64,7 +64,7 @@ static void render_lit_triangle(slayer3d_render_context *ctx)
     slayer3d_begin_mode_3d(ctx, cam);
 
     slayer3d_draw_triangle_3d(ctx, slayer3d_vec3_make(-0.5f, -0.5f, 0.0f), slayer3d_vec3_make(0.5f, -0.5f, 0.0f),
-                              slayer3d_vec3_make(0.0f, 0.5f, 0.0f), (slayer3d_color){255, 128, 64, 255});
+                              slayer3d_vec3_make(0.0f, 0.5f, 0.0f), slayer3d_color{255, 128, 64, 255});
 
     slayer3d_end_mode_3d(ctx);
 }

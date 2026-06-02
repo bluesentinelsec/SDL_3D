@@ -8,6 +8,8 @@
 
 #include <SDL3/SDL.h>
 
+#include <stddef.h>
+
 /* GL types. */
 typedef unsigned int GLenum;
 typedef unsigned int GLuint;
@@ -16,8 +18,14 @@ typedef int GLsizei;
 typedef float GLfloat;
 typedef unsigned char GLboolean;
 typedef char GLchar;
-typedef signed long long GLsizeiptr;
+typedef ptrdiff_t GLsizeiptr;
 typedef unsigned int GLbitfield;
+
+#if defined(_WIN32)
+#define SLAYER3D_GL_APIENTRY __stdcall
+#else
+#define SLAYER3D_GL_APIENTRY
+#endif
 
 /* GL constants. */
 #define GL_FALSE 0
@@ -96,92 +104,96 @@ typedef unsigned int GLbitfield;
 #define GL_RG16F 0x822F
 
 /* Function pointer types. */
-typedef void (*PFNGLCLEARPROC)(GLbitfield);
-typedef void (*PFNGLCLEARCOLORPROC)(GLfloat, GLfloat, GLfloat, GLfloat);
-typedef void (*PFNGLENABLEPROC)(GLenum);
-typedef void (*PFNGLDISABLEPROC)(GLenum);
-typedef void (*PFNGLDEPTHFUNCPROC)(GLenum);
-typedef void (*PFNGLDEPTHMASKPROC)(GLboolean);
-typedef void (*PFNGLCOLORMASKPROC)(GLboolean, GLboolean, GLboolean, GLboolean);
-typedef void (*PFNGLCULLFACEPROC)(GLenum);
-typedef void (*PFNGLFRONTFACEPROC)(GLenum);
-typedef void (*PFNGLVIEWPORTPROC)(GLint, GLint, GLsizei, GLsizei);
-typedef void (*PFNGLBLENDFUNCPROC)(GLenum, GLenum);
-typedef void (*PFNGLSCISSORPROC)(GLint, GLint, GLsizei, GLsizei);
-typedef GLenum (*PFNGLGETERRORPROC)(void);
-typedef void (*PFNGLFLUSHPROC)(void);
-typedef void (*PFNGLFINISHPROC)(void);
-typedef GLuint (*PFNGLCREATESHADERPROC)(GLenum);
-typedef void (*PFNGLSHADERSOURCEPROC)(GLuint, GLsizei, const GLchar **, const GLint *);
-typedef void (*PFNGLCOMPILESHADERPROC)(GLuint);
-typedef void (*PFNGLGETSHADERIVPROC)(GLuint, GLenum, GLint *);
-typedef void (*PFNGLGETSHADERINFOLOGPROC)(GLuint, GLsizei, GLsizei *, GLchar *);
-typedef void (*PFNGLDELETESHADERPROC)(GLuint);
-typedef GLuint (*PFNGLCREATEPROGRAMPROC)(void);
-typedef void (*PFNGLATTACHSHADERPROC)(GLuint, GLuint);
-typedef void (*PFNGLLINKPROGRAMPROC)(GLuint);
-typedef void (*PFNGLGETPROGRAMIVPROC)(GLuint, GLenum, GLint *);
-typedef void (*PFNGLGETPROGRAMINFOLOGPROC)(GLuint, GLsizei, GLsizei *, GLchar *);
-typedef void (*PFNGLUSEPROGRAMPROC)(GLuint);
-typedef void (*PFNGLDELETEPROGRAMPROC)(GLuint);
-typedef GLint (*PFNGLGETUNIFORMLOCATIONPROC)(GLuint, const GLchar *);
-typedef void (*PFNGLUNIFORM1IPROC)(GLint, GLint);
-typedef void (*PFNGLUNIFORM1FPROC)(GLint, GLfloat);
-typedef void (*PFNGLUNIFORM2FPROC)(GLint, GLfloat, GLfloat);
-typedef void (*PFNGLUNIFORM3FPROC)(GLint, GLfloat, GLfloat, GLfloat);
-typedef void (*PFNGLUNIFORM4FPROC)(GLint, GLfloat, GLfloat, GLfloat, GLfloat);
-typedef void (*PFNGLUNIFORMMATRIX3FVPROC)(GLint, GLsizei, GLboolean, const GLfloat *);
-typedef void (*PFNGLUNIFORMMATRIX4FVPROC)(GLint, GLsizei, GLboolean, const GLfloat *);
-typedef void (*PFNGLGENVERTEXARRAYSPROC)(GLsizei, GLuint *);
-typedef void (*PFNGLBINDVERTEXARRAYPROC)(GLuint);
-typedef void (*PFNGLDELETEVERTEXARRAYSPROC)(GLsizei, const GLuint *);
-typedef void (*PFNGLGENBUFFERSPROC)(GLsizei, GLuint *);
-typedef void (*PFNGLBINDBUFFERPROC)(GLenum, GLuint);
-typedef void (*PFNGLBUFFERDATAPROC)(GLenum, GLsizeiptr, const void *, GLenum);
-typedef void (*PFNGLDELETEBUFFERSPROC)(GLsizei, const GLuint *);
-typedef void (*PFNGLENABLEVERTEXATTRIBARRAYPROC)(GLuint);
-typedef void (*PFNGLVERTEXATTRIBPOINTERPROC)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void *);
-typedef void (*PFNGLDRAWARRAYSPROC)(GLenum, GLint, GLsizei);
-typedef void (*PFNGLDRAWELEMENTSPROC)(GLenum, GLsizei, GLenum, const void *);
-typedef void (*PFNGLDRAWARRAYSINSTANCEDPROC)(GLenum, GLint, GLsizei, GLsizei);
-typedef void (*PFNGLDRAWELEMENTSINSTANCEDPROC)(GLenum, GLsizei, GLenum, const void *, GLsizei);
-typedef void (*PFNGLVERTEXATTRIBDIVISORPROC)(GLuint, GLuint);
-typedef void (*PFNGLGENTEXTURESPROC)(GLsizei, GLuint *);
-typedef void (*PFNGLBINDTEXTUREPROC)(GLenum, GLuint);
-typedef void (*PFNGLTEXIMAGE2DPROC)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum, const void *);
-typedef void (*PFNGLTEXIMAGE3DPROC)(GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum, GLenum,
-                                    const void *);
-typedef void (*PFNGLFRAMEBUFFERTEXTURELAYERPROC)(GLenum, GLenum, GLuint, GLint, GLint);
-typedef void (*PFNGLTEXPARAMETERIPROC)(GLenum, GLenum, GLint);
-typedef void (*PFNGLTEXPARAMETERFVPROC)(GLenum, GLenum, const GLfloat *);
-typedef void (*PFNGLDELETETEXTURESPROC)(GLsizei, const GLuint *);
-typedef void (*PFNGLACTIVETEXTUREPROC)(GLenum);
-typedef void (*PFNGLGENFRAMEBUFFERSPROC)(GLsizei, GLuint *);
-typedef void (*PFNGLBINDFRAMEBUFFERPROC)(GLenum, GLuint);
-typedef void (*PFNGLFRAMEBUFFERTEXTURE2DPROC)(GLenum, GLenum, GLenum, GLuint, GLint);
-typedef GLenum (*PFNGLCHECKFRAMEBUFFERSTATUSPROC)(GLenum);
-typedef void (*PFNGLDELETEFRAMEBUFFERSPROC)(GLsizei, const GLuint *);
-typedef void (*PFNGLGENRENDERBUFFERSPROC)(GLsizei, GLuint *);
-typedef void (*PFNGLBINDRENDERBUFFERPROC)(GLenum, GLuint);
-typedef void (*PFNGLRENDERBUFFERSTORAGEPROC)(GLenum, GLenum, GLsizei, GLsizei);
-typedef void (*PFNGLFRAMEBUFFERRENDERBUFFERPROC)(GLenum, GLenum, GLenum, GLuint);
-typedef void (*PFNGLDELETERENDERBUFFERSPROC)(GLsizei, const GLuint *);
-typedef void (*PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLbitfield, GLenum);
-typedef GLint (*PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar *);
-typedef void (*PFNGLREADPIXELSPROC)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
-typedef void (*PFNGLTEXSUBIMAGE2DPROC)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, const void *);
-typedef void (*PFNGLBINDBUFFERBASEPROC)(GLenum, GLuint, GLuint);
-typedef void (*PFNGLUNIFORMBLOCKBINDINGPROC)(GLuint, GLuint, GLuint);
-typedef GLuint (*PFNGLGETUNIFORMBLOCKINDEXPROC)(GLuint, const char *);
-typedef void (*PFNGLDRAWBUFFERPROC)(GLenum);
-typedef void (*PFNGLREADBUFFERPROC)(GLenum);
-typedef void (*PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
-typedef void (*PFNGLGENERATEMIPMAPPROC)(GLenum);
-typedef void (*PFNGLGENQUERIESPROC)(GLsizei, GLuint *);
-typedef void (*PFNGLDELETEQUERIESPROC)(GLsizei, const GLuint *);
-typedef void (*PFNGLBEGINQUERYPROC)(GLenum, GLuint);
-typedef void (*PFNGLENDQUERYPROC)(GLenum);
-typedef void (*PFNGLGETQUERYOBJECTUIVPROC)(GLuint, GLenum, GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLCLEARPROC)(GLbitfield);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLCLEARCOLORPROC)(GLfloat, GLfloat, GLfloat, GLfloat);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLENABLEPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDISABLEPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDEPTHFUNCPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDEPTHMASKPROC)(GLboolean);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLCOLORMASKPROC)(GLboolean, GLboolean, GLboolean, GLboolean);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLCULLFACEPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLFRONTFACEPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLVIEWPORTPROC)(GLint, GLint, GLsizei, GLsizei);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBLENDFUNCPROC)(GLenum, GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLSCISSORPROC)(GLint, GLint, GLsizei, GLsizei);
+typedef GLenum(SLAYER3D_GL_APIENTRY *PFNGLGETERRORPROC)(void);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLFLUSHPROC)(void);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLFINISHPROC)(void);
+typedef GLuint(SLAYER3D_GL_APIENTRY *PFNGLCREATESHADERPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLSHADERSOURCEPROC)(GLuint, GLsizei, const GLchar **, const GLint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLCOMPILESHADERPROC)(GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGETSHADERIVPROC)(GLuint, GLenum, GLint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGETSHADERINFOLOGPROC)(GLuint, GLsizei, GLsizei *, GLchar *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETESHADERPROC)(GLuint);
+typedef GLuint(SLAYER3D_GL_APIENTRY *PFNGLCREATEPROGRAMPROC)(void);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLATTACHSHADERPROC)(GLuint, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLLINKPROGRAMPROC)(GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGETPROGRAMIVPROC)(GLuint, GLenum, GLint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGETPROGRAMINFOLOGPROC)(GLuint, GLsizei, GLsizei *, GLchar *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUSEPROGRAMPROC)(GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETEPROGRAMPROC)(GLuint);
+typedef GLint(SLAYER3D_GL_APIENTRY *PFNGLGETUNIFORMLOCATIONPROC)(GLuint, const GLchar *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORM1IPROC)(GLint, GLint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORM1FPROC)(GLint, GLfloat);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORM2FPROC)(GLint, GLfloat, GLfloat);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORM3FPROC)(GLint, GLfloat, GLfloat, GLfloat);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORM4FPROC)(GLint, GLfloat, GLfloat, GLfloat, GLfloat);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORMMATRIX3FVPROC)(GLint, GLsizei, GLboolean, const GLfloat *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORMMATRIX4FVPROC)(GLint, GLsizei, GLboolean, const GLfloat *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENVERTEXARRAYSPROC)(GLsizei, GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBINDVERTEXARRAYPROC)(GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETEVERTEXARRAYSPROC)(GLsizei, const GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENBUFFERSPROC)(GLsizei, GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBINDBUFFERPROC)(GLenum, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBUFFERDATAPROC)(GLenum, GLsizeiptr, const void *, GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETEBUFFERSPROC)(GLsizei, const GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLENABLEVERTEXATTRIBARRAYPROC)(GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLVERTEXATTRIBPOINTERPROC)(GLuint, GLint, GLenum, GLboolean, GLsizei,
+                                                                 const void *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDRAWARRAYSPROC)(GLenum, GLint, GLsizei);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDRAWELEMENTSPROC)(GLenum, GLsizei, GLenum, const void *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDRAWARRAYSINSTANCEDPROC)(GLenum, GLint, GLsizei, GLsizei);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDRAWELEMENTSINSTANCEDPROC)(GLenum, GLsizei, GLenum, const void *, GLsizei);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLVERTEXATTRIBDIVISORPROC)(GLuint, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENTEXTURESPROC)(GLsizei, GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBINDTEXTUREPROC)(GLenum, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLTEXIMAGE2DPROC)(GLenum, GLint, GLint, GLsizei, GLsizei, GLint, GLenum, GLenum,
+                                                        const void *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLTEXIMAGE3DPROC)(GLenum, GLint, GLint, GLsizei, GLsizei, GLsizei, GLint, GLenum,
+                                                        GLenum, const void *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLFRAMEBUFFERTEXTURELAYERPROC)(GLenum, GLenum, GLuint, GLint, GLint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLTEXPARAMETERIPROC)(GLenum, GLenum, GLint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLTEXPARAMETERFVPROC)(GLenum, GLenum, const GLfloat *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETETEXTURESPROC)(GLsizei, const GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLACTIVETEXTUREPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENFRAMEBUFFERSPROC)(GLsizei, GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBINDFRAMEBUFFERPROC)(GLenum, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLFRAMEBUFFERTEXTURE2DPROC)(GLenum, GLenum, GLenum, GLuint, GLint);
+typedef GLenum(SLAYER3D_GL_APIENTRY *PFNGLCHECKFRAMEBUFFERSTATUSPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETEFRAMEBUFFERSPROC)(GLsizei, const GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENRENDERBUFFERSPROC)(GLsizei, GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBINDRENDERBUFFERPROC)(GLenum, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLRENDERBUFFERSTORAGEPROC)(GLenum, GLenum, GLsizei, GLsizei);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLFRAMEBUFFERRENDERBUFFERPROC)(GLenum, GLenum, GLenum, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETERENDERBUFFERSPROC)(GLsizei, const GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBLITFRAMEBUFFERPROC)(GLint, GLint, GLint, GLint, GLint, GLint, GLint, GLint,
+                                                             GLbitfield, GLenum);
+typedef GLint(SLAYER3D_GL_APIENTRY *PFNGLGETATTRIBLOCATIONPROC)(GLuint, const GLchar *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLREADPIXELSPROC)(GLint, GLint, GLsizei, GLsizei, GLenum, GLenum, void *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLTEXSUBIMAGE2DPROC)(GLenum, GLint, GLint, GLint, GLsizei, GLsizei, GLenum,
+                                                           GLenum, const void *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBINDBUFFERBASEPROC)(GLenum, GLuint, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORMBLOCKBINDINGPROC)(GLuint, GLuint, GLuint);
+typedef GLuint(SLAYER3D_GL_APIENTRY *PFNGLGETUNIFORMBLOCKINDEXPROC)(GLuint, const char *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDRAWBUFFERPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLREADBUFFERPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLUNIFORM1FVPROC)(GLint, GLsizei, const GLfloat *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENERATEMIPMAPPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGENQUERIESPROC)(GLsizei, GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLDELETEQUERIESPROC)(GLsizei, const GLuint *);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLBEGINQUERYPROC)(GLenum, GLuint);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLENDQUERYPROC)(GLenum);
+typedef void(SLAYER3D_GL_APIENTRY *PFNGLGETQUERYOBJECTUIVPROC)(GLuint, GLenum, GLuint *);
 /* Global function pointers. */
 #if defined(__GNUC__) || defined(__clang__)
 #define SLAYER3D_GL_FUNCS_MAYBE_UNUSED __attribute__((unused))

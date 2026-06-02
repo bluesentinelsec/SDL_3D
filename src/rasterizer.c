@@ -263,7 +263,7 @@ static float slayer3d_clip_distance(slayer3d_vec4 v, slayer3d_clip_plane plane)
     case SLAYER3D_CLIP_FAR:
         return v.w - v.z;
     default:
-        SDL_assert(0 && "unreachable: unknown clip plane");
+        SDL_assert(plane >= SLAYER3D_CLIP_LEFT && plane <= SLAYER3D_CLIP_FAR);
         return 0.0f;
     }
 }

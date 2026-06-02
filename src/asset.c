@@ -336,7 +336,7 @@ static bool build_compressed_pack_bytes(const uint8_t *raw_data, size_t raw_size
     }
 
     const mz_ulong compressed_bound = mz_compressBound((mz_ulong)raw_size);
-    if (compressed_bound > (mz_ulong)(SIZE_MAX - SLAYER3D_PACK_COMPRESSED_HEADER_SIZE))
+    if ((size_t)compressed_bound > SIZE_MAX - SLAYER3D_PACK_COMPRESSED_HEADER_SIZE)
     {
         set_asset_error(error_buffer, error_buffer_size, "asset pack is too large");
         return false;

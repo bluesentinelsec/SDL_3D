@@ -2022,7 +2022,7 @@ slayer3d_demo_player *slayer3d_demo_playback_load(const char *path)
 
     if (tick_count > 0)
     {
-        if (tick_count > (Uint32)(SIZE_MAX / sizeof(*player->snapshots)))
+        if ((size_t)tick_count > SIZE_MAX / sizeof(*player->snapshots))
         {
             slayer3d_demo_playback_free(player);
             SDL_CloseIO(stream);
