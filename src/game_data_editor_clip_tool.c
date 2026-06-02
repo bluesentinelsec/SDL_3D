@@ -115,6 +115,7 @@ static bool editor_clip_tool_operation_active(const editor_clip_tool_state *tool
 }
 
 static void editor_clip_tool_refresh_preview(slayer3d_game_data_runtime *runtime);
+static bool capture_editor_clip_tool_selection(slayer3d_game_data_runtime *runtime, editor_clip_tool_state *tool);
 
 static void editor_clip_tool_clear_preview(editor_clip_tool_state *tool)
 {
@@ -245,6 +246,44 @@ void reset_editor_clip_tool_state(slayer3d_game_data_runtime *runtime, const cha
     tool->keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
     SDL_snprintf(tool->message, sizeof(tool->message), "%s", message != NULL ? message : "");
     publish_editor_clip_tool_state(runtime);
+}
+
+static bool reset_editor_clip_tool_for_next_operation(slayer3d_game_data_runtime *runtime, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return false;
+
+    editor_clip_tool_state *tool = &runtime->editor_clip_tool;
+    editor_clip_tool_clear_preview(tool);
+    tool->point_count = 0;
+    tool->hovered_point = -1;
+    tool->dragged_point = -1;
+    tool->has_snap_target = false;
+    tool->has_work_plane_normal = false;
+    tool->work_plane_normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    editor_clip_tool_clear_drag_plane(tool);
+    tool->keep_mode = EDITOR_BRUSH_SOURCE_CLIP_KEEP_FRONT;
+    tool->preview_valid = false;
+    tool->preview_has_results = false;
+    tool->selected_brush_count = 0;
+    tool->world_name[0] = '\0';
+    for (int i = 0; i < SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY; ++i)
+    {
+        tool->brush_identities[i][0] = '\0';
+        tool->brush_identity_refs[i] = NULL;
+    }
+    tool->active = true;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    SDL_snprintf(tool->scene, sizeof(tool->scene), "%s", active_scene != NULL ? active_scene : "");
+
+    const bool selection_valid = capture_editor_clip_tool_selection(runtime, tool);
+    if (selection_valid && tool->selected_brush_count > 0)
+        editor_clip_tool_set_message(tool, message);
+    else if (selection_valid)
+        editor_clip_tool_set_message(tool, "Clip Tool: select brushes to clip");
+
+    publish_editor_clip_tool_state(runtime);
+    return selection_valid;
 }
 
 static int editor_clip_source_snap_units(const slayer3d_game_data_runtime *runtime,
@@ -1164,7 +1203,7 @@ bool slayer3d_game_data_commit_editor_clip_tool(slayer3d_game_data_runtime *runt
     }
 
     editor_brush_world_free_source_clip_result(&result);
-    reset_editor_clip_tool_state(runtime, "Clip applied");
+    reset_editor_clip_tool_for_next_operation(runtime, "Clip applied; click to place clip points");
     editor_clip_tool_clear_issue(runtime);
     editor_clip_tool_publish_message(runtime, runtime->editor_clip_tool.message, true);
     return true;

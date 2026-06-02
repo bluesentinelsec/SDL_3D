@@ -22839,10 +22839,65 @@ TEST(GameDataRuntime, EditorClipToolTwoPointPlacementUsesWorkPlaneNormal)
     ASSERT_EQ(brush_world.brush_count, 1);
     EXPECT_NEAR(brush_world.brushes[0].bounds.min.x, 0.0f, 0.001f);
     EXPECT_NEAR(brush_world.brushes[0].bounds.max.x, 4.0f, 0.001f);
-    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", true));
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""), "Clip applied");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""), "Clip applied");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip applied; click to place clip points");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.console.line0", ""),
+                 "Clip applied; click to place clip points");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.issues.line0", ""), "");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorClipToolStaysActiveForSequentialClipOperations)
+{
+    slayer3d_game_session *session = nullptr;
+    slayer3d_game_data_runtime *runtime = nullptr;
+    brush_world_runtime *world_runtime = nullptr;
+    ASSERT_NO_FATAL_FAILURE(load_editor_source_clip_fixture(&session, &runtime, &world_runtime,
+                                                            source_clip_box_json("source.box.clip.tool.sequence",
+                                                                                 "brush.source.clip.tool.sequence", 0,
+                                                                                 0, 0, 8000, 8000, 8000)));
+    (void)world_runtime;
+
+    select_editor_shell_test_brush(runtime, "brush.source.clip.tool.sequence");
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int mode_clip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.clip");
+    ASSERT_GE(mode_clip_signal, 0);
+    slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
+
+    auto place_y_plane_clip = [&](int x) {
+        const int point_a[3] = {x, 0, 0};
+        const int point_b[3] = {x, 0, 8000};
+        ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_a, slayer3d_vec3_make(0, 1, 0)));
+        ASSERT_TRUE(slayer3d_game_data_place_editor_clip_point_source(runtime, point_b, slayer3d_vec3_make(0, 1, 0)));
+    };
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    ASSERT_NO_FATAL_FAILURE(place_y_plane_clip(6000));
+    ASSERT_TRUE(slayer3d_game_data_commit_editor_clip_tool(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
+
+    ASSERT_NO_FATAL_FAILURE(place_y_plane_clip(3000));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.valid", false));
+    ASSERT_TRUE(slayer3d_game_data_commit_editor_clip_tool(runtime));
+
+    slayer3d_game_data_brush_world brush_world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
+    ASSERT_EQ(brush_world.brush_count, 1);
+    EXPECT_NEAR(brush_world.brushes[0].bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_world.brushes[0].bounds.max.x, 3.0f, 0.001f);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.point_count", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -22933,7 +22988,10 @@ TEST(GameDataRuntime, EditorClipToolKeepBothClipsMultipleSelectedBrushes)
     EXPECT_EQ(brush_world.brush_count, 4);
     EXPECT_EQ(brush_world.compile_invalid_brush_count, 0);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 4);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""), "Clip applied");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.clip.active", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 4);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.message", ""),
+                 "Clip applied; click to place clip points");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
