@@ -2170,8 +2170,8 @@ static bool for_each_ui_inspector_rect_root(const slayer3d_game_data_runtime *ru
     return true;
 }
 
-static bool emit_editor_vertex_lasso_rect(slayer3d_game_data_ui_rect_fn callback, void *userdata, const char *name,
-                                          float x, float y, float w, float h, slayer3d_color color)
+static bool emit_editor_lasso_rect(slayer3d_game_data_ui_rect_fn callback, void *userdata, const char *name, float x,
+                                   float y, float w, float h, slayer3d_color color)
 {
     if (w <= 0.0f || h <= 0.0f)
         return true;
@@ -2188,19 +2188,29 @@ static bool emit_editor_vertex_lasso_rect(slayer3d_game_data_ui_rect_fn callback
     return callback(userdata, &rect);
 }
 
-static bool for_each_editor_vertex_lasso_rect(const slayer3d_game_data_runtime *runtime,
-                                              slayer3d_game_data_ui_rect_fn callback, void *userdata)
+static bool for_each_editor_lasso_rect(const slayer3d_game_data_runtime *runtime,
+                                       slayer3d_game_data_ui_rect_fn callback, void *userdata, const char *state_prefix,
+                                       const char *rect_prefix)
 {
-    if (runtime == NULL || callback == NULL || runtime->scene_state == NULL ||
-        !slayer3d_properties_get_bool(runtime->scene_state, "editor.vertex.lasso.active", false))
+    if (runtime == NULL || callback == NULL || runtime->scene_state == NULL || state_prefix == NULL ||
+        rect_prefix == NULL)
     {
         return true;
     }
 
-    const float start_x = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.start_x", 0.0f);
-    const float start_y = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.start_y", 0.0f);
-    const float end_x = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.end_x", start_x);
-    const float end_y = slayer3d_properties_get_float(runtime->scene_state, "editor.vertex.lasso.end_y", start_y);
+    char key[128];
+    SDL_snprintf(key, sizeof(key), "%s.active", state_prefix);
+    if (!slayer3d_properties_get_bool(runtime->scene_state, key, false))
+        return true;
+
+    SDL_snprintf(key, sizeof(key), "%s.start_x", state_prefix);
+    const float start_x = slayer3d_properties_get_float(runtime->scene_state, key, 0.0f);
+    SDL_snprintf(key, sizeof(key), "%s.start_y", state_prefix);
+    const float start_y = slayer3d_properties_get_float(runtime->scene_state, key, 0.0f);
+    SDL_snprintf(key, sizeof(key), "%s.end_x", state_prefix);
+    const float end_x = slayer3d_properties_get_float(runtime->scene_state, key, start_x);
+    SDL_snprintf(key, sizeof(key), "%s.end_y", state_prefix);
+    const float end_y = slayer3d_properties_get_float(runtime->scene_state, key, start_y);
     const float x = SDL_min(start_x, end_x);
     const float y = SDL_min(start_y, end_y);
     const float w = SDL_fabsf(end_x - start_x);
@@ -2208,18 +2218,30 @@ static bool for_each_editor_vertex_lasso_rect(const slayer3d_game_data_runtime *
     if (w < 1.0f || h < 1.0f)
         return true;
 
-    const bool additive = slayer3d_properties_get_bool(runtime->scene_state, "editor.vertex.lasso.additive", false);
+    SDL_snprintf(key, sizeof(key), "%s.additive", state_prefix);
+    const bool additive = slayer3d_properties_get_bool(runtime->scene_state, key, false);
     const slayer3d_color fill = additive ? (slayer3d_color){80, 255, 160, 48} : (slayer3d_color){255, 224, 64, 42};
     const slayer3d_color border = additive ? (slayer3d_color){80, 255, 160, 235} : (slayer3d_color){255, 224, 64, 235};
     const float t = 2.0f;
 
-    return emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.fill", x, y, w, h, fill) &&
-           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.top", x, y, w, t, border) &&
-           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.bottom", x, y + h - t, w, t,
-                                         border) &&
-           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.left", x, y, t, h, border) &&
-           emit_editor_vertex_lasso_rect(callback, userdata, "ui.editor.vertex_lasso.right", x + w - t, y, t, h,
-                                         border);
+    const bool edge_lasso = SDL_strcmp(rect_prefix, "ui.editor.edge_lasso") == 0;
+    const char *fill_name = edge_lasso ? "ui.editor.edge_lasso.fill" : "ui.editor.vertex_lasso.fill";
+    const char *top_name = edge_lasso ? "ui.editor.edge_lasso.top" : "ui.editor.vertex_lasso.top";
+    const char *bottom_name = edge_lasso ? "ui.editor.edge_lasso.bottom" : "ui.editor.vertex_lasso.bottom";
+    const char *left_name = edge_lasso ? "ui.editor.edge_lasso.left" : "ui.editor.vertex_lasso.left";
+    const char *right_name = edge_lasso ? "ui.editor.edge_lasso.right" : "ui.editor.vertex_lasso.right";
+    return emit_editor_lasso_rect(callback, userdata, fill_name, x, y, w, h, fill) &&
+           emit_editor_lasso_rect(callback, userdata, top_name, x, y, w, t, border) &&
+           emit_editor_lasso_rect(callback, userdata, bottom_name, x, y + h - t, w, t, border) &&
+           emit_editor_lasso_rect(callback, userdata, left_name, x, y, t, h, border) &&
+           emit_editor_lasso_rect(callback, userdata, right_name, x + w - t, y, t, h, border);
+}
+
+static bool for_each_editor_selection_lasso_rect(const slayer3d_game_data_runtime *runtime,
+                                                 slayer3d_game_data_ui_rect_fn callback, void *userdata)
+{
+    return for_each_editor_lasso_rect(runtime, callback, userdata, "editor.vertex.lasso", "ui.editor.vertex_lasso") &&
+           for_each_editor_lasso_rect(runtime, callback, userdata, "editor.edge.lasso", "ui.editor.edge_lasso");
 }
 
 bool slayer3d_game_data_for_each_ui_image(const slayer3d_game_data_runtime *runtime,
@@ -2257,7 +2279,7 @@ bool slayer3d_game_data_for_each_ui_rect(const slayer3d_game_data_runtime *runti
             return true;
     if (!retained_ui_rects_from_layout(runtime, callback, userdata))
         return true;
-    if (!for_each_editor_vertex_lasso_rect(runtime, callback, userdata))
+    if (!for_each_editor_selection_lasso_rect(runtime, callback, userdata))
         return true;
     return true;
 }

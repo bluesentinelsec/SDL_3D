@@ -98,6 +98,7 @@ typedef struct editor_drag_move_state
     bool vertex_drag;
     bool vertex_add_drag;
     bool vertex_lasso;
+    bool edge_lasso;
     bool vertex_toggle_on_click;
     bool lasso_additive;
     const char *scene;

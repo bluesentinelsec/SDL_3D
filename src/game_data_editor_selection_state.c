@@ -183,6 +183,26 @@ void publish_editor_vertex_lasso_state(slayer3d_game_data_runtime *runtime, cons
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.lasso.selected_count", selected_count);
 }
 
+void publish_editor_edge_lasso_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
+                                     int selected_count)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const bool active = drag != NULL && drag->active && drag->edge_lasso;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.lasso.active", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.lasso.additive",
+                                 active ? drag->lasso_additive : false);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.start_x",
+                                  active ? drag->start_mouse_x : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.start_y",
+                                  active ? drag->start_mouse_y : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.end_x",
+                                  active ? drag->current_mouse_x : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.end_y",
+                                  active ? drag->current_mouse_y : 0.0f);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.edge.lasso.selected_count", selected_count);
+}
+
 void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)

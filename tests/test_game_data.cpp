@@ -17433,6 +17433,119 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModePublishesSourceEdgeHandles)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoEdgeModeLassoSelectsProjectedEdges)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int edge_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.edge");
+    ASSERT_GE(edge_signal, 0);
+    slayer3d_signal_emit(bus, edge_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event down{};
+    down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    down.button.button = SDL_BUTTON_LEFT;
+    down.button.x = 8.0f;
+    down.button.y = 88.0f;
+    slayer3d_input_process_event(input, &down);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.edge.lasso.active", false));
+
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 1272.0f;
+    motion.motion.y = 592.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.edge.lasso.active", false));
+
+    struct LassoRectCapture
+    {
+        int rects = 0;
+        bool saw_fill = false;
+    } lasso_rects;
+    auto capture_lasso_rects = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+        auto *capture = static_cast<LassoRectCapture *>(userdata);
+        if (rect != nullptr && rect->name != nullptr && std::string(rect->name).find("ui.editor.edge_lasso.") == 0)
+        {
+            capture->rects++;
+            if (SDL_strcmp(rect->name, "ui.editor.edge_lasso.fill") == 0 && rect->color.a > 0 && rect->w > 0.0f &&
+                rect->h > 0.0f)
+            {
+                capture->saw_fill = true;
+            }
+        }
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_lasso_rects, &lasso_rects));
+    EXPECT_GE(lasso_rects.rects, 5);
+    EXPECT_TRUE(lasso_rects.saw_fill);
+
+    SDL_Event up{};
+    up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    up.button.button = SDL_BUTTON_LEFT;
+    up.button.x = motion.motion.x;
+    up.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &up);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.edge.lasso.active", true));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.lasso.selected_count", -1), 12);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", -1), 12);
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.edge.selection.multiple", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "edge lasso selected");
+
+    struct SelectedEdgeDebugCapture
+    {
+        int selected_handles = 0;
+        int base_handles = 0;
+        bool selected_handle_is_red = false;
+    } selected_edge_debug;
+    auto capture_selected_edge_handles = [](void *userdata,
+                                            const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<SelectedEdgeDebugCapture *>(userdata);
+        if (primitive == nullptr)
+            return true;
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE)
+            capture->base_handles++;
+        if (primitive->type != SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_SELECTED_HANDLE)
+            return true;
+        capture->selected_handles++;
+        if (primitive->color.r >= 240 && primitive->color.g <= 64 && primitive->color.b <= 64)
+            capture->selected_handle_is_red = true;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_selected_edge_handles,
+                                                                          &selected_edge_debug));
+    EXPECT_GE(selected_edge_debug.selected_handles,
+              slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", 0));
+    EXPECT_EQ(selected_edge_debug.base_handles, 0);
+    EXPECT_TRUE(selected_edge_debug.selected_handle_is_red);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoVertexModeCanSelectBrushBeforeVertices)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

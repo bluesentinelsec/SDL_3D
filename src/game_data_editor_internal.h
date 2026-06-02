@@ -39,6 +39,8 @@ void clear_editor_selected_vertices(slayer3d_game_data_runtime *runtime);
 void clear_editor_selected_edges(slayer3d_game_data_runtime *runtime);
 void publish_editor_vertex_lasso_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
                                        int selected_count);
+void publish_editor_edge_lasso_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
+                                     int selected_count);
 void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime);
 void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime);
 void clear_editor_active_selection(slayer3d_game_data_runtime *runtime);
@@ -71,6 +73,10 @@ void publish_editor_edge_hover_state(slayer3d_game_data_runtime *runtime,
                                      const slayer3d_game_data_editor_selection *selection);
 int editor_selected_edge_index(const slayer3d_game_data_runtime *runtime,
                                const editor_source_edge_selection *selection);
+bool editor_project_world_to_viewport(const slayer3d_camera3d *camera, const editor_trace_viewport_config *view,
+                                      slayer3d_vec3 point, float *out_x, float *out_y);
+bool editor_lasso_contains_screen_point(const editor_drag_move_state *drag, const editor_trace_viewport_config *view,
+                                        float screen_x, float screen_y);
 bool editor_handle_vertex_lasso(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
                                 const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
 bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
@@ -84,6 +90,8 @@ bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
 bool editor_handle_edge_selection(slayer3d_game_data_runtime *runtime,
                                   const slayer3d_game_data_editor_selection *hover_selection, bool select_requested,
                                   bool *out_consumed);
+bool editor_handle_edge_lasso(slayer3d_game_data_runtime *runtime, yyjson_val *selection_json,
+                              const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
 bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
 bool editor_trace_desc_from_json(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                  slayer3d_game_data_world_trace_desc *out_trace);
