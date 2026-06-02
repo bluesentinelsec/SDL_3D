@@ -219,6 +219,17 @@ void publish_editor_edge_drag_state(slayer3d_game_data_runtime *runtime, const e
                                  active ? drag->applied_offset : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
 }
 
+void publish_editor_edge_move_result(slayer3d_game_data_runtime *runtime, bool valid, int edge_count,
+                                     const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.move.valid", valid);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.edge.move.edge_count", edge_count);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.move.message", message != NULL ? message : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message != NULL ? message : "");
+}
+
 void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)

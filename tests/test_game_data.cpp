@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <array>
 #include <cfloat>
 #include <chrono>
@@ -300,6 +301,8 @@ extern "C"
     bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
                                    const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed);
     bool editor_translate_selected_vertices(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
+    bool editor_translate_selected_edges(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
+    float editor_brush_source_meters_from_units(const brush_world_runtime *world_runtime, int value);
     bool editor_selection_from_brush_index(const slayer3d_game_data_runtime *runtime, const char *world_name,
                                            int brush_index, int face_index,
                                            slayer3d_game_data_editor_selection *out_selection);
@@ -17638,6 +17641,139 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeDragsSelectedEdge)
     ASSERT_LT(after_edge.vertex_indices[1], after_model.vertex_count);
     EXPECT_NE(after_model.vertices[after_edge.vertex_indices[0]].coord[0], before_a_x);
     EXPECT_NE(after_model.vertices[after_edge.vertex_indices[1]].coord[0], before_b_x);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoEdgeModeRejectsInvalidEdgeMove)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int edge_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.edge");
+    ASSERT_GE(edge_signal, 0);
+    slayer3d_signal_emit(bus, edge_signal, nullptr);
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event down{};
+    down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    down.button.button = SDL_BUTTON_LEFT;
+    down.button.x = motion.motion.x;
+    down.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &down);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    SDL_Event up{};
+    up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    up.button.button = SDL_BUTTON_LEFT;
+    up.button.x = motion.motion.x;
+    up.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &up);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", 0), 1);
+    const int selected_edge_index = slayer3d_properties_get_int(scene_state, "editor.edge.selection.index", -1);
+    ASSERT_GE(selected_edge_index, 0);
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model before_model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &before_model, error, sizeof(error)))
+        << error;
+    ASSERT_LT(selected_edge_index, before_model.edge_count);
+
+    int min_coord[3] = {before_model.vertices[0].coord[0], before_model.vertices[0].coord[1],
+                        before_model.vertices[0].coord[2]};
+    int max_coord[3] = {min_coord[0], min_coord[1], min_coord[2]};
+    for (int i = 1; i < before_model.vertex_count; ++i)
+    {
+        for (int axis = 0; axis < 3; ++axis)
+        {
+            min_coord[axis] = std::min(min_coord[axis], before_model.vertices[i].coord[axis]);
+            max_coord[axis] = std::max(max_coord[axis], before_model.vertices[i].coord[axis]);
+        }
+    }
+
+    const editor_brush_source_edge selected_edge = before_model.edges[selected_edge_index];
+    ASSERT_GE(selected_edge.vertex_indices[0], 0);
+    ASSERT_GE(selected_edge.vertex_indices[1], 0);
+    ASSERT_LT(selected_edge.vertex_indices[0], before_model.vertex_count);
+    ASSERT_LT(selected_edge.vertex_indices[1], before_model.vertex_count);
+    const editor_brush_source_vertex &a = before_model.vertices[selected_edge.vertex_indices[0]];
+    const editor_brush_source_vertex &b = before_model.vertices[selected_edge.vertex_indices[1]];
+
+    int collapse_axis = -1;
+    int collapse_delta_units = 0;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        if (a.coord[axis] != b.coord[axis] || max_coord[axis] <= min_coord[axis])
+            continue;
+        if (a.coord[axis] == min_coord[axis])
+        {
+            collapse_axis = axis;
+            collapse_delta_units = max_coord[axis] - min_coord[axis];
+            break;
+        }
+        if (a.coord[axis] == max_coord[axis])
+        {
+            collapse_axis = axis;
+            collapse_delta_units = min_coord[axis] - max_coord[axis];
+            break;
+        }
+    }
+    ASSERT_GE(collapse_axis, 0);
+    ASSERT_NE(collapse_delta_units, 0);
+
+    const float collapse_delta_meters = editor_brush_source_meters_from_units(world_runtime, collapse_delta_units);
+    slayer3d_vec3 invalid_offset = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (collapse_axis == 0)
+        invalid_offset.x = collapse_delta_meters;
+    else if (collapse_axis == 1)
+        invalid_offset.y = collapse_delta_meters;
+    else
+        invalid_offset.z = collapse_delta_meters;
+
+    EXPECT_FALSE(editor_translate_selected_edges(runtime, invalid_offset));
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.edge.move.valid", true));
+    EXPECT_NE(std::string(slayer3d_properties_get_string(scene_state, "editor.edge.move.message", "")).find("blocked"),
+              std::string::npos);
+
+    editor_brush_source_vertex_model after_model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &after_model, error, sizeof(error)))
+        << error;
+    ASSERT_EQ(after_model.vertex_count, before_model.vertex_count);
+    for (int i = 0; i < before_model.vertex_count; ++i)
+    {
+        EXPECT_EQ(after_model.vertices[i].coord[0], before_model.vertices[i].coord[0]);
+        EXPECT_EQ(after_model.vertices[i].coord[1], before_model.vertices[i].coord[1]);
+        EXPECT_EQ(after_model.vertices[i].coord[2], before_model.vertices[i].coord[2]);
+    }
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

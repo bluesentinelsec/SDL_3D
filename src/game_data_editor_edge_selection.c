@@ -219,6 +219,185 @@ static void editor_refresh_selected_edges_after_source_edit(slayer3d_game_data_r
     publish_editor_selected_edge_count(runtime);
 }
 
+typedef struct editor_edge_move_validation_target
+{
+    const brush_world_runtime *world_runtime;
+    int source_index;
+    int original_vertex_count;
+    int vertex_indices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    int coords[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    int vertex_index_count;
+} editor_edge_move_validation_target;
+
+static editor_edge_move_validation_target *editor_edge_move_find_target(editor_edge_move_validation_target *targets,
+                                                                        int target_count,
+                                                                        const brush_world_runtime *world_runtime,
+                                                                        int source_index)
+{
+    for (int i = 0; i < target_count; ++i)
+    {
+        if (targets[i].world_runtime == world_runtime && targets[i].source_index == source_index)
+            return &targets[i];
+    }
+    return NULL;
+}
+
+static const char *editor_edge_move_target_identity(const editor_edge_move_validation_target *target)
+{
+    if (target == NULL || target->world_runtime == NULL || target->source_index < 0 ||
+        target->source_index >= target->world_runtime->editor_source_box_count)
+    {
+        return NULL;
+    }
+    const editor_brush_source_box_runtime *box = &target->world_runtime->editor_source_boxes[target->source_index];
+    return box->stable_id != NULL && box->stable_id[0] != '\0' ? box->stable_id : box->name;
+}
+
+static bool editor_edge_move_target_add_vertex(editor_edge_move_validation_target *target, int vertex_index,
+                                               const int coord[3], char *error, int error_size)
+{
+    if (target == NULL || vertex_index < 0 || coord == NULL)
+        return false;
+    for (int i = 0; i < target->vertex_index_count; ++i)
+    {
+        if (target->vertex_indices[i] != vertex_index)
+            continue;
+        if (target->coords[i][0] == coord[0] && target->coords[i][1] == coord[1] && target->coords[i][2] == coord[2])
+            return true;
+        set_error(error, error_size, "edge move produced conflicting endpoint coordinates");
+        return false;
+    }
+    if (target->vertex_index_count >= SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY)
+    {
+        set_error(error, error_size, "edge move selected too many endpoints");
+        return false;
+    }
+    const int index = target->vertex_index_count++;
+    target->vertex_indices[index] = vertex_index;
+    for (int axis = 0; axis < 3; ++axis)
+        target->coords[index][axis] = coord[axis];
+    return true;
+}
+
+static void editor_edge_move_init_desc(const editor_edge_move_validation_target *target,
+                                       editor_brush_source_vertex_operation_desc *desc)
+{
+    if (desc == NULL)
+        return;
+    SDL_zero(*desc);
+    desc->brush_identity = editor_edge_move_target_identity(target);
+    desc->type = EDITOR_BRUSH_SOURCE_VERTEX_OPERATION_MOVE_MANY;
+    if (target == NULL)
+        return;
+    desc->vertex_index_count = target->vertex_index_count;
+    for (int i = 0; i < target->vertex_index_count; ++i)
+    {
+        desc->vertex_indices[i] = target->vertex_indices[i];
+        for (int axis = 0; axis < 3; ++axis)
+            desc->coords[i][axis] = target->coords[i][axis];
+    }
+}
+
+static bool editor_validate_selected_edge_move(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset,
+                                               char *error, int error_size)
+{
+    if (error != NULL && error_size > 0)
+        error[0] = '\0';
+    if (runtime == NULL || !editor_selected_edges_active_for_scene(runtime) || runtime->editor_selected_edge_count <= 0)
+    {
+        set_error(error, error_size, "edge move requires selected edges");
+        return false;
+    }
+
+    editor_edge_move_validation_target *targets =
+        (editor_edge_move_validation_target *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_EDGE_CAPACITY, sizeof(*targets));
+    if (targets == NULL)
+    {
+        set_error(error, error_size, "failed to allocate edge move validation state");
+        return false;
+    }
+
+    int target_count = 0;
+    bool ok = true;
+    for (int i = 0; ok && i < runtime->editor_selected_edge_count; ++i)
+    {
+        const editor_source_edge_selection *selection = &runtime->editor_selected_edges[i];
+        const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+        editor_brush_source_vertex_model model;
+        int edge_index = -1;
+        if (world_runtime == NULL || selection->source_index < 0 ||
+            !editor_brush_source_box_build_vertex_model(world_runtime, selection->source_index, &model, error,
+                                                        error_size) ||
+            !editor_source_edge_model_index(&model, selection, &edge_index))
+        {
+            set_error(error, error_size, "edge move selected edge no longer exists");
+            ok = false;
+            break;
+        }
+
+        editor_edge_move_validation_target *target =
+            editor_edge_move_find_target(targets, target_count, world_runtime, selection->source_index);
+        if (target == NULL)
+        {
+            if (target_count >= SLAYER3D_EDITOR_SELECTED_EDGE_CAPACITY)
+            {
+                set_error(error, error_size, "edge move selected too many source brushes");
+                ok = false;
+                break;
+            }
+            target = &targets[target_count++];
+            target->world_runtime = world_runtime;
+            target->source_index = selection->source_index;
+            target->original_vertex_count = model.vertex_count;
+        }
+
+        const int delta[3] = {editor_source_units_from_meters(world_runtime, offset.x),
+                              editor_source_units_from_meters(world_runtime, offset.y),
+                              editor_source_units_from_meters(world_runtime, offset.z)};
+        const editor_brush_source_edge *edge = &model.edges[edge_index];
+        for (int endpoint = 0; ok && endpoint < 2; ++endpoint)
+        {
+            const int vertex_index = edge->vertex_indices[endpoint];
+            if (vertex_index < 0 || vertex_index >= model.vertex_count)
+            {
+                set_error(error, error_size, "edge move source endpoint is invalid");
+                ok = false;
+                break;
+            }
+            int coord[3] = {model.vertices[vertex_index].coord[0] + delta[0],
+                            model.vertices[vertex_index].coord[1] + delta[1],
+                            model.vertices[vertex_index].coord[2] + delta[2]};
+            ok = editor_edge_move_target_add_vertex(target, vertex_index, coord, error, error_size);
+        }
+    }
+
+    for (int i = 0; ok && i < target_count; ++i)
+    {
+        editor_brush_source_vertex_operation_desc desc;
+        editor_edge_move_init_desc(&targets[i], &desc);
+        editor_brush_source_vertex_operation_result preview;
+        SDL_zero(preview);
+        if (!editor_brush_world_preview_source_vertex_operation(targets[i].world_runtime, &desc, &preview, error,
+                                                                error_size))
+        {
+            editor_brush_source_free_runtime_brush(&preview.brush);
+            ok = false;
+            break;
+        }
+        if (preview.vertex_count != targets[i].original_vertex_count)
+        {
+            set_error(error, error_size, "edge move would collapse source brush topology");
+            editor_brush_source_free_runtime_brush(&preview.brush);
+            ok = false;
+            break;
+        }
+        editor_brush_source_free_runtime_brush(&preview.brush);
+    }
+
+    SDL_free(targets);
+    return ok;
+}
+
 bool editor_translate_selected_edges(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset)
 {
     if (runtime == NULL || runtime->scene_state == NULL || !editor_selected_edges_active_for_scene(runtime) ||
@@ -227,12 +406,23 @@ bool editor_translate_selected_edges(slayer3d_game_data_runtime *runtime, slayer
         return false;
     }
 
+    char validation_error[256];
+    SDL_zeroa(validation_error);
+    if (!editor_validate_selected_edge_move(runtime, offset, validation_error, sizeof(validation_error)))
+    {
+        char message[320];
+        SDL_snprintf(message, sizeof(message), "edge move blocked: %s",
+                     validation_error[0] != '\0' ? validation_error : "invalid source edit");
+        publish_editor_edge_move_result(runtime, false, runtime->editor_selected_edge_count, message);
+        return false;
+    }
+
     editor_source_vertex_selection *saved_vertices =
         (editor_source_vertex_selection *)SDL_calloc(SLAYER3D_EDITOR_SELECTED_VERTEX_CAPACITY, sizeof(*saved_vertices));
     if (saved_vertices == NULL)
     {
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
-                                       "edge move blocked: allocation failed");
+        publish_editor_edge_move_result(runtime, false, runtime->editor_selected_edge_count,
+                                        "edge move blocked: allocation failed");
         return false;
     }
     const int saved_vertex_count = runtime->editor_selected_vertex_count;
@@ -259,14 +449,23 @@ bool editor_translate_selected_edges(slayer3d_game_data_runtime *runtime, slayer
 
     if (!endpoints_ready)
     {
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action",
-                                       "edge move blocked: invalid source edge selection");
+        publish_editor_edge_move_result(runtime, false, runtime->editor_selected_edge_count,
+                                        "edge move blocked: invalid source edge selection");
         return false;
     }
     if (moved)
     {
         editor_refresh_selected_edges_after_source_edit(runtime);
-        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "moved selected edges");
+        publish_editor_edge_move_result(runtime, true, runtime->editor_selected_edge_count, "moved selected edges");
+    }
+    else
+    {
+        const char *vertex_message =
+            slayer3d_properties_get_string(runtime->scene_state, "editor.vertex.move.message", "");
+        char message[320];
+        SDL_snprintf(message, sizeof(message), "edge move blocked: %s",
+                     vertex_message != NULL && vertex_message[0] != '\0' ? vertex_message : "invalid source edit");
+        publish_editor_edge_move_result(runtime, false, runtime->editor_selected_edge_count, message);
     }
     return moved;
 }
