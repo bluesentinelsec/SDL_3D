@@ -1993,7 +1993,7 @@ static bool source_clip_set_box_identity(editor_brush_source_box_runtime *box, c
 
 static bool source_clip_output_box_from_vertices(const brush_world_runtime *world_runtime, int source_index,
                                                  const char *identity,
-                                                 const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                                 int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
                                                  int vertex_count, editor_brush_source_box_runtime *out_box,
                                                  char *error_buffer, int error_buffer_size)
 {
@@ -2059,8 +2059,8 @@ static bool source_clip_output_box_from_vertices(const brush_world_runtime *worl
 }
 
 static bool source_clip_append_output(const brush_world_runtime *world_runtime, int source_index, const char *identity,
-                                      const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
-                                      int vertex_count, editor_brush_source_clip_result *out_result, char *error_buffer,
+                                      int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3], int vertex_count,
+                                      editor_brush_source_clip_result *out_result, char *error_buffer,
                                       int error_buffer_size)
 {
     if (out_result == NULL || out_result->output_brush_count >= SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY)
@@ -2081,9 +2081,9 @@ static bool source_clip_append_output(const brush_world_runtime *world_runtime, 
     return true;
 }
 
-static bool source_clip_vertices_are_coplanar_with_clip(
-    const editor_brush_source_clip_desc *desc, const int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
-    int vertex_count)
+static bool source_clip_vertices_are_coplanar_with_clip(const editor_brush_source_clip_desc *desc,
+                                                        int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3],
+                                                        int vertex_count)
 {
     if (desc == NULL || vertices == NULL || vertex_count <= 0)
         return false;
