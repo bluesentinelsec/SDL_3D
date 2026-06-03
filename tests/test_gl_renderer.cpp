@@ -2032,8 +2032,8 @@ TEST_F(GLRendererTest, BillboardVisibleWithTexture)
 
     slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        slayer3d_vec2{2.0f, 2.0f}, slayer3d_color{255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2062,8 +2062,8 @@ TEST_F(GLRendererTest, BillboardVisibleFromOppositeViewDirection)
 
     slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        slayer3d_vec2{2.0f, 2.0f}, slayer3d_color{255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2090,8 +2090,8 @@ TEST_F(GLRendererTest, BillboardPreservesTopToBottomTextureOrientation)
 
     slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        slayer3d_vec2{2.0f, 2.0f}, slayer3d_color{255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2121,8 +2121,8 @@ TEST_F(GLRendererTest, BillboardTransparentPixelsDiscard)
 
     slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        slayer3d_vec2{2.0f, 2.0f}, slayer3d_color{255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2433,11 +2433,9 @@ TEST_F(GLRendererTest, CSMAllLayersHaveDepthData)
     slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     /* Draw a large ground plane and several cubes at different distances. */
-    slayer3d_draw_plane(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec2{40, 40},
-                        slayer3d_color{200, 200, 200, 255});
+    slayer3d_draw_plane(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec2{40, 40}, slayer3d_color{200, 200, 200, 255});
     slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 1, 0), slayer3d_vec3_make(2, 2, 2), slayer3d_color{255, 0, 0, 255});
-    slayer3d_draw_cube(ctx, slayer3d_vec3_make(5, 1, -5), slayer3d_vec3_make(2, 2, 2),
-                       slayer3d_color{0, 255, 0, 255});
+    slayer3d_draw_cube(ctx, slayer3d_vec3_make(5, 1, -5), slayer3d_vec3_make(2, 2, 2), slayer3d_color{0, 255, 0, 255});
     slayer3d_draw_cube(ctx, slayer3d_vec3_make(-8, 1, -10), slayer3d_vec3_make(2, 2, 2),
                        slayer3d_color{0, 0, 255, 255});
     slayer3d_end_mode_3d(ctx);

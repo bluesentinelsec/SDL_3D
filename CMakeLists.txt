@@ -24,7 +24,7 @@ else()
 endif()
 option(SLAYER3D_FETCH_SDL3 "Fetch SDL3 if it is not already available" ON)
 set(SLAYER3D_SDL_LINKAGE
-    "static"
+    "auto"
     CACHE STRING "SDL3 link mode: static, shared, or auto")
 set_property(CACHE SLAYER3D_SDL_LINKAGE PROPERTY STRINGS static shared auto)
 option(SLAYER3D_ENABLE_NETWORKING "Enable SDL3_net-based network transport" ON)

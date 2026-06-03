@@ -14523,7 +14523,8 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
     for (const Case &test_case : cases)
     {
         const std::filesystem::path dir = unique_test_dir(test_case.name);
-        write_text(dir / "scenes" / "play.scene.json", test_case.scene_json != nullptr ? test_case.scene_json : R"json({
+        write_text(dir / "scenes" / "play.scene.json",
+                   test_case.scene_json != nullptr ? test_case.scene_json : R"json({
   "schema": "slayer3d.scene.v0",
   "name": "scene.play"
 })json");
