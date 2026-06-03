@@ -28325,16 +28325,21 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
     EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.0f, 0.001f);
 
     SDL_zeroa(error);
-    EXPECT_FALSE(editor_brush_world_rotate_source_box(
+    ASSERT_TRUE(editor_brush_world_rotate_source_box(
         world_runtime, "source.box.rotate", slayer3d_vec3_make(2.0f, 0.5f, 4.0f), slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
-        SDL_PI_F * 0.25f, error, sizeof(error)));
-    EXPECT_NE(std::string(error).find("integer source grid"), std::string::npos) << error;
+        SDL_PI_F * 0.25f, error, sizeof(error)))
+        << error;
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_TRUE(world.brushes[0].has_bounds);
-    EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.0f, 0.001f);
-    EXPECT_NEAR(world.brushes[0].bounds.max.x, 4.0f, 0.001f);
-    EXPECT_NEAR(world.brushes[0].bounds.min.z, 0.0f, 0.001f);
-    EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, -2.2f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 6.2f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, -0.2f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.2f, 0.001f);
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, "source.box.rotate", &rotated_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(rotated_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&rotated_source);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

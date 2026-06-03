@@ -3621,19 +3621,23 @@ bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *w
     return true;
 }
 
-static bool source_rotation_coord(float value, int *out_coord)
+static bool source_rotation_coord(float value, int snap_units, int *out_coord)
 {
     if (out_coord == NULL || SDL_isnan(value) || SDL_isinf(value))
         return false;
-    const int rounded = (int)SDL_lroundf(value);
-    if (SDL_fabsf(value - (float)rounded) > 0.001f)
+    if (snap_units <= 0)
+        snap_units = 1;
+    const float scaled = value / (float)snap_units;
+    const long rounded_scaled = SDL_lroundf(scaled);
+    if (rounded_scaled > INT_MAX / snap_units || rounded_scaled < INT_MIN / snap_units)
         return false;
+    const int rounded = (int)rounded_scaled * snap_units;
     *out_coord = rounded;
     return true;
 }
 
 static bool rotate_source_vertex_coord(const int coord[3], const float pivot[3], slayer3d_vec3 axis,
-                                       float angle_radians, int out_coord[3])
+                                       float angle_radians, int snap_units, int out_coord[3])
 {
     if (coord == NULL || pivot == NULL || out_coord == NULL)
         return false;
@@ -3646,9 +3650,9 @@ static bool rotate_source_vertex_coord(const int coord[3], const float pivot[3],
         slayer3d_vec3_add(slayer3d_vec3_add(slayer3d_vec3_scale(relative, cos_angle),
                                             slayer3d_vec3_scale(slayer3d_vec3_cross(axis, relative), sin_angle)),
                           slayer3d_vec3_scale(axis, slayer3d_vec3_dot(axis, relative) * (1.0f - cos_angle)));
-    return source_rotation_coord(rotated.x + pivot[0], &out_coord[0]) &&
-           source_rotation_coord(rotated.y + pivot[1], &out_coord[1]) &&
-           source_rotation_coord(rotated.z + pivot[2], &out_coord[2]);
+    return source_rotation_coord(rotated.x + pivot[0], snap_units, &out_coord[0]) &&
+           source_rotation_coord(rotated.y + pivot[1], snap_units, &out_coord[1]) &&
+           source_rotation_coord(rotated.z + pivot[2], snap_units, &out_coord[2]);
 }
 
 bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
@@ -3703,13 +3707,13 @@ bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, co
 
     int rotated_vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
     SDL_zeroa(rotated_vertices);
+    const int snap_units = source_snap_units(world_runtime);
     for (int vertex = 0; vertex < model.vertex_count; ++vertex)
     {
-        if (!rotate_source_vertex_coord(model.vertices[vertex].coord, pivot_source, axis, angle_radians,
+        if (!rotate_source_vertex_coord(model.vertices[vertex].coord, pivot_source, axis, angle_radians, snap_units,
                                         rotated_vertices[vertex]))
         {
-            set_error(error_buffer, error_buffer_size,
-                      "source brush rotation would leave the brush off the integer source grid");
+            set_error(error_buffer, error_buffer_size, "source brush rotation would overflow the source grid");
             return false;
         }
     }
