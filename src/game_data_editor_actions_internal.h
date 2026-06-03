@@ -16,6 +16,7 @@ bool slayer3d_game_data_escape_editor_clip_tool(slayer3d_game_data_runtime *runt
 bool slayer3d_game_data_cycle_editor_clip_keep_mode(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_commit_editor_clip_tool(slayer3d_game_data_runtime *runtime);
 void reset_editor_clip_tool_state(slayer3d_game_data_runtime *runtime, const char *message);
+void reset_editor_rotate_tool_state(slayer3d_game_data_runtime *runtime, const char *message);
 bool slayer3d_game_data_place_editor_clip_point_source(slayer3d_game_data_runtime *runtime, const int coord[3],
                                                        slayer3d_vec3 work_plane_normal);
 bool slayer3d_game_data_move_editor_clip_point_source(slayer3d_game_data_runtime *runtime, int point_index,
@@ -115,6 +116,9 @@ bool editor_brush_world_translate_source_box(brush_world_runtime *world_runtime,
                                              slayer3d_vec3 offset, char *error_buffer, int error_buffer_size);
 bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime, const char *brush_name,
                                                           int quarter_turns, char *error_buffer, int error_buffer_size);
+bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                          slayer3d_vec3 pivot, slayer3d_vec3 axis, float angle_radians,
+                                          char *error_buffer, int error_buffer_size);
 int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
                                                           const char *brush_identity, int fallback_face_index,
                                                           const char *face_identity);

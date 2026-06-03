@@ -214,6 +214,9 @@ extern "C"
     bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *world_runtime,
                                                               const char *brush_name, int quarter_turns,
                                                               char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                              slayer3d_vec3 pivot, slayer3d_vec3 axis, float angle_radians,
+                                              char *error_buffer, int error_buffer_size);
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
@@ -289,10 +292,14 @@ extern "C"
                                                            const char *material_name, unsigned int contents,
                                                            const int source_min[3], const int source_max[3],
                                                            editor_brush_source_prefab_result *out_result);
+    bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime, const char *mode,
+                                                 const char *message_override);
     bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset,
                                                               bool use_last_offset);
     bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_runtime *runtime,
                                                               slayer3d_vec3 offset);
+    bool slayer3d_game_data_rotate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 pivot,
+                                                           slayer3d_vec3 axis, float angle_radians);
     bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                            const slayer3d_properties *payload);
     bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -22249,6 +22256,38 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     EXPECT_EQ(brush_world().brush_count, initial_brush_count + 1);
 
     select_brush(brush_name.c_str());
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "rotate", nullptr));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "rotate");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "rotate");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.rotate.ready", false));
+    const slayer3d_value *rotate_pivot = slayer3d_properties_get_value(scene_state, "editor.rotate.pivot");
+    ASSERT_NE(rotate_pivot, nullptr);
+    ASSERT_EQ(rotate_pivot->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(rotate_pivot->as_vec3.x, 0.5f, 0.001f);
+    EXPECT_NEAR(rotate_pivot->as_vec3.y, 0.5f, 0.001f);
+    EXPECT_NEAR(rotate_pivot->as_vec3.z, 0.5f, 0.001f);
+    struct RotateDebugCapture
+    {
+        int pivots = 0;
+        int rings = 0;
+        int arcs = 0;
+    } rotate_debug;
+    auto capture_rotate_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<RotateDebugCapture *>(userdata);
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_PIVOT)
+            capture->pivots++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING)
+            capture->rings++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_ARC)
+            capture->arcs++;
+        return true;
+    };
+    ASSERT_TRUE(
+        slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_rotate_debug, &rotate_debug));
+    EXPECT_GT(rotate_debug.pivots, 0);
+    EXPECT_GE(rotate_debug.rings, 144);
+    EXPECT_EQ(rotate_debug.arcs, 0);
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "select", nullptr));
     ASSERT_TRUE(slayer3d_game_data_translate_selected_editor_brushes(runtime, slayer3d_vec3_make(2.0f, 0.0f, 0.0f)));
     EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 2.0f, 0.001f);
     EXPECT_NEAR(active_selection().bounds.min.x, 2.0f, 0.001f);
@@ -22258,6 +22297,23 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
     EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 2.0f, 0.001f);
     EXPECT_NEAR(active_selection().bounds.min.x, 2.0f, 0.001f);
+
+    ASSERT_TRUE(slayer3d_game_data_rotate_selected_editor_brushes(
+        runtime, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 1.0f, 0.0f), SDL_PI_F * 0.5f));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -3.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, -2.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.min.z, -3.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "rotated 1 selected brush");
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 2.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, 0.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.min.x, 2.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -3.0f, 0.001f);
 
     ASSERT_TRUE(
         slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(1.0f, 0.0f, 0.0f), false));
@@ -22284,6 +22340,84 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
     EXPECT_FALSE(brush_exists(duplicate_name.c_str()));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 0);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoBrushRotateCanRunConsecutively)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto brush_world = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        return world;
+    };
+    auto brush_index = [&](const char *brush_name) {
+        const slayer3d_game_data_brush_world world = brush_world();
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, brush_name) == 0)
+                return i;
+        }
+        return -1;
+    };
+    auto brush_bounds = [&](const char *brush_name) {
+        const slayer3d_game_data_brush_world world = brush_world();
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, brush_name) == 0)
+                return brush.bounds;
+        }
+        ADD_FAILURE() << "brush not found: " << (brush_name != nullptr ? brush_name : "<null>");
+        return slayer3d_bounding_box{};
+    };
+    auto active_selection = [&]() {
+        slayer3d_game_data_editor_selection selection{};
+        EXPECT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &selection));
+        return selection;
+    };
+
+    const int source_min[3] = {0, 0, 0};
+    const int source_max[3] = {1000, 1000, 1000};
+    editor_brush_source_prefab_result source_result{};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.wall", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, source_min,
+        source_max, &source_result));
+    ASSERT_TRUE(source_result.valid);
+    const std::string brush_name = source_result.brush_name;
+
+    slayer3d_game_data_editor_selection selection{};
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target", brush_index(brush_name.c_str()),
+                                                  -1, &selection));
+    ASSERT_TRUE(editor_select_mode_primary_click(runtime, &selection));
+
+    const slayer3d_vec3 pivot = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 y_axis = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    ASSERT_TRUE(slayer3d_game_data_rotate_selected_editor_brushes(runtime, pivot, y_axis, SDL_PI_F * 0.5f));
+    EXPECT_STREQ(active_selection().element_name, brush_name.c_str());
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, 0.0f, 0.001f);
+
+    ASSERT_TRUE(slayer3d_game_data_rotate_selected_editor_brushes(runtime, pivot, y_axis, SDL_PI_F * 0.5f));
+    EXPECT_STREQ(active_selection().element_name, brush_name.c_str());
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, -1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, 0.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -28159,6 +28293,54 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
     EXPECT_NEAR(world.brushes[0].bounds.min.z, 0.0f, 0.001f);
     EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.0f, 0.001f);
 
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_rotate_source_box(
+        world_runtime, "source.box.rotate", slayer3d_vec3_make(2.0f, 0.5f, 4.0f), slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
+        SDL_PI_F * 0.5f, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, -2.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 6.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, 2.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 6.0f, 0.001f);
+    editor_brush_source_box_runtime rotated_source{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, "source.box.rotate", &rotated_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(rotated_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&rotated_source);
+
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_rotate_source_box(
+        world_runtime, "source.box.rotate", slayer3d_vec3_make(2.0f, 0.5f, 4.0f), slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
+        -SDL_PI_F * 0.5f, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 4.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.0f, 0.001f);
+
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_rotate_source_box(
+        world_runtime, "source.box.rotate", slayer3d_vec3_make(2.0f, 0.5f, 4.0f), slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
+        SDL_PI_F * 0.25f, error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, -2.2f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 6.2f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, -0.2f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.2f, 0.001f);
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, "source.box.rotate", &rotated_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(rotated_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&rotated_source);
+
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
 }
@@ -28818,8 +29000,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool buttons[9]{};
         bool labels[9]{};
         bool tool_background = false;
-        bool tool_buttons[7]{};
-        bool tool_labels[7]{};
+        bool tool_buttons[8]{};
+        bool tool_labels[8]{};
         bool grid_widget = false;
         bool grid_label = false;
         bool inspector_panel = false;
@@ -28947,10 +29129,12 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 3;
             else if (key == "vertex")
                 index = 4;
-            else if (key == "entity")
+            else if (key == "rotate")
                 index = 5;
-            else if (key == "texture")
+            else if (key == "entity")
                 index = 6;
+            else if (key == "texture")
+                index = 7;
             if (index >= 0)
                 capture->tool_buttons[index] = true;
         }
@@ -29030,10 +29214,12 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 3;
             else if (key == "vertex")
                 index = 4;
-            else if (key == "entity")
+            else if (key == "rotate")
                 index = 5;
-            else if (key == "texture")
+            else if (key == "entity")
                 index = 6;
+            else if (key == "texture")
+                index = 7;
             if (index >= 0)
                 capture->tool_labels[index] = true;
         }
@@ -29049,7 +29235,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         EXPECT_TRUE(toolbar_capture.labels[i]) << i;
     }
     EXPECT_TRUE(toolbar_capture.tool_background);
-    for (int i = 0; i < 7; ++i)
+    for (int i = 0; i < 8; ++i)
     {
         EXPECT_TRUE(toolbar_capture.tool_buttons[i]) << i;
         EXPECT_TRUE(toolbar_capture.tool_labels[i]) << i;

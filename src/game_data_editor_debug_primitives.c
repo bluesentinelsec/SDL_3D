@@ -124,6 +124,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES;
     if (SDL_strcmp(value != NULL ? value : "", "edge_handles") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES;
+    if (SDL_strcmp(value != NULL ? value : "", "rotate_handles") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES;
     if (SDL_strcmp(value != NULL ? value : "", "clip_preview") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW;
     return 0u;
@@ -310,12 +312,20 @@ static int editor_debug_source_index_for_selection(const brush_world_runtime *wo
     if (world == NULL || selection == NULL || !selection->hit ||
         selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
         return -1;
+    if (selection->element_index >= 0 && selection->element_index < world->desc.brush_count)
+    {
+        const slayer3d_game_data_brush *brush = &world->desc.brushes[selection->element_index];
+        int source_index = editor_brush_world_find_source_box_index(world, brush->name);
+        if (source_index >= 0)
+            return source_index;
+        source_index = editor_brush_world_find_source_box_index(world, brush->editor.stable_id);
+        if (source_index >= 0)
+            return source_index;
+    }
     int source_index = editor_brush_world_find_source_box_index(world, selection->element_name);
     if (source_index >= 0)
         return source_index;
-    return selection->element_editor != NULL
-               ? editor_brush_world_find_source_box_index(world, selection->element_editor->stable_id)
-               : -1;
+    return -1;
 }
 
 static bool editor_debug_vertex_is_selected(const slayer3d_game_data_runtime *runtime, const char *world_name,
@@ -1638,6 +1648,267 @@ static bool emit_editor_debug_player_start_marker(const slayer3d_game_data_runti
     return true;
 }
 
+static bool editor_rotate_tool_selection_bounds(const slayer3d_game_data_runtime *runtime,
+                                                slayer3d_bounding_box *out_bounds)
+{
+    if (runtime == NULL || out_bounds == NULL || runtime->editor_selected_brush_count <= 0)
+        return false;
+
+    bool has_bounds = false;
+    slayer3d_bounding_box bounds;
+    SDL_zero(bounds);
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        if (!selection.hit || !selection.has_bounds)
+            continue;
+        if (!has_bounds)
+        {
+            bounds = selection.bounds;
+            has_bounds = true;
+            continue;
+        }
+        bounds.min.x = SDL_min(bounds.min.x, selection.bounds.min.x);
+        bounds.min.y = SDL_min(bounds.min.y, selection.bounds.min.y);
+        bounds.min.z = SDL_min(bounds.min.z, selection.bounds.min.z);
+        bounds.max.x = SDL_max(bounds.max.x, selection.bounds.max.x);
+        bounds.max.y = SDL_max(bounds.max.y, selection.bounds.max.y);
+        bounds.max.z = SDL_max(bounds.max.z, selection.bounds.max.z);
+    }
+    if (!has_bounds)
+        return false;
+    *out_bounds = bounds;
+    return true;
+}
+
+static slayer3d_vec3 editor_rotate_tool_pivot(const slayer3d_game_data_runtime *runtime, slayer3d_bounding_box bounds)
+{
+    if (runtime != NULL && runtime->editor_drag_move.active && runtime->editor_drag_move.rotate_drag)
+        return runtime->editor_drag_move.rotate_pivot;
+    const slayer3d_value *pivot_value = runtime != NULL && runtime->scene_state != NULL
+                                            ? slayer3d_properties_get_value(runtime->scene_state, "editor.rotate.pivot")
+                                            : NULL;
+    if (pivot_value != NULL && pivot_value->type == SLAYER3D_VALUE_VEC3)
+        return pivot_value->as_vec3;
+    return slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+}
+
+static bool emit_editor_debug_rotate_ring(editor_debug_iteration_context *context, slayer3d_vec3 center, float radius,
+                                          slayer3d_vec3 axis_a, slayer3d_vec3 axis_b,
+                                          slayer3d_game_data_editor_debug_primitive_type type, float start_angle,
+                                          float end_angle, int segments)
+{
+    if (context == NULL || radius <= 0.0f || segments <= 0)
+        return false;
+    const float angle_range = end_angle - start_angle;
+    slayer3d_vec3 previous =
+        slayer3d_vec3_add(center, slayer3d_vec3_add(slayer3d_vec3_scale(axis_a, SDL_cosf(start_angle) * radius),
+                                                    slayer3d_vec3_scale(axis_b, SDL_sinf(start_angle) * radius)));
+    const slayer3d_game_data_editor_debug_primitive_type old_type = context->type;
+    context->type = type;
+    for (int segment = 1; segment <= segments; ++segment)
+    {
+        const float angle = start_angle + angle_range * (float)segment / (float)segments;
+        const slayer3d_vec3 current =
+            slayer3d_vec3_add(center, slayer3d_vec3_add(slayer3d_vec3_scale(axis_a, SDL_cosf(angle) * radius),
+                                                        slayer3d_vec3_scale(axis_b, SDL_sinf(angle) * radius)));
+        if (!emit_editor_debug_line(context, previous, current))
+        {
+            context->type = old_type;
+            return false;
+        }
+        previous = current;
+    }
+    context->type = old_type;
+    return true;
+}
+
+static void editor_debug_rotate_axis_basis(slayer3d_vec3 axis, slayer3d_vec3 *out_a, slayer3d_vec3 *out_b)
+{
+    const float abs_x = SDL_fabsf(axis.x);
+    const float abs_y = SDL_fabsf(axis.y);
+    const float abs_z = SDL_fabsf(axis.z);
+    if (abs_x >= abs_y && abs_x >= abs_z)
+    {
+        *out_a = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+        *out_b = slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    }
+    else if (abs_y >= abs_z)
+    {
+        *out_a = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+        *out_b = slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    }
+    else
+    {
+        *out_a = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+        *out_b = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    }
+}
+
+static bool editor_debug_rotate_axis_matches(slayer3d_vec3 a, slayer3d_vec3 b)
+{
+    if (slayer3d_vec3_length_squared(a) <= 0.000001f || slayer3d_vec3_length_squared(b) <= 0.000001f)
+        return false;
+    a = slayer3d_vec3_normalize(a);
+    b = slayer3d_vec3_normalize(b);
+    return SDL_fabsf(a.x - b.x) <= 0.001f && SDL_fabsf(a.y - b.y) <= 0.001f && SDL_fabsf(a.z - b.z) <= 0.001f;
+}
+
+static slayer3d_color editor_debug_rotate_ring_color(slayer3d_vec3 ring_axis, slayer3d_vec3 hover_axis,
+                                                     slayer3d_vec3 active_axis, bool hovered, bool dragging,
+                                                     slayer3d_color base)
+{
+    if (dragging && editor_debug_rotate_axis_matches(ring_axis, active_axis))
+        return (slayer3d_color){255, 245, 80, 255};
+    if (hovered && editor_debug_rotate_axis_matches(ring_axis, hover_axis))
+        return (slayer3d_color){255, 255, 255, 255};
+    return base;
+}
+
+static slayer3d_vec3 editor_debug_rotate_point(slayer3d_vec3 point, slayer3d_vec3 pivot, slayer3d_vec3 axis,
+                                               float angle_radians)
+{
+    axis = slayer3d_vec3_normalize(axis);
+    const float cos_angle = SDL_cosf(angle_radians);
+    const float sin_angle = SDL_sinf(angle_radians);
+    const slayer3d_vec3 relative = slayer3d_vec3_sub(point, pivot);
+    const slayer3d_vec3 rotated =
+        slayer3d_vec3_add(slayer3d_vec3_add(slayer3d_vec3_scale(relative, cos_angle),
+                                            slayer3d_vec3_scale(slayer3d_vec3_cross(axis, relative), sin_angle)),
+                          slayer3d_vec3_scale(axis, slayer3d_vec3_dot(axis, relative) * (1.0f - cos_angle)));
+    return slayer3d_vec3_add(pivot, rotated);
+}
+
+static bool emit_editor_debug_rotate_preview_edges(editor_debug_iteration_context *context,
+                                                   const slayer3d_game_data_runtime *runtime, slayer3d_vec3 pivot,
+                                                   slayer3d_vec3 axis, float angle_radians)
+{
+    if (context == NULL || runtime == NULL || SDL_fabsf(angle_radians) <= 0.000001f ||
+        slayer3d_vec3_length_squared(axis) <= 0.000001f)
+    {
+        return true;
+    }
+
+    const slayer3d_game_data_editor_debug_primitive_type old_type = context->type;
+    const slayer3d_color old_color = context->color;
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_PREVIEW_EDGE;
+    context->color = (slayer3d_color){255, 245, 80, 245};
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        const brush_world_runtime *world = find_brush_world_runtime(runtime, selection.world_name);
+        const int source_index = editor_debug_source_index_for_selection(world, &selection);
+        editor_brush_source_vertex_model model;
+        if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world, source_index, &model, NULL, 0))
+            continue;
+
+        context->world_name = selection.world_name;
+        context->element_name = selection.element_name;
+        context->face_index = -1;
+        for (int edge = 0; edge < model.edge_count; ++edge)
+        {
+            const editor_brush_source_edge *source_edge = &model.edges[edge];
+            const int a = source_edge->vertex_indices[0];
+            const int b = source_edge->vertex_indices[1];
+            if (a < 0 || a >= model.vertex_count || b < 0 || b >= model.vertex_count)
+                continue;
+            const slayer3d_vec3 start = slayer3d_vec3_add(selection.world_position,
+                                                          editor_source_vertex_coord_meters(world, &model.vertices[a]));
+            const slayer3d_vec3 end = slayer3d_vec3_add(selection.world_position,
+                                                        editor_source_vertex_coord_meters(world, &model.vertices[b]));
+            if (!emit_editor_debug_line(context, editor_debug_rotate_point(start, pivot, axis, angle_radians),
+                                        editor_debug_rotate_point(end, pivot, axis, angle_radians)))
+            {
+                context->type = old_type;
+                context->color = old_color;
+                return false;
+            }
+        }
+    }
+    context->type = old_type;
+    context->color = old_color;
+    return true;
+}
+
+static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runtime,
+                                          const slayer3d_game_data_editor_debug_desc *desc,
+                                          slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    const unsigned int flags =
+        desc != NULL && desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if (runtime == NULL || runtime->scene_state == NULL || callback == NULL ||
+        (flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES) == 0u || !editor_mode_is_rotate(runtime))
+    {
+        return true;
+    }
+
+    slayer3d_bounding_box bounds;
+    if (!editor_rotate_tool_selection_bounds(runtime, &bounds))
+        return true;
+    const slayer3d_vec3 pivot = editor_rotate_tool_pivot(runtime, bounds);
+    const slayer3d_vec3 size = slayer3d_vec3_sub(bounds.max, bounds.min);
+    const float radius = SDL_max(SDL_max(size.x, SDL_max(size.y, size.z)) * 0.75f, 0.75f);
+    const bool dragging = runtime->editor_drag_move.active && runtime->editor_drag_move.rotate_drag;
+    const bool hovered = scene_state_bool(runtime, "editor.rotate.hovered", false);
+    const slayer3d_vec3 hover_axis = slayer3d_properties_get_vec3(runtime->scene_state, "editor.rotate.hover_axis",
+                                                                  slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 active_axis = dragging
+                                          ? runtime->editor_drag_move.rotate_axis
+                                          : slayer3d_properties_get_vec3(runtime->scene_state, "editor.rotate.axis",
+                                                                         slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_PIVOT;
+    context.face_index = -1;
+    context.color = (slayer3d_color){255, 230, 80, 255};
+    if (!emit_editor_debug_marker_cross(&context, pivot, 0.45f))
+        return false;
+
+    const int segments = 48;
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING;
+    context.color = editor_debug_rotate_ring_color(slayer3d_vec3_make(1.0f, 0.0f, 0.0f), hover_axis, active_axis,
+                                                   hovered, dragging, (slayer3d_color){180, 50, 40, 210});
+    if (!emit_editor_debug_rotate_ring(&context, pivot, radius, slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
+                                       slayer3d_vec3_make(0.0f, 0.0f, 1.0f),
+                                       SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING, 0.0f, SDL_PI_F * 2.0f, segments))
+        return false;
+    context.color = editor_debug_rotate_ring_color(slayer3d_vec3_make(0.0f, 1.0f, 0.0f), hover_axis, active_axis,
+                                                   hovered, dragging, (slayer3d_color){50, 165, 75, 210});
+    if (!emit_editor_debug_rotate_ring(&context, pivot, radius, slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
+                                       slayer3d_vec3_make(0.0f, 0.0f, 1.0f),
+                                       SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING, 0.0f, SDL_PI_F * 2.0f, segments))
+        return false;
+    context.color = editor_debug_rotate_ring_color(slayer3d_vec3_make(0.0f, 0.0f, 1.0f), hover_axis, active_axis,
+                                                   hovered, dragging, (slayer3d_color){55, 110, 190, 210});
+    if (!emit_editor_debug_rotate_ring(&context, pivot, radius, slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
+                                       slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
+                                       SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING, 0.0f, SDL_PI_F * 2.0f, segments))
+        return false;
+
+    if (runtime->editor_drag_move.active && runtime->editor_drag_move.rotate_drag &&
+        SDL_fabsf(runtime->editor_drag_move.rotate_angle_radians) > 0.000001f)
+    {
+        slayer3d_vec3 arc_a;
+        slayer3d_vec3 arc_b;
+        editor_debug_rotate_axis_basis(runtime->editor_drag_move.rotate_axis, &arc_a, &arc_b);
+        context.color = (slayer3d_color){255, 245, 110, 255};
+        if (!emit_editor_debug_rotate_ring(&context, pivot, radius * 1.08f, arc_a, arc_b,
+                                           SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_ARC, 0.0f,
+                                           runtime->editor_drag_move.rotate_angle_radians, 24))
+            return false;
+        if (!emit_editor_debug_rotate_preview_edges(&context, runtime, pivot, runtime->editor_drag_move.rotate_axis,
+                                                    runtime->editor_drag_move.rotate_angle_radians))
+            return false;
+    }
+
+    return true;
+}
+
 bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data_runtime *runtime,
                                                         const slayer3d_game_data_editor_debug_desc *desc,
                                                         slayer3d_game_data_editor_debug_primitive_fn callback,
@@ -1670,6 +1941,11 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
 
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS) != 0u &&
         !emit_editor_debug_player_start_marker(runtime, desc, callback, userdata))
+    {
+        return true;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES) != 0u &&
+        !emit_editor_debug_rotate_tool(runtime, desc, callback, userdata))
     {
         return true;
     }

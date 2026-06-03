@@ -131,6 +131,10 @@
             "bindings": [{ "device": "keyboard", "key": "V" }]
           },
           {
+            "name": "action.editor.mode.rotate",
+            "bindings": []
+          },
+          {
             "name": "action.editor.palette.material",
             "bindings": [{ "device": "keyboard", "key": "M" }]
           },
@@ -285,6 +289,7 @@
     "signal.editor.mode.select",
     "signal.editor.mode.texture",
     "signal.editor.mode.vertex",
+    "signal.editor.mode.rotate",
     "signal.editor.palette.material",
     "signal.editor.palette.game_object",
     "signal.editor.palette.close",
@@ -411,6 +416,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.mode.vertex",
         "on_pressed": "signal.editor.mode.vertex"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.mode.rotate",
+        "on_pressed": "signal.editor.mode.rotate"
       },
       {
         "type": "sensor.input_pressed",
@@ -586,6 +596,12 @@
         ]
       },
       {
+        "signal": "signal.editor.mode.rotate",
+        "actions": [
+          { "type": "editor.tool.set_mode", "mode": "rotate" }
+        ]
+      },
+      {
         "signal": "signal.editor.mode.select",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "select" }
@@ -736,7 +752,8 @@
 	                                  "conditions": [
 	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
 	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "edge", "default": "select" },
-	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" }
+	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" },
+	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "rotate", "default": "select" }
 	                                  ]
 	                                },
 	                                "then": [
@@ -964,6 +981,7 @@
                             { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "select", "default": "select" },
                             { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
                             { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" },
+                            { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "rotate", "default": "select" },
                             { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "texture", "default": "select" }
                           ]
                         },
