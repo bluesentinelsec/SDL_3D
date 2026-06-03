@@ -17957,6 +17957,79 @@ TEST(GameDataRuntime, EditorShellDojoEdgeModeMovesSharedCoincidentEdgesAsClump)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoEdgeModeNudgesSelectedEdgesOnGrid)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_float(scene_state, "editor.grid.size", 1.0f);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int edge_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.edge");
+    ASSERT_GE(edge_signal, 0);
+    slayer3d_signal_emit(bus, edge_signal, nullptr);
+
+    brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    editor_brush_source_vertex_model before_model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &before_model, error, sizeof(error)))
+        << error;
+    const int max_x_units = editor_source_units_from_meters(world_runtime, 2.0f);
+    ASSERT_GT(max_x_units, 0);
+    const int selected_edge_index = find_source_edge_on_axis_value(before_model, 0, max_x_units);
+    ASSERT_GE(selected_edge_index, 0);
+
+    editor_source_edge_selection selected_edge{};
+    ASSERT_TRUE(
+        editor_source_edge_selection_from_model(world_runtime, &before_model, selected_edge_index, &selected_edge));
+    ASSERT_TRUE(editor_add_shared_edge_selection_group(runtime, &selected_edge));
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event key{};
+    key.type = SDL_EVENT_KEY_DOWN;
+    key.key.scancode = SDL_SCANCODE_UP;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    key.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    const int delta_units = editor_source_units_from_meters(world_runtime, 1.0f);
+    ASSERT_GT(delta_units, 0);
+    int expected_coords[2][3] = {
+        {selected_edge.coord[0][0] + delta_units, selected_edge.coord[0][1], selected_edge.coord[0][2]},
+        {selected_edge.coord[1][0] + delta_units, selected_edge.coord[1][1], selected_edge.coord[1][2]}};
+
+    editor_brush_source_vertex_model after_model{};
+    ASSERT_TRUE(editor_brush_source_box_build_vertex_model(world_runtime, 0, &after_model, error, sizeof(error)))
+        << error;
+    EXPECT_TRUE(model_has_edge_with_coords(after_model, expected_coords));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.edge.move.valid", false));
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.move.edge_count", 0), 1);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.edge.selection.count", 0), 1);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "moved selected edges");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoEdgeModeRejectsInvalidEdgeMove)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
