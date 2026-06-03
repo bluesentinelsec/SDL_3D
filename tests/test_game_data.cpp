@@ -21934,6 +21934,93 @@ TEST(GameDataRuntime, EditorShellDojoBrushSelectionSupportsAdditiveModifiers)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoBrushKeyboardNudgeUsesCameraRelativeDirection)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_float(scene_state, "editor.grid.size", 1.0f);
+
+    auto brush_bounds = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, "brush.target.cube") == 0)
+                return brush.bounds;
+        }
+        ADD_FAILURE() << "brush.target.cube not found";
+        return slayer3d_bounding_box{};
+    };
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    int frame = 0;
+    auto press_key = [&](SDL_Scancode scancode) {
+        SDL_Event key{};
+        key.type = SDL_EVENT_KEY_DOWN;
+        key.key.scancode = scancode;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, ++frame);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        key.type = SDL_EVENT_KEY_UP;
+        slayer3d_input_process_event(input, &key);
+        slayer3d_input_update(input, ++frame);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
+
+    slayer3d_camera3d default_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.viewport", &default_camera));
+    const slayer3d_vec3 default_forward =
+        slayer3d_vec3_normalize(slayer3d_vec3_sub(default_camera.target, default_camera.position));
+    ASSERT_GT(default_forward.x, 0.0f);
+    ASSERT_GT(SDL_fabsf(default_forward.x), SDL_fabsf(default_forward.z));
+
+    const slayer3d_bounding_box before = brush_bounds();
+    press_key(SDL_SCANCODE_UP);
+    const slayer3d_bounding_box after_default_up = brush_bounds();
+    EXPECT_NEAR(after_default_up.min.x, before.min.x + 1.0f, 0.001f);
+    EXPECT_NEAR(after_default_up.max.x, before.max.x + 1.0f, 0.001f);
+    EXPECT_NEAR(after_default_up.min.z, before.min.z, 0.001f);
+    EXPECT_NEAR(after_default_up.max.z, before.max.z, 0.001f);
+
+    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
+    ASSERT_NE(editor_camera, nullptr);
+    const float yaw = slayer3d_properties_get_float(editor_camera->props, "yaw", 0.0f);
+    slayer3d_properties_set_float(editor_camera->props, "yaw", yaw + 3.14159265f);
+
+    slayer3d_camera3d reversed_camera{};
+    ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.viewport", &reversed_camera));
+    const slayer3d_vec3 reversed_forward =
+        slayer3d_vec3_normalize(slayer3d_vec3_sub(reversed_camera.target, reversed_camera.position));
+    ASSERT_LT(reversed_forward.x, 0.0f);
+    ASSERT_GT(SDL_fabsf(reversed_forward.x), SDL_fabsf(reversed_forward.z));
+
+    press_key(SDL_SCANCODE_UP);
+    const slayer3d_bounding_box after_reversed_up = brush_bounds();
+    EXPECT_NEAR(after_reversed_up.min.x, before.min.x, 0.001f);
+    EXPECT_NEAR(after_reversed_up.max.x, before.max.x, 0.001f);
+    EXPECT_NEAR(after_reversed_up.min.z, before.min.z, 0.001f);
+    EXPECT_NEAR(after_reversed_up.max.z, before.max.z, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "moved 1 selected brush");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoBrushDuplicationPreservesSourceAndSelection)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
