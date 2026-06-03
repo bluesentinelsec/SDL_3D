@@ -22345,6 +22345,84 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoBrushRotateCanRunConsecutively)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto brush_world = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        return world;
+    };
+    auto brush_index = [&](const char *brush_name) {
+        const slayer3d_game_data_brush_world world = brush_world();
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, brush_name) == 0)
+                return i;
+        }
+        return -1;
+    };
+    auto brush_bounds = [&](const char *brush_name) {
+        const slayer3d_game_data_brush_world world = brush_world();
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, brush_name) == 0)
+                return brush.bounds;
+        }
+        ADD_FAILURE() << "brush not found: " << (brush_name != nullptr ? brush_name : "<null>");
+        return slayer3d_bounding_box{};
+    };
+    auto active_selection = [&]() {
+        slayer3d_game_data_editor_selection selection{};
+        EXPECT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &selection));
+        return selection;
+    };
+
+    const int source_min[3] = {0, 0, 0};
+    const int source_max[3] = {1000, 1000, 1000};
+    editor_brush_source_prefab_result source_result{};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.wall", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, source_min,
+        source_max, &source_result));
+    ASSERT_TRUE(source_result.valid);
+    const std::string brush_name = source_result.brush_name;
+
+    slayer3d_game_data_editor_selection selection{};
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target", brush_index(brush_name.c_str()),
+                                                  -1, &selection));
+    ASSERT_TRUE(editor_select_mode_primary_click(runtime, &selection));
+
+    const slayer3d_vec3 pivot = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 y_axis = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    ASSERT_TRUE(slayer3d_game_data_rotate_selected_editor_brushes(runtime, pivot, y_axis, SDL_PI_F * 0.5f));
+    EXPECT_STREQ(active_selection().element_name, brush_name.c_str());
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, 0.0f, 0.001f);
+
+    ASSERT_TRUE(slayer3d_game_data_rotate_selected_editor_brushes(runtime, pivot, y_axis, SDL_PI_F * 0.5f));
+    EXPECT_STREQ(active_selection().element_name, brush_name.c_str());
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, -1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -1.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, 0.0f, 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentLoadsIntoEditorRuntime)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

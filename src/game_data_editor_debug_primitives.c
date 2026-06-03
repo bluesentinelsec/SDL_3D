@@ -312,12 +312,20 @@ static int editor_debug_source_index_for_selection(const brush_world_runtime *wo
     if (world == NULL || selection == NULL || !selection->hit ||
         selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD)
         return -1;
+    if (selection->element_index >= 0 && selection->element_index < world->desc.brush_count)
+    {
+        const slayer3d_game_data_brush *brush = &world->desc.brushes[selection->element_index];
+        int source_index = editor_brush_world_find_source_box_index(world, brush->name);
+        if (source_index >= 0)
+            return source_index;
+        source_index = editor_brush_world_find_source_box_index(world, brush->editor.stable_id);
+        if (source_index >= 0)
+            return source_index;
+    }
     int source_index = editor_brush_world_find_source_box_index(world, selection->element_name);
     if (source_index >= 0)
         return source_index;
-    return selection->element_editor != NULL
-               ? editor_brush_world_find_source_box_index(world, selection->element_editor->stable_id)
-               : -1;
+    return -1;
 }
 
 static bool editor_debug_vertex_is_selected(const slayer3d_game_data_runtime *runtime, const char *world_name,
@@ -1758,6 +1766,72 @@ static slayer3d_color editor_debug_rotate_ring_color(slayer3d_vec3 ring_axis, sl
     return base;
 }
 
+static slayer3d_vec3 editor_debug_rotate_point(slayer3d_vec3 point, slayer3d_vec3 pivot, slayer3d_vec3 axis,
+                                               float angle_radians)
+{
+    axis = slayer3d_vec3_normalize(axis);
+    const float cos_angle = SDL_cosf(angle_radians);
+    const float sin_angle = SDL_sinf(angle_radians);
+    const slayer3d_vec3 relative = slayer3d_vec3_sub(point, pivot);
+    const slayer3d_vec3 rotated =
+        slayer3d_vec3_add(slayer3d_vec3_add(slayer3d_vec3_scale(relative, cos_angle),
+                                            slayer3d_vec3_scale(slayer3d_vec3_cross(axis, relative), sin_angle)),
+                          slayer3d_vec3_scale(axis, slayer3d_vec3_dot(axis, relative) * (1.0f - cos_angle)));
+    return slayer3d_vec3_add(pivot, rotated);
+}
+
+static bool emit_editor_debug_rotate_preview_edges(editor_debug_iteration_context *context,
+                                                   const slayer3d_game_data_runtime *runtime, slayer3d_vec3 pivot,
+                                                   slayer3d_vec3 axis, float angle_radians)
+{
+    if (context == NULL || runtime == NULL || SDL_fabsf(angle_radians) <= 0.000001f ||
+        slayer3d_vec3_length_squared(axis) <= 0.000001f)
+    {
+        return true;
+    }
+
+    const slayer3d_game_data_editor_debug_primitive_type old_type = context->type;
+    const slayer3d_color old_color = context->color;
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_PREVIEW_EDGE;
+    context->color = (slayer3d_color){255, 245, 80, 245};
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        const brush_world_runtime *world = find_brush_world_runtime(runtime, selection.world_name);
+        const int source_index = editor_debug_source_index_for_selection(world, &selection);
+        editor_brush_source_vertex_model model;
+        if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world, source_index, &model, NULL, 0))
+            continue;
+
+        context->world_name = selection.world_name;
+        context->element_name = selection.element_name;
+        context->face_index = -1;
+        for (int edge = 0; edge < model.edge_count; ++edge)
+        {
+            const editor_brush_source_edge *source_edge = &model.edges[edge];
+            const int a = source_edge->vertex_indices[0];
+            const int b = source_edge->vertex_indices[1];
+            if (a < 0 || a >= model.vertex_count || b < 0 || b >= model.vertex_count)
+                continue;
+            const slayer3d_vec3 start = slayer3d_vec3_add(selection.world_position,
+                                                          editor_source_vertex_coord_meters(world, &model.vertices[a]));
+            const slayer3d_vec3 end = slayer3d_vec3_add(selection.world_position,
+                                                        editor_source_vertex_coord_meters(world, &model.vertices[b]));
+            if (!emit_editor_debug_line(context, editor_debug_rotate_point(start, pivot, axis, angle_radians),
+                                        editor_debug_rotate_point(end, pivot, axis, angle_radians)))
+            {
+                context->type = old_type;
+                context->color = old_color;
+                return false;
+            }
+        }
+    }
+    context->type = old_type;
+    context->color = old_color;
+    return true;
+}
+
 static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runtime,
                                           const slayer3d_game_data_editor_debug_desc *desc,
                                           slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
@@ -1826,6 +1900,9 @@ static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runt
         if (!emit_editor_debug_rotate_ring(&context, pivot, radius * 1.08f, arc_a, arc_b,
                                            SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_ARC, 0.0f,
                                            runtime->editor_drag_move.rotate_angle_radians, 24))
+            return false;
+        if (!emit_editor_debug_rotate_preview_edges(&context, runtime, pivot, runtime->editor_drag_move.rotate_axis,
+                                                    runtime->editor_drag_move.rotate_angle_radians))
             return false;
     }
 

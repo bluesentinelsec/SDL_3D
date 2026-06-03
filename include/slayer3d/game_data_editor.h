@@ -129,6 +129,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING = 32,
         /** @brief Rotate tool active drag angle arc line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_ARC = 33,
+        /** @brief Rotate tool non-mutating transformed source preview edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_PREVIEW_EDGE = 34,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
