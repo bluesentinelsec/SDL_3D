@@ -101,6 +101,149 @@ static void publish_editor_drag_move_feedback(slayer3d_game_data_runtime *runtim
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.brush.drag.delta", delta);
 }
 
+static int editor_dominant_axis_index(slayer3d_vec3 v)
+{
+    const float abs_x = SDL_fabsf(v.x);
+    const float abs_y = SDL_fabsf(v.y);
+    const float abs_z = SDL_fabsf(v.z);
+    if (abs_x >= abs_y && abs_x >= abs_z)
+        return 0;
+    if (abs_y >= abs_z)
+        return 1;
+    return 2;
+}
+
+static slayer3d_vec3 editor_dominant_axis_vector(slayer3d_vec3 v)
+{
+    const int axis = editor_dominant_axis_index(v);
+    const float value = axis == 0 ? v.x : (axis == 1 ? v.y : v.z);
+    const float sign = value < 0.0f ? -1.0f : 1.0f;
+    switch (axis)
+    {
+    case 0:
+        return slayer3d_vec3_make(sign, 0.0f, 0.0f);
+    case 1:
+        return slayer3d_vec3_make(0.0f, sign, 0.0f);
+    default:
+        return slayer3d_vec3_make(0.0f, 0.0f, sign);
+    }
+}
+
+static bool editor_vec3_same_direction(slayer3d_vec3 a, slayer3d_vec3 b)
+{
+    return SDL_fabsf(a.x - b.x) <= 0.0001f && SDL_fabsf(a.y - b.y) <= 0.0001f && SDL_fabsf(a.z - b.z) <= 0.0001f;
+}
+
+static bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_forward,
+                                slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic)
+{
+    if (out_forward != NULL)
+        *out_forward = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (out_right != NULL)
+        *out_right = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (out_up != NULL)
+        *out_up = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (out_orthographic != NULL)
+        *out_orthographic = false;
+    if (runtime == NULL)
+        return false;
+
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, slayer3d_game_data_active_camera(runtime), &camera))
+        return false;
+
+    const slayer3d_vec3 forward = slayer3d_vec3_normalize(slayer3d_vec3_sub(camera.target, camera.position));
+    const slayer3d_vec3 right = slayer3d_vec3_normalize(slayer3d_vec3_cross(forward, camera.up));
+    const slayer3d_vec3 up = slayer3d_vec3_normalize(slayer3d_vec3_cross(right, forward));
+    if (slayer3d_vec3_length_squared(forward) <= 0.000001f || slayer3d_vec3_length_squared(right) <= 0.000001f ||
+        slayer3d_vec3_length_squared(up) <= 0.000001f)
+    {
+        return false;
+    }
+
+    if (out_forward != NULL)
+        *out_forward = forward;
+    if (out_right != NULL)
+        *out_right = right;
+    if (out_up != NULL)
+        *out_up = up;
+    if (out_orthographic != NULL)
+        *out_orthographic = camera.projection == SLAYER3D_CAMERA_ORTHOGRAPHIC;
+    return true;
+}
+
+static slayer3d_vec3 editor_perspective_camera_forward_nudge_axis(slayer3d_vec3 forward, slayer3d_vec3 up)
+{
+    slayer3d_vec3 projected = slayer3d_vec3_make(forward.x, 0.0f, forward.z);
+    if (slayer3d_vec3_length_squared(projected) <= 0.000001f)
+    {
+        projected = slayer3d_vec3_make(up.x, 0.0f, up.z);
+        if (forward.y > 0.0f)
+            projected = slayer3d_vec3_negate(projected);
+    }
+    if (slayer3d_vec3_length_squared(projected) <= 0.000001f)
+        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    return editor_dominant_axis_vector(projected);
+}
+
+static slayer3d_vec3 editor_perspective_camera_right_nudge_axis(slayer3d_vec3 right, slayer3d_vec3 forward_axis)
+{
+    slayer3d_vec3 axis = editor_dominant_axis_vector(right);
+    if (editor_vec3_same_direction(axis, forward_axis))
+    {
+        axis = slayer3d_vec3_cross(axis, slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+        if (slayer3d_vec3_length_squared(axis) <= 0.000001f)
+            axis = slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    }
+    return editor_dominant_axis_vector(axis);
+}
+
+static slayer3d_vec3 editor_camera_relative_brush_nudge_axis(const slayer3d_game_data_runtime *runtime,
+                                                             SDL_Scancode scancode)
+{
+    slayer3d_vec3 forward;
+    slayer3d_vec3 right;
+    slayer3d_vec3 up;
+    bool orthographic = false;
+    if (!editor_camera_basis(runtime, &forward, &right, &up, &orthographic))
+    {
+        if (scancode == SDL_SCANCODE_LEFT)
+            return slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+        if (scancode == SDL_SCANCODE_RIGHT)
+            return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+        if (scancode == SDL_SCANCODE_UP)
+            return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+        if (scancode == SDL_SCANCODE_DOWN)
+            return slayer3d_vec3_make(-1.0f, 0.0f, 0.0f);
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    }
+
+    if (orthographic)
+    {
+        if (scancode == SDL_SCANCODE_UP)
+            return editor_dominant_axis_vector(up);
+        if (scancode == SDL_SCANCODE_DOWN)
+            return slayer3d_vec3_negate(editor_dominant_axis_vector(up));
+        if (scancode == SDL_SCANCODE_RIGHT)
+            return editor_dominant_axis_vector(right);
+        if (scancode == SDL_SCANCODE_LEFT)
+            return slayer3d_vec3_negate(editor_dominant_axis_vector(right));
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    }
+
+    const slayer3d_vec3 forward_axis = editor_perspective_camera_forward_nudge_axis(forward, up);
+    const slayer3d_vec3 right_axis = editor_perspective_camera_right_nudge_axis(right, forward_axis);
+    if (scancode == SDL_SCANCODE_UP)
+        return forward_axis;
+    if (scancode == SDL_SCANCODE_DOWN)
+        return slayer3d_vec3_negate(forward_axis);
+    if (scancode == SDL_SCANCODE_RIGHT)
+        return right_axis;
+    if (scancode == SDL_SCANCODE_LEFT)
+        return slayer3d_vec3_negate(right_axis);
+    return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+}
+
 static bool editor_set_face_resize_preview(slayer3d_game_data_runtime *runtime,
                                            const slayer3d_game_data_editor_selection *selection, float distance)
 {
@@ -432,6 +575,23 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
              (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN)))
     {
         offset.y = -grid_size;
+    }
+    else if (!source_handle_mode && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT) && !transform_modifier)
+    {
+        offset = slayer3d_vec3_scale(editor_camera_relative_brush_nudge_axis(runtime, SDL_SCANCODE_LEFT), grid_size);
+    }
+    else if (!source_handle_mode && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT) &&
+             !transform_modifier)
+    {
+        offset = slayer3d_vec3_scale(editor_camera_relative_brush_nudge_axis(runtime, SDL_SCANCODE_RIGHT), grid_size);
+    }
+    else if (!source_handle_mode && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_UP) && !transform_modifier)
+    {
+        offset = slayer3d_vec3_scale(editor_camera_relative_brush_nudge_axis(runtime, SDL_SCANCODE_UP), grid_size);
+    }
+    else if (!source_handle_mode && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_DOWN) && !transform_modifier)
+    {
+        offset = slayer3d_vec3_scale(editor_camera_relative_brush_nudge_axis(runtime, SDL_SCANCODE_DOWN), grid_size);
     }
     else if (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT) && !transform_modifier)
     {
