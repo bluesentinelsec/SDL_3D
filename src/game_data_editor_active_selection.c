@@ -367,7 +367,7 @@ static float editor_rotate_drag_angle(const editor_drag_move_state *drag, float 
     {
         raw_degrees = (mouse_x - drag->start_mouse_x) * 0.75f;
     }
-    const float snap_degrees = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0 ? 1.0f : 5.0f;
+    const float snap_degrees = 90.0f;
     return slayer3d_degrees_to_radians(SDL_roundf(raw_degrees / snap_degrees) * snap_degrees);
 }
 
