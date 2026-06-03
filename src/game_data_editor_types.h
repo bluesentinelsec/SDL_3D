@@ -109,7 +109,9 @@ typedef struct editor_drag_move_state
     slayer3d_game_data_editor_selection face_selection;
     slayer3d_vec3 rotate_pivot;
     slayer3d_vec3 rotate_axis;
+    slayer3d_vec3 rotate_hover_axis;
     float rotate_angle_radians;
+    float rotate_preview_angle_radians;
     float rotate_start_angle_radians;
     float rotate_pivot_screen_x;
     float rotate_pivot_screen_y;
@@ -118,6 +120,8 @@ typedef struct editor_drag_move_state
     float rotate_axis_screen_b_x;
     float rotate_axis_screen_b_y;
     bool rotate_screen_basis_valid;
+    bool rotate_hovered;
+    bool rotate_preview_valid;
     int vertex_origin_count;
     editor_drag_vertex_origin vertex_toggle_origin;
     editor_drag_vertex_origin vertex_origins[SLAYER3D_EDITOR_DRAG_VERTEX_ORIGIN_CAPACITY];

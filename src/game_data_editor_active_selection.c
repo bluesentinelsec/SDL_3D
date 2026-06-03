@@ -297,24 +297,9 @@ static float editor_rotate_ring_screen_distance_squared(const slayer3d_camera3d 
     return best;
 }
 
-static slayer3d_vec3 editor_rotate_fallback_axis_for_camera(const slayer3d_camera3d *camera)
-{
-    if (camera == NULL)
-        return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
-    const slayer3d_vec3 forward = slayer3d_vec3_normalize(slayer3d_vec3_sub(camera->target, camera->position));
-    const float abs_x = SDL_fabsf(slayer3d_vec3_dot(forward, slayer3d_vec3_make(1.0f, 0.0f, 0.0f)));
-    const float abs_y = SDL_fabsf(slayer3d_vec3_dot(forward, slayer3d_vec3_make(0.0f, 1.0f, 0.0f)));
-    const float abs_z = SDL_fabsf(slayer3d_vec3_dot(forward, slayer3d_vec3_make(0.0f, 0.0f, 1.0f)));
-    if (abs_x >= abs_y && abs_x >= abs_z)
-        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
-    if (abs_y >= abs_z)
-        return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
-    return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
-}
-
-static bool editor_choose_rotate_drag_axis(slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
-                                           slayer3d_vec3 pivot, float radius, slayer3d_vec3 *out_axis,
-                                           editor_drag_move_state *drag)
+static bool editor_pick_rotate_axis_at(slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
+                                       slayer3d_vec3 pivot, float radius, slayer3d_vec3 *out_axis,
+                                       editor_drag_move_state *drag)
 {
     if (runtime == NULL || out_axis == NULL || drag == NULL)
         return false;
@@ -349,9 +334,9 @@ static bool editor_choose_rotate_drag_axis(slayer3d_game_data_runtime *runtime, 
     }
 
     const float handle_pick_radius_pixels = 28.0f;
-    slayer3d_vec3 axis = best_axis >= 0 && best_distance <= handle_pick_radius_pixels * handle_pick_radius_pixels
-                             ? axes[best_axis]
-                             : editor_rotate_fallback_axis_for_camera(&camera);
+    if (best_axis < 0 || best_distance > handle_pick_radius_pixels * handle_pick_radius_pixels)
+        return false;
+    slayer3d_vec3 axis = axes[best_axis];
     *out_axis = axis;
     if (!editor_rotate_axis_screen_basis(&camera, &viewport, pivot, radius, axis, drag))
         return false;
@@ -393,6 +378,133 @@ static float editor_rotate_drag_angle(const editor_drag_move_state *drag, float 
     return slayer3d_degrees_to_radians(SDL_roundf(raw_degrees / snap_degrees) * snap_degrees);
 }
 
+static bool editor_rotate_selected_source_brushes_delta(slayer3d_game_data_runtime *runtime, slayer3d_vec3 pivot,
+                                                        slayer3d_vec3 axis, float angle_delta_radians,
+                                                        char *error_buffer, int error_buffer_size)
+{
+    if (runtime == NULL || SDL_fabsf(angle_delta_radians) <= 0.000001f)
+        return true;
+    if (!editor_selected_brushes_active_for_scene(runtime) || runtime->editor_selected_brush_count <= 0 ||
+        slayer3d_vec3_length_squared(axis) <= 0.000001f)
+    {
+        set_error(error_buffer, error_buffer_size, "rotate preview requires selected source brushes");
+        return false;
+    }
+    axis = slayer3d_vec3_normalize(axis);
+
+    struct rotate_preview_target
+    {
+        brush_world_runtime *world_runtime;
+        char brush_identity[SLAYER3D_GAME_DATA_EDITOR_DIAGNOSTIC_TEXT_MAX];
+    } targets[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+    SDL_zeroa(targets);
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        targets[i].world_runtime = find_brush_world_runtime_mutable(runtime, selection->world_name);
+        const char *brush_identity = editor_metadata_stable_id(selection->element_editor);
+        if (brush_identity == NULL || brush_identity[0] == '\0')
+            brush_identity = selection->element_name;
+        if (targets[i].world_runtime == NULL || brush_identity == NULL || brush_identity[0] == '\0')
+        {
+            set_error(error_buffer, error_buffer_size, "rotate preview target no longer resolves");
+            return false;
+        }
+        SDL_strlcpy(targets[i].brush_identity, brush_identity, sizeof(targets[i].brush_identity));
+    }
+
+    int applied_count = 0;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        if (!editor_brush_world_rotate_source_box(targets[i].world_runtime, targets[i].brush_identity, pivot, axis,
+                                                  angle_delta_radians, error_buffer, error_buffer_size))
+        {
+            for (int rollback = applied_count - 1; rollback >= 0; --rollback)
+            {
+                (void)editor_brush_world_rotate_source_box(targets[rollback].world_runtime,
+                                                           targets[rollback].brush_identity, pivot, axis,
+                                                           -angle_delta_radians, NULL, 0);
+            }
+            return false;
+        }
+        applied_count++;
+    }
+
+    update_active_editor_selection_from_selected_brushes(runtime);
+    return true;
+}
+
+static bool editor_apply_rotate_live_preview(slayer3d_game_data_runtime *runtime, editor_drag_move_state *drag,
+                                             float target_angle_radians)
+{
+    if (runtime == NULL || drag == NULL || !drag->active || !drag->rotate_drag)
+        return false;
+    const float delta = target_angle_radians - drag->rotate_preview_angle_radians;
+    if (SDL_fabsf(delta) <= 0.000001f)
+        return true;
+
+    char error[256];
+    SDL_zeroa(error);
+    if (!editor_rotate_selected_source_brushes_delta(runtime, drag->rotate_pivot, drag->rotate_axis, delta, error,
+                                                     sizeof(error)))
+    {
+        drag->rotate_preview_valid = false;
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.valid", false);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.rotate.message",
+                                       error[0] != '\0' ? error : "rotation rejected");
+        return false;
+    }
+
+    drag->rotate_preview_angle_radians = target_angle_radians;
+    drag->rotate_preview_valid = true;
+    return true;
+}
+
+static void editor_rollback_rotate_live_preview(slayer3d_game_data_runtime *runtime, editor_drag_move_state *drag)
+{
+    if (runtime == NULL || drag == NULL || !drag->active || !drag->rotate_drag ||
+        SDL_fabsf(drag->rotate_preview_angle_radians) <= 0.000001f)
+    {
+        return;
+    }
+    (void)editor_rotate_selected_source_brushes_delta(runtime, drag->rotate_pivot, drag->rotate_axis,
+                                                      -drag->rotate_preview_angle_radians, NULL, 0);
+    drag->rotate_preview_angle_radians = 0.0f;
+}
+
+static bool editor_update_rotate_hover_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_rotate(runtime) ||
+        runtime->editor_drag_move.rotate_drag)
+    {
+        return false;
+    }
+
+    slayer3d_bounding_box bounds;
+    slayer3d_vec3 axis = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    bool hovered = false;
+    if (editor_selected_bounds(runtime, &bounds))
+    {
+        slayer3d_input_manager *input = runtime_input(runtime);
+        float mouse_x = 0.0f;
+        float mouse_y = 0.0f;
+        if (input != NULL && slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+        {
+            const slayer3d_vec3 pivot = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+            editor_drag_move_state pick;
+            SDL_zero(pick);
+            hovered = editor_pick_rotate_axis_at(runtime, mouse_x, mouse_y, pivot, editor_rotate_tool_radius(bounds),
+                                                 &axis, &pick);
+        }
+    }
+
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.hovered", hovered);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.hover_axis", axis);
+    if (hovered)
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.axis", axis);
+    return hovered;
+}
+
 void reset_editor_rotate_tool_state(slayer3d_game_data_runtime *runtime, const char *message)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -401,9 +513,13 @@ void reset_editor_rotate_tool_state(slayer3d_game_data_runtime *runtime, const c
     const bool has_pivot = editor_selected_bounds_center(runtime, &pivot);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.ready", has_pivot);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.dragging", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.hovered", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.live_preview", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.valid", has_pivot);
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.pivot", pivot);
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.axis", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.hover_axis",
+                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     slayer3d_properties_set_float(runtime->scene_state, "editor.rotate.angle_radians", 0.0f);
     slayer3d_properties_set_float(runtime->scene_state, "editor.rotate.angle_degrees", 0.0f);
     slayer3d_properties_set_string(runtime->scene_state, "editor.rotate.message",
@@ -420,11 +536,17 @@ static void publish_editor_rotate_drag_state(slayer3d_game_data_runtime *runtime
     const float angle = active ? drag->rotate_angle_radians : 0.0f;
     slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.ready", runtime->editor_selected_brush_count > 0);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.dragging", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.hovered", drag != NULL && drag->rotate_hovered);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.live_preview",
+                                 active && SDL_fabsf(drag->rotate_preview_angle_radians) > 0.000001f);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.valid", valid);
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.pivot",
                                  active ? drag->rotate_pivot : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.axis",
                                  active ? drag->rotate_axis : slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.hover_axis",
+                                 drag != NULL && drag->rotate_hovered ? drag->rotate_hover_axis
+                                                                      : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
     slayer3d_properties_set_float(runtime->scene_state, "editor.rotate.angle_radians", angle);
     slayer3d_properties_set_float(runtime->scene_state, "editor.rotate.angle_degrees",
                                   slayer3d_radians_to_degrees(angle));
@@ -744,13 +866,17 @@ static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
     if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_rotate(runtime))
     {
         if (runtime != NULL && runtime->editor_drag_move.active && runtime->editor_drag_move.rotate_drag)
+        {
+            editor_rollback_rotate_live_preview(runtime, &runtime->editor_drag_move);
             clear_editor_drag_move(runtime);
+        }
         return true;
     }
 
     slayer3d_input_manager *input = runtime_input(runtime);
     if (input == NULL)
         return true;
+    (void)editor_update_rotate_hover_state(runtime);
 
     editor_drag_move_state *drag = &runtime->editor_drag_move;
     const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
@@ -775,8 +901,15 @@ static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
         drag->rotate_axis = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
         (void)slayer3d_input_get_mouse_position(input, &drag->start_mouse_x, &drag->start_mouse_y);
         const float radius = editor_rotate_tool_radius(bounds);
-        (void)editor_choose_rotate_drag_axis(runtime, drag->start_mouse_x, drag->start_mouse_y, pivot, radius,
-                                             &drag->rotate_axis, drag);
+        if (!editor_pick_rotate_axis_at(runtime, drag->start_mouse_x, drag->start_mouse_y, pivot, radius,
+                                        &drag->rotate_axis, drag))
+        {
+            clear_editor_drag_move(runtime);
+            return true;
+        }
+        drag->rotate_hovered = true;
+        drag->rotate_hover_axis = drag->rotate_axis;
+        drag->rotate_preview_valid = true;
         publish_editor_rotate_drag_state(runtime, drag, true, "rotate drag");
         if (out_consumed != NULL)
             *out_consumed = true;
@@ -791,21 +924,27 @@ static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
     float mouse_x = drag->start_mouse_x;
     float mouse_y = drag->start_mouse_y;
     (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
-    drag->rotate_angle_radians = editor_rotate_drag_angle(drag, mouse_x, mouse_y);
-    drag->moved = SDL_fabsf(drag->rotate_angle_radians) > 0.000001f;
-    publish_editor_rotate_drag_state(runtime, drag, true, drag->moved ? "rotate preview" : "rotate drag");
+    const float target_angle = editor_rotate_drag_angle(drag, mouse_x, mouse_y);
+    const bool preview_valid = editor_apply_rotate_live_preview(runtime, drag, target_angle);
+    drag->rotate_angle_radians = preview_valid ? target_angle : drag->rotate_preview_angle_radians;
+    drag->moved = SDL_fabsf(drag->rotate_preview_angle_radians) > 0.000001f;
+    const char *preview_message =
+        preview_valid
+            ? (drag->moved ? "rotate preview" : "rotate drag")
+            : slayer3d_properties_get_string(runtime->scene_state, "editor.rotate.message", "rotation rejected");
+    publish_editor_rotate_drag_state(runtime, drag, preview_valid, preview_message);
 
     if (left_released || !left_down)
     {
         const slayer3d_vec3 pivot = drag->rotate_pivot;
         const slayer3d_vec3 axis = drag->rotate_axis;
-        const float angle = drag->rotate_angle_radians;
+        const float angle = drag->rotate_preview_angle_radians;
         const bool moved = drag->moved;
-        clear_editor_drag_move(runtime);
         if (moved)
         {
-            if (slayer3d_game_data_rotate_selected_editor_brushes(runtime, pivot, axis, angle))
+            if (slayer3d_game_data_record_selected_editor_brush_rotation(runtime, pivot, axis, angle))
             {
+                drag->rotate_preview_angle_radians = 0.0f;
                 update_active_editor_selection_from_selected_brushes(runtime);
                 slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.valid", true);
                 slayer3d_properties_set_string(runtime->scene_state, "editor.rotate.message", "rotated selection");
@@ -813,12 +952,15 @@ static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
             }
             else
             {
+                editor_rollback_rotate_live_preview(runtime, drag);
                 slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.valid", false);
                 slayer3d_properties_set_string(runtime->scene_state, "editor.rotate.message", "rotation rejected");
                 slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "rotation rejected");
             }
         }
+        clear_editor_drag_move(runtime);
         slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.dragging", false);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.rotate.live_preview", false);
         slayer3d_properties_set_float(runtime->scene_state, "editor.rotate.angle_radians", 0.0f);
         slayer3d_properties_set_float(runtime->scene_state, "editor.rotate.angle_degrees", 0.0f);
         slayer3d_properties_set_vec3(runtime->scene_state, "editor.rotate.pivot", pivot);

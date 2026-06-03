@@ -2944,6 +2944,82 @@ fail:
     return false;
 }
 
+bool slayer3d_game_data_record_selected_editor_brush_rotation(slayer3d_game_data_runtime *runtime, slayer3d_vec3 pivot,
+                                                              slayer3d_vec3 axis, float angle_radians)
+{
+    if (runtime == NULL || SDL_fabsf(angle_radians) <= 0.000001f || runtime->editor_selected_brush_count <= 0 ||
+        runtime->editor_selected_brush_scene == NULL)
+    {
+        return false;
+    }
+    if (!editor_float_finite(pivot.x) || !editor_float_finite(pivot.y) || !editor_float_finite(pivot.z) ||
+        !editor_float_finite(axis.x) || !editor_float_finite(axis.y) || !editor_float_finite(axis.z) ||
+        !editor_float_finite(angle_radians) || slayer3d_vec3_length_squared(axis) <= 0.000001f)
+    {
+        return false;
+    }
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    if (active_scene == NULL || SDL_strcmp(runtime->editor_selected_brush_scene, active_scene) != 0)
+        return false;
+
+    axis = slayer3d_vec3_normalize(axis);
+    editor_command_history_state *history = &runtime->editor_command_history;
+    const int first_entry = history->count;
+    int recorded_count = 0;
+    editor_command_transaction_entry *last_entry = NULL;
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        if (!transaction_editor_selection_is_selectable_brush(selection))
+            goto fail;
+
+        editor_command_transaction_entry *entry = editor_command_history_append(runtime);
+        if (entry == NULL)
+            goto fail;
+        if (!editor_prepare_transaction_common(entry, active_scene, "rotate", "element", selection->world_name,
+                                               selection->element_name) ||
+            !copy_editor_transaction_string(editor_metadata_stable_id(selection->element_editor),
+                                            &entry->element_stable_id))
+        {
+            goto fail;
+        }
+        entry->rotation_pivot = pivot;
+        entry->rotation_axis = axis;
+        entry->rotation_angle_radians = angle_radians;
+        entry->has_bounds = selection->has_bounds;
+        entry->bounds = selection->bounds;
+        SDL_snprintf(entry->message, sizeof(entry->message), "rotated %s", selection->element_name);
+
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+        if (world_runtime == NULL)
+            goto fail;
+        editor_brush_world_mark_dirty(world_runtime);
+        last_entry = entry;
+        recorded_count++;
+    }
+
+    if (runtime->scene_state != NULL)
+    {
+        char message[128];
+        SDL_snprintf(message, sizeof(message),
+                     recorded_count == 1 ? "rotated 1 selected brush" : "rotated %d selected brushes", recorded_count);
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    }
+    if (last_entry != NULL && runtime->editor_selected_brush_count > 0)
+    {
+        runtime->editor_active_selection = runtime->editor_selected_brushes[runtime->editor_selected_brush_count - 1];
+        runtime->editor_selection_scene = active_scene;
+    }
+    return recorded_count > 0;
+
+fail:
+    for (int clear = first_entry; clear < history->count; ++clear)
+        free_editor_command_transaction_entry(&history->entries[clear]);
+    history->count = first_entry;
+    history->cursor = first_entry;
+    return false;
+}
+
 bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, int quarter_turns)
 {
     if (runtime == NULL || quarter_turns == 0 || runtime->editor_selected_brush_count <= 0 ||

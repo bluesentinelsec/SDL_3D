@@ -1738,6 +1738,26 @@ static void editor_debug_rotate_axis_basis(slayer3d_vec3 axis, slayer3d_vec3 *ou
     }
 }
 
+static bool editor_debug_rotate_axis_matches(slayer3d_vec3 a, slayer3d_vec3 b)
+{
+    if (slayer3d_vec3_length_squared(a) <= 0.000001f || slayer3d_vec3_length_squared(b) <= 0.000001f)
+        return false;
+    a = slayer3d_vec3_normalize(a);
+    b = slayer3d_vec3_normalize(b);
+    return SDL_fabsf(a.x - b.x) <= 0.001f && SDL_fabsf(a.y - b.y) <= 0.001f && SDL_fabsf(a.z - b.z) <= 0.001f;
+}
+
+static slayer3d_color editor_debug_rotate_ring_color(slayer3d_vec3 ring_axis, slayer3d_vec3 hover_axis,
+                                                     slayer3d_vec3 active_axis, bool hovered, bool dragging,
+                                                     slayer3d_color base)
+{
+    if (dragging && editor_debug_rotate_axis_matches(ring_axis, active_axis))
+        return (slayer3d_color){255, 245, 80, 255};
+    if (hovered && editor_debug_rotate_axis_matches(ring_axis, hover_axis))
+        return (slayer3d_color){255, 255, 255, 255};
+    return base;
+}
+
 static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runtime,
                                           const slayer3d_game_data_editor_debug_desc *desc,
                                           slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
@@ -1756,6 +1776,14 @@ static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runt
     const slayer3d_vec3 pivot = editor_rotate_tool_pivot(runtime, bounds);
     const slayer3d_vec3 size = slayer3d_vec3_sub(bounds.max, bounds.min);
     const float radius = SDL_max(SDL_max(size.x, SDL_max(size.y, size.z)) * 0.75f, 0.75f);
+    const bool dragging = runtime->editor_drag_move.active && runtime->editor_drag_move.rotate_drag;
+    const bool hovered = scene_state_bool(runtime, "editor.rotate.hovered", false);
+    const slayer3d_vec3 hover_axis = slayer3d_properties_get_vec3(runtime->scene_state, "editor.rotate.hover_axis",
+                                                                  slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 active_axis = dragging
+                                          ? runtime->editor_drag_move.rotate_axis
+                                          : slayer3d_properties_get_vec3(runtime->scene_state, "editor.rotate.axis",
+                                                                         slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
 
     editor_debug_iteration_context context;
     SDL_zero(context);
@@ -1769,17 +1797,20 @@ static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runt
 
     const int segments = 48;
     context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING;
-    context.color = (slayer3d_color){255, 80, 60, 255};
+    context.color = editor_debug_rotate_ring_color(slayer3d_vec3_make(1.0f, 0.0f, 0.0f), hover_axis, active_axis,
+                                                   hovered, dragging, (slayer3d_color){180, 50, 40, 210});
     if (!emit_editor_debug_rotate_ring(&context, pivot, radius, slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
                                        slayer3d_vec3_make(0.0f, 0.0f, 1.0f),
                                        SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING, 0.0f, SDL_PI_F * 2.0f, segments))
         return false;
-    context.color = (slayer3d_color){80, 230, 100, 255};
+    context.color = editor_debug_rotate_ring_color(slayer3d_vec3_make(0.0f, 1.0f, 0.0f), hover_axis, active_axis,
+                                                   hovered, dragging, (slayer3d_color){50, 165, 75, 210});
     if (!emit_editor_debug_rotate_ring(&context, pivot, radius, slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
                                        slayer3d_vec3_make(0.0f, 0.0f, 1.0f),
                                        SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING, 0.0f, SDL_PI_F * 2.0f, segments))
         return false;
-    context.color = (slayer3d_color){80, 160, 255, 255};
+    context.color = editor_debug_rotate_ring_color(slayer3d_vec3_make(0.0f, 0.0f, 1.0f), hover_axis, active_axis,
+                                                   hovered, dragging, (slayer3d_color){55, 110, 190, 210});
     if (!emit_editor_debug_rotate_ring(&context, pivot, radius, slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
                                        slayer3d_vec3_make(0.0f, 1.0f, 0.0f),
                                        SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_RING, 0.0f, SDL_PI_F * 2.0f, segments))
