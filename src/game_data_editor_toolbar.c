@@ -48,44 +48,6 @@ static bool editor_hit_is_toolbar(const slayer3d_ui_layout_hit_region *hit)
            editor_hit_id_has_prefix(hit, "ui.editor_shell.tool_toolbar.");
 }
 
-bool editor_handle_prefabs_widget(slayer3d_game_data_runtime *runtime, yyjson_val *editor, bool *out_consumed)
-{
-    if (out_consumed != NULL)
-        *out_consumed = false;
-    yyjson_val *widget = obj_get(editor, "prefabs_widget");
-    if (runtime == NULL || runtime->scene_state == NULL || !yyjson_is_obj(widget))
-        return true;
-
-    slayer3d_input_manager *input = runtime_input(runtime);
-    float mouse_x = 0.0f;
-    float mouse_y = 0.0f;
-    if (input == NULL || !slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
-        return true;
-
-    slayer3d_ui_layout_model *layout = NULL;
-    const slayer3d_ui_layout_hit_region *hit = NULL;
-    (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
-    const bool over_button = (hit != NULL && SDL_strcmp(hit->action, "editor.palette.prefabs") == 0) ||
-                             editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button"));
-    if (out_consumed != NULL)
-        *out_consumed = over_button;
-    if (!over_button || !slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT))
-    {
-        slayer3d_ui_layout_destroy(layout);
-        return true;
-    }
-
-    const char *active_key = json_string(widget, "active_key", "editor.palette.active");
-    const char *cursor_key = json_string(widget, "cursor_key", "editor.palette.brush.cursor");
-    const char *active_value = json_string(widget, "active_value", "brush");
-    const char *default_cursor = json_string(widget, "default_cursor", "floor");
-    slayer3d_properties_set_string(runtime->scene_state, active_key, active_value);
-    slayer3d_properties_set_string(runtime->scene_state, cursor_key, default_cursor);
-    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "prefabs palette opened");
-    slayer3d_ui_layout_destroy(layout);
-    return true;
-}
-
 static const char *editor_mode_for_tool_action(const char *action)
 {
     if (SDL_strcmp(action, "editor.tool.select") == 0)
