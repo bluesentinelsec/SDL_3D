@@ -23,11 +23,16 @@ static bool is_non_empty_string(yyjson_val *object, const char *key)
     return value != NULL && value[0] != '\0';
 }
 
+static bool validation_float_finite(float value)
+{
+    return !SDL_isnan(value) && !SDL_isinf(value);
+}
+
 static bool editor_command_name_valid(const char *value)
 {
-    return value != NULL &&
-           (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "paint") == 0 ||
-            SDL_strcmp(value, "resize") == 0 || SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
+    return value != NULL && (SDL_strcmp(value, "translate") == 0 || SDL_strcmp(value, "rotate") == 0 ||
+                             SDL_strcmp(value, "paint") == 0 || SDL_strcmp(value, "resize") == 0 ||
+                             SDL_strcmp(value, "extrude") == 0 || SDL_strcmp(value, "delete") == 0);
 }
 
 static bool editor_command_target_name_valid(const char *value)
@@ -153,7 +158,7 @@ static bool editor_tool_mode_valid(const char *mode)
     return mode != NULL &&
            (SDL_strcmp(mode, "select") == 0 || SDL_strcmp(mode, "brush") == 0 || SDL_strcmp(mode, "face") == 0 ||
             SDL_strcmp(mode, "edge") == 0 || SDL_strcmp(mode, "clip") == 0 || SDL_strcmp(mode, "vertex") == 0 ||
-            SDL_strcmp(mode, "texture") == 0);
+            SDL_strcmp(mode, "rotate") == 0 || SDL_strcmp(mode, "texture") == 0);
 }
 
 bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -165,7 +170,7 @@ bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *a
     if (!editor_tool_mode_valid(mode))
         return validation_error(ctx, json_path,
                                 "editor.tool.set_mode mode must be one of select, brush, face, edge, clip, vertex, "
-                                "texture");
+                                "rotate, texture");
     yyjson_val *message = obj_get(action, "message");
     if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
         return validation_error(ctx, json_path, "editor.tool.set_mode message must be non-empty");
@@ -321,6 +326,41 @@ bool validate_editor_selection_resize_y_action(validation_context *ctx, yyjson_v
     return validate_optional_action_branches(ctx, action, json_path, names, false);
 }
 
+bool validate_editor_selection_rotate_selected_action(validation_context *ctx, yyjson_val *action,
+                                                      const char *json_path, validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    yyjson_val *pivot = obj_get(action, "pivot");
+    if (pivot != NULL && !is_vec_array(pivot, 3))
+        return validation_error(ctx, json_path, "editor.selection.rotate_selected pivot must be a numeric vec3");
+    yyjson_val *axis = obj_get(action, "axis");
+    if (!is_vec_array(axis, 3))
+        return validation_error(ctx, json_path, "editor.selection.rotate_selected axis must be a numeric vec3");
+    const float axis_x = (float)yyjson_get_num(yyjson_arr_get(axis, 0));
+    const float axis_y = (float)yyjson_get_num(yyjson_arr_get(axis, 1));
+    const float axis_z = (float)yyjson_get_num(yyjson_arr_get(axis, 2));
+    if (!validation_float_finite(axis_x) || !validation_float_finite(axis_y) || !validation_float_finite(axis_z) ||
+        axis_x * axis_x + axis_y * axis_y + axis_z * axis_z <= 0.000001f)
+    {
+        return validation_error(ctx, json_path, "editor.selection.rotate_selected axis must be non-zero and finite");
+    }
+    yyjson_val *angle_radians = obj_get(action, "angle_radians");
+    yyjson_val *angle_degrees = obj_get(action, "angle_degrees");
+    if ((angle_radians == NULL) == (angle_degrees == NULL))
+    {
+        return validation_error(ctx, json_path,
+                                "editor.selection.rotate_selected requires exactly one angle_radians or angle_degrees");
+    }
+    if (angle_radians != NULL &&
+        (!yyjson_is_num(angle_radians) || !validation_float_finite((float)yyjson_get_num(angle_radians))))
+        return validation_error(ctx, json_path, "editor.selection.rotate_selected angle_radians must be finite");
+    if (angle_degrees != NULL &&
+        (!yyjson_is_num(angle_degrees) || !validation_float_finite((float)yyjson_get_num(angle_degrees))))
+        return validation_error(ctx, json_path, "editor.selection.rotate_selected angle_degrees must be finite");
+    return true;
+}
+
 bool validate_editor_selection_run_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                           validation_names *names, const char *type)
 {
@@ -339,7 +379,8 @@ bool validate_editor_command_preview_action(validation_context *ctx, yyjson_val 
         target = "selection";
     if (!editor_command_name_valid(command))
         return validation_error(ctx, json_path,
-                                "editor.command.preview command must be translate, paint, resize, extrude, or delete");
+                                "editor.command.preview command must be translate, rotate, paint, resize, extrude, or "
+                                "delete");
     if (!editor_command_target_name_valid(target))
         return validation_error(ctx, json_path,
                                 "editor.command.preview target must be selection, world, element, face, or material");

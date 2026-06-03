@@ -48,7 +48,7 @@ static bool editor_debug_flag_name_valid(const char *value)
                              SDL_strcmp(value, "game_objects") == 0 || SDL_strcmp(value, "markers") == 0 ||
                              SDL_strcmp(value, "diagnostic_markers") == 0 || SDL_strcmp(value, "selection_face") == 0 ||
                              SDL_strcmp(value, "vertex_handles") == 0 || SDL_strcmp(value, "edge_handles") == 0 ||
-                             SDL_strcmp(value, "clip_preview") == 0);
+                             SDL_strcmp(value, "rotate_handles") == 0 || SDL_strcmp(value, "clip_preview") == 0);
 }
 
 static bool validate_string_or_string_array_names(validation_context *ctx, yyjson_val *value, const char *path,

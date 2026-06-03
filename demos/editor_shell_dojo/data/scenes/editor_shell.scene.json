@@ -291,6 +291,12 @@
         "tool_mode": "vertex",
         "message": "vertex tool",
         "button": { "x": 492, "y": 45, "w": 100, "h": 28 }
+      },
+      {
+        "mode": "rotate",
+        "tool_mode": "rotate",
+        "message": "rotate tool",
+        "button": { "x": 598, "y": 45, "w": 100, "h": 28 }
       }
     ],
     "palette": {
@@ -354,6 +360,7 @@
         "selection_face",
         "vertex_handles",
         "edge_handles",
+        "rotate_handles",
         "command_preview",
         "clip_preview",
         "markers"
@@ -500,6 +507,16 @@
             "interactive": true,
             "action": "editor.tool.vertex",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "vertex" }
+          },
+          {
+            "id": "ui.editor_shell.tool_toolbar.rotate.button",
+            "type": "button",
+            "w": 100,
+            "h": 28,
+            "text": "Rotate",
+            "interactive": true,
+            "action": "editor.tool.rotate",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "rotate" }
           },
           {
             "id": "ui.editor_shell.tool_toolbar.entity.button",

@@ -3621,6 +3621,155 @@ bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *w
     return true;
 }
 
+static bool source_rotation_coord(float value, int *out_coord)
+{
+    if (out_coord == NULL || SDL_isnan(value) || SDL_isinf(value))
+        return false;
+    const int rounded = (int)SDL_lroundf(value);
+    if (SDL_fabsf(value - (float)rounded) > 0.001f)
+        return false;
+    *out_coord = rounded;
+    return true;
+}
+
+static bool rotate_source_vertex_coord(const int coord[3], const float pivot[3], slayer3d_vec3 axis,
+                                       float angle_radians, int out_coord[3])
+{
+    if (coord == NULL || pivot == NULL || out_coord == NULL)
+        return false;
+
+    const float cos_angle = SDL_cosf(angle_radians);
+    const float sin_angle = SDL_sinf(angle_radians);
+    const slayer3d_vec3 relative =
+        slayer3d_vec3_make((float)coord[0] - pivot[0], (float)coord[1] - pivot[1], (float)coord[2] - pivot[2]);
+    const slayer3d_vec3 rotated =
+        slayer3d_vec3_add(slayer3d_vec3_add(slayer3d_vec3_scale(relative, cos_angle),
+                                            slayer3d_vec3_scale(slayer3d_vec3_cross(axis, relative), sin_angle)),
+                          slayer3d_vec3_scale(axis, slayer3d_vec3_dot(axis, relative) * (1.0f - cos_angle)));
+    return source_rotation_coord(rotated.x + pivot[0], &out_coord[0]) &&
+           source_rotation_coord(rotated.y + pivot[1], &out_coord[1]) &&
+           source_rotation_coord(rotated.z + pivot[2], &out_coord[2]);
+}
+
+bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                          slayer3d_vec3 pivot, slayer3d_vec3 axis, float angle_radians,
+                                          char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush rotation requires a source model");
+        return false;
+    }
+    if (SDL_isnan(pivot.x) || SDL_isinf(pivot.x) || SDL_isnan(pivot.y) || SDL_isinf(pivot.y) || SDL_isnan(pivot.z) ||
+        SDL_isinf(pivot.z) || SDL_isnan(axis.x) || SDL_isinf(axis.x) || SDL_isnan(axis.y) || SDL_isinf(axis.y) ||
+        SDL_isnan(axis.z) || SDL_isinf(axis.z) || SDL_isnan(angle_radians) || SDL_isinf(angle_radians))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush rotation requires finite pivot, axis, and angle");
+        return false;
+    }
+    if (SDL_fabsf(angle_radians) <= 0.000001f)
+        return true;
+
+    const float axis_len_sq = slayer3d_vec3_length_squared(axis);
+    if (axis_len_sq <= 0.000001f)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush rotation requires a non-zero axis");
+        return false;
+    }
+    axis = slayer3d_vec3_normalize(axis);
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    editor_brush_source_vertex_model model;
+    if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
+                                                    error_buffer_size))
+    {
+        return false;
+    }
+
+    const float pivot_source[3] = {
+        pivot.x / (world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit
+                                                                       : 0.001f),
+        pivot.y / (world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit
+                                                                       : 0.001f),
+        pivot.z / (world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit
+                                                                       : 0.001f),
+    };
+
+    int rotated_vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    SDL_zeroa(rotated_vertices);
+    for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+    {
+        if (!rotate_source_vertex_coord(model.vertices[vertex].coord, pivot_source, axis, angle_radians,
+                                        rotated_vertices[vertex]))
+        {
+            set_error(error_buffer, error_buffer_size,
+                      "source brush rotation would leave the brush off the integer source grid");
+            return false;
+        }
+    }
+
+    slayer3d_game_data_brush rebuilt;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, brush_name, &rotated_vertices[0][0],
+                                                                    model.vertex_count, &rebuilt, error_buffer,
+                                                                    error_buffer_size))
+    {
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&rebuilt);
+
+    editor_brush_source_box_runtime snapshot;
+    SDL_zero(snapshot);
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    if (!copy_editor_brush_source_box_runtime(box, &snapshot))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to snapshot source brush rotation");
+        return false;
+    }
+
+    char *old_prefab = box->prefab;
+    box->prefab = SDL_strdup("convex");
+    if (box->prefab == NULL)
+    {
+        box->prefab = old_prefab;
+        free_editor_brush_source_box(&snapshot);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush rotation metadata");
+        return false;
+    }
+    SDL_free(old_prefab);
+    box->vertex_count = model.vertex_count;
+    for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+    {
+        box->vertices[vertex][0] = rotated_vertices[vertex][0];
+        box->vertices[vertex][1] = rotated_vertices[vertex][1];
+        box->vertices[vertex][2] = rotated_vertices[vertex][2];
+    }
+    for (int vertex = model.vertex_count; vertex < SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY; ++vertex)
+    {
+        box->vertices[vertex][0] = 0;
+        box->vertices[vertex][1] = 0;
+        box->vertices[vertex][2] = 0;
+    }
+    source_box_update_bounds_from_vertices(box);
+
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
+        !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(box);
+        *box = snapshot;
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    free_editor_brush_source_box(&snapshot);
+    return true;
+}
+
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size)

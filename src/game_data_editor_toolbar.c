@@ -62,6 +62,8 @@ static const char *editor_mode_for_tool_action(const char *action)
         return "clip";
     if (SDL_strcmp(action, "editor.tool.vertex") == 0)
         return "vertex";
+    if (SDL_strcmp(action, "editor.tool.rotate") == 0)
+        return "rotate";
     if (SDL_strcmp(action, "editor.tool.texture") == 0)
         return "texture";
     return NULL;
@@ -117,6 +119,15 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
             message = selected_count > 0 ? "vertex tool" : "select a brush before vertex tool";
         }
     }
+    else if (SDL_strcmp(mode, "rotate") == 0)
+    {
+        tool_mode = "rotate";
+        if (message == NULL || message[0] == '\0')
+        {
+            const int selected_count = slayer3d_properties_get_int(runtime->scene_state, "editor.selection.count", 0);
+            message = selected_count > 0 ? "rotate tool" : "select a brush before rotate tool";
+        }
+    }
     else if (SDL_strcmp(mode, "texture") == 0)
     {
         tool_mode = "paint";
@@ -146,6 +157,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     clear_editor_command_preview(runtime);
     if (entering_clip)
         return slayer3d_game_data_enter_editor_clip_tool(runtime, message);
+    if (SDL_strcmp(mode, "rotate") == 0)
+        reset_editor_rotate_tool_state(runtime, message);
     return true;
 }
 

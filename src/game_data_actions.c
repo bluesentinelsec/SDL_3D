@@ -242,6 +242,54 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     return true;
 }
 
+static bool editor_selected_brushes_bounds_center(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_center)
+{
+    if (runtime == NULL || out_center == NULL || runtime->editor_selected_brush_count <= 0)
+        return false;
+
+    bool has_bounds = false;
+    slayer3d_bounding_box bounds;
+    SDL_zero(bounds);
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
+        if (!selection->hit || !selection->has_bounds)
+            continue;
+        if (!has_bounds)
+        {
+            bounds = selection->bounds;
+            has_bounds = true;
+            continue;
+        }
+        bounds.min.x = SDL_min(bounds.min.x, selection->bounds.min.x);
+        bounds.min.y = SDL_min(bounds.min.y, selection->bounds.min.y);
+        bounds.min.z = SDL_min(bounds.min.z, selection->bounds.min.z);
+        bounds.max.x = SDL_max(bounds.max.x, selection->bounds.max.x);
+        bounds.max.y = SDL_max(bounds.max.y, selection->bounds.max.y);
+        bounds.max.z = SDL_max(bounds.max.z, selection->bounds.max.z);
+    }
+    if (!has_bounds)
+        return false;
+
+    *out_center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+    return true;
+}
+
+static bool editor_selection_rotate_selected_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    slayer3d_vec3 pivot = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (obj_get(action, "pivot") != NULL)
+        pivot = json_vec3(action, "pivot", pivot);
+    else if (!editor_selected_brushes_bounds_center(runtime, &pivot))
+        return false;
+
+    const slayer3d_vec3 axis = json_vec3(action, "axis", slayer3d_vec3_make(0.0f, 1.0f, 0.0f));
+    const float angle_radians = obj_get(action, "angle_radians") != NULL
+                                    ? json_float(action, "angle_radians", 0.0f)
+                                    : slayer3d_degrees_to_radians(json_float(action, "angle_degrees", 0.0f));
+    return slayer3d_game_data_rotate_selected_editor_brushes(runtime, pivot, axis, angle_radians);
+}
+
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -485,6 +533,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.selection.resize_y") == 0)
         return slayer3d_game_data_resize_selected_editor_brushes_y(runtime, action, payload);
+
+    if (SDL_strcmp(type, "editor.selection.rotate_selected") == 0)
+        return editor_selection_rotate_selected_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.run") == 0)
     {
