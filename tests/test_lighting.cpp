@@ -405,8 +405,8 @@ TEST(SLAYER3DPBRShading, RoughnessAffectsSpecular)
 
     float rs, gs, bs, rr, gr, br;
     /* View from directly above → specular highlight should be stronger for smooth. */
-    p_smooth.camera_pos = (slayer3d_vec3){0.0f, 5.0f, 0.0f};
-    p_rough.camera_pos = (slayer3d_vec3){0.0f, 5.0f, 0.0f};
+    p_smooth.camera_pos = slayer3d_vec3{0.0f, 5.0f, 0.0f};
+    p_rough.camera_pos = slayer3d_vec3{0.0f, 5.0f, 0.0f};
     slayer3d_shade_fragment_pbr(&p_smooth, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &rs, &gs, &bs);
     slayer3d_shade_fragment_pbr(&p_rough, 1.0f, 1.0f, 1.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, &rr, &gr, &br);
 

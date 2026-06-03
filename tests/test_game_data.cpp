@@ -14523,10 +14523,11 @@ TEST(GameDataRuntime, RejectsInvalidBrushWorlds)
     for (const Case &test_case : cases)
     {
         const std::filesystem::path dir = unique_test_dir(test_case.name);
-        write_text(dir / "scenes" / "play.scene.json", test_case.scene_json != nullptr ? test_case.scene_json : R"json({
+        const char *scene_json = test_case.scene_json != nullptr ? test_case.scene_json : R"json({
   "schema": "slayer3d.scene.v0",
   "name": "scene.play"
-})json");
+})json";
+        write_text(dir / "scenes" / "play.scene.json", scene_json);
         std::string brush_world_section = test_case.brush_world_json;
         const size_t section_start = brush_world_section.find("\"brush_worlds\"");
         const size_t section_end = brush_world_section.rfind('}');
@@ -19517,7 +19518,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     click_editor(click.button.x, click.button.y, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 9);
     ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.selection.element", ""), floor_brush_name.c_str());
-    const int brush_count_before_floor_lower = world().brush_count;
+    const slayer3d_game_data_brush_world brush_world_before_floor_lower = world();
+    const int brush_count_before_floor_lower = brush_world_before_floor_lower.brush_count;
     const slayer3d_bounding_box floor_bounds_before_lower = brush_bounds(floor_brush_name);
     press_editor_key(SDL_SCANCODE_LEFTBRACKET, 11);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.transaction.valid", false));
@@ -19937,7 +19939,8 @@ TEST(GameDataRuntime, EditorShellDojoSelectModeDragAutoCommitsBrushInEmptySpace)
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
         return brush_world;
     };
-    const int initial_brush_count = world().brush_count;
+    const slayer3d_game_data_brush_world initial_world = world();
+    const int initial_brush_count = initial_world.brush_count;
     slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
     ASSERT_NE(input, nullptr);
 
@@ -20380,7 +20383,8 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragStartsOnHoveredBrushFace)
         EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &brush_world));
         return brush_world;
     };
-    const int initial_brush_count = world().brush_count;
+    const slayer3d_game_data_brush_world initial_world = world();
+    const int initial_brush_count = initial_world.brush_count;
 
     slayer3d_game_data_editor_selection hover{};
     hover.hit = true;
@@ -21148,7 +21152,8 @@ TEST(GameDataRuntime, EditorShellDojoBrushDuplicationPreservesSourceAndSelection
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
 
     const slayer3d_bounding_box source_bounds = brush_bounds(source_result.brush_name);
-    const int initial_brush_count = brush_world().brush_count;
+    const slayer3d_game_data_brush_world initial_world = brush_world();
+    const int initial_brush_count = initial_world.brush_count;
     ASSERT_TRUE(
         slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(2.0f, 0.0f, 0.0f), false));
     ASSERT_EQ(brush_world().brush_count, initial_brush_count + 1);

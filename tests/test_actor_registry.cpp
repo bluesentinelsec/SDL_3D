@@ -212,7 +212,7 @@ TEST(ActorRegistry, UpdateEvaluatesSpatialTriggers)
     sensor->triggers[0].edge = SLAYER3D_TRIGGER_EDGE_ENTER;
     sensor->triggers[0].emit_signal_id = 1;
     sensor->triggers[0].enabled = true;
-    sensor->triggers[0].spatial.zone = (slayer3d_bounding_box){{0, 0, 0}, {10, 10, 10}};
+    sensor->triggers[0].spatial.zone = slayer3d_bounding_box{{0, 0, 0}, {10, 10, 10}};
     sensor->trigger_count = 1;
 
     /* Outside → no fire. */
@@ -284,7 +284,7 @@ TEST(ActorRegistry, InactiveActorsSkipped)
     sensor->triggers[0].edge = SLAYER3D_TRIGGER_EDGE_ENTER;
     sensor->triggers[0].emit_signal_id = 1;
     sensor->triggers[0].enabled = true;
-    sensor->triggers[0].spatial.zone = (slayer3d_bounding_box){{0, 0, 0}, {10, 10, 10}};
+    sensor->triggers[0].spatial.zone = slayer3d_bounding_box{{0, 0, 0}, {10, 10, 10}};
     sensor->trigger_count = 1;
     sensor->active = false;
 

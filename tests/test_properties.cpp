@@ -196,7 +196,7 @@ TEST(Properties, SetAndGetColor)
     slayer3d_properties *p = slayer3d_properties_create();
     slayer3d_color red = {255, 0, 0, 255};
     slayer3d_properties_set_color(p, "tint", red);
-    slayer3d_color result = slayer3d_properties_get_color(p, "tint", (slayer3d_color){0, 0, 0, 0});
+    slayer3d_color result = slayer3d_properties_get_color(p, "tint", slayer3d_color{0, 0, 0, 0});
     EXPECT_EQ(result.r, 255);
     EXPECT_EQ(result.g, 0);
     EXPECT_EQ(result.b, 0);

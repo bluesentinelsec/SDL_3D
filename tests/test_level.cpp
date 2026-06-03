@@ -979,7 +979,7 @@ TEST(SLAYER3DDrawModelCulling, SkipsOffscreenChunkBeforeMaterialValidation)
 
     SDL_ClearError();
     EXPECT_TRUE(slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), 1.0f,
-                                    (slayer3d_color){255, 255, 255, 255}))
+                                    slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     EXPECT_TRUE(slayer3d_end_mode_3d(ctx)) << SDL_GetError();
 

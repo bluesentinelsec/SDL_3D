@@ -23,6 +23,10 @@ else()
     option(SLAYER3D_BUILD_TESTS "Build Slayer 3D tests" OFF)
 endif()
 option(SLAYER3D_FETCH_SDL3 "Fetch SDL3 if it is not already available" ON)
+set(SLAYER3D_SDL_LINKAGE
+    "auto"
+    CACHE STRING "SDL3 link mode: static, shared, or auto")
+set_property(CACHE SLAYER3D_SDL_LINKAGE PROPERTY STRINGS static shared auto)
 option(SLAYER3D_ENABLE_NETWORKING "Enable SDL3_net-based network transport" ON)
 option(SLAYER3D_COMPRESS_PACKS "Compress Slayer 3D asset packs by default" ON)
 set(SLAYER3D_PACK_PASSWORD
@@ -40,11 +44,34 @@ include(Slayer3DCompilerWarnings)
 include(Slayer3DSanitizers)
 include(Slayer3DAssets)
 
-if(NOT TARGET SDL3::SDL3)
-    find_package(SDL3 3.2 CONFIG QUIET COMPONENTS SDL3)
+if(NOT SLAYER3D_SDL_LINKAGE STREQUAL "static" AND NOT SLAYER3D_SDL_LINKAGE STREQUAL "shared"
+   AND NOT SLAYER3D_SDL_LINKAGE STREQUAL "auto")
+    message(FATAL_ERROR "SLAYER3D_SDL_LINKAGE must be 'static', 'shared', or 'auto'.")
 endif()
 
-if(NOT TARGET SDL3::SDL3 AND SLAYER3D_FETCH_SDL3)
+function(slayer3d_copy_runtime_dlls target_name)
+    if(WIN32)
+        add_custom_command(
+            TARGET ${target_name}
+            POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E $<IF:$<BOOL:$<TARGET_RUNTIME_DLLS:${target_name}>>,copy_if_different,true>
+                    $<TARGET_RUNTIME_DLLS:${target_name}> $<TARGET_FILE_DIR:${target_name}>
+            COMMAND_EXPAND_LISTS
+        )
+    endif()
+endfunction()
+
+if(NOT TARGET SDL3::SDL3 AND NOT TARGET SDL3::SDL3-static AND NOT TARGET SDL3::SDL3-shared)
+    if(SLAYER3D_SDL_LINKAGE STREQUAL "static")
+        find_package(SDL3 3.2 CONFIG QUIET COMPONENTS SDL3-static)
+    elseif(SLAYER3D_SDL_LINKAGE STREQUAL "shared")
+        find_package(SDL3 3.2 CONFIG QUIET COMPONENTS SDL3-shared)
+    else()
+        find_package(SDL3 3.2 CONFIG QUIET COMPONENTS SDL3)
+    endif()
+endif()
+
+if(NOT TARGET SDL3::SDL3 AND NOT TARGET SDL3::SDL3-static AND NOT TARGET SDL3::SDL3-shared AND SLAYER3D_FETCH_SDL3)
     FetchContent_Declare(
         SDL3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
@@ -52,12 +79,18 @@ if(NOT TARGET SDL3::SDL3 AND SLAYER3D_FETCH_SDL3)
         GIT_SHALLOW TRUE
     )
 
-    if(IOS)
+    if(IOS AND SLAYER3D_SDL_LINKAGE STREQUAL "shared")
+        message(FATAL_ERROR "iOS app bundles require SLAYER3D_SDL_LINKAGE=static or auto.")
+    endif()
+    if(SLAYER3D_SDL_LINKAGE STREQUAL "static" OR IOS)
         # iOS app bundles cannot rely on a build-tree SDL dylib at runtime.
-        # Force a static SDL so the simulator/device app can launch without
-        # embedding extra runtime artifacts into the .app.
+        # Prefer static SDL by default so build-tree tools do not require
+        # embedding extra runtime artifacts.
         set(SDL_SHARED OFF CACHE BOOL "" FORCE)
         set(SDL_STATIC ON CACHE BOOL "" FORCE)
+    elseif(SLAYER3D_SDL_LINKAGE STREQUAL "shared")
+        set(SDL_SHARED ON CACHE BOOL "" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "" FORCE)
     endif()
 
     set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
@@ -68,7 +101,7 @@ if(NOT TARGET SDL3::SDL3 AND SLAYER3D_FETCH_SDL3)
     set(SLAYER3D_USING_FETCHED_SDL3 ON)
 endif()
 
-if(NOT TARGET SDL3::SDL3 AND NOT TARGET SDL3::SDL3-static)
+if(NOT TARGET SDL3::SDL3 AND NOT TARGET SDL3::SDL3-static AND NOT TARGET SDL3::SDL3-shared)
     message(FATAL_ERROR "SDL3 was not found. Provide SDL3 via a parent target, find_package(SDL3), or enable SLAYER3D_FETCH_SDL3.")
 endif()
 
@@ -76,11 +109,25 @@ if(EMSCRIPTEN)
     set(SLAYER3D_ENABLE_NETWORKING OFF CACHE BOOL "Enable SDL3_net-based network transport" FORCE)
 endif()
 
-set(SLAYER3D_SDL_TARGET SDL3::SDL3)
-if(NOT TARGET ${SLAYER3D_SDL_TARGET} AND TARGET SDL3::SDL3-static)
+if(SLAYER3D_SDL_LINKAGE STREQUAL "static")
+    if(NOT TARGET SDL3::SDL3-static)
+        message(FATAL_ERROR "SLAYER3D_SDL_LINKAGE=static requires SDL3::SDL3-static.")
+    endif()
     set(SLAYER3D_SDL_TARGET SDL3::SDL3-static)
-elseif(IOS AND TARGET SDL3::SDL3-static)
-    set(SLAYER3D_SDL_TARGET SDL3::SDL3-static)
+elseif(SLAYER3D_SDL_LINKAGE STREQUAL "shared")
+    if(NOT TARGET SDL3::SDL3-shared)
+        message(FATAL_ERROR "SLAYER3D_SDL_LINKAGE=shared requires SDL3::SDL3-shared.")
+    endif()
+    set(SLAYER3D_SDL_TARGET SDL3::SDL3-shared)
+else()
+    set(SLAYER3D_SDL_TARGET SDL3::SDL3)
+    if(IOS AND TARGET SDL3::SDL3-static)
+        set(SLAYER3D_SDL_TARGET SDL3::SDL3-static)
+    elseif(NOT TARGET ${SLAYER3D_SDL_TARGET} AND TARGET SDL3::SDL3-static)
+        set(SLAYER3D_SDL_TARGET SDL3::SDL3-static)
+    elseif(NOT TARGET ${SLAYER3D_SDL_TARGET} AND TARGET SDL3::SDL3-shared)
+        set(SLAYER3D_SDL_TARGET SDL3::SDL3-shared)
+    endif()
 endif()
 
 if(SLAYER3D_ENABLE_NETWORKING)
@@ -417,6 +464,7 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     target_include_directories(slayer3d_pack PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
     slayer3d_enable_warnings(slayer3d_pack)
     slayer3d_enable_sanitizers(slayer3d_pack)
+    slayer3d_copy_runtime_dlls(slayer3d_pack)
 
     add_executable(slayer3d_bundle tools/slayer3d_bundle.c tools/slayer3d_bundle_cli.c tools/slayer3d_fused.c)
     target_link_libraries(slayer3d_bundle PRIVATE Slayer3D::slayer3d slayer3d_argtable3)
@@ -424,6 +472,7 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     target_include_directories(slayer3d_bundle PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/tools)
     slayer3d_enable_warnings(slayer3d_bundle)
     slayer3d_enable_sanitizers(slayer3d_bundle)
+    slayer3d_copy_runtime_dlls(slayer3d_bundle)
 
     add_executable(
         slayer3d_runner
@@ -439,6 +488,7 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     target_compile_definitions(slayer3d_runner PRIVATE SLAYER3D_MEDIA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/media")
     slayer3d_enable_warnings(slayer3d_runner)
     slayer3d_enable_sanitizers(slayer3d_runner)
+    slayer3d_copy_runtime_dlls(slayer3d_runner)
 
     add_executable(
         slayer3d_editor
@@ -465,6 +515,7 @@ if(NOT CMAKE_CROSSCOMPILING AND NOT EMSCRIPTEN)
     )
     slayer3d_enable_warnings(slayer3d_editor)
     slayer3d_enable_sanitizers(slayer3d_editor)
+    slayer3d_copy_runtime_dlls(slayer3d_editor)
 endif()
 
 if(SLAYER3D_BUILD_TESTS)

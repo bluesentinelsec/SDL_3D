@@ -207,7 +207,7 @@ TEST_F(GLRendererTest, RenderProfilesSelectRetroPostProcess)
     {
         slayer3d_render_profile profile = test_case.profile();
         ASSERT_TRUE(slayer3d_set_render_profile(ctx, &profile));
-        ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){4, 5, 6, 255}));
+        ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{4, 5, 6, 255}));
         int width = -1;
         int height = -1;
         slayer3d_gl_active_retro_virtual_resolution(ctx->gl, &width, &height);
@@ -289,10 +289,10 @@ TEST_F(GLRendererTest, DepthPrepassReplaysOpaqueLitTriangles)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(
-        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     unsigned char px[4];
@@ -351,12 +351,12 @@ TEST_F(GLRendererTest, StaticModelMeshesUseInstancedBackendDraws)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     for (int i = 0; i < 5; ++i)
     {
         ASSERT_TRUE(slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(-1.2f + 0.6f * (float)i, 0, 0), 1.0f,
-                                        (slayer3d_color){255, 255, 255, 255}));
+                                        slayer3d_color{255, 255, 255, 255}));
     }
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
@@ -430,10 +430,10 @@ TEST_F(GLRendererTest, SkinnedLitModelsUseGpuSkinningWhenJointBudgetAllows)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_draw_model_skinned(ctx, &model, slayer3d_vec3_make(0, 0, 0), slayer3d_vec3_make(0, 1, 0), 0.0f,
-                                            slayer3d_vec3_make(1, 1, 1), (slayer3d_color){255, 255, 255, 255}, joints));
+                                            slayer3d_vec3_make(1, 1, 1), slayer3d_color{255, 255, 255, 255}, joints));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     unsigned char px[4];
@@ -507,13 +507,13 @@ TEST_F(GLRendererTest, SkinnedLitModelsWithSharedPoseUseInstancedBackendDraw)
 
     constexpr int instance_count = 5;
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     for (int i = 0; i < instance_count; ++i)
     {
         ASSERT_TRUE(slayer3d_draw_model_skinned(ctx, &model, slayer3d_vec3_make(-1.0f + 0.5f * (float)i, 0, 0),
                                                 slayer3d_vec3_make(0, 1, 0), 0.0f, slayer3d_vec3_make(1, 1, 1),
-                                                (slayer3d_color){255, 255, 255, 255}, joints));
+                                                slayer3d_color{255, 255, 255, 255}, joints));
     }
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
@@ -604,7 +604,7 @@ TEST_F(GLRendererTest, SkinnedCrowdBatchesSharedPoseGroupsAndUsesGpuPalette)
     constexpr int instances_per_pose = 16;
     constexpr int crowd_count = pose_count * instances_per_pose;
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     for (int pose = 0; pose < pose_count; ++pose)
     {
@@ -615,7 +615,7 @@ TEST_F(GLRendererTest, SkinnedCrowdBatchesSharedPoseGroupsAndUsesGpuPalette)
             const float y = -0.9f + 0.45f * (float)(index / 16);
             ASSERT_TRUE(slayer3d_draw_model_skinned(ctx, &model, slayer3d_vec3_make(x, y, 0),
                                                     slayer3d_vec3_make(0, 1, 0), 0.0f, slayer3d_vec3_make(1, 1, 1),
-                                                    (slayer3d_color){255, 255, 255, 255}, poses[pose]));
+                                                    slayer3d_color{255, 255, 255, 255}, poses[pose]));
         }
     }
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -695,7 +695,7 @@ TEST_F(GLRendererTest, SkinnedLitModelsFallBackToUniformsWhenPosePaletteIsFull)
 
     constexpr int draw_count = 5;
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     for (int i = 0; i < draw_count; ++i)
     {
@@ -703,7 +703,7 @@ TEST_F(GLRendererTest, SkinnedLitModelsFallBackToUniformsWhenPosePaletteIsFull)
         joints[0].m[12] = 0.01f * (float)i;
         ASSERT_TRUE(slayer3d_draw_model_skinned(ctx, &model, slayer3d_vec3_make(-0.8f + 0.4f * (float)i, 0, 0),
                                                 slayer3d_vec3_make(0, 1, 0), 0.0f, slayer3d_vec3_make(1, 1, 1),
-                                                (slayer3d_color){255, 255, 255, 255}, joints.data()));
+                                                slayer3d_color{255, 255, 255, 255}, joints.data()));
     }
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
@@ -774,10 +774,10 @@ TEST_F(GLRendererTest, SkinnedLitModelsFallBackToCpuWhenJointBudgetIsExceeded)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_draw_model_skinned(ctx, &model, slayer3d_vec3_make(0, 0, 0), slayer3d_vec3_make(0, 1, 0), 0.0f,
-                                            slayer3d_vec3_make(1, 1, 1), (slayer3d_color){255, 255, 255, 255},
+                                            slayer3d_vec3_make(1, 1, 1), slayer3d_color{255, 255, 255, 255},
                                             joints.data()));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
@@ -846,7 +846,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.45f, 0.45f, 0.45f));
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -859,7 +859,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "brush.visibility.enabled", true);
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -876,7 +876,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
 
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -893,7 +893,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     side_cam.target.x = 0.75f;
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, side_cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &side_cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -904,7 +904,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
 
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -951,7 +951,7 @@ TEST_F(GLRendererTest, BrushVisibilityOcclusionCullsHiddenBrushSubmodels)
     slayer3d_properties_set_bool(slayer3d_game_data_mutable_scene_state(runtime), "brush.visibility.enabled", true);
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -1026,7 +1026,7 @@ TEST_F(GLRendererTest, BrushVisibilityDrawsFullyVisibleCompileChunks)
     ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.45f, 0.45f, 0.45f));
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -1101,7 +1101,7 @@ TEST_F(GLRendererTest, BrushVisibilityFrustumCullsOffscreenBrushesBeforeSubmissi
     ASSERT_TRUE(slayer3d_set_ambient_light(ctx, 0.45f, 0.45f, 0.45f));
     slayer3d_reset_render_stats(ctx);
     slayer3d_game_data_reset_brush_diagnostics(runtime);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_game_data_draw_brush_worlds_with_assets_and_camera(runtime, ctx, nullptr, &cam));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
@@ -1453,10 +1453,10 @@ TEST_F(GLRendererTest, DepthPrepassDisabledDoesNotReplayEligibleMeshes)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(
-        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     unsigned char px[4];
@@ -1503,13 +1503,13 @@ TEST_F(GLRendererTest, DepthPrepassReducesMainGeometrySamplesInOverdrawCase)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     auto draw_overdraw_stack = [&](int layer_count) {
-        ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+        ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
         ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
         for (int i = 0; i < layer_count; ++i)
         {
             const float z = -0.14f + (float)i * 0.02f;
             ASSERT_TRUE(slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, z), 1.0f,
-                                            (slayer3d_color){255, 255, 255, 255}));
+                                            slayer3d_color{255, 255, 255, 255}));
         }
         ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
         unsigned char px[4];
@@ -1564,10 +1564,10 @@ TEST_F(GLRendererTest, PhongCubeVisibleWithoutIBL)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){8, 32, 96, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{8, 32, 96, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec3_make(2, 2, 2),
-                       (slayer3d_color){255, 255, 255, 255});
+                       slayer3d_color{255, 255, 255, 255});
     slayer3d_end_mode_3d(ctx);
 
     unsigned char px[4];
@@ -1589,10 +1589,10 @@ TEST_F(GLRendererTest, AmbientOnlyPhongCubeUsesLitPath)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec3_make(2, 2, 2),
-                       (slayer3d_color){255, 255, 255, 255});
+                       slayer3d_color{255, 255, 255, 255});
     slayer3d_end_mode_3d(ctx);
 
     unsigned char px[4];
@@ -1635,10 +1635,10 @@ TEST_F(GLRendererTest, AmbientOnlyPhongModelUsesLitPath)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     ASSERT_TRUE(
-        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, slayer3d_color{255, 255, 255, 255}));
     slayer3d_end_mode_3d(ctx);
 
     unsigned char px[4];
@@ -1696,14 +1696,14 @@ TEST_F(GLRendererTest, PerObjectLightSelectionCapsShaderLightsPerDraw)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(
-        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(-1.2f, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(-1.2f, 0, 0), 1.0f, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(
-        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0.0f, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0.0f, 0, 0), 1.0f, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(
-        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(1.2f, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(1.2f, 0, 0), 1.0f, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     unsigned char px[4];
@@ -1775,10 +1775,10 @@ TEST_F(GLRendererTest, PerObjectLightSelectionChoosesRelevantLocalLight)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     slayer3d_reset_render_stats(ctx);
-    ASSERT_TRUE(slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255}));
+    ASSERT_TRUE(slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255}));
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(
-        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, (slayer3d_color){255, 255, 255, 255}));
+        slayer3d_draw_model(ctx, &model, slayer3d_vec3_make(0, 0, 0), 1.0f, slayer3d_color{255, 255, 255, 255}));
     ASSERT_TRUE(slayer3d_end_mode_3d(ctx));
 
     unsigned char px[4];
@@ -1828,10 +1828,10 @@ TEST_F(GLRendererTest, Line3DVisibleOnGLBackend)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     slayer3d_draw_line_3d(ctx, slayer3d_vec3_make(-1.5f, 0.0f, 0.0f), slayer3d_vec3_make(1.5f, 0.0f, 0.0f),
-                          (slayer3d_color){255, 32, 32, 255});
+                          slayer3d_color{255, 32, 32, 255});
     slayer3d_end_mode_3d(ctx);
 
     bool found_red = false;
@@ -1894,10 +1894,10 @@ TEST_F(GLRendererTest, BackfaceCullingHidesCubeInteriorAcrossFrames)
 
     for (int frame = 0; frame < 2; ++frame)
     {
-        slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+        slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
         slayer3d_begin_mode_3d(ctx, cam);
         slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec3_make(4, 4, 4),
-                           (slayer3d_color){255, 0, 0, 255});
+                           slayer3d_color{255, 0, 0, 255});
         slayer3d_end_mode_3d(ctx);
 
         unsigned char px[4];
@@ -1940,9 +1940,9 @@ TEST_F(GLRendererTest, LevelInteriorVisibleWithBackfaceCulling)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_level(ctx, &level, nullptr, (slayer3d_color){255, 255, 255, 255})) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_draw_level(ctx, &level, nullptr, slayer3d_color{255, 255, 255, 255})) << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
     unsigned char px[4];
@@ -2004,9 +2004,9 @@ TEST_F(GLRendererTest, LightmappedLevelRendersWithoutVertexColorFallback)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_level(ctx, &level, nullptr, (slayer3d_color){255, 255, 255, 255})) << SDL_GetError();
+    ASSERT_TRUE(slayer3d_draw_level(ctx, &level, nullptr, slayer3d_color{255, 255, 255, 255})) << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
     unsigned char px[4];
@@ -2030,10 +2030,10 @@ TEST_F(GLRendererTest, BillboardVisibleWithTexture)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        (slayer3d_vec2){2.0f, 2.0f}, (slayer3d_color){255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2060,10 +2060,10 @@ TEST_F(GLRendererTest, BillboardVisibleFromOppositeViewDirection)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        (slayer3d_vec2){2.0f, 2.0f}, (slayer3d_color){255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2088,10 +2088,10 @@ TEST_F(GLRendererTest, BillboardPreservesTopToBottomTextureOrientation)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        (slayer3d_vec2){2.0f, 2.0f}, (slayer3d_color){255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2119,10 +2119,10 @@ TEST_F(GLRendererTest, BillboardTransparentPixelsDiscard)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
-    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
-                                        (slayer3d_vec2){2.0f, 2.0f}, (slayer3d_color){255, 255, 255, 255}))
+    ASSERT_TRUE(slayer3d_draw_billboard(ctx, &texture, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), slayer3d_vec2{2.0f, 2.0f},
+                                        slayer3d_color{255, 255, 255, 255}))
         << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
 
@@ -2151,8 +2151,8 @@ TEST_F(GLRendererTest, MuzzleFlashParticleShaderProducesNonClearPixels)
     config.lifetime_max = 1.0f;
     config.size_start = 1.4f;
     config.size_end = 1.4f;
-    config.color_start = (slayer3d_color){255, 225, 120, 255};
-    config.color_end = (slayer3d_color){255, 80, 16, 255};
+    config.color_start = slayer3d_color{255, 225, 120, 255};
+    config.color_end = slayer3d_color{255, 80, 16, 255};
     config.max_particles = 1;
     config.render_style = SLAYER3D_PARTICLE_RENDER_MUZZLE_FLASH;
     config.camera_facing = true;
@@ -2162,7 +2162,7 @@ TEST_F(GLRendererTest, MuzzleFlashParticleShaderProducesNonClearPixels)
     ASSERT_NE(emitter, nullptr) << SDL_GetError();
     slayer3d_particle_emitter_emit(emitter, 1);
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     ASSERT_TRUE(slayer3d_begin_mode_3d(ctx, cam));
     ASSERT_TRUE(slayer3d_draw_particles(ctx, emitter)) << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
@@ -2199,7 +2199,7 @@ TEST_F(GLRendererTest, TexturedSkyboxShowsTopFaceWithBackfaceCulling)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     ASSERT_TRUE(slayer3d_set_backface_culling_enabled(ctx, true));
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     ASSERT_TRUE(slayer3d_draw_skybox_textured(ctx, &skybox)) << SDL_GetError();
     slayer3d_end_mode_3d(ctx);
@@ -2260,7 +2260,7 @@ TEST_F(GLRendererTest, TexturedSkyboxMatchesSeamConsistentDirections)
         cam.fovy = 60.0f;
         cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-        slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+        slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
         slayer3d_begin_mode_3d(ctx, cam);
         ASSERT_TRUE(slayer3d_draw_skybox_textured(ctx, &skybox)) << SDL_GetError();
         slayer3d_end_mode_3d(ctx);
@@ -2354,10 +2354,10 @@ TEST_F(GLRendererTest, ShadowPassProducesNonUniformDepth)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     slayer3d_set_ambient_light(ctx, 0.3f, 0.3f, 0.3f);
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec3_make(2, 2, 2),
-                       (slayer3d_color){255, 255, 255, 255});
+                       slayer3d_color{255, 255, 255, 255});
     slayer3d_end_mode_3d(ctx);
 
     /* The center pixel should show the lit cube (not black). */
@@ -2393,10 +2393,10 @@ TEST_F(GLRendererTest, ShadowWorksOnFirstFrame)
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
     /* First frame ever — shadow pass is now automatic. */
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec3_make(2, 2, 2),
-                       (slayer3d_color){255, 255, 255, 255});
+                       slayer3d_color{255, 255, 255, 255});
     slayer3d_end_mode_3d(ctx);
 
     unsigned char px[4];
@@ -2430,16 +2430,14 @@ TEST_F(GLRendererTest, CSMAllLayersHaveDepthData)
     cam.fovy = 60.0f;
     cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
 
-    slayer3d_clear_render_context(ctx, (slayer3d_color){0, 0, 0, 255});
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
     slayer3d_begin_mode_3d(ctx, cam);
     /* Draw a large ground plane and several cubes at different distances. */
-    slayer3d_draw_plane(ctx, slayer3d_vec3_make(0, 0, 0), (slayer3d_vec2){40, 40},
-                        (slayer3d_color){200, 200, 200, 255});
-    slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 1, 0), slayer3d_vec3_make(2, 2, 2), (slayer3d_color){255, 0, 0, 255});
-    slayer3d_draw_cube(ctx, slayer3d_vec3_make(5, 1, -5), slayer3d_vec3_make(2, 2, 2),
-                       (slayer3d_color){0, 255, 0, 255});
+    slayer3d_draw_plane(ctx, slayer3d_vec3_make(0, 0, 0), slayer3d_vec2{40, 40}, slayer3d_color{200, 200, 200, 255});
+    slayer3d_draw_cube(ctx, slayer3d_vec3_make(0, 1, 0), slayer3d_vec3_make(2, 2, 2), slayer3d_color{255, 0, 0, 255});
+    slayer3d_draw_cube(ctx, slayer3d_vec3_make(5, 1, -5), slayer3d_vec3_make(2, 2, 2), slayer3d_color{0, 255, 0, 255});
     slayer3d_draw_cube(ctx, slayer3d_vec3_make(-8, 1, -10), slayer3d_vec3_make(2, 2, 2),
-                       (slayer3d_color){0, 0, 255, 255});
+                       slayer3d_color{0, 0, 255, 255});
     slayer3d_end_mode_3d(ctx);
 
     /* The center pixel should show the lit scene (not black). */

@@ -9,3 +9,5 @@ set_target_properties(gui_demo PROPERTIES
 if(NOT WIN32)
     target_link_libraries(gui_demo PRIVATE m)
 endif()
+
+slayer3d_copy_runtime_dlls(gui_demo)

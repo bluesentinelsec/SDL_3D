@@ -293,7 +293,7 @@ TEST(SLAYER3DActor, NullActorPropertyAccessIsSafe)
     slayer3d_actor_set_rotation(nullptr, slayer3d_vec3_make(0, 1, 0), 1.0f);
     slayer3d_actor_set_scale(nullptr, slayer3d_vec3_make(1, 1, 1));
     slayer3d_actor_set_visible(nullptr, true);
-    slayer3d_actor_set_tint(nullptr, (slayer3d_color){255, 255, 255, 255});
+    slayer3d_actor_set_tint(nullptr, slayer3d_color{255, 255, 255, 255});
 
     slayer3d_vec3 pos = slayer3d_actor_get_position(nullptr);
     EXPECT_FLOAT_EQ(pos.x, 0.0f);

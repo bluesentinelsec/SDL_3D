@@ -31,7 +31,7 @@ function(slayer3d_add_test target_name source_file test_label)
             GTest::gtest_main
     )
 
-    target_compile_features(${target_name} PRIVATE cxx_std_17)
+    target_compile_features(${target_name} PRIVATE cxx_std_20)
     target_compile_definitions(
         ${target_name}
         PRIVATE
@@ -49,14 +49,7 @@ function(slayer3d_add_test target_name source_file test_label)
         target_link_options(${target_name} PRIVATE "--emrun")
     endif()
 
-    if(WIN32)
-        add_custom_command(
-            TARGET ${target_name}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:${target_name}> $<TARGET_FILE_DIR:${target_name}>
-            COMMAND_EXPAND_LISTS
-        )
-    endif()
+    slayer3d_copy_runtime_dlls(${target_name})
 
     set(_slayer3d_test_timeout 15)
     if(test_label STREQUAL "render")
@@ -137,7 +130,7 @@ if(ANDROID)
             android
     )
 
-    target_compile_features(main PRIVATE cxx_std_17)
+    target_compile_features(main PRIVATE cxx_std_20)
     target_include_directories(main PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_definitions(
         main
@@ -162,7 +155,7 @@ elseif(IOS)
             GTest::gtest
     )
 
-    target_compile_features(slayer3d_ios_tests PRIVATE cxx_std_17)
+    target_compile_features(slayer3d_ios_tests PRIVATE cxx_std_20)
     target_include_directories(slayer3d_ios_tests PRIVATE ${CMAKE_SOURCE_DIR}/src)
     target_compile_definitions(
         slayer3d_ios_tests

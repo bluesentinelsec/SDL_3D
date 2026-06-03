@@ -1,0 +1,79 @@
+name: Windows MSVC
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  static-debug:
+    name: MSVC static Debug
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      BUILD_DIR: build\windows-msvc
+      BUILD_CONFIG: Debug
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path logs | Out-Null
+          cmake -S . -B "$env:BUILD_DIR" `
+            -G "Visual Studio 17 2022" `
+            -A x64 `
+            -DSLAYER3D_BUILD_TESTS=ON `
+            -DSLAYER3D_BUILD_DEMOS=ON `
+            -DSLAYER3D_BUILD_BENCHMARKS=OFF `
+            -DSLAYER3D_SDL_LINKAGE=static 2>&1 | Tee-Object logs\configure.log
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Build
+        shell: pwsh
+        run: |
+          cmake --build "$env:BUILD_DIR" --config "$env:BUILD_CONFIG" --parallel 2>&1 | Tee-Object logs\build.log
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Verify SDL is statically linked
+        shell: pwsh
+        run: |
+          dumpbin /DEPENDENTS "$env:BUILD_DIR\$env:BUILD_CONFIG\slayer3d_editor.exe" | Tee-Object logs\editor-dependencies.log
+          if (Select-String -Path logs\editor-dependencies.log -Pattern 'SDL3\.dll') {
+            Write-Error 'slayer3d_editor.exe imports SDL3.dll; expected static SDL linkage.'
+            exit 1
+          }
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          ctest --test-dir "$env:BUILD_DIR" -C "$env:BUILD_CONFIG" --output-on-failure 2>&1 | Tee-Object logs\ctest.log
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Smoke test editor help
+        shell: pwsh
+        run: |
+          & "$env:BUILD_DIR\$env:BUILD_CONFIG\slayer3d_editor.exe" -h 2>&1 | Tee-Object logs\editor-help.log
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-msvc-logs
+          path: logs
+          retention-days: 14
