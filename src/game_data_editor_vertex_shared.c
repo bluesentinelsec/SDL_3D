@@ -45,6 +45,7 @@ void clear_editor_drag_move(slayer3d_game_data_runtime *runtime)
         return;
     SDL_zero(runtime->editor_drag_move);
     publish_editor_vertex_drag_state(runtime, NULL);
+    publish_editor_edge_drag_state(runtime, NULL);
 }
 
 const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)

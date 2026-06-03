@@ -28,6 +28,15 @@ void init_editor_source_vertex_selection(editor_source_vertex_selection *selecti
     selection->vertex_index = -1;
 }
 
+void init_editor_source_edge_selection(editor_source_edge_selection *selection)
+{
+    if (selection == NULL)
+        return;
+    SDL_zero(*selection);
+    selection->source_index = -1;
+    selection->edge_index = -1;
+}
+
 bool editor_selected_vertices_active_for_scene(const slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
@@ -35,6 +44,15 @@ bool editor_selected_vertices_active_for_scene(const slayer3d_game_data_runtime 
     const char *active_scene = slayer3d_game_data_active_scene(runtime);
     return runtime->editor_selected_vertex_scene != NULL && active_scene != NULL &&
            SDL_strcmp(runtime->editor_selected_vertex_scene, active_scene) == 0;
+}
+
+bool editor_selected_edges_active_for_scene(const slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return false;
+    const char *active_scene = slayer3d_game_data_active_scene(runtime);
+    return runtime->editor_selected_edge_scene != NULL && active_scene != NULL &&
+           SDL_strcmp(runtime->editor_selected_edge_scene, active_scene) == 0;
 }
 
 void publish_editor_selected_vertex_count(slayer3d_game_data_runtime *runtime)
@@ -80,6 +98,49 @@ void publish_editor_selected_vertex_count(slayer3d_game_data_runtime *runtime)
                                                     (float)selection->coord[2] * meters_per_unit));
 }
 
+void publish_editor_selected_edge_count(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const int count = editor_selected_edges_active_for_scene(runtime) ? runtime->editor_selected_edge_count : 0;
+    slayer3d_properties_set_int(runtime->scene_state, "editor.edge.selection.count", count);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.selection.multiple", count > 1);
+    if (count <= 0)
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.world", "");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.brush", "");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.brush_stable_id", "");
+        slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.edge", "");
+        slayer3d_properties_set_int(runtime->scene_state, "editor.edge.selection.index", -1);
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.selection.start",
+                                     slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.selection.end",
+                                     slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        return;
+    }
+
+    const editor_source_edge_selection *selection = &runtime->editor_selected_edges[count - 1];
+    const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection->world_name);
+    const float meters_per_unit = world_runtime != NULL && world_runtime->editor_source_meters_per_unit > 0.0f
+                                      ? world_runtime->editor_source_meters_per_unit
+                                      : 0.001f;
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.world", selection->world_name);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.brush", selection->brush_name);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.brush_stable_id",
+                                   selection->brush_stable_id);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.selection.edge", selection->edge_stable_id);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.edge.selection.index", selection->edge_index);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.selection.start",
+                                 slayer3d_vec3_make((float)selection->coord[0][0] * meters_per_unit,
+                                                    (float)selection->coord[0][1] * meters_per_unit,
+                                                    (float)selection->coord[0][2] * meters_per_unit));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.selection.end",
+                                 slayer3d_vec3_make((float)selection->coord[1][0] * meters_per_unit,
+                                                    (float)selection->coord[1][1] * meters_per_unit,
+                                                    (float)selection->coord[1][2] * meters_per_unit));
+}
+
 void clear_editor_selected_vertices(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL)
@@ -89,6 +150,17 @@ void clear_editor_selected_vertices(slayer3d_game_data_runtime *runtime)
     runtime->editor_selected_vertex_count = 0;
     runtime->editor_selected_vertex_scene = slayer3d_game_data_active_scene(runtime);
     publish_editor_selected_vertex_count(runtime);
+}
+
+void clear_editor_selected_edges(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL)
+        return;
+    for (int i = 0; i < SLAYER3D_EDITOR_SELECTED_EDGE_CAPACITY; ++i)
+        init_editor_source_edge_selection(&runtime->editor_selected_edges[i]);
+    runtime->editor_selected_edge_count = 0;
+    runtime->editor_selected_edge_scene = slayer3d_game_data_active_scene(runtime);
+    publish_editor_selected_edge_count(runtime);
 }
 
 void publish_editor_vertex_lasso_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
@@ -111,6 +183,53 @@ void publish_editor_vertex_lasso_state(slayer3d_game_data_runtime *runtime, cons
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.lasso.selected_count", selected_count);
 }
 
+void publish_editor_edge_lasso_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
+                                     int selected_count)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const bool active = drag != NULL && drag->active && drag->edge_lasso;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.lasso.active", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.lasso.additive",
+                                 active ? drag->lasso_additive : false);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.start_x",
+                                  active ? drag->start_mouse_x : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.start_y",
+                                  active ? drag->start_mouse_y : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.end_x",
+                                  active ? drag->current_mouse_x : 0.0f);
+    slayer3d_properties_set_float(runtime->scene_state, "editor.edge.lasso.end_y",
+                                  active ? drag->current_mouse_y : 0.0f);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.edge.lasso.selected_count", selected_count);
+}
+
+void publish_editor_edge_drag_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+
+    const bool active = drag != NULL && drag->active && drag->edge_drag;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.active", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.moved", active ? drag->moved : false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.axis_lock_y",
+                                 active ? drag->axis_lock_y : false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.drag.axis_lock_dominant",
+                                 active ? drag->axis_lock_dominant : false);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.drag.offset",
+                                 active ? drag->applied_offset : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+}
+
+void publish_editor_edge_move_result(slayer3d_game_data_runtime *runtime, bool valid, int edge_count,
+                                     const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.move.valid", valid);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.edge.move.edge_count", edge_count);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.move.message", message != NULL ? message : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message != NULL ? message : "");
+}
+
 void publish_editor_selected_brush_count(slayer3d_game_data_runtime *runtime)
 {
     if (runtime == NULL || runtime->scene_state == NULL)
@@ -125,6 +244,7 @@ void clear_editor_selected_brushes(slayer3d_game_data_runtime *runtime)
     if (runtime == NULL)
         return;
     clear_editor_selected_vertices(runtime);
+    clear_editor_selected_edges(runtime);
     for (int i = 0; i < SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY; ++i)
         init_editor_selection(&runtime->editor_selected_brushes[i]);
     runtime->editor_selected_brush_count = 0;
@@ -159,4 +279,18 @@ void clear_editor_vertex_hover_state(slayer3d_game_data_runtime *runtime)
     slayer3d_properties_set_int(runtime->scene_state, "editor.vertex.hover.z", 0);
     slayer3d_properties_set_vec3(runtime->scene_state, "editor.vertex.hover.coord",
                                  slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+}
+
+void clear_editor_edge_hover_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.hover.hit", false);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.hover.brush", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.hover.brush_stable_id", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.edge.hover.edge", "");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.edge.hover.selected", false);
+    slayer3d_properties_set_int(runtime->scene_state, "editor.edge.hover.index", -1);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.hover.start", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.edge.hover.end", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
 }

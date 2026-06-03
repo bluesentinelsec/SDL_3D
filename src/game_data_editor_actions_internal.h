@@ -7,6 +7,7 @@
 
 bool slayer3d_game_data_clear_active_editor_selection(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_clear_editor_vertex_selection(slayer3d_game_data_runtime *runtime);
+bool slayer3d_game_data_clear_editor_edge_selection(slayer3d_game_data_runtime *runtime);
 bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime, const char *mode,
                                              const char *message_override);
 bool slayer3d_game_data_enter_editor_clip_tool(slayer3d_game_data_runtime *runtime, const char *message_override);

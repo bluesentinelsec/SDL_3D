@@ -969,6 +969,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("console.write", validate_console_write_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.clear", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.vertex.selection.clear", validate_noop_action),
+        ACTION_RULE_EXACT_HANDLER("editor.edge.selection.clear", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.tool.set_mode", validate_editor_tool_set_mode_action),
         ACTION_RULE_EXACT_HANDLER("editor.clip.cancel", validate_noop_action),
         ACTION_RULE_EXACT_HANDLER("editor.clip.escape", validate_noop_action),

@@ -384,8 +384,10 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
     if (runtime == NULL || runtime->scene_state == NULL)
         return true;
     const bool vertex_mode = editor_mode_is_vertex(runtime);
+    const bool edge_mode = editor_mode_is_edge(runtime);
+    const bool source_handle_mode = vertex_mode || edge_mode;
     const bool brush_transform_mode = editor_mode_is_select(runtime) || editor_mode_is_brush(runtime);
-    if (!brush_transform_mode && !vertex_mode)
+    if (!brush_transform_mode && !source_handle_mode)
         return true;
 
     slayer3d_input_manager *input = runtime_input(runtime);
@@ -396,23 +398,23 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
     const SDL_Keymod modifiers = SDL_GetModState();
     const bool transform_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_ALT)) != 0;
     const bool duplicate_modifier = (modifiers & (SDL_KMOD_CTRL | SDL_KMOD_GUI)) != 0;
-    if (!vertex_mode && duplicate_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_D))
+    if (!source_handle_mode && duplicate_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_D))
     {
         (void)slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 0.0f, 0.0f), true);
         if (out_changed != NULL)
             *out_changed = true;
         return true;
     }
-    if (!vertex_mode && (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_HOME) ||
-                         (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT))))
+    if (!source_handle_mode && (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_HOME) ||
+                                (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_LEFT))))
     {
         (void)slayer3d_game_data_rotate_selected_editor_brushes_y(runtime, 1);
         if (out_changed != NULL)
             *out_changed = true;
         return true;
     }
-    if (!vertex_mode && (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_END) ||
-                         (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT))))
+    if (!source_handle_mode && (slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_END) ||
+                                (transform_modifier && slayer3d_input_is_scancode_pressed(input, SDL_SCANCODE_RIGHT))))
     {
         (void)slayer3d_game_data_rotate_selected_editor_brushes_y(runtime, -1);
         if (out_changed != NULL)
@@ -450,12 +452,15 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
 
     if (slayer3d_vec3_length_squared(offset) <= 0.0000001f)
         return true;
+    bool moved = false;
     if (vertex_mode)
-        (void)editor_translate_selected_vertices(runtime, offset);
+        moved = editor_translate_selected_vertices(runtime, offset);
+    else if (edge_mode)
+        moved = editor_translate_selected_edges(runtime, offset);
     else
-        (void)slayer3d_game_data_translate_selected_editor_brushes(runtime, offset);
+        moved = slayer3d_game_data_translate_selected_editor_brushes(runtime, offset);
     if (out_changed != NULL)
-        *out_changed = true;
+        *out_changed = moved;
     return true;
 }
 
@@ -727,6 +732,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         !editor_pick_selection_from_json(runtime, selection_json, &trace, &hover_selection))
     {
         clear_editor_vertex_hover_state(runtime);
+        clear_editor_edge_hover_state(runtime);
         return false;
     }
 
@@ -741,16 +747,9 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
 
     publish_editor_selection(runtime, obj_get(selection_json, "hover_outputs"), &hover_selection);
     publish_editor_vertex_hover_state(runtime, &hover_selection);
+    publish_editor_edge_hover_state(runtime, &hover_selection);
     bool ui_consumed = false;
     if (!editor_handle_grid_widget(runtime, editor, &ui_consumed))
-        return false;
-    if (ui_consumed)
-    {
-        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
-        publish_editor_selected_brush_count(runtime);
-        return true;
-    }
-    if (!editor_handle_prefabs_widget(runtime, editor, &ui_consumed))
         return false;
     if (ui_consumed)
     {
@@ -818,6 +817,36 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_vertex_count(runtime);
         return true;
     }
+    bool edge_drag_consumed = false;
+    if (!editor_handle_edge_drag(runtime, &hover_selection, &edge_drag_consumed))
+        return false;
+    if (edge_drag_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        publish_editor_selected_edge_count(runtime);
+        return true;
+    }
+    bool edge_lasso_consumed = false;
+    if (!editor_handle_edge_lasso(runtime, selection_json, &hover_selection, &edge_lasso_consumed))
+        return false;
+    if (edge_lasso_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        publish_editor_selected_edge_count(runtime);
+        return true;
+    }
+    bool edge_selection_consumed = false;
+    if (!editor_handle_edge_selection(runtime, &hover_selection, select_requested, &edge_selection_consumed))
+        return false;
+    if (edge_selection_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        publish_editor_selected_edge_count(runtime);
+        return true;
+    }
     bool face_drag_consumed = false;
     if (!editor_handle_face_drag(runtime, &hover_selection, &face_drag_consumed))
         return false;
@@ -862,6 +891,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
         publish_editor_selected_brush_count(runtime);
         publish_editor_selected_vertex_count(runtime);
+        publish_editor_selected_edge_count(runtime);
         return true;
     }
     if (drag_consumed)
@@ -899,7 +929,8 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         return true;
     }
 
-    if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime) || editor_mode_is_vertex(runtime)) &&
+    if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime) || editor_mode_is_edge(runtime) ||
+         editor_mode_is_vertex(runtime)) &&
         hover_selection.hit)
     {
         runtime->editor_active_selection = hover_selection;

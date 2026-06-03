@@ -188,6 +188,12 @@ bool editor_mode_is_face(const slayer3d_game_data_runtime *runtime)
            SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "face") == 0;
 }
 
+bool editor_mode_is_edge(const slayer3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "edge") == 0;
+}
+
 bool editor_mode_is_vertex(const slayer3d_game_data_runtime *runtime)
 {
     return runtime != NULL && runtime->scene_state != NULL &&

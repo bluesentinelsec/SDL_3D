@@ -115,6 +115,14 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_STATUS_LABEL = 25,
         /** @brief Clip tool source-geometry snap target marker. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_CLIP_SNAP_TARGET = 26,
+        /** @brief Editable source brush edge line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_EDITABLE_EDGE = 27,
+        /** @brief Editable source brush edge midpoint handle. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HANDLE = 28,
+        /** @brief Hovered source brush edge midpoint handle. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_HOVER_HANDLE = 29,
+        /** @brief Selected source brush edge midpoint handle. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_EDGE_SELECTED_HANDLE = 30,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -143,6 +151,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES = 1u << 10,
         /** @brief Emit active source clip preview edges. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW = 1u << 11,
+        /** @brief Emit source edge handles for selected brushes. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES = 1u << 12,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
@@ -151,7 +161,7 @@ extern "C"
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */
