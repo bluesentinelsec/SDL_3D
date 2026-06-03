@@ -117,10 +117,10 @@ TEST(Action, SetPropertyColor)
     a.set_property.target = props;
     a.set_property.key = "tint";
     a.set_property.value.type = SLAYER3D_VALUE_COLOR;
-    a.set_property.value.as_color = (slayer3d_color){255, 0, 0, 255};
+    a.set_property.value.as_color = slayer3d_color{255, 0, 0, 255};
 
     slayer3d_action_execute(&a, NULL, NULL);
-    slayer3d_color c = slayer3d_properties_get_color(props, "tint", (slayer3d_color){0, 0, 0, 0});
+    slayer3d_color c = slayer3d_properties_get_color(props, "tint", slayer3d_color{0, 0, 0, 0});
     EXPECT_EQ(c.r, 255);
     EXPECT_EQ(c.g, 0);
 

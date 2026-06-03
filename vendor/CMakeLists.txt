@@ -11,22 +11,18 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/walterschell/Lua.git
     GIT_TAG v5.4.7
     GIT_SHALLOW TRUE
+    SOURCE_SUBDIR slayer3d_no_upstream_cmake
 )
-FetchContent_GetProperties(slayer3d_lua_source)
-if(NOT slayer3d_lua_source_POPULATED)
-    FetchContent_Populate(slayer3d_lua_source)
-endif()
 
 FetchContent_Declare(
     slayer3d_miniz_source
     GIT_REPOSITORY https://github.com/richgel999/miniz.git
     GIT_TAG 3.1.0
     GIT_SHALLOW TRUE
+    SOURCE_SUBDIR slayer3d_no_upstream_cmake
 )
-FetchContent_GetProperties(slayer3d_miniz_source)
-if(NOT slayer3d_miniz_source_POPULATED)
-    FetchContent_Populate(slayer3d_miniz_source)
-endif()
+
+FetchContent_MakeAvailable(slayer3d_lua_source slayer3d_miniz_source)
 
 set(SLAYER3D_MINIZ_HEADER "${slayer3d_miniz_source_SOURCE_DIR}/miniz.h")
 if(EXISTS "${SLAYER3D_MINIZ_HEADER}")
@@ -74,8 +70,6 @@ if(UNIX AND NOT EMSCRIPTEN)
 endif()
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_lua PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_lua PRIVATE /w)
 endif()
 
 add_library(slayer3d_cgltf OBJECT cgltf/cgltf_impl.c)
@@ -83,8 +77,6 @@ target_include_directories(slayer3d_cgltf PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/cgl
 set_target_properties(slayer3d_cgltf PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_cgltf PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_cgltf PRIVATE /w)
 endif()
 
 add_library(slayer3d_ufbx OBJECT ufbx/ufbx.c)
@@ -92,8 +84,6 @@ target_include_directories(slayer3d_ufbx PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/ufbx
 set_target_properties(slayer3d_ufbx PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_ufbx PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_ufbx PRIVATE /w)
 endif()
 
 add_library(slayer3d_stb OBJECT stb/stb_impl.c stb/stb_truetype_impl.c)
@@ -101,8 +91,6 @@ target_include_directories(slayer3d_stb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/stb)
 set_target_properties(slayer3d_stb PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_stb PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_stb PRIVATE /w)
 endif()
 
 if(APPLE)
@@ -115,8 +103,6 @@ target_include_directories(slayer3d_miniaudio PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 set_target_properties(slayer3d_miniaudio PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_miniaudio PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_miniaudio PRIVATE /w)
 endif()
 
 add_library(slayer3d_yyjson OBJECT yyjson/yyjson.c)
@@ -124,8 +110,6 @@ target_include_directories(slayer3d_yyjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/yy
 set_target_properties(slayer3d_yyjson PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_yyjson PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_yyjson PRIVATE /w)
 endif()
 
 add_library(
@@ -146,8 +130,6 @@ target_compile_definitions(slayer3d_miniz PRIVATE MINIZ_NO_ARCHIVE_APIS MINIZ_NO
                                                 MINIZ_NO_ZLIB_COMPATIBLE_NAMES)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_miniz PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_miniz PRIVATE /w)
 endif()
 
 add_library(slayer3d_crypto OBJECT crypto/slayer3d_crypto.c)
@@ -177,6 +159,4 @@ target_include_directories(slayer3d_argtable3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
 set_target_properties(slayer3d_argtable3 PROPERTIES POSITION_INDEPENDENT_CODE ON)
 if(CMAKE_C_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     target_compile_options(slayer3d_argtable3 PRIVATE -w)
-elseif(MSVC)
-    target_compile_options(slayer3d_argtable3 PRIVATE /w)
 endif()

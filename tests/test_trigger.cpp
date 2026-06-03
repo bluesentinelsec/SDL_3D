@@ -47,7 +47,7 @@ static slayer3d_trigger make_spatial_trigger(slayer3d_bounding_box zone, slayer3
 
 static slayer3d_bounding_box make_box(float x0, float y0, float z0, float x1, float y1, float z1)
 {
-    return (slayer3d_bounding_box){{x0, y0, z0}, {x1, y1, z1}};
+    return slayer3d_bounding_box{{x0, y0, z0}, {x1, y1, z1}};
 }
 
 /* ================================================================== */
