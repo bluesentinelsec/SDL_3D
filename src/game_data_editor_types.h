@@ -101,6 +101,7 @@ typedef struct editor_drag_move_state
     bool edge_drag;
     bool edge_lasso;
     bool rotate_drag;
+    bool scale_drag;
     bool vertex_toggle_on_click;
     bool lasso_additive;
     const char *scene;
@@ -122,6 +123,15 @@ typedef struct editor_drag_move_state
     bool rotate_screen_basis_valid;
     bool rotate_hovered;
     bool rotate_preview_valid;
+    slayer3d_bounding_box scale_start_bounds;
+    slayer3d_vec3 scale_anchor;
+    slayer3d_vec3 scale_handle_signs;
+    slayer3d_vec3 scale_factors;
+    slayer3d_vec3 scale_start_handle;
+    bool scale_center_anchor;
+    bool scale_proportional;
+    bool scale_hovered;
+    bool scale_preview_valid;
     int vertex_origin_count;
     editor_drag_vertex_origin vertex_toggle_origin;
     editor_drag_vertex_origin vertex_origins[SLAYER3D_EDITOR_DRAG_VERTEX_ORIGIN_CAPACITY];
@@ -408,6 +418,8 @@ typedef struct editor_command_transaction_entry
     int brush_index;
     bool has_source_box_snapshot;
     editor_brush_source_box_runtime source_box_snapshot;
+    bool has_source_box_after_snapshot;
+    editor_brush_source_box_runtime source_box_after_snapshot;
     int source_clip_before_count;
     int source_clip_after_count;
     int source_clip_before_indices[SLAYER3D_EDITOR_SOURCE_CLIP_BRUSH_CAPACITY];

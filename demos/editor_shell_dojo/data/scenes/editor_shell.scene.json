@@ -297,6 +297,12 @@
         "tool_mode": "rotate",
         "message": "rotate tool",
         "button": { "x": 598, "y": 45, "w": 100, "h": 28 }
+      },
+      {
+        "mode": "scale",
+        "tool_mode": "scale",
+        "message": "scale tool",
+        "button": { "x": 704, "y": 45, "w": 88, "h": 28 }
       }
     ],
     "palette": {
@@ -361,6 +367,7 @@
         "vertex_handles",
         "edge_handles",
         "rotate_handles",
+        "scale_handles",
         "command_preview",
         "clip_preview",
         "markers"
@@ -517,6 +524,16 @@
             "interactive": true,
             "action": "editor.tool.rotate",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "rotate" }
+          },
+          {
+            "id": "ui.editor_shell.tool_toolbar.scale.button",
+            "type": "button",
+            "w": 88,
+            "h": 28,
+            "text": "Scale",
+            "interactive": true,
+            "action": "editor.tool.scale",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "scale" }
           },
           {
             "id": "ui.editor_shell.tool_toolbar.entity.button",

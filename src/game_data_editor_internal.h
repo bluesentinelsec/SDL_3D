@@ -67,6 +67,7 @@ bool editor_mode_is_face(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_edge(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_vertex(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_rotate(const slayer3d_game_data_runtime *runtime);
+bool editor_mode_is_scale(const slayer3d_game_data_runtime *runtime);
 bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,
                                     const char *element_name);
 bool editor_hover_is_selected_brush(const slayer3d_game_data_runtime *runtime,
@@ -95,6 +96,8 @@ bool editor_handle_vertex_drag(slayer3d_game_data_runtime *runtime,
 bool editor_handle_vertex_add_to_source(slayer3d_game_data_runtime *runtime,
                                         const slayer3d_game_data_editor_selection *hover_selection,
                                         bool select_requested, bool *out_consumed);
+void reset_editor_rotate_tool_state(slayer3d_game_data_runtime *runtime, const char *message);
+void reset_editor_scale_tool_state(slayer3d_game_data_runtime *runtime, const char *message);
 bool editor_handle_vertex_selection(slayer3d_game_data_runtime *runtime,
                                     const slayer3d_game_data_editor_selection *hover_selection, bool select_requested,
                                     bool *out_consumed);
@@ -145,6 +148,8 @@ bool slayer3d_game_data_create_editor_source_box_brush(slayer3d_game_data_runtim
 bool slayer3d_game_data_translate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset);
 bool slayer3d_game_data_rotate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 pivot,
                                                        slayer3d_vec3 axis, float angle_radians);
+bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 anchor,
+                                                      slayer3d_vec3 factors);
 bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, int quarter_turns);
 bool slayer3d_game_data_duplicate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 offset,
                                                           bool use_last_offset);

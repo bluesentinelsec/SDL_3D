@@ -426,6 +426,182 @@ void reset_editor_rotate_tool_state(slayer3d_game_data_runtime *runtime, const c
                                                    : (has_pivot ? "rotate tool" : "select a brush before rotate tool"));
 }
 
+void reset_editor_scale_tool_state(slayer3d_game_data_runtime *runtime, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_bounding_box bounds;
+    const bool has_bounds = editor_selected_bounds(runtime, &bounds);
+    const slayer3d_vec3 anchor = has_bounds ? slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f)
+                                            : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.ready", has_bounds);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.dragging", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.hovered", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.live_preview", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.valid", has_bounds);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.proportional", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.center_anchor", false);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.anchor", anchor);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.factors", slayer3d_vec3_make(1.0f, 1.0f, 1.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.handle_axes",
+                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_string(runtime->scene_state, "editor.scale.handle", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.scale.message",
+                                   message != NULL ? message
+                                                   : (has_bounds ? "scale tool" : "select a brush before scale tool"));
+}
+
+static slayer3d_vec3 editor_scale_bounds_point(slayer3d_bounding_box bounds, slayer3d_vec3 signs)
+{
+    const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+    return slayer3d_vec3_make(signs.x < -0.5f ? bounds.min.x : (signs.x > 0.5f ? bounds.max.x : center.x),
+                              signs.y < -0.5f ? bounds.min.y : (signs.y > 0.5f ? bounds.max.y : center.y),
+                              signs.z < -0.5f ? bounds.min.z : (signs.z > 0.5f ? bounds.max.z : center.z));
+}
+
+static int editor_scale_active_axis_count(slayer3d_vec3 signs)
+{
+    int count = 0;
+    if (SDL_fabsf(signs.x) > 0.5f)
+        count++;
+    if (SDL_fabsf(signs.y) > 0.5f)
+        count++;
+    if (SDL_fabsf(signs.z) > 0.5f)
+        count++;
+    return count;
+}
+
+static const char *editor_scale_handle_name(slayer3d_vec3 signs)
+{
+    const int axes = editor_scale_active_axis_count(signs);
+    return axes == 1 ? "side" : (axes == 2 ? "edge" : (axes == 3 ? "corner" : ""));
+}
+
+static bool editor_pick_scale_handle_at(slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
+                                        slayer3d_bounding_box bounds, slayer3d_vec3 *out_signs)
+{
+    if (runtime == NULL || out_signs == NULL)
+        return false;
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    yyjson_val *selection = obj_get(editor, "selection");
+    yyjson_val *trace = obj_get(selection, "trace");
+    editor_trace_viewport_config viewport;
+    if (!editor_trace_select_viewport_at(runtime, trace, mouse_x, mouse_y, &viewport))
+        return false;
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, viewport.camera, &camera))
+        return false;
+
+    int best_x = 0;
+    int best_y = 0;
+    int best_z = 0;
+    float best_distance = FLT_MAX;
+    for (int sx = -1; sx <= 1; ++sx)
+    {
+        for (int sy = -1; sy <= 1; ++sy)
+        {
+            for (int sz = -1; sz <= 1; ++sz)
+            {
+                if (sx == 0 && sy == 0 && sz == 0)
+                    continue;
+                float screen_x = 0.0f;
+                float screen_y = 0.0f;
+                const slayer3d_vec3 point =
+                    editor_scale_bounds_point(bounds, slayer3d_vec3_make((float)sx, (float)sy, (float)sz));
+                if (!editor_project_world_to_viewport(&camera, &viewport, point, &screen_x, &screen_y))
+                    continue;
+                const float dx = mouse_x - (viewport.x + screen_x);
+                const float dy = mouse_y - (viewport.y + screen_y);
+                const float distance = dx * dx + dy * dy;
+                if (distance < best_distance)
+                {
+                    best_distance = distance;
+                    best_x = sx;
+                    best_y = sy;
+                    best_z = sz;
+                }
+            }
+        }
+    }
+    const float handle_pick_radius_pixels = 18.0f;
+    if (best_distance > handle_pick_radius_pixels * handle_pick_radius_pixels)
+        return false;
+    *out_signs = slayer3d_vec3_make((float)best_x, (float)best_y, (float)best_z);
+    return true;
+}
+
+static slayer3d_vec3 editor_scale_anchor_for_handle(slayer3d_bounding_box bounds, slayer3d_vec3 signs,
+                                                    bool center_anchor)
+{
+    if (center_anchor)
+        return slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+    return editor_scale_bounds_point(bounds, slayer3d_vec3_scale(signs, -1.0f));
+}
+
+static slayer3d_vec3 editor_scale_drag_factors(const editor_drag_move_state *drag, float mouse_x, float mouse_y)
+{
+    slayer3d_vec3 factors = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    if (drag == NULL)
+        return factors;
+    const float sx = drag->scale_start_handle.x - drag->scale_anchor.x;
+    const float sy = drag->scale_start_handle.y - drag->scale_anchor.y;
+    const float sz = drag->scale_start_handle.z - drag->scale_anchor.z;
+    const float start_len = SDL_sqrtf(sx * sx + sy * sy + sz * sz);
+    if (start_len <= 0.000001f)
+        return factors;
+
+    const float mouse_delta = ((mouse_x - drag->start_mouse_x) - (mouse_y - drag->start_mouse_y)) * 0.01f;
+    float factor = 1.0f + mouse_delta;
+    if (factor < 0.05f)
+        factor = 0.05f;
+    factor = SDL_roundf(factor * 20.0f) / 20.0f;
+
+    const bool proportional = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0 || drag->scale_proportional;
+    if (proportional)
+    {
+        factors = slayer3d_vec3_make(factor, factor, factor);
+    }
+    else
+    {
+        if (SDL_fabsf(drag->scale_handle_signs.x) > 0.5f)
+            factors.x = factor;
+        if (SDL_fabsf(drag->scale_handle_signs.y) > 0.5f)
+            factors.y = factor;
+        if (SDL_fabsf(drag->scale_handle_signs.z) > 0.5f)
+            factors.z = factor;
+    }
+    return factors;
+}
+
+static void publish_editor_scale_drag_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
+                                            bool valid, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const bool active = drag != NULL && drag->active && drag->scale_drag;
+    const slayer3d_vec3 factors = active ? drag->scale_factors : slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.ready", runtime->editor_selected_brush_count > 0);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.dragging", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.hovered", drag != NULL && drag->scale_hovered);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.live_preview",
+                                 active && (SDL_fabsf(factors.x - 1.0f) > 0.000001f ||
+                                            SDL_fabsf(factors.y - 1.0f) > 0.000001f ||
+                                            SDL_fabsf(factors.z - 1.0f) > 0.000001f));
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.valid", valid);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.proportional", active && drag->scale_proportional);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.center_anchor",
+                                 active && drag->scale_center_anchor);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.anchor",
+                                 active ? drag->scale_anchor : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.factors", factors);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.handle_axes",
+                                 drag != NULL ? drag->scale_handle_signs : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_string(
+        runtime->scene_state, "editor.scale.handle",
+        drag != NULL && drag->scale_hovered ? editor_scale_handle_name(drag->scale_handle_signs) : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.scale.message", message != NULL ? message : "");
+}
+
 static void publish_editor_rotate_drag_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
                                              bool valid, const char *message)
 {
@@ -859,6 +1035,139 @@ static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
+static bool editor_update_scale_hover_state(slayer3d_game_data_runtime *runtime)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_scale(runtime) ||
+        runtime->editor_drag_move.scale_drag)
+    {
+        return false;
+    }
+    slayer3d_vec3 signs = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    bool hovered = false;
+    slayer3d_bounding_box bounds;
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input != NULL && editor_selected_bounds(runtime, &bounds))
+    {
+        float mouse_x = 0.0f;
+        float mouse_y = 0.0f;
+        if (slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+            hovered = editor_pick_scale_handle_at(runtime, mouse_x, mouse_y, bounds, &signs);
+    }
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.hovered", hovered);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.handle_axes", signs);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.scale.handle",
+                                   hovered ? editor_scale_handle_name(signs) : "");
+    return hovered;
+}
+
+static bool editor_handle_scale_drag(slayer3d_game_data_runtime *runtime,
+                                     const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
+{
+    (void)hover_selection;
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_scale(runtime))
+    {
+        if (runtime != NULL && runtime->editor_drag_move.active && runtime->editor_drag_move.scale_drag)
+            clear_editor_drag_move(runtime);
+        return true;
+    }
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return true;
+    (void)editor_update_scale_hover_state(runtime);
+
+    editor_drag_move_state *drag = &runtime->editor_drag_move;
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+
+    if (!drag->active && left_pressed && editor_selected_brushes_active_for_scene(runtime) &&
+        runtime->editor_selected_brush_count > 0)
+    {
+        slayer3d_bounding_box bounds;
+        if (!editor_selected_bounds(runtime, &bounds))
+            return true;
+        float mouse_x = 0.0f;
+        float mouse_y = 0.0f;
+        (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+        slayer3d_vec3 signs = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        if (!editor_pick_scale_handle_at(runtime, mouse_x, mouse_y, bounds, &signs))
+            return true;
+
+        SDL_zero(*drag);
+        drag->active = true;
+        drag->scale_drag = true;
+        drag->scene = slayer3d_game_data_active_scene(runtime);
+        drag->scale_start_bounds = bounds;
+        drag->scale_handle_signs = signs;
+        drag->scale_center_anchor = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+        drag->scale_proportional = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+        drag->scale_anchor = editor_scale_anchor_for_handle(bounds, signs, drag->scale_center_anchor);
+        drag->scale_start_handle = editor_scale_bounds_point(bounds, signs);
+        drag->scale_factors = slayer3d_vec3_make(1.0f, 1.0f, 1.0f);
+        drag->scale_hovered = true;
+        drag->scale_preview_valid = true;
+        drag->start_mouse_x = mouse_x;
+        drag->start_mouse_y = mouse_y;
+        publish_editor_scale_drag_state(runtime, drag, true, "scale drag");
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
+
+    if (!drag->active || !drag->scale_drag)
+        return true;
+    if (out_consumed != NULL)
+        *out_consumed = true;
+
+    drag->scale_center_anchor = (SDL_GetModState() & SDL_KMOD_ALT) != 0;
+    drag->scale_proportional = (SDL_GetModState() & SDL_KMOD_SHIFT) != 0;
+    drag->scale_anchor =
+        editor_scale_anchor_for_handle(drag->scale_start_bounds, drag->scale_handle_signs, drag->scale_center_anchor);
+    drag->scale_start_handle = editor_scale_bounds_point(drag->scale_start_bounds, drag->scale_handle_signs);
+
+    float mouse_x = drag->start_mouse_x;
+    float mouse_y = drag->start_mouse_y;
+    (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+    drag->scale_factors = editor_scale_drag_factors(drag, mouse_x, mouse_y);
+    drag->moved = SDL_fabsf(drag->scale_factors.x - 1.0f) > 0.000001f ||
+                  SDL_fabsf(drag->scale_factors.y - 1.0f) > 0.000001f ||
+                  SDL_fabsf(drag->scale_factors.z - 1.0f) > 0.000001f;
+    publish_editor_scale_drag_state(runtime, drag, true, drag->moved ? "scale preview" : "scale drag");
+
+    if (left_released || !left_down)
+    {
+        const slayer3d_vec3 anchor = drag->scale_anchor;
+        const slayer3d_vec3 factors = drag->scale_factors;
+        const bool moved = drag->moved;
+        if (moved)
+        {
+            if (slayer3d_game_data_scale_selected_editor_brushes(runtime, anchor, factors))
+            {
+                update_active_editor_selection_from_selected_brushes(runtime);
+                slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.valid", true);
+                slayer3d_properties_set_string(runtime->scene_state, "editor.scale.message", "scaled selection");
+                editor_publish_console_message(runtime, "scaled selection");
+            }
+            else
+            {
+                slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.valid", false);
+                slayer3d_properties_set_string(runtime->scene_state, "editor.scale.message", "scale rejected");
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "scale rejected");
+            }
+        }
+        clear_editor_drag_move(runtime);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.dragging", false);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.scale.live_preview", false);
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.anchor", anchor);
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.scale.factors", factors);
+    }
+
+    return true;
+}
+
 static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
                                     const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
 {
@@ -983,8 +1292,8 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
     const bool vertex_mode = editor_mode_is_vertex(runtime);
     const bool edge_mode = editor_mode_is_edge(runtime);
     const bool source_handle_mode = vertex_mode || edge_mode;
-    const bool brush_transform_mode =
-        editor_mode_is_select(runtime) || editor_mode_is_brush(runtime) || editor_mode_is_rotate(runtime);
+    const bool brush_transform_mode = editor_mode_is_select(runtime) || editor_mode_is_brush(runtime) ||
+                                      editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime);
     if (!brush_transform_mode && !source_handle_mode)
         return true;
 
@@ -1471,6 +1780,15 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_brush_count(runtime);
         return true;
     }
+    bool scale_drag_consumed = false;
+    if (!editor_handle_scale_drag(runtime, &hover_selection, &scale_drag_consumed))
+        return false;
+    if (scale_drag_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     bool face_drag_consumed = false;
     if (!editor_handle_face_drag(runtime, &hover_selection, &face_drag_consumed))
         return false;
@@ -1554,7 +1872,7 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime) || editor_mode_is_edge(runtime) ||
-         editor_mode_is_vertex(runtime) || editor_mode_is_rotate(runtime)) &&
+         editor_mode_is_vertex(runtime) || editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime)) &&
         hover_selection.hit)
     {
         runtime->editor_active_selection = hover_selection;

@@ -131,6 +131,12 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_ARC = 33,
         /** @brief Rotate tool non-mutating transformed source preview edge. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_ROTATE_PREVIEW_EDGE = 34,
+        /** @brief Scale tool bounds-handle marker line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_HANDLE = 35,
+        /** @brief Scale tool hovered or active bounds-handle marker line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_HOVER_HANDLE = 36,
+        /** @brief Scale tool non-mutating transformed source preview edge. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_PREVIEW_EDGE = 37,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -163,6 +169,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES = 1u << 12,
         /** @brief Emit rotate tool pivot and axis handles. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES = 1u << 13,
+        /** @brief Emit scale tool bounds handles. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES = 1u << 14,
         /** @brief Emit every supported editor debug primitive. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL =
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORLD_BOUNDS | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_BOUNDS |
@@ -172,7 +180,7 @@ extern "C"
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_DIAGNOSTIC_MARKERS |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SELECTION_FACE | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_VERTEX_HANDLES |
             SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES |
-            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES,
+            SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES | SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES,
     };
 
     /** @brief One renderer-agnostic editor debug line segment. */

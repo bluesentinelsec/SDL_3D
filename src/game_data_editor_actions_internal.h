@@ -119,6 +119,9 @@ bool editor_brush_world_rotate_source_box_y_quarter_turns(brush_world_runtime *w
 bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                           slayer3d_vec3 pivot, slayer3d_vec3 axis, float angle_radians,
                                           char *error_buffer, int error_buffer_size);
+bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                         slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
+                                         int error_buffer_size);
 int editor_brush_world_source_box_face_index_for_identity(const brush_world_runtime *world_runtime,
                                                           const char *brush_identity, int fallback_face_index,
                                                           const char *face_identity);
