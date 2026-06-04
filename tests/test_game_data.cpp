@@ -217,6 +217,9 @@ extern "C"
     bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                               slayer3d_vec3 pivot, slayer3d_vec3 axis, float angle_radians,
                                               char *error_buffer, int error_buffer_size);
+    bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                             slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
+                                             int error_buffer_size);
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
@@ -300,6 +303,8 @@ extern "C"
                                                               slayer3d_vec3 offset);
     bool slayer3d_game_data_rotate_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 pivot,
                                                            slayer3d_vec3 axis, float angle_radians);
+    bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 anchor,
+                                                          slayer3d_vec3 factors);
     bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                            const slayer3d_properties *payload);
     bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -22315,6 +22320,61 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 0.0f, 0.001f);
     EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -3.0f, 0.001f);
 
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "scale", nullptr));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "scale");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "scale");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.scale.ready", false));
+    const slayer3d_value *scale_anchor = slayer3d_properties_get_value(scene_state, "editor.scale.anchor");
+    ASSERT_NE(scale_anchor, nullptr);
+    ASSERT_EQ(scale_anchor->type, SLAYER3D_VALUE_VEC3);
+    EXPECT_NEAR(scale_anchor->as_vec3.x, 0.5f, 0.001f);
+    EXPECT_NEAR(scale_anchor->as_vec3.y, 0.5f, 0.001f);
+    EXPECT_NEAR(scale_anchor->as_vec3.z, -2.5f, 0.001f);
+    struct ScaleDebugCapture
+    {
+        int handles = 0;
+        int hovered_handles = 0;
+        int preview_edges = 0;
+    } scale_debug;
+    auto capture_scale_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<ScaleDebugCapture *>(userdata);
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_HANDLE)
+            capture->handles++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_HOVER_HANDLE)
+            capture->hovered_handles++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_PREVIEW_EDGE)
+            capture->preview_edges++;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_scale_debug, &scale_debug));
+    EXPECT_GE(scale_debug.handles, 78);
+    EXPECT_EQ(scale_debug.hovered_handles, 0);
+    EXPECT_EQ(scale_debug.preview_edges, 0);
+
+    ASSERT_TRUE(slayer3d_game_data_scale_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 0.0f, -3.0f),
+                                                                 slayer3d_vec3_make(2.0f, 1.0f, 1.0f)));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 2.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -3.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, -2.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.x, 2.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "scaled 1 selected brush");
+    brush_world_runtime *source_world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(source_world_runtime, nullptr);
+    editor_brush_source_box_runtime scaled_source{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(source_world_runtime, brush_name.c_str(), &scaled_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(scaled_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&scaled_source);
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 1.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.x, 1.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 2.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.x, 2.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "select", nullptr));
+
     ASSERT_TRUE(
         slayer3d_game_data_duplicate_selected_editor_brushes(runtime, slayer3d_vec3_make(1.0f, 0.0f, 0.0f), false));
     ASSERT_EQ(brush_world().brush_count, initial_brush_count + 2);
@@ -28340,6 +28400,42 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
         << error;
     EXPECT_EQ(rotated_source.vertex_count, 8);
     free_editor_brush_source_box_runtime(&rotated_source);
+
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", rotate_json,
+                                                                     sizeof(rotate_json) - 1u, "/tmp/source-scale.json",
+                                                                     error, sizeof(error)))
+        << error;
+    world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_scale_source_box(world_runtime, "source.box.rotate",
+                                                    slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                    slayer3d_vec3_make(0.5f, 2.0f, 1.0f), error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 2.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.y, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.y, 2.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 8.0f, 0.001f);
+    editor_brush_source_box_runtime scaled_source{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, "source.box.rotate", &scaled_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(scaled_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&scaled_source);
+
+    SDL_zeroa(error);
+    EXPECT_FALSE(editor_brush_world_scale_source_box(world_runtime, "source.box.rotate",
+                                                     slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                     slayer3d_vec3_make(0.01f, 1.0f, 1.0f), error, sizeof(error)));
+    EXPECT_STRNE(error, "");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 2.0f, 0.001f) << "invalid scale must be atomic";
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

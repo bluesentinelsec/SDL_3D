@@ -3774,6 +3774,134 @@ bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, co
     return true;
 }
 
+static bool scale_source_vertex_coord(const int coord[3], const float anchor[3], slayer3d_vec3 factors, int snap_units,
+                                      int out_coord[3])
+{
+    if (coord == NULL || anchor == NULL || out_coord == NULL)
+        return false;
+    return source_rotation_coord(anchor[0] + ((float)coord[0] - anchor[0]) * factors.x, snap_units, &out_coord[0]) &&
+           source_rotation_coord(anchor[1] + ((float)coord[1] - anchor[1]) * factors.y, snap_units, &out_coord[1]) &&
+           source_rotation_coord(anchor[2] + ((float)coord[2] - anchor[2]) * factors.z, snap_units, &out_coord[2]);
+}
+
+bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                         slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
+                                         int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush scale requires a source model");
+        return false;
+    }
+    if (SDL_isnan(anchor.x) || SDL_isinf(anchor.x) || SDL_isnan(anchor.y) || SDL_isinf(anchor.y) ||
+        SDL_isnan(anchor.z) || SDL_isinf(anchor.z) || SDL_isnan(factors.x) || SDL_isinf(factors.x) ||
+        SDL_isnan(factors.y) || SDL_isinf(factors.y) || SDL_isnan(factors.z) || SDL_isinf(factors.z))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush scale requires finite anchor and factors");
+        return false;
+    }
+    if (factors.x <= 0.000001f || factors.y <= 0.000001f || factors.z <= 0.000001f)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush scale requires positive factors");
+        return false;
+    }
+    if (SDL_fabsf(factors.x - 1.0f) <= 0.000001f && SDL_fabsf(factors.y - 1.0f) <= 0.000001f &&
+        SDL_fabsf(factors.z - 1.0f) <= 0.000001f)
+    {
+        return true;
+    }
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    editor_brush_source_vertex_model model;
+    if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
+                                                    error_buffer_size))
+    {
+        return false;
+    }
+
+    const float meters_per_unit =
+        world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit : 0.001f;
+    const float anchor_source[3] = {
+        anchor.x / meters_per_unit,
+        anchor.y / meters_per_unit,
+        anchor.z / meters_per_unit,
+    };
+
+    int scaled_vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    SDL_zeroa(scaled_vertices);
+    const int snap_units = source_snap_units(world_runtime);
+    for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+    {
+        if (!scale_source_vertex_coord(model.vertices[vertex].coord, anchor_source, factors, snap_units,
+                                       scaled_vertices[vertex]))
+        {
+            set_error(error_buffer, error_buffer_size, "source brush scale would overflow the source grid");
+            return false;
+        }
+    }
+
+    slayer3d_game_data_brush rebuilt;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, brush_name, &scaled_vertices[0][0],
+                                                                    model.vertex_count, &rebuilt, error_buffer,
+                                                                    error_buffer_size))
+    {
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&rebuilt);
+
+    editor_brush_source_box_runtime snapshot;
+    SDL_zero(snapshot);
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    if (!copy_editor_brush_source_box_runtime(box, &snapshot))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to snapshot source brush scale");
+        return false;
+    }
+
+    char *old_prefab = box->prefab;
+    box->prefab = SDL_strdup("convex");
+    if (box->prefab == NULL)
+    {
+        box->prefab = old_prefab;
+        free_editor_brush_source_box(&snapshot);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush scale metadata");
+        return false;
+    }
+    SDL_free(old_prefab);
+    box->vertex_count = model.vertex_count;
+    for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+    {
+        box->vertices[vertex][0] = scaled_vertices[vertex][0];
+        box->vertices[vertex][1] = scaled_vertices[vertex][1];
+        box->vertices[vertex][2] = scaled_vertices[vertex][2];
+    }
+    for (int vertex = model.vertex_count; vertex < SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY; ++vertex)
+    {
+        box->vertices[vertex][0] = 0;
+        box->vertices[vertex][1] = 0;
+        box->vertices[vertex][2] = 0;
+    }
+    source_box_update_bounds_from_vertices(box);
+
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
+        !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(box);
+        *box = snapshot;
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    free_editor_brush_source_box(&snapshot);
+    return true;
+}
+
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size)

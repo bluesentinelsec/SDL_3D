@@ -290,6 +290,18 @@ static bool editor_selection_rotate_selected_action(slayer3d_game_data_runtime *
     return slayer3d_game_data_rotate_selected_editor_brushes(runtime, pivot, axis, angle_radians);
 }
 
+static bool editor_selection_scale_selected_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    slayer3d_vec3 anchor = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (obj_get(action, "anchor") != NULL)
+        anchor = json_vec3(action, "anchor", anchor);
+    else if (!editor_selected_brushes_bounds_center(runtime, &anchor))
+        return false;
+
+    const slayer3d_vec3 factors = json_vec3(action, "factors", slayer3d_vec3_make(1.0f, 1.0f, 1.0f));
+    return slayer3d_game_data_scale_selected_editor_brushes(runtime, anchor, factors);
+}
+
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -536,6 +548,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.selection.rotate_selected") == 0)
         return editor_selection_rotate_selected_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.selection.scale_selected") == 0)
+        return editor_selection_scale_selected_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.run") == 0)
     {

@@ -126,6 +126,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_EDGE_HANDLES;
     if (SDL_strcmp(value != NULL ? value : "", "rotate_handles") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES;
+    if (SDL_strcmp(value != NULL ? value : "", "scale_handles") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES;
     if (SDL_strcmp(value != NULL ? value : "", "clip_preview") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW;
     return 0u;
@@ -1832,6 +1834,138 @@ static bool emit_editor_debug_rotate_preview_edges(editor_debug_iteration_contex
     return true;
 }
 
+static slayer3d_vec3 editor_debug_scale_bounds_point(slayer3d_bounding_box bounds, slayer3d_vec3 signs)
+{
+    const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+    return slayer3d_vec3_make(signs.x < -0.5f ? bounds.min.x : (signs.x > 0.5f ? bounds.max.x : center.x),
+                              signs.y < -0.5f ? bounds.min.y : (signs.y > 0.5f ? bounds.max.y : center.y),
+                              signs.z < -0.5f ? bounds.min.z : (signs.z > 0.5f ? bounds.max.z : center.z));
+}
+
+static bool editor_debug_scale_signs_match(slayer3d_vec3 a, slayer3d_vec3 b)
+{
+    return SDL_fabsf(a.x - b.x) <= 0.001f && SDL_fabsf(a.y - b.y) <= 0.001f && SDL_fabsf(a.z - b.z) <= 0.001f;
+}
+
+static slayer3d_vec3 editor_debug_scale_point(slayer3d_vec3 point, slayer3d_vec3 anchor, slayer3d_vec3 factors)
+{
+    return slayer3d_vec3_make(anchor.x + (point.x - anchor.x) * factors.x, anchor.y + (point.y - anchor.y) * factors.y,
+                              anchor.z + (point.z - anchor.z) * factors.z);
+}
+
+static bool emit_editor_debug_scale_preview_edges(editor_debug_iteration_context *context,
+                                                  const slayer3d_game_data_runtime *runtime, slayer3d_vec3 anchor,
+                                                  slayer3d_vec3 factors)
+{
+    if (context == NULL || runtime == NULL ||
+        (SDL_fabsf(factors.x - 1.0f) <= 0.000001f && SDL_fabsf(factors.y - 1.0f) <= 0.000001f &&
+         SDL_fabsf(factors.z - 1.0f) <= 0.000001f))
+    {
+        return true;
+    }
+
+    const slayer3d_game_data_editor_debug_primitive_type old_type = context->type;
+    const slayer3d_color old_color = context->color;
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_PREVIEW_EDGE;
+    context->color = (slayer3d_color){90, 245, 255, 245};
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        const brush_world_runtime *world = find_brush_world_runtime(runtime, selection.world_name);
+        const int source_index = editor_debug_source_index_for_selection(world, &selection);
+        editor_brush_source_vertex_model model;
+        if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world, source_index, &model, NULL, 0))
+            continue;
+
+        context->world_name = selection.world_name;
+        context->element_name = selection.element_name;
+        context->face_index = -1;
+        for (int edge = 0; edge < model.edge_count; ++edge)
+        {
+            const editor_brush_source_edge *source_edge = &model.edges[edge];
+            const int a = source_edge->vertex_indices[0];
+            const int b = source_edge->vertex_indices[1];
+            if (a < 0 || a >= model.vertex_count || b < 0 || b >= model.vertex_count)
+                continue;
+            const slayer3d_vec3 start = slayer3d_vec3_add(selection.world_position,
+                                                          editor_source_vertex_coord_meters(world, &model.vertices[a]));
+            const slayer3d_vec3 end = slayer3d_vec3_add(selection.world_position,
+                                                        editor_source_vertex_coord_meters(world, &model.vertices[b]));
+            if (!emit_editor_debug_line(context, editor_debug_scale_point(start, anchor, factors),
+                                        editor_debug_scale_point(end, anchor, factors)))
+            {
+                context->type = old_type;
+                context->color = old_color;
+                return false;
+            }
+        }
+    }
+    context->type = old_type;
+    context->color = old_color;
+    return true;
+}
+
+static bool emit_editor_debug_scale_tool(const slayer3d_game_data_runtime *runtime,
+                                         const slayer3d_game_data_editor_debug_desc *desc,
+                                         slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    const unsigned int flags =
+        desc != NULL && desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if (runtime == NULL || runtime->scene_state == NULL || callback == NULL ||
+        (flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES) == 0u || !editor_mode_is_scale(runtime))
+    {
+        return true;
+    }
+
+    slayer3d_bounding_box bounds;
+    if (!editor_rotate_tool_selection_bounds(runtime, &bounds))
+        return true;
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.face_index = -1;
+
+    const bool dragging = runtime->editor_drag_move.active && runtime->editor_drag_move.scale_drag;
+    const bool hovered = scene_state_bool(runtime, "editor.scale.hovered", false);
+    const slayer3d_vec3 active_signs =
+        dragging ? runtime->editor_drag_move.scale_handle_signs
+                 : slayer3d_properties_get_vec3(runtime->scene_state, "editor.scale.handle_axes",
+                                                slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 size = slayer3d_vec3_sub(bounds.max, bounds.min);
+    const float marker_size = SDL_max(SDL_max(size.x, SDL_max(size.y, size.z)) * 0.035f, 0.12f);
+    for (int sx = -1; sx <= 1; ++sx)
+    {
+        for (int sy = -1; sy <= 1; ++sy)
+        {
+            for (int sz = -1; sz <= 1; ++sz)
+            {
+                if (sx == 0 && sy == 0 && sz == 0)
+                    continue;
+                const slayer3d_vec3 signs = slayer3d_vec3_make((float)sx, (float)sy, (float)sz);
+                const bool highlighted = (dragging || hovered) && editor_debug_scale_signs_match(signs, active_signs);
+                context.type = highlighted ? SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_HOVER_HANDLE
+                                           : SLAYER3D_GAME_DATA_EDITOR_DEBUG_SCALE_HANDLE;
+                context.color =
+                    highlighted ? (slayer3d_color){255, 255, 255, 255} : (slayer3d_color){90, 220, 245, 220};
+                if (!emit_editor_debug_marker_cross(&context, editor_debug_scale_bounds_point(bounds, signs),
+                                                    marker_size))
+                    return false;
+            }
+        }
+    }
+
+    if (dragging)
+    {
+        if (!emit_editor_debug_scale_preview_edges(&context, runtime, runtime->editor_drag_move.scale_anchor,
+                                                   runtime->editor_drag_move.scale_factors))
+            return false;
+    }
+    return true;
+}
+
 static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runtime,
                                           const slayer3d_game_data_editor_debug_desc *desc,
                                           slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
@@ -1946,6 +2080,11 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
     }
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES) != 0u &&
         !emit_editor_debug_rotate_tool(runtime, desc, callback, userdata))
+    {
+        return true;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES) != 0u &&
+        !emit_editor_debug_scale_tool(runtime, desc, callback, userdata))
     {
         return true;
     }

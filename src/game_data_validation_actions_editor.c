@@ -158,7 +158,7 @@ static bool editor_tool_mode_valid(const char *mode)
     return mode != NULL &&
            (SDL_strcmp(mode, "select") == 0 || SDL_strcmp(mode, "brush") == 0 || SDL_strcmp(mode, "face") == 0 ||
             SDL_strcmp(mode, "edge") == 0 || SDL_strcmp(mode, "clip") == 0 || SDL_strcmp(mode, "vertex") == 0 ||
-            SDL_strcmp(mode, "rotate") == 0 || SDL_strcmp(mode, "texture") == 0);
+            SDL_strcmp(mode, "rotate") == 0 || SDL_strcmp(mode, "scale") == 0 || SDL_strcmp(mode, "texture") == 0);
 }
 
 bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -170,7 +170,7 @@ bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *a
     if (!editor_tool_mode_valid(mode))
         return validation_error(ctx, json_path,
                                 "editor.tool.set_mode mode must be one of select, brush, face, edge, clip, vertex, "
-                                "rotate, texture");
+                                "rotate, scale, texture");
     yyjson_val *message = obj_get(action, "message");
     if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
         return validation_error(ctx, json_path, "editor.tool.set_mode message must be non-empty");
@@ -358,6 +358,28 @@ bool validate_editor_selection_rotate_selected_action(validation_context *ctx, y
     if (angle_degrees != NULL &&
         (!yyjson_is_num(angle_degrees) || !validation_float_finite((float)yyjson_get_num(angle_degrees))))
         return validation_error(ctx, json_path, "editor.selection.rotate_selected angle_degrees must be finite");
+    return true;
+}
+
+bool validate_editor_selection_scale_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                     validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    yyjson_val *anchor = obj_get(action, "anchor");
+    if (anchor != NULL && !is_vec_array(anchor, 3))
+        return validation_error(ctx, json_path, "editor.selection.scale_selected anchor must be a numeric vec3");
+    yyjson_val *factors = obj_get(action, "factors");
+    if (!is_vec_array(factors, 3))
+        return validation_error(ctx, json_path, "editor.selection.scale_selected factors must be a numeric vec3");
+    const float factor_x = (float)yyjson_get_num(yyjson_arr_get(factors, 0));
+    const float factor_y = (float)yyjson_get_num(yyjson_arr_get(factors, 1));
+    const float factor_z = (float)yyjson_get_num(yyjson_arr_get(factors, 2));
+    if (!validation_float_finite(factor_x) || !validation_float_finite(factor_y) ||
+        !validation_float_finite(factor_z) || factor_x <= 0.0f || factor_y <= 0.0f || factor_z <= 0.0f)
+    {
+        return validation_error(ctx, json_path, "editor.selection.scale_selected factors must be positive and finite");
+    }
     return true;
 }
 
