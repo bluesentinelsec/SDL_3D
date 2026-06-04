@@ -128,6 +128,8 @@ static unsigned int editor_debug_flag_from_string(const char *value)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ROTATE_HANDLES;
     if (SDL_strcmp(value != NULL ? value : "", "scale_handles") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES;
+    if (SDL_strcmp(value != NULL ? value : "", "shear_handles") == 0)
+        return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES;
     if (SDL_strcmp(value != NULL ? value : "", "clip_preview") == 0)
         return SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_CLIP_PREVIEW;
     return 0u;
@@ -1966,6 +1968,190 @@ static bool emit_editor_debug_scale_tool(const slayer3d_game_data_runtime *runti
     return true;
 }
 
+static slayer3d_vec3 editor_debug_shear_point(slayer3d_vec3 point, slayer3d_bounding_box bounds,
+                                              slayer3d_vec3 side_normal, slayer3d_vec3 delta)
+{
+    if (SDL_fabsf(side_normal.x) > 0.5f)
+    {
+        const float size = bounds.max.x - bounds.min.x;
+        if (size <= 0.000001f)
+            return point;
+        float t = side_normal.x > 0.0f ? (point.x - bounds.min.x) / size : (bounds.max.x - point.x) / size;
+        t = SDL_clamp(t, 0.0f, 1.0f);
+        return slayer3d_vec3_add(point, slayer3d_vec3_scale(delta, t));
+    }
+    if (SDL_fabsf(side_normal.y) > 0.5f)
+    {
+        const float size = bounds.max.y - bounds.min.y;
+        if (size <= 0.000001f)
+            return point;
+        float t = side_normal.y > 0.0f ? (point.y - bounds.min.y) / size : (bounds.max.y - point.y) / size;
+        t = SDL_clamp(t, 0.0f, 1.0f);
+        return slayer3d_vec3_add(point, slayer3d_vec3_scale(delta, t));
+    }
+    const float size = bounds.max.z - bounds.min.z;
+    if (size <= 0.000001f)
+        return point;
+    float t = side_normal.z > 0.0f ? (point.z - bounds.min.z) / size : (bounds.max.z - point.z) / size;
+    t = SDL_clamp(t, 0.0f, 1.0f);
+    return slayer3d_vec3_add(point, slayer3d_vec3_scale(delta, t));
+}
+
+static bool editor_debug_shear_normals_match(slayer3d_vec3 a, slayer3d_vec3 b)
+{
+    return SDL_fabsf(a.x - b.x) <= 0.001f && SDL_fabsf(a.y - b.y) <= 0.001f && SDL_fabsf(a.z - b.z) <= 0.001f;
+}
+
+static void editor_debug_shear_side_corners(slayer3d_bounding_box bounds, slayer3d_vec3 normal,
+                                            slayer3d_vec3 out_points[4])
+{
+    if (out_points == NULL)
+        return;
+    if (SDL_fabsf(normal.x) > 0.5f)
+    {
+        const float x = normal.x > 0.0f ? bounds.max.x : bounds.min.x;
+        out_points[0] = slayer3d_vec3_make(x, bounds.min.y, bounds.min.z);
+        out_points[1] = slayer3d_vec3_make(x, bounds.max.y, bounds.min.z);
+        out_points[2] = slayer3d_vec3_make(x, bounds.max.y, bounds.max.z);
+        out_points[3] = slayer3d_vec3_make(x, bounds.min.y, bounds.max.z);
+        return;
+    }
+    if (SDL_fabsf(normal.y) > 0.5f)
+    {
+        const float y = normal.y > 0.0f ? bounds.max.y : bounds.min.y;
+        out_points[0] = slayer3d_vec3_make(bounds.min.x, y, bounds.min.z);
+        out_points[1] = slayer3d_vec3_make(bounds.max.x, y, bounds.min.z);
+        out_points[2] = slayer3d_vec3_make(bounds.max.x, y, bounds.max.z);
+        out_points[3] = slayer3d_vec3_make(bounds.min.x, y, bounds.max.z);
+        return;
+    }
+    const float z = normal.z > 0.0f ? bounds.max.z : bounds.min.z;
+    out_points[0] = slayer3d_vec3_make(bounds.min.x, bounds.min.y, z);
+    out_points[1] = slayer3d_vec3_make(bounds.max.x, bounds.min.y, z);
+    out_points[2] = slayer3d_vec3_make(bounds.max.x, bounds.max.y, z);
+    out_points[3] = slayer3d_vec3_make(bounds.min.x, bounds.max.y, z);
+}
+
+static bool emit_editor_debug_shear_side_outline(editor_debug_iteration_context *context, slayer3d_bounding_box bounds,
+                                                 slayer3d_vec3 normal, slayer3d_vec3 delta)
+{
+    slayer3d_vec3 corners[4];
+    editor_debug_shear_side_corners(bounds, normal, corners);
+    for (int edge = 0; edge < 4; ++edge)
+    {
+        const slayer3d_vec3 start = editor_debug_shear_point(corners[edge], bounds, normal, delta);
+        const slayer3d_vec3 end = editor_debug_shear_point(corners[(edge + 1) % 4], bounds, normal, delta);
+        if (!emit_editor_debug_line(context, start, end))
+            return false;
+    }
+    return true;
+}
+
+static bool emit_editor_debug_shear_preview_edges(editor_debug_iteration_context *context,
+                                                  const slayer3d_game_data_runtime *runtime,
+                                                  slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
+                                                  slayer3d_vec3 delta)
+{
+    if (context == NULL || runtime == NULL || slayer3d_vec3_length_squared(delta) <= 0.0000001f)
+        return true;
+
+    const slayer3d_game_data_editor_debug_primitive_type old_type = context->type;
+    const slayer3d_color old_color = context->color;
+    context->type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_PREVIEW_EDGE;
+    context->color = (slayer3d_color){255, 210, 80, 245};
+    for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
+    {
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        const brush_world_runtime *world = find_brush_world_runtime(runtime, selection.world_name);
+        const int source_index = editor_debug_source_index_for_selection(world, &selection);
+        editor_brush_source_vertex_model model;
+        if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world, source_index, &model, NULL, 0))
+            continue;
+
+        context->world_name = selection.world_name;
+        context->element_name = selection.element_name;
+        context->face_index = -1;
+        for (int edge = 0; edge < model.edge_count; ++edge)
+        {
+            const editor_brush_source_edge *source_edge = &model.edges[edge];
+            const int a = source_edge->vertex_indices[0];
+            const int b = source_edge->vertex_indices[1];
+            if (a < 0 || a >= model.vertex_count || b < 0 || b >= model.vertex_count)
+                continue;
+            const slayer3d_vec3 start = slayer3d_vec3_add(selection.world_position,
+                                                          editor_source_vertex_coord_meters(world, &model.vertices[a]));
+            const slayer3d_vec3 end = slayer3d_vec3_add(selection.world_position,
+                                                        editor_source_vertex_coord_meters(world, &model.vertices[b]));
+            if (!emit_editor_debug_line(context, editor_debug_shear_point(start, bounds, side_normal, delta),
+                                        editor_debug_shear_point(end, bounds, side_normal, delta)))
+            {
+                context->type = old_type;
+                context->color = old_color;
+                return false;
+            }
+        }
+    }
+    context->type = old_type;
+    context->color = old_color;
+    return true;
+}
+
+static bool emit_editor_debug_shear_tool(const slayer3d_game_data_runtime *runtime,
+                                         const slayer3d_game_data_editor_debug_desc *desc,
+                                         slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    const unsigned int flags =
+        desc != NULL && desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
+    if (runtime == NULL || runtime->scene_state == NULL || callback == NULL ||
+        (flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES) == 0u || !editor_mode_is_shear(runtime))
+    {
+        return true;
+    }
+
+    slayer3d_bounding_box bounds;
+    if (!editor_rotate_tool_selection_bounds(runtime, &bounds))
+        return true;
+
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = callback;
+    context.userdata = userdata;
+    context.face_index = -1;
+
+    const bool dragging = runtime->editor_drag_move.active && runtime->editor_drag_move.shear_drag;
+    const bool hovered = scene_state_bool(runtime, "editor.shear.hovered", false);
+    const slayer3d_vec3 active_normal =
+        dragging ? runtime->editor_drag_move.shear_side_normal
+                 : slayer3d_properties_get_vec3(runtime->scene_state, "editor.shear.side_normal",
+                                                slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 normals[] = {
+        slayer3d_vec3_make(1.0f, 0.0f, 0.0f), slayer3d_vec3_make(-1.0f, 0.0f, 0.0f),
+        slayer3d_vec3_make(0.0f, 1.0f, 0.0f), slayer3d_vec3_make(0.0f, -1.0f, 0.0f),
+        slayer3d_vec3_make(0.0f, 0.0f, 1.0f), slayer3d_vec3_make(0.0f, 0.0f, -1.0f),
+    };
+    for (int i = 0; i < (int)SDL_arraysize(normals); ++i)
+    {
+        const bool highlighted = (dragging || hovered) && editor_debug_shear_normals_match(normals[i], active_normal);
+        context.type = highlighted ? SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_HOVER_HANDLE
+                                   : SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_HANDLE;
+        context.color = highlighted ? (slayer3d_color){255, 255, 255, 255} : (slayer3d_color){245, 180, 80, 220};
+        const slayer3d_vec3 delta =
+            dragging && highlighted ? runtime->editor_drag_move.shear_delta : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        if (!emit_editor_debug_shear_side_outline(&context, bounds, normals[i], delta))
+            return false;
+    }
+
+    if (dragging)
+    {
+        if (!emit_editor_debug_shear_preview_edges(&context, runtime, runtime->editor_drag_move.shear_start_bounds,
+                                                   runtime->editor_drag_move.shear_side_normal,
+                                                   runtime->editor_drag_move.shear_delta))
+            return false;
+    }
+    return true;
+}
+
 static bool emit_editor_debug_rotate_tool(const slayer3d_game_data_runtime *runtime,
                                           const slayer3d_game_data_editor_debug_desc *desc,
                                           slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
@@ -2085,6 +2271,11 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
     }
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SCALE_HANDLES) != 0u &&
         !emit_editor_debug_scale_tool(runtime, desc, callback, userdata))
+    {
+        return true;
+    }
+    if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_SHEAR_HANDLES) != 0u &&
+        !emit_editor_debug_shear_tool(runtime, desc, callback, userdata))
     {
         return true;
     }

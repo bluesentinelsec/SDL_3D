@@ -303,6 +303,12 @@
         "tool_mode": "scale",
         "message": "scale tool",
         "button": { "x": 704, "y": 45, "w": 88, "h": 28 }
+      },
+      {
+        "mode": "shear",
+        "tool_mode": "shear",
+        "message": "shear tool",
+        "button": { "x": 798, "y": 45, "w": 88, "h": 28 }
       }
     ],
     "palette": {
@@ -368,6 +374,7 @@
         "edge_handles",
         "rotate_handles",
         "scale_handles",
+        "shear_handles",
         "command_preview",
         "clip_preview",
         "markers"
@@ -534,6 +541,16 @@
             "interactive": true,
             "action": "editor.tool.scale",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "scale" }
+          },
+          {
+            "id": "ui.editor_shell.tool_toolbar.shear.button",
+            "type": "button",
+            "w": 88,
+            "h": 28,
+            "text": "Shear",
+            "interactive": true,
+            "action": "editor.tool.shear",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "shear" }
           },
           {
             "id": "ui.editor_shell.tool_toolbar.entity.button",

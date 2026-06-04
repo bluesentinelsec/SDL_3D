@@ -220,6 +220,9 @@ extern "C"
     bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
                                              int error_buffer_size);
+    bool editor_brush_world_shear_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                             slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
+                                             slayer3d_vec3 delta, char *error_buffer, int error_buffer_size);
     bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                    slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                    int error_buffer_size);
@@ -305,6 +308,9 @@ extern "C"
                                                            slayer3d_vec3 axis, float angle_radians);
     bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 anchor,
                                                           slayer3d_vec3 factors);
+    bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime *runtime,
+                                                          slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
+                                                          slayer3d_vec3 delta);
     bool slayer3d_game_data_delete_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                            const slayer3d_properties *payload);
     bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime, yyjson_val *action,
@@ -22373,6 +22379,53 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
     EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 2.0f, 0.001f);
     EXPECT_NEAR(active_selection().bounds.max.x, 2.0f, 0.001f);
+
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "shear", nullptr));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "shear");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "shear");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.shear.ready", false));
+    struct ShearDebugCapture
+    {
+        int handles = 0;
+        int hovered_handles = 0;
+        int preview_edges = 0;
+    } shear_debug;
+    auto capture_shear_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
+        auto *capture = static_cast<ShearDebugCapture *>(userdata);
+        if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_HANDLE)
+            capture->handles++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_HOVER_HANDLE)
+            capture->hovered_handles++;
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_PREVIEW_EDGE)
+            capture->preview_edges++;
+        return true;
+    };
+    ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_shear_debug, &shear_debug));
+    EXPECT_GE(shear_debug.handles, 24);
+    EXPECT_EQ(shear_debug.hovered_handles, 0);
+    EXPECT_EQ(shear_debug.preview_edges, 0);
+
+    const slayer3d_bounding_box shear_bounds = brush_bounds(brush_name.c_str());
+    ASSERT_TRUE(slayer3d_game_data_shear_selected_editor_brushes(
+        runtime, shear_bounds, slayer3d_vec3_make(1.0f, 0.0f, 0.0f), slayer3d_vec3_make(0.0f, 0.0f, 1.0f)));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.x, 2.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.z, -3.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, -1.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.z, -1.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "sheared 1 selected brush");
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(source_world_runtime, brush_name.c_str(), &scaled_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(scaled_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&scaled_source);
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, -2.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.z, -2.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, -1.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.z, -1.0f, 0.001f);
     ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "select", nullptr));
 
     ASSERT_TRUE(
@@ -28436,6 +28489,42 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordi
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
     ASSERT_TRUE(world.brushes[0].has_bounds);
     EXPECT_NEAR(world.brushes[0].bounds.max.x, 2.0f, 0.001f) << "invalid scale must be atomic";
+
+    ASSERT_TRUE(slayer3d_game_data_load_editable_level_fragment_json(runtime, "brush.editor_shell.target", rotate_json,
+                                                                     sizeof(rotate_json) - 1u, "/tmp/source-shear.json",
+                                                                     error, sizeof(error)))
+        << error;
+    world_runtime = find_brush_world_runtime_mutable(runtime, "brush.editor_shell.target");
+    ASSERT_NE(world_runtime, nullptr);
+    const slayer3d_bounding_box shear_source_bounds = {slayer3d_vec3_make(0.0f, 0.0f, 0.0f),
+                                                       slayer3d_vec3_make(4.0f, 1.0f, 8.0f)};
+    SDL_zeroa(error);
+    ASSERT_TRUE(editor_brush_world_shear_source_box(world_runtime, "source.box.rotate", shear_source_bounds,
+                                                    slayer3d_vec3_make(1.0f, 0.0f, 0.0f),
+                                                    slayer3d_vec3_make(0.0f, 0.0f, 1.0f), error, sizeof(error)))
+        << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.min.x, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.x, 4.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.min.z, 0.0f, 0.001f);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 9.0f, 0.001f);
+    editor_brush_source_box_runtime sheared_source{};
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(world_runtime, "source.box.rotate", &sheared_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(sheared_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&sheared_source);
+
+    SDL_zeroa(error);
+    EXPECT_FALSE(editor_brush_world_shear_source_box(world_runtime, "source.box.rotate", shear_source_bounds,
+                                                     slayer3d_vec3_make(1.0f, 1.0f, 0.0f),
+                                                     slayer3d_vec3_make(0.0f, 0.0f, 1.0f), error, sizeof(error)));
+    EXPECT_NE(std::string(error).find("axis-aligned side normal"), std::string::npos) << error;
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_TRUE(world.brushes[0].has_bounds);
+    EXPECT_NEAR(world.brushes[0].bounds.max.z, 9.0f, 0.001f) << "invalid shear must be atomic";
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

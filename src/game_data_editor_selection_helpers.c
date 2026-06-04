@@ -212,6 +212,12 @@ bool editor_mode_is_scale(const slayer3d_game_data_runtime *runtime)
            SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "scale") == 0;
 }
 
+bool editor_mode_is_shear(const slayer3d_game_data_runtime *runtime)
+{
+    return runtime != NULL && runtime->scene_state != NULL &&
+           SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select"), "shear") == 0;
+}
+
 bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,
                                     const char *element_name)
 {

@@ -158,7 +158,8 @@ static bool editor_tool_mode_valid(const char *mode)
     return mode != NULL &&
            (SDL_strcmp(mode, "select") == 0 || SDL_strcmp(mode, "brush") == 0 || SDL_strcmp(mode, "face") == 0 ||
             SDL_strcmp(mode, "edge") == 0 || SDL_strcmp(mode, "clip") == 0 || SDL_strcmp(mode, "vertex") == 0 ||
-            SDL_strcmp(mode, "rotate") == 0 || SDL_strcmp(mode, "scale") == 0 || SDL_strcmp(mode, "texture") == 0);
+            SDL_strcmp(mode, "rotate") == 0 || SDL_strcmp(mode, "scale") == 0 || SDL_strcmp(mode, "shear") == 0 ||
+            SDL_strcmp(mode, "texture") == 0);
 }
 
 bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *action, const char *json_path,
@@ -170,7 +171,7 @@ bool validate_editor_tool_set_mode_action(validation_context *ctx, yyjson_val *a
     if (!editor_tool_mode_valid(mode))
         return validation_error(ctx, json_path,
                                 "editor.tool.set_mode mode must be one of select, brush, face, edge, clip, vertex, "
-                                "rotate, scale, texture");
+                                "rotate, scale, shear, texture");
     yyjson_val *message = obj_get(action, "message");
     if (message != NULL && (!yyjson_is_str(message) || yyjson_get_str(message)[0] == '\0'))
         return validation_error(ctx, json_path, "editor.tool.set_mode message must be non-empty");
@@ -379,6 +380,47 @@ bool validate_editor_selection_scale_selected_action(validation_context *ctx, yy
         !validation_float_finite(factor_z) || factor_x <= 0.0f || factor_y <= 0.0f || factor_z <= 0.0f)
     {
         return validation_error(ctx, json_path, "editor.selection.scale_selected factors must be positive and finite");
+    }
+    return true;
+}
+
+bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                     validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    yyjson_val *bounds_min = obj_get(action, "bounds_min");
+    yyjson_val *bounds_max = obj_get(action, "bounds_max");
+    if ((bounds_min == NULL) != (bounds_max == NULL))
+        return validation_error(ctx, json_path,
+                                "editor.selection.shear_selected requires both bounds_min and bounds_max");
+    if (bounds_min != NULL && !is_vec_array(bounds_min, 3))
+        return validation_error(ctx, json_path, "editor.selection.shear_selected bounds_min must be a numeric vec3");
+    if (bounds_max != NULL && !is_vec_array(bounds_max, 3))
+        return validation_error(ctx, json_path, "editor.selection.shear_selected bounds_max must be a numeric vec3");
+    yyjson_val *side_normal = obj_get(action, "side_normal");
+    if (!is_vec_array(side_normal, 3))
+        return validation_error(ctx, json_path, "editor.selection.shear_selected side_normal must be a numeric vec3");
+    const float normal_x = (float)yyjson_get_num(yyjson_arr_get(side_normal, 0));
+    const float normal_y = (float)yyjson_get_num(yyjson_arr_get(side_normal, 1));
+    const float normal_z = (float)yyjson_get_num(yyjson_arr_get(side_normal, 2));
+    if (!validation_float_finite(normal_x) || !validation_float_finite(normal_y) ||
+        !validation_float_finite(normal_z) ||
+        normal_x * normal_x + normal_y * normal_y + normal_z * normal_z <= 0.000001f)
+    {
+        return validation_error(ctx, json_path,
+                                "editor.selection.shear_selected side_normal must be non-zero and finite");
+    }
+    yyjson_val *delta = obj_get(action, "delta");
+    if (!is_vec_array(delta, 3))
+        return validation_error(ctx, json_path, "editor.selection.shear_selected delta must be a numeric vec3");
+    const float delta_x = (float)yyjson_get_num(yyjson_arr_get(delta, 0));
+    const float delta_y = (float)yyjson_get_num(yyjson_arr_get(delta, 1));
+    const float delta_z = (float)yyjson_get_num(yyjson_arr_get(delta, 2));
+    if (!validation_float_finite(delta_x) || !validation_float_finite(delta_y) || !validation_float_finite(delta_z) ||
+        delta_x * delta_x + delta_y * delta_y + delta_z * delta_z <= 0.000001f)
+    {
+        return validation_error(ctx, json_path, "editor.selection.shear_selected delta must be non-zero and finite");
     }
     return true;
 }

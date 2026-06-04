@@ -102,6 +102,7 @@ typedef struct editor_drag_move_state
     bool edge_lasso;
     bool rotate_drag;
     bool scale_drag;
+    bool shear_drag;
     bool vertex_toggle_on_click;
     bool lasso_additive;
     const char *scene;
@@ -132,6 +133,13 @@ typedef struct editor_drag_move_state
     bool scale_proportional;
     bool scale_hovered;
     bool scale_preview_valid;
+    slayer3d_bounding_box shear_start_bounds;
+    slayer3d_vec3 shear_side_normal;
+    slayer3d_vec3 shear_delta;
+    slayer3d_vec3 shear_axis;
+    bool shear_vertical;
+    bool shear_hovered;
+    bool shear_preview_valid;
     int vertex_origin_count;
     editor_drag_vertex_origin vertex_toggle_origin;
     editor_drag_vertex_origin vertex_origins[SLAYER3D_EDITOR_DRAG_VERTEX_ORIGIN_CAPACITY];
