@@ -536,6 +536,40 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return slayer3d_game_data_set_editor_tool_mode(runtime, json_string(action, "mode", NULL),
                                                        json_string(action, "message", NULL));
 
+    if (SDL_strcmp(type, "editor.escape") == 0)
+    {
+        if (runtime == NULL || runtime->scene_state == NULL)
+            return false;
+        if (SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.palette.active", ""), "") != 0)
+        {
+            slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "palette closed");
+            return true;
+        }
+        if (slayer3d_properties_get_int(runtime->scene_state, "editor.vertex.selection.count", 0) > 0)
+        {
+            if (!slayer3d_game_data_clear_editor_vertex_selection(runtime))
+                return false;
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex selection cleared");
+            return true;
+        }
+
+        const char *mode = slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select");
+        if (SDL_strcmp(mode, "clip") == 0)
+            return slayer3d_game_data_escape_editor_clip_tool(runtime);
+        if (SDL_strcmp(mode, "select") != 0)
+            return slayer3d_game_data_set_editor_tool_mode(runtime, "select", NULL);
+        if (slayer3d_properties_get_int(runtime->scene_state, "editor.selection.count", 0) > 0)
+        {
+            if (!slayer3d_game_data_clear_active_editor_selection(runtime))
+                return false;
+            (void)slayer3d_game_data_clear_editor_command_preview(runtime, action);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "selection cleared");
+            return true;
+        }
+        return slayer3d_game_data_clear_editor_command_preview(runtime, action);
+    }
+
     if (SDL_strcmp(type, "editor.clip.cancel") == 0)
         return slayer3d_game_data_cancel_editor_clip_tool(runtime, json_string(action, "message", NULL));
 

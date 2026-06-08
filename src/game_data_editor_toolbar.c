@@ -68,8 +68,6 @@ static const char *editor_mode_for_tool_action(const char *action)
         return "scale";
     if (SDL_strcmp(action, "editor.tool.shear") == 0)
         return "shear";
-    if (SDL_strcmp(action, "editor.tool.texture") == 0)
-        return "texture";
     return NULL;
 }
 
@@ -150,12 +148,6 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
             message = selected_count > 0 ? "shear tool" : "select a brush before shear tool";
         }
     }
-    else if (SDL_strcmp(mode, "texture") == 0)
-    {
-        tool_mode = "paint";
-        if (message == NULL || message[0] == '\0')
-            message = "texture tool";
-    }
     else
     {
         return false;
@@ -176,6 +168,7 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
     if (entering_clip)
         return slayer3d_game_data_enter_editor_clip_tool(runtime, message);

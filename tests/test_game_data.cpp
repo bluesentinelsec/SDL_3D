@@ -16866,7 +16866,8 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
     EXPECT_NEAR(target_cube_min_y(), 0.35f, 0.001f);
 
-    slayer3d_signal_emit(bus, tool_cycle_signal, nullptr);
+    slayer3d_signal_emit(bus, slayer3d_game_data_find_signal(runtime, "signal.editor.palette.material"), nullptr);
+    slayer3d_properties_set_string(slayer3d_game_data_mutable_scene_state(runtime), "editor.palette.active", "");
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
 
@@ -19727,7 +19728,6 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     const int mode_edge_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.edge");
     const int mode_face_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.face");
     const int mode_select_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.select");
-    const int mode_texture_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.texture");
     const int mode_vertex_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.mode.vertex");
     const int commit_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.command.commit");
     const int clip_cycle_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.clip.cycle_keep_mode");
@@ -19755,8 +19755,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_GE(mode_edge_signal, 0);
     ASSERT_GE(mode_face_signal, 0);
     ASSERT_GE(mode_select_signal, 0);
-    ASSERT_GE(mode_texture_signal, 0);
     ASSERT_GE(mode_vertex_signal, 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.editor.mode.texture"), 0);
+    EXPECT_LT(slayer3d_game_data_find_signal(runtime, "signal.editor.tool.player_start"), 0);
     ASSERT_GE(commit_signal, 0);
     ASSERT_GE(clip_cycle_signal, 0);
     ASSERT_GE(undo_signal, 0);
@@ -20097,18 +20098,33 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.tool_toolbar.select.selected"));
-    slayer3d_signal_emit(bus, mode_texture_signal, nullptr);
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "texture");
-    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
     EXPECT_TRUE(press_key(SDL_SCANCODE_SPACE, 113));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "select mode");
+    EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.entity.button"));
+    EXPECT_FALSE(visible_ui_rect("ui.editor_shell.tool_toolbar.texture.button"));
 
     seed_editor_shell_test_cube(runtime);
     select_editor_shell_test_cube(runtime);
     EXPECT_EQ(world().brush_count, 1);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "scale", nullptr));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "scale");
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "scale", nullptr));
+    click_editor(840.0f, 60.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 115);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "shear");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "shear");
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
+    slayer3d_signal_emit(bus, escape_signal, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
+    move_editor_mouse(660.0f, 360.0f, 116);
     slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "clip");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
@@ -20161,7 +20177,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 1.0f, 0.001f);
     std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 1"));
-    click_editor(890.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
+    click_editor(900.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
@@ -20219,7 +20235,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
     EXPECT_TRUE(grid_rects.hovered_option);
     EXPECT_EQ(grid_rects.hovered_option_rect.color.a, 248);
-    click_editor(890.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    click_editor(900.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
@@ -29185,8 +29201,8 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         bool buttons[9]{};
         bool labels[9]{};
         bool tool_background = false;
-        bool tool_buttons[8]{};
-        bool tool_labels[8]{};
+        bool tool_buttons[9]{};
+        bool tool_labels[9]{};
         bool grid_widget = false;
         bool grid_label = false;
         bool inspector_panel = false;
@@ -29308,18 +29324,20 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 0;
             else if (key == "brush")
                 index = 1;
-            else if (key == "clip")
+            else if (key == "edge")
                 index = 2;
-            else if (key == "face")
+            else if (key == "clip")
                 index = 3;
-            else if (key == "vertex")
+            else if (key == "face")
                 index = 4;
-            else if (key == "rotate")
+            else if (key == "vertex")
                 index = 5;
-            else if (key == "entity")
+            else if (key == "rotate")
                 index = 6;
-            else if (key == "texture")
+            else if (key == "scale")
                 index = 7;
+            else if (key == "shear")
+                index = 8;
             if (index >= 0)
                 capture->tool_buttons[index] = true;
         }
@@ -29393,18 +29411,20 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
                 index = 0;
             else if (key == "brush")
                 index = 1;
-            else if (key == "clip")
+            else if (key == "edge")
                 index = 2;
-            else if (key == "face")
+            else if (key == "clip")
                 index = 3;
-            else if (key == "vertex")
+            else if (key == "face")
                 index = 4;
-            else if (key == "rotate")
+            else if (key == "vertex")
                 index = 5;
-            else if (key == "entity")
+            else if (key == "rotate")
                 index = 6;
-            else if (key == "texture")
+            else if (key == "scale")
                 index = 7;
+            else if (key == "shear")
+                index = 8;
             if (index >= 0)
                 capture->tool_labels[index] = true;
         }
@@ -29420,7 +29440,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
         EXPECT_TRUE(toolbar_capture.labels[i]) << i;
     }
     EXPECT_TRUE(toolbar_capture.tool_background);
-    for (int i = 0; i < 8; ++i)
+    for (int i = 0; i < 9; ++i)
     {
         EXPECT_TRUE(toolbar_capture.tool_buttons[i]) << i;
         EXPECT_TRUE(toolbar_capture.tool_labels[i]) << i;

@@ -250,8 +250,8 @@
       "grid_key": "editor.grid.size",
       "brush_grid_key": "editor.brush.grid_size",
       "open_key": "editor.grid.menu.open",
-      "button": { "x": 835, "y": 45, "w": 110, "h": 28 },
-      "popup": { "x": 835, "y": 76, "w": 110, "h": 288 },
+      "button": { "x": 892, "y": 45, "w": 110, "h": 28 },
+      "popup": { "x": 892, "y": 76, "w": 110, "h": 288 },
       "row_height": 24,
       "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
     },
@@ -551,25 +551,6 @@
             "interactive": true,
             "action": "editor.tool.shear",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "shear" }
-          },
-          {
-            "id": "ui.editor_shell.tool_toolbar.entity.button",
-            "type": "button",
-            "w": 104,
-            "h": 28,
-            "text": "Entity Tool",
-            "interactive": true,
-            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "player_start" }
-          },
-          {
-            "id": "ui.editor_shell.tool_toolbar.texture.button",
-            "type": "button",
-            "w": 110,
-            "h": 28,
-            "text": "Texture Tool",
-            "interactive": true,
-            "action": "editor.tool.texture",
-            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "paint" }
           },
           {
             "id": "ui.editor_shell.tool_toolbar.grid.button",
@@ -1527,7 +1508,7 @@
         "h": 26,
         "layer": 141,
         "font": "font.editor_shell.ui",
-        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, C clip, V vertex, M texture, G objects. Edge Tool exposes selected-brush edges. Esc clears selection/back to select.",
+        "text": "3D editor: WASD move, RMB drag look, MMB drag pan, wheel zoom, Q/E down/up. Modes: Space select, B brush tool, C clip, V vertex. Edge Tool exposes selected-brush edges. Esc clears selection/back to select.",
         "text_color": [
                 190,
                 205,
