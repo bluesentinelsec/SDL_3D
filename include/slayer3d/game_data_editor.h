@@ -75,7 +75,7 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_HIT_MARKER = 5,
         /** @brief Non-mutating editor command preview bounds edge. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_COMMAND_PREVIEW_BOUNDS_EDGE = 6,
-        /** @brief Authored editor work-plane grid line. */
+        /** @brief Editor grid line clipped to a visible brush surface. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID = 7,
         /** @brief Editor-authored player-start marker line. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_PLAYER_START_EDGE = 8,
@@ -143,6 +143,8 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_HOVER_HANDLE = 39,
         /** @brief Shear tool non-mutating transformed source preview edge. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_SHEAR_PREVIEW_EDGE = 40,
+        /** @brief Dedicated editor origin axis line. */
+        SLAYER3D_GAME_DATA_EDITOR_DEBUG_ORIGIN_AXIS = 41,
     } slayer3d_game_data_editor_debug_primitive_type;
 
     enum
@@ -159,7 +161,7 @@ extern "C"
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_HIT_MARKER = 1u << 4,
         /** @brief Emit active non-mutating editor command preview bounds. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_COMMAND_PREVIEW = 1u << 5,
-        /** @brief Emit authored editor work-plane grid lines. */
+        /** @brief Emit editor brush-surface grid lines and origin axes. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID = 1u << 6,
         /** @brief Emit editor-authored player-start marker icons. */
         SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_PLAYER_STARTS = 1u << 7,
@@ -236,7 +238,7 @@ extern "C"
         slayer3d_color hit_marker_color;
         /** @brief Color for command preview bounds, or alpha 0 for default. */
         slayer3d_color command_preview_color;
-        /** @brief Color for work-plane grid lines, or alpha 0 for default. */
+        /** @brief Color for brush-surface grid lines, or alpha 0 for default. */
         slayer3d_color work_plane_grid_color;
         /** @brief Color for editor player-start marker lines, or alpha 0 for default. */
         slayer3d_color player_start_color;

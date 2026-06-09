@@ -22,6 +22,13 @@ typedef struct editor_debug_iteration_context
     bool stopped;
 } editor_debug_iteration_context;
 
+typedef struct editor_debug_surface_grid_point
+{
+    float u;
+    float v;
+    float angle;
+} editor_debug_surface_grid_point;
+
 static bool emit_editor_selected_brush_bounds(const slayer3d_game_data_runtime *runtime,
                                               const slayer3d_game_data_editor_debug_desc *desc,
                                               slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata);
@@ -1299,18 +1306,14 @@ static bool emit_editor_overlapping_source_brush_bounds(const slayer3d_game_data
     return true;
 }
 
-static bool editor_selection_face_corners(const slayer3d_game_data_editor_selection *selection,
-                                          slayer3d_vec3 out_corners[4])
+static bool editor_bounds_face_corners(slayer3d_bounding_box bounds, int face_index, slayer3d_vec3 out_corners[4])
 {
-    if (selection == NULL || out_corners == NULL || !selection->hit || !selection->has_bounds ||
-        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->face_index < 0)
-    {
+    if (out_corners == NULL || face_index < 0)
         return false;
-    }
 
-    const slayer3d_vec3 min = selection->bounds.min;
-    const slayer3d_vec3 max = selection->bounds.max;
-    switch (selection->face_index)
+    const slayer3d_vec3 min = bounds.min;
+    const slayer3d_vec3 max = bounds.max;
+    switch (face_index)
     {
     case 0:
         out_corners[0] = slayer3d_vec3_make(max.x, min.y, min.z);
@@ -1351,6 +1354,17 @@ static bool editor_selection_face_corners(const slayer3d_game_data_editor_select
     default:
         return false;
     }
+}
+
+static bool editor_selection_face_corners(const slayer3d_game_data_editor_selection *selection,
+                                          slayer3d_vec3 out_corners[4])
+{
+    if (selection == NULL || out_corners == NULL || !selection->hit || !selection->has_bounds ||
+        selection->type != SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD || selection->face_index < 0)
+    {
+        return false;
+    }
+    return editor_bounds_face_corners(selection->bounds, selection->face_index, out_corners);
 }
 
 static bool emit_editor_debug_selection_face(const slayer3d_game_data_editor_debug_desc *desc,
@@ -1523,8 +1537,17 @@ static bool emit_editor_debug_overlay_markers(const slayer3d_game_data_runtime *
     return true;
 }
 
-static bool emit_editor_debug_work_plane_grid(const slayer3d_game_data_editor_debug_desc *desc,
-                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+static slayer3d_vec3 editor_debug_axis_vector(int axis)
+{
+    if (axis == 0)
+        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    if (axis == 2)
+        return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+}
+
+static bool emit_editor_debug_origin_axes(const slayer3d_game_data_editor_debug_desc *desc,
+                                          slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
 {
     if (desc == NULL || callback == NULL || !desc->has_work_plane_grid ||
         slayer3d_vec3_length_squared(desc->work_plane_normal) <= 0.000001f)
@@ -1532,46 +1555,441 @@ static bool emit_editor_debug_work_plane_grid(const slayer3d_game_data_editor_de
         return true;
     }
 
-    const slayer3d_vec3 normal = slayer3d_vec3_normalize(desc->work_plane_normal);
-    slayer3d_vec3 reference =
-        SDL_fabsf(normal.y) < 0.95f ? slayer3d_vec3_make(0.0f, 1.0f, 0.0f) : slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
-    slayer3d_vec3 tangent = slayer3d_vec3_cross(reference, normal);
-    if (slayer3d_vec3_length_squared(tangent) <= 0.000001f)
-        tangent = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
-    tangent = slayer3d_vec3_normalize(tangent);
-    const slayer3d_vec3 bitangent = slayer3d_vec3_normalize(slayer3d_vec3_cross(normal, tangent));
-    const slayer3d_vec3 center = slayer3d_vec3_scale(normal, desc->work_plane_distance);
     const float half_size = desc->work_plane_grid_size > 0.0f ? desc->work_plane_grid_size : 16.0f;
-    const float spacing = desc->work_plane_grid_spacing > 0.0f ? desc->work_plane_grid_spacing : 1.0f;
-    const int line_count = SDL_min((int)SDL_floorf(half_size / spacing), 512);
+    const slayer3d_color colors[3] = {
+        {230, 70, 50, 230},
+        {70, 220, 100, 230},
+        {80, 140, 255, 230},
+    };
+    const char *names[3] = {"x", "y", "z"};
 
     editor_debug_iteration_context context;
     SDL_zero(context);
     context.callback = callback;
     context.userdata = userdata;
-    context.color = editor_debug_color_or_default(desc->work_plane_grid_color, (slayer3d_color){90, 160, 190, 120});
-    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID;
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_ORIGIN_AXIS;
+    context.world_name = "editor_origin";
     context.face_index = -1;
 
-    for (int i = -line_count; i <= line_count; ++i)
+    for (int axis = 0; axis < 3; ++axis)
     {
-        const float offset = (float)i * spacing;
-        const slayer3d_vec3 tangent_offset = slayer3d_vec3_scale(tangent, offset);
-        const slayer3d_vec3 bitangent_offset = slayer3d_vec3_scale(bitangent, offset);
-        if (!emit_editor_debug_line(&context,
-                                    slayer3d_vec3_add(slayer3d_vec3_add(center, tangent_offset),
-                                                      slayer3d_vec3_scale(bitangent, -half_size)),
-                                    slayer3d_vec3_add(slayer3d_vec3_add(center, tangent_offset),
-                                                      slayer3d_vec3_scale(bitangent, half_size))) ||
-            !emit_editor_debug_line(&context,
-                                    slayer3d_vec3_add(slayer3d_vec3_add(center, bitangent_offset),
-                                                      slayer3d_vec3_scale(tangent, -half_size)),
-                                    slayer3d_vec3_add(slayer3d_vec3_add(center, bitangent_offset),
-                                                      slayer3d_vec3_scale(tangent, half_size))))
+        const slayer3d_vec3 direction = editor_debug_axis_vector(axis);
+        context.color = colors[axis];
+        context.element_name = names[axis];
+        if (!emit_editor_debug_line(&context, slayer3d_vec3_scale(direction, -half_size),
+                                    slayer3d_vec3_scale(direction, half_size)))
         {
             return false;
         }
     }
+    return true;
+}
+
+static slayer3d_vec3 editor_debug_grid_world_point(slayer3d_vec3 normal, slayer3d_vec3 tangent, slayer3d_vec3 bitangent,
+                                                   float plane_distance, float u, float v)
+{
+    return slayer3d_vec3_add(slayer3d_vec3_add(slayer3d_vec3_scale(tangent, u), slayer3d_vec3_scale(bitangent, v)),
+                             slayer3d_vec3_scale(normal, plane_distance));
+}
+
+static void editor_debug_grid_expand_interval(float value, float *out_min, float *out_max, int *out_count)
+{
+    if (out_min == NULL || out_max == NULL || out_count == NULL)
+        return;
+    if (*out_count == 0)
+    {
+        *out_min = value;
+        *out_max = value;
+    }
+    else
+    {
+        *out_min = SDL_min(*out_min, value);
+        *out_max = SDL_max(*out_max, value);
+    }
+    ++(*out_count);
+}
+
+static bool emit_editor_debug_surface_grid_axis(editor_debug_iteration_context *context,
+                                                const editor_debug_surface_grid_point *points, int point_count,
+                                                slayer3d_vec3 normal, slayer3d_vec3 tangent, slayer3d_vec3 bitangent,
+                                                float plane_distance, float spacing, bool fixed_u)
+{
+    if (context == NULL || points == NULL || point_count < 3 || spacing <= 0.0f)
+        return true;
+
+    float min_fixed = fixed_u ? points[0].u : points[0].v;
+    float max_fixed = min_fixed;
+    for (int i = 1; i < point_count; ++i)
+    {
+        const float value = fixed_u ? points[i].u : points[i].v;
+        min_fixed = SDL_min(min_fixed, value);
+        max_fixed = SDL_max(max_fixed, value);
+    }
+
+    const float epsilon = 0.0001f;
+    const int first = (int)SDL_ceilf((min_fixed - epsilon) / spacing);
+    const int last = (int)SDL_floorf((max_fixed + epsilon) / spacing);
+    const int max_lines = 1024;
+    if (last < first)
+        return true;
+
+    const int clamped_last = SDL_min(last, first + max_lines - 1);
+    const slayer3d_vec3 visual_offset = slayer3d_vec3_scale(normal, 0.002f);
+    for (int line = first; line <= clamped_last; ++line)
+    {
+        const float fixed = (float)line * spacing;
+        float min_other = 0.0f;
+        float max_other = 0.0f;
+        int intersection_count = 0;
+
+        for (int edge = 0; edge < point_count; ++edge)
+        {
+            const editor_debug_surface_grid_point *a = &points[edge];
+            const editor_debug_surface_grid_point *b = &points[(edge + 1) % point_count];
+            const float a_fixed = fixed_u ? a->u : a->v;
+            const float b_fixed = fixed_u ? b->u : b->v;
+            const float a_other = fixed_u ? a->v : a->u;
+            const float b_other = fixed_u ? b->v : b->u;
+
+            if (SDL_fabsf(a_fixed - fixed) <= epsilon && SDL_fabsf(b_fixed - fixed) <= epsilon)
+            {
+                editor_debug_grid_expand_interval(a_other, &min_other, &max_other, &intersection_count);
+                editor_debug_grid_expand_interval(b_other, &min_other, &max_other, &intersection_count);
+                continue;
+            }
+
+            const float edge_min = SDL_min(a_fixed, b_fixed);
+            const float edge_max = SDL_max(a_fixed, b_fixed);
+            if (fixed < edge_min - epsilon || fixed > edge_max + epsilon || SDL_fabsf(b_fixed - a_fixed) <= epsilon)
+                continue;
+
+            const float t = SDL_clamp((fixed - a_fixed) / (b_fixed - a_fixed), 0.0f, 1.0f);
+            editor_debug_grid_expand_interval(a_other + (b_other - a_other) * t, &min_other, &max_other,
+                                              &intersection_count);
+        }
+
+        if (intersection_count < 2 || max_other - min_other <= 0.0001f)
+            continue;
+
+        slayer3d_vec3 start;
+        slayer3d_vec3 end;
+        if (fixed_u)
+        {
+            start = editor_debug_grid_world_point(normal, tangent, bitangent, plane_distance, fixed, min_other);
+            end = editor_debug_grid_world_point(normal, tangent, bitangent, plane_distance, fixed, max_other);
+        }
+        else
+        {
+            start = editor_debug_grid_world_point(normal, tangent, bitangent, plane_distance, min_other, fixed);
+            end = editor_debug_grid_world_point(normal, tangent, bitangent, plane_distance, max_other, fixed);
+        }
+        if (!emit_editor_debug_line(context, slayer3d_vec3_add(start, visual_offset),
+                                    slayer3d_vec3_add(end, visual_offset)))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+static slayer3d_vec3 editor_debug_surface_grid_tangent(slayer3d_vec3 normal)
+{
+    slayer3d_vec3 best = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    float best_len_sq = -1.0f;
+    for (int axis = 0; axis < 3; ++axis)
+    {
+        const slayer3d_vec3 candidate = editor_debug_axis_vector(axis);
+        const slayer3d_vec3 projected =
+            slayer3d_vec3_sub(candidate, slayer3d_vec3_scale(normal, slayer3d_vec3_dot(candidate, normal)));
+        const float len_sq = slayer3d_vec3_length_squared(projected);
+        if (len_sq > best_len_sq)
+        {
+            best_len_sq = len_sq;
+            best = projected;
+        }
+    }
+    return best_len_sq > 0.000001f ? slayer3d_vec3_normalize(best) : slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+}
+
+static bool emit_editor_debug_surface_grid(editor_debug_iteration_context *context, const slayer3d_vec3 *corners,
+                                           int corner_count, slayer3d_vec3 normal, float spacing)
+{
+    if (context == NULL || corners == NULL || corner_count < 3 || spacing <= 0.0f ||
+        slayer3d_vec3_length_squared(normal) <= 0.000001f)
+    {
+        return true;
+    }
+
+    normal = slayer3d_vec3_normalize(normal);
+    const slayer3d_vec3 tangent = editor_debug_surface_grid_tangent(normal);
+    const slayer3d_vec3 bitangent = slayer3d_vec3_normalize(slayer3d_vec3_cross(normal, tangent));
+    const float plane_distance = slayer3d_vec3_dot(normal, corners[0]);
+
+    slayer3d_vec3 center = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    for (int i = 0; i < corner_count; ++i)
+        center = slayer3d_vec3_add(center, corners[i]);
+    center = slayer3d_vec3_scale(center, 1.0f / (float)corner_count);
+    const float center_u = slayer3d_vec3_dot(center, tangent);
+    const float center_v = slayer3d_vec3_dot(center, bitangent);
+
+    editor_debug_surface_grid_point points[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    SDL_zeroa(points);
+    int point_count = 0;
+    for (int i = 0; i < corner_count && i < (int)SDL_arraysize(points); ++i)
+    {
+        editor_debug_surface_grid_point point;
+        SDL_zero(point);
+        point.u = slayer3d_vec3_dot(corners[i], tangent);
+        point.v = slayer3d_vec3_dot(corners[i], bitangent);
+        point.angle = SDL_atan2f(point.v - center_v, point.u - center_u);
+
+        int insert = point_count;
+        while (insert > 0 && points[insert - 1].angle > point.angle)
+        {
+            points[insert] = points[insert - 1];
+            --insert;
+        }
+        points[insert] = point;
+        ++point_count;
+    }
+
+    return emit_editor_debug_surface_grid_axis(context, points, point_count, normal, tangent, bitangent, plane_distance,
+                                               spacing, true) &&
+           emit_editor_debug_surface_grid_axis(context, points, point_count, normal, tangent, bitangent, plane_distance,
+                                               spacing, false);
+}
+
+static bool emit_editor_debug_source_model_face_grid(editor_debug_iteration_context *context,
+                                                     const brush_world_runtime *world,
+                                                     const slayer3d_game_data_brush *brush,
+                                                     const slayer3d_game_data_brush_compiled_face *compiled_face,
+                                                     slayer3d_vec3 world_position, float spacing, bool *out_handled)
+{
+    if (out_handled != NULL)
+        *out_handled = false;
+    if (context == NULL || world == NULL || brush == NULL || compiled_face == NULL || spacing <= 0.0f ||
+        compiled_face->face_index < 0 || compiled_face->face_index >= brush->face_count)
+    {
+        return true;
+    }
+
+    const char *brush_identity =
+        compiled_face->source_brush_stable_id != NULL && compiled_face->source_brush_stable_id[0] != '\0'
+            ? compiled_face->source_brush_stable_id
+        : brush->editor.stable_id != NULL && brush->editor.stable_id[0] != '\0' ? brush->editor.stable_id
+                                                                                : brush->name;
+    const int source_index = editor_brush_world_find_source_box_index(world, brush_identity);
+    editor_brush_source_vertex_model model;
+    if (source_index < 0 || !editor_brush_source_box_build_vertex_model(world, source_index, &model, NULL, 0) ||
+        compiled_face->face_index >= model.face_count)
+    {
+        return true;
+    }
+
+    const editor_brush_source_face_ref *face = &model.faces[compiled_face->face_index];
+    if (face->vertex_count < 3)
+        return true;
+
+    slayer3d_vec3 corners[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY];
+    SDL_zeroa(corners);
+    int corner_count = 0;
+    for (int i = 0; i < face->vertex_count && corner_count < (int)SDL_arraysize(corners); ++i)
+    {
+        const int vertex_index = face->vertex_indices[i];
+        if (vertex_index < 0 || vertex_index >= model.vertex_count)
+            continue;
+        corners[corner_count++] =
+            slayer3d_vec3_add(world_position, editor_source_vertex_coord_meters(world, &model.vertices[vertex_index]));
+    }
+    if (corner_count < 3)
+        return true;
+
+    if (out_handled != NULL)
+        *out_handled = true;
+    const slayer3d_vec3 normal = brush->faces[compiled_face->face_index].normal;
+    return emit_editor_debug_surface_grid(context, corners, corner_count, normal, spacing);
+}
+
+static slayer3d_vec3 editor_debug_bounds_face_normal(int face_index)
+{
+    switch (face_index)
+    {
+    case 0:
+        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    case 1:
+        return slayer3d_vec3_make(-1.0f, 0.0f, 0.0f);
+    case 2:
+        return slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    case 3:
+        return slayer3d_vec3_make(0.0f, -1.0f, 0.0f);
+    case 4:
+        return slayer3d_vec3_make(0.0f, 0.0f, 1.0f);
+    case 5:
+        return slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+    default:
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    }
+}
+
+static bool emit_editor_debug_bounds_face_grid(editor_debug_iteration_context *context,
+                                               const slayer3d_game_data_brush *brush, int face_index,
+                                               slayer3d_vec3 world_position, float spacing)
+{
+    if (context == NULL || brush == NULL || !brush->has_bounds || spacing <= 0.0f)
+        return true;
+
+    slayer3d_vec3 corners[4];
+    if (!editor_bounds_face_corners(brush->bounds, face_index, corners))
+        return true;
+    for (int i = 0; i < 4; ++i)
+        corners[i] = slayer3d_vec3_add(corners[i], world_position);
+
+    slayer3d_vec3 normal = face_index >= 0 && face_index < brush->face_count
+                               ? brush->faces[face_index].normal
+                               : editor_debug_bounds_face_normal(face_index);
+    if (slayer3d_vec3_length_squared(normal) <= 0.000001f)
+        normal = editor_debug_bounds_face_normal(face_index);
+    return emit_editor_debug_surface_grid(context, corners, 4, normal, spacing);
+}
+
+static bool editor_debug_compiled_face_seen(const slayer3d_game_data_brush_world *world, int face_index)
+{
+    if (world == NULL || world->compile_rendered_faces == NULL || face_index < 0 ||
+        face_index >= world->compile_rendered_face_metadata_count)
+    {
+        return false;
+    }
+
+    const slayer3d_game_data_brush_compiled_face *face = &world->compile_rendered_faces[face_index];
+    for (int i = 0; i < face_index; ++i)
+    {
+        const slayer3d_game_data_brush_compiled_face *previous = &world->compile_rendered_faces[i];
+        if (previous->brush_index == face->brush_index && previous->face_index == face->face_index)
+            return true;
+    }
+    return false;
+}
+
+typedef struct editor_surface_grid_context
+{
+    const slayer3d_game_data_runtime *runtime;
+    const slayer3d_game_data_editor_debug_desc *desc;
+    slayer3d_game_data_editor_debug_primitive_fn callback;
+    void *userdata;
+    bool stopped;
+} editor_surface_grid_context;
+
+static bool emit_editor_debug_brush_face_grid(editor_debug_iteration_context *context, const brush_world_runtime *world,
+                                              const slayer3d_game_data_brush *brush,
+                                              const slayer3d_game_data_brush_compiled_face *compiled_face,
+                                              int fallback_face_index, slayer3d_vec3 world_position, float spacing)
+{
+    if (context == NULL || world == NULL || brush == NULL || spacing <= 0.0f)
+        return true;
+
+    bool handled = false;
+    if (compiled_face != NULL && !emit_editor_debug_source_model_face_grid(context, world, brush, compiled_face,
+                                                                           world_position, spacing, &handled))
+    {
+        return false;
+    }
+    if (handled)
+        return true;
+
+    const int face_index = compiled_face != NULL ? compiled_face->face_index : fallback_face_index;
+    return emit_editor_debug_bounds_face_grid(context, brush, face_index, world_position, spacing);
+}
+
+static bool emit_editor_debug_brush_world_surface_grid(void *userdata,
+                                                       const slayer3d_game_data_brush_world_instance *instance)
+{
+    editor_surface_grid_context *grid_context = (editor_surface_grid_context *)userdata;
+    if (grid_context == NULL || grid_context->runtime == NULL || grid_context->desc == NULL || instance == NULL)
+        return true;
+
+    const brush_world_runtime *world = find_brush_world_runtime(grid_context->runtime, instance->world_name);
+    if (world == NULL)
+        return false;
+
+    const float spacing =
+        grid_context->desc->work_plane_grid_spacing > 0.0f ? grid_context->desc->work_plane_grid_spacing : 1.0f;
+    editor_debug_iteration_context context;
+    SDL_zero(context);
+    context.callback = grid_context->callback;
+    context.userdata = grid_context->userdata;
+    context.color =
+        editor_debug_color_or_default(grid_context->desc->work_plane_grid_color, (slayer3d_color){90, 160, 190, 120});
+    context.type = SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID;
+    context.world_name = instance->world_name;
+
+    const slayer3d_game_data_brush_world *brush_world = &world->desc;
+    if (brush_world->compile_rendered_faces != NULL && brush_world->compile_rendered_face_metadata_count > 0)
+    {
+        for (int i = 0; i < brush_world->compile_rendered_face_metadata_count; ++i)
+        {
+            if (editor_debug_compiled_face_seen(brush_world, i))
+                continue;
+            const slayer3d_game_data_brush_compiled_face *face = &brush_world->compile_rendered_faces[i];
+            if (face->brush_index < 0 || face->brush_index >= brush_world->brush_count)
+                continue;
+            const slayer3d_game_data_brush *brush = &brush_world->brushes[face->brush_index];
+            if (face->face_index < 0 || face->face_index >= brush->face_count)
+                continue;
+            context.element_name = face->brush_name != NULL ? face->brush_name : brush->name;
+            context.face_index = face->face_index;
+            if (!emit_editor_debug_brush_face_grid(&context, world, brush, face, -1, instance->position, spacing))
+            {
+                grid_context->stopped = context.stopped;
+                return false;
+            }
+        }
+        return true;
+    }
+
+    for (int brush_index = 0; brush_index < brush_world->brush_count; ++brush_index)
+    {
+        const slayer3d_game_data_brush *brush = &brush_world->brushes[brush_index];
+        context.element_name = brush->name;
+        for (int face_index = 0; face_index < brush->face_count; ++face_index)
+        {
+            context.face_index = face_index;
+            if (!emit_editor_debug_brush_face_grid(&context, world, brush, NULL, face_index, instance->position,
+                                                   spacing))
+            {
+                grid_context->stopped = context.stopped;
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static bool emit_editor_debug_work_plane_grid(const slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_debug_desc *desc,
+                                              slayer3d_game_data_editor_debug_primitive_fn callback, void *userdata)
+{
+    if (runtime == NULL || desc == NULL || callback == NULL || !desc->has_work_plane_grid ||
+        slayer3d_vec3_length_squared(desc->work_plane_normal) <= 0.000001f)
+    {
+        return true;
+    }
+
+    if (!emit_editor_debug_origin_axes(desc, callback, userdata))
+        return false;
+
+    editor_surface_grid_context context;
+    SDL_zero(context);
+    context.runtime = runtime;
+    context.desc = desc;
+    context.callback = callback;
+    context.userdata = userdata;
+    if (!slayer3d_game_data_for_each_brush_world_instance(runtime, emit_editor_debug_brush_world_surface_grid,
+                                                          &context))
+    {
+        return false;
+    }
+    if (context.stopped)
+        return false;
     return true;
 }
 
@@ -2239,7 +2657,7 @@ bool slayer3d_game_data_for_each_editor_debug_primitive(const slayer3d_game_data
 
     const unsigned int flags = desc->flags != 0u ? desc->flags : SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_ALL;
     if ((flags & SLAYER3D_GAME_DATA_EDITOR_DEBUG_DRAW_WORK_PLANE_GRID) != 0u &&
-        !emit_editor_debug_work_plane_grid(desc, callback, userdata))
+        !emit_editor_debug_work_plane_grid(runtime, desc, callback, userdata))
     {
         return true;
     }
