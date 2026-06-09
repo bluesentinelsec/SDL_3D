@@ -16758,6 +16758,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     struct DebugCapture
     {
         int grid_lines = 0;
+        int origin_axes = 0;
         int world_edges = 0;
         int selection_edges = 0;
         int selection_face_edges = 0;
@@ -16765,14 +16766,29 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         int rays = 0;
         int normals = 0;
         int markers = 0;
+        float max_grid_abs = 0.0f;
     } debug;
     auto capture_debug = [](void *userdata, const slayer3d_game_data_editor_debug_primitive *primitive) -> bool {
         auto *capture = static_cast<DebugCapture *>(userdata);
         if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORK_PLANE_GRID)
         {
             capture->grid_lines++;
-            EXPECT_NEAR(primitive->start.y, 0.0f, 0.001f);
-            EXPECT_NEAR(primitive->end.y, 0.0f, 0.001f);
+            EXPECT_NE(primitive->world_name, nullptr);
+            EXPECT_NE(primitive->element_name, nullptr);
+            EXPECT_GE(primitive->face_index, 0);
+            capture->max_grid_abs = std::max(capture->max_grid_abs, std::fabs(primitive->start.x));
+            capture->max_grid_abs = std::max(capture->max_grid_abs, std::fabs(primitive->start.y));
+            capture->max_grid_abs = std::max(capture->max_grid_abs, std::fabs(primitive->start.z));
+            capture->max_grid_abs = std::max(capture->max_grid_abs, std::fabs(primitive->end.x));
+            capture->max_grid_abs = std::max(capture->max_grid_abs, std::fabs(primitive->end.y));
+            capture->max_grid_abs = std::max(capture->max_grid_abs, std::fabs(primitive->end.z));
+        }
+        else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_ORIGIN_AXIS)
+        {
+            capture->origin_axes++;
+            EXPECT_STREQ(primitive->world_name, "editor_origin");
+            EXPECT_NE(primitive->element_name, nullptr);
+            EXPECT_EQ(primitive->face_index, -1);
         }
         else if (primitive->type == SLAYER3D_GAME_DATA_EDITOR_DEBUG_WORLD_BOUNDS_EDGE)
             capture->world_edges++;
@@ -16794,7 +16810,10 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
         return true;
     };
     ASSERT_TRUE(slayer3d_game_data_for_each_active_editor_debug_primitive(runtime, capture_debug, &debug));
-    EXPECT_EQ(debug.grid_lines, 1026);
+    EXPECT_GT(debug.grid_lines, 0);
+    EXPECT_LT(debug.grid_lines, 1026);
+    EXPECT_LT(debug.max_grid_abs, 64.0f);
+    EXPECT_EQ(debug.origin_axes, 3);
     EXPECT_EQ(debug.world_edges, 12);
     EXPECT_EQ(debug.selection_edges, 12);
     EXPECT_EQ(debug.selection_face_edges, 52);
