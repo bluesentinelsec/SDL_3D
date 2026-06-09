@@ -1852,6 +1852,40 @@ TEST_F(GLRendererTest, Line3DVisibleOnGLBackend)
     EXPECT_TRUE(found_red);
 }
 
+TEST_F(GLRendererTest, Line3DVisibleWithBackfaceCullingOnGLBackend)
+{
+    slayer3d_camera3d cam;
+    cam.position = slayer3d_vec3_make(0, 0, 5);
+    cam.target = slayer3d_vec3_make(0, 0, 0);
+    cam.up = slayer3d_vec3_make(0, 1, 0);
+    cam.fovy = 60.0f;
+    cam.projection = SLAYER3D_CAMERA_PERSPECTIVE;
+
+    ASSERT_TRUE(slayer3d_set_backface_culling_enabled(ctx, true));
+    slayer3d_clear_render_context(ctx, slayer3d_color{0, 0, 0, 255});
+    slayer3d_begin_mode_3d(ctx, cam);
+    slayer3d_draw_line_3d(ctx, slayer3d_vec3_make(1.5f, 0.0f, 0.0f), slayer3d_vec3_make(-1.5f, 0.0f, 0.0f),
+                          slayer3d_color{255, 32, 32, 255});
+    slayer3d_end_mode_3d(ctx);
+
+    bool found_red = false;
+    for (int y = 0; y < 240 && !found_red; ++y)
+    {
+        for (int x = 0; x < 320; ++x)
+        {
+            unsigned char px[4];
+            readPixel(x, y, px);
+            if (px[0] > 100 && px[1] < 80 && px[2] < 80)
+            {
+                found_red = true;
+                break;
+            }
+        }
+    }
+
+    EXPECT_TRUE(found_red);
+}
+
 TEST_F(GLRendererTest, BackfaceCullingShowsFrontFaces)
 {
     /* A cube viewed from the front should show the front face, not the back. */

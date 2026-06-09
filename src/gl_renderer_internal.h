@@ -134,6 +134,7 @@ typedef struct slayer3d_draw_entry
     int joint_palette_offset;
     bool use_joint_palette_buffer;
     bool gpu_skinned;
+    bool disable_culling;
     bool viewport_enabled;
     SDL_Rect viewport_rect;
     bool scissor_enabled;

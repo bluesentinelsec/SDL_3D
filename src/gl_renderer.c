@@ -56,9 +56,81 @@ static const float *ensure_white_colors(slayer3d_gl_context *ctx, int vertex_cou
 
 static float *copy_floats(const float *src, size_t count);
 
+static slayer3d_vec4 transform_vec4_columns(const float *m, float x, float y, float z, float w)
+{
+    return slayer3d_vec4_make(
+        (m[0] * x) + (m[4] * y) + (m[8] * z) + (m[12] * w), (m[1] * x) + (m[5] * y) + (m[9] * z) + (m[13] * w),
+        (m[2] * x) + (m[6] * y) + (m[10] * z) + (m[14] * w), (m[3] * x) + (m[7] * y) + (m[11] * z) + (m[15] * w));
+}
+
+static float clip_line_distance(slayer3d_vec4 v, int plane)
+{
+    switch (plane)
+    {
+    case 0:
+        return v.x + v.w;
+    case 1:
+        return v.w - v.x;
+    case 2:
+        return v.y + v.w;
+    case 3:
+        return v.w - v.y;
+    case 4:
+        return v.z + v.w;
+    default:
+        return v.w - v.z;
+    }
+}
+
+static bool clip_line_to_view(slayer3d_vec4 *a, slayer3d_vec4 *b)
+{
+    if (a == NULL || b == NULL)
+        return false;
+
+    for (int plane = 0; plane < 6; ++plane)
+    {
+        const float da = clip_line_distance(*a, plane);
+        const float db = clip_line_distance(*b, plane);
+        if (da < 0.0f && db < 0.0f)
+            return false;
+        if (da >= 0.0f && db >= 0.0f)
+            continue;
+
+        const float denom = da - db;
+        if (SDL_fabsf(denom) <= 0.000001f)
+            return false;
+        const float t = da / denom;
+        const slayer3d_vec4 p = slayer3d_vec4_lerp(*a, *b, t);
+        if (da < 0.0f)
+            *a = p;
+        else
+            *b = p;
+    }
+
+    return a->w > 0.0f && b->w > 0.0f;
+}
+
+static bool append_line_quad_vertex(float *positions, float *uvs, float *quad_colors, int *index, slayer3d_vec4 p,
+                                    const float *color)
+{
+    if (positions == NULL || uvs == NULL || quad_colors == NULL || index == NULL || color == NULL)
+        return false;
+    const int i = *index;
+    positions[(i * 3) + 0] = p.x;
+    positions[(i * 3) + 1] = p.y;
+    positions[(i * 3) + 2] = p.z;
+    uvs[(i * 2) + 0] = 0.0f;
+    uvs[(i * 2) + 1] = 0.0f;
+    quad_colors[(i * 4) + 0] = color[0];
+    quad_colors[(i * 4) + 1] = color[1];
+    quad_colors[(i * 4) + 2] = color[2];
+    quad_colors[(i * 4) + 3] = color[3];
+    *index = i + 1;
+    return true;
+}
+
 bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, const float *colors, const float *mvp)
 {
-    static const float k_zero_uvs[4] = {0.0f, 0.0f, 0.0f, 0.0f};
     static const float k_white_tint[4] = {1.0f, 1.0f, 1.0f, 1.0f};
 
     if (!ctx || !positions || !colors || !mvp)
@@ -66,18 +138,68 @@ bool slayer3d_gl_append_line(slayer3d_gl_context *ctx, const float *positions, c
         return false;
     }
 
+    slayer3d_vec4 clip_start = transform_vec4_columns(mvp, positions[0], positions[1], positions[2], 1.0f);
+    slayer3d_vec4 clip_end = transform_vec4_columns(mvp, positions[3], positions[4], positions[5], 1.0f);
+    if (!clip_line_to_view(&clip_start, &clip_end))
+        return true;
+
+    slayer3d_vec4 start =
+        slayer3d_vec4_make(clip_start.x / clip_start.w, clip_start.y / clip_start.w, clip_start.z / clip_start.w, 1.0f);
+    slayer3d_vec4 end =
+        slayer3d_vec4_make(clip_end.x / clip_end.w, clip_end.y / clip_end.w, clip_end.z / clip_end.w, 1.0f);
+
+    const int logical_w = ctx->logical_w > 0 ? ctx->logical_w : SDL_max(ctx->world_w, 1);
+    const int logical_h = ctx->logical_h > 0 ? ctx->logical_h : SDL_max(ctx->world_h, 1);
+    float viewport_w = (float)logical_w;
+    float viewport_h = (float)logical_h;
+    if (ctx->current_ctx != NULL && ctx->current_ctx->viewport_enabled && ctx->current_ctx->viewport_rect.w > 0 &&
+        ctx->current_ctx->viewport_rect.h > 0)
+    {
+        viewport_w = (float)ctx->current_ctx->viewport_rect.w;
+        viewport_h = (float)ctx->current_ctx->viewport_rect.h;
+    }
+    viewport_w *= (float)SDL_max(ctx->world_w, 1) / (float)logical_w;
+    viewport_h *= (float)SDL_max(ctx->world_h, 1) / (float)logical_h;
+
+    const float dx = (end.x - start.x) * viewport_w * 0.5f;
+    const float dy = (end.y - start.y) * viewport_h * 0.5f;
+    const float len = SDL_sqrtf((dx * dx) + (dy * dy));
+    if (len <= 0.0001f)
+        return true;
+
+    const float half_width_px = 0.75f;
+    const float off_x = (-dy / len) * half_width_px * 2.0f / viewport_w;
+    const float off_y = (dx / len) * half_width_px * 2.0f / viewport_h;
+    const slayer3d_vec4 start_a = slayer3d_vec4_make(start.x + off_x, start.y + off_y, start.z, 1.0f);
+    const slayer3d_vec4 start_b = slayer3d_vec4_make(start.x - off_x, start.y - off_y, start.z, 1.0f);
+    const slayer3d_vec4 end_a = slayer3d_vec4_make(end.x + off_x, end.y + off_y, end.z, 1.0f);
+    const slayer3d_vec4 end_b = slayer3d_vec4_make(end.x - off_x, end.y - off_y, end.z, 1.0f);
+
+    float quad_positions[18];
+    float quad_uvs[12];
+    float quad_colors[24];
+    int vertex_index = 0;
+    (void)append_line_quad_vertex(quad_positions, quad_uvs, quad_colors, &vertex_index, start_a, colors);
+    (void)append_line_quad_vertex(quad_positions, quad_uvs, quad_colors, &vertex_index, start_b, colors);
+    (void)append_line_quad_vertex(quad_positions, quad_uvs, quad_colors, &vertex_index, end_b, colors + 4);
+    (void)append_line_quad_vertex(quad_positions, quad_uvs, quad_colors, &vertex_index, start_a, colors);
+    (void)append_line_quad_vertex(quad_positions, quad_uvs, quad_colors, &vertex_index, end_b, colors + 4);
+    (void)append_line_quad_vertex(quad_positions, quad_uvs, quad_colors, &vertex_index, end_a, colors + 4);
+
     slayer3d_draw_entry *e = slayer3d_gl_append_draw_entry(ctx);
     if (!e)
         return false;
 
     e->lit = false;
-    e->primitive_mode = GL_LINES;
-    e->vertex_count = 2;
-    e->positions = copy_floats(positions, 6);
-    e->uvs = copy_floats(k_zero_uvs, 4);
-    e->colors = copy_floats(colors, 8);
-    SDL_memcpy(e->mvp, mvp, 16 * sizeof(float));
+    e->primitive_mode = GL_TRIANGLES;
+    e->vertex_count = vertex_index;
+    e->positions = copy_floats(quad_positions, (size_t)vertex_index * 3u);
+    e->uvs = copy_floats(quad_uvs, (size_t)vertex_index * 2u);
+    e->colors = copy_floats(quad_colors, (size_t)vertex_index * 4u);
+    const slayer3d_mat4 identity = slayer3d_mat4_identity();
+    SDL_memcpy(e->mvp, identity.m, 16 * sizeof(float));
     SDL_memcpy(e->tint, k_white_tint, sizeof(k_white_tint));
+    e->disable_culling = true;
     e->owns_arrays = true;
     if (ctx->current_ctx != NULL)
         draw_entry_capture_viewport(e, ctx->current_ctx);
@@ -1318,7 +1440,7 @@ static bool draw_entries_can_instance(const slayer3d_gl_context *ctx, const slay
            draw_entry_float3_equal(a->emissive, b->emissive) &&
            draw_entry_matrix_equal(a->view_projection, b->view_projection, 16) &&
            draw_entry_float3_equal(a->camera_pos, b->camera_pos) && a->viewport_enabled == b->viewport_enabled &&
-           a->scissor_enabled == b->scissor_enabled &&
+           a->scissor_enabled == b->scissor_enabled && a->disable_culling == b->disable_culling &&
            (!a->viewport_enabled || SDL_memcmp(&a->viewport_rect, &b->viewport_rect, sizeof(a->viewport_rect)) == 0) &&
            (!a->scissor_enabled || SDL_memcmp(&a->scissor_rect, &b->scissor_rect, sizeof(a->scissor_rect)) == 0) &&
            draw_entry_skinning_equal(a, b);
@@ -1393,6 +1515,25 @@ static bool upload_instance_attributes(slayer3d_gl_context *ctx, const slayer3d_
     return true;
 }
 
+static void apply_draw_entry_cull_state(slayer3d_gl_context *ctx, const slayer3d_draw_entry *entry)
+{
+    if (ctx == NULL || entry == NULL)
+        return;
+    slayer3d_gl_funcs *gl = &ctx->gl;
+    if (entry->disable_culling)
+    {
+        gl->Disable(GL_CULL_FACE);
+    }
+    else if (ctx->current_ctx != NULL && ctx->current_ctx->backface_culling_enabled)
+    {
+        gl->Enable(GL_CULL_FACE);
+    }
+    else
+    {
+        gl->Disable(GL_CULL_FACE);
+    }
+}
+
 static bool draw_static_mesh_instance_batch(slayer3d_gl_context *ctx, int start, int count)
 {
     if (ctx == NULL || count <= 1)
@@ -1432,6 +1573,7 @@ static void replay_draw_list_geometry(slayer3d_gl_context *ctx)
         slayer3d_draw_entry *e = &ctx->draw_list[i];
         GLuint tex = slayer3d_gl_resolve_texture(ctx, e->texture);
         apply_draw_entry_viewport(ctx, e);
+        apply_draw_entry_cull_state(ctx, e);
 
         if (e->lit)
         {
