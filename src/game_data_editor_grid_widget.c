@@ -76,8 +76,12 @@ bool editor_handle_grid_widget(slayer3d_game_data_runtime *runtime, yyjson_val *
     const bool over_retained_button =
         retained_hit != NULL && SDL_strcmp(retained_hit->id, EDITOR_GRID_DROPDOWN_ID) == 0;
     const bool over_retained_option = retained_hit != NULL && retained_hit->option_index >= 0;
-    const bool over_button = over_retained_button || editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button"));
-    const bool over_popup = over_retained_option || editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "popup"));
+    const bool use_legacy_hit_rects = retained_hit == NULL;
+    const bool over_button =
+        over_retained_button ||
+        (use_legacy_hit_rects && editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button")));
+    const bool over_popup = over_retained_option ||
+                            (use_legacy_hit_rects && editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "popup")));
     if (!left_pressed)
     {
         if (out_consumed != NULL)

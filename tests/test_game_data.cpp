@@ -20144,11 +20144,19 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "shear");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "shear");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
+    click_editor(934.0f, 60.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 116);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.flip_vertical.message", ""),
+                 "flipped selected brushes vertically around +Y");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "flipped 1 selected brush vertically");
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
-    move_editor_mouse(660.0f, 360.0f, 116);
+    move_editor_mouse(660.0f, 360.0f, 117);
     slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "clip");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
@@ -20201,7 +20209,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 1.0f, 0.001f);
     std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 1"));
-    click_editor(900.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
+    click_editor(990.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
@@ -20259,7 +20267,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
     EXPECT_TRUE(grid_rects.hovered_option);
     EXPECT_EQ(grid_rects.hovered_option_rect.color.a, 248);
-    click_editor(900.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    click_editor(990.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
