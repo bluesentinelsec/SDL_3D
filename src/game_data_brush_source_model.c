@@ -3902,6 +3902,207 @@ bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, con
     return true;
 }
 
+static bool shear_source_side_axis(slayer3d_vec3 side_normal, int *out_axis, float *out_sign)
+{
+    if (out_axis != NULL)
+        *out_axis = -1;
+    if (out_sign != NULL)
+        *out_sign = 0.0f;
+    const float ax = SDL_fabsf(side_normal.x);
+    const float ay = SDL_fabsf(side_normal.y);
+    const float az = SDL_fabsf(side_normal.z);
+    if (ax > 0.5f && ay <= 0.0001f && az <= 0.0001f)
+    {
+        if (out_axis != NULL)
+            *out_axis = 0;
+        if (out_sign != NULL)
+            *out_sign = side_normal.x < 0.0f ? -1.0f : 1.0f;
+        return true;
+    }
+    if (ay > 0.5f && ax <= 0.0001f && az <= 0.0001f)
+    {
+        if (out_axis != NULL)
+            *out_axis = 1;
+        if (out_sign != NULL)
+            *out_sign = side_normal.y < 0.0f ? -1.0f : 1.0f;
+        return true;
+    }
+    if (az > 0.5f && ax <= 0.0001f && ay <= 0.0001f)
+    {
+        if (out_axis != NULL)
+            *out_axis = 2;
+        if (out_sign != NULL)
+            *out_sign = side_normal.z < 0.0f ? -1.0f : 1.0f;
+        return true;
+    }
+    return false;
+}
+
+static bool shear_source_vertex_coord(const int coord[3], const float bounds_min[3], const float bounds_max[3],
+                                      int axis, float sign, slayer3d_vec3 delta_source, int snap_units,
+                                      int out_coord[3])
+{
+    if (coord == NULL || bounds_min == NULL || bounds_max == NULL || out_coord == NULL || axis < 0 || axis > 2)
+        return false;
+    const float axis_min = bounds_min[axis];
+    const float axis_max = bounds_max[axis];
+    const float axis_size = axis_max - axis_min;
+    if (axis_size <= 0.000001f)
+        return false;
+    const float coord_axis = (float)coord[axis];
+    float t = sign > 0.0f ? (coord_axis - axis_min) / axis_size : (axis_max - coord_axis) / axis_size;
+    if (t < 0.0f)
+        t = 0.0f;
+    if (t > 1.0f)
+        t = 1.0f;
+
+    return source_rotation_coord((float)coord[0] + delta_source.x * t, snap_units, &out_coord[0]) &&
+           source_rotation_coord((float)coord[1] + delta_source.y * t, snap_units, &out_coord[1]) &&
+           source_rotation_coord((float)coord[2] + delta_source.z * t, snap_units, &out_coord[2]);
+}
+
+bool editor_brush_world_shear_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                         slayer3d_bounding_box bounds, slayer3d_vec3 side_normal, slayer3d_vec3 delta,
+                                         char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush shear requires a source model");
+        return false;
+    }
+    if (SDL_isnan(bounds.min.x) || SDL_isinf(bounds.min.x) || SDL_isnan(bounds.min.y) || SDL_isinf(bounds.min.y) ||
+        SDL_isnan(bounds.min.z) || SDL_isinf(bounds.min.z) || SDL_isnan(bounds.max.x) || SDL_isinf(bounds.max.x) ||
+        SDL_isnan(bounds.max.y) || SDL_isinf(bounds.max.y) || SDL_isnan(bounds.max.z) || SDL_isinf(bounds.max.z) ||
+        SDL_isnan(side_normal.x) || SDL_isinf(side_normal.x) || SDL_isnan(side_normal.y) || SDL_isinf(side_normal.y) ||
+        SDL_isnan(side_normal.z) || SDL_isinf(side_normal.z) || SDL_isnan(delta.x) || SDL_isinf(delta.x) ||
+        SDL_isnan(delta.y) || SDL_isinf(delta.y) || SDL_isnan(delta.z) || SDL_isinf(delta.z))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush shear requires finite bounds, side, and delta");
+        return false;
+    }
+
+    int axis = -1;
+    float sign = 0.0f;
+    if (!shear_source_side_axis(side_normal, &axis, &sign))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush shear requires an axis-aligned side normal");
+        return false;
+    }
+    if ((axis == 0 && bounds.max.x - bounds.min.x <= 0.000001f) ||
+        (axis == 1 && bounds.max.y - bounds.min.y <= 0.000001f) ||
+        (axis == 2 && bounds.max.z - bounds.min.z <= 0.000001f))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush shear requires non-empty bounds");
+        return false;
+    }
+
+    if (axis == 0)
+        delta.x = 0.0f;
+    else if (axis == 1)
+        delta.y = 0.0f;
+    else
+        delta.z = 0.0f;
+    if (slayer3d_vec3_length_squared(delta) <= 0.0000001f)
+        return true;
+
+    const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_name);
+    if (source_index < 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush not found");
+        return false;
+    }
+
+    editor_brush_source_vertex_model model;
+    if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
+                                                    error_buffer_size))
+    {
+        return false;
+    }
+
+    const float meters_per_unit =
+        world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit : 0.001f;
+    const float bounds_min[3] = {
+        bounds.min.x / meters_per_unit,
+        bounds.min.y / meters_per_unit,
+        bounds.min.z / meters_per_unit,
+    };
+    const float bounds_max[3] = {
+        bounds.max.x / meters_per_unit,
+        bounds.max.y / meters_per_unit,
+        bounds.max.z / meters_per_unit,
+    };
+    const slayer3d_vec3 delta_source =
+        slayer3d_vec3_make(delta.x / meters_per_unit, delta.y / meters_per_unit, delta.z / meters_per_unit);
+
+    int sheared_vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    SDL_zeroa(sheared_vertices);
+    const int snap_units = source_snap_units(world_runtime);
+    for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+    {
+        if (!shear_source_vertex_coord(model.vertices[vertex].coord, bounds_min, bounds_max, axis, sign, delta_source,
+                                       snap_units, sheared_vertices[vertex]))
+        {
+            set_error(error_buffer, error_buffer_size, "source brush shear would overflow the source grid");
+            return false;
+        }
+    }
+
+    slayer3d_game_data_brush rebuilt;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, brush_name, &sheared_vertices[0][0],
+                                                                    model.vertex_count, &rebuilt, error_buffer,
+                                                                    error_buffer_size))
+    {
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&rebuilt);
+
+    editor_brush_source_box_runtime snapshot;
+    SDL_zero(snapshot);
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    if (!copy_editor_brush_source_box_runtime(box, &snapshot))
+    {
+        set_error(error_buffer, error_buffer_size, "failed to snapshot source brush shear");
+        return false;
+    }
+
+    char *old_prefab = box->prefab;
+    box->prefab = SDL_strdup("convex");
+    if (box->prefab == NULL)
+    {
+        box->prefab = old_prefab;
+        free_editor_brush_source_box(&snapshot);
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush shear metadata");
+        return false;
+    }
+    SDL_free(old_prefab);
+    box->vertex_count = model.vertex_count;
+    for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+    {
+        box->vertices[vertex][0] = sheared_vertices[vertex][0];
+        box->vertices[vertex][1] = sheared_vertices[vertex][1];
+        box->vertices[vertex][2] = sheared_vertices[vertex][2];
+    }
+    for (int vertex = model.vertex_count; vertex < SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY; ++vertex)
+    {
+        box->vertices[vertex][0] = 0;
+        box->vertices[vertex][1] = 0;
+        box->vertices[vertex][2] = 0;
+    }
+    source_box_update_bounds_from_vertices(box);
+
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
+        !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(box);
+        *box = snapshot;
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    free_editor_brush_source_box(&snapshot);
+    return true;
+}
+
 bool editor_brush_world_resize_source_box_face(brush_world_runtime *world_runtime, const char *brush_name,
                                                slayer3d_vec3 face_normal, float distance, char *error_buffer,
                                                int error_buffer_size)

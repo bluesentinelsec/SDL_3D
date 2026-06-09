@@ -14,6 +14,9 @@
 #include "slayer3d/camera.h"
 #include "slayer3d/math.h"
 
+static bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_forward,
+                                slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic);
+
 static bool editor_selection_button_requested(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                               const char *key, const char *fallback)
 {
@@ -451,6 +454,28 @@ void reset_editor_scale_tool_state(slayer3d_game_data_runtime *runtime, const ch
                                                    : (has_bounds ? "scale tool" : "select a brush before scale tool"));
 }
 
+void reset_editor_shear_tool_state(slayer3d_game_data_runtime *runtime, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    slayer3d_bounding_box bounds;
+    const bool has_bounds = editor_selected_bounds(runtime, &bounds);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.ready", has_bounds);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.dragging", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.hovered", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.live_preview", false);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.valid", has_bounds);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.vertical", false);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.side_normal",
+                                 slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.delta", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.axis", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_string(runtime->scene_state, "editor.shear.side", "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.shear.message",
+                                   message != NULL ? message
+                                                   : (has_bounds ? "shear tool" : "select a brush before shear tool"));
+}
+
 static slayer3d_vec3 editor_scale_bounds_point(slayer3d_bounding_box bounds, slayer3d_vec3 signs)
 {
     const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
@@ -536,6 +561,180 @@ static slayer3d_vec3 editor_scale_anchor_for_handle(slayer3d_bounding_box bounds
     if (center_anchor)
         return slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
     return editor_scale_bounds_point(bounds, slayer3d_vec3_scale(signs, -1.0f));
+}
+
+static slayer3d_vec3 editor_shear_side_center(slayer3d_bounding_box bounds, slayer3d_vec3 normal)
+{
+    const slayer3d_vec3 center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
+    if (SDL_fabsf(normal.x) > 0.5f)
+        return slayer3d_vec3_make(normal.x > 0.0f ? bounds.max.x : bounds.min.x, center.y, center.z);
+    if (SDL_fabsf(normal.y) > 0.5f)
+        return slayer3d_vec3_make(center.x, normal.y > 0.0f ? bounds.max.y : bounds.min.y, center.z);
+    return slayer3d_vec3_make(center.x, center.y, normal.z > 0.0f ? bounds.max.z : bounds.min.z);
+}
+
+static const char *editor_shear_side_name(slayer3d_vec3 normal)
+{
+    if (normal.x > 0.5f)
+        return "right";
+    if (normal.x < -0.5f)
+        return "left";
+    if (normal.y > 0.5f)
+        return "top";
+    if (normal.y < -0.5f)
+        return "bottom";
+    if (normal.z > 0.5f)
+        return "front";
+    if (normal.z < -0.5f)
+        return "back";
+    return "";
+}
+
+static bool editor_shear_axis_side_normal(slayer3d_vec3 normal, slayer3d_vec3 *out_normal)
+{
+    if (out_normal == NULL || slayer3d_vec3_length_squared(normal) <= 0.000001f)
+        return false;
+
+    const float ax = SDL_fabsf(normal.x);
+    const float ay = SDL_fabsf(normal.y);
+    const float az = SDL_fabsf(normal.z);
+    if (ax >= ay && ax >= az)
+        *out_normal = slayer3d_vec3_make(normal.x < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f);
+    else if (ay >= az)
+        *out_normal = slayer3d_vec3_make(0.0f, normal.y < 0.0f ? -1.0f : 1.0f, 0.0f);
+    else
+        *out_normal = slayer3d_vec3_make(0.0f, 0.0f, normal.z < 0.0f ? -1.0f : 1.0f);
+    return true;
+}
+
+static bool editor_pick_shear_side_from_hover(slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_selection *hover_selection,
+                                              slayer3d_vec3 *out_normal)
+{
+    if (runtime == NULL || out_normal == NULL || editor_selected_brush_index(runtime, hover_selection) < 0 ||
+        hover_selection->face_index < 0)
+    {
+        return false;
+    }
+    return editor_shear_axis_side_normal(hover_selection->normal, out_normal);
+}
+
+static bool editor_pick_shear_side_at(slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
+                                      slayer3d_bounding_box bounds, slayer3d_vec3 *out_normal)
+{
+    if (runtime == NULL || out_normal == NULL)
+        return false;
+    yyjson_val *editor = active_editor_tooling_root(runtime);
+    yyjson_val *selection = obj_get(editor, "selection");
+    yyjson_val *trace = obj_get(selection, "trace");
+    editor_trace_viewport_config viewport;
+    if (!editor_trace_select_viewport_at(runtime, trace, mouse_x, mouse_y, &viewport))
+        return false;
+    slayer3d_camera3d camera;
+    if (!slayer3d_game_data_get_camera(runtime, viewport.camera, &camera))
+        return false;
+
+    const slayer3d_vec3 normals[] = {
+        slayer3d_vec3_make(1.0f, 0.0f, 0.0f), slayer3d_vec3_make(-1.0f, 0.0f, 0.0f),
+        slayer3d_vec3_make(0.0f, 1.0f, 0.0f), slayer3d_vec3_make(0.0f, -1.0f, 0.0f),
+        slayer3d_vec3_make(0.0f, 0.0f, 1.0f), slayer3d_vec3_make(0.0f, 0.0f, -1.0f),
+    };
+    slayer3d_vec3 best_normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    float best_distance = FLT_MAX;
+    for (int i = 0; i < (int)SDL_arraysize(normals); ++i)
+    {
+        float screen_x = 0.0f;
+        float screen_y = 0.0f;
+        if (!editor_project_world_to_viewport(&camera, &viewport, editor_shear_side_center(bounds, normals[i]),
+                                              &screen_x, &screen_y))
+            continue;
+        const float dx = mouse_x - (viewport.x + screen_x);
+        const float dy = mouse_y - (viewport.y + screen_y);
+        const float distance = dx * dx + dy * dy;
+        if (distance < best_distance)
+        {
+            best_distance = distance;
+            best_normal = normals[i];
+        }
+    }
+    const float side_pick_radius_pixels = 28.0f;
+    if (best_distance > side_pick_radius_pixels * side_pick_radius_pixels)
+        return false;
+    *out_normal = best_normal;
+    return true;
+}
+
+static slayer3d_vec3 editor_shear_axis_for_side(slayer3d_vec3 side_normal, bool vertical, slayer3d_vec3 camera_right)
+{
+    const slayer3d_vec3 world_up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    if (vertical && SDL_fabsf(side_normal.y) <= 0.5f)
+        return world_up;
+    if (SDL_fabsf(side_normal.y) > 0.5f)
+    {
+        slayer3d_vec3 horizontal_right = slayer3d_vec3_make(camera_right.x, 0.0f, camera_right.z);
+        if (slayer3d_vec3_length_squared(horizontal_right) > 0.000001f)
+            return slayer3d_vec3_normalize(horizontal_right);
+        return slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    }
+    slayer3d_vec3 sideways = slayer3d_vec3_cross(side_normal, world_up);
+    if (slayer3d_vec3_length_squared(sideways) <= 0.000001f)
+        sideways = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    return slayer3d_vec3_normalize(sideways);
+}
+
+static slayer3d_vec3 editor_shear_drag_delta(const slayer3d_game_data_runtime *runtime,
+                                             const editor_drag_move_state *drag, float mouse_x, float mouse_y)
+{
+    if (drag == NULL)
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    slayer3d_vec3 camera_forward;
+    slayer3d_vec3 camera_right;
+    slayer3d_vec3 camera_up;
+    bool orthographic = false;
+    if (!editor_camera_basis(runtime, &camera_forward, &camera_right, &camera_up, &orthographic))
+    {
+        camera_right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+        camera_up = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    }
+    (void)camera_forward;
+    (void)orthographic;
+    const slayer3d_vec3 axis = editor_shear_axis_for_side(drag->shear_side_normal, drag->shear_vertical, camera_right);
+    const float projected_x = slayer3d_vec3_dot(axis, camera_right);
+    const float projected_y = -slayer3d_vec3_dot(axis, camera_up);
+    const float projected_length_squared = projected_x * projected_x + projected_y * projected_y;
+    if (projected_length_squared <= 0.000001f)
+        return slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const float inverse_projected_length = 1.0f / SDL_sqrtf(projected_length_squared);
+    const float mouse_dx = mouse_x - drag->start_mouse_x;
+    const float mouse_dy = mouse_y - drag->start_mouse_y;
+    const float pixel_distance = (mouse_dx * projected_x + mouse_dy * projected_y) * inverse_projected_length;
+    const float units_per_pixel = SDL_max(drag->grid_size, 0.001f) / 48.0f;
+    const float distance = editor_snap_delta(pixel_distance * units_per_pixel, drag->grid_size);
+    return slayer3d_vec3_scale(axis, distance);
+}
+
+static void publish_editor_shear_drag_state(slayer3d_game_data_runtime *runtime, const editor_drag_move_state *drag,
+                                            bool valid, const char *message)
+{
+    if (runtime == NULL || runtime->scene_state == NULL)
+        return;
+    const bool active = drag != NULL && drag->active && drag->shear_drag;
+    const slayer3d_vec3 side_normal = drag != NULL ? drag->shear_side_normal : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 delta = active ? drag->shear_delta : slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.ready", runtime->editor_selected_brush_count > 0);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.dragging", active);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.hovered", drag != NULL && drag->shear_hovered);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.live_preview",
+                                 active && slayer3d_vec3_length_squared(delta) > 0.0000001f);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.valid", valid);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.vertical", active && drag->shear_vertical);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.side_normal", side_normal);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.delta", delta);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.axis",
+                                 active ? drag->shear_axis : slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    slayer3d_properties_set_string(runtime->scene_state, "editor.shear.side",
+                                   drag != NULL && drag->shear_hovered ? editor_shear_side_name(side_normal) : "");
+    slayer3d_properties_set_string(runtime->scene_state, "editor.shear.message", message != NULL ? message : "");
 }
 
 static slayer3d_vec3 editor_scale_drag_factors(const editor_drag_move_state *drag, float mouse_x, float mouse_y)
@@ -1168,6 +1367,156 @@ static bool editor_handle_scale_drag(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
+static bool editor_update_shear_hover_state(slayer3d_game_data_runtime *runtime,
+                                            const slayer3d_game_data_editor_selection *hover_selection)
+{
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_shear(runtime) ||
+        runtime->editor_drag_move.shear_drag)
+    {
+        return false;
+    }
+    slayer3d_vec3 normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    bool hovered = editor_pick_shear_side_from_hover(runtime, hover_selection, &normal);
+    slayer3d_bounding_box bounds;
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (!hovered && input != NULL && editor_selected_bounds(runtime, &bounds))
+    {
+        float mouse_x = 0.0f;
+        float mouse_y = 0.0f;
+        if (slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y))
+            hovered = editor_pick_shear_side_at(runtime, mouse_x, mouse_y, bounds, &normal);
+    }
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.hovered", hovered);
+    slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.side_normal", normal);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.shear.side",
+                                   hovered ? editor_shear_side_name(normal) : "");
+    return hovered;
+}
+
+static bool editor_handle_shear_drag(slayer3d_game_data_runtime *runtime,
+                                     const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
+{
+    (void)hover_selection;
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_shear(runtime))
+    {
+        if (runtime != NULL && runtime->editor_drag_move.active && runtime->editor_drag_move.shear_drag)
+            clear_editor_drag_move(runtime);
+        return true;
+    }
+
+    slayer3d_input_manager *input = runtime_input(runtime);
+    if (input == NULL)
+        return true;
+    (void)editor_update_shear_hover_state(runtime, hover_selection);
+
+    editor_drag_move_state *drag = &runtime->editor_drag_move;
+    const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
+    const bool left_down = slayer3d_input_is_mouse_button_down(input, SDL_BUTTON_LEFT);
+    const bool left_released = slayer3d_input_is_mouse_button_released(input, SDL_BUTTON_LEFT);
+
+    if (!drag->active && left_pressed && editor_selected_brushes_active_for_scene(runtime) &&
+        runtime->editor_selected_brush_count > 0)
+    {
+        slayer3d_bounding_box bounds;
+        if (!editor_selected_bounds(runtime, &bounds))
+            return true;
+        float mouse_x = 0.0f;
+        float mouse_y = 0.0f;
+        (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+        slayer3d_vec3 normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        if (!editor_pick_shear_side_from_hover(runtime, hover_selection, &normal) &&
+            !editor_pick_shear_side_at(runtime, mouse_x, mouse_y, bounds, &normal))
+        {
+            return true;
+        }
+
+        SDL_zero(*drag);
+        drag->active = true;
+        drag->shear_drag = true;
+        drag->scene = slayer3d_game_data_active_scene(runtime);
+        drag->grid_size = slayer3d_properties_get_float(runtime->scene_state, "editor.grid.size", 1.0f);
+        drag->shear_start_bounds = bounds;
+        drag->shear_side_normal = normal;
+        drag->shear_vertical = (SDL_GetModState() & SDL_KMOD_ALT) != 0 && SDL_fabsf(normal.y) <= 0.5f;
+        slayer3d_vec3 camera_forward;
+        slayer3d_vec3 camera_right;
+        slayer3d_vec3 camera_up;
+        bool orthographic = false;
+        if (!editor_camera_basis(runtime, &camera_forward, &camera_right, &camera_up, &orthographic))
+            camera_right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+        (void)camera_forward;
+        (void)camera_up;
+        (void)orthographic;
+        drag->shear_axis = editor_shear_axis_for_side(normal, drag->shear_vertical, camera_right);
+        drag->shear_delta = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+        drag->shear_hovered = true;
+        drag->shear_preview_valid = true;
+        drag->start_mouse_x = mouse_x;
+        drag->start_mouse_y = mouse_y;
+        publish_editor_shear_drag_state(runtime, drag, true, "shear drag");
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        return true;
+    }
+
+    if (!drag->active || !drag->shear_drag)
+        return true;
+    if (out_consumed != NULL)
+        *out_consumed = true;
+
+    drag->shear_vertical = (SDL_GetModState() & SDL_KMOD_ALT) != 0 && SDL_fabsf(drag->shear_side_normal.y) <= 0.5f;
+    slayer3d_vec3 camera_forward;
+    slayer3d_vec3 camera_right;
+    slayer3d_vec3 camera_up;
+    bool orthographic = false;
+    if (!editor_camera_basis(runtime, &camera_forward, &camera_right, &camera_up, &orthographic))
+        camera_right = slayer3d_vec3_make(1.0f, 0.0f, 0.0f);
+    (void)camera_forward;
+    (void)camera_up;
+    (void)orthographic;
+    drag->shear_axis = editor_shear_axis_for_side(drag->shear_side_normal, drag->shear_vertical, camera_right);
+
+    float mouse_x = drag->start_mouse_x;
+    float mouse_y = drag->start_mouse_y;
+    (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
+    drag->shear_delta = editor_shear_drag_delta(runtime, drag, mouse_x, mouse_y);
+    drag->moved = slayer3d_vec3_length_squared(drag->shear_delta) > 0.0000001f;
+    publish_editor_shear_drag_state(runtime, drag, true, drag->moved ? "shear preview" : "shear drag");
+
+    if (left_released || !left_down)
+    {
+        const slayer3d_bounding_box bounds = drag->shear_start_bounds;
+        const slayer3d_vec3 side_normal = drag->shear_side_normal;
+        const slayer3d_vec3 delta = drag->shear_delta;
+        const bool moved = drag->moved;
+        if (moved)
+        {
+            if (slayer3d_game_data_shear_selected_editor_brushes(runtime, bounds, side_normal, delta))
+            {
+                update_active_editor_selection_from_selected_brushes(runtime);
+                slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.valid", true);
+                slayer3d_properties_set_string(runtime->scene_state, "editor.shear.message", "sheared selection");
+                editor_publish_console_message(runtime, "sheared selection");
+            }
+            else
+            {
+                slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.valid", false);
+                slayer3d_properties_set_string(runtime->scene_state, "editor.shear.message", "shear rejected");
+                slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "shear rejected");
+            }
+        }
+        clear_editor_drag_move(runtime);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.dragging", false);
+        slayer3d_properties_set_bool(runtime->scene_state, "editor.shear.live_preview", false);
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.side_normal", side_normal);
+        slayer3d_properties_set_vec3(runtime->scene_state, "editor.shear.delta", delta);
+    }
+
+    return true;
+}
+
 static bool editor_handle_drag_move(slayer3d_game_data_runtime *runtime,
                                     const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
 {
@@ -1293,7 +1642,8 @@ static bool editor_handle_grid_nudge(slayer3d_game_data_runtime *runtime, bool *
     const bool edge_mode = editor_mode_is_edge(runtime);
     const bool source_handle_mode = vertex_mode || edge_mode;
     const bool brush_transform_mode = editor_mode_is_select(runtime) || editor_mode_is_brush(runtime) ||
-                                      editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime);
+                                      editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime) ||
+                                      editor_mode_is_shear(runtime);
     if (!brush_transform_mode && !source_handle_mode)
         return true;
 
@@ -1789,6 +2139,15 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
         publish_editor_selected_brush_count(runtime);
         return true;
     }
+    bool shear_drag_consumed = false;
+    if (!editor_handle_shear_drag(runtime, &hover_selection, &shear_drag_consumed))
+        return false;
+    if (shear_drag_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     bool face_drag_consumed = false;
     if (!editor_handle_face_drag(runtime, &hover_selection, &face_drag_consumed))
         return false;
@@ -1872,7 +2231,8 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     }
 
     if ((editor_mode_is_brush(runtime) || editor_mode_is_face(runtime) || editor_mode_is_edge(runtime) ||
-         editor_mode_is_vertex(runtime) || editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime)) &&
+         editor_mode_is_vertex(runtime) || editor_mode_is_rotate(runtime) || editor_mode_is_scale(runtime) ||
+         editor_mode_is_shear(runtime)) &&
         hover_selection.hit)
     {
         runtime->editor_active_selection = hover_selection;

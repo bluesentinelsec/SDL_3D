@@ -66,8 +66,8 @@ static const char *editor_mode_for_tool_action(const char *action)
         return "rotate";
     if (SDL_strcmp(action, "editor.tool.scale") == 0)
         return "scale";
-    if (SDL_strcmp(action, "editor.tool.texture") == 0)
-        return "texture";
+    if (SDL_strcmp(action, "editor.tool.shear") == 0)
+        return "shear";
     return NULL;
 }
 
@@ -139,11 +139,14 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
             message = selected_count > 0 ? "scale tool" : "select a brush before scale tool";
         }
     }
-    else if (SDL_strcmp(mode, "texture") == 0)
+    else if (SDL_strcmp(mode, "shear") == 0)
     {
-        tool_mode = "paint";
+        tool_mode = "shear";
         if (message == NULL || message[0] == '\0')
-            message = "texture tool";
+        {
+            const int selected_count = slayer3d_properties_get_int(runtime->scene_state, "editor.selection.count", 0);
+            message = selected_count > 0 ? "shear tool" : "select a brush before shear tool";
+        }
     }
     else
     {
@@ -165,6 +168,7 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
     if (entering_clip)
         return slayer3d_game_data_enter_editor_clip_tool(runtime, message);
@@ -172,6 +176,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
         reset_editor_rotate_tool_state(runtime, message);
     if (SDL_strcmp(mode, "scale") == 0)
         reset_editor_scale_tool_state(runtime, message);
+    if (SDL_strcmp(mode, "shear") == 0)
+        reset_editor_shear_tool_state(runtime, message);
     return true;
 }
 

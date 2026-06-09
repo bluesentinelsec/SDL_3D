@@ -242,9 +242,9 @@ static bool console_write_action(slayer3d_game_data_runtime *runtime, yyjson_val
     return true;
 }
 
-static bool editor_selected_brushes_bounds_center(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_center)
+static bool editor_selected_brushes_bounds(const slayer3d_game_data_runtime *runtime, slayer3d_bounding_box *out_bounds)
 {
-    if (runtime == NULL || out_center == NULL || runtime->editor_selected_brush_count <= 0)
+    if (runtime == NULL || out_bounds == NULL || runtime->editor_selected_brush_count <= 0)
         return false;
 
     bool has_bounds = false;
@@ -271,6 +271,17 @@ static bool editor_selected_brushes_bounds_center(const slayer3d_game_data_runti
     if (!has_bounds)
         return false;
 
+    *out_bounds = bounds;
+    return true;
+}
+
+static bool editor_selected_brushes_bounds_center(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_center)
+{
+    if (out_center == NULL)
+        return false;
+    slayer3d_bounding_box bounds;
+    if (!editor_selected_brushes_bounds(runtime, &bounds))
+        return false;
     *out_center = slayer3d_vec3_scale(slayer3d_vec3_add(bounds.min, bounds.max), 0.5f);
     return true;
 }
@@ -300,6 +311,24 @@ static bool editor_selection_scale_selected_action(slayer3d_game_data_runtime *r
 
     const slayer3d_vec3 factors = json_vec3(action, "factors", slayer3d_vec3_make(1.0f, 1.0f, 1.0f));
     return slayer3d_game_data_scale_selected_editor_brushes(runtime, anchor, factors);
+}
+
+static bool editor_selection_shear_selected_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    slayer3d_bounding_box bounds;
+    if (obj_get(action, "bounds_min") != NULL && obj_get(action, "bounds_max") != NULL)
+    {
+        bounds.min = json_vec3(action, "bounds_min", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+        bounds.max = json_vec3(action, "bounds_max", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    }
+    else if (!editor_selected_brushes_bounds(runtime, &bounds))
+    {
+        return false;
+    }
+
+    const slayer3d_vec3 side_normal = json_vec3(action, "side_normal", slayer3d_vec3_make(1.0f, 0.0f, 0.0f));
+    const slayer3d_vec3 delta = json_vec3(action, "delta", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
+    return slayer3d_game_data_shear_selected_editor_brushes(runtime, bounds, side_normal, delta);
 }
 
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
@@ -507,6 +536,40 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
         return slayer3d_game_data_set_editor_tool_mode(runtime, json_string(action, "mode", NULL),
                                                        json_string(action, "message", NULL));
 
+    if (SDL_strcmp(type, "editor.escape") == 0)
+    {
+        if (runtime == NULL || runtime->scene_state == NULL)
+            return false;
+        if (SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.palette.active", ""), "") != 0)
+        {
+            slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "palette closed");
+            return true;
+        }
+        if (slayer3d_properties_get_int(runtime->scene_state, "editor.vertex.selection.count", 0) > 0)
+        {
+            if (!slayer3d_game_data_clear_editor_vertex_selection(runtime))
+                return false;
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "vertex selection cleared");
+            return true;
+        }
+
+        const char *mode = slayer3d_properties_get_string(runtime->scene_state, "editor.mode", "select");
+        if (SDL_strcmp(mode, "clip") == 0)
+            return slayer3d_game_data_escape_editor_clip_tool(runtime);
+        if (SDL_strcmp(mode, "select") != 0)
+            return slayer3d_game_data_set_editor_tool_mode(runtime, "select", NULL);
+        if (slayer3d_properties_get_int(runtime->scene_state, "editor.selection.count", 0) > 0)
+        {
+            if (!slayer3d_game_data_clear_active_editor_selection(runtime))
+                return false;
+            (void)slayer3d_game_data_clear_editor_command_preview(runtime, action);
+            slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "selection cleared");
+            return true;
+        }
+        return slayer3d_game_data_clear_editor_command_preview(runtime, action);
+    }
+
     if (SDL_strcmp(type, "editor.clip.cancel") == 0)
         return slayer3d_game_data_cancel_editor_clip_tool(runtime, json_string(action, "message", NULL));
 
@@ -551,6 +614,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.selection.scale_selected") == 0)
         return editor_selection_scale_selected_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
+        return editor_selection_shear_selected_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.run") == 0)
     {

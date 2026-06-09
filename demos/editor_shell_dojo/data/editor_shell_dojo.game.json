@@ -278,7 +278,6 @@
     "signal.editor.tool.wall",
     "signal.editor.tool.ceiling",
     "signal.editor.tool.sky",
-    "signal.editor.tool.player_start",
     "signal.editor.grid.decrease",
     "signal.editor.grid.increase",
     "signal.editor.wall_axis.toggle",
@@ -287,7 +286,6 @@
     "signal.editor.mode.edge",
     "signal.editor.mode.face",
     "signal.editor.mode.select",
-    "signal.editor.mode.texture",
     "signal.editor.mode.vertex",
     "signal.editor.mode.rotate",
     "signal.editor.palette.material",
@@ -514,7 +512,7 @@
             "type": "scene_state.cycle",
             "key": "editor.tool.mode",
             "default": "select",
-            "values": ["select", "move", "paint", "floor", "wall", "ceiling", "sky", "player_start"]
+            "values": ["select", "move", "floor", "wall", "ceiling", "sky"]
           }
         ]
       },
@@ -559,13 +557,6 @@
         ]
       },
       {
-        "signal": "signal.editor.tool.player_start",
-        "actions": [
-          { "type": "scene_state.set", "key": "editor.tool.mode", "value": "player_start" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start tool selected" }
-        ]
-      },
-      {
         "signal": "signal.editor.mode.brush",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "brush" }
@@ -605,12 +596,6 @@
         "signal": "signal.editor.mode.select",
         "actions": [
           { "type": "editor.tool.set_mode", "mode": "select" }
-        ]
-      },
-      {
-        "signal": "signal.editor.mode.texture",
-        "actions": [
-          { "type": "editor.tool.set_mode", "mode": "texture", "message": "texture mode" }
         ]
       },
       {
@@ -706,73 +691,7 @@
       {
         "signal": "signal.editor.escape",
         "actions": [
-          {
-            "type": "branch",
-            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "!=", "value": "", "default": "" },
-            "then": [
-              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
-              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "palette closed" }
-            ],
-            "else": [
-              {
-                "type": "branch",
-                "if": { "type": "scene_state.compare", "key": "editor.vertex.selection.count", "op": ">", "value": 0, "default": 0 },
-                "then": [
-                  { "type": "editor.vertex.selection.clear" },
-                  { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "vertex selection cleared" }
-                ],
-                "else": [
-                  {
-                    "type": "branch",
-                    "if": { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "vertex", "default": "select" },
-	                    "then": [
-	                      { "type": "editor.tool.set_mode", "mode": "select" }
-	                    ],
-	                    "else": [
-	                      {
-	                        "type": "branch",
-	                        "if": { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "clip", "default": "select" },
-	                        "then": [
-	                          { "type": "editor.clip.escape" }
-	                        ],
-	                        "else": [
-	                          {
-	                            "type": "branch",
-	                            "if": { "type": "scene_state.compare", "key": "editor.selection.count", "op": ">", "value": 0, "default": 0 },
-	                            "then": [
-	                              { "type": "editor.selection.clear" },
-	                              { "type": "editor.command.clear_preview", "message": "selection cleared" },
-	                              { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "selection cleared" }
-	                            ],
-	                            "else": [
-	                              {
-	                                "type": "branch",
-	                                "if": {
-	                                  "type": "any",
-	                                  "conditions": [
-	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
-	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "edge", "default": "select" },
-	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" },
-	                                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "rotate", "default": "select" }
-	                                  ]
-	                                },
-	                                "then": [
-	                                  { "type": "editor.tool.set_mode", "mode": "select" }
-	                                ],
-	                                "else": [
-	                                  { "type": "editor.command.clear_preview", "message": "escape" }
-	                                ]
-	                              }
-	                            ]
-	                          }
-	                        ]
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
+          { "type": "editor.escape" }
         ]
       },
       {
