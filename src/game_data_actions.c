@@ -331,6 +331,126 @@ static bool editor_selection_shear_selected_action(slayer3d_game_data_runtime *r
     return slayer3d_game_data_shear_selected_editor_brushes(runtime, bounds, side_normal, delta);
 }
 
+static const char *editor_flip_axis_label(slayer3d_vec3 normal)
+{
+    const float abs_x = SDL_fabsf(normal.x);
+    const float abs_y = SDL_fabsf(normal.y);
+    const float abs_z = SDL_fabsf(normal.z);
+    if (abs_x >= abs_y && abs_x >= abs_z)
+        return normal.x >= 0.0f ? "+X" : "-X";
+    if (abs_y >= abs_x && abs_y >= abs_z)
+        return normal.y >= 0.0f ? "+Y" : "-Y";
+    return normal.z >= 0.0f ? "+Z" : "-Z";
+}
+
+static bool editor_selection_flip_vertical_normal(slayer3d_game_data_runtime *runtime, yyjson_val *action,
+                                                  slayer3d_vec3 *out_normal, const char **out_axis_label, char *message,
+                                                  size_t message_size)
+{
+    if (out_normal == NULL)
+        return false;
+    if (message != NULL && message_size > 0u)
+        message[0] = '\0';
+
+    slayer3d_vec3 normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    if (obj_get(action, "normal") != NULL)
+    {
+        normal = json_vec3(action, "normal", normal);
+    }
+    else
+    {
+        const char *normal_key = json_string(action, "normal_key", NULL);
+        const slayer3d_value *normal_value =
+            runtime != NULL && runtime->scene_state != NULL && normal_key != NULL && normal_key[0] != '\0'
+                ? slayer3d_properties_get_value(runtime->scene_state, normal_key)
+                : NULL;
+        if (normal_value != NULL && normal_value->type == SLAYER3D_VALUE_VEC3)
+        {
+            normal = normal_value->as_vec3;
+        }
+        else
+        {
+            const char *view_mode_key = json_string(action, "view_mode_key", "editor.view.mode");
+            const char *view_mode =
+                runtime != NULL && runtime->scene_state != NULL && view_mode_key != NULL && view_mode_key[0] != '\0'
+                    ? slayer3d_properties_get_string(runtime->scene_state, view_mode_key, "flyby_3d")
+                    : "flyby_3d";
+            const char *top_mode = json_string(action, "top_mode", "orthographic_top");
+            const char *front_mode = json_string(action, "front_mode", "orthographic_front");
+            const char *side_mode = json_string(action, "side_mode", "orthographic_side");
+            const char *flyby_mode = json_string(action, "flyby_mode", "flyby_3d");
+            if (SDL_strcmp(view_mode, top_mode) == 0)
+                normal = slayer3d_vec3_make(0.0f, 0.0f, -1.0f);
+            else if (SDL_strcmp(view_mode, front_mode) == 0 || SDL_strcmp(view_mode, side_mode) == 0 ||
+                     SDL_strcmp(view_mode, flyby_mode) == 0)
+                normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+            else
+            {
+                if (message != NULL && message_size > 0u)
+                    SDL_snprintf(message, message_size, "vertical flip unsupported for view '%s'", view_mode);
+                return false;
+            }
+        }
+    }
+
+    if (SDL_isnan(normal.x) || SDL_isinf(normal.x) || SDL_isnan(normal.y) || SDL_isinf(normal.y) ||
+        SDL_isnan(normal.z) || SDL_isinf(normal.z) || slayer3d_vec3_length_squared(normal) <= 0.000001f)
+    {
+        if (message != NULL && message_size > 0u)
+            SDL_strlcpy(message, "vertical flip requires a finite non-zero normal", message_size);
+        return false;
+    }
+    normal = slayer3d_vec3_normalize(normal);
+    *out_normal = normal;
+    if (out_axis_label != NULL)
+        *out_axis_label = editor_flip_axis_label(normal);
+    return true;
+}
+
+static bool editor_selection_flip_vertical_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    slayer3d_vec3 pivot = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    if (obj_get(action, "pivot") != NULL)
+        pivot = json_vec3(action, "pivot", pivot);
+    else if (!editor_selected_brushes_bounds_center(runtime, &pivot))
+    {
+        editor_set_bool_output(scene_state, outputs, "valid_key", false);
+        editor_set_string_output(scene_state, outputs, "message_key", "select brushes before vertical flip");
+        if (scene_state != NULL)
+            slayer3d_properties_set_string(scene_state, "editor.tool.last_action",
+                                           "select brushes before vertical flip");
+        return false;
+    }
+
+    slayer3d_vec3 normal = slayer3d_vec3_make(0.0f, 1.0f, 0.0f);
+    const char *axis_label = "+Y";
+    char message[128];
+    if (!editor_selection_flip_vertical_normal(runtime, action, &normal, &axis_label, message, sizeof(message)))
+    {
+        editor_set_bool_output(scene_state, outputs, "valid_key", false);
+        editor_set_string_output(scene_state, outputs, "message_key",
+                                 message[0] != '\0' ? message : "vertical flip failed");
+        if (scene_state != NULL)
+            slayer3d_properties_set_string(scene_state, "editor.tool.last_action",
+                                           message[0] != '\0' ? message : "vertical flip failed");
+        return false;
+    }
+
+    const bool flipped = slayer3d_game_data_flip_selected_editor_brushes(runtime, pivot, normal);
+    SDL_snprintf(message, sizeof(message),
+                 flipped ? "flipped selected brushes vertically around %s" : "vertical flip failed around %s",
+                 axis_label);
+    editor_set_bool_output(scene_state, outputs, "valid_key", flipped);
+    editor_set_string_output(scene_state, outputs, "message_key", message);
+    editor_set_string_output(scene_state, outputs, "axis_key", axis_label);
+    editor_set_vec3_output(scene_state, outputs, "center_key", pivot);
+    if (scene_state != NULL && !flipped)
+        slayer3d_properties_set_string(scene_state, "editor.tool.last_action", message);
+    return flipped;
+}
+
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -614,6 +734,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.selection.scale_selected") == 0)
         return editor_selection_scale_selected_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.selection.flip_vertical") == 0)
+        return editor_selection_flip_vertical_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
         return editor_selection_shear_selected_action(runtime, action);

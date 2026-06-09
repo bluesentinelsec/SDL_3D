@@ -31,6 +31,8 @@ bool validate_editor_selection_rotate_selected_action(validation_context *ctx, y
                                                       const char *json_path, validation_names *names, const char *type);
 bool validate_editor_selection_scale_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type);
+bool validate_editor_selection_flip_vertical_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type);
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type);
 bool validate_editor_selection_run_action(validation_context *ctx, yyjson_val *action, const char *json_path,

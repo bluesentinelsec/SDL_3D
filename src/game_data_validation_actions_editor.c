@@ -383,6 +383,44 @@ bool validate_editor_selection_scale_selected_action(validation_context *ctx, yy
     return true;
 }
 
+bool validate_editor_selection_flip_vertical_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                                    validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    yyjson_val *pivot = obj_get(action, "pivot");
+    if (pivot != NULL && !is_vec_array(pivot, 3))
+        return validation_error(ctx, json_path, "editor.selection.flip_vertical pivot must be a numeric vec3");
+    yyjson_val *normal = obj_get(action, "normal");
+    if (normal != NULL)
+    {
+        if (!is_vec_array(normal, 3))
+            return validation_error(ctx, json_path, "editor.selection.flip_vertical normal must be a numeric vec3");
+        const float normal_x = (float)yyjson_get_num(yyjson_arr_get(normal, 0));
+        const float normal_y = (float)yyjson_get_num(yyjson_arr_get(normal, 1));
+        const float normal_z = (float)yyjson_get_num(yyjson_arr_get(normal, 2));
+        if (!validation_float_finite(normal_x) || !validation_float_finite(normal_y) ||
+            !validation_float_finite(normal_z) ||
+            normal_x * normal_x + normal_y * normal_y + normal_z * normal_z <= 0.000001f)
+        {
+            return validation_error(ctx, json_path,
+                                    "editor.selection.flip_vertical normal must be non-zero and finite");
+        }
+    }
+    static const char *const string_fields[] = {"normal_key", "view_mode_key", "top_mode",
+                                                "front_mode", "side_mode",     "flyby_mode"};
+    for (size_t i = 0; i < SDL_arraysize(string_fields); ++i)
+    {
+        yyjson_val *field = obj_get(action, string_fields[i]);
+        if (field != NULL && (!yyjson_is_str(field) || yyjson_get_str(field)[0] == '\0'))
+            return validation_error(ctx, json_path, "editor.selection.flip_vertical %s must be a non-empty string",
+                                    string_fields[i]);
+    }
+    static const char *const output_keys[] = {"valid_key", "message_key", "axis_key", "center_key"};
+    return validate_optional_output_keys(ctx, action, json_path, "editor.selection.flip_vertical", output_keys,
+                                         SDL_arraysize(output_keys));
+}
+
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type)
 {

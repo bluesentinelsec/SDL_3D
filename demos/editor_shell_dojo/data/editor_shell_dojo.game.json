@@ -74,6 +74,10 @@
             "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
           },
           {
+            "name": "action.editor.brush.flip_vertical",
+            "bindings": []
+          },
+          {
             "name": "action.editor.export",
             "bindings": [
               { "device": "keyboard", "key": "S", "modifiers": ["ctrl"] },
@@ -272,6 +276,7 @@
     "signal.editor.delete_selected",
     "signal.editor.brush.lower_y",
     "signal.editor.brush.raise_y",
+    "signal.editor.brush.flip_vertical",
     "signal.editor.command.undo",
     "signal.editor.command.redo",
     "signal.editor.tool.floor",
@@ -359,6 +364,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.brush.raise_y",
         "on_pressed": "signal.editor.brush.raise_y"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.brush.flip_vertical",
+        "on_pressed": "signal.editor.brush.flip_vertical"
       },
       {
         "type": "sensor.input_pressed",
@@ -1407,6 +1417,56 @@
                 "type": "scene_state.set",
                 "key": "editor.tool.last_action",
                 "value": "select brushes before raising"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.brush.flip_vertical",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "select", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "rotate", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "scale", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "shear", "default": "select" }
+                  ]
+                },
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.selection.count",
+                  "op": ">",
+                  "value": 0,
+                  "default": 0
+                }
+              ]
+            },
+            "then": [
+              {
+                "type": "editor.selection.flip_vertical",
+                "view_mode_key": "editor.view.mode",
+                "outputs": {
+                  "valid_key": "editor.flip_vertical.valid",
+                  "message_key": "editor.flip_vertical.message",
+                  "axis_key": "editor.flip_vertical.axis",
+                  "center_key": "editor.flip_vertical.center"
+                }
+              }
+            ],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "select brushes before vertical flip"
               }
             ]
           }

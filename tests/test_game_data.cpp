@@ -220,6 +220,9 @@ extern "C"
     bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
                                              int error_buffer_size);
+    bool editor_brush_world_mirror_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                              slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal, char *error_buffer,
+                                              int error_buffer_size);
     bool editor_brush_world_shear_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
                                              slayer3d_vec3 delta, char *error_buffer, int error_buffer_size);
@@ -308,6 +311,8 @@ extern "C"
                                                            slayer3d_vec3 axis, float angle_radians);
     bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 anchor,
                                                           slayer3d_vec3 factors);
+    bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 plane_point,
+                                                         slayer3d_vec3 plane_normal);
     bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime *runtime,
                                                           slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
                                                           slayer3d_vec3 delta);
@@ -22461,6 +22466,38 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
     EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, -1.0f, 0.001f);
     EXPECT_NEAR(active_selection().bounds.max.z, -1.0f, 0.001f);
+
+    ASSERT_TRUE(slayer3d_game_data_flip_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 2.0f, 0.0f),
+                                                                slayer3d_vec3_make(0.0f, 1.0f, 0.0f)));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.y, 3.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.y, 4.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.min.y, 3.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "flipped 1 selected brush vertically");
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(source_world_runtime, brush_name.c_str(), &scaled_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(scaled_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&scaled_source);
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.y, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.y, 1.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.y, 1.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.y, 3.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.min.y, 3.0f, 0.001f);
+
+    slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(mutable_scene_state, nullptr);
+    slayer3d_properties_set_string(mutable_scene_state, "editor.view.mode", "orthographic_top");
+    slayer3d_signal_bus *flip_bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(flip_bus, nullptr);
+    const int flip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.brush.flip_vertical");
+    ASSERT_GE(flip_signal, 0);
+    slayer3d_signal_emit(flip_bus, flip_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.flip_vertical.axis", ""), "-Z");
     ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "select", nullptr));
 
     ASSERT_TRUE(
