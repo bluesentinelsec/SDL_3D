@@ -28232,6 +28232,90 @@ TEST(GameDataRuntime, EditableLevelFragmentSourceBoxCreateCommandPreviewsAndAppl
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoShearToolDragsHoveredSelectedFace)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+
+    const int source_min[3] = {0, 0, 0};
+    const int source_max[3] = {2000, 2000, 2000};
+    editor_brush_source_prefab_result source_result{};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.wall", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, source_min,
+        source_max, &source_result));
+    ASSERT_TRUE(source_result.valid);
+    ASSERT_NE(source_result.brush_name, nullptr);
+    select_editor_shell_test_brush(runtime, source_result.brush_name);
+    ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "shear", nullptr));
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    const slayer3d_bounding_box before = world.brushes[0].bounds;
+
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    SDL_Event motion{};
+    motion.type = SDL_EVENT_MOUSE_MOTION;
+    motion.motion.x = 640.0f;
+    motion.motion.y = 340.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 1);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.shear.hovered", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.hover.element", ""), source_result.brush_name);
+
+    SDL_Event down{};
+    down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+    down.button.button = SDL_BUTTON_LEFT;
+    down.button.x = motion.motion.x;
+    down.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &down);
+    slayer3d_input_update(input, 2);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.shear.dragging", false));
+
+    motion.motion.x = 760.0f;
+    motion.motion.y = 340.0f;
+    motion.motion.xrel = 120.0f;
+    motion.motion.yrel = 0.0f;
+    slayer3d_input_process_event(input, &motion);
+    slayer3d_input_update(input, 3);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.shear.live_preview", false));
+
+    SDL_Event up{};
+    up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+    up.button.button = SDL_BUTTON_LEFT;
+    up.button.x = motion.motion.x;
+    up.button.y = motion.motion.y;
+    slayer3d_input_process_event(input, &up);
+    slayer3d_input_update(input, 4);
+    ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    const slayer3d_bounding_box after = world.brushes[0].bounds;
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.shear.dragging", true));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "sheared 1 selected brush");
+    EXPECT_TRUE(SDL_fabsf(after.min.x - before.min.x) > 0.001f || SDL_fabsf(after.max.x - before.max.x) > 0.001f ||
+                SDL_fabsf(after.min.y - before.min.y) > 0.001f || SDL_fabsf(after.max.y - before.max.y) > 0.001f ||
+                SDL_fabsf(after.min.z - before.min.z) > 0.001f || SDL_fabsf(after.max.z - before.max.z) > 0.001f);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditableLevelFragmentSourceBoxMutationsRejectOffSnapCoordinates)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

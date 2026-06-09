@@ -590,6 +590,35 @@ static const char *editor_shear_side_name(slayer3d_vec3 normal)
     return "";
 }
 
+static bool editor_shear_axis_side_normal(slayer3d_vec3 normal, slayer3d_vec3 *out_normal)
+{
+    if (out_normal == NULL || slayer3d_vec3_length_squared(normal) <= 0.000001f)
+        return false;
+
+    const float ax = SDL_fabsf(normal.x);
+    const float ay = SDL_fabsf(normal.y);
+    const float az = SDL_fabsf(normal.z);
+    if (ax >= ay && ax >= az)
+        *out_normal = slayer3d_vec3_make(normal.x < 0.0f ? -1.0f : 1.0f, 0.0f, 0.0f);
+    else if (ay >= az)
+        *out_normal = slayer3d_vec3_make(0.0f, normal.y < 0.0f ? -1.0f : 1.0f, 0.0f);
+    else
+        *out_normal = slayer3d_vec3_make(0.0f, 0.0f, normal.z < 0.0f ? -1.0f : 1.0f);
+    return true;
+}
+
+static bool editor_pick_shear_side_from_hover(slayer3d_game_data_runtime *runtime,
+                                              const slayer3d_game_data_editor_selection *hover_selection,
+                                              slayer3d_vec3 *out_normal)
+{
+    if (runtime == NULL || out_normal == NULL || editor_selected_brush_index(runtime, hover_selection) < 0 ||
+        hover_selection->face_index < 0)
+    {
+        return false;
+    }
+    return editor_shear_axis_side_normal(hover_selection->normal, out_normal);
+}
+
 static bool editor_pick_shear_side_at(slayer3d_game_data_runtime *runtime, float mouse_x, float mouse_y,
                                       slayer3d_bounding_box bounds, slayer3d_vec3 *out_normal)
 {
@@ -1338,7 +1367,8 @@ static bool editor_handle_scale_drag(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
-static bool editor_update_shear_hover_state(slayer3d_game_data_runtime *runtime)
+static bool editor_update_shear_hover_state(slayer3d_game_data_runtime *runtime,
+                                            const slayer3d_game_data_editor_selection *hover_selection)
 {
     if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_shear(runtime) ||
         runtime->editor_drag_move.shear_drag)
@@ -1346,10 +1376,10 @@ static bool editor_update_shear_hover_state(slayer3d_game_data_runtime *runtime)
         return false;
     }
     slayer3d_vec3 normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-    bool hovered = false;
+    bool hovered = editor_pick_shear_side_from_hover(runtime, hover_selection, &normal);
     slayer3d_bounding_box bounds;
     slayer3d_input_manager *input = runtime_input(runtime);
-    if (input != NULL && editor_selected_bounds(runtime, &bounds))
+    if (!hovered && input != NULL && editor_selected_bounds(runtime, &bounds))
     {
         float mouse_x = 0.0f;
         float mouse_y = 0.0f;
@@ -1379,7 +1409,7 @@ static bool editor_handle_shear_drag(slayer3d_game_data_runtime *runtime,
     slayer3d_input_manager *input = runtime_input(runtime);
     if (input == NULL)
         return true;
-    (void)editor_update_shear_hover_state(runtime);
+    (void)editor_update_shear_hover_state(runtime, hover_selection);
 
     editor_drag_move_state *drag = &runtime->editor_drag_move;
     const bool left_pressed = slayer3d_input_is_mouse_button_pressed(input, SDL_BUTTON_LEFT);
@@ -1396,8 +1426,11 @@ static bool editor_handle_shear_drag(slayer3d_game_data_runtime *runtime,
         float mouse_y = 0.0f;
         (void)slayer3d_input_get_mouse_position(input, &mouse_x, &mouse_y);
         slayer3d_vec3 normal = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
-        if (!editor_pick_shear_side_at(runtime, mouse_x, mouse_y, bounds, &normal))
+        if (!editor_pick_shear_side_from_hover(runtime, hover_selection, &normal) &&
+            !editor_pick_shear_side_at(runtime, mouse_x, mouse_y, bounds, &normal))
+        {
             return true;
+        }
 
         SDL_zero(*drag);
         drag->active = true;
