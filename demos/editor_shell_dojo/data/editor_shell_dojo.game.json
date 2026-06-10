@@ -74,6 +74,10 @@
             "bindings": [{ "device": "keyboard", "key": "RIGHTBRACKET" }]
           },
           {
+            "name": "action.editor.brush.duplicate",
+            "bindings": []
+          },
+          {
             "name": "action.editor.brush.flip_horizontal",
             "bindings": []
           },
@@ -280,6 +284,7 @@
     "signal.editor.delete_selected",
     "signal.editor.brush.lower_y",
     "signal.editor.brush.raise_y",
+    "signal.editor.brush.duplicate",
     "signal.editor.brush.flip_horizontal",
     "signal.editor.brush.flip_vertical",
     "signal.editor.command.undo",
@@ -369,6 +374,11 @@
         "type": "sensor.input_pressed",
         "action": "action.editor.brush.raise_y",
         "on_pressed": "signal.editor.brush.raise_y"
+      },
+      {
+        "type": "sensor.input_pressed",
+        "action": "action.editor.brush.duplicate",
+        "on_pressed": "signal.editor.brush.duplicate"
       },
       {
         "type": "sensor.input_pressed",
@@ -1427,6 +1437,57 @@
                 "type": "scene_state.set",
                 "key": "editor.tool.last_action",
                 "value": "select brushes before raising"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "signal": "signal.editor.brush.duplicate",
+        "actions": [
+          {
+            "type": "branch",
+            "if": {
+              "type": "all",
+              "conditions": [
+                {
+                  "type": "any",
+                  "conditions": [
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "select", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "brush", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "face", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "rotate", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "scale", "default": "select" },
+                    { "type": "scene_state.compare", "key": "editor.mode", "op": "==", "value": "shear", "default": "select" }
+                  ]
+                },
+                {
+                  "type": "scene_state.compare",
+                  "key": "editor.selection.count",
+                  "op": ">",
+                  "value": 0,
+                  "default": 0
+                }
+              ]
+            },
+            "then": [
+              {
+                "type": "editor.brush.duplicate",
+                "mode": "in_place",
+                "outputs": {
+                  "valid_key": "editor.duplicate.valid",
+                  "message_key": "editor.duplicate.message",
+                  "count_key": "editor.duplicate.count",
+                  "mode_key": "editor.duplicate.mode",
+                  "offset_key": "editor.duplicate.offset"
+                }
+              }
+            ],
+            "else": [
+              {
+                "type": "scene_state.set",
+                "key": "editor.tool.last_action",
+                "value": "select brushes before duplicating"
               }
             ]
           }

@@ -626,6 +626,55 @@ static bool editor_selection_flip_horizontal_action(slayer3d_game_data_runtime *
     return flipped;
 }
 
+static bool editor_brush_duplicate_action(slayer3d_game_data_runtime *runtime, yyjson_val *action)
+{
+    yyjson_val *outputs = obj_get(action, "outputs");
+    slayer3d_properties *scene_state = runtime != NULL ? runtime->scene_state : NULL;
+    const char *mode = json_string(action, "mode", "in_place");
+    slayer3d_vec3 offset = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    bool use_last_offset = false;
+
+    if (SDL_strcmp(mode, "last_offset") == 0)
+    {
+        use_last_offset = true;
+    }
+    else if (SDL_strcmp(mode, "offset") == 0)
+    {
+        offset = json_vec3(action, "offset", offset);
+    }
+    else
+    {
+        mode = "in_place";
+    }
+
+    if (runtime == NULL || runtime->editor_selected_brush_count <= 0)
+    {
+        editor_set_bool_output(scene_state, outputs, "valid_key", false);
+        editor_set_int_output(scene_state, outputs, "count_key", 0);
+        editor_set_string_output(scene_state, outputs, "mode_key", mode);
+        editor_set_vec3_output(scene_state, outputs, "offset_key", offset);
+        editor_set_string_output(scene_state, outputs, "message_key", "select brushes before duplicating");
+        if (scene_state != NULL)
+            slayer3d_properties_set_string(scene_state, "editor.tool.last_action", "select brushes before duplicating");
+        return false;
+    }
+
+    const bool duplicated = slayer3d_game_data_duplicate_selected_editor_brushes(runtime, offset, use_last_offset);
+    const int count = duplicated ? runtime->editor_selected_brush_count : 0;
+    const char *message = duplicated && scene_state != NULL
+                              ? slayer3d_properties_get_string(scene_state, "editor.tool.last_action", "")
+                              : "selected brushes could not be duplicated";
+    if (duplicated && use_last_offset && runtime->editor_has_last_duplicate_offset)
+        offset = runtime->editor_last_duplicate_offset;
+
+    editor_set_bool_output(scene_state, outputs, "valid_key", duplicated);
+    editor_set_int_output(scene_state, outputs, "count_key", count);
+    editor_set_string_output(scene_state, outputs, "mode_key", mode);
+    editor_set_vec3_output(scene_state, outputs, "offset_key", offset);
+    editor_set_string_output(scene_state, outputs, "message_key", message);
+    return duplicated;
+}
+
 bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action, const slayer3d_properties *payload)
 {
     const char *type = json_string(action, "type", "");
@@ -915,6 +964,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.selection.flip_horizontal") == 0)
         return editor_selection_flip_horizontal_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.brush.duplicate") == 0)
+        return editor_brush_duplicate_action(runtime, action);
 
     if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
         return editor_selection_shear_selected_action(runtime, action);

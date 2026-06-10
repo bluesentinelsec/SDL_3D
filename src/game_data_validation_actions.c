@@ -990,6 +990,7 @@ static const action_validation_rule *find_action_validation_rule(const char *typ
         ACTION_RULE_EXACT_HANDLER("editor.selection.scale_selected", validate_editor_selection_scale_selected_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.flip_vertical", validate_editor_selection_flip_vertical_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.flip_horizontal", validate_editor_selection_flip_horizontal_action),
+        ACTION_RULE_EXACT_HANDLER("editor.brush.duplicate", validate_editor_brush_duplicate_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.shear_selected", validate_editor_selection_shear_selected_action),
         ACTION_RULE_EXACT_HANDLER("editor.selection.run", validate_editor_selection_run_action),
         ACTION_RULE_EXACT_HANDLER("editor.command.preview", validate_editor_command_preview_action),

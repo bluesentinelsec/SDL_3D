@@ -36,6 +36,7 @@
       "action.editor.clip.cycle_keep_mode",
       "action.editor.brush.lower_y",
       "action.editor.brush.raise_y",
+      "action.editor.brush.duplicate",
       "action.editor.brush.flip_horizontal",
       "action.editor.brush.flip_vertical",
       "action.editor.palette.material",
@@ -553,6 +554,15 @@
             "interactive": true,
             "action": "editor.tool.shear",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "shear" }
+          },
+          {
+            "id": "ui.editor_shell.tool_toolbar.duplicate.button",
+            "type": "button",
+            "w": 74,
+            "h": 28,
+            "text": "Duplicate",
+            "interactive": true,
+            "action": "editor.brush.duplicate"
           },
           {
             "id": "ui.editor_shell.tool_toolbar.flip_horizontal.button",

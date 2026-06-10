@@ -186,13 +186,16 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
     const char *mode = editor_mode_for_tool_action(action);
     if (mode != NULL)
         return slayer3d_game_data_set_editor_tool_mode(runtime, mode, NULL);
-    if (runtime != NULL && (SDL_strcmp(action, "editor.brush.flip_vertical") == 0 ||
-                            SDL_strcmp(action, "editor.brush.flip_horizontal") == 0))
+    if (runtime != NULL &&
+        (SDL_strcmp(action, "editor.brush.duplicate") == 0 || SDL_strcmp(action, "editor.brush.flip_vertical") == 0 ||
+         SDL_strcmp(action, "editor.brush.flip_horizontal") == 0))
     {
         slayer3d_signal_bus *bus = runtime_bus(runtime);
-        const char *signal = SDL_strcmp(action, "editor.brush.flip_horizontal") == 0
-                                 ? "signal.editor.brush.flip_horizontal"
-                                 : "signal.editor.brush.flip_vertical";
+        const char *signal = "signal.editor.brush.duplicate";
+        if (SDL_strcmp(action, "editor.brush.flip_horizontal") == 0)
+            signal = "signal.editor.brush.flip_horizontal";
+        else if (SDL_strcmp(action, "editor.brush.flip_vertical") == 0)
+            signal = "signal.editor.brush.flip_vertical";
         const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
         if (bus != NULL && signal_id >= 0)
         {
