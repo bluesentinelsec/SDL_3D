@@ -3203,10 +3203,8 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
         if (world_runtime == NULL || !world_runtime->editor_has_source_model)
             goto fail;
 
-        const char *brush_identities[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
-        int group_indices[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
-        SDL_zeroa(brush_identities);
-        SDL_zeroa(group_indices);
+        const char *brush_identities[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY] = {0};
+        int group_indices[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY] = {0};
         int group_count = 0;
         for (int j = i; j < entry_count; ++j)
         {
