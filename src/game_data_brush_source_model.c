@@ -3799,85 +3799,6 @@ static bool mirror_source_vertex_coord(const int coord[3], const float plane_poi
            source_rotation_coord(mirrored.z, snap_units, &out_coord[2]);
 }
 
-static bool editor_brush_world_apply_transformed_source_vertices(brush_world_runtime *world_runtime, int source_index,
-                                                                 const char *brush_name,
-                                                                 const editor_brush_source_vertex_model *model,
-                                                                 const int *transformed_vertices,
-                                                                 const char *operation_name, char *error_buffer,
-                                                                 int error_buffer_size)
-{
-    if (world_runtime == NULL || source_index < 0 || source_index >= world_runtime->editor_source_box_count ||
-        brush_name == NULL || model == NULL || transformed_vertices == NULL || operation_name == NULL)
-    {
-        set_error(error_buffer, error_buffer_size, "source brush transform requires valid source vertices");
-        return false;
-    }
-
-    slayer3d_game_data_brush rebuilt;
-    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, brush_name, transformed_vertices,
-                                                                    model->vertex_count, &rebuilt, error_buffer,
-                                                                    error_buffer_size))
-    {
-        return false;
-    }
-    editor_brush_source_free_runtime_brush(&rebuilt);
-
-    editor_brush_source_box_runtime snapshot;
-    SDL_zero(snapshot);
-    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
-    if (!copy_editor_brush_source_box_runtime(box, &snapshot))
-    {
-        set_errorf(error_buffer, error_buffer_size, "failed to snapshot source brush %s", operation_name);
-        return false;
-    }
-
-    char *old_prefab = box->prefab;
-    box->prefab = SDL_strdup("convex");
-    if (box->prefab == NULL)
-    {
-        box->prefab = old_prefab;
-        free_editor_brush_source_box(&snapshot);
-        set_errorf(error_buffer, error_buffer_size, "failed to allocate source brush %s metadata", operation_name);
-        return false;
-    }
-    SDL_free(old_prefab);
-    box->vertex_count = model->vertex_count;
-    for (int vertex = 0; vertex < model->vertex_count; ++vertex)
-    {
-        box->vertices[vertex][0] = transformed_vertices[vertex * 3];
-        box->vertices[vertex][1] = transformed_vertices[vertex * 3 + 1];
-        box->vertices[vertex][2] = transformed_vertices[vertex * 3 + 2];
-    }
-    for (int vertex = model->vertex_count; vertex < SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY; ++vertex)
-    {
-        box->vertices[vertex][0] = 0;
-        box->vertices[vertex][1] = 0;
-        box->vertices[vertex][2] = 0;
-    }
-    source_box_update_bounds_from_vertices(box);
-
-    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
-        !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
-    {
-        free_editor_brush_source_box(box);
-        *box = snapshot;
-        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
-        return false;
-    }
-
-    free_editor_brush_source_box(&snapshot);
-    return true;
-}
-
-typedef struct editor_source_box_transform_batch_item
-{
-    int source_index;
-    int vertex_count;
-    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
-    bool has_snapshot;
-    editor_brush_source_box_runtime snapshot;
-} editor_source_box_transform_batch_item;
-
 static bool editor_source_box_apply_transformed_vertices(editor_brush_source_box_runtime *box, int vertex_count,
                                                          const int *transformed_vertices, const char *operation_name,
                                                          char *error_buffer, int error_buffer_size)
@@ -3914,6 +3835,67 @@ static bool editor_source_box_apply_transformed_vertices(editor_brush_source_box
     source_box_update_bounds_from_vertices(box);
     return true;
 }
+
+static bool editor_brush_world_apply_transformed_source_vertices(brush_world_runtime *world_runtime, int source_index,
+                                                                 const char *brush_name,
+                                                                 const editor_brush_source_vertex_model *model,
+                                                                 const int *transformed_vertices,
+                                                                 const char *operation_name, char *error_buffer,
+                                                                 int error_buffer_size)
+{
+    if (world_runtime == NULL || source_index < 0 || source_index >= world_runtime->editor_source_box_count ||
+        brush_name == NULL || model == NULL || transformed_vertices == NULL || operation_name == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush transform requires valid source vertices");
+        return false;
+    }
+
+    slayer3d_game_data_brush rebuilt;
+    if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, brush_name, transformed_vertices,
+                                                                    model->vertex_count, &rebuilt, error_buffer,
+                                                                    error_buffer_size))
+    {
+        return false;
+    }
+    editor_brush_source_free_runtime_brush(&rebuilt);
+
+    editor_brush_source_box_runtime snapshot;
+    SDL_zero(snapshot);
+    editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[source_index];
+    if (!copy_editor_brush_source_box_runtime(box, &snapshot))
+    {
+        set_errorf(error_buffer, error_buffer_size, "failed to snapshot source brush %s", operation_name);
+        return false;
+    }
+
+    if (!editor_source_box_apply_transformed_vertices(box, model->vertex_count, transformed_vertices, operation_name,
+                                                      error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(&snapshot);
+        return false;
+    }
+
+    if (!source_box_candidate_valid(world_runtime, box, source_index, error_buffer, error_buffer_size) ||
+        !editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+    {
+        free_editor_brush_source_box(box);
+        *box = snapshot;
+        (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+        return false;
+    }
+
+    free_editor_brush_source_box(&snapshot);
+    return true;
+}
+
+typedef struct editor_source_box_transform_batch_item
+{
+    int source_index;
+    int vertex_count;
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    bool has_snapshot;
+    editor_brush_source_box_runtime snapshot;
+} editor_source_box_transform_batch_item;
 
 static void editor_restore_source_box_transform_batch(brush_world_runtime *world_runtime,
                                                       editor_source_box_transform_batch_item *items, int item_count)
