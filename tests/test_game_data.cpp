@@ -17051,6 +17051,29 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoUsesDarkGrayViewportBackground)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_render_settings render{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render));
+    EXPECT_EQ(render.clear_color.r, 18);
+    EXPECT_EQ(render.clear_color.g, 20);
+    EXPECT_EQ(render.clear_color.b, 24);
+    EXPECT_EQ(render.clear_color.a, 255);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

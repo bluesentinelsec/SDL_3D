@@ -1949,7 +1949,7 @@
   "render": {
     "lighting": true,
     "bloom": false,
-    "clear_color": [0.04, 0.045, 0.055]
+    "clear_color": [18, 20, 24, 255]
   },
   "entities": [
     {
