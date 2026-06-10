@@ -886,9 +886,32 @@ std::filesystem::path editor_shell_dojo_data_path()
     return demo_data_path("editor_shell_dojo", "editor_shell_dojo.game.json");
 }
 
+void configure_editor_shell_legacy_interaction_grid(slayer3d_game_data_runtime *runtime)
+{
+    ASSERT_NE(runtime, nullptr);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_properties_set_float(scene_state, "editor.grid.size", 1.0f);
+    slayer3d_properties_set_float(scene_state, "editor.brush.grid_size", 1.0f);
+}
+
+void configure_editor_shell_default_test_camera(slayer3d_game_data_runtime *runtime)
+{
+    ASSERT_NE(runtime, nullptr);
+    configure_editor_shell_legacy_interaction_grid(runtime);
+    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
+    ASSERT_NE(editor_camera, nullptr);
+    editor_camera->position = slayer3d_vec3_make(-5.0f, 3.2f, 5.0f);
+    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.98279f);
+    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.29566f);
+    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
+                                 slayer3d_vec3_make(0.79584f, -0.29161f, -0.53056f));
+}
+
 void seed_editor_shell_test_cube(slayer3d_game_data_runtime *runtime)
 {
     ASSERT_NE(runtime, nullptr);
+    configure_editor_shell_default_test_camera(runtime);
     char error[512]{};
     slayer3d_game_data_create_box_brush_desc desc{};
     desc.world_name = "brush.editor_shell.target";
@@ -17028,6 +17051,29 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoUsesDarkGrayViewportBackground)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_game_data_render_settings render{};
+    ASSERT_TRUE(slayer3d_game_data_get_render_settings(runtime, &render));
+    EXPECT_EQ(render.clear_color.r, 18);
+    EXPECT_EQ(render.clear_color.g, 20);
+    EXPECT_EQ(render.clear_color.b, 24);
+    EXPECT_EQ(render.clear_color.a, 255);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -20058,7 +20104,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.prefab", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.brush.material", ""), "mat.editor.floor");
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 1.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 0.25f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.height", 0.0f), 1.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.elevation", 1.0f), 0.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.thickness", 0.0f), 0.2f, 0.001f);
@@ -20176,8 +20222,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "shear");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     const slayer3d_game_data_ui_rect flip_vertical_rect = ui_rect("ui.editor_shell.tool_toolbar.flip_vertical.button");
-    click_editor(flip_vertical_rect.x + 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f, SDL_BUTTON_LEFT,
-                 SDL_KMOD_NONE, 116);
+    click_editor(flip_vertical_rect.x + flip_vertical_rect.w - 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f,
+                 SDL_BUTTON_LEFT, SDL_KMOD_NONE, 116);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.flip_vertical.message", ""),
@@ -20220,6 +20266,11 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
 
+    slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(mutable_scene_state, nullptr);
+    slayer3d_properties_set_float(mutable_scene_state, "editor.grid.size", 0.25f);
+    slayer3d_properties_set_float(mutable_scene_state, "editor.brush.grid_size", 0.25f);
+    configure_editor_shell_drag_camera(runtime);
     slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.modal"));
@@ -20239,10 +20290,12 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.mode", ""), "floor");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.placement_preview.material", ""),
                  "mat.editor.floor");
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 1.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 0.25f, 0.001f);
     std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
-    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 1"));
-    click_editor(990.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
+    EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 0.25"));
+    const slayer3d_game_data_ui_rect grid_button_rect = ui_rect("ui.editor_shell.tool_toolbar.grid.button");
+    click_editor(grid_button_rect.x + 2.0f, grid_button_rect.y + grid_button_rect.h * 0.5f, SDL_BUTTON_LEFT,
+                 SDL_KMOD_NONE, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
@@ -20273,13 +20326,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
             capture->popup = true;
             capture->popup_rect = *rect;
         }
-        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.5") == 0 && rect->w > 50.0f &&
                  rect->h > 10.0f && !capture->option)
         {
             capture->option = true;
             capture->option_rect = *rect;
         }
-        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.5") == 0 && rect->w > 50.0f &&
                  rect->h > 10.0f && rect->color.r == 54 && rect->color.g == 102 && rect->color.b == 166)
         {
             capture->hovered_option = true;
@@ -20300,7 +20353,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
     EXPECT_TRUE(grid_rects.hovered_option);
     EXPECT_EQ(grid_rects.hovered_option_rect.color.a, 248);
-    click_editor(990.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    click_editor(grid_rects.option_rect.x + grid_rects.option_rect.w * 0.5f,
+                 grid_rects.option_rect.y + grid_rects.option_rect.h * 0.5f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
@@ -20885,19 +20939,12 @@ TEST(GameDataRuntime, EditorShellDojoSelectModeDragAutoCommitsBrushInEmptySpace)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
-    ASSERT_NE(editor_camera, nullptr);
-    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
-    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.0f);
-    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
-    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
-                                 slayer3d_vec3_make(0.0f, -0.564642f, -0.825336f));
+    configure_editor_shell_drag_camera(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
-    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 1.0f, 0.001f);
+    EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 0.25f, 0.001f);
 
     auto world = [&]() {
         slayer3d_game_data_brush_world brush_world{};
@@ -20971,14 +21018,8 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragLeavesPendingSourceBrushFootpr
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
-    ASSERT_NE(editor_camera, nullptr);
-    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
-    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.0f);
-    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
-    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
-                                 slayer3d_vec3_make(0.0f, -0.564642f, -0.825336f));
+    configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -21123,14 +21164,8 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragNormalizesReversedFootprint)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
-    ASSERT_NE(editor_camera, nullptr);
-    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
-    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.0f);
-    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
-    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
-                                 slayer3d_vec3_make(0.0f, -0.564642f, -0.825336f));
+    configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -21215,6 +21250,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDragUsesActiveWorkPlaneAxis)
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -21508,14 +21544,8 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolShiftAdjustsPendingFootprintDepth)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
-    ASSERT_NE(editor_camera, nullptr);
-    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
-    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.0f);
-    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
-    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
-                                 slayer3d_vec3_make(0.0f, -0.564642f, -0.825336f));
+    configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -21658,14 +21688,8 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolEnterCommitsPendingFootprintAsSour
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
-
-    slayer3d_registered_actor *editor_camera = slayer3d_game_data_find_actor(runtime, "entity.editor_shell.camera");
-    ASSERT_NE(editor_camera, nullptr);
-    editor_camera->position = slayer3d_vec3_make(32.0f, 8.0f, 32.0f);
-    slayer3d_properties_set_float(editor_camera->props, "yaw", 0.0f);
-    slayer3d_properties_set_float(editor_camera->props, "pitch", -0.6f);
-    slayer3d_properties_set_vec3(editor_camera->props, "camera_forward",
-                                 slayer3d_vec3_make(0.0f, -0.564642f, -0.825336f));
+    configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -21787,6 +21811,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolToolSwitchCancelsPendingFootprint)
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -21836,6 +21861,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolDeleteCancelsPendingFootprintBefor
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -21887,6 +21913,7 @@ TEST(GameDataRuntime, EditorShellDojoBrushToolNewDragReplacesPendingFootprint)
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
     configure_editor_shell_drag_camera(runtime);
+    configure_editor_shell_legacy_interaction_grid(runtime);
 
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
@@ -22425,7 +22452,8 @@ TEST(GameDataRuntime, EditorShellDojoVerticalFlipToolbarMirrorsMultiSelection)
     ASSERT_NEAR(cube_before.max.y, 1.2f, 0.001f);
 
     const slayer3d_game_data_ui_rect flip_vertical_rect = ui_rect("ui.editor_shell.tool_toolbar.flip_vertical.button");
-    click_editor(flip_vertical_rect.x + 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f, 200);
+    click_editor(flip_vertical_rect.x + flip_vertical_rect.w - 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f,
+                 200);
 
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
@@ -25036,7 +25064,7 @@ TEST(GameDataRuntime, EditorClipToolMousePlacementSnapsToSourceVertexEdgeAndFace
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.snap.kind", ""), "edge");
     EXPECT_NE(nullptr, SDL_strstr(slayer3d_properties_get_string(scene_state, "editor.clip.snap.target", ""), "edge"));
     snapped = slayer3d_properties_get_vec3(scene_state, "editor.clip.point1", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    EXPECT_NEAR(snapped.x, 4000.0f, 0.001f);
+    EXPECT_NEAR(snapped.x, 4250.0f, 0.001f);
     EXPECT_NEAR(snapped.y, 0.0f, 0.001f);
     EXPECT_NEAR(snapped.z, 0.0f, 0.001f);
 
@@ -25044,9 +25072,9 @@ TEST(GameDataRuntime, EditorClipToolMousePlacementSnapsToSourceVertexEdgeAndFace
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.clip.snap.kind", ""), "face");
     EXPECT_NE(nullptr, SDL_strstr(slayer3d_properties_get_string(scene_state, "editor.clip.snap.target", ""), "face"));
     snapped = slayer3d_properties_get_vec3(scene_state, "editor.clip.point2", slayer3d_vec3_make(0.0f, 0.0f, 0.0f));
-    EXPECT_NEAR(snapped.x, 4000.0f, 0.001f);
+    EXPECT_NEAR(snapped.x, 4250.0f, 0.001f);
     EXPECT_NEAR(snapped.y, 0.0f, 0.001f);
-    EXPECT_NEAR(snapped.z, 4000.0f, 0.001f);
+    EXPECT_NEAR(snapped.z, 4250.0f, 0.001f);
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
@@ -28684,6 +28712,7 @@ TEST(GameDataRuntime, EditorShellDojoShearToolDragsHoveredSelectedFace)
     slayer3d_game_data_runtime *runtime = nullptr;
     ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
         << error;
+    configure_editor_shell_default_test_camera(runtime);
     const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
 
@@ -29660,6 +29689,11 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 
     slayer3d_camera3d before{};
     ASSERT_TRUE(slayer3d_game_data_get_camera(runtime, "camera.editor_shell.viewport", &before));
+    const slayer3d_vec3 origin = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    const slayer3d_vec3 boot_to_origin = slayer3d_vec3_normalize(slayer3d_vec3_sub(origin, before.position));
+    const slayer3d_vec3 boot_forward = slayer3d_vec3_normalize(slayer3d_vec3_sub(before.target, before.position));
+    EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(before.position, origin)), 11.0f);
+    EXPECT_GT(slayer3d_vec3_dot(boot_to_origin, boot_forward), 0.999f);
     EXPECT_STREQ(slayer3d_game_data_active_camera(runtime), "camera.editor_shell.viewport");
     slayer3d_game_data_scene_skybox editor_skybox{};
     EXPECT_FALSE(slayer3d_game_data_get_active_scene_skybox(runtime, &editor_skybox));
@@ -30132,6 +30166,30 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
 
     key.type = SDL_EVENT_KEY_UP;
     slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 16);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+
+    const slayer3d_vec3 before_hold = camera_actor->position;
+    key.type = SDL_EVENT_KEY_DOWN;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 23);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+    slayer3d_vec3 previous_hold_position = camera_actor->position;
+    const float first_hold_step = slayer3d_vec3_length(slayer3d_vec3_sub(previous_hold_position, before_hold));
+    float last_hold_step = first_hold_step;
+    for (Uint64 frame = 24; frame < 38; ++frame)
+    {
+        slayer3d_input_update(input, frame);
+        ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.25f));
+        last_hold_step = slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, previous_hold_position));
+        previous_hold_position = camera_actor->position;
+    }
+    EXPECT_GT(first_hold_step, 0.1f);
+    EXPECT_GT(last_hold_step, first_hold_step * 1.5f);
+    key.type = SDL_EVENT_KEY_UP;
+    slayer3d_input_process_event(input, &key);
+    slayer3d_input_update(input, 38);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     const float yaw_before_free_mouse = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);
     SDL_Event motion{};
@@ -30139,7 +30197,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     motion.motion.xrel = 60.0f;
     motion.motion.yrel = -15.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 17);
+    slayer3d_input_update(input, 39);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_NEAR(slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw), yaw_before_free_mouse, 0.0001f);
 
@@ -30150,7 +30208,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     motion.motion.xrel = 60.0f;
     motion.motion.yrel = -15.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 18);
+    slayer3d_input_update(input, 40);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
 
     const float yaw = slayer3d_properties_get_float(camera_actor->props, "yaw", start_yaw);
@@ -30160,7 +30218,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(after.target, before.target)), 0.01f);
     right_down.type = SDL_EVENT_MOUSE_BUTTON_UP;
     slayer3d_input_process_event(input, &right_down);
-    slayer3d_input_update(input, 19);
+    slayer3d_input_update(input, 41);
 
     const slayer3d_vec3 before_pan = camera_actor->position;
     SDL_Event middle_down{};
@@ -30170,12 +30228,12 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     motion.motion.xrel = 30.0f;
     motion.motion.yrel = -20.0f;
     slayer3d_input_process_event(input, &motion);
-    slayer3d_input_update(input, 20);
+    slayer3d_input_update(input, 42);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, before_pan)), 0.01f);
     middle_down.type = SDL_EVENT_MOUSE_BUTTON_UP;
     slayer3d_input_process_event(input, &middle_down);
-    slayer3d_input_update(input, 21);
+    slayer3d_input_update(input, 43);
 
     const slayer3d_vec3 before_wheel = camera_actor->position;
     SDL_Event wheel{};
@@ -30185,7 +30243,7 @@ TEST(GameDataRuntime, EditorShellDojoCameraNavigation)
     wheel.wheel.mouse_y = 360.0f;
     wheel.wheel.direction = SDL_MOUSEWHEEL_NORMAL;
     slayer3d_input_process_event(input, &wheel);
-    slayer3d_input_update(input, 22);
+    slayer3d_input_update(input, 44);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
     EXPECT_GT(slayer3d_vec3_length(slayer3d_vec3_sub(camera_actor->position, before_wheel)), 0.01f);
 

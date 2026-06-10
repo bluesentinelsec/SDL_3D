@@ -35,10 +35,14 @@ static void editor_set_grid_value(slayer3d_game_data_runtime *runtime, yyjson_va
 
 static const slayer3d_ui_layout_hit_region *editor_retained_grid_hit(const slayer3d_game_data_runtime *runtime,
                                                                      slayer3d_ui_layout_model *layout, float mouse_x,
-                                                                     float mouse_y)
+                                                                     float mouse_y, bool *out_layout_valid)
 {
+    if (out_layout_valid != NULL)
+        *out_layout_valid = false;
     if (layout == NULL || !slayer3d_game_data_build_active_ui_widget_layout(runtime, 1280.0f, 720.0f, NULL, layout))
         return NULL;
+    if (out_layout_valid != NULL)
+        *out_layout_valid = true;
     const slayer3d_ui_layout_hit_region *hit = slayer3d_ui_layout_hit_test(layout, mouse_x, mouse_y);
     if (hit == NULL)
         return NULL;
@@ -70,13 +74,14 @@ bool editor_handle_grid_widget(slayer3d_game_data_runtime *runtime, yyjson_val *
 
     slayer3d_ui_layout_model *layout = NULL;
     const slayer3d_ui_layout_hit_region *retained_hit = NULL;
+    bool retained_layout_valid = false;
     if (slayer3d_ui_layout_create(&layout))
-        retained_hit = editor_retained_grid_hit(runtime, layout, mouse_x, mouse_y);
+        retained_hit = editor_retained_grid_hit(runtime, layout, mouse_x, mouse_y, &retained_layout_valid);
 
     const bool over_retained_button =
         retained_hit != NULL && SDL_strcmp(retained_hit->id, EDITOR_GRID_DROPDOWN_ID) == 0;
     const bool over_retained_option = retained_hit != NULL && retained_hit->option_index >= 0;
-    const bool use_legacy_hit_rects = retained_hit == NULL;
+    const bool use_legacy_hit_rects = !retained_layout_valid;
     const bool over_button =
         over_retained_button ||
         (use_legacy_hit_rects && editor_mouse_in_rect(mouse_x, mouse_y, obj_get(widget, "button")));

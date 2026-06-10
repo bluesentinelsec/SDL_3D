@@ -491,12 +491,12 @@
               "player_start_source_path_key": "editor.player_start.source_path"
             }
           },
-          { "type": "scene_state.set", "key": "editor.grid.size", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.grid.size", "value": 0.25 },
           { "type": "scene_state.set", "key": "editor.ortho.size", "value": 48.0 },
           { "type": "scene_state.set", "key": "editor.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "select" },
           { "type": "scene_state.set", "key": "editor.brush.prefab", "value": "floor" },
-          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 1.0 },
+          { "type": "scene_state.set", "key": "editor.brush.grid_size", "value": 0.25 },
           { "type": "scene_state.set", "key": "editor.brush.height", "value": 1.0 },
           { "type": "scene_state.set", "key": "editor.brush.elevation", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.brush.thickness", "value": 0.2 },
@@ -630,14 +630,14 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.grid.size",
-            "default": 1.0,
+            "default": 0.25,
             "direction": -1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
-            "default": 1.0,
+            "default": 0.25,
             "direction": -1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
@@ -650,14 +650,14 @@
           {
             "type": "scene_state.cycle",
             "key": "editor.grid.size",
-            "default": 1.0,
+            "default": 0.25,
             "direction": 1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
           {
             "type": "scene_state.cycle",
             "key": "editor.brush.grid_size",
-            "default": 1.0,
+            "default": 0.25,
             "direction": 1,
             "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
           },
@@ -1949,13 +1949,13 @@
   "render": {
     "lighting": true,
     "bloom": false,
-    "clear_color": [0.04, 0.045, 0.055]
+    "clear_color": [18, 20, 24, 255]
   },
   "entities": [
     {
       "name": "entity.editor_shell.camera",
       "active": true,
-      "transform": { "position": [-5.0, 3.2, 5.0] },
+      "transform": { "position": [-9.55008, 3.49932, 6.36672] },
       "properties": {
         "yaw": { "type": "float", "value": 0.98279 },
         "pitch": { "type": "float", "value": -0.29566 },
@@ -1990,8 +1990,11 @@
           "side_camera": "camera.editor_shell.ortho_side",
           "orthographic_size_key": "editor.ortho.size",
           "orthographic_controls_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "", "default": "" },
-          "move_speed": 8.0,
-          "fast_speed": 22.0,
+          "move_speed": 14.0,
+          "fast_speed": 40.0,
+          "move_acceleration_delay": 0.75,
+          "move_acceleration_ramp_time": 3.0,
+          "move_acceleration_max_multiplier": 2.5,
           "orthographic_pan_speed": 0.85,
           "orthographic_zoom_speed": 1.75,
           "orthographic_wheel_zoom_step": 0.12,

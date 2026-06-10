@@ -618,6 +618,43 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
         vertical *= inv_len;
     }
 
+    const slayer3d_vec3 move_direction = slayer3d_vec3_make(forward, side, vertical);
+    const float move_dt = SDL_max(dt, 0.0f);
+    float hold_multiplier = 1.0f;
+    if (len_sq > 0.000001f && move_dt > 0.0f)
+    {
+        const slayer3d_vec3 normalized_move_direction = slayer3d_vec3_normalize(move_direction);
+        if (runtime->editor_camera_move.active &&
+            slayer3d_vec3_dot(runtime->editor_camera_move.direction, normalized_move_direction) > 0.75f)
+        {
+            runtime->editor_camera_move.hold_seconds += move_dt;
+        }
+        else
+        {
+            runtime->editor_camera_move.active = true;
+            runtime->editor_camera_move.hold_seconds = move_dt;
+        }
+        runtime->editor_camera_move.direction = normalized_move_direction;
+
+        const float acceleration_delay = json_float(component, "move_acceleration_delay", 0.75f);
+        const float acceleration_ramp_time = json_float(component, "move_acceleration_ramp_time", 3.0f);
+        const float acceleration_max_multiplier = json_float(component, "move_acceleration_max_multiplier", 2.5f);
+        if (acceleration_max_multiplier > 1.0f && runtime->editor_camera_move.hold_seconds > acceleration_delay)
+        {
+            const float ramp =
+                acceleration_ramp_time > 0.0001f
+                    ? (runtime->editor_camera_move.hold_seconds - acceleration_delay) / acceleration_ramp_time
+                    : 1.0f;
+            hold_multiplier = 1.0f + (acceleration_max_multiplier - 1.0f) * editor_camera_clampf(ramp, 0.0f, 1.0f);
+        }
+    }
+    else
+    {
+        runtime->editor_camera_move.active = false;
+        runtime->editor_camera_move.hold_seconds = 0.0f;
+        runtime->editor_camera_move.direction = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);
+    }
+
     const float fast =
         fps_controller_action_value(runtime, input, fps_controller_action_id(runtime, component, "fast"));
     const float speed = fast > 0.0f
@@ -627,9 +664,9 @@ void update_editor_camera_controller(slayer3d_game_data_runtime *runtime, yyjson
     const float fwd_z = -SDL_cosf(yaw);
     const float right_x = SDL_cosf(yaw);
     const float right_z = SDL_sinf(yaw);
-    const slayer3d_vec3 delta = slayer3d_vec3_make((fwd_x * forward + right_x * side) * speed * SDL_max(dt, 0.0f),
-                                                   vertical * speed * SDL_max(dt, 0.0f),
-                                                   (fwd_z * forward + right_z * side) * speed * SDL_max(dt, 0.0f));
+    const float move_step = speed * hold_multiplier * move_dt;
+    const slayer3d_vec3 delta = slayer3d_vec3_make((fwd_x * forward + right_x * side) * move_step, vertical * move_step,
+                                                   (fwd_z * forward + right_z * side) * move_step);
     if (slayer3d_vec3_length_squared(delta) > 0.0000001f)
         actor_set_position(actor, slayer3d_vec3_add(actor->position, delta));
 
