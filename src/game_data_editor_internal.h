@@ -152,6 +152,8 @@ bool slayer3d_game_data_rotate_selected_editor_brushes(slayer3d_game_data_runtim
                                                        slayer3d_vec3 axis, float angle_radians);
 bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 anchor,
                                                       slayer3d_vec3 factors);
+bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 plane_point,
+                                                     slayer3d_vec3 plane_normal);
 bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_bounding_box bounds,
                                                       slayer3d_vec3 side_normal, slayer3d_vec3 delta);
 bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, int quarter_turns);

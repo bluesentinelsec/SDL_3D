@@ -220,6 +220,9 @@ extern "C"
     bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
                                              int error_buffer_size);
+    bool editor_brush_world_mirror_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                              slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal, char *error_buffer,
+                                              int error_buffer_size);
     bool editor_brush_world_shear_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                              slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
                                              slayer3d_vec3 delta, char *error_buffer, int error_buffer_size);
@@ -308,6 +311,8 @@ extern "C"
                                                            slayer3d_vec3 axis, float angle_radians);
     bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 anchor,
                                                           slayer3d_vec3 factors);
+    bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 plane_point,
+                                                         slayer3d_vec3 plane_normal);
     bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime *runtime,
                                                           slayer3d_bounding_box bounds, slayer3d_vec3 side_normal,
                                                           slayer3d_vec3 delta);
@@ -20139,11 +20144,19 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "shear");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "shear");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
+    click_editor(934.0f, 60.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 116);
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.flip_vertical.message", ""),
+                 "flipped selected brushes vertically around +Y");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "flipped 1 selected brush vertically");
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
     slayer3d_signal_emit(bus, escape_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "select");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
-    move_editor_mouse(660.0f, 360.0f, 116);
+    move_editor_mouse(660.0f, 360.0f, 117);
     slayer3d_signal_emit(bus, mode_clip_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "clip");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.clip.selected_count", 0), 1);
@@ -20196,7 +20209,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 1.0f, 0.001f);
     std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 1"));
-    click_editor(900.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
+    click_editor(990.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
@@ -20254,7 +20267,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
     EXPECT_TRUE(grid_rects.hovered_option);
     EXPECT_EQ(grid_rects.hovered_option_rect.color.a, 248);
-    click_editor(900.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    click_editor(990.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
@@ -22074,6 +22087,148 @@ TEST(GameDataRuntime, EditorShellDojoBrushKeyboardNudgeUsesCameraRelativeDirecti
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoVerticalFlipToolbarMirrorsMultiSelection)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+
+    editor_brush_source_prefab_result slab_result{};
+    const int slab_min[3] = {-1500, 0, -1500};
+    const int slab_max[3] = {1500, 200, 1500};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.floor", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, slab_min,
+        slab_max, &slab_result));
+    ASSERT_TRUE(slab_result.valid);
+    ASSERT_STRNE(slab_result.brush_name, "");
+
+    editor_brush_source_prefab_result cube_result{};
+    const int cube_min[3] = {-500, 200, -500};
+    const int cube_max[3] = {500, 1200, 500};
+    ASSERT_TRUE(slayer3d_game_data_create_editor_source_box_brush(
+        runtime, "brush.editor_shell.target", "mat.editor.wall", SLAYER3D_GAME_DATA_BRUSH_CONTENT_SOLID, cube_min,
+        cube_max, &cube_result));
+    ASSERT_TRUE(cube_result.valid);
+    ASSERT_STRNE(cube_result.brush_name, "");
+
+    auto brush_world = [&]() {
+        slayer3d_game_data_brush_world world{};
+        EXPECT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+        return world;
+    };
+    auto brush_index = [&](const char *brush_name) {
+        const slayer3d_game_data_brush_world world = brush_world();
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, brush_name) == 0)
+                return i;
+        }
+        ADD_FAILURE() << "brush not found: " << (brush_name != nullptr ? brush_name : "<null>");
+        return -1;
+    };
+    auto brush_bounds = [&](const char *brush_name) {
+        const slayer3d_game_data_brush_world world = brush_world();
+        for (int i = 0; i < world.brush_count; ++i)
+        {
+            const slayer3d_game_data_brush &brush = world.brushes[i];
+            if (brush.name != nullptr && SDL_strcmp(brush.name, brush_name) == 0)
+                return brush.bounds;
+        }
+        ADD_FAILURE() << "brush not found: " << (brush_name != nullptr ? brush_name : "<null>");
+        return slayer3d_bounding_box{};
+    };
+    auto click_editor = [&](float x, float y, Uint64 frame) {
+        SDL_Event click_motion{};
+        click_motion.type = SDL_EVENT_MOUSE_MOTION;
+        click_motion.motion.x = x;
+        click_motion.motion.y = y;
+        SDL_Event mouse_down{};
+        mouse_down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        mouse_down.button.button = SDL_BUTTON_LEFT;
+        mouse_down.button.x = x;
+        mouse_down.button.y = y;
+        slayer3d_input_process_event(input, &click_motion);
+        slayer3d_input_process_event(input, &mouse_down);
+        slayer3d_input_update(input, frame);
+        EXPECT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+        mouse_down.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        slayer3d_input_process_event(input, &mouse_down);
+        slayer3d_input_update(input, frame + 1U);
+    };
+
+    slayer3d_game_data_editor_selection slab_selection{};
+    slayer3d_game_data_editor_selection cube_selection{};
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target",
+                                                  brush_index(slab_result.brush_name), -1, &slab_selection));
+    ASSERT_TRUE(editor_selection_from_brush_index(runtime, "brush.editor_shell.target",
+                                                  brush_index(cube_result.brush_name), -1, &cube_selection));
+
+    SDL_SetModState(SDL_KMOD_NONE);
+    ASSERT_TRUE(editor_select_mode_primary_click(runtime, &slab_selection));
+    SDL_SetModState(SDL_KMOD_SHIFT);
+    ASSERT_TRUE(editor_select_mode_primary_click(runtime, &cube_selection));
+    SDL_SetModState(SDL_KMOD_NONE);
+    ASSERT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 2);
+    ASSERT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.selection.multiple", false));
+
+    const slayer3d_bounding_box slab_before = brush_bounds(slab_result.brush_name);
+    const slayer3d_bounding_box cube_before = brush_bounds(cube_result.brush_name);
+    ASSERT_NEAR(slab_before.min.y, 0.0f, 0.001f);
+    ASSERT_NEAR(slab_before.max.y, 0.2f, 0.001f);
+    ASSERT_NEAR(cube_before.min.y, 0.2f, 0.001f);
+    ASSERT_NEAR(cube_before.max.y, 1.2f, 0.001f);
+
+    click_editor(934.0f, 60.0f, 200);
+
+    EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.flip_vertical.message", ""),
+                 "flipped selected brushes vertically around +Y");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "flipped 2 selected brushes vertically");
+
+    const slayer3d_bounding_box slab_after = brush_bounds(slab_result.brush_name);
+    const slayer3d_bounding_box cube_after = brush_bounds(cube_result.brush_name);
+    EXPECT_NEAR(slab_after.min.y, 1.0f, 0.001f);
+    EXPECT_NEAR(slab_after.max.y, 1.2f, 0.001f);
+    EXPECT_NEAR(cube_after.min.y, 0.0f, 0.001f);
+    EXPECT_NEAR(cube_after.max.y, 1.0f, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 2);
+
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
+    const slayer3d_bounding_box slab_undo = brush_bounds(slab_result.brush_name);
+    const slayer3d_bounding_box cube_undo = brush_bounds(cube_result.brush_name);
+    EXPECT_NEAR(slab_undo.min.y, slab_before.min.y, 0.001f);
+    EXPECT_NEAR(slab_undo.max.y, slab_before.max.y, 0.001f);
+    EXPECT_NEAR(cube_undo.min.y, cube_before.min.y, 0.001f);
+    EXPECT_NEAR(cube_undo.max.y, cube_before.max.y, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 2);
+
+    ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
+    const slayer3d_bounding_box slab_redo = brush_bounds(slab_result.brush_name);
+    const slayer3d_bounding_box cube_redo = brush_bounds(cube_result.brush_name);
+    EXPECT_NEAR(slab_redo.min.y, slab_after.min.y, 0.001f);
+    EXPECT_NEAR(slab_redo.max.y, slab_after.max.y, 0.001f);
+    EXPECT_NEAR(cube_redo.min.y, cube_after.min.y, 0.001f);
+    EXPECT_NEAR(cube_redo.max.y, cube_after.max.y, 0.001f);
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 2);
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoBrushDuplicationPreservesSourceAndSelection)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -22461,6 +22616,38 @@ TEST(GameDataRuntime, EditorShellDojoBrushHistoryRestoresSourceRuntimeAndSelecti
     ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
     EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.z, -1.0f, 0.001f);
     EXPECT_NEAR(active_selection().bounds.max.z, -1.0f, 0.001f);
+
+    ASSERT_TRUE(slayer3d_game_data_flip_selected_editor_brushes(runtime, slayer3d_vec3_make(0.0f, 2.0f, 0.0f),
+                                                                slayer3d_vec3_make(0.0f, 1.0f, 0.0f)));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.y, 3.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.y, 4.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.min.y, 3.0f, 0.001f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "flipped 1 selected brush vertically");
+    ASSERT_TRUE(editor_brush_world_copy_source_box_by_identity(source_world_runtime, brush_name.c_str(), &scaled_source,
+                                                               nullptr, error, sizeof(error)))
+        << error;
+    EXPECT_EQ(scaled_source.vertex_count, 8);
+    free_editor_brush_source_box_runtime(&scaled_source);
+    ASSERT_TRUE(slayer3d_game_data_undo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.y, 0.0f, 0.001f);
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).max.y, 1.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.max.y, 1.0f, 0.001f);
+    ASSERT_TRUE(slayer3d_game_data_redo_editor_command(runtime, nullptr, nullptr));
+    EXPECT_NEAR(brush_bounds(brush_name.c_str()).min.y, 3.0f, 0.001f);
+    EXPECT_NEAR(active_selection().bounds.min.y, 3.0f, 0.001f);
+
+    slayer3d_properties *mutable_scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(mutable_scene_state, nullptr);
+    slayer3d_properties_set_string(mutable_scene_state, "editor.view.mode", "orthographic_top");
+    slayer3d_signal_bus *flip_bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(flip_bus, nullptr);
+    const int flip_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.brush.flip_vertical");
+    ASSERT_GE(flip_signal, 0);
+    slayer3d_signal_emit(flip_bus, flip_signal, nullptr);
+    ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.flip_vertical.axis", ""), "-Z");
     ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "select", nullptr));
 
     ASSERT_TRUE(

@@ -36,6 +36,7 @@
       "action.editor.clip.cycle_keep_mode",
       "action.editor.brush.lower_y",
       "action.editor.brush.raise_y",
+      "action.editor.brush.flip_vertical",
       "action.editor.palette.material",
       "action.editor.palette.game_object",
       "action.editor.palette.close",
@@ -250,8 +251,8 @@
       "grid_key": "editor.grid.size",
       "brush_grid_key": "editor.brush.grid_size",
       "open_key": "editor.grid.menu.open",
-      "button": { "x": 892, "y": 45, "w": 110, "h": 28 },
-      "popup": { "x": 892, "y": 76, "w": 110, "h": 288 },
+      "button": { "x": 982, "y": 45, "w": 110, "h": 28 },
+      "popup": { "x": 982, "y": 76, "w": 110, "h": 288 },
       "row_height": 24,
       "values": [0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0]
     },
@@ -551,6 +552,15 @@
             "interactive": true,
             "action": "editor.tool.shear",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "shear" }
+          },
+          {
+            "id": "ui.editor_shell.tool_toolbar.flip_vertical.button",
+            "type": "button",
+            "w": 84,
+            "h": 28,
+            "text": "Flip V",
+            "interactive": true,
+            "action": "editor.brush.flip_vertical"
           },
           {
             "id": "ui.editor_shell.tool_toolbar.grid.button",

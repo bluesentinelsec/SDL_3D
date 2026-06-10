@@ -122,6 +122,12 @@ bool editor_brush_world_rotate_source_box(brush_world_runtime *world_runtime, co
 bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                          slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
                                          int error_buffer_size);
+bool editor_brush_world_mirror_source_box(brush_world_runtime *world_runtime, const char *brush_name,
+                                          slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal, char *error_buffer,
+                                          int error_buffer_size);
+bool editor_brush_world_mirror_source_boxes(brush_world_runtime *world_runtime, const char *const *brush_identities,
+                                            int brush_count, slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal,
+                                            char *error_buffer, int error_buffer_size);
 bool editor_brush_world_shear_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                          slayer3d_bounding_box bounds, slayer3d_vec3 side_normal, slayer3d_vec3 delta,
                                          char *error_buffer, int error_buffer_size);
