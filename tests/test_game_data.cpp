@@ -20199,8 +20199,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "shear");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     const slayer3d_game_data_ui_rect flip_vertical_rect = ui_rect("ui.editor_shell.tool_toolbar.flip_vertical.button");
-    click_editor(flip_vertical_rect.x + 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f, SDL_BUTTON_LEFT,
-                 SDL_KMOD_NONE, 116);
+    click_editor(flip_vertical_rect.x + flip_vertical_rect.w - 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f,
+                 SDL_BUTTON_LEFT, SDL_KMOD_NONE, 116);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.flip_vertical.message", ""),
@@ -20270,7 +20270,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.placement_preview.snap", 0.0f), 0.25f, 0.001f);
     std::vector<std::string> grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 0.25"));
-    click_editor(990.0f, 54.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 4);
+    const slayer3d_game_data_ui_rect grid_button_rect = ui_rect("ui.editor_shell.tool_toolbar.grid.button");
+    click_editor(grid_button_rect.x + 2.0f, grid_button_rect.y + grid_button_rect.h * 0.5f, SDL_BUTTON_LEFT,
+                 SDL_KMOD_NONE, 4);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     grid_toolbar_text = visible_ui_text("ui.editor_shell.tool_toolbar.grid.");
     EXPECT_TRUE(contains_ui_text(grid_toolbar_text, "Grid 16"));
@@ -20301,13 +20303,13 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
             capture->popup = true;
             capture->popup_rect = *rect;
         }
-        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.5") == 0 && rect->w > 50.0f &&
                  rect->h > 10.0f && !capture->option)
         {
             capture->option = true;
             capture->option_rect = *rect;
         }
-        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.7") == 0 && rect->w > 50.0f &&
+        else if (SDL_strcmp(rect->name, "ui.editor_shell.tool_toolbar.grid.option.5") == 0 && rect->w > 50.0f &&
                  rect->h > 10.0f && rect->color.r == 54 && rect->color.g == 102 && rect->color.b == 166)
         {
             capture->hovered_option = true;
@@ -20328,7 +20330,8 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     ASSERT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, capture_grid_dropdown_rects, &grid_rects));
     EXPECT_TRUE(grid_rects.hovered_option);
     EXPECT_EQ(grid_rects.hovered_option_rect.color.a, 248);
-    click_editor(990.0f, 208.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
+    click_editor(grid_rects.option_rect.x + grid_rects.option_rect.w * 0.5f,
+                 grid_rects.option_rect.y + grid_rects.option_rect.h * 0.5f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 5);
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", true));
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.grid.size", 0.0f), 4.0f, 0.001f);
     EXPECT_NEAR(slayer3d_properties_get_float(scene_state, "editor.brush.grid_size", 0.0f), 4.0f, 0.001f);
@@ -22426,7 +22429,8 @@ TEST(GameDataRuntime, EditorShellDojoVerticalFlipToolbarMirrorsMultiSelection)
     ASSERT_NEAR(cube_before.max.y, 1.2f, 0.001f);
 
     const slayer3d_game_data_ui_rect flip_vertical_rect = ui_rect("ui.editor_shell.tool_toolbar.flip_vertical.button");
-    click_editor(flip_vertical_rect.x + 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f, 200);
+    click_editor(flip_vertical_rect.x + flip_vertical_rect.w - 2.0f, flip_vertical_rect.y + flip_vertical_rect.h * 0.5f,
+                 200);
 
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.flip_vertical.valid", false));
