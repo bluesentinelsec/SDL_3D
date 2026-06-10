@@ -156,8 +156,8 @@
       "work_plane_distance_key": "editor.work_plane.distance",
       "floor_material": "mat.editor.floor",
       "ceiling_material": "mat.editor.ceiling",
-      "default_snap": 1.0,
-      "default_grid_size": 1.0,
+      "default_snap": 0.25,
+      "default_grid_size": 0.25,
       "default_elevation": 0.0,
       "drag_create": {
         "mode": "drag_box",

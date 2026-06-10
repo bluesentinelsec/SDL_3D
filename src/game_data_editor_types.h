@@ -157,6 +157,13 @@ typedef struct editor_camera_orbit_state
     float radius;
 } editor_camera_orbit_state;
 
+typedef struct editor_camera_move_state
+{
+    bool active;
+    slayer3d_vec3 direction;
+    float hold_seconds;
+} editor_camera_move_state;
+
 typedef struct editor_brush_source_box_runtime
 {
     char *stable_id;
