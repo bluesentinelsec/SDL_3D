@@ -14,9 +14,6 @@
 #include "slayer3d/camera.h"
 #include "slayer3d/math.h"
 
-static bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_forward,
-                                slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic);
-
 static bool editor_selection_button_requested(const slayer3d_game_data_runtime *runtime, yyjson_val *selection,
                                               const char *key, const char *fallback)
 {
@@ -860,8 +857,8 @@ static bool editor_vec3_same_direction(slayer3d_vec3 a, slayer3d_vec3 b)
     return SDL_fabsf(a.x - b.x) <= 0.0001f && SDL_fabsf(a.y - b.y) <= 0.0001f && SDL_fabsf(a.z - b.z) <= 0.0001f;
 }
 
-static bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_forward,
-                                slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic)
+bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_forward,
+                         slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic)
 {
     if (out_forward != NULL)
         *out_forward = slayer3d_vec3_make(0.0f, 0.0f, 0.0f);

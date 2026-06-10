@@ -140,6 +140,8 @@ bool update_editor_drag_create(slayer3d_game_data_runtime *runtime, yyjson_val *
 const char *editor_selection_type_name(slayer3d_game_data_world_model_type type);
 slayer3d_game_data_editor_selection resolved_editor_selection(const slayer3d_game_data_runtime *runtime,
                                                               const slayer3d_game_data_editor_selection *selection);
+bool editor_camera_basis(const slayer3d_game_data_runtime *runtime, slayer3d_vec3 *out_forward,
+                         slayer3d_vec3 *out_right, slayer3d_vec3 *out_up, bool *out_orthographic);
 void publish_editor_selection(slayer3d_game_data_runtime *runtime, yyjson_val *outputs,
                               const slayer3d_game_data_editor_selection *selection);
 bool slayer3d_game_data_select_editor_brush_action(slayer3d_game_data_runtime *runtime, yyjson_val *action);
@@ -154,6 +156,8 @@ bool slayer3d_game_data_scale_selected_editor_brushes(slayer3d_game_data_runtime
                                                       slayer3d_vec3 factors);
 bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 plane_point,
                                                      slayer3d_vec3 plane_normal);
+bool slayer3d_game_data_flip_selected_editor_brushes_horizontal(slayer3d_game_data_runtime *runtime,
+                                                                slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal);
 bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_bounding_box bounds,
                                                       slayer3d_vec3 side_normal, slayer3d_vec3 delta);
 bool slayer3d_game_data_rotate_selected_editor_brushes_y(slayer3d_game_data_runtime *runtime, int quarter_turns);

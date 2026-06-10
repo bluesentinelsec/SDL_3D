@@ -36,6 +36,7 @@
       "action.editor.clip.cycle_keep_mode",
       "action.editor.brush.lower_y",
       "action.editor.brush.raise_y",
+      "action.editor.brush.flip_horizontal",
       "action.editor.brush.flip_vertical",
       "action.editor.palette.material",
       "action.editor.palette.game_object",
@@ -554,9 +555,18 @@
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "shear" }
           },
           {
+            "id": "ui.editor_shell.tool_toolbar.flip_horizontal.button",
+            "type": "button",
+            "w": 60,
+            "h": 28,
+            "text": "Flip H",
+            "interactive": true,
+            "action": "editor.brush.flip_horizontal"
+          },
+          {
             "id": "ui.editor_shell.tool_toolbar.flip_vertical.button",
             "type": "button",
-            "w": 84,
+            "w": 60,
             "h": 28,
             "text": "Flip V",
             "interactive": true,
