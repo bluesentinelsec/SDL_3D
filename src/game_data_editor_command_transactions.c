@@ -1760,7 +1760,8 @@ static bool editor_transaction_has_brush_mutation(const editor_command_transacti
            (SDL_strcmp(entry->command, "rotate") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "rotate_y") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "scale") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
-           (SDL_strcmp(entry->command, "flip_vertical") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
+           ((SDL_strcmp(entry->command, "flip_vertical") == 0 || SDL_strcmp(entry->command, "flip_horizontal") == 0) &&
+            SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "shear") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "sector_floor") == 0 && SDL_strcmp(entry->target, "element") == 0) ||
            (SDL_strcmp(entry->command, "clip") == 0 && SDL_strcmp(entry->target, "selection") == 0) ||
@@ -1952,7 +1953,7 @@ static bool apply_editor_transaction_mutation(slayer3d_game_data_runtime *runtim
         return true;
     }
     if (SDL_strcmp(entry->command, "scale") == 0 || SDL_strcmp(entry->command, "flip_vertical") == 0 ||
-        SDL_strcmp(entry->command, "shear") == 0)
+        SDL_strcmp(entry->command, "flip_horizontal") == 0 || SDL_strcmp(entry->command, "shear") == 0)
     {
         editor_selection_identity_snapshot selected_snapshots[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
         editor_selection_identity_snapshot active_snapshot;
@@ -3126,11 +3127,15 @@ fail:
     return false;
 }
 
-bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 plane_point,
-                                                     slayer3d_vec3 plane_normal)
+static bool slayer3d_game_data_mirror_selected_editor_brushes(slayer3d_game_data_runtime *runtime,
+                                                              slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal,
+                                                              const char *command_name, const char *adverb)
 {
-    if (runtime == NULL || runtime->editor_selected_brush_count <= 0 || runtime->editor_selected_brush_scene == NULL)
+    if (runtime == NULL || command_name == NULL || command_name[0] == '\0' || adverb == NULL || adverb[0] == '\0' ||
+        runtime->editor_selected_brush_count <= 0 || runtime->editor_selected_brush_scene == NULL)
+    {
         return false;
+    }
     if (!editor_float_finite(plane_point.x) || !editor_float_finite(plane_point.y) ||
         !editor_float_finite(plane_point.z) || !editor_float_finite(plane_normal.x) ||
         !editor_float_finite(plane_normal.y) || !editor_float_finite(plane_normal.z) ||
@@ -3167,7 +3172,7 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
             transaction_group_id = entry->id;
         else
             entry->id = transaction_group_id;
-        if (!editor_prepare_transaction_common(entry, active_scene, "flip_vertical", "element", selection.world_name,
+        if (!editor_prepare_transaction_common(entry, active_scene, command_name, "element", selection.world_name,
                                                selection.element_name) ||
             !copy_editor_transaction_string(editor_metadata_stable_id(selection.element_editor),
                                             &entry->element_stable_id))
@@ -3176,7 +3181,7 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
         }
         entry->has_bounds = selection.has_bounds;
         entry->bounds = selection.bounds;
-        SDL_snprintf(entry->message, sizeof(entry->message), "flipped %s vertically", selection.element_name);
+        SDL_snprintf(entry->message, sizeof(entry->message), "flipped %s %s", selection.element_name, adverb);
 
         brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, selection.world_name);
         if (world_runtime == NULL || !world_runtime->editor_has_source_model)
@@ -3261,10 +3266,10 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
     if (runtime->scene_state != NULL)
     {
         char message[128];
-        SDL_snprintf(message, sizeof(message),
-                     applied_count == 1 ? "flipped 1 selected brush vertically"
-                                        : "flipped %d selected brushes vertically",
-                     applied_count);
+        if (applied_count == 1)
+            SDL_snprintf(message, sizeof(message), "flipped 1 selected brush %s", adverb);
+        else
+            SDL_snprintf(message, sizeof(message), "flipped %d selected brushes %s", applied_count, adverb);
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     }
     if (last_entry != NULL && runtime->editor_selected_brush_count > 0)
@@ -3288,6 +3293,20 @@ fail:
     history->count = first_entry;
     history->cursor = first_entry;
     return false;
+}
+
+bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_vec3 plane_point,
+                                                     slayer3d_vec3 plane_normal)
+{
+    return slayer3d_game_data_mirror_selected_editor_brushes(runtime, plane_point, plane_normal, "flip_vertical",
+                                                             "vertically");
+}
+
+bool slayer3d_game_data_flip_selected_editor_brushes_horizontal(slayer3d_game_data_runtime *runtime,
+                                                                slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal)
+{
+    return slayer3d_game_data_mirror_selected_editor_brushes(runtime, plane_point, plane_normal, "flip_horizontal",
+                                                             "horizontally");
 }
 
 bool slayer3d_game_data_shear_selected_editor_brushes(slayer3d_game_data_runtime *runtime, slayer3d_bounding_box bounds,
