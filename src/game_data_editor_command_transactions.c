@@ -375,6 +375,26 @@ static editor_command_transaction_entry *editor_command_history_append(slayer3d_
     return entry;
 }
 
+static int editor_command_transaction_group_start(const editor_command_history_state *history, int index)
+{
+    if (history == NULL || index < 0 || index >= history->count)
+        return index;
+    const int transaction_id = history->entries[index].id;
+    while (index > 0 && history->entries[index - 1].id == transaction_id)
+        index--;
+    return index;
+}
+
+static int editor_command_transaction_group_end(const editor_command_history_state *history, int index)
+{
+    if (history == NULL || index < 0 || index >= history->count)
+        return index;
+    const int transaction_id = history->entries[index].id;
+    while (index + 1 < history->count && history->entries[index + 1].id == transaction_id)
+        index++;
+    return index;
+}
+
 static const char *editor_metadata_stable_id(const slayer3d_game_data_editor_metadata *metadata)
 {
     return metadata != NULL && metadata->stable_id != NULL ? metadata->stable_id : NULL;
@@ -3125,29 +3145,40 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
     plane_normal = slayer3d_vec3_normalize(plane_normal);
     editor_command_history_state *history = &runtime->editor_command_history;
     const int first_entry = history->count;
+    int entry_count = 0;
     int applied_count = 0;
+    bool mutation_applied[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+    bool group_processed[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+    SDL_zeroa(mutation_applied);
+    SDL_zeroa(group_processed);
     editor_command_transaction_entry *last_entry = NULL;
+    int transaction_group_id = -1;
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
     {
-        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
-        if (!transaction_editor_selection_is_selectable_brush(selection))
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        if (!transaction_editor_selection_is_selectable_brush(&selection))
             goto fail;
 
         editor_command_transaction_entry *entry = editor_command_history_append(runtime);
         if (entry == NULL)
             goto fail;
-        if (!editor_prepare_transaction_common(entry, active_scene, "flip_vertical", "element", selection->world_name,
-                                               selection->element_name) ||
-            !copy_editor_transaction_string(editor_metadata_stable_id(selection->element_editor),
+        if (transaction_group_id < 0)
+            transaction_group_id = entry->id;
+        else
+            entry->id = transaction_group_id;
+        if (!editor_prepare_transaction_common(entry, active_scene, "flip_vertical", "element", selection.world_name,
+                                               selection.element_name) ||
+            !copy_editor_transaction_string(editor_metadata_stable_id(selection.element_editor),
                                             &entry->element_stable_id))
         {
             goto fail;
         }
-        entry->has_bounds = selection->has_bounds;
-        entry->bounds = selection->bounds;
-        SDL_snprintf(entry->message, sizeof(entry->message), "flipped %s vertically", selection->element_name);
+        entry->has_bounds = selection.has_bounds;
+        entry->bounds = selection.bounds;
+        SDL_snprintf(entry->message, sizeof(entry->message), "flipped %s vertically", selection.element_name);
 
-        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, selection->world_name);
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, selection.world_name);
         if (world_runtime == NULL || !world_runtime->editor_has_source_model)
             goto fail;
         const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
@@ -3159,11 +3190,64 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
             goto fail;
         }
         entry->has_source_box_snapshot = true;
+        entry_count++;
+    }
 
-        if (!editor_brush_world_mirror_source_box(world_runtime, brush_identity, plane_point, plane_normal, NULL, 0))
+    for (int i = 0; i < entry_count; ++i)
+    {
+        if (group_processed[i])
+            continue;
+
+        editor_command_transaction_entry *entry = &history->entries[first_entry + i];
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+        if (world_runtime == NULL || !world_runtime->editor_has_source_model)
             goto fail;
-        editor_brush_world_mark_dirty(world_runtime);
 
+        const char *brush_identities[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+        int group_indices[SLAYER3D_EDITOR_SELECTED_BRUSH_CAPACITY];
+        SDL_zeroa(brush_identities);
+        SDL_zeroa(group_indices);
+        int group_count = 0;
+        for (int j = i; j < entry_count; ++j)
+        {
+            editor_command_transaction_entry *candidate = &history->entries[first_entry + j];
+            if (group_processed[j] || candidate->world_name == NULL ||
+                SDL_strcmp(candidate->world_name, entry->world_name) != 0)
+            {
+                continue;
+            }
+            brush_identities[group_count] =
+                candidate->element_stable_id != NULL && candidate->element_stable_id[0] != '\0'
+                    ? candidate->element_stable_id
+                    : candidate->element_name;
+            group_indices[group_count] = j;
+            group_count++;
+        }
+
+        if (group_count <= 0 || !editor_brush_world_mirror_source_boxes(world_runtime, brush_identities, group_count,
+                                                                        plane_point, plane_normal, NULL, 0))
+        {
+            goto fail;
+        }
+        editor_brush_world_mark_dirty(world_runtime);
+        for (int group = 0; group < group_count; ++group)
+        {
+            const int entry_index = group_indices[group];
+            mutation_applied[entry_index] = true;
+            group_processed[entry_index] = true;
+            applied_count++;
+        }
+    }
+
+    for (int i = 0; i < entry_count; ++i)
+    {
+        editor_command_transaction_entry *entry = &history->entries[first_entry + i];
+        brush_world_runtime *world_runtime = find_brush_world_runtime_mutable(runtime, entry->world_name);
+        if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+            goto fail;
+        const char *brush_identity = entry->element_stable_id != NULL && entry->element_stable_id[0] != '\0'
+                                         ? entry->element_stable_id
+                                         : entry->element_name;
         if (!editor_brush_world_copy_source_box_by_identity(world_runtime, brush_identity,
                                                             &entry->source_box_after_snapshot, NULL, NULL, 0))
         {
@@ -3174,7 +3258,6 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
 
         refresh_selected_editor_brush_bounds_for_transaction(runtime, entry, i);
         last_entry = entry;
-        applied_count++;
     }
 
     if (runtime->scene_state != NULL)
@@ -3194,8 +3277,14 @@ bool slayer3d_game_data_flip_selected_editor_brushes(slayer3d_game_data_runtime 
     return applied_count > 0;
 
 fail:
-    for (int rollback = first_entry + applied_count - 1; rollback >= first_entry; --rollback)
-        (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], false);
+    for (int rollback = entry_count - 1; rollback >= 0; --rollback)
+    {
+        if (mutation_applied[rollback])
+        {
+            editor_command_transaction_entry *entry = &history->entries[first_entry + rollback];
+            (void)apply_editor_source_box_snapshot(runtime, entry, &entry->source_box_snapshot);
+        }
+    }
     for (int clear = first_entry; clear < history->count; ++clear)
         free_editor_command_transaction_entry(&history->entries[clear]);
     history->count = first_entry;
@@ -3445,14 +3534,27 @@ bool slayer3d_game_data_undo_editor_command(slayer3d_game_data_runtime *runtime,
         return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "undo", false, NULL, message);
     }
 
-    editor_command_transaction_entry *entry = &history->entries[history->cursor - 1];
-    if (!apply_editor_transaction_mutation(runtime, entry, false))
+    const int group_end = history->cursor - 1;
+    const int group_start = editor_command_transaction_group_start(history, group_end);
+    editor_command_transaction_entry *entry = &history->entries[group_end];
+    int failed_index = -1;
+    for (int i = group_end; i >= group_start; --i)
     {
+        if (!apply_editor_transaction_mutation(runtime, &history->entries[i], false))
+        {
+            failed_index = i;
+            break;
+        }
+    }
+    if (failed_index >= 0)
+    {
+        for (int rollback = failed_index + 1; rollback <= group_end; ++rollback)
+            (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], true);
         const char *message = json_string(action, "invalid_message", "editor command undo failed");
         publish_editor_transaction(runtime, outputs, "undo", false, NULL, message);
         return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "undo", false, NULL, message);
     }
-    history->cursor--;
+    history->cursor = group_start;
     char message[128];
     format_editor_transaction_message(runtime, "undo", true, entry,
                                       json_string(action, "message", "undo {editor_command}"), message,
@@ -3476,14 +3578,27 @@ bool slayer3d_game_data_redo_editor_command(slayer3d_game_data_runtime *runtime,
         return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "redo", false, NULL, message);
     }
 
-    editor_command_transaction_entry *entry = &history->entries[history->cursor];
-    if (!apply_editor_transaction_mutation(runtime, entry, true))
+    const int group_start = history->cursor;
+    const int group_end = editor_command_transaction_group_end(history, group_start);
+    editor_command_transaction_entry *entry = &history->entries[group_start];
+    int failed_index = -1;
+    for (int i = group_start; i <= group_end; ++i)
     {
+        if (!apply_editor_transaction_mutation(runtime, &history->entries[i], true))
+        {
+            failed_index = i;
+            break;
+        }
+    }
+    if (failed_index >= 0)
+    {
+        for (int rollback = failed_index - 1; rollback >= group_start; --rollback)
+            (void)apply_editor_transaction_mutation(runtime, &history->entries[rollback], false);
         const char *message = json_string(action, "invalid_message", "editor command redo failed");
         publish_editor_transaction(runtime, outputs, "redo", false, NULL, message);
         return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "redo", false, NULL, message);
     }
-    history->cursor++;
+    history->cursor = group_end + 1;
     char message[128];
     format_editor_transaction_message(runtime, "redo", true, entry,
                                       json_string(action, "message", "redo {editor_command}"), message,

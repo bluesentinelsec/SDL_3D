@@ -3869,6 +3869,83 @@ static bool editor_brush_world_apply_transformed_source_vertices(brush_world_run
     return true;
 }
 
+typedef struct editor_source_box_transform_batch_item
+{
+    int source_index;
+    int vertex_count;
+    int vertices[SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY][3];
+    bool has_snapshot;
+    editor_brush_source_box_runtime snapshot;
+} editor_source_box_transform_batch_item;
+
+static bool editor_source_box_apply_transformed_vertices(editor_brush_source_box_runtime *box, int vertex_count,
+                                                         const int *transformed_vertices, const char *operation_name,
+                                                         char *error_buffer, int error_buffer_size)
+{
+    if (box == NULL || vertex_count <= 0 || vertex_count > SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY ||
+        transformed_vertices == NULL || operation_name == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush transform requires valid source vertices");
+        return false;
+    }
+
+    char *old_prefab = box->prefab;
+    box->prefab = SDL_strdup("convex");
+    if (box->prefab == NULL)
+    {
+        box->prefab = old_prefab;
+        set_errorf(error_buffer, error_buffer_size, "failed to allocate source brush %s metadata", operation_name);
+        return false;
+    }
+    SDL_free(old_prefab);
+    box->vertex_count = vertex_count;
+    for (int vertex = 0; vertex < vertex_count; ++vertex)
+    {
+        box->vertices[vertex][0] = transformed_vertices[vertex * 3];
+        box->vertices[vertex][1] = transformed_vertices[vertex * 3 + 1];
+        box->vertices[vertex][2] = transformed_vertices[vertex * 3 + 2];
+    }
+    for (int vertex = vertex_count; vertex < SLAYER3D_EDITOR_SOURCE_CONVEX_VERTEX_CAPACITY; ++vertex)
+    {
+        box->vertices[vertex][0] = 0;
+        box->vertices[vertex][1] = 0;
+        box->vertices[vertex][2] = 0;
+    }
+    source_box_update_bounds_from_vertices(box);
+    return true;
+}
+
+static void editor_restore_source_box_transform_batch(brush_world_runtime *world_runtime,
+                                                      editor_source_box_transform_batch_item *items, int item_count)
+{
+    if (world_runtime == NULL || items == NULL)
+        return;
+    for (int i = 0; i < item_count; ++i)
+    {
+        if (!items[i].has_snapshot || items[i].source_index < 0 ||
+            items[i].source_index >= world_runtime->editor_source_box_count)
+        {
+            continue;
+        }
+        free_editor_brush_source_box(&world_runtime->editor_source_boxes[items[i].source_index]);
+        world_runtime->editor_source_boxes[items[i].source_index] = items[i].snapshot;
+        SDL_zero(items[i].snapshot);
+        items[i].has_snapshot = false;
+    }
+}
+
+static void editor_free_source_box_transform_batch(editor_source_box_transform_batch_item *items, int item_count)
+{
+    if (items == NULL)
+        return;
+    for (int i = 0; i < item_count; ++i)
+    {
+        if (items[i].has_snapshot)
+            free_editor_brush_source_box(&items[i].snapshot);
+    }
+    SDL_free(items);
+}
+
 bool editor_brush_world_scale_source_box(brush_world_runtime *world_runtime, const char *brush_name,
                                          slayer3d_vec3 anchor, slayer3d_vec3 factors, char *error_buffer,
                                          int error_buffer_size)
@@ -4049,6 +4126,144 @@ bool editor_brush_world_mirror_source_box(brush_world_runtime *world_runtime, co
     return editor_brush_world_apply_transformed_source_vertices(world_runtime, source_index, brush_name, &model,
                                                                 &mirrored_vertices[0][0], "mirror", error_buffer,
                                                                 error_buffer_size);
+}
+
+bool editor_brush_world_mirror_source_boxes(brush_world_runtime *world_runtime, const char *const *brush_identities,
+                                            int brush_count, slayer3d_vec3 plane_point, slayer3d_vec3 plane_normal,
+                                            char *error_buffer, int error_buffer_size)
+{
+    if (world_runtime == NULL || !world_runtime->editor_has_source_model)
+    {
+        set_error(error_buffer, error_buffer_size, "source-backed brush mirror requires a source model");
+        return false;
+    }
+    if (brush_identities == NULL || brush_count <= 0)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush mirror requires selected brushes");
+        return false;
+    }
+    if (SDL_isnan(plane_point.x) || SDL_isinf(plane_point.x) || SDL_isnan(plane_point.y) || SDL_isinf(plane_point.y) ||
+        SDL_isnan(plane_point.z) || SDL_isinf(plane_point.z) || SDL_isnan(plane_normal.x) ||
+        SDL_isinf(plane_normal.x) || SDL_isnan(plane_normal.y) || SDL_isinf(plane_normal.y) ||
+        SDL_isnan(plane_normal.z) || SDL_isinf(plane_normal.z))
+    {
+        set_error(error_buffer, error_buffer_size, "source brush mirror requires finite plane point and normal");
+        return false;
+    }
+    if (slayer3d_vec3_length_squared(plane_normal) <= 0.000001f)
+    {
+        set_error(error_buffer, error_buffer_size, "source brush mirror requires a non-zero plane normal");
+        return false;
+    }
+    plane_normal = slayer3d_vec3_normalize(plane_normal);
+
+    editor_source_box_transform_batch_item *items =
+        (editor_source_box_transform_batch_item *)SDL_calloc((size_t)brush_count, sizeof(*items));
+    if (items == NULL)
+    {
+        set_error(error_buffer, error_buffer_size, "failed to allocate source brush mirror batch");
+        return false;
+    }
+    for (int i = 0; i < brush_count; ++i)
+        items[i].source_index = -1;
+
+    const float meters_per_unit =
+        world_runtime->editor_source_meters_per_unit > 0.0f ? world_runtime->editor_source_meters_per_unit : 0.001f;
+    const float plane_point_source[3] = {
+        plane_point.x / meters_per_unit,
+        plane_point.y / meters_per_unit,
+        plane_point.z / meters_per_unit,
+    };
+    const int snap_units = source_snap_units(world_runtime);
+
+    for (int i = 0; i < brush_count; ++i)
+    {
+        const char *brush_identity = brush_identities[i];
+        if (brush_identity == NULL || brush_identity[0] == '\0')
+        {
+            set_error(error_buffer, error_buffer_size, "source brush mirror requires brush identities");
+            goto fail;
+        }
+
+        const int source_index = find_editor_source_box_index_by_identity(world_runtime, brush_identity);
+        if (source_index < 0)
+        {
+            set_error(error_buffer, error_buffer_size, "source brush not found");
+            goto fail;
+        }
+        for (int previous = 0; previous < i; ++previous)
+        {
+            if (items[previous].source_index == source_index)
+            {
+                set_error(error_buffer, error_buffer_size, "source brush mirror batch contains duplicate brushes");
+                goto fail;
+            }
+        }
+
+        editor_brush_source_vertex_model model;
+        if (!editor_brush_source_box_build_vertex_model(world_runtime, source_index, &model, error_buffer,
+                                                        error_buffer_size))
+        {
+            goto fail;
+        }
+
+        items[i].source_index = source_index;
+        items[i].vertex_count = model.vertex_count;
+        for (int vertex = 0; vertex < model.vertex_count; ++vertex)
+        {
+            if (!mirror_source_vertex_coord(model.vertices[vertex].coord, plane_point_source, plane_normal, snap_units,
+                                            items[i].vertices[vertex]))
+            {
+                set_error(error_buffer, error_buffer_size, "source brush mirror would overflow the source grid");
+                goto fail;
+            }
+        }
+
+        slayer3d_game_data_brush rebuilt;
+        if (!editor_brush_world_build_source_convex_brush_from_vertices(world_runtime, brush_identity,
+                                                                        &items[i].vertices[0][0], model.vertex_count,
+                                                                        &rebuilt, error_buffer, error_buffer_size))
+        {
+            goto fail;
+        }
+        editor_brush_source_free_runtime_brush(&rebuilt);
+
+        if (!copy_editor_brush_source_box_runtime(&world_runtime->editor_source_boxes[source_index],
+                                                  &items[i].snapshot))
+        {
+            set_error(error_buffer, error_buffer_size, "failed to snapshot source brush mirror");
+            goto fail;
+        }
+        items[i].has_snapshot = true;
+    }
+
+    for (int i = 0; i < brush_count; ++i)
+    {
+        editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[items[i].source_index];
+        if (!editor_source_box_apply_transformed_vertices(box, items[i].vertex_count, &items[i].vertices[0][0],
+                                                          "mirror", error_buffer, error_buffer_size))
+        {
+            goto fail_restore;
+        }
+    }
+    for (int i = 0; i < brush_count; ++i)
+    {
+        editor_brush_source_box_runtime *box = &world_runtime->editor_source_boxes[items[i].source_index];
+        if (!source_box_candidate_valid(world_runtime, box, items[i].source_index, error_buffer, error_buffer_size))
+            goto fail_restore;
+    }
+    if (!editor_brush_world_rebuild_from_source(world_runtime, error_buffer, error_buffer_size))
+        goto fail_restore;
+
+    editor_free_source_box_transform_batch(items, brush_count);
+    return true;
+
+fail_restore:
+    editor_restore_source_box_transform_batch(world_runtime, items, brush_count);
+    (void)editor_brush_world_rebuild_from_source(world_runtime, NULL, 0);
+fail:
+    editor_free_source_box_transform_batch(items, brush_count);
+    return false;
 }
 
 static bool shear_source_side_axis(slayer3d_vec3 side_normal, int *out_axis, float *out_sign)

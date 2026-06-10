@@ -252,21 +252,22 @@ static bool editor_selected_brushes_bounds(const slayer3d_game_data_runtime *run
     SDL_zero(bounds);
     for (int i = 0; i < runtime->editor_selected_brush_count; ++i)
     {
-        const slayer3d_game_data_editor_selection *selection = &runtime->editor_selected_brushes[i];
-        if (!selection->hit || !selection->has_bounds)
+        slayer3d_game_data_editor_selection selection =
+            resolved_editor_selection(runtime, &runtime->editor_selected_brushes[i]);
+        if (!selection.hit || !selection.has_bounds)
             continue;
         if (!has_bounds)
         {
-            bounds = selection->bounds;
+            bounds = selection.bounds;
             has_bounds = true;
             continue;
         }
-        bounds.min.x = SDL_min(bounds.min.x, selection->bounds.min.x);
-        bounds.min.y = SDL_min(bounds.min.y, selection->bounds.min.y);
-        bounds.min.z = SDL_min(bounds.min.z, selection->bounds.min.z);
-        bounds.max.x = SDL_max(bounds.max.x, selection->bounds.max.x);
-        bounds.max.y = SDL_max(bounds.max.y, selection->bounds.max.y);
-        bounds.max.z = SDL_max(bounds.max.z, selection->bounds.max.z);
+        bounds.min.x = SDL_min(bounds.min.x, selection.bounds.min.x);
+        bounds.min.y = SDL_min(bounds.min.y, selection.bounds.min.y);
+        bounds.min.z = SDL_min(bounds.min.z, selection.bounds.min.z);
+        bounds.max.x = SDL_max(bounds.max.x, selection.bounds.max.x);
+        bounds.max.y = SDL_max(bounds.max.y, selection.bounds.max.y);
+        bounds.max.z = SDL_max(bounds.max.z, selection.bounds.max.z);
     }
     if (!has_bounds)
         return false;
