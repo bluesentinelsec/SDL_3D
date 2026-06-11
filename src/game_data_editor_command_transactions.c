@@ -2958,6 +2958,27 @@ static bool append_editor_brush_paint_transaction(slayer3d_game_data_runtime *ru
     return true;
 }
 
+typedef struct editor_paint_selection_target
+{
+    const char *world_name;
+    const char *element_name;
+    const char *element_stable_id;
+    int face_count;
+} editor_paint_selection_target;
+
+static void free_editor_paint_selection_targets(editor_paint_selection_target *targets, int count)
+{
+    if (targets == NULL)
+        return;
+    for (int i = 0; i < count; ++i)
+    {
+        SDL_free((void *)targets[i].world_name);
+        SDL_free((void *)targets[i].element_name);
+        SDL_free((void *)targets[i].element_stable_id);
+    }
+    SDL_free(targets);
+}
+
 bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime *runtime, yyjson_val *action,
                                                       const slayer3d_properties *payload)
 {
@@ -2986,6 +3007,8 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
     editor_command_transaction_entry *last_entry = NULL;
     int applied_count = 0;
     int painted_face_count = 0;
+    editor_paint_selection_target *selection_targets = NULL;
+    int selection_target_count = 0;
 
     if (SDL_strcmp(target, "face") == 0)
     {
@@ -3034,6 +3057,11 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
         }
 
         const int selected_count = runtime->editor_selected_brush_count;
+        selection_targets =
+            (editor_paint_selection_target *)SDL_calloc((size_t)selected_count, sizeof(*selection_targets));
+        if (selection_targets == NULL)
+            goto fail;
+        selection_target_count = selected_count;
         for (int i = 0; i < selected_count; ++i)
         {
             const slayer3d_game_data_editor_selection selection =
@@ -3058,11 +3086,31 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
             if (initial_brush == NULL || initial_material_index < 0)
                 goto fail;
 
-            for (int face_index = 0; face_index < face_count; ++face_index)
+            if (!copy_editor_transaction_string(selection.world_name, &selection_targets[i].world_name) ||
+                !copy_editor_transaction_string(selection.element_name, &selection_targets[i].element_name) ||
+                !copy_editor_transaction_string(element_stable_id, &selection_targets[i].element_stable_id))
             {
-                const brush_world_runtime *world_runtime = find_brush_world_runtime(runtime, selection.world_name);
+                goto fail;
+            }
+            selection_targets[i].face_count = face_count;
+        }
+
+        for (int i = 0; i < selected_count; ++i)
+        {
+            const editor_paint_selection_target *target_selection = &selection_targets[i];
+            slayer3d_game_data_editor_selection selection;
+            SDL_zero(selection);
+            selection.hit = true;
+            selection.type = SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD;
+            selection.world_name = target_selection->world_name;
+            selection.element_name = target_selection->element_name;
+
+            for (int face_index = 0; face_index < target_selection->face_count; ++face_index)
+            {
+                const brush_world_runtime *world_runtime =
+                    find_brush_world_runtime(runtime, target_selection->world_name);
                 const int brush_index = find_editor_mutable_brush_index_by_identity(
-                    world_runtime, selection.element_name, element_stable_id);
+                    world_runtime, target_selection->element_name, target_selection->element_stable_id);
                 const slayer3d_game_data_brush *brush =
                     brush_index >= 0 ? &world_runtime->desc.brushes[brush_index] : NULL;
                 const int material_index = editor_brush_material_index_by_name(world_runtime, material_name);
@@ -3071,8 +3119,8 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
 
                 editor_command_transaction_entry *entry = NULL;
                 if (!append_editor_brush_paint_transaction(runtime, active_scene, world_runtime, &selection,
-                                                           element_stable_id, brush, face_index, material_index,
-                                                           material_name, &entry) ||
+                                                           target_selection->element_stable_id, brush, face_index,
+                                                           material_index, material_name, &entry) ||
                     !apply_editor_transaction_mutation(runtime, entry, true))
                 {
                     goto fail;
@@ -3096,6 +3144,7 @@ bool slayer3d_game_data_paint_selected_editor_brushes(slayer3d_game_data_runtime
     if (runtime->scene_state != NULL)
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
     publish_editor_transaction(runtime, outputs, "commit", true, last_entry, message);
+    free_editor_paint_selection_targets(selection_targets, selection_target_count);
     return run_editor_transaction_action_array(runtime, obj_get(action, "actions"), "commit", true, last_entry,
                                                message);
 
@@ -3110,6 +3159,7 @@ fail: {
     if (runtime->scene_state != NULL)
         slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", fail_message);
     publish_editor_transaction(runtime, outputs, "commit", false, NULL, fail_message);
+    free_editor_paint_selection_targets(selection_targets, selection_target_count);
     return run_editor_transaction_action_array(runtime, obj_get(action, "else"), "commit", false, NULL, fail_message);
 }
 }
