@@ -459,6 +459,40 @@ bool validate_editor_selection_flip_horizontal_action(validation_context *ctx, y
                                          SDL_arraysize(output_keys));
 }
 
+bool validate_editor_brush_duplicate_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                            validation_names *names, const char *type)
+{
+    (void)names;
+    (void)type;
+    const char *mode = json_string(action, "mode");
+    if (mode == NULL)
+        mode = "in_place";
+    if (SDL_strcmp(mode, "in_place") != 0 && SDL_strcmp(mode, "last_offset") != 0 && SDL_strcmp(mode, "offset") != 0)
+    {
+        return validation_error(ctx, json_path,
+                                "editor.brush.duplicate mode must be one of in_place, last_offset, offset");
+    }
+
+    yyjson_val *offset = obj_get(action, "offset");
+    if (offset != NULL && !is_vec_array(offset, 3))
+        return validation_error(ctx, json_path, "editor.brush.duplicate offset must be a numeric vec3");
+    if (offset != NULL)
+    {
+        const float offset_x = (float)yyjson_get_num(yyjson_arr_get(offset, 0));
+        const float offset_y = (float)yyjson_get_num(yyjson_arr_get(offset, 1));
+        const float offset_z = (float)yyjson_get_num(yyjson_arr_get(offset, 2));
+        if (!validation_float_finite(offset_x) || !validation_float_finite(offset_y) ||
+            !validation_float_finite(offset_z))
+        {
+            return validation_error(ctx, json_path, "editor.brush.duplicate offset must be finite");
+        }
+    }
+
+    static const char *const output_keys[] = {"valid_key", "message_key", "count_key", "mode_key", "offset_key"};
+    return validate_optional_output_keys(ctx, action, json_path, "editor.brush.duplicate", output_keys,
+                                         SDL_arraysize(output_keys));
+}
+
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type)
 {
