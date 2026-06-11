@@ -468,7 +468,7 @@
           {
             "id": "ui.editor_shell.tool_toolbar.leading_spacer",
             "type": "spacer",
-            "w": 58,
+            "w": 49,
             "h": 28
           },
           {
@@ -603,9 +603,9 @@
           {
             "id": "ui.editor_shell.tool_toolbar.materials.button",
             "type": "button",
-            "w": 68,
+            "w": 86,
             "h": 28,
-            "text": "Mats (m)",
+            "text": "Texture (m)",
             "text_scale": 0.42,
             "interactive": true,
             "action": "editor.palette.material",
@@ -1001,7 +1001,7 @@
             "h": 34,
             "layer": 121,
             "children": [
-              { "id": "ui.editor_shell.texture_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Materials" },
+              { "id": "ui.editor_shell.texture_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Textures" },
               {
                 "id": "ui.editor_shell.texture_viewer.collapse.button",
                 "type": "button",
@@ -1078,7 +1078,7 @@
         "y": 92,
         "w": 152,
         "h": 32,
-        "text": "Materials",
+        "text": "Textures",
         "text_scale": 0.48,
         "interactive": true,
         "action": "editor.texture.viewer.toggle",
@@ -1430,7 +1430,7 @@
         "h": 34,
         "layer": 141,
         "font": "font.editor_shell.ui",
-        "text": "Materials",
+        "text": "Textures",
         "text_color": [
                 235,
                 245,

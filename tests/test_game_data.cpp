@@ -17514,7 +17514,7 @@ TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
     EXPECT_TRUE(contains_text(labels, "Face (f)"));
     EXPECT_TRUE(contains_text(labels, "Vertex (v)"));
     EXPECT_TRUE(contains_text(labels, "Duplicate (d)"));
-    EXPECT_TRUE(contains_text(labels, "Mats (m)"));
+    EXPECT_TRUE(contains_text(labels, "Texture (m)"));
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
