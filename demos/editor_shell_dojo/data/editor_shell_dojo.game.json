@@ -315,6 +315,8 @@
     "signal.editor.texture.select.door_hatch",
     "signal.editor.texture.select.lava",
     "signal.editor.texture.select.radioactive_crate",
+    "signal.editor.texture.page.previous",
+    "signal.editor.texture.page.next",
     "signal.editor.texture.paint.selection",
     "signal.editor.texture.paint.face",
     "signal.editor.export",
@@ -701,6 +703,7 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "texture" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "material" },
+          { "type": "scene_state.set", "key": "editor.palette.material.page", "value": 0 },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "material palette opened" }
@@ -896,6 +899,32 @@
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.radioactive_crate" },
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.radioactive_crate" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "radioactive crate texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.page.previous",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.palette.material.page",
+            "default": 0,
+            "direction": -1,
+            "values": [0, 1]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture palette page changed" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.page.next",
+        "actions": [
+          {
+            "type": "scene_state.cycle",
+            "key": "editor.palette.material.page",
+            "default": 0,
+            "direction": 1,
+            "values": [0, 1]
+          },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture palette page changed" }
         ]
       },
       {
@@ -2240,7 +2269,13 @@
       { "id": "image.editor_shell.skybox.py", "path": "asset://skyboxes/sky_17/py.png" },
       { "id": "image.editor_shell.skybox.ny", "path": "asset://skyboxes/sky_17/ny.png" },
       { "id": "image.editor_shell.skybox.pz", "path": "asset://skyboxes/sky_17/pz.png" },
-      { "id": "image.editor_shell.skybox.nz", "path": "asset://skyboxes/sky_17/nz.png" }
+      { "id": "image.editor_shell.skybox.nz", "path": "asset://skyboxes/sky_17/nz.png" },
+      { "id": "image.editor_shell.texture.wall_metal", "path": "asset://textures/wall_metal.jpg" },
+      { "id": "image.editor_shell.texture.rock_floor", "path": "asset://textures/rock_floor.jpg" },
+      { "id": "image.editor_shell.texture.ceiling_metal", "path": "asset://textures/ceiling_metal.jpg" },
+      { "id": "image.editor_shell.texture.door_hatch", "path": "asset://textures/door-hatch.png" },
+      { "id": "image.editor_shell.texture.lava", "path": "asset://textures/lava.jpg" },
+      { "id": "image.editor_shell.texture.radioactive_crate", "path": "asset://textures/radioactive-crate.png" }
     ],
     "fonts": [
       { "id": "font.editor_shell.ui", "builtin": "Inter", "size": 18 }

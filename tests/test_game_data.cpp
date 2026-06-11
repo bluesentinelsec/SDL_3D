@@ -17159,6 +17159,113 @@ TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoTexturePaletteShowsThumbnailPages)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+    auto visible_thumbnail_names = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> names;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_image *image) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (image == nullptr || image->name == nullptr)
+                return true;
+            const std::string name = image->name;
+            if (name.rfind("ui.editor_shell.palette.material.", 0) != 0 || name.find(".thumbnail") == std::string::npos)
+            {
+                return true;
+            }
+            slayer3d_game_data_ui_image resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_image(capture->runtime, image, nullptr, &resolved, &visible) || !visible)
+            {
+                return true;
+            }
+            EXPECT_FLOAT_EQ(resolved.w, 76.0f);
+            EXPECT_FLOAT_EQ(resolved.h, 76.0f);
+            capture->names.emplace_back(resolved.name);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_image(runtime, collect, &capture));
+        return capture.names;
+    };
+    auto visible_rect_names = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> names;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr)
+                return true;
+            const std::string name = rect->name;
+            if (name.rfind("ui.editor_shell.palette.material.scroll.", 0) != 0)
+                return true;
+            slayer3d_game_data_ui_rect resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_rect(capture->runtime, rect, nullptr, &resolved, &visible) || !visible)
+                return true;
+            capture->names.emplace_back(resolved.name);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        return capture.names;
+    };
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    emit_signal("signal.editor.palette.material");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.palette.material.page", -1), 0);
+    std::vector<std::string> thumbnails = visible_thumbnail_names();
+    EXPECT_EQ(thumbnails.size(), 4U);
+    EXPECT_NE(std::find(thumbnails.begin(), thumbnails.end(), "ui.editor_shell.palette.material.wall_metal.thumbnail"),
+              thumbnails.end());
+    EXPECT_NE(std::find(thumbnails.begin(), thumbnails.end(), "ui.editor_shell.palette.material.door_hatch.thumbnail"),
+              thumbnails.end());
+    std::vector<std::string> scroll_rects = visible_rect_names();
+    EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.palette.material.scroll.track"),
+              scroll_rects.end());
+    EXPECT_NE(
+        std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.palette.material.scroll.thumb.page0"),
+        scroll_rects.end());
+
+    emit_signal("signal.editor.texture.page.next");
+    EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.palette.material.page", -1), 1);
+    thumbnails = visible_thumbnail_names();
+    EXPECT_EQ(thumbnails.size(), 2U);
+    EXPECT_NE(std::find(thumbnails.begin(), thumbnails.end(), "ui.editor_shell.palette.material.lava.thumbnail"),
+              thumbnails.end());
+    EXPECT_NE(
+        std::find(thumbnails.begin(), thumbnails.end(), "ui.editor_shell.palette.material.radioactive_crate.thumbnail"),
+        thumbnails.end());
+    scroll_rects = visible_rect_names();
+    EXPECT_NE(
+        std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.palette.material.scroll.thumb.page1"),
+        scroll_rects.end());
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoUsesDarkGrayViewportBackground)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
