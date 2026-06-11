@@ -438,7 +438,7 @@
         "y": 0,
         "w": 1280,
         "h": 38,
-        "padding": 12,
+        "padding": 5,
         "gap": 4,
         "layer": 100,
         "children": [
@@ -461,16 +461,23 @@
         "y": 38,
         "w": 1280,
         "h": 42,
-        "padding": 12,
-        "gap": 6,
+        "padding": 7,
+        "gap": 4,
         "layer": 110,
         "children": [
           {
+            "id": "ui.editor_shell.tool_toolbar.leading_spacer",
+            "type": "spacer",
+            "w": 58,
+            "h": 28
+          },
+          {
             "id": "ui.editor_shell.tool_toolbar.select.button",
             "type": "button",
-            "w": 78,
+            "w": 94,
             "h": 28,
-            "text": "Select",
+            "text": "Select (space)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.select",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "select", "default": "select" }
@@ -478,9 +485,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.brush.button",
             "type": "button",
-            "w": 104,
+            "w": 94,
             "h": 28,
-            "text": "Brush Tool",
+            "text": "Brush Tool (b)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.brush",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "brush" }
@@ -488,9 +496,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.edge.button",
             "type": "button",
-            "w": 92,
+            "w": 70,
             "h": 28,
-            "text": "Edge Tool",
+            "text": "Edge (e)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.edge",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "edge" }
@@ -498,9 +507,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.clip.button",
             "type": "button",
-            "w": 88,
+            "w": 68,
             "h": 28,
-            "text": "Clip Tool",
+            "text": "Clip (c)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.clip",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "clip" }
@@ -508,9 +518,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.face.button",
             "type": "button",
-            "w": 88,
+            "w": 68,
             "h": 28,
-            "text": "Face Tool",
+            "text": "Face (f)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.face",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "face" }
@@ -518,9 +529,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.vertex.button",
             "type": "button",
-            "w": 100,
+            "w": 78,
             "h": 28,
-            "text": "Vertex Tool",
+            "text": "Vertex (v)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.vertex",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "vertex" }
@@ -528,9 +540,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.rotate.button",
             "type": "button",
-            "w": 100,
+            "w": 78,
             "h": 28,
-            "text": "Rotate",
+            "text": "Rotate (r)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.rotate",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "rotate" }
@@ -538,9 +551,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.scale.button",
             "type": "button",
-            "w": 88,
+            "w": 72,
             "h": 28,
-            "text": "Scale",
+            "text": "Scale (s)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.scale",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "scale" }
@@ -548,9 +562,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.shear.button",
             "type": "button",
-            "w": 88,
+            "w": 72,
             "h": 28,
-            "text": "Shear",
+            "text": "Shear (h)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.shear",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "shear" }
@@ -558,36 +573,40 @@
           {
             "id": "ui.editor_shell.tool_toolbar.duplicate.button",
             "type": "button",
-            "w": 74,
+            "w": 92,
             "h": 28,
-            "text": "Duplicate",
+            "text": "Duplicate (d)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.brush.duplicate"
           },
           {
             "id": "ui.editor_shell.tool_toolbar.flip_horizontal.button",
             "type": "button",
-            "w": 60,
+            "w": 72,
             "h": 28,
-            "text": "Flip H",
+            "text": "Flip H (x)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.brush.flip_horizontal"
           },
           {
             "id": "ui.editor_shell.tool_toolbar.flip_vertical.button",
             "type": "button",
-            "w": 60,
+            "w": 72,
             "h": 28,
-            "text": "Flip V",
+            "text": "Flip V (y)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.brush.flip_vertical"
           },
           {
             "id": "ui.editor_shell.tool_toolbar.materials.button",
             "type": "button",
-            "w": 60,
+            "w": 68,
             "h": 28,
-            "text": "Mats",
+            "text": "Mats (m)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.palette.material",
             "selected_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" }
@@ -595,8 +614,9 @@
           {
             "id": "ui.editor_shell.tool_toolbar.grid.button",
             "type": "dropdown",
-            "w": 110,
+            "w": 92,
             "h": 28,
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.grid.select",
             "text_format": "Grid %.3g",

@@ -17289,6 +17289,123 @@ TEST(GameDataRuntime, EditorShellDojoUsesDarkGrayViewportBackground)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoToolbarButtonsAreCompactCenteredAndLabeled)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto largest_ui_rect = [&](const char *name) {
+        struct Capture
+        {
+            const char *name = nullptr;
+            slayer3d_game_data_ui_rect rect{};
+            float area = -1.0f;
+            bool found = false;
+        } capture{name, {}, -1.0f, false};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_rect *rect) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (rect == nullptr || rect->name == nullptr || capture->name == nullptr ||
+                SDL_strcmp(rect->name, capture->name) != 0)
+            {
+                return true;
+            }
+            const float area = rect->w * rect->h;
+            if (area > capture->area)
+            {
+                capture->rect = *rect;
+                capture->area = area;
+                capture->found = true;
+            }
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
+        EXPECT_TRUE(capture.found) << name;
+        return capture.rect;
+    };
+    auto visible_text = [&]() {
+        struct Capture
+        {
+            std::vector<std::string> values;
+        } capture;
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (text != nullptr && text->name != nullptr && text->text != nullptr &&
+                std::string(text->name).rfind("ui.editor_shell.tool_toolbar.", 0) == 0)
+            {
+                capture->values.emplace_back(text->text);
+            }
+            return true;
+        };
+        slayer3d_game_data_ui_metrics metrics{};
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text_for_metrics(runtime, &metrics, collect, &capture));
+        return capture.values;
+    };
+    auto contains_text = [](const std::vector<std::string> &values, const char *expected) {
+        return std::find(values.begin(), values.end(), expected) != values.end();
+    };
+
+    const slayer3d_game_data_ui_rect menu_toolbar = largest_ui_rect("ui.editor_shell.toolbar");
+    for (const char *name : {"ui.editor_shell.toolbar.file.button", "ui.editor_shell.toolbar.edit.button",
+                             "ui.editor_shell.toolbar.selection.button", "ui.editor_shell.toolbar.groups.button",
+                             "ui.editor_shell.toolbar.tools.button", "ui.editor_shell.toolbar.view.button",
+                             "ui.editor_shell.toolbar.run.button", "ui.editor_shell.toolbar.debug.button",
+                             "ui.editor_shell.toolbar.help.button"})
+    {
+        const slayer3d_game_data_ui_rect button = largest_ui_rect(name);
+        EXPECT_NEAR(button.y + button.h * 0.5f, menu_toolbar.y + menu_toolbar.h * 0.5f, 0.001f) << name;
+        EXPECT_GE(button.x, menu_toolbar.x) << name;
+        EXPECT_LE(button.x + button.w, menu_toolbar.x + menu_toolbar.w) << name;
+    }
+
+    const slayer3d_game_data_ui_rect tool_toolbar = largest_ui_rect("ui.editor_shell.tool_toolbar");
+    const char *tool_button_names[] = {"ui.editor_shell.tool_toolbar.select.button",
+                                       "ui.editor_shell.tool_toolbar.brush.button",
+                                       "ui.editor_shell.tool_toolbar.edge.button",
+                                       "ui.editor_shell.tool_toolbar.clip.button",
+                                       "ui.editor_shell.tool_toolbar.face.button",
+                                       "ui.editor_shell.tool_toolbar.vertex.button",
+                                       "ui.editor_shell.tool_toolbar.rotate.button",
+                                       "ui.editor_shell.tool_toolbar.scale.button",
+                                       "ui.editor_shell.tool_toolbar.shear.button",
+                                       "ui.editor_shell.tool_toolbar.duplicate.button",
+                                       "ui.editor_shell.tool_toolbar.flip_horizontal.button",
+                                       "ui.editor_shell.tool_toolbar.flip_vertical.button",
+                                       "ui.editor_shell.tool_toolbar.materials.button",
+                                       "ui.editor_shell.tool_toolbar.grid.button"};
+    float first_x = 0.0f;
+    float last_right = 0.0f;
+    for (size_t i = 0; i < SDL_arraysize(tool_button_names); ++i)
+    {
+        const slayer3d_game_data_ui_rect button = largest_ui_rect(tool_button_names[i]);
+        if (i == 0)
+            first_x = button.x;
+        last_right = button.x + button.w;
+        EXPECT_NEAR(button.y + button.h * 0.5f, tool_toolbar.y + tool_toolbar.h * 0.5f, 0.001f) << tool_button_names[i];
+        EXPECT_GE(button.x, tool_toolbar.x) << tool_button_names[i];
+        EXPECT_LE(button.x + button.w, tool_toolbar.x + tool_toolbar.w) << tool_button_names[i];
+    }
+    EXPECT_NEAR(first_x - tool_toolbar.x, tool_toolbar.x + tool_toolbar.w - last_right, 1.0f);
+
+    const std::vector<std::string> labels = visible_text();
+    EXPECT_TRUE(contains_text(labels, "Select (space)"));
+    EXPECT_TRUE(contains_text(labels, "Brush Tool (b)"));
+    EXPECT_TRUE(contains_text(labels, "Clip (c)"));
+    EXPECT_TRUE(contains_text(labels, "Face (f)"));
+    EXPECT_TRUE(contains_text(labels, "Vertex (v)"));
+    EXPECT_TRUE(contains_text(labels, "Duplicate (d)"));
+    EXPECT_TRUE(contains_text(labels, "Mats (m)"));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoFaceDragUsesProjectedFaceNormalDirection)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -20432,7 +20549,9 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "select");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.selection.count", 0), 1);
     ASSERT_TRUE(slayer3d_game_data_set_editor_tool_mode(runtime, "scale", nullptr));
-    click_editor(840.0f, 60.0f, SDL_BUTTON_LEFT, SDL_KMOD_NONE, 115);
+    const slayer3d_game_data_ui_rect shear_rect = ui_rect("ui.editor_shell.tool_toolbar.shear.button");
+    click_editor(shear_rect.x + shear_rect.w * 0.5f, shear_rect.y + shear_rect.h * 0.5f, SDL_BUTTON_LEFT, SDL_KMOD_NONE,
+                 115);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "shear");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "shear");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.grid.menu.open", false));
