@@ -10398,7 +10398,8 @@ TEST(GameDataRuntime, RejectsInvalidEditorSelectionActions)
     SDL_zeroa(error);
     EXPECT_FALSE(slayer3d_game_data_validate_file((dir / "bad_paint_preview_action.game.json").string().c_str(),
                                                   nullptr, error, sizeof(error)));
-    EXPECT_NE(std::string(error).find("editor.command.preview paint requires a non-empty material"), std::string::npos)
+    EXPECT_NE(std::string(error).find("editor.command.preview paint requires material or material_key"),
+              std::string::npos)
         << error;
 
     write_text(dir / "bad_transaction_action.game.json",
@@ -16942,9 +16943,9 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
                  target_cube_left_face_stable_id);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 2);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
-    EXPECT_EQ(target_cube_face_material(), "mat.editor.floor");
+    EXPECT_EQ(target_cube_face_material(), "mat.editor.texture.wall_metal");
     ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
-    EXPECT_STREQ(active_selection.material_name, "mat.editor.floor");
+    EXPECT_STREQ(active_selection.material_name, "mat.editor.texture.wall_metal");
 
     press_key(SDL_SCANCODE_U, 13);
     ASSERT_TRUE(slayer3d_game_data_update(runtime, 0.016f));
@@ -16960,7 +16961,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.transaction.message", ""), "redo paint #2");
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.undo_count", -1), 2);
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.transaction.redo_count", -1), 0);
-    EXPECT_EQ(target_cube_face_material(), "mat.editor.floor");
+    EXPECT_EQ(target_cube_face_material(), "mat.editor.texture.wall_metal");
 
     const int export_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.export");
     ASSERT_GE(export_signal, 0);
@@ -16969,7 +16970,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     const char *export_json = slayer3d_properties_get_string(scene_state, "editor.export.json", "");
     ASSERT_NE(export_json, nullptr);
     EXPECT_NE(std::string(export_json).find("\"schema\": \"slayer3d.fragment.v0\""), std::string::npos);
-    EXPECT_NE(std::string(export_json).find("\"material\": \"mat.editor.floor\""), std::string::npos);
+    EXPECT_NE(std::string(export_json).find("\"material\": \"mat.editor.texture.wall_metal\""), std::string::npos);
     EXPECT_GT(slayer3d_properties_get_int(scene_state, "editor.export.size", 0), 0);
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.brush_world.dirty", false));
     EXPECT_EQ(slayer3d_properties_get_int(scene_state, "editor.brush_world.revision", 0), 7);
@@ -16992,6 +16993,15 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(std::string(editor_state.source_path), saved_path_string);
     write_text(export_dir / "scenes" / "play.scene.json",
                R"json({ "schema": "slayer3d.scene.v0", "name": "scene.play" })json");
+    const std::filesystem::path exported_textures_dir = export_dir / "textures";
+    std::filesystem::create_directories(exported_textures_dir);
+    const std::filesystem::path dojo_textures_dir = dojo_path.parent_path() / "textures";
+    for (const char *texture_name : {"wall_metal.jpg", "rock_floor.jpg", "ceiling_metal.jpg", "door-hatch.png",
+                                     "lava.jpg", "radioactive-crate.png"})
+    {
+        std::filesystem::copy_file(dojo_textures_dir / texture_name, exported_textures_dir / texture_name,
+                                   std::filesystem::copy_options::overwrite_existing);
+    }
     write_text(export_dir / "exported.game.json",
                R"json({
   "schema": "slayer3d.game.v0",
@@ -17010,7 +17020,7 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     ASSERT_TRUE(slayer3d_game_data_get_brush_world(export_runtime, "brush.editor_shell.target", &exported_world));
     ASSERT_GT(exported_world.brush_count, 0);
     ASSERT_GT(exported_world.brushes[0].face_count, 1);
-    EXPECT_STREQ(exported_world.brushes[0].faces[1].material_name, "mat.editor.floor");
+    EXPECT_STREQ(exported_world.brushes[0].faces[1].material_name, "mat.editor.texture.wall_metal");
     slayer3d_game_data_destroy(export_runtime);
     slayer3d_game_session_destroy(export_session);
     remove_test_dir(export_dir);
@@ -17046,6 +17056,104 @@ TEST(GameDataRuntime, EditorShellDojoPublishesSelectionAndDebugOverlay)
     EXPECT_EQ(active_selection.type, SLAYER3D_GAME_DATA_WORLD_MODEL_BRUSH_WORLD);
     EXPECT_STREQ(active_selection.world_name, "brush.editor_shell.target");
     EXPECT_STREQ(active_selection.element_name, "brush.target.cube");
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoTexturePalettePaintsSelectionAndFace)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+    seed_editor_shell_test_cube(runtime);
+    select_editor_shell_test_cube(runtime);
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    auto emit_signal = [&](const char *name) {
+        const int signal = slayer3d_game_data_find_signal(runtime, name);
+        ASSERT_GE(signal, 0) << name;
+        slayer3d_signal_emit(bus, signal, nullptr);
+    };
+
+    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    slayer3d_game_data_editor_selection active_selection{};
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_GE(active_selection.face_index, 0);
+    emit_signal("signal.editor.texture.select.lava");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
+                 "mat.editor.texture.lava");
+    emit_signal("signal.editor.texture.paint.selection");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.paint.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "painted 6 faces with mat.editor.texture.lava");
+
+    slayer3d_game_data_brush_world world{};
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_EQ(world.brush_count, 1);
+    ASSERT_GE(world.brushes[0].face_count, 6);
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+        EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.texture.lava");
+
+    const slayer3d_game_data_brush_material *lava_material = nullptr;
+    const slayer3d_game_data_brush_material *wall_material = nullptr;
+    for (int i = 0; i < world.material_count; ++i)
+    {
+        if (world.materials[i].name != nullptr && SDL_strcmp(world.materials[i].name, "mat.editor.texture.lava") == 0)
+            lava_material = &world.materials[i];
+        if (world.materials[i].name != nullptr &&
+            SDL_strcmp(world.materials[i].name, "mat.editor.texture.wall_metal") == 0)
+        {
+            wall_material = &world.materials[i];
+        }
+    }
+    ASSERT_NE(lava_material, nullptr);
+    EXPECT_STREQ(lava_material->texture, "asset://textures/lava.jpg");
+    ASSERT_NE(wall_material, nullptr);
+    EXPECT_STREQ(wall_material->texture, "asset://textures/wall_metal.jpg");
+    ASSERT_NE(world.render_model, nullptr);
+    bool saw_lava_render_material = false;
+    for (int i = 0; i < world.render_model->material_count; ++i)
+    {
+        const slayer3d_material &material = world.render_model->materials[i];
+        if (material.name != nullptr && SDL_strcmp(material.name, "mat.editor.texture.lava") == 0)
+        {
+            saw_lava_render_material = true;
+            ASSERT_NE(material.albedo_map, nullptr);
+            EXPECT_STREQ(material.albedo_map, "asset://textures/lava.jpg");
+        }
+    }
+    EXPECT_TRUE(saw_lava_render_material);
+
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    ASSERT_GE(active_selection.face_index, 0);
+    const int face_paint_index = active_selection.face_index;
+    emit_signal("signal.editor.texture.select.rock_floor");
+    emit_signal("signal.editor.texture.paint.face");
+    EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.paint.valid", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""),
+                 "painted 1 face with mat.editor.texture.rock_floor");
+    ASSERT_TRUE(slayer3d_game_data_get_brush_world(runtime, "brush.editor_shell.target", &world));
+    ASSERT_GE(world.brushes[0].face_count, 6);
+    ASSERT_LT(face_paint_index, world.brushes[0].face_count);
+    EXPECT_STREQ(world.brushes[0].faces[face_paint_index].material_name, "mat.editor.texture.rock_floor");
+    for (int i = 0; i < world.brushes[0].face_count; ++i)
+    {
+        if (i != face_paint_index)
+            EXPECT_STREQ(world.brushes[0].faces[i].material_name, "mat.editor.texture.lava");
+    }
+
+    ASSERT_TRUE(slayer3d_game_data_get_active_editor_selection(runtime, &active_selection));
+    EXPECT_EQ(active_selection.face_index, face_paint_index);
+    EXPECT_STREQ(active_selection.material_name, "mat.editor.texture.rock_floor");
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);

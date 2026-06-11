@@ -309,6 +309,14 @@
     "signal.editor.palette.previous",
     "signal.editor.palette.next",
     "signal.editor.palette.accept",
+    "signal.editor.texture.select.wall_metal",
+    "signal.editor.texture.select.rock_floor",
+    "signal.editor.texture.select.ceiling_metal",
+    "signal.editor.texture.select.door_hatch",
+    "signal.editor.texture.select.lava",
+    "signal.editor.texture.select.radioactive_crate",
+    "signal.editor.texture.paint.selection",
+    "signal.editor.texture.paint.face",
     "signal.editor.export",
     "signal.editor.test_run.prepare",
     "signal.editor.test_run.enter"
@@ -511,8 +519,9 @@
           { "type": "scene_state.set", "key": "editor.brush.elevation", "value": 0.0 },
           { "type": "scene_state.set", "key": "editor.brush.thickness", "value": 0.2 },
           { "type": "scene_state.set", "key": "editor.brush.material", "value": "mat.editor.floor" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
-          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Map" },
@@ -692,7 +701,8 @@
           { "type": "scene_state.set", "key": "editor.mode", "value": "texture" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "material" },
-          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.floor" },
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "material palette opened" }
         ]
       },
@@ -729,6 +739,26 @@
         "actions": [
           {
             "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.material.cursor",
+                "default": "mat.editor.texture.wall_metal",
+                "direction": -1,
+                "values": [
+                  "mat.editor.texture.wall_metal",
+                  "mat.editor.texture.rock_floor",
+                  "mat.editor.texture.ceiling_metal",
+                  "mat.editor.texture.door_hatch",
+                  "mat.editor.texture.lava",
+                  "mat.editor.texture.radioactive_crate"
+                ]
+              }
+            ]
+          },
+          {
+            "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
             "then": [
               {
@@ -745,6 +775,26 @@
       {
         "signal": "signal.editor.palette.next",
         "actions": [
+          {
+            "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            "then": [
+              {
+                "type": "scene_state.cycle",
+                "key": "editor.palette.material.cursor",
+                "default": "mat.editor.texture.wall_metal",
+                "direction": 1,
+                "values": [
+                  "mat.editor.texture.wall_metal",
+                  "mat.editor.texture.rock_floor",
+                  "mat.editor.texture.ceiling_metal",
+                  "mat.editor.texture.door_hatch",
+                  "mat.editor.texture.lava",
+                  "mat.editor.texture.radioactive_crate"
+                ]
+              }
+            ]
+          },
           {
             "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
@@ -765,6 +815,30 @@
         "actions": [
           {
             "type": "branch",
+            "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            "then": [
+              {
+                "type": "editor.brush.paint",
+                "target": "selection",
+                "material_key": "editor.palette.material.cursor",
+                "outputs": {
+                  "valid_key": "editor.texture.paint.valid",
+                  "message_key": "editor.texture.paint.message",
+                  "world_key": "editor.texture.paint.world",
+                  "element_key": "editor.texture.paint.element",
+                  "face_index_key": "editor.texture.paint.face_index",
+                  "source_path_key": "editor.brush_world.source_path",
+                  "dirty_key": "editor.brush_world.dirty",
+                  "revision_key": "editor.brush_world.revision",
+                  "saved_revision_key": "editor.brush_world.saved_revision"
+                }
+              },
+              { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+            ]
+          },
+          {
+            "type": "branch",
             "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "game_object" },
             "then": [
               { "type": "scene_state.set", "key": "editor.mode", "value": "thing" },
@@ -774,6 +848,98 @@
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "player start selected" }
             ]
           }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select.wall_metal",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "wall metal texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select.rock_floor",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.rock_floor" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.rock_floor" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "rock floor texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select.ceiling_metal",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.ceiling_metal" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.ceiling_metal" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "ceiling metal texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select.door_hatch",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.door_hatch" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.door_hatch" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "door hatch texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select.lava",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.lava" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.lava" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "lava texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.select.radioactive_crate",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.radioactive_crate" },
+          { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.radioactive_crate" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "radioactive crate texture selected" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.paint.selection",
+        "actions": [
+          {
+            "type": "editor.brush.paint",
+            "target": "selection",
+            "material_key": "editor.palette.material.cursor",
+            "outputs": {
+              "valid_key": "editor.texture.paint.valid",
+              "message_key": "editor.texture.paint.message",
+              "world_key": "editor.texture.paint.world",
+              "element_key": "editor.texture.paint.element",
+              "face_index_key": "editor.texture.paint.face_index",
+              "source_path_key": "editor.brush_world.source_path",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.paint.face",
+        "actions": [
+          {
+            "type": "editor.brush.paint",
+            "target": "face",
+            "material_key": "editor.palette.material.cursor",
+            "outputs": {
+              "valid_key": "editor.texture.paint.valid",
+              "message_key": "editor.texture.paint.message",
+              "world_key": "editor.texture.paint.world",
+              "element_key": "editor.texture.paint.element",
+              "face_index_key": "editor.texture.paint.face_index",
+              "source_path_key": "editor.brush_world.source_path",
+              "dirty_key": "editor.brush_world.dirty",
+              "revision_key": "editor.brush_world.revision",
+              "saved_revision_key": "editor.brush_world.saved_revision"
+            }
+          },
+          { "type": "console.write", "message_from_state": "editor.tool.last_action" }
         ]
       },
       {
@@ -811,7 +977,7 @@
                 "type": "editor.command.preview",
                 "command": "paint",
                 "target": "face",
-                "material": "mat.editor.floor",
+                "material_key": "editor.palette.material.cursor",
                 "message": "preview paint {selection_element}",
                 "outputs": {
                   "active_key": "editor.command_preview.active",
@@ -1926,6 +2092,79 @@
           "editor": {
             "stable_id": "editor.material.sky",
             "display_name": "Sky Boundary Material"
+          }
+        },
+        {
+          "name": "mat.editor.texture.wall_metal",
+          "texture": "asset://textures/wall_metal.jpg",
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "roughness": 0.78,
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.texture.wall_metal",
+            "display_name": "Wall Metal",
+            "tags": ["texture", "wall", "metal"]
+          }
+        },
+        {
+          "name": "mat.editor.texture.rock_floor",
+          "texture": "asset://textures/rock_floor.jpg",
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "roughness": 0.9,
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.texture.rock_floor",
+            "display_name": "Rock Floor",
+            "tags": ["texture", "floor", "rock"]
+          }
+        },
+        {
+          "name": "mat.editor.texture.ceiling_metal",
+          "texture": "asset://textures/ceiling_metal.jpg",
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "roughness": 0.82,
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.texture.ceiling_metal",
+            "display_name": "Ceiling Metal",
+            "tags": ["texture", "ceiling", "metal"]
+          }
+        },
+        {
+          "name": "mat.editor.texture.door_hatch",
+          "texture": "asset://textures/door-hatch.png",
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "roughness": 0.75,
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.texture.door_hatch",
+            "display_name": "Door Hatch",
+            "tags": ["texture", "door", "metal"]
+          }
+        },
+        {
+          "name": "mat.editor.texture.lava",
+          "texture": "asset://textures/lava.jpg",
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "roughness": 0.65,
+          "emissive": [0.35, 0.12, 0.02],
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.texture.lava",
+            "display_name": "Lava",
+            "tags": ["texture", "hazard", "emissive"]
+          }
+        },
+        {
+          "name": "mat.editor.texture.radioactive_crate",
+          "texture": "asset://textures/radioactive-crate.png",
+          "albedo": [1.0, 1.0, 1.0, 1.0],
+          "roughness": 0.7,
+          "tex_scale": 1.0,
+          "editor": {
+            "stable_id": "editor.material.texture.radioactive_crate",
+            "display_name": "Radioactive Crate",
+            "tags": ["texture", "crate", "hazard"]
           }
         }
       ],

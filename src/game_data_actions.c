@@ -968,6 +968,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     if (SDL_strcmp(type, "editor.brush.duplicate") == 0)
         return editor_brush_duplicate_action(runtime, action);
 
+    if (SDL_strcmp(type, "editor.brush.paint") == 0)
+        return slayer3d_game_data_paint_selected_editor_brushes(runtime, action, payload);
+
     if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
         return editor_selection_shear_selected_action(runtime, action);
 
