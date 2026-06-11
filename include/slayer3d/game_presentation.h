@@ -74,6 +74,7 @@ extern "C"
         int count;                                     /**< Number of cached images. */
         int capacity;                                  /**< Allocated cache slots. */
         slayer3d_asset_resolver *assets;               /**< Resolver used for lazy image loads; not owned. */
+        const char *preloaded_scene;                   /**< Runtime-owned active scene most recently preloaded. */
     } slayer3d_game_data_image_cache;
 
     /**

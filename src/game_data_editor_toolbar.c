@@ -48,6 +48,16 @@ static bool editor_hit_is_toolbar(const slayer3d_ui_layout_hit_region *hit)
            editor_hit_id_has_prefix(hit, "ui.editor_shell.tool_toolbar.");
 }
 
+static bool editor_hit_is_palette(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.palette.");
+}
+
+static bool editor_hit_is_texture_viewer(const slayer3d_ui_layout_hit_region *hit)
+{
+    return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.");
+}
+
 static const char *editor_mode_for_tool_action(const char *action)
 {
     if (SDL_strcmp(action, "editor.tool.select") == 0)
@@ -168,6 +178,8 @@ bool slayer3d_game_data_set_editor_tool_mode(slayer3d_game_data_runtime *runtime
     slayer3d_properties_set_string(runtime->scene_state, "editor.mode", mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.mode", tool_mode);
     slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", message);
+    slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
+    slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
     slayer3d_properties_set_bool(runtime->scene_state, "editor.grid.menu.open", false);
     clear_editor_command_preview(runtime);
     if (entering_clip)
@@ -203,6 +215,19 @@ static bool editor_apply_tool_action(slayer3d_game_data_runtime *runtime, const 
             return true;
         }
     }
+    if (runtime != NULL &&
+        (SDL_strncmp(action, "editor.texture.", 15) == 0 || SDL_strncmp(action, "editor.palette.", 15) == 0))
+    {
+        char signal[128];
+        SDL_snprintf(signal, sizeof(signal), "signal.%s", action);
+        slayer3d_signal_bus *bus = runtime_bus(runtime);
+        const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
+        if (bus != NULL && signal_id >= 0)
+        {
+            slayer3d_signal_emit(bus, signal_id, NULL);
+            return true;
+        }
+    }
     return false;
 }
 
@@ -224,7 +249,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     slayer3d_ui_layout_model *layout = NULL;
     const slayer3d_ui_layout_hit_region *hit = NULL;
     (void)editor_retained_ui_hit(runtime, mouse_x, mouse_y, &layout, &hit);
-    if (editor_hit_is_toolbar(hit))
+    if (editor_hit_is_toolbar(hit) || editor_hit_is_palette(hit) || editor_hit_is_texture_viewer(hit))
     {
         if (out_consumed != NULL)
             *out_consumed = true;

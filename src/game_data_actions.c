@@ -884,6 +884,15 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
     {
         if (runtime == NULL || runtime->scene_state == NULL)
             return false;
+        if (editor_mode_is_paint(runtime) ||
+            slayer3d_properties_get_bool(runtime->scene_state, "editor.texture.viewer.active", false))
+        {
+            slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.active", false);
+            slayer3d_properties_set_bool(runtime->scene_state, "editor.texture.viewer.collapsed", false);
+            (void)slayer3d_game_data_set_editor_tool_mode(runtime, "select", NULL);
+            return true;
+        }
         if (SDL_strcmp(slayer3d_properties_get_string(runtime->scene_state, "editor.palette.active", ""), "") != 0)
         {
             slayer3d_properties_set_string(runtime->scene_state, "editor.palette.active", "");
@@ -967,6 +976,9 @@ bool execute_one_action(slayer3d_game_data_runtime *runtime, yyjson_val *action,
 
     if (SDL_strcmp(type, "editor.brush.duplicate") == 0)
         return editor_brush_duplicate_action(runtime, action);
+
+    if (SDL_strcmp(type, "editor.brush.paint") == 0)
+        return slayer3d_game_data_paint_selected_editor_brushes(runtime, action, payload);
 
     if (SDL_strcmp(type, "editor.selection.shear_selected") == 0)
         return editor_selection_shear_selected_action(runtime, action);

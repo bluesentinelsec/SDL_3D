@@ -493,6 +493,32 @@ bool validate_editor_brush_duplicate_action(validation_context *ctx, yyjson_val 
                                          SDL_arraysize(output_keys));
 }
 
+bool validate_editor_brush_paint_action(validation_context *ctx, yyjson_val *action, const char *json_path,
+                                        validation_names *names, const char *type)
+{
+    const char *target = json_string(action, "target");
+    if (target == NULL)
+        target = "selection";
+    if (SDL_strcmp(target, "selection") != 0 && SDL_strcmp(target, "face") != 0)
+        return validation_error(ctx, json_path, "%s target must be selection or face", type);
+
+    yyjson_val *material = obj_get(action, "material");
+    yyjson_val *material_key = obj_get(action, "material_key");
+    if (material != NULL && (!yyjson_is_str(material) || yyjson_get_str(material)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s material must be a non-empty string", type);
+    if (material_key != NULL && (!yyjson_is_str(material_key) || yyjson_get_str(material_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "%s material_key must be a non-empty string", type);
+    if (material == NULL && material_key == NULL)
+        return validation_error(ctx, json_path, "%s requires material or material_key", type);
+
+    const char *output_keys[] = {
+        "valid_key",      "event_key",       "message_key", "transaction_id_key", "undo_count_key",    "redo_count_key",
+        "command_key",    "target_key",      "world_key",   "element_key",        "face_index_key",    "bounds_min_key",
+        "bounds_max_key", "source_path_key", "dirty_key",   "revision_key",       "saved_revision_key"};
+    return validate_optional_output_keys(ctx, action, json_path, type, output_keys, SDL_arraysize(output_keys)) &&
+           validate_optional_action_branches(ctx, action, json_path, names, false);
+}
+
 bool validate_editor_selection_shear_selected_action(validation_context *ctx, yyjson_val *action, const char *json_path,
                                                      validation_names *names, const char *type)
 {
@@ -562,10 +588,13 @@ bool validate_editor_command_preview_action(validation_context *ctx, yyjson_val 
         return validation_error(ctx, json_path, "editor.command.preview resize/extrude target must be face");
     }
     yyjson_val *material = obj_get(action, "material");
-    if (SDL_strcmp(command, "paint") == 0 && (!yyjson_is_str(material) || yyjson_get_str(material)[0] == '\0'))
-        return validation_error(ctx, json_path, "editor.command.preview paint requires a non-empty material");
+    yyjson_val *material_key = obj_get(action, "material_key");
+    if (SDL_strcmp(command, "paint") == 0 && material == NULL && material_key == NULL)
+        return validation_error(ctx, json_path, "editor.command.preview paint requires material or material_key");
     if (material != NULL && !yyjson_is_str(material))
         return validation_error(ctx, json_path, "editor.command.preview material must be a string");
+    if (material_key != NULL && (!yyjson_is_str(material_key) || yyjson_get_str(material_key)[0] == '\0'))
+        return validation_error(ctx, json_path, "editor.command.preview material_key must be a non-empty string");
     yyjson_val *offset = obj_get(action, "offset");
     if (offset != NULL && !is_vec_array(offset, 3))
         return validation_error(ctx, json_path, "editor.command.preview offset must be a vec3");

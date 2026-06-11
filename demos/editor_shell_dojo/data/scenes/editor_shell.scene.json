@@ -438,7 +438,7 @@
         "y": 0,
         "w": 1280,
         "h": 38,
-        "padding": 12,
+        "padding": 5,
         "gap": 4,
         "layer": 100,
         "children": [
@@ -461,16 +461,23 @@
         "y": 38,
         "w": 1280,
         "h": 42,
-        "padding": 12,
-        "gap": 6,
+        "padding": 7,
+        "gap": 4,
         "layer": 110,
         "children": [
           {
+            "id": "ui.editor_shell.tool_toolbar.leading_spacer",
+            "type": "spacer",
+            "w": 49,
+            "h": 28
+          },
+          {
             "id": "ui.editor_shell.tool_toolbar.select.button",
             "type": "button",
-            "w": 78,
+            "w": 94,
             "h": 28,
-            "text": "Select",
+            "text": "Select (space)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.select",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "select", "default": "select" }
@@ -478,9 +485,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.brush.button",
             "type": "button",
-            "w": 104,
+            "w": 94,
             "h": 28,
-            "text": "Brush Tool",
+            "text": "Brush Tool (b)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.brush",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "brush" }
@@ -488,9 +496,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.edge.button",
             "type": "button",
-            "w": 92,
+            "w": 70,
             "h": 28,
-            "text": "Edge Tool",
+            "text": "Edge (e)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.edge",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "edge" }
@@ -498,9 +507,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.clip.button",
             "type": "button",
-            "w": 88,
+            "w": 68,
             "h": 28,
-            "text": "Clip Tool",
+            "text": "Clip (c)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.clip",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "clip" }
@@ -508,9 +518,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.face.button",
             "type": "button",
-            "w": 88,
+            "w": 68,
             "h": 28,
-            "text": "Face Tool",
+            "text": "Face (f)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.face",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "face" }
@@ -518,9 +529,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.vertex.button",
             "type": "button",
-            "w": 100,
+            "w": 78,
             "h": 28,
-            "text": "Vertex Tool",
+            "text": "Vertex (v)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.vertex",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "vertex" }
@@ -528,9 +540,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.rotate.button",
             "type": "button",
-            "w": 100,
+            "w": 78,
             "h": 28,
-            "text": "Rotate",
+            "text": "Rotate (r)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.rotate",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "rotate" }
@@ -538,9 +551,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.scale.button",
             "type": "button",
-            "w": 88,
+            "w": 72,
             "h": 28,
-            "text": "Scale",
+            "text": "Scale (s)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.scale",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "scale" }
@@ -548,9 +562,10 @@
           {
             "id": "ui.editor_shell.tool_toolbar.shear.button",
             "type": "button",
-            "w": 88,
+            "w": 72,
             "h": 28,
-            "text": "Shear",
+            "text": "Shear (h)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.tool.shear",
             "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "shear" }
@@ -558,35 +573,50 @@
           {
             "id": "ui.editor_shell.tool_toolbar.duplicate.button",
             "type": "button",
-            "w": 74,
+            "w": 92,
             "h": 28,
-            "text": "Duplicate",
+            "text": "Duplicate (d)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.brush.duplicate"
           },
           {
             "id": "ui.editor_shell.tool_toolbar.flip_horizontal.button",
             "type": "button",
-            "w": 60,
+            "w": 72,
             "h": 28,
-            "text": "Flip H",
+            "text": "Flip H (x)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.brush.flip_horizontal"
           },
           {
             "id": "ui.editor_shell.tool_toolbar.flip_vertical.button",
             "type": "button",
-            "w": 60,
+            "w": 72,
             "h": 28,
-            "text": "Flip V",
+            "text": "Flip V (y)",
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.brush.flip_vertical"
           },
           {
+            "id": "ui.editor_shell.tool_toolbar.materials.button",
+            "type": "button",
+            "w": 86,
+            "h": 28,
+            "text": "Texture (m)",
+            "text_scale": 0.42,
+            "interactive": true,
+            "action": "editor.palette.material",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "paint" }
+          },
+          {
             "id": "ui.editor_shell.tool_toolbar.grid.button",
             "type": "dropdown",
-            "w": 110,
+            "w": 92,
             "h": 28,
+            "text_scale": 0.42,
             "interactive": true,
             "action": "editor.grid.select",
             "text_format": "Grid %.3g",
@@ -946,6 +976,122 @@
         "children": [{ "id": "ui.editor_shell.left_inspector.collapsed.label", "type": "label", "w": "fill", "h": "fill", "text": "Inspector  I" }]
       },
       {
+        "id": "ui.editor_shell.texture_viewer.panel",
+        "type": "panel",
+        "layout": "none",
+        "x": 1030,
+        "y": 92,
+        "w": 238,
+        "h": 460,
+        "layer": 120,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        },
+        "children": [
+          {
+            "id": "ui.editor_shell.texture_viewer.header",
+            "type": "panel",
+            "x": 8,
+            "y": 8,
+            "w": 222,
+            "h": 34,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.texture_viewer.title", "type": "label", "x": 12, "y": 6, "w": 120, "h": 20, "text": "Textures" },
+              {
+                "id": "ui.editor_shell.texture_viewer.collapse.button",
+                "type": "button",
+                "x": 164,
+                "y": 4,
+                "w": 50,
+                "h": 24,
+                "text": "hide",
+                "text_scale": 0.42,
+                "interactive": true,
+                "action": "editor.texture.viewer.toggle"
+              }
+            ]
+          },
+          {
+            "id": "ui.editor_shell.texture_viewer.mode.brush.button",
+            "type": "button",
+            "x": 12,
+            "y": 52,
+            "w": 102,
+            "h": 30,
+            "text": "Brush",
+            "text_scale": 0.46,
+            "interactive": true,
+            "action": "editor.texture.paint.mode.brush",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "brush", "default": "face" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.texture_viewer.mode.face.button",
+            "type": "button",
+            "x": 124,
+            "y": 52,
+            "w": 102,
+            "h": 30,
+            "text": "Face",
+            "text_scale": 0.46,
+            "interactive": true,
+            "action": "editor.texture.paint.mode.face",
+            "selected_if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "face", "default": "face" },
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.texture_viewer.list.panel",
+            "type": "panel",
+            "x": 10,
+            "y": 94,
+            "w": 218,
+            "h": 354,
+            "layer": 121,
+            "children": [
+              { "id": "ui.editor_shell.texture_viewer.wall_metal.button", "type": "button", "x": 10, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.wall_metal", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.wall_metal" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.wall_metal.label", "type": "label", "x": 6, "y": 92, "w": 86, "h": 18, "text": "Wall Metal", "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.rock_floor.button", "type": "button", "x": 106, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.rock_floor", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.rock_floor" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.rock_floor.label", "type": "label", "x": 102, "y": 92, "w": 86, "h": 18, "text": "Rock Floor", "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.ceiling_metal.button", "type": "button", "x": 10, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.ceiling_metal", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.ceiling_metal" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.ceiling_metal.label", "type": "label", "x": 6, "y": 202, "w": 86, "h": 18, "text": "Ceiling", "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.door_hatch.button", "type": "button", "x": 106, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.door_hatch", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.door_hatch" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.door_hatch.label", "type": "label", "x": 102, "y": 202, "w": 86, "h": 18, "text": "Door Hatch", "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.lava.button", "type": "button", "x": 10, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.lava", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.lava" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.lava.label", "type": "label", "x": 6, "y": 312, "w": 86, "h": 18, "text": "Lava", "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.radioactive_crate.button", "type": "button", "x": 106, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.radioactive_crate", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.radioactive_crate" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.radioactive_crate.label", "type": "label", "x": 98, "y": 312, "w": 94, "h": 18, "text": "Rad Crate", "text_scale": 0.38, "align": "center", "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.scroll.track", "type": "panel", "x": 198, "y": 12, "w": 10, "h": 318, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.scroll.thumb", "type": "panel", "x": 200, "y": 16, "w": 6, "h": 306, "layer": 123 }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "ui.editor_shell.texture_viewer.collapsed",
+        "type": "button",
+        "x": 1116,
+        "y": 92,
+        "w": 152,
+        "h": 32,
+        "text": "Textures",
+        "text_scale": 0.48,
+        "interactive": true,
+        "action": "editor.texture.viewer.toggle",
+        "layer": 120,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": true, "default": false }
+          ]
+        }
+      },
+      {
         "id": "ui.editor_shell.console.panel",
         "type": "panel",
         "x": 0,
@@ -1284,7 +1430,7 @@
         "h": 34,
         "layer": 141,
         "font": "font.editor_shell.ui",
-        "text": "Materials",
+        "text": "Textures",
         "text_color": [
                 235,
                 245,
@@ -1299,6 +1445,365 @@
                 "op": "==",
                 "value": "material"
         }
+},
+{
+        "id": "ui.editor_shell.palette.material.wall_metal.button",
+        "type": "button",
+        "x": 394,
+        "y": 214,
+        "w": 92,
+        "h": 92,
+        "text": "",
+        "interactive": true,
+        "action": "editor.texture.select.wall_metal",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.wall_metal" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.wall_metal.label",
+        "type": "label",
+        "x": 394,
+        "y": 310,
+        "w": 92,
+        "h": 18,
+        "text": "Wall Metal",
+        "font": "font.editor_shell.ui",
+        "text_scale": 0.42,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.rock_floor.button",
+        "type": "button",
+        "x": 514,
+        "y": 214,
+        "w": 92,
+        "h": 92,
+        "text": "",
+        "interactive": true,
+        "action": "editor.texture.select.rock_floor",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.rock_floor" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.rock_floor.label",
+        "type": "label",
+        "x": 514,
+        "y": 310,
+        "w": 92,
+        "h": 18,
+        "text": "Rock Floor",
+        "font": "font.editor_shell.ui",
+        "text_scale": 0.42,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.ceiling_metal.button",
+        "type": "button",
+        "x": 634,
+        "y": 214,
+        "w": 92,
+        "h": 92,
+        "text": "",
+        "interactive": true,
+        "action": "editor.texture.select.ceiling_metal",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.ceiling_metal" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.ceiling_metal.label",
+        "type": "label",
+        "x": 634,
+        "y": 310,
+        "w": 92,
+        "h": 18,
+        "text": "Ceiling",
+        "font": "font.editor_shell.ui",
+        "text_scale": 0.42,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.door_hatch.button",
+        "type": "button",
+        "x": 754,
+        "y": 214,
+        "w": 92,
+        "h": 92,
+        "text": "",
+        "interactive": true,
+        "action": "editor.texture.select.door_hatch",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.door_hatch" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.door_hatch.label",
+        "type": "label",
+        "x": 754,
+        "y": 310,
+        "w": 92,
+        "h": 18,
+        "text": "Door Hatch",
+        "font": "font.editor_shell.ui",
+        "text_scale": 0.42,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.lava.button",
+        "type": "button",
+        "x": 394,
+        "y": 214,
+        "w": 92,
+        "h": 92,
+        "text": "",
+        "interactive": true,
+        "action": "editor.texture.select.lava",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 1, "default": 0 }
+                ]
+        },
+        "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.lava" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.lava.label",
+        "type": "label",
+        "x": 394,
+        "y": 310,
+        "w": 92,
+        "h": 18,
+        "text": "Lava",
+        "font": "font.editor_shell.ui",
+        "text_scale": 0.42,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 1, "default": 0 }
+                ]
+        },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.radioactive_crate.button",
+        "type": "button",
+        "x": 514,
+        "y": 214,
+        "w": 92,
+        "h": 92,
+        "text": "",
+        "interactive": true,
+        "action": "editor.texture.select.radioactive_crate",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 1, "default": 0 }
+                ]
+        },
+        "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.radioactive_crate" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.radioactive_crate.label",
+        "type": "label",
+        "x": 514,
+        "y": 310,
+        "w": 92,
+        "h": 18,
+        "text": "Rad Crate",
+        "font": "font.editor_shell.ui",
+        "text_scale": 0.42,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 1, "default": 0 }
+                ]
+        },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.scroll.track",
+        "type": "panel",
+        "x": 872,
+        "y": 214,
+        "w": 14,
+        "h": 114,
+        "color": [
+                20,
+                26,
+                36,
+                235
+        ],
+        "border_color": [
+                70,
+                94,
+                124,
+                235
+        ],
+        "border_thickness": 1,
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.scroll.thumb.page0",
+        "type": "panel",
+        "x": 874,
+        "y": 216,
+        "w": 10,
+        "h": 52,
+        "color": [
+                95,
+                145,
+                205,
+                245
+        ],
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+                ]
+        },
+        "layer": 142
+},
+{
+        "id": "ui.editor_shell.palette.material.scroll.thumb.page1",
+        "type": "panel",
+        "x": 874,
+        "y": 274,
+        "w": 10,
+        "h": 52,
+        "color": [
+                95,
+                145,
+                205,
+                245
+        ],
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+                        { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 1, "default": 0 }
+                ]
+        },
+        "layer": 142
+},
+{
+        "id": "ui.editor_shell.palette.material.scroll.previous.button",
+        "type": "button",
+        "x": 866,
+        "y": 336,
+        "w": 26,
+        "h": 22,
+        "text": "^",
+        "interactive": true,
+        "action": "editor.texture.page.previous",
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+        "layer": 143
+},
+{
+        "id": "ui.editor_shell.palette.material.scroll.next.button",
+        "type": "button",
+        "x": 866,
+        "y": 360,
+        "w": 26,
+        "h": 22,
+        "text": "v",
+        "interactive": true,
+        "action": "editor.texture.page.next",
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+        "layer": 143
+},
+{
+        "id": "ui.editor_shell.palette.material.paint_selection.button",
+        "type": "button",
+        "x": 394,
+        "y": 388,
+        "w": 236,
+        "h": 42,
+        "text": "Paint Selection",
+        "interactive": true,
+        "action": "editor.texture.paint.selection",
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+        "layer": 141
+},
+{
+        "id": "ui.editor_shell.palette.material.paint_face.button",
+        "type": "button",
+        "x": 650,
+        "y": 388,
+        "w": 236,
+        "h": 42,
+        "text": "Paint Face",
+        "interactive": true,
+        "action": "editor.texture.paint.face",
+        "visible_if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+        "layer": 141
 },
 {
         "id": "ui.editor_shell.palette.modal.title.game_object",
@@ -1548,6 +2053,200 @@
         "text_scale": 0.6,
         "align": "right"
 }
+    ],
+    "images": [
+      {
+        "name": "ui.editor_shell.texture_viewer.wall_metal.thumbnail",
+        "image": "image.editor_shell.texture.wall_metal",
+        "x": 1058,
+        "y": 206,
+        "w": 62,
+        "h": 62,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.texture_viewer.rock_floor.thumbnail",
+        "image": "image.editor_shell.texture.rock_floor",
+        "x": 1154,
+        "y": 206,
+        "w": 62,
+        "h": 62,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.texture_viewer.ceiling_metal.thumbnail",
+        "image": "image.editor_shell.texture.ceiling_metal",
+        "x": 1058,
+        "y": 316,
+        "w": 62,
+        "h": 62,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.texture_viewer.door_hatch.thumbnail",
+        "image": "image.editor_shell.texture.door_hatch",
+        "x": 1154,
+        "y": 316,
+        "w": 62,
+        "h": 62,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.texture_viewer.lava.thumbnail",
+        "image": "image.editor_shell.texture.lava",
+        "x": 1058,
+        "y": 426,
+        "w": 62,
+        "h": 62,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.texture_viewer.radioactive_crate.thumbnail",
+        "image": "image.editor_shell.texture.radioactive_crate",
+        "x": 1154,
+        "y": 426,
+        "w": 62,
+        "h": 62,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": false, "default": false }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.material.wall_metal.thumbnail",
+        "image": "image.editor_shell.texture.wall_metal",
+        "x": 402,
+        "y": 222,
+        "w": 76,
+        "h": 76,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.material.rock_floor.thumbnail",
+        "image": "image.editor_shell.texture.rock_floor",
+        "x": 522,
+        "y": 222,
+        "w": 76,
+        "h": 76,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.material.ceiling_metal.thumbnail",
+        "image": "image.editor_shell.texture.ceiling_metal",
+        "x": 642,
+        "y": 222,
+        "w": 76,
+        "h": 76,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.material.door_hatch.thumbnail",
+        "image": "image.editor_shell.texture.door_hatch",
+        "x": 762,
+        "y": 222,
+        "w": 76,
+        "h": 76,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 0, "default": 0 }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.material.lava.thumbnail",
+        "image": "image.editor_shell.texture.lava",
+        "x": 402,
+        "y": 222,
+        "w": 76,
+        "h": 76,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 1, "default": 0 }
+          ]
+        }
+      },
+      {
+        "name": "ui.editor_shell.palette.material.radioactive_crate.thumbnail",
+        "image": "image.editor_shell.texture.radioactive_crate",
+        "x": 522,
+        "y": 222,
+        "w": 76,
+        "h": 76,
+        "preserve_aspect": false,
+        "visible_if": {
+          "type": "all",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "editor.palette.active", "op": "==", "value": "material" },
+            { "type": "scene_state.compare", "key": "editor.palette.material.page", "op": "==", "value": 1, "default": 0 }
+          ]
+        }
+      }
     ]
   }
 }

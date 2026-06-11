@@ -5,6 +5,7 @@
 
 #include "slayer3d/game_presentation.h"
 
+#include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
@@ -17,6 +18,7 @@
 #include "game_data_internal.h"
 #include "game_presentation_internal.h"
 #include "render_context_internal.h"
+#include "texture_internal.h"
 
 typedef struct scene_world_viewport
 {
@@ -124,6 +126,75 @@ static bool apply_world_lights(const slayer3d_game_data_runtime *runtime, slayer
     for (int i = 0; i < selected_count; ++i)
         ok = slayer3d_add_light(renderer, &selected[i]) && ok;
     return ok;
+}
+
+typedef struct preload_scene_assets_context
+{
+    const slayer3d_game_data_runtime *runtime;
+    slayer3d_game_data_image_cache *image_cache;
+    slayer3d_render_context *renderer;
+    slayer3d_asset_resolver *assets;
+} preload_scene_assets_context;
+
+static bool preload_scene_ui_image(void *userdata, const slayer3d_game_data_ui_image *image)
+{
+    preload_scene_assets_context *context = (preload_scene_assets_context *)userdata;
+    if (context == NULL || context->runtime == NULL || context->image_cache == NULL || image == NULL ||
+        image->image == NULL || image->image[0] == '\0')
+    {
+        return true;
+    }
+    (void)slayer3d_game_data_find_or_load_image_entry(context->runtime, context->image_cache, image->image);
+    return true;
+}
+
+static bool preload_brush_world_material_textures(void *userdata,
+                                                  const slayer3d_game_data_brush_world_instance *instance)
+{
+    preload_scene_assets_context *context = (preload_scene_assets_context *)userdata;
+    if (context == NULL || context->renderer == NULL || instance == NULL || instance->world == NULL ||
+        instance->world->materials == NULL)
+    {
+        return true;
+    }
+
+    const char *source_path = instance->world->render_model != NULL ? instance->world->render_model->source_path : NULL;
+    for (int i = 0; i < instance->world->material_count; ++i)
+    {
+        const char *texture_path = instance->world->materials[i].texture;
+        if (texture_path == NULL || texture_path[0] == '\0')
+            continue;
+        const slayer3d_texture2d *texture = NULL;
+        if (!slayer3d_texture_cache_get_or_load_asset(&context->renderer->texture_cache, context->assets, source_path,
+                                                      texture_path, &texture))
+        {
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to preload brush material texture %s: %s", texture_path,
+                        SDL_GetError());
+        }
+    }
+    return true;
+}
+
+static void preload_active_scene_assets(const slayer3d_game_data_frame_desc *frame)
+{
+    if (frame == NULL || frame->runtime == NULL || frame->renderer == NULL || frame->image_cache == NULL)
+        return;
+
+    const char *active_scene = slayer3d_game_data_active_scene(frame->runtime);
+    if (active_scene != NULL && frame->image_cache->preloaded_scene != NULL &&
+        SDL_strcmp(frame->image_cache->preloaded_scene, active_scene) == 0)
+        return;
+
+    preload_scene_assets_context context;
+    SDL_zero(context);
+    context.runtime = frame->runtime;
+    context.image_cache = frame->image_cache;
+    context.renderer = frame->renderer;
+    context.assets = frame->image_cache->assets;
+    (void)slayer3d_game_data_for_each_ui_image(frame->runtime, preload_scene_ui_image, &context);
+    (void)slayer3d_game_data_for_each_brush_world_instance(frame->runtime, preload_brush_world_material_textures,
+                                                           &context);
+    frame->image_cache->preloaded_scene = active_scene;
 }
 
 static bool run_frame_hook(const slayer3d_game_data_frame_desc *frame, slayer3d_game_data_frame_hook hook)
@@ -770,6 +841,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
         return false;
 
     bool ok = true;
+    preload_active_scene_assets(frame);
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;
     slayer3d_game_data_model_cache_begin_pose_frame(frame->model_cache);

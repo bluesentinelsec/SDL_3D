@@ -256,6 +256,12 @@ bool slayer3d_game_data_preview_editor_command(slayer3d_game_data_runtime *runti
     if (SDL_strcmp(command, "paint") == 0)
     {
         const char *authored_material = json_string(action, "material", NULL);
+        const char *material_key = json_string(action, "material_key", NULL);
+        if ((authored_material == NULL || authored_material[0] == '\0') && material_key != NULL &&
+            runtime->scene_state != NULL)
+        {
+            authored_material = slayer3d_properties_get_string(runtime->scene_state, material_key, NULL);
+        }
         if (!resolve_editor_paint_material(runtime, &selection, authored_material, &paint_material_name,
                                            &paint_material_index))
         {
