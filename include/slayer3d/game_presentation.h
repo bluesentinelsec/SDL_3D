@@ -94,10 +94,14 @@ extern "C"
     {
         /** @brief Request is queued and has not been serviced yet. */
         SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED = 0,
+        /** @brief Request is being prepared by the warmup service or a worker. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING = 1,
+        /** @brief Request was prepared off-thread and is waiting for main-thread finalization. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE = 2,
         /** @brief Request was serviced successfully. */
-        SLAYER3D_GAME_DATA_ASSET_WARMUP_READY = 1,
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_READY = 3,
         /** @brief Request was serviced and failed. */
-        SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED = 2,
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED = 4,
     } slayer3d_game_data_asset_warmup_state;
 
     /** @brief One queued presentation asset warmup request. */
@@ -107,15 +111,16 @@ extern "C"
         slayer3d_game_data_asset_warmup_state state; /**< Current request state. */
         char *source_path;                           /**< Optional owned source path for relative texture requests. */
         char *id;                                    /**< Owned asset id or texture path. */
+        void *prepared;                              /**< Private prepared payload for main-thread finalization. */
     } slayer3d_game_data_asset_warmup_entry;
 
     /**
      * @brief Budgeted queue for presentation asset warmup.
      *
-     * Requests are deduplicated by kind/source/id. This first-stage queue is
-     * serviced incrementally on the render thread, which avoids startup stalls
-     * while preserving the renderer ownership rules needed for future threaded
-     * CPU preparation plus render-thread finalization.
+     * Requests are deduplicated by kind/source/id. Workers may prepare CPU-only
+     * texture data, while renderer-owned cache insertion remains on the main
+     * presentation path. Platforms without worker support continue to service
+     * requests incrementally on the render thread.
      */
     typedef struct slayer3d_game_data_asset_warmup_queue
     {
@@ -124,6 +129,7 @@ extern "C"
         int capacity;                                   /**< Allocated request slots. */
         char *requested_scene;                          /**< Owned active scene most recently enumerated. */
         int max_jobs_per_frame;                         /**< Default service budget; <= 0 uses one job. */
+        void *worker_state;                             /**< Private worker-thread state. */
     } slayer3d_game_data_asset_warmup_queue;
 
     /** @brief Snapshot counts for a presentation asset warmup queue. */
@@ -463,6 +469,19 @@ extern "C"
 
     /** @brief Free all entries owned by a presentation asset warmup queue. */
     void slayer3d_game_data_asset_warmup_queue_free(slayer3d_game_data_asset_warmup_queue *queue);
+
+    /**
+     * @brief Start background CPU warmup workers for texture requests when supported.
+     *
+     * The queue falls back to synchronous budgeted service when this returns
+     * false. @p assets is only read by workers; callers must keep it alive until
+     * the queue is stopped or freed.
+     */
+    bool slayer3d_game_data_asset_warmup_queue_start_workers(slayer3d_game_data_asset_warmup_queue *queue,
+                                                             slayer3d_asset_resolver *assets, int worker_count);
+
+    /** @brief Stop and join any background warmup workers owned by the queue. */
+    void slayer3d_game_data_asset_warmup_queue_stop_workers(slayer3d_game_data_asset_warmup_queue *queue);
 
     /** @brief Queue a UI/image asset id for warmup, deduplicating existing requests. */
     bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_warmup_queue *queue,

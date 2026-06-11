@@ -992,6 +992,7 @@ bool slayer3d_data_game_runtime_create(const slayer3d_data_game_runtime_desc *de
     slayer3d_game_data_model_cache_init(&runtime->model_cache, runtime->assets);
     slayer3d_game_data_mesh_primitive_cache_init(&runtime->mesh_primitive_cache);
     slayer3d_game_data_asset_warmup_queue_init(&runtime->asset_warmup, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&runtime->asset_warmup, runtime->assets, 1);
     if (!slayer3d_game_data_app_flow_start(&runtime->app_flow, runtime->data))
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());

@@ -87,10 +87,13 @@ assets once per scene activation. Requests are deduplicated and then serviced
 with a small per-frame budget instead of blocking startup on the full scene
 asset set.
 
-This first warmup stage still finalizes assets on the render thread so existing
-texture, sprite, and model cache ownership remains valid across desktop, mobile,
-and web targets. It is the integration point for future worker-thread CPU
-loading and render-thread GPU finalization.
+On native SDL targets, the managed runtime also starts a background warmup worker
+for CPU-only texture preparation. The worker reads and decodes texture assets,
+then the frame warmup service publishes those prepared textures into the render
+texture cache on the main presentation path. UI images, sprites, and models still
+use the budgeted main-thread path until their loaders are split into worker-safe
+prepare/finalize phases. Web builds and platforms where worker creation fails
+fall back to the same budgeted service path.
 
 ## Network Packet Loops
 

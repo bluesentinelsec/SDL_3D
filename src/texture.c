@@ -651,6 +651,7 @@ bool slayer3d_texture_cache_get_or_load_asset(slayer3d_texture_cache_entry **cac
 {
     slayer3d_texture_cache_entry *entry = NULL;
     char *resolved_path = NULL;
+    slayer3d_texture2d texture;
 
     if (cache == NULL)
     {
@@ -680,11 +681,77 @@ bool slayer3d_texture_cache_get_or_load_asset(slayer3d_texture_cache_entry **cac
         }
     }
 
-    entry = (slayer3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
-    if (entry == NULL)
+    if (slayer3d_texture_path_is_asset_uri(resolved_path))
+    {
+        slayer3d_asset_buffer buffer;
+        slayer3d_image image;
+        char error[256];
+        SDL_zero(buffer);
+        SDL_zero(image);
+        if (assets == NULL)
+        {
+            SDL_free(resolved_path);
+            return SDL_SetError("Cannot load asset texture '%s' without an asset resolver.", texture_path);
+        }
+        if (!slayer3d_asset_resolver_read_file(assets, resolved_path, &buffer, error, (int)sizeof(error)))
+        {
+            SDL_free(resolved_path);
+            return SDL_SetError("Failed to read texture asset '%s': %s", texture_path, error);
+        }
+        const bool decoded = slayer3d_load_image_from_memory(buffer.data, buffer.size, &image);
+        slayer3d_asset_buffer_free(&buffer);
+        if (!decoded)
+        {
+            SDL_free(resolved_path);
+            return SDL_SetError("Failed to decode texture asset '%s'.", texture_path);
+        }
+        const bool created = slayer3d_create_texture_from_image(&image, &texture);
+        slayer3d_free_image(&image);
+        if (!created)
+        {
+            SDL_free(resolved_path);
+            return false;
+        }
+    }
+    else if (!slayer3d_load_texture_from_file(resolved_path, &texture))
     {
         SDL_free(resolved_path);
-        return SDL_OutOfMemory();
+        return false;
+    }
+
+    if (!slayer3d_texture_cache_insert_prepared(cache, resolved_path, &texture, out_texture))
+    {
+        slayer3d_free_texture(&texture);
+        SDL_free(resolved_path);
+        return false;
+    }
+    return true;
+}
+
+bool slayer3d_texture_cache_prepare_asset(const slayer3d_asset_resolver *assets, const char *source_path,
+                                          const char *texture_path, char **out_resolved_path,
+                                          slayer3d_texture2d *out_texture)
+{
+    char *resolved_path = NULL;
+
+    if (texture_path == NULL)
+    {
+        return SDL_InvalidParamError("texture_path");
+    }
+    if (out_resolved_path == NULL)
+    {
+        return SDL_InvalidParamError("out_resolved_path");
+    }
+    if (out_texture == NULL)
+    {
+        return SDL_InvalidParamError("out_texture");
+    }
+
+    SDL_zerop(out_texture);
+    *out_resolved_path = NULL;
+    if (!slayer3d_texture_resolve_path(source_path, texture_path, &resolved_path))
+    {
+        return false;
     }
 
     if (slayer3d_texture_path_is_asset_uri(resolved_path))
@@ -696,13 +763,11 @@ bool slayer3d_texture_cache_get_or_load_asset(slayer3d_texture_cache_entry **cac
         SDL_zero(image);
         if (assets == NULL)
         {
-            SDL_free(entry);
             SDL_free(resolved_path);
             return SDL_SetError("Cannot load asset texture '%s' without an asset resolver.", texture_path);
         }
         if (!slayer3d_asset_resolver_read_file(assets, resolved_path, &buffer, error, (int)sizeof(error)))
         {
-            SDL_free(entry);
             SDL_free(resolved_path);
             return SDL_SetError("Failed to read texture asset '%s': %s", texture_path, error);
         }
@@ -710,31 +775,67 @@ bool slayer3d_texture_cache_get_or_load_asset(slayer3d_texture_cache_entry **cac
         slayer3d_asset_buffer_free(&buffer);
         if (!decoded)
         {
-            SDL_free(entry);
             SDL_free(resolved_path);
             return SDL_SetError("Failed to decode texture asset '%s'.", texture_path);
         }
-        const bool created = slayer3d_create_texture_from_image(&image, &entry->texture);
+        const bool created = slayer3d_create_texture_from_image(&image, out_texture);
         slayer3d_free_image(&image);
         if (!created)
         {
-            SDL_free(entry);
             SDL_free(resolved_path);
             return false;
         }
     }
-    else if (!slayer3d_load_texture_from_file(resolved_path, &entry->texture))
+    else if (!slayer3d_load_texture_from_file(resolved_path, out_texture))
     {
-        SDL_free(entry);
         SDL_free(resolved_path);
         return false;
     }
 
-    /* Default to REPEAT wrapping to match the GL renderer's GL_REPEAT. */
-    entry->texture.wrap_u = SLAYER3D_TEXTURE_WRAP_REPEAT;
-    entry->texture.wrap_v = SLAYER3D_TEXTURE_WRAP_REPEAT;
+    out_texture->wrap_u = SLAYER3D_TEXTURE_WRAP_REPEAT;
+    out_texture->wrap_v = SLAYER3D_TEXTURE_WRAP_REPEAT;
+    *out_resolved_path = resolved_path;
+    return true;
+}
+
+bool slayer3d_texture_cache_insert_prepared(slayer3d_texture_cache_entry **cache, char *resolved_path,
+                                            slayer3d_texture2d *texture, const slayer3d_texture2d **out_texture)
+{
+    if (cache == NULL)
+    {
+        return SDL_InvalidParamError("cache");
+    }
+    if (resolved_path == NULL)
+    {
+        return SDL_InvalidParamError("resolved_path");
+    }
+    if (texture == NULL)
+    {
+        return SDL_InvalidParamError("texture");
+    }
+    if (out_texture == NULL)
+    {
+        return SDL_InvalidParamError("out_texture");
+    }
+
+    for (slayer3d_texture_cache_entry *existing = *cache; existing != NULL; existing = existing->next)
+    {
+        if (SDL_strcmp(existing->path, resolved_path) == 0)
+        {
+            slayer3d_free_texture(texture);
+            SDL_free(resolved_path);
+            *out_texture = &existing->texture;
+            return true;
+        }
+    }
+
+    slayer3d_texture_cache_entry *entry = (slayer3d_texture_cache_entry *)SDL_calloc(1, sizeof(*entry));
+    if (entry == NULL)
+        return SDL_OutOfMemory();
 
     entry->path = resolved_path;
+    entry->texture = *texture;
+    SDL_zerop(texture);
     entry->next = *cache;
     *cache = entry;
     *out_texture = &entry->texture;

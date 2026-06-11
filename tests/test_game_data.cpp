@@ -3633,6 +3633,29 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueDeduplicatesRequests)
     slayer3d_game_data_asset_warmup_queue_free(&queue);
 }
 
+TEST(GameDataRuntime, PresentationAssetWarmupQueueStartsAndStopsWorkers)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+
+    const bool started = slayer3d_game_data_asset_warmup_queue_start_workers(&queue, assets, 1);
+    if (started)
+    {
+        EXPECT_NE(queue.worker_state, nullptr);
+        slayer3d_game_data_asset_warmup_queue_stop_workers(&queue);
+        EXPECT_EQ(queue.worker_state, nullptr);
+    }
+    else
+    {
+        EXPECT_EQ(queue.worker_state, nullptr);
+    }
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_asset_resolver_destroy(assets);
+}
+
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 {
     const std::filesystem::path dir = unique_test_dir("pong_presentation");
