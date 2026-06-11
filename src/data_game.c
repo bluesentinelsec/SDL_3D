@@ -21,6 +21,7 @@ struct slayer3d_data_game_runtime
     slayer3d_game_data_sprite_cache sprite_cache;
     slayer3d_game_data_model_cache model_cache;
     slayer3d_game_data_mesh_primitive_cache mesh_primitive_cache;
+    slayer3d_game_data_asset_warmup_queue asset_warmup;
     slayer3d_game_data_app_flow app_flow;
     slayer3d_game_data_frame_state frame_state;
     slayer3d_game_data_input_profile_refresh_state input_profile_refresh;
@@ -990,6 +991,7 @@ bool slayer3d_data_game_runtime_create(const slayer3d_data_game_runtime_desc *de
     slayer3d_game_data_sprite_cache_init(&runtime->sprite_cache, runtime->assets);
     slayer3d_game_data_model_cache_init(&runtime->model_cache, runtime->assets);
     slayer3d_game_data_mesh_primitive_cache_init(&runtime->mesh_primitive_cache);
+    slayer3d_game_data_asset_warmup_queue_init(&runtime->asset_warmup, 1);
     if (!slayer3d_game_data_app_flow_start(&runtime->app_flow, runtime->data))
     {
         set_error(error_buffer, error_buffer_size, SDL_GetError());
@@ -1026,6 +1028,7 @@ void slayer3d_data_game_runtime_destroy(slayer3d_data_game_runtime *runtime)
     disconnect_haptics_policies(runtime);
     slayer3d_game_data_particle_cache_free(&runtime->particle_cache);
     slayer3d_game_data_mesh_primitive_cache_free(&runtime->mesh_primitive_cache);
+    slayer3d_game_data_asset_warmup_queue_free(&runtime->asset_warmup);
     slayer3d_game_data_model_cache_free(&runtime->model_cache);
     slayer3d_game_data_sprite_cache_free(&runtime->sprite_cache);
     slayer3d_game_data_image_cache_free(&runtime->image_cache);
@@ -1424,6 +1427,7 @@ void slayer3d_data_game_runtime_render(slayer3d_data_game_runtime *runtime, slay
     frame.sprite_cache = &runtime->sprite_cache;
     frame.model_cache = &runtime->model_cache;
     frame.mesh_primitive_cache = &runtime->mesh_primitive_cache;
+    frame.asset_warmup = &runtime->asset_warmup;
     frame.app_flow = &runtime->app_flow;
     frame.metrics = &runtime->frame_state.metrics;
     frame.render_eval = &runtime->frame_state.render_eval;

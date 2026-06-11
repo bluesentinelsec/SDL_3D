@@ -21,7 +21,8 @@ The runtime currently owns:
 - asset resolver creation
 - caller-provided asset mounting
 - root game JSON loading
-- font, image, and particle presentation caches
+- font, image, particle, sprite, model, mesh primitive, and asset warmup
+  presentation caches
 - authored app-flow startup and frame update
 - authored frame render through `slayer3d_game_data_draw_frame`
 - haptics policy signal wiring
@@ -76,6 +77,20 @@ During the managed loop:
 
 The outer loop still controls fixed timestep, SDL events, input snapshots,
 audio frame updates, and presentation.
+
+## Presentation Asset Warmup
+
+The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
+to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
+scene UI images, brush material textures, render sprite assets, and render model
+assets once per scene activation. Requests are deduplicated and then serviced
+with a small per-frame budget instead of blocking startup on the full scene
+asset set.
+
+This first warmup stage still finalizes assets on the render thread so existing
+texture, sprite, and model cache ownership remains valid across desktop, mobile,
+and web targets. It is the integration point for future worker-thread CPU
+loading and render-thread GPU finalization.
 
 ## Network Packet Loops
 

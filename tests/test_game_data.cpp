@@ -3599,6 +3599,40 @@ TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, PresentationAssetWarmupQueueDeduplicatesRequests)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 3);
+
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.texture.wall"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.texture.wall"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, "asset://maps/editor.map",
+                                                                "asset://textures/wall.png"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, "asset://maps/editor.map",
+                                                                "asset://textures/wall.png"));
+    EXPECT_TRUE(
+        slayer3d_game_data_asset_warmup_request_texture(&queue, "asset://maps/other.map", "asset://textures/wall.png"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.actor.guard"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.actor.guard"));
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.queued, 5);
+    EXPECT_EQ(stats.ready, 0);
+    EXPECT_EQ(stats.failed, 0);
+    EXPECT_EQ(queue.max_jobs_per_frame, 3);
+
+    EXPECT_EQ(
+        slayer3d_game_data_asset_warmup_queue_service(&queue, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0),
+        0);
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.queued, 5);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+}
+
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
 {
     const std::filesystem::path dir = unique_test_dir("pong_presentation");
