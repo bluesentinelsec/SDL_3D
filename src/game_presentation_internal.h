@@ -32,6 +32,13 @@ slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_run
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_image_cache *cache, const char *image_id);
 
+bool slayer3d_game_data_prepare_direct_image_texture(slayer3d_asset_resolver *assets,
+                                                     const slayer3d_game_data_image_asset *asset,
+                                                     slayer3d_texture2d *out_texture);
+
+slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared_texture(
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture);
+
 slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_find_or_load_sprite_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_sprite_cache *cache, const char *sprite_id);
 

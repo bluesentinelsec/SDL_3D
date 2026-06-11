@@ -471,13 +471,15 @@ extern "C"
     void slayer3d_game_data_asset_warmup_queue_free(slayer3d_game_data_asset_warmup_queue *queue);
 
     /**
-     * @brief Start background CPU warmup workers for texture requests when supported.
+     * @brief Start background CPU warmup workers for texture and direct UI image requests when supported.
      *
      * The queue falls back to synchronous budgeted service when this returns
-     * false. @p assets is only read by workers; callers must keep it alive until
-     * the queue is stopped or freed.
+     * false. @p runtime may be NULL for texture-only warmup; direct UI image
+     * warmup requires it. @p runtime and @p assets are only read by workers;
+     * callers must keep them alive until the queue is stopped or freed.
      */
     bool slayer3d_game_data_asset_warmup_queue_start_workers(slayer3d_game_data_asset_warmup_queue *queue,
+                                                             const slayer3d_game_data_runtime *runtime,
                                                              slayer3d_asset_resolver *assets, int worker_count);
 
     /** @brief Stop and join any background warmup workers owned by the queue. */

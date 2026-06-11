@@ -21,6 +21,11 @@ typedef struct asset_warmup_prepared_texture
     slayer3d_texture2d texture;
 } asset_warmup_prepared_texture;
 
+typedef struct asset_warmup_prepared_image
+{
+    slayer3d_texture2d texture;
+} asset_warmup_prepared_image;
+
 typedef struct asset_warmup_worker_state
 {
     SDL_Mutex *mutex;
@@ -28,6 +33,7 @@ typedef struct asset_warmup_worker_state
     SDL_Thread **threads;
     int thread_count;
     bool stopping;
+    const slayer3d_game_data_runtime *runtime;
     slayer3d_asset_resolver *assets;
     slayer3d_game_data_asset_warmup_queue *queue;
 } asset_warmup_worker_state;
@@ -41,12 +47,22 @@ static void free_prepared_texture(asset_warmup_prepared_texture *prepared)
     SDL_free(prepared);
 }
 
+static void free_prepared_image(asset_warmup_prepared_image *prepared)
+{
+    if (prepared == NULL)
+        return;
+    slayer3d_free_texture(&prepared->texture);
+    SDL_free(prepared);
+}
+
 static void free_warmup_entry_prepared(slayer3d_game_data_asset_warmup_entry *entry)
 {
     if (entry == NULL || entry->prepared == NULL)
         return;
     if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE)
         free_prepared_texture((asset_warmup_prepared_texture *)entry->prepared);
+    else if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE)
+        free_prepared_image((asset_warmup_prepared_image *)entry->prepared);
     entry->prepared = NULL;
 }
 
@@ -156,31 +172,46 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
     return true;
 }
 
-static int find_queued_texture_index(const slayer3d_game_data_asset_warmup_queue *queue)
+static bool worker_can_prepare_entry(const asset_warmup_worker_state *worker_state,
+                                     const slayer3d_game_data_asset_warmup_entry *entry)
 {
+    if (worker_state == NULL || entry == NULL || entry->id == NULL)
+        return false;
+    if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE)
+        return true;
+    if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE && worker_state->runtime != NULL)
+    {
+        slayer3d_game_data_image_asset asset;
+        return slayer3d_game_data_get_image_asset(worker_state->runtime, entry->id, &asset) && asset.path != NULL &&
+               asset.sprite == NULL;
+    }
+    return false;
+}
+
+static int find_queued_worker_index(const asset_warmup_worker_state *worker_state)
+{
+    const slayer3d_game_data_asset_warmup_queue *queue = worker_state != NULL ? worker_state->queue : NULL;
     if (queue == NULL)
         return -1;
     for (int i = 0; i < queue->count; ++i)
     {
         const slayer3d_game_data_asset_warmup_entry *entry = &queue->entries[i];
-        if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE &&
-            entry->state == SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED && entry->id != NULL)
+        if (entry->state == SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED && worker_can_prepare_entry(worker_state, entry))
             return i;
     }
     return -1;
 }
 
-static int find_loading_texture_index(const slayer3d_game_data_asset_warmup_queue *queue, const char *source_path,
-                                      const char *id)
+static int find_loading_worker_index(const slayer3d_game_data_asset_warmup_queue *queue,
+                                     slayer3d_game_data_asset_warmup_kind kind, const char *source_path, const char *id)
 {
     if (queue == NULL)
         return -1;
     for (int i = 0; i < queue->count; ++i)
     {
         const slayer3d_game_data_asset_warmup_entry *entry = &queue->entries[i];
-        if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE &&
-            entry->state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING &&
-            warmup_entry_matches(entry, SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE, source_path, id))
+        if (entry->state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING &&
+            warmup_entry_matches(entry, kind, source_path, id))
             return i;
     }
     return -1;
@@ -233,6 +264,52 @@ static bool prepare_texture_request(asset_warmup_worker_state *worker_state, con
     return true;
 }
 
+static bool prepare_image_request(asset_warmup_worker_state *worker_state, const char *id,
+                                  asset_warmup_prepared_image **out_prepared)
+{
+    asset_warmup_prepared_image *prepared = NULL;
+
+    if (worker_state == NULL || worker_state->runtime == NULL || id == NULL || out_prepared == NULL)
+        return false;
+
+    *out_prepared = NULL;
+    slayer3d_game_data_image_asset asset;
+    if (!slayer3d_game_data_get_image_asset(worker_state->runtime, id, &asset) || asset.path == NULL ||
+        asset.sprite != NULL)
+        return false;
+
+    prepared = (asset_warmup_prepared_image *)SDL_calloc(1, sizeof(*prepared));
+    if (prepared == NULL)
+        return SDL_OutOfMemory();
+
+    if (!slayer3d_game_data_prepare_direct_image_texture(worker_state->assets, &asset, &prepared->texture))
+    {
+        free_prepared_image(prepared);
+        return false;
+    }
+
+    *out_prepared = prepared;
+    return true;
+}
+
+static bool prepare_worker_request(asset_warmup_worker_state *worker_state, slayer3d_game_data_asset_warmup_kind kind,
+                                   const char *source_path, const char *id, void **out_prepared)
+{
+    if (out_prepared == NULL)
+        return false;
+    *out_prepared = NULL;
+
+    switch (kind)
+    {
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE:
+        return prepare_texture_request(worker_state, source_path, id, (asset_warmup_prepared_texture **)out_prepared);
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE:
+        return prepare_image_request(worker_state, id, (asset_warmup_prepared_image **)out_prepared);
+    default:
+        return false;
+    }
+}
+
 static int SDLCALL warmup_worker_main(void *userdata)
 {
     asset_warmup_worker_state *worker_state = (asset_warmup_worker_state *)userdata;
@@ -242,18 +319,22 @@ static int SDLCALL warmup_worker_main(void *userdata)
 
     for (;;)
     {
+        slayer3d_game_data_asset_warmup_kind kind = 0;
         char *source_path = NULL;
         char *id = NULL;
 
         SDL_LockMutex(worker_state->mutex);
         while (!worker_state->stopping)
         {
-            const int index = find_queued_texture_index(worker_state->queue);
+            const int index = find_queued_worker_index(worker_state);
             if (index >= 0)
             {
                 slayer3d_game_data_asset_warmup_entry *entry = &worker_state->queue->entries[index];
                 if (copy_warmup_entry_request(entry, &source_path, &id))
+                {
+                    kind = entry->kind;
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+                }
                 else
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
                 break;
@@ -272,11 +353,11 @@ static int SDLCALL warmup_worker_main(void *userdata)
         if (id == NULL)
             continue;
 
-        asset_warmup_prepared_texture *prepared = NULL;
-        const bool prepared_ok = prepare_texture_request(worker_state, source_path, id, &prepared);
+        void *prepared = NULL;
+        const bool prepared_ok = prepare_worker_request(worker_state, kind, source_path, id, &prepared);
 
         SDL_LockMutex(worker_state->mutex);
-        const int index = find_loading_texture_index(worker_state->queue, source_path, id);
+        const int index = find_loading_worker_index(worker_state->queue, kind, source_path, id);
         if (index >= 0)
         {
             slayer3d_game_data_asset_warmup_entry *entry = &worker_state->queue->entries[index];
@@ -296,9 +377,14 @@ static int SDLCALL warmup_worker_main(void *userdata)
 
         if (!prepared_ok)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to prepare texture asset %s: %s", id, SDL_GetError());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to prepare %s asset %s: %s",
+                        kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE ? "image" : "texture", id, SDL_GetError());
         }
-        free_prepared_texture(prepared);
+        slayer3d_game_data_asset_warmup_entry cleanup_entry;
+        SDL_zero(cleanup_entry);
+        cleanup_entry.kind = kind;
+        cleanup_entry.prepared = prepared;
+        free_warmup_entry_prepared(&cleanup_entry);
         SDL_free(source_path);
         SDL_free(id);
     }
@@ -315,6 +401,7 @@ void slayer3d_game_data_asset_warmup_queue_init(slayer3d_game_data_asset_warmup_
 }
 
 bool slayer3d_game_data_asset_warmup_queue_start_workers(slayer3d_game_data_asset_warmup_queue *queue,
+                                                         const slayer3d_game_data_runtime *runtime,
                                                          slayer3d_asset_resolver *assets, int worker_count)
 {
     if (queue == NULL || assets == NULL)
@@ -346,6 +433,7 @@ bool slayer3d_game_data_asset_warmup_queue_start_workers(slayer3d_game_data_asse
     }
 
     worker_state->queue = queue;
+    worker_state->runtime = runtime;
     worker_state->assets = assets;
     worker_state->thread_count = worker_count;
     queue->worker_state = worker_state;
@@ -490,7 +578,8 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
 }
 
 static bool finalize_prepared_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
-                                           slayer3d_render_context *renderer, void *prepared_payload)
+                                           const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                           slayer3d_game_data_image_cache *image_cache, void *prepared_payload)
 {
     if (entry == NULL || prepared_payload == NULL)
         return false;
@@ -510,6 +599,17 @@ static bool finalize_prepared_warmup_entry(slayer3d_game_data_asset_warmup_entry
             SDL_zero(prepared->texture);
         }
         return ok;
+    }
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE: {
+        if (runtime == NULL || image_cache == NULL)
+            return false;
+        slayer3d_game_data_image_asset asset;
+        if (!slayer3d_game_data_get_image_asset(runtime, entry->id, &asset))
+            return false;
+        asset_warmup_prepared_image *prepared = (asset_warmup_prepared_image *)prepared_payload;
+        slayer3d_game_data_image_cache_entry *cache_entry =
+            slayer3d_game_data_image_cache_insert_prepared_texture(image_cache, asset.id, &prepared->texture);
+        return cache_entry != NULL;
     }
     default:
         return false;
@@ -584,7 +684,7 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
             }
             if (entry->state != SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED)
                 continue;
-            if (queue->worker_state != NULL && entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE)
+            if (worker_can_prepare_entry(queue_worker_state(queue), entry))
                 continue;
             work_index = i;
             work_entry.kind = entry->kind;
@@ -606,7 +706,7 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
 
         const bool ok =
             service_mode == SERVICE_FINALIZE
-                ? finalize_prepared_warmup_entry(&work_entry, renderer, prepared)
+                ? finalize_prepared_warmup_entry(&work_entry, runtime, renderer, image_cache, prepared)
                 : service_warmup_entry(&work_entry, runtime, renderer, image_cache, sprite_cache, model_cache, assets);
 
         queue_lock(queue);
@@ -623,7 +723,8 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
                         warmup_kind_name(work_entry.kind), work_entry.id != NULL ? work_entry.id : "<null>",
                         SDL_GetError());
         }
-        free_prepared_texture((asset_warmup_prepared_texture *)prepared);
+        work_entry.prepared = prepared;
+        free_warmup_entry_prepared(&work_entry);
         SDL_free(work_entry.source_path);
         SDL_free(work_entry.id);
         serviced++;

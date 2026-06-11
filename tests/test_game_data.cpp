@@ -22,6 +22,7 @@ extern "C"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "../vendor/yyjson/yyjson.h"
 #include "slayer3d/asset.h"
@@ -3640,7 +3641,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueStartsAndStopsWorkers)
     slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
 
-    const bool started = slayer3d_game_data_asset_warmup_queue_start_workers(&queue, assets, 1);
+    const bool started = slayer3d_game_data_asset_warmup_queue_start_workers(&queue, nullptr, assets, 1);
     if (started)
     {
         EXPECT_NE(queue.worker_state, nullptr);
@@ -3654,6 +3655,79 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueStartsAndStopsWorkers)
 
     slayer3d_game_data_asset_warmup_queue_free(&queue);
     slayer3d_asset_resolver_destroy(assets);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_ui_image");
+    Uint8 pixels[] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+    slayer3d_image image{};
+    image.pixels = pixels;
+    image.width = 2;
+    image.height = 2;
+    std::filesystem::create_directories(dir / "images");
+    ASSERT_TRUE(slayer3d_save_image_png(&image, (dir / "images" / "pixel.png").string().c_str())) << SDL_GetError();
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Image", "id": "test.warmup_image", "version": "0.1.0" },
+  "world": { "name": "world.warmup_image", "kind": "fixed_screen" },
+  "assets": {
+    "images": [{ "id": "image.pixel", "path": "asset://images/pixel.png" }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_image_cache image_cache{};
+    slayer3d_game_data_image_cache_init(&image_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&queue, runtime, assets, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.pixel"));
+
+    for (int attempt = 0; attempt < 100 && image_cache.count == 0; ++attempt)
+    {
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, &image_cache, nullptr, nullptr,
+                                                            assets, 1);
+        if (image_cache.count == 0)
+            SDL_Delay(1);
+    }
+
+    ASSERT_EQ(image_cache.count, 1);
+    EXPECT_STREQ(image_cache.entries[0].image_id, "image.pixel");
+    EXPECT_TRUE(image_cache.entries[0].loaded);
+    EXPECT_EQ(image_cache.entries[0].texture.width, 2);
+    EXPECT_EQ(image_cache.entries[0].texture.height, 2);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_image_cache_free(&image_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
