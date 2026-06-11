@@ -69,6 +69,7 @@ bool editor_mode_is_vertex(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_rotate(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_scale(const slayer3d_game_data_runtime *runtime);
 bool editor_mode_is_shear(const slayer3d_game_data_runtime *runtime);
+bool editor_mode_is_paint(const slayer3d_game_data_runtime *runtime);
 bool editor_selection_matches_brush(const slayer3d_game_data_editor_selection *selection, const char *world_name,
                                     const char *element_name);
 bool editor_hover_is_selected_brush(const slayer3d_game_data_runtime *runtime,

@@ -319,6 +319,9 @@
     "signal.editor.texture.page.next",
     "signal.editor.texture.paint.selection",
     "signal.editor.texture.paint.face",
+    "signal.editor.texture.paint.mode.brush",
+    "signal.editor.texture.paint.mode.face",
+    "signal.editor.texture.viewer.toggle",
     "signal.editor.export",
     "signal.editor.test_run.prepare",
     "signal.editor.test_run.enter"
@@ -524,6 +527,9 @@
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
+          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "face" },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.palette.game_object.cursor", "value": "player_start" },
           { "type": "scene_state.set", "key": "editor.inspector.collapsed", "value": false },
           { "type": "scene_state.set", "key": "editor.inspector.tab", "value": "Map" },
@@ -700,13 +706,16 @@
       {
         "signal": "signal.editor.palette.material",
         "actions": [
-          { "type": "scene_state.set", "key": "editor.mode", "value": "texture" },
+          { "type": "scene_state.set", "key": "editor.mode", "value": "paint" },
           { "type": "scene_state.set", "key": "editor.tool.mode", "value": "paint" },
-          { "type": "scene_state.set", "key": "editor.palette.active", "value": "material" },
+          { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": true },
+          { "type": "scene_state.set", "key": "editor.texture.viewer.collapsed", "value": false },
+          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "face" },
           { "type": "scene_state.set", "key": "editor.palette.material.page", "value": 0 },
           { "type": "scene_state.set", "key": "editor.palette.material.cursor", "value": "mat.editor.texture.wall_metal" },
           { "type": "scene_state.set", "key": "editor.texture.material", "value": "mat.editor.texture.wall_metal" },
-          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "material palette opened" }
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture paint mode" }
         ]
       },
       {
@@ -726,6 +735,7 @@
             "if": { "type": "scene_state.compare", "key": "editor.palette.active", "op": "!=", "value": "", "default": "" },
             "then": [
               { "type": "scene_state.set", "key": "editor.palette.active", "value": "" },
+              { "type": "scene_state.set", "key": "editor.texture.viewer.active", "value": false },
               { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "palette closed" }
             ]
           }
@@ -972,6 +982,27 @@
         ]
       },
       {
+        "signal": "signal.editor.texture.paint.mode.brush",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "brush" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "paint brushes" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.paint.mode.face",
+        "actions": [
+          { "type": "scene_state.set", "key": "editor.texture.paint.mode", "value": "face" },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "paint faces" }
+        ]
+      },
+      {
+        "signal": "signal.editor.texture.viewer.toggle",
+        "actions": [
+          { "type": "scene_state.toggle", "key": "editor.texture.viewer.collapsed", "default": false },
+          { "type": "scene_state.set", "key": "editor.tool.last_action", "value": "texture viewer toggled" }
+        ]
+      },
+      {
         "signal": "signal.editor.selection.clear",
         "actions": [
           { "type": "editor.selection.clear" },
@@ -1003,25 +1034,54 @@
             "if": { "type": "scene_state.compare", "key": "editor.tool.mode", "op": "==", "value": "paint" },
             "then": [
               {
-                "type": "editor.command.preview",
-                "command": "paint",
-                "target": "face",
-                "material_key": "editor.palette.material.cursor",
-                "message": "preview paint {selection_element}",
-                "outputs": {
-                  "active_key": "editor.command_preview.active",
-                  "valid_key": "editor.command_preview.valid",
-                  "command_key": "editor.command_preview.command",
-                  "target_key": "editor.command_preview.target",
-                  "message_key": "editor.command_preview.message",
-                  "world_key": "editor.command_preview.world",
-                  "element_key": "editor.command_preview.element",
-                  "element_stable_id_key": "editor.command_preview.element_stable_id",
-                  "face_stable_id_key": "editor.command_preview.face_stable_id",
-                  "face_index_key": "editor.command_preview.face_index",
-                  "bounds_min_key": "editor.command_preview.bounds_min",
-                  "bounds_max_key": "editor.command_preview.bounds_max"
-                }
+                "type": "branch",
+                "if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "brush", "default": "face" },
+                "then": [
+                  {
+                    "type": "editor.command.preview",
+                    "command": "paint",
+                    "target": "selection",
+                    "material_key": "editor.palette.material.cursor",
+                    "message": "preview paint {selection_element}",
+                    "outputs": {
+                      "active_key": "editor.command_preview.active",
+                      "valid_key": "editor.command_preview.valid",
+                      "command_key": "editor.command_preview.command",
+                      "target_key": "editor.command_preview.target",
+                      "message_key": "editor.command_preview.message",
+                      "world_key": "editor.command_preview.world",
+                      "element_key": "editor.command_preview.element",
+                      "element_stable_id_key": "editor.command_preview.element_stable_id",
+                      "face_stable_id_key": "editor.command_preview.face_stable_id",
+                      "face_index_key": "editor.command_preview.face_index",
+                      "bounds_min_key": "editor.command_preview.bounds_min",
+                      "bounds_max_key": "editor.command_preview.bounds_max"
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "type": "editor.command.preview",
+                    "command": "paint",
+                    "target": "face",
+                    "material_key": "editor.palette.material.cursor",
+                    "message": "preview paint {selection_element}",
+                    "outputs": {
+                      "active_key": "editor.command_preview.active",
+                      "valid_key": "editor.command_preview.valid",
+                      "command_key": "editor.command_preview.command",
+                      "target_key": "editor.command_preview.target",
+                      "message_key": "editor.command_preview.message",
+                      "world_key": "editor.command_preview.world",
+                      "element_key": "editor.command_preview.element",
+                      "element_stable_id_key": "editor.command_preview.element_stable_id",
+                      "face_stable_id_key": "editor.command_preview.face_stable_id",
+                      "face_index_key": "editor.command_preview.face_index",
+                      "bounds_min_key": "editor.command_preview.bounds_min",
+                      "bounds_max_key": "editor.command_preview.bounds_max"
+                    }
+                  }
+                ]
               }
             ],
             "else": [

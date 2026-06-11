@@ -1128,6 +1128,75 @@ static bool editor_handle_face_drag(slayer3d_game_data_runtime *runtime,
     return true;
 }
 
+static bool editor_emit_texture_paint_preview(slayer3d_game_data_runtime *runtime)
+{
+    slayer3d_signal_bus *bus = runtime_bus(runtime);
+    const int signal_id = slayer3d_game_data_find_signal(runtime, "signal.editor.command.preview");
+    if (bus == NULL || signal_id < 0)
+        return false;
+    slayer3d_signal_emit(bus, signal_id, NULL);
+    return true;
+}
+
+static bool editor_emit_texture_paint_commit(slayer3d_game_data_runtime *runtime, const char *mode)
+{
+    const char *signal = "signal.editor.texture.paint.face";
+    if (mode != NULL && SDL_strcmp(mode, "brush") == 0)
+        signal = "signal.editor.texture.paint.selection";
+
+    slayer3d_signal_bus *bus = runtime_bus(runtime);
+    const int signal_id = slayer3d_game_data_find_signal(runtime, signal);
+    if (bus == NULL || signal_id < 0)
+        return false;
+    slayer3d_signal_emit(bus, signal_id, NULL);
+    return true;
+}
+
+static bool editor_handle_texture_paint(slayer3d_game_data_runtime *runtime,
+                                        const slayer3d_game_data_editor_selection *hover_selection,
+                                        bool select_requested, bool *out_consumed)
+{
+    if (out_consumed != NULL)
+        *out_consumed = false;
+    if (runtime == NULL || runtime->scene_state == NULL || !editor_mode_is_paint(runtime))
+        return true;
+
+    const char *paint_mode = slayer3d_properties_get_string(runtime->scene_state, "editor.texture.paint.mode", "face");
+    const bool brush_mode = paint_mode != NULL && SDL_strcmp(paint_mode, "brush") == 0;
+    const bool can_paint =
+        editor_selection_is_selectable_brush(hover_selection) && (brush_mode || hover_selection->face_index >= 0);
+
+    if (!can_paint)
+    {
+        clear_editor_command_preview(runtime);
+        return true;
+    }
+
+    const slayer3d_game_data_editor_selection resolved = resolved_editor_selection(runtime, hover_selection);
+    runtime->editor_active_selection = resolved;
+    runtime->editor_selection_scene = slayer3d_game_data_active_scene(runtime);
+
+    if (!editor_emit_texture_paint_preview(runtime))
+        return false;
+
+    if (select_requested)
+    {
+        if (out_consumed != NULL)
+            *out_consumed = true;
+        if (brush_mode)
+        {
+            clear_editor_selected_brushes(runtime);
+            if (!add_editor_selected_brush(runtime, &resolved))
+                return false;
+            update_active_editor_selection_from_selected_brushes(runtime);
+        }
+        if (!editor_emit_texture_paint_commit(runtime, brush_mode ? "brush" : "face"))
+            return false;
+        clear_editor_command_preview(runtime);
+    }
+    return true;
+}
+
 static bool editor_handle_rotate_drag(slayer3d_game_data_runtime *runtime,
                                       const slayer3d_game_data_editor_selection *hover_selection, bool *out_consumed)
 {
@@ -2048,6 +2117,15 @@ bool slayer3d_game_data_update_active_editor_tooling(slayer3d_game_data_runtime 
     const bool select_requested = editor_selection_button_requested(runtime, selection_json, "select_button", "LEFT");
     const bool secondary_select_requested =
         editor_selection_button_requested(runtime, selection_json, "secondary_select_button", NULL);
+    bool texture_paint_consumed = false;
+    if (!editor_handle_texture_paint(runtime, &hover_selection, select_requested, &texture_paint_consumed))
+        return false;
+    if (texture_paint_consumed)
+    {
+        publish_editor_selection(runtime, outputs, &runtime->editor_active_selection);
+        publish_editor_selected_brush_count(runtime);
+        return true;
+    }
     bool vertex_lasso_consumed = false;
     if (!editor_handle_vertex_lasso(runtime, selection_json, &hover_selection, &vertex_lasso_consumed))
         return false;
