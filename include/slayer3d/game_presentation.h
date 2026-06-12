@@ -102,6 +102,8 @@ extern "C"
         SLAYER3D_GAME_DATA_ASSET_WARMUP_READY = 3,
         /** @brief Request was serviced and failed. */
         SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED = 4,
+        /** @brief Request was deprioritized before completion. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED = 5,
     } slayer3d_game_data_asset_warmup_state;
 
     /** @brief One queued presentation asset warmup request. */
@@ -112,6 +114,7 @@ extern "C"
         char *source_path;                           /**< Optional owned source path for relative texture requests. */
         char *id;                                    /**< Owned asset id or texture path. */
         void *prepared;                              /**< Private prepared payload for main-thread finalization. */
+        unsigned int generation;                     /**< Monotonic token used to ignore stale worker completions. */
     } slayer3d_game_data_asset_warmup_entry;
 
     /**
@@ -141,7 +144,8 @@ extern "C"
         int pending;            /**< Requests not yet completed: queued + loading + ready_for_finalize. */
         int ready;              /**< Requests serviced successfully. */
         int failed;             /**< Requests serviced unsuccessfully. */
-        int completed;          /**< Requests no longer pending: ready + failed. */
+        int canceled;           /**< Requests deprioritized before completion. */
+        int completed;          /**< Requests no longer pending: ready + failed + canceled. */
         int total;              /**< Total requests tracked by the queue. */
         float progress;         /**< Completed/total in [0, 1], or 1 when total is zero. */
     } slayer3d_game_data_asset_warmup_stats;
@@ -490,6 +494,17 @@ extern "C"
 
     /** @brief Stop and join any background warmup workers owned by the queue. */
     void slayer3d_game_data_asset_warmup_queue_stop_workers(slayer3d_game_data_asset_warmup_queue *queue);
+
+    /**
+     * @brief Cancel queued or in-flight warmup requests that have not completed.
+     *
+     * Ready and failed entries remain available for diagnostics and
+     * deduplication. A later matching request revives a canceled entry and
+     * queues it again.
+     *
+     * @return Number of entries moved to the canceled state.
+     */
+    int slayer3d_game_data_asset_warmup_queue_cancel_pending(slayer3d_game_data_asset_warmup_queue *queue);
 
     /** @brief Queue a UI/image asset id for warmup, deduplicating existing requests. */
     bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_warmup_queue *queue,

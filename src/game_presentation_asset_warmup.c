@@ -162,6 +162,15 @@ static bool ensure_warmup_queue_capacity(slayer3d_game_data_asset_warmup_queue *
     return true;
 }
 
+static void bump_warmup_entry_generation(slayer3d_game_data_asset_warmup_entry *entry)
+{
+    if (entry == NULL)
+        return;
+    entry->generation++;
+    if (entry->generation == 0)
+        entry->generation = 1;
+}
+
 static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
                                  slayer3d_game_data_asset_warmup_kind kind, const char *source_path, const char *id)
 {
@@ -173,6 +182,13 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
     {
         if (warmup_entry_matches(&queue->entries[i], kind, source_path, id))
         {
+            if (queue->entries[i].state == SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED)
+            {
+                free_warmup_entry_prepared(&queue->entries[i]);
+                bump_warmup_entry_generation(&queue->entries[i]);
+                queue->entries[i].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED;
+                queue_signal_workers(queue);
+            }
             queue_unlock(queue);
             return true;
         }
@@ -188,6 +204,7 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
     SDL_zero(*entry);
     entry->kind = kind;
     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED;
+    entry->generation = 1;
     if (source_path != NULL && source_path[0] != '\0')
     {
         entry->source_path = SDL_strdup(source_path);
@@ -247,14 +264,15 @@ static int find_queued_worker_index(const asset_warmup_worker_state *worker_stat
 }
 
 static int find_loading_worker_index(const slayer3d_game_data_asset_warmup_queue *queue,
-                                     slayer3d_game_data_asset_warmup_kind kind, const char *source_path, const char *id)
+                                     slayer3d_game_data_asset_warmup_kind kind, const char *source_path, const char *id,
+                                     unsigned int generation)
 {
     if (queue == NULL)
         return -1;
     for (int i = 0; i < queue->count; ++i)
     {
         const slayer3d_game_data_asset_warmup_entry *entry = &queue->entries[i];
-        if (entry->state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING &&
+        if (entry->state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING && entry->generation == generation &&
             warmup_entry_matches(entry, kind, source_path, id))
             return i;
     }
@@ -452,6 +470,7 @@ static int SDLCALL warmup_worker_main(void *userdata)
         slayer3d_game_data_asset_warmup_kind kind = 0;
         char *source_path = NULL;
         char *id = NULL;
+        unsigned int generation = 0;
 
         SDL_LockMutex(worker_state->mutex);
         while (!worker_state->stopping)
@@ -463,6 +482,7 @@ static int SDLCALL warmup_worker_main(void *userdata)
                 if (copy_warmup_entry_request(entry, &source_path, &id))
                 {
                     kind = entry->kind;
+                    generation = entry->generation;
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
                 }
                 else
@@ -487,7 +507,7 @@ static int SDLCALL warmup_worker_main(void *userdata)
         const bool prepared_ok = prepare_worker_request(worker_state, kind, source_path, id, &prepared);
 
         SDL_LockMutex(worker_state->mutex);
-        const int index = find_loading_worker_index(worker_state->queue, kind, source_path, id);
+        const int index = find_loading_worker_index(worker_state->queue, kind, source_path, id, generation);
         if (index >= 0)
         {
             slayer3d_game_data_asset_warmup_entry *entry = &worker_state->queue->entries[index];
@@ -625,6 +645,32 @@ void slayer3d_game_data_asset_warmup_queue_free(slayer3d_game_data_asset_warmup_
     SDL_zero(*queue);
 }
 
+int slayer3d_game_data_asset_warmup_queue_cancel_pending(slayer3d_game_data_asset_warmup_queue *queue)
+{
+    if (queue == NULL)
+        return 0;
+
+    int canceled = 0;
+    queue_lock(queue);
+    for (int i = 0; i < queue->count; ++i)
+    {
+        slayer3d_game_data_asset_warmup_entry *entry = &queue->entries[i];
+        if (entry->state != SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED &&
+            entry->state != SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING &&
+            entry->state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE)
+        {
+            continue;
+        }
+
+        free_warmup_entry_prepared(entry);
+        bump_warmup_entry_generation(entry);
+        entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED;
+        canceled++;
+    }
+    queue_unlock(queue);
+    return canceled;
+}
+
 bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_warmup_queue *queue,
                                                       const char *image_id)
 {
@@ -667,6 +713,9 @@ void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_
         case SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED:
             out_stats->failed++;
             break;
+        case SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED:
+            out_stats->canceled++;
+            break;
         case SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING:
             out_stats->loading++;
             break;
@@ -680,7 +729,7 @@ void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_
         }
     }
     out_stats->pending = out_stats->queued + out_stats->loading + out_stats->ready_for_finalize;
-    out_stats->completed = out_stats->ready + out_stats->failed;
+    out_stats->completed = out_stats->ready + out_stats->failed + out_stats->canceled;
     out_stats->progress = out_stats->total > 0 ? (float)out_stats->completed / (float)out_stats->total : 1.0f;
     queue_unlock((slayer3d_game_data_asset_warmup_queue *)queue);
 }
@@ -856,6 +905,7 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
                 work_entry.kind = entry->kind;
                 if (copy_warmup_entry_request(entry, &work_entry.source_path, &work_entry.id))
                 {
+                    work_entry.generation = entry->generation;
                     prepared = entry->prepared;
                     entry->prepared = NULL;
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
@@ -875,6 +925,7 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
             work_entry.kind = entry->kind;
             if (copy_warmup_entry_request(entry, &work_entry.source_path, &work_entry.id))
             {
+                work_entry.generation = entry->generation;
                 entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
                 service_mode = SERVICE_SYNC;
             }
@@ -897,6 +948,8 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
 
         queue_lock(queue);
         if (work_index >= 0 && work_index < queue->count &&
+            queue->entries[work_index].state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING &&
+            queue->entries[work_index].generation == work_entry.generation &&
             warmup_entry_matches(&queue->entries[work_index], work_entry.kind, work_entry.source_path, work_entry.id))
         {
             queue->entries[work_index].state =

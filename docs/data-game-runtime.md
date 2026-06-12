@@ -83,9 +83,10 @@ audio frame updates, and presentation.
 The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
 to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
 scene UI images, brush material textures, render sprite assets, and render model
-assets once per scene activation. Requests are deduplicated and then serviced
-with a small per-frame budget instead of blocking startup on the full scene
-asset set.
+assets once per scene activation. When the active scene changes, unfinished
+requests from the previous activation are canceled so the current scene's assets
+take priority. Requests are deduplicated and then serviced with a small
+per-frame budget instead of blocking startup on the full scene asset set.
 
 On native SDL targets, the managed runtime also starts a background warmup worker
 for CPU-only texture, UI image, authored sprite, and authored model preparation.
@@ -97,8 +98,8 @@ worker creation fails fall back to the same budgeted service path.
 The managed runtime publishes warmup progress to scene state each render under
 the `asset_warmup` prefix. Data-authored UI can bind to `asset_warmup.total`,
 `queued`, `loading`, `ready_for_finalize`, `pending`, `ready`, `failed`,
-`completed`, `progress`, `active`, `complete`, and `status`. Hosts that need a
-different namespace can call
+`canceled`, `completed`, `progress`, `active`, `complete`, and `status`. Hosts
+that need a different namespace can call
 `slayer3d_data_game_runtime_publish_asset_warmup_stats()` with a custom prefix.
 For active-scene UI images, the same publisher also writes
 `asset_warmup.ui_image.<image_id>.status`, `pending`, `ready`, and `failed`

@@ -146,6 +146,8 @@ static const char *data_game_warmup_state_name(slayer3d_game_data_asset_warmup_s
         return "ready";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED:
         return "failed";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED:
+        return "canceled";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED:
     default:
         return "queued";
@@ -1190,6 +1192,7 @@ bool slayer3d_data_game_runtime_publish_asset_warmup_stats(slayer3d_data_game_ru
     data_game_set_warmup_int(state, prefix, "pending", stats.pending);
     data_game_set_warmup_int(state, prefix, "ready", stats.ready);
     data_game_set_warmup_int(state, prefix, "failed", stats.failed);
+    data_game_set_warmup_int(state, prefix, "canceled", stats.canceled);
     data_game_set_warmup_int(state, prefix, "completed", stats.completed);
     data_game_set_warmup_float(state, prefix, "progress", stats.progress);
     data_game_set_warmup_bool(state, prefix, "active", stats.pending > 0);

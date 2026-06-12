@@ -186,6 +186,9 @@ static void queue_active_scene_assets(const slayer3d_game_data_frame_desc *frame
         SDL_strcmp(frame->asset_warmup->requested_scene, active_scene) == 0)
         return;
 
+    if (active_scene != NULL || frame->asset_warmup->requested_scene != NULL)
+        (void)slayer3d_game_data_asset_warmup_queue_cancel_pending(frame->asset_warmup);
+
     queue_scene_assets_context context;
     SDL_zero(context);
     context.queue = frame->asset_warmup;

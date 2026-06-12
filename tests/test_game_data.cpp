@@ -3622,6 +3622,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueDeduplicatesRequests)
     EXPECT_EQ(stats.queued, 5);
     EXPECT_EQ(stats.ready, 0);
     EXPECT_EQ(stats.failed, 0);
+    EXPECT_EQ(stats.canceled, 0);
     EXPECT_EQ(queue.max_jobs_per_frame, 3);
 
     EXPECT_EQ(
@@ -3667,12 +3668,14 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueReportsDetailedStats)
     ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/finalize.png"));
     ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.ready"));
     ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.failed"));
-    ASSERT_EQ(queue.count, 5);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.canceled"));
+    ASSERT_EQ(queue.count, 6);
 
     queue.entries[1].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
     queue.entries[2].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE;
     queue.entries[3].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY;
     queue.entries[4].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+    queue.entries[5].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED;
 
     slayer3d_game_data_asset_warmup_state state{};
     EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE, nullptr,
@@ -3681,20 +3684,73 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueReportsDetailedStats)
     EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL, nullptr,
                                                               "model.failed", &state));
     EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED);
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, nullptr,
+                                                              "image.canceled", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED);
     EXPECT_FALSE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
                                                                nullptr, "image.missing", &state));
 
     slayer3d_game_data_asset_warmup_stats stats{};
     slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
-    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.total, 6);
     EXPECT_EQ(stats.queued, 1);
     EXPECT_EQ(stats.loading, 1);
     EXPECT_EQ(stats.ready_for_finalize, 1);
     EXPECT_EQ(stats.pending, 3);
     EXPECT_EQ(stats.ready, 1);
     EXPECT_EQ(stats.failed, 1);
-    EXPECT_EQ(stats.completed, 2);
-    EXPECT_FLOAT_EQ(stats.progress, 0.4f);
+    EXPECT_EQ(stats.canceled, 1);
+    EXPECT_EQ(stats.completed, 3);
+    EXPECT_FLOAT_EQ(stats.progress, 0.5f);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupQueueCancelsPendingRequests)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 2);
+
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.queued"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/loading.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/finalize.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.ready"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.failed"));
+    ASSERT_EQ(queue.count, 5);
+
+    queue.entries[1].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+    queue.entries[2].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE;
+    queue.entries[3].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY;
+    queue.entries[4].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+
+    EXPECT_EQ(slayer3d_game_data_asset_warmup_queue_cancel_pending(&queue), 3);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.queued, 0);
+    EXPECT_EQ(stats.loading, 0);
+    EXPECT_EQ(stats.ready_for_finalize, 0);
+    EXPECT_EQ(stats.pending, 0);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 1);
+    EXPECT_EQ(stats.canceled, 3);
+    EXPECT_EQ(stats.completed, 5);
+    EXPECT_FLOAT_EQ(stats.progress, 1.0f);
+
+    slayer3d_game_data_asset_warmup_state state{};
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, nullptr,
+                                                              "image.queued", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED);
+
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.queued"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, nullptr,
+                                                              "image.queued", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED);
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.queued, 1);
+    EXPECT_EQ(stats.canceled, 2);
+    EXPECT_EQ(stats.completed, 4);
 
     slayer3d_game_data_asset_warmup_queue_free(&queue);
 }
@@ -4070,6 +4126,7 @@ TEST(GameDataRuntime, DataGameRuntimePublishesAssetWarmupStatsToSceneState)
     ASSERT_NE(state, nullptr);
     EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.total", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.pending", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.canceled", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.completed", -1), 0);
     EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.progress", 0.0f), 1.0f);
     EXPECT_FALSE(slayer3d_properties_get_bool(state, "editor.assets.active", true));
