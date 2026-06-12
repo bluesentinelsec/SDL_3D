@@ -36,6 +36,17 @@ bool slayer3d_game_data_prepare_direct_image_texture(slayer3d_asset_resolver *as
                                                      const slayer3d_game_data_image_asset *asset,
                                                      slayer3d_texture2d *out_texture);
 
+bool slayer3d_game_data_prepare_sprite_backed_image_texture(const slayer3d_game_data_runtime *runtime,
+                                                            const slayer3d_game_data_image_asset *asset,
+                                                            slayer3d_texture2d *out_texture, const char **out_effect,
+                                                            float *out_effect_delay, float *out_effect_duration,
+                                                            char **out_shader_vertex_source,
+                                                            char **out_shader_fragment_source);
+
+slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared(
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture, const char *effect,
+    float effect_delay, float effect_duration, char **shader_vertex_source, char **shader_fragment_source);
+
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared_texture(
     slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture);
 
