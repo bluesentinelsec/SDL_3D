@@ -660,6 +660,29 @@ void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_
     queue_unlock((slayer3d_game_data_asset_warmup_queue *)queue);
 }
 
+bool slayer3d_game_data_asset_warmup_request_state(const slayer3d_game_data_asset_warmup_queue *queue,
+                                                   slayer3d_game_data_asset_warmup_kind kind, const char *source_path,
+                                                   const char *id, slayer3d_game_data_asset_warmup_state *out_state)
+{
+    if (out_state != NULL)
+        *out_state = SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED;
+    if (queue == NULL || id == NULL || out_state == NULL)
+        return false;
+
+    bool found = false;
+    queue_lock((slayer3d_game_data_asset_warmup_queue *)queue);
+    for (int i = 0; i < queue->count; ++i)
+    {
+        if (!warmup_entry_matches(&queue->entries[i], kind, source_path, id))
+            continue;
+        *out_state = queue->entries[i].state;
+        found = true;
+        break;
+    }
+    queue_unlock((slayer3d_game_data_asset_warmup_queue *)queue);
+    return found;
+}
+
 static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
                                  const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                  slayer3d_game_data_image_cache *image_cache,

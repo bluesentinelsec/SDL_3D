@@ -102,6 +102,11 @@ the `asset_warmup` prefix. Data-authored UI can bind to `asset_warmup.total`,
 `completed`, `progress`, `active`, `complete`, and `status`. Hosts that need a
 different namespace can call
 `slayer3d_data_game_runtime_publish_asset_warmup_stats()` with a custom prefix.
+For active-scene UI images, the same publisher also writes
+`asset_warmup.ui_image.<image_id>.status`, `pending`, `ready`, and `failed`
+fields so authored texture browsers can show per-thumbnail loading or failure
+states. UI image drawing skips matching pending/failed warmup requests instead
+of forcing a synchronous lazy load.
 
 ## Network Packet Loops
 

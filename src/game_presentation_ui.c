@@ -24,6 +24,7 @@ typedef struct ui_image_draw_context
     const slayer3d_game_data_runtime *runtime;
     slayer3d_render_context *renderer;
     slayer3d_game_data_image_cache *image_cache;
+    const slayer3d_game_data_asset_warmup_queue *asset_warmup;
     const slayer3d_game_data_ui_metrics *metrics;
     const slayer3d_game_data_render_eval *render_eval;
     bool ok;
@@ -184,6 +185,14 @@ static bool draw_ui_image(void *userdata, const slayer3d_game_data_ui_image *ima
     if (!visible)
         return true;
 
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    if (slayer3d_game_data_asset_warmup_request_state(draw->asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
+                                                      NULL, resolved.image, &warmup_state) &&
+        warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return true;
+    }
+
     slayer3d_game_data_image_cache_entry *entry =
         slayer3d_game_data_find_or_load_image_entry(draw->runtime, draw->image_cache, resolved.image);
     if (entry == NULL)
@@ -307,6 +316,7 @@ bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, 
 
 bool slayer3d_game_data_draw_ui_images(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                        slayer3d_game_data_image_cache *image_cache,
+                                       const slayer3d_game_data_asset_warmup_queue *asset_warmup,
                                        const slayer3d_game_data_ui_metrics *metrics,
                                        const slayer3d_game_data_render_eval *render_eval)
 {
@@ -318,6 +328,7 @@ bool slayer3d_game_data_draw_ui_images(const slayer3d_game_data_runtime *runtime
     context.runtime = runtime;
     context.renderer = renderer;
     context.image_cache = image_cache;
+    context.asset_warmup = asset_warmup;
     context.metrics = metrics;
     context.render_eval = render_eval;
     context.ok = true;

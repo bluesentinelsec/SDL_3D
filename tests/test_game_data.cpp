@@ -3674,6 +3674,16 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueReportsDetailedStats)
     queue.entries[3].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY;
     queue.entries[4].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
 
+    slayer3d_game_data_asset_warmup_state state{};
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE, nullptr,
+                                                              "asset://textures/loading.png", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING);
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL, nullptr,
+                                                              "model.failed", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED);
+    EXPECT_FALSE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
+                                                               nullptr, "image.missing", &state));
+
     slayer3d_game_data_asset_warmup_stats stats{};
     slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
     EXPECT_EQ(stats.total, 5);
@@ -17708,8 +17718,34 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
         return capture.names;
     };
+    auto visible_texture_status_labels = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> names;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (text == nullptr || text->name == nullptr)
+                return true;
+            const std::string name = text->name;
+            if (name.rfind("ui.editor_shell.texture_viewer.", 0) != 0 ||
+                (name.find(".loading") == std::string::npos && name.find(".failed") == std::string::npos))
+            {
+                return true;
+            }
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) || !visible)
+                return true;
+            capture->names.emplace_back(resolved.name);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.names;
+    };
 
-    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
     emit_signal("signal.editor.palette.material");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "paint");
@@ -17732,6 +17768,17 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
               scroll_rects.end());
     EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.thumb"),
               scroll_rects.end());
+    EXPECT_TRUE(visible_texture_status_labels().empty());
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.ui_image.image.editor_shell.texture.wall_metal.pending",
+                                 true);
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.ui_image.image.editor_shell.texture.lava.failed", true);
+    std::vector<std::string> status_labels = visible_texture_status_labels();
+    EXPECT_NE(
+        std::find(status_labels.begin(), status_labels.end(), "ui.editor_shell.texture_viewer.wall_metal.loading"),
+        status_labels.end());
+    EXPECT_NE(std::find(status_labels.begin(), status_labels.end(), "ui.editor_shell.texture_viewer.lava.failed"),
+              status_labels.end());
 
     emit_signal("signal.editor.texture.paint.mode.brush");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "brush");
@@ -17742,6 +17789,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", false));
     thumbnails = visible_thumbnail_names();
     EXPECT_TRUE(thumbnails.empty());
+    EXPECT_TRUE(visible_texture_status_labels().empty());
     emit_signal("signal.editor.texture.viewer.toggle");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", true));
     thumbnails = visible_thumbnail_names();

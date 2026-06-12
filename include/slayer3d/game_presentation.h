@@ -476,12 +476,13 @@ extern "C"
     void slayer3d_game_data_asset_warmup_queue_free(slayer3d_game_data_asset_warmup_queue *queue);
 
     /**
-     * @brief Start background CPU warmup workers for texture and direct UI image requests when supported.
+     * @brief Start background CPU warmup workers for CPU-safe asset requests when supported.
      *
      * The queue falls back to synchronous budgeted service when this returns
-     * false. @p runtime may be NULL for texture-only warmup; direct UI image
-     * warmup requires it. @p runtime and @p assets are only read by workers;
-     * callers must keep them alive until the queue is stopped or freed.
+     * false. @p runtime may be NULL for texture-only warmup; direct UI image,
+     * sprite, and model warmup require it. @p runtime and @p assets are only
+     * read by workers; callers must keep them alive until the queue is stopped
+     * or freed.
      */
     bool slayer3d_game_data_asset_warmup_queue_start_workers(slayer3d_game_data_asset_warmup_queue *queue,
                                                              const slayer3d_game_data_runtime *runtime,
@@ -509,6 +510,16 @@ extern "C"
     /** @brief Read queue counts by state. */
     void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_warmup_queue *queue,
                                                      slayer3d_game_data_asset_warmup_stats *out_stats);
+
+    /**
+     * @brief Query one queued warmup request state.
+     *
+     * @return true when a matching request exists and @p out_state was written.
+     */
+    bool slayer3d_game_data_asset_warmup_request_state(const slayer3d_game_data_asset_warmup_queue *queue,
+                                                       slayer3d_game_data_asset_warmup_kind kind,
+                                                       const char *source_path, const char *id,
+                                                       slayer3d_game_data_asset_warmup_state *out_state);
 
     /**
      * @brief Service queued warmup requests within a bounded job budget.
@@ -693,11 +704,15 @@ extern "C"
      * @brief Draw authored UI images for the active scene.
      *
      * Images are loaded lazily through @p image_cache and drawn on SLAYER3D's
-     * overlay path after world rendering. @p render_eval supplies the current
-     * presentation time for authored image effects such as `melt`.
+     * overlay path after world rendering. When @p asset_warmup has a matching
+     * pending or failed UI image request, the draw is skipped so authored
+     * placeholders can remain visible without blocking on a synchronous lazy
+     * load. @p render_eval supplies the current presentation time for authored
+     * image effects such as `melt`.
      */
     bool slayer3d_game_data_draw_ui_images(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                            slayer3d_game_data_image_cache *image_cache,
+                                           const slayer3d_game_data_asset_warmup_queue *asset_warmup,
                                            const slayer3d_game_data_ui_metrics *metrics,
                                            const slayer3d_game_data_render_eval *render_eval);
 

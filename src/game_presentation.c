@@ -878,8 +878,8 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
     ok = run_frame_hook(frame, frame->before_ui) && ok;
     ok = slayer3d_game_data_draw_ui_rects(frame->runtime, frame->renderer, frame->metrics, frame->render_eval) && ok;
     if (frame->image_cache != NULL)
-        ok = slayer3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics,
-                                               frame->render_eval) &&
+        ok = slayer3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
+                                               frame->metrics, frame->render_eval) &&
              ok;
     if (frame->font_cache != NULL)
     {

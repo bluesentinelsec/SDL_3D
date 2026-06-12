@@ -134,6 +134,68 @@ static void data_game_set_warmup_string(slayer3d_properties *state, const char *
         slayer3d_properties_set_string(state, key, value != NULL ? value : "");
 }
 
+static const char *data_game_warmup_state_name(slayer3d_game_data_asset_warmup_state state)
+{
+    switch (state)
+    {
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING:
+        return "loading";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE:
+        return "ready_for_finalize";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_READY:
+        return "ready";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED:
+        return "failed";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED:
+    default:
+        return "queued";
+    }
+}
+
+typedef struct data_game_publish_ui_image_warmup_context
+{
+    const slayer3d_game_data_asset_warmup_queue *queue;
+    slayer3d_properties *state;
+    const char *prefix;
+} data_game_publish_ui_image_warmup_context;
+
+static bool data_game_publish_ui_image_warmup(void *userdata, const slayer3d_game_data_ui_image *image)
+{
+    data_game_publish_ui_image_warmup_context *context = (data_game_publish_ui_image_warmup_context *)userdata;
+    if (context == NULL || context->queue == NULL || context->state == NULL || image == NULL || image->image == NULL ||
+        image->image[0] == '\0')
+    {
+        return true;
+    }
+
+    slayer3d_game_data_asset_warmup_state state;
+    if (!slayer3d_game_data_asset_warmup_request_state(context->queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL,
+                                                       image->image, &state))
+    {
+        return true;
+    }
+
+    char field[128];
+    int written = SDL_snprintf(field, sizeof(field), "ui_image.%s.status", image->image);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_string(context->state, context->prefix, field, data_game_warmup_state_name(state));
+    written = SDL_snprintf(field, sizeof(field), "ui_image.%s.pending", image->image);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_bool(context->state, context->prefix, field,
+                                  state == SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED ||
+                                      state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING ||
+                                      state == SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE);
+    written = SDL_snprintf(field, sizeof(field), "ui_image.%s.ready", image->image);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_bool(context->state, context->prefix, field,
+                                  state == SLAYER3D_GAME_DATA_ASSET_WARMUP_READY);
+    written = SDL_snprintf(field, sizeof(field), "ui_image.%s.failed", image->image);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_bool(context->state, context->prefix, field,
+                                  state == SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED);
+    return true;
+}
+
 static void data_game_release_mouse_capture(slayer3d_data_game_runtime *runtime, slayer3d_game_context *ctx)
 {
     if (runtime == NULL || ctx == NULL || ctx->window == NULL || !runtime->mouse_capture_applied ||
@@ -1141,6 +1203,13 @@ bool slayer3d_data_game_runtime_publish_asset_warmup_stats(slayer3d_data_game_ru
     else if (stats.total > 0)
         status = "ready";
     data_game_set_warmup_string(state, prefix, "status", status);
+
+    data_game_publish_ui_image_warmup_context image_context;
+    SDL_zero(image_context);
+    image_context.queue = &runtime->asset_warmup;
+    image_context.state = state;
+    image_context.prefix = prefix;
+    (void)slayer3d_game_data_for_each_ui_image(runtime->data, data_game_publish_ui_image_warmup, &image_context);
     return true;
 }
 
