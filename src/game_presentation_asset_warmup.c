@@ -598,6 +598,7 @@ bool slayer3d_game_data_asset_warmup_queue_start_workers(slayer3d_game_data_asse
     if (worker_count <= 0)
         worker_count = 1;
 #ifdef __EMSCRIPTEN__
+    (void)runtime;
     (void)worker_count;
     return false;
 #else
