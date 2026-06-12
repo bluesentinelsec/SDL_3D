@@ -169,18 +169,223 @@ slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_run
     if (!slayer3d_game_data_get_font_asset(runtime, font_id, &font))
         return NULL;
 
-    slayer3d_font *slot = &cache->fonts[cache->count];
+    slayer3d_font prepared;
+    SDL_zero(prepared);
     bool loaded = false;
     if (font.builtin)
-        loaded = slayer3d_load_builtin_font(cache->media_dir, font.builtin_id, font.size, slot);
+        loaded = slayer3d_load_builtin_font(cache->media_dir, font.builtin_id, font.size, &prepared);
     else if (font.path != NULL)
-        loaded = slayer3d_load_font(font.path, font.size, slot);
+        loaded = slayer3d_load_font(font.path, font.size, &prepared);
     if (!loaded)
         return NULL;
 
-    cache->font_ids[cache->count] = font_id;
+    slayer3d_font *cached = slayer3d_game_data_font_cache_insert_prepared(cache, font.id, &prepared);
+    if (cached == NULL)
+        slayer3d_free_font(&prepared);
+    return cached;
+}
+
+slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_font_cache *cache, const char *font_id,
+                                                             slayer3d_font *font)
+{
+    if (cache == NULL || font_id == NULL || font == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->font_ids[i] != NULL && SDL_strcmp(cache->font_ids[i], font_id) == 0)
+        {
+            slayer3d_free_font(font);
+            return &cache->fonts[i];
+        }
+    }
+
+    if (!ensure_font_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    char *owned_font_id = SDL_strdup(font_id);
+    if (owned_font_id == NULL)
+        return NULL;
+
+    slayer3d_font *slot = &cache->fonts[cache->count];
+    *slot = *font;
+    SDL_zero(*font);
+    cache->font_ids[cache->count] = owned_font_id;
     cache->count++;
     return slot;
+}
+
+bool slayer3d_game_data_prepare_direct_image_texture(slayer3d_asset_resolver *assets,
+                                                     const slayer3d_game_data_image_asset *asset,
+                                                     slayer3d_texture2d *out_texture)
+{
+    if (assets == NULL || asset == NULL || asset->path == NULL || out_texture == NULL)
+        return false;
+
+    SDL_zero(*out_texture);
+    slayer3d_asset_buffer buffer;
+    SDL_zero(buffer);
+    char error[256];
+    if (!slayer3d_asset_resolver_read_file(assets, asset->path, &buffer, error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to read UI image asset %s: %s", asset->path, error);
+        return false;
+    }
+
+    slayer3d_image image;
+    SDL_zero(image);
+    const bool decoded = slayer3d_load_image_from_memory(buffer.data, buffer.size, &image);
+    slayer3d_asset_buffer_free(&buffer);
+    if (!decoded)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to decode UI image asset %s", asset->path);
+        return false;
+    }
+
+    const bool loaded = slayer3d_create_texture_from_image(&image, out_texture);
+    slayer3d_free_image(&image);
+    if (!loaded)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for UI image asset %s", asset->path);
+        return false;
+    }
+    return true;
+}
+
+bool slayer3d_game_data_prepare_sprite_backed_image_texture(const slayer3d_game_data_runtime *runtime,
+                                                            const slayer3d_game_data_image_asset *asset,
+                                                            slayer3d_texture2d *out_texture, const char **out_effect,
+                                                            float *out_effect_delay, float *out_effect_duration,
+                                                            char **out_shader_vertex_source,
+                                                            char **out_shader_fragment_source)
+{
+    if (out_texture != NULL)
+        SDL_zero(*out_texture);
+    if (out_effect != NULL)
+        *out_effect = NULL;
+    if (out_effect_delay != NULL)
+        *out_effect_delay = 0.0f;
+    if (out_effect_duration != NULL)
+        *out_effect_duration = 1.0f;
+    if (out_shader_vertex_source != NULL)
+        *out_shader_vertex_source = NULL;
+    if (out_shader_fragment_source != NULL)
+        *out_shader_fragment_source = NULL;
+    if (runtime == NULL || asset == NULL || asset->sprite == NULL || out_texture == NULL)
+        return false;
+
+    slayer3d_sprite_asset_runtime sprite;
+    SDL_zero(sprite);
+    char error[256];
+    if (!slayer3d_game_data_load_sprite_asset(runtime, asset->sprite, &sprite, error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load sprite-backed UI image %s: %s", asset->sprite,
+                     error);
+        return false;
+    }
+
+    if (sprite.base_texture_count <= 0 || sprite.base_textures == NULL || sprite.base_textures[0].pixels == NULL ||
+        sprite.base_textures[0].width <= 0 || sprite.base_textures[0].height <= 0)
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite-backed UI image %s has no base texture", asset->sprite);
+        slayer3d_sprite_asset_free(&sprite);
+        return false;
+    }
+
+    slayer3d_image image;
+    SDL_zero(image);
+    image.pixels = sprite.base_textures[0].pixels;
+    image.width = sprite.base_textures[0].width;
+    image.height = sprite.base_textures[0].height;
+
+    if (!slayer3d_create_texture_from_image(&image, out_texture))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for sprite-backed UI image %s",
+                     asset->sprite);
+        slayer3d_sprite_asset_free(&sprite);
+        return false;
+    }
+
+    if (out_effect != NULL)
+        *out_effect = sprite.effect;
+    if (out_effect_delay != NULL)
+        *out_effect_delay = sprite.effect_delay;
+    if (out_effect_duration != NULL)
+        *out_effect_duration = sprite.effect_duration;
+    if (out_shader_vertex_source != NULL)
+    {
+        *out_shader_vertex_source = sprite.shader_vertex_source;
+        sprite.shader_vertex_source = NULL;
+    }
+    if (out_shader_fragment_source != NULL)
+    {
+        *out_shader_fragment_source = sprite.shader_fragment_source;
+        sprite.shader_fragment_source = NULL;
+    }
+    slayer3d_sprite_asset_free(&sprite);
+    return true;
+}
+
+slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared(
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture, const char *effect,
+    float effect_delay, float effect_duration, char **shader_vertex_source, char **shader_fragment_source)
+{
+    if (cache == NULL || image_id == NULL || texture == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].image_id != NULL && SDL_strcmp(cache->entries[i].image_id, image_id) == 0)
+        {
+            if (cache->entries[i].loaded)
+            {
+                slayer3d_free_texture(texture);
+                if (shader_vertex_source != NULL)
+                {
+                    SDL_free(*shader_vertex_source);
+                    *shader_vertex_source = NULL;
+                }
+                if (shader_fragment_source != NULL)
+                {
+                    SDL_free(*shader_fragment_source);
+                    *shader_fragment_source = NULL;
+                }
+                return &cache->entries[i];
+            }
+            return NULL;
+        }
+    }
+
+    if (!ensure_image_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    slayer3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
+    SDL_zero(*entry);
+    entry->image_id = image_id;
+    entry->effect = effect;
+    entry->effect_delay = effect_delay;
+    entry->effect_duration = effect_duration;
+    if (shader_vertex_source != NULL)
+    {
+        entry->shader_vertex_source = *shader_vertex_source;
+        *shader_vertex_source = NULL;
+    }
+    if (shader_fragment_source != NULL)
+    {
+        entry->shader_fragment_source = *shader_fragment_source;
+        *shader_fragment_source = NULL;
+    }
+    entry->texture = *texture;
+    SDL_zero(*texture);
+    entry->loaded = true;
+    ++cache->count;
+    return entry;
+}
+
+slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared_texture(
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture)
+{
+    return slayer3d_game_data_image_cache_insert_prepared(cache, image_id, texture, NULL, 0.0f, 1.0f, NULL, NULL);
 }
 
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entry(
@@ -195,114 +400,45 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entr
             return cache->entries[i].loaded ? &cache->entries[i] : NULL;
     }
 
-    if (!ensure_image_cache_capacity(cache, cache->count + 1))
-        return NULL;
-
     slayer3d_game_data_image_asset asset;
     if (!slayer3d_game_data_get_image_asset(runtime, image_id, &asset))
         return NULL;
 
     if (asset.sprite != NULL)
     {
-        slayer3d_sprite_asset_runtime sprite;
-        SDL_zero(sprite);
-        char error[256];
-        if (!slayer3d_game_data_load_sprite_asset(runtime, asset.sprite, &sprite, error, (int)sizeof(error)))
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load sprite-backed UI image %s: %s", asset.sprite,
-                         error);
+        slayer3d_texture2d texture;
+        const char *effect = NULL;
+        float effect_delay = 0.0f;
+        float effect_duration = 1.0f;
+        char *shader_vertex_source = NULL;
+        char *shader_fragment_source = NULL;
+        if (!slayer3d_game_data_prepare_sprite_backed_image_texture(runtime, &asset, &texture, &effect, &effect_delay,
+                                                                    &effect_duration, &shader_vertex_source,
+                                                                    &shader_fragment_source))
             return NULL;
-        }
-
-        if (sprite.base_texture_count <= 0 || sprite.base_textures == NULL || sprite.base_textures[0].pixels == NULL ||
-            sprite.base_textures[0].width <= 0 || sprite.base_textures[0].height <= 0)
+        slayer3d_game_data_image_cache_entry *entry = slayer3d_game_data_image_cache_insert_prepared(
+            cache, asset.id, &texture, effect, effect_delay, effect_duration, &shader_vertex_source,
+            &shader_fragment_source);
+        if (entry == NULL)
         {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Sprite-backed UI image %s has no base texture", asset.sprite);
-            slayer3d_sprite_asset_free(&sprite);
-            return NULL;
+            slayer3d_free_texture(&texture);
+            SDL_free(shader_vertex_source);
+            SDL_free(shader_fragment_source);
         }
-
-        slayer3d_image image;
-        SDL_zero(image);
-        image.pixels = sprite.base_textures[0].pixels;
-        image.width = sprite.base_textures[0].width;
-        image.height = sprite.base_textures[0].height;
-
-        slayer3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
-        SDL_zero(*entry);
-        entry->image_id = asset.id;
-        entry->effect = sprite.effect;
-        entry->effect_delay = sprite.effect_delay;
-        entry->effect_duration = sprite.effect_duration;
-        if (sprite.shader_vertex_source != NULL)
-            entry->shader_vertex_source = SDL_strdup(sprite.shader_vertex_source);
-        if (sprite.shader_fragment_source != NULL)
-            entry->shader_fragment_source = SDL_strdup(sprite.shader_fragment_source);
-        if ((sprite.shader_vertex_source != NULL && entry->shader_vertex_source == NULL) ||
-            (sprite.shader_fragment_source != NULL && entry->shader_fragment_source == NULL))
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to copy sprite-backed UI image shader source %s",
-                         asset.sprite);
-            SDL_free(entry->shader_vertex_source);
-            SDL_free(entry->shader_fragment_source);
-            slayer3d_sprite_asset_free(&sprite);
-            return NULL;
-        }
-        entry->loaded = slayer3d_create_texture_from_image(&image, &entry->texture);
-        slayer3d_sprite_asset_free(&sprite);
-        if (!entry->loaded)
-        {
-            SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for sprite-backed UI image %s",
-                         asset.sprite);
-            SDL_free(entry->shader_vertex_source);
-            SDL_free(entry->shader_fragment_source);
-            SDL_zero(*entry);
-            return NULL;
-        }
-
-        ++cache->count;
         return entry;
     }
 
     if (asset.path == NULL)
         return NULL;
 
-    slayer3d_asset_buffer buffer;
-    SDL_zero(buffer);
-    char error[256];
-    if (!slayer3d_asset_resolver_read_file(cache->assets, asset.path, &buffer, error, (int)sizeof(error)))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to read UI image asset %s: %s", asset.path, error);
+    slayer3d_texture2d texture;
+    SDL_zero(texture);
+    if (!slayer3d_game_data_prepare_direct_image_texture(cache->assets, &asset, &texture))
         return NULL;
-    }
-
-    slayer3d_image image;
-    SDL_zero(image);
-    const bool decoded = slayer3d_load_image_from_memory(buffer.data, buffer.size, &image);
-    slayer3d_asset_buffer_free(&buffer);
-    if (!decoded)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to decode UI image asset %s", asset.path);
-        return NULL;
-    }
-
-    slayer3d_game_data_image_cache_entry *entry = &cache->entries[cache->count];
-    SDL_zero(*entry);
-    entry->image_id = asset.id;
-    entry->effect = NULL;
-    entry->effect_delay = 0.0f;
-    entry->effect_duration = 1.0f;
-    entry->shader_vertex_source = NULL;
-    entry->shader_fragment_source = NULL;
-    entry->loaded = slayer3d_create_texture_from_image(&image, &entry->texture);
-    slayer3d_free_image(&image);
-    if (!entry->loaded)
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to create texture for UI image asset %s", asset.path);
-        return NULL;
-    }
-
-    ++cache->count;
+    slayer3d_game_data_image_cache_entry *entry =
+        slayer3d_game_data_image_cache_insert_prepared_texture(cache, asset.id, &texture);
+    if (entry == NULL)
+        slayer3d_free_texture(&texture);
     return entry;
 }
 
@@ -318,21 +454,53 @@ slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_find_or_load_sprite_en
             return cache->entries[i].loaded ? &cache->entries[i] : NULL;
     }
 
+    char error[256];
+    slayer3d_sprite_asset_runtime sprite;
+    SDL_zero(sprite);
+    if (!slayer3d_game_data_load_sprite_asset(runtime, sprite_id, &sprite, error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load world sprite asset %s: %s", sprite_id, error);
+        return NULL;
+    }
+
+    slayer3d_game_data_sprite_cache_entry *entry =
+        slayer3d_game_data_sprite_cache_insert_prepared(cache, sprite_id, &sprite);
+    if (entry == NULL)
+        slayer3d_sprite_asset_free(&sprite);
+    return entry;
+}
+
+slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_sprite_cache_insert_prepared(
+    slayer3d_game_data_sprite_cache *cache, const char *sprite_id, slayer3d_sprite_asset_runtime *sprite)
+{
+    if (cache == NULL || sprite_id == NULL || sprite == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].sprite_id != NULL && SDL_strcmp(cache->entries[i].sprite_id, sprite_id) == 0)
+        {
+            if (cache->entries[i].loaded)
+            {
+                slayer3d_sprite_asset_free(sprite);
+                return &cache->entries[i];
+            }
+            return NULL;
+        }
+    }
+
     if (!ensure_sprite_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    char *owned_sprite_id = SDL_strdup(sprite_id);
+    if (owned_sprite_id == NULL)
         return NULL;
 
     slayer3d_game_data_sprite_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
-    entry->sprite_id = sprite_id;
-
-    char error[256];
-    if (!slayer3d_game_data_load_sprite_asset(runtime, sprite_id, &entry->sprite, error, (int)sizeof(error)))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load world sprite asset %s: %s", sprite_id, error);
-        SDL_zero(entry);
-        return NULL;
-    }
-
+    entry->sprite_id = owned_sprite_id;
+    entry->sprite = *sprite;
+    SDL_zero(*sprite);
     entry->loaded = true;
     ++cache->count;
     return entry;
@@ -350,9 +518,6 @@ slayer3d_game_data_model_cache_entry *slayer3d_game_data_find_or_load_model_entr
             return cache->entries[i].loaded ? &cache->entries[i] : NULL;
     }
 
-    if (!ensure_model_cache_capacity(cache, cache->count + 1))
-        return NULL;
-
     slayer3d_game_data_model_asset asset;
     if (!slayer3d_game_data_get_model_asset(runtime, model_id, &asset))
         return NULL;
@@ -368,18 +533,55 @@ slayer3d_game_data_model_cache_entry *slayer3d_game_data_find_or_load_model_entr
         return NULL;
     }
 
-    slayer3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
-    SDL_zero(*entry);
-    entry->model_id = model_id;
-    entry->loaded = slayer3d_load_model_from_file(filesystem_path, &entry->model);
+    slayer3d_model model;
+    SDL_zero(model);
+    const bool loaded = slayer3d_load_model_from_file(filesystem_path, &model);
     slayer3d_asset_resolver_free_path(filesystem_path);
-    if (!entry->loaded)
+    if (!loaded)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load model asset %s: %s", model_id, SDL_GetError());
-        SDL_zero(entry);
         return NULL;
     }
 
+    slayer3d_game_data_model_cache_entry *entry =
+        slayer3d_game_data_model_cache_insert_prepared(cache, model_id, &model);
+    if (entry == NULL)
+        slayer3d_free_model(&model);
+    return entry;
+}
+
+slayer3d_game_data_model_cache_entry *slayer3d_game_data_model_cache_insert_prepared(
+    slayer3d_game_data_model_cache *cache, const char *model_id, slayer3d_model *model)
+{
+    if (cache == NULL || model_id == NULL || model == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].model_id != NULL && SDL_strcmp(cache->entries[i].model_id, model_id) == 0)
+        {
+            if (cache->entries[i].loaded)
+            {
+                slayer3d_free_model(model);
+                return &cache->entries[i];
+            }
+            return NULL;
+        }
+    }
+
+    if (!ensure_model_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    char *owned_model_id = SDL_strdup(model_id);
+    if (owned_model_id == NULL)
+        return NULL;
+
+    slayer3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
+    SDL_zero(*entry);
+    entry->model_id = owned_model_id;
+    entry->model = *model;
+    SDL_zero(*model);
+    entry->loaded = true;
     ++cache->count;
     return entry;
 }

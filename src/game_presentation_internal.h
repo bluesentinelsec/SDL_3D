@@ -11,6 +11,7 @@ typedef struct primitive_draw_context
     slayer3d_game_data_sprite_cache *sprite_cache;
     slayer3d_game_data_model_cache *model_cache;
     slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache;
+    const slayer3d_game_data_asset_warmup_queue *asset_warmup;
     const slayer3d_camera3d *camera;
     const slayer3d_game_data_render_eval *eval;
     slayer3d_game_data_render_settings render_settings;
@@ -29,14 +30,41 @@ bool slayer3d_game_data_ensure_mesh_primitive_cache_capacity(slayer3d_game_data_
 slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_runtime *runtime,
                                                     slayer3d_game_data_font_cache *cache, const char *font_id);
 
+slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_font_cache *cache, const char *font_id,
+                                                             slayer3d_font *font);
+
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_image_cache *cache, const char *image_id);
+
+bool slayer3d_game_data_prepare_direct_image_texture(slayer3d_asset_resolver *assets,
+                                                     const slayer3d_game_data_image_asset *asset,
+                                                     slayer3d_texture2d *out_texture);
+
+bool slayer3d_game_data_prepare_sprite_backed_image_texture(const slayer3d_game_data_runtime *runtime,
+                                                            const slayer3d_game_data_image_asset *asset,
+                                                            slayer3d_texture2d *out_texture, const char **out_effect,
+                                                            float *out_effect_delay, float *out_effect_duration,
+                                                            char **out_shader_vertex_source,
+                                                            char **out_shader_fragment_source);
+
+slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared(
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture, const char *effect,
+    float effect_delay, float effect_duration, char **shader_vertex_source, char **shader_fragment_source);
+
+slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prepared_texture(
+    slayer3d_game_data_image_cache *cache, const char *image_id, slayer3d_texture2d *texture);
 
 slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_find_or_load_sprite_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_sprite_cache *cache, const char *sprite_id);
 
+slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_sprite_cache_insert_prepared(
+    slayer3d_game_data_sprite_cache *cache, const char *sprite_id, slayer3d_sprite_asset_runtime *sprite);
+
 slayer3d_game_data_model_cache_entry *slayer3d_game_data_find_or_load_model_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_model_cache *cache, const char *model_id);
+
+slayer3d_game_data_model_cache_entry *slayer3d_game_data_model_cache_insert_prepared(
+    slayer3d_game_data_model_cache *cache, const char *model_id, slayer3d_model *model);
 
 bool slayer3d_game_data_draw_particles_filtered(const slayer3d_game_data_runtime *runtime,
                                                 slayer3d_render_context *renderer,
@@ -55,6 +83,17 @@ bool slayer3d_game_data_flush_sphere_draw_batch(primitive_draw_context *context)
 
 bool slayer3d_game_data_append_sphere_draw_batch(primitive_draw_context *context,
                                                  const slayer3d_game_data_render_primitive *primitive);
+
+bool slayer3d_game_data_primitive_asset_ready(const primitive_draw_context *context,
+                                              slayer3d_game_data_asset_warmup_kind kind, const char *id);
+
+bool slayer3d_game_data_mesh_primitive_cacheable(const slayer3d_game_data_render_primitive *primitive);
+
+bool slayer3d_game_data_mesh_primitive_warmup_key(const slayer3d_game_data_render_primitive *primitive, char *buffer,
+                                                  int buffer_size);
+
+const slayer3d_mesh *slayer3d_game_data_find_or_build_mesh_primitive(
+    slayer3d_game_data_mesh_primitive_cache *cache, const slayer3d_game_data_render_primitive *primitive);
 
 const slayer3d_texture2d *slayer3d_game_data_primitive_texture(primitive_draw_context *context,
                                                                const slayer3d_game_data_render_primitive *primitive);

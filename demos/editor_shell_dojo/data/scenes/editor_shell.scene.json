@@ -1054,16 +1054,28 @@
             "layer": 121,
             "children": [
               { "id": "ui.editor_shell.texture_viewer.wall_metal.button", "type": "button", "x": 10, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.wall_metal", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.wall_metal" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.wall_metal.loading", "type": "label", "x": 10, "y": 41, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.wall_metal.pending", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.wall_metal.failed", "type": "label", "x": 10, "y": 41, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.wall_metal.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.wall_metal.label", "type": "label", "x": 6, "y": 92, "w": 86, "h": 18, "text": "Wall Metal", "text_scale": 0.38, "align": "center", "layer": 122 },
               { "id": "ui.editor_shell.texture_viewer.rock_floor.button", "type": "button", "x": 106, "y": 12, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.rock_floor", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.rock_floor" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.rock_floor.loading", "type": "label", "x": 106, "y": 41, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.rock_floor.pending", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.rock_floor.failed", "type": "label", "x": 106, "y": 41, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.rock_floor.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.rock_floor.label", "type": "label", "x": 102, "y": 92, "w": 86, "h": 18, "text": "Rock Floor", "text_scale": 0.38, "align": "center", "layer": 122 },
               { "id": "ui.editor_shell.texture_viewer.ceiling_metal.button", "type": "button", "x": 10, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.ceiling_metal", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.ceiling_metal" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.ceiling_metal.loading", "type": "label", "x": 10, "y": 151, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.ceiling_metal.pending", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.ceiling_metal.failed", "type": "label", "x": 10, "y": 151, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.ceiling_metal.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.ceiling_metal.label", "type": "label", "x": 6, "y": 202, "w": 86, "h": 18, "text": "Ceiling", "text_scale": 0.38, "align": "center", "layer": 122 },
               { "id": "ui.editor_shell.texture_viewer.door_hatch.button", "type": "button", "x": 106, "y": 122, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.door_hatch", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.door_hatch" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.door_hatch.loading", "type": "label", "x": 106, "y": 151, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.door_hatch.pending", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.door_hatch.failed", "type": "label", "x": 106, "y": 151, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.door_hatch.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.door_hatch.label", "type": "label", "x": 102, "y": 202, "w": 86, "h": 18, "text": "Door Hatch", "text_scale": 0.38, "align": "center", "layer": 122 },
               { "id": "ui.editor_shell.texture_viewer.lava.button", "type": "button", "x": 10, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.lava", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.lava" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.lava.loading", "type": "label", "x": 10, "y": 261, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.lava.pending", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.lava.failed", "type": "label", "x": 10, "y": 261, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.lava.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.lava.label", "type": "label", "x": 6, "y": 312, "w": 86, "h": 18, "text": "Lava", "text_scale": 0.38, "align": "center", "layer": 122 },
               { "id": "ui.editor_shell.texture_viewer.radioactive_crate.button", "type": "button", "x": 106, "y": 232, "w": 78, "h": 78, "text": "", "interactive": true, "action": "editor.texture.select.radioactive_crate", "selected_if": { "type": "scene_state.compare", "key": "editor.palette.material.cursor", "op": "==", "value": "mat.editor.texture.radioactive_crate" }, "layer": 122 },
+              { "id": "ui.editor_shell.texture_viewer.radioactive_crate.loading", "type": "label", "x": 106, "y": 261, "w": 78, "h": 20, "text": "Loading", "text_scale": 0.34, "align": "center", "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.radioactive_crate.pending", "op": "==", "value": true, "default": false } },
+              { "id": "ui.editor_shell.texture_viewer.radioactive_crate.failed", "type": "label", "x": 106, "y": 261, "w": 78, "h": 20, "text": "Failed", "text_scale": 0.34, "align": "center", "text_color": [255, 100, 90, 255], "layer": 124, "visible_if": { "type": "scene_state.compare", "key": "asset_warmup.ui_image.image.editor_shell.texture.radioactive_crate.failed", "op": "==", "value": true, "default": false } },
               { "id": "ui.editor_shell.texture_viewer.radioactive_crate.label", "type": "label", "x": 98, "y": 312, "w": 94, "h": 18, "text": "Rad Crate", "text_scale": 0.38, "align": "center", "layer": 122 },
               { "id": "ui.editor_shell.texture_viewer.scroll.track", "type": "panel", "x": 198, "y": 12, "w": 10, "h": 318, "layer": 122 },
               { "id": "ui.editor_shell.texture_viewer.scroll.thumb", "type": "panel", "x": 200, "y": 16, "w": 6, "h": 306, "layer": 123 }
@@ -1090,6 +1102,60 @@
             { "type": "scene_state.compare", "key": "editor.texture.viewer.collapsed", "op": "==", "value": true, "default": false }
           ]
         }
+      },
+      {
+        "id": "ui.editor_shell.asset_warmup.panel",
+        "type": "panel",
+        "x": 930,
+        "y": 534,
+        "w": 338,
+        "h": 58,
+        "layer": 120,
+        "visible_if": {
+          "type": "any",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "asset_warmup.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "asset_warmup.failed", "op": ">", "value": 0, "default": 0 }
+          ]
+        },
+        "children": [
+          {
+            "id": "ui.editor_shell.asset_warmup.status",
+            "type": "label",
+            "x": 10,
+            "y": 7,
+            "w": 318,
+            "h": 18,
+            "format": "Assets: %s  pending %s / ready %s / failed %s",
+            "bindings": [
+              { "type": "scene_state", "key": "asset_warmup.status", "default": "idle" },
+              { "type": "scene_state", "key": "asset_warmup.pending", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.ready", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.failed", "default": 0 }
+            ],
+            "text_scale": 0.4,
+            "align": "left",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.asset_warmup.jobs",
+            "type": "label",
+            "x": 10,
+            "y": 29,
+            "w": 318,
+            "h": 18,
+            "format": "Queue %s  loading %s  finalize %s  jobs %s",
+            "bindings": [
+              { "type": "scene_state", "key": "asset_warmup.queued", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.loading", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.ready_for_finalize", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.service_jobs", "default": 0 }
+            ],
+            "text_scale": 0.4,
+            "align": "left",
+            "layer": 121
+          }
+        ]
       },
       {
         "id": "ui.editor_shell.console.panel",
@@ -1377,6 +1443,170 @@
                                 "key": "editor.palette.game_object.cursor",
                                 "op": "==",
                                 "value": "player_start",
+                                "default": "player_start"
+                        }
+                ]
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.cell",
+        "type": "panel",
+        "x": 724,
+        "y": 236,
+        "w": 132,
+        "h": 132,
+        "color": [
+                38,
+                44,
+                54,
+                235
+        ],
+        "border_color": [
+                95,
+                115,
+                145,
+                230
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.preview.body",
+        "type": "panel",
+        "x": 775,
+        "y": 272,
+        "w": 30,
+        "h": 48,
+        "color": [
+                112,
+                178,
+                255,
+                245
+        ],
+        "border_color": [
+                170,
+                214,
+                255,
+                255
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.preview.head",
+        "type": "panel",
+        "x": 770,
+        "y": 252,
+        "w": 40,
+        "h": 26,
+        "color": [
+                135,
+                198,
+                255,
+                255
+        ],
+        "border_color": [
+                190,
+                228,
+                255,
+                255
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.ready_badge",
+        "type": "panel",
+        "x": 743,
+        "y": 251,
+        "w": 16,
+        "h": 16,
+        "color": [
+                64,
+                235,
+                150,
+                245
+        ],
+        "border_color": [
+                172,
+                255,
+                210,
+                255
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.ready",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
+        },
+        "layer": 131
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.selected",
+        "type": "panel",
+        "x": 720,
+        "y": 232,
+        "w": 140,
+        "h": 140,
+        "color": [
+                0,
+                0,
+                0,
+                0
+        ],
+        "border_color": [
+                95,
+                255,
+                210,
+                255
+        ],
+        "border_thickness": 3,
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.game_object.cursor",
+                                "op": "==",
+                                "value": "simple_robot",
                                 "default": "player_start"
                         }
                 ]
@@ -1853,6 +2083,142 @@
                 "key": "editor.palette.active",
                 "op": "==",
                 "value": "game_object"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.label",
+        "type": "label",
+        "x": 725.0,
+        "y": 334,
+        "w": 130,
+        "h": 21,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Simple Robot",
+        "text_color": [
+                230,
+                238,
+                248,
+                245
+        ],
+        "text_scale": 0.55,
+        "align": "center",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.loading",
+        "type": "label",
+        "x": 725.0,
+        "y": 316,
+        "w": 130,
+        "h": 18,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Loading",
+        "text_color": [
+                255,
+                226,
+                118,
+                255
+        ],
+        "text_scale": 0.45,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.pending",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.ready",
+        "type": "label",
+        "x": 725.0,
+        "y": 316,
+        "w": 130,
+        "h": 18,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Ready",
+        "text_color": [
+                130,
+                255,
+                190,
+                255
+        ],
+        "text_scale": 0.45,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.ready",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.failed",
+        "type": "label",
+        "x": 725.0,
+        "y": 316,
+        "w": 130,
+        "h": 18,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Failed",
+        "text_color": [
+                255,
+                100,
+                90,
+                255
+        ],
+        "text_scale": 0.45,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.failed",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
         }
 },
 {

@@ -21,7 +21,8 @@ The runtime currently owns:
 - asset resolver creation
 - caller-provided asset mounting
 - root game JSON loading
-- font, image, and particle presentation caches
+- font, image, particle, sprite, model, mesh primitive, and asset warmup
+  presentation caches
 - authored app-flow startup and frame update
 - authored frame render through `slayer3d_game_data_draw_frame`
 - haptics policy signal wiring
@@ -76,6 +77,69 @@ During the managed loop:
 
 The outer loop still controls fixed timestep, SDL events, input snapshots,
 audio frame updates, and presentation.
+
+## Presentation Asset Warmup
+
+The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
+to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
+scene fonts, UI images, skybox images, brush material textures, render sprite
+assets, render model assets, render primitive texture images, and cacheable
+procedural mesh primitives once per scene activation. It also queues authored
+sound, music, and ambient audio file paths so resolver-backed audio can be
+materialized into the runtime cache before first playback. When the active scene
+changes, unfinished requests from the previous activation are canceled so the
+current scene's assets take priority. Requests are deduplicated and then
+serviced with a small per-frame budget instead of blocking startup on the full
+scene asset set.
+
+On native SDL targets, the managed runtime also starts a background warmup worker
+for CPU-only texture, UI image, authored sprite, and authored model preparation.
+The worker reads and decodes those assets, then the frame warmup service
+publishes the prepared assets into the render texture, UI image, sprite, and
+model caches on the main presentation path. Web builds and platforms where
+worker creation fails fall back to the same budgeted service path. Audio
+materialization and font loading currently run on the budgeted main service path
+because they update runtime-owned audio/font cache state.
+
+The managed runtime publishes warmup progress to scene state each render under
+the `asset_warmup` prefix. Data-authored UI can bind to `asset_warmup.total`,
+`queued`, `loading`, `ready_for_finalize`, `pending`, `ready`, `failed`,
+`canceled`, `completed`, `worker_threads`, `service_calls`, `service_jobs`,
+`progress`, `elapsed_ms`, `service_last_ms`, `service_total_ms`,
+`service_max_ms`, `active`, `complete`, and `status`. Hosts that need a
+different namespace can call
+`slayer3d_data_game_runtime_publish_asset_warmup_stats()` with a custom prefix.
+For active-scene UI images, the same publisher also writes
+`asset_warmup.ui_image.<image_id>.status`, `pending`, `ready`, and `failed`
+fields so authored texture browsers can show per-thumbnail loading or failure
+states. UI image drawing skips matching pending/failed warmup requests instead
+of forcing a synchronous lazy load. Active-scene skybox drawing also skips until
+all six queued skybox image faces are ready. Editor texture swatches backed by
+pending or failed warmup thumbnails remain visible with status text, but their
+selection actions are ignored until the thumbnail is available.
+Render primitives that reference warmed image, sprite, or model assets also
+avoid forcing synchronous lazy loads while those requests are pending or failed.
+Texture-backed geometry draws untextured until its image is available; sprites
+and models skip drawing until ready. Solid procedural mesh primitives also use
+the warmup queue to populate the generated mesh cache ahead of first draw; if a
+matching mesh warmup request is still pending, solid mesh drawing waits for the
+budgeted warmup service instead of building the mesh on the draw path.
+
+Authored font assets use the same per-asset state shape under
+`asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text
+and editor debug labels skip matching pending/failed font requests instead of
+forcing synchronous font loads from the draw path.
+
+Authored model assets use the same per-asset state shape under
+`asset_warmup.model.<model_id>.status`, `pending`, `ready`, and `failed`.
+Editor actor/model browsers can bind to those keys to show progressive model
+availability while CPU mesh decoding and render-thread finalization complete in
+the background.
+
+The editor shell includes a compact asset warmup diagnostics panel that appears
+while warmup is active or when failures are present. It is authored entirely in
+scene UI and binds to the aggregate `asset_warmup` fields, making queue depth,
+loading/finalization counts, and service activity visible during startup.
 
 ## Network Packet Loops
 

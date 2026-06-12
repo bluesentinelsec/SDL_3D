@@ -269,6 +269,7 @@ target_sources(
         src/game_data_world_queries.c
         src/game_data_standard_options.c
         src/game_presentation.c
+        src/game_presentation_asset_warmup.c
         src/game_presentation_app_flow.c
         src/game_presentation_cache.c
         src/game_presentation_brush_worlds.c

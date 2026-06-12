@@ -32,6 +32,9 @@ extern "C"
         float size;
     } slayer3d_game_data_font_asset;
 
+    /** @brief Callback for authored font asset descriptors. */
+    typedef bool (*slayer3d_game_data_font_asset_fn)(void *userdata, const slayer3d_game_data_font_asset *font);
+
     /** @brief Authored image asset descriptor. */
     typedef struct slayer3d_game_data_image_asset
     {
@@ -51,6 +54,9 @@ extern "C"
         /** @brief Virtual or filesystem path to the model source. */
         const char *path;
     } slayer3d_game_data_model_asset;
+
+    /** @brief Callback for authored 3D model asset descriptors. */
+    typedef bool (*slayer3d_game_data_model_asset_fn)(void *userdata, const slayer3d_game_data_model_asset *model);
 
     /** @brief Authored scene skybox descriptor using six image asset ids. */
     typedef struct slayer3d_game_data_scene_skybox
@@ -88,6 +94,9 @@ extern "C"
         slayer3d_audio_bus bus;
     } slayer3d_game_data_sound_asset;
 
+    /** @brief Callback for authored sound-effect asset descriptors. */
+    typedef bool (*slayer3d_game_data_sound_asset_fn)(void *userdata, const slayer3d_game_data_sound_asset *sound);
+
     /** @brief Authored music asset descriptor. */
     typedef struct slayer3d_game_data_music_asset
     {
@@ -100,6 +109,9 @@ extern "C"
         /** @brief Whether playback should loop by default. */
         bool loop;
     } slayer3d_game_data_music_asset;
+
+    /** @brief Callback for authored music asset descriptors. */
+    typedef bool (*slayer3d_game_data_music_asset_fn)(void *userdata, const slayer3d_game_data_music_asset *music);
 
     /** @brief Authored ambient-zone asset descriptor. */
     typedef struct slayer3d_game_data_ambient_asset
@@ -115,6 +127,10 @@ extern "C"
         /** @brief Whether playback should loop by default. */
         bool loop;
     } slayer3d_game_data_ambient_asset;
+
+    /** @brief Callback for authored ambient-zone asset descriptors. */
+    typedef bool (*slayer3d_game_data_ambient_asset_fn)(void *userdata,
+                                                        const slayer3d_game_data_ambient_asset *ambient);
 
     /** @brief Authored sprite asset descriptor. */
     typedef struct slayer3d_game_data_sprite_asset

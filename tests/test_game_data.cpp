@@ -22,6 +22,7 @@ extern "C"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
+#include <SDL3/SDL_timer.h>
 
 #include "../vendor/yyjson/yyjson.h"
 #include "slayer3d/asset.h"
@@ -3597,6 +3598,826 @@ TEST(GameDataRuntime, ReadsSpriteAssetMetadata)
 
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupQueueDeduplicatesRequests)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 3);
+
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.texture.wall"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.texture.wall"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, "asset://maps/editor.map",
+                                                                "asset://textures/wall.png"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, "asset://maps/editor.map",
+                                                                "asset://textures/wall.png"));
+    EXPECT_TRUE(
+        slayer3d_game_data_asset_warmup_request_texture(&queue, "asset://maps/other.map", "asset://textures/wall.png"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.actor.guard"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.actor.guard"));
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.queued, 5);
+    EXPECT_EQ(stats.ready, 0);
+    EXPECT_EQ(stats.failed, 0);
+    EXPECT_EQ(stats.canceled, 0);
+    EXPECT_EQ(queue.max_jobs_per_frame, 3);
+
+    EXPECT_EQ(slayer3d_game_data_asset_warmup_queue_service(&queue, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                                            nullptr, nullptr, nullptr, 0),
+              0);
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.queued, 5);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupQueueStartsAndStopsWorkers)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+
+    const bool started = slayer3d_game_data_asset_warmup_queue_start_workers(&queue, nullptr, assets, 1);
+    if (started)
+    {
+        EXPECT_NE(queue.worker_state, nullptr);
+        slayer3d_game_data_asset_warmup_queue_stop_workers(&queue);
+        EXPECT_EQ(queue.worker_state, nullptr);
+    }
+    else
+    {
+        EXPECT_EQ(queue.worker_state, nullptr);
+    }
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_asset_resolver_destroy(assets);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupQueueReportsDetailedStats)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 2);
+
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.queued"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/loading.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/finalize.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.ready"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.failed"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.canceled"));
+    ASSERT_EQ(queue.count, 6);
+
+    queue.entries[1].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+    queue.entries[2].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE;
+    queue.entries[3].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY;
+    queue.entries[4].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+    queue.entries[5].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED;
+
+    slayer3d_game_data_asset_warmup_state state{};
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE, nullptr,
+                                                              "asset://textures/loading.png", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING);
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL, nullptr,
+                                                              "model.failed", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED);
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, nullptr,
+                                                              "image.canceled", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED);
+    EXPECT_FALSE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
+                                                               nullptr, "image.missing", &state));
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 6);
+    EXPECT_EQ(stats.queued, 1);
+    EXPECT_EQ(stats.loading, 1);
+    EXPECT_EQ(stats.ready_for_finalize, 1);
+    EXPECT_EQ(stats.pending, 3);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 1);
+    EXPECT_EQ(stats.canceled, 1);
+    EXPECT_EQ(stats.completed, 3);
+    EXPECT_FLOAT_EQ(stats.progress, 0.5f);
+    EXPECT_GE(stats.elapsed_ms, 0.0f);
+    EXPECT_EQ(stats.service_calls, 0);
+    EXPECT_EQ(stats.service_jobs, 0);
+    EXPECT_FLOAT_EQ(stats.service_last_ms, 0.0f);
+    EXPECT_FLOAT_EQ(stats.service_total_ms, 0.0f);
+    EXPECT_FLOAT_EQ(stats.service_max_ms, 0.0f);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupQueueCancelsPendingRequests)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 2);
+
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.queued"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/loading.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/finalize.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.ready"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.failed"));
+    ASSERT_EQ(queue.count, 5);
+
+    queue.entries[1].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+    queue.entries[2].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE;
+    queue.entries[3].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY;
+    queue.entries[4].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+
+    EXPECT_EQ(slayer3d_game_data_asset_warmup_queue_cancel_pending(&queue), 3);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.queued, 0);
+    EXPECT_EQ(stats.loading, 0);
+    EXPECT_EQ(stats.ready_for_finalize, 0);
+    EXPECT_EQ(stats.pending, 0);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 1);
+    EXPECT_EQ(stats.canceled, 3);
+    EXPECT_EQ(stats.completed, 5);
+    EXPECT_FLOAT_EQ(stats.progress, 1.0f);
+
+    slayer3d_game_data_asset_warmup_state state{};
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, nullptr,
+                                                              "image.queued", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED);
+
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.queued"));
+    EXPECT_TRUE(slayer3d_game_data_asset_warmup_request_state(&queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, nullptr,
+                                                              "image.queued", &state));
+    EXPECT_EQ(state, SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED);
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.queued, 1);
+    EXPECT_EQ(stats.canceled, 2);
+    EXPECT_EQ(stats.completed, 4);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_ui_image");
+    Uint8 pixels[] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+    slayer3d_image image{};
+    image.pixels = pixels;
+    image.width = 2;
+    image.height = 2;
+    std::filesystem::create_directories(dir / "images");
+    ASSERT_TRUE(slayer3d_save_image_png(&image, (dir / "images" / "pixel.png").string().c_str())) << SDL_GetError();
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Image", "id": "test.warmup_image", "version": "0.1.0" },
+  "world": { "name": "world.warmup_image", "kind": "fixed_screen" },
+  "assets": {
+    "images": [{ "id": "image.pixel", "path": "asset://images/pixel.png" }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_image_cache image_cache{};
+    slayer3d_game_data_image_cache_init(&image_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&queue, runtime, assets, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.pixel"));
+
+    for (int attempt = 0; attempt < 100 && image_cache.count == 0; ++attempt)
+    {
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &image_cache, nullptr,
+                                                            nullptr, nullptr, assets, 1);
+        if (image_cache.count == 0)
+            SDL_Delay(1);
+    }
+
+    ASSERT_EQ(image_cache.count, 1);
+    EXPECT_STREQ(image_cache.entries[0].image_id, "image.pixel");
+    EXPECT_TRUE(image_cache.entries[0].loaded);
+    EXPECT_EQ(image_cache.entries[0].texture.width, 2);
+    EXPECT_EQ(image_cache.entries[0].texture.height, 2);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+    EXPECT_GE(stats.service_calls, 1);
+    EXPECT_GE(stats.service_jobs, 1);
+    EXPECT_GE(stats.elapsed_ms, 0.0f);
+    EXPECT_GE(stats.service_last_ms, 0.0f);
+    EXPECT_GE(stats.service_total_ms, stats.service_last_ms);
+    EXPECT_GE(stats.service_max_ms, stats.service_last_ms);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_image_cache_free(&image_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteBackedUiImages)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_sprite_ui_image");
+    Uint8 pixels[] = {255, 64, 0, 255, 0, 128, 255, 255, 0, 255, 64, 255, 255, 255, 255, 255};
+    slayer3d_image image{};
+    image.pixels = pixels;
+    image.width = 2;
+    image.height = 2;
+    std::filesystem::create_directories(dir / "sprites");
+    std::filesystem::create_directories(dir / "shaders");
+    ASSERT_TRUE(slayer3d_save_image_png(&image, (dir / "sprites" / "badge.png").string().c_str())) << SDL_GetError();
+    write_text(dir / "shaders" / "badge.frag", "void main() {}\n");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Sprite UI", "id": "test.warmup_sprite_ui", "version": "0.1.0" },
+  "world": { "name": "world.warmup_sprite_ui", "kind": "fixed_screen" },
+  "assets": {
+    "sprites": [{
+      "id": "sprite.badge",
+      "path": "asset://sprites/badge.png",
+      "frame_width": 2,
+      "frame_height": 2,
+      "columns": 1,
+      "rows": 1,
+      "frame_count": 1,
+      "direction_count": 1,
+      "fps": 1.0,
+      "effect": "melt",
+      "effect_delay": 0.25,
+      "effect_duration": 0.75,
+      "shader_fragment_path": "asset://shaders/badge.frag"
+    }],
+    "images": [{ "id": "image.badge", "sprite": "sprite.badge" }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_image_cache image_cache{};
+    slayer3d_game_data_image_cache_init(&image_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&queue, runtime, assets, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.badge"));
+
+    for (int attempt = 0; attempt < 100 && image_cache.count == 0; ++attempt)
+    {
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &image_cache, nullptr,
+                                                            nullptr, nullptr, assets, 1);
+        if (image_cache.count == 0)
+            SDL_Delay(1);
+    }
+
+    ASSERT_EQ(image_cache.count, 1);
+    EXPECT_STREQ(image_cache.entries[0].image_id, "image.badge");
+    EXPECT_TRUE(image_cache.entries[0].loaded);
+    EXPECT_EQ(image_cache.entries[0].texture.width, 2);
+    EXPECT_EQ(image_cache.entries[0].texture.height, 2);
+    EXPECT_STREQ(image_cache.entries[0].effect, "melt");
+    EXPECT_FLOAT_EQ(image_cache.entries[0].effect_delay, 0.25f);
+    EXPECT_FLOAT_EQ(image_cache.entries[0].effect_duration, 0.75f);
+    ASSERT_NE(image_cache.entries[0].shader_fragment_source, nullptr);
+    EXPECT_STREQ(image_cache.entries[0].shader_fragment_source, "void main() {}\n");
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_image_cache_free(&image_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteAssets)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_sprite");
+    Uint8 pixels[] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+    slayer3d_image image{};
+    image.pixels = pixels;
+    image.width = 2;
+    image.height = 2;
+    std::filesystem::create_directories(dir / "sprites");
+    ASSERT_TRUE(slayer3d_save_image_png(&image, (dir / "sprites" / "single.png").string().c_str())) << SDL_GetError();
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Sprite", "id": "test.warmup_sprite", "version": "0.1.0" },
+  "world": { "name": "world.warmup_sprite", "kind": "fixed_screen" },
+  "assets": {
+    "sprites": [{
+      "id": "sprite.single",
+      "path": "asset://sprites/single.png",
+      "frame_width": 2,
+      "frame_height": 2,
+      "columns": 1,
+      "rows": 1,
+      "frame_count": 1,
+      "direction_count": 1,
+      "fps": 1.0
+    }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_sprite_cache sprite_cache{};
+    slayer3d_game_data_sprite_cache_init(&sprite_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&queue, runtime, assets, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.single"));
+
+    for (int attempt = 0; attempt < 100 && sprite_cache.count == 0; ++attempt)
+    {
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, &sprite_cache,
+                                                            nullptr, nullptr, assets, 1);
+        if (sprite_cache.count == 0)
+            SDL_Delay(1);
+    }
+
+    ASSERT_EQ(sprite_cache.count, 1);
+    EXPECT_STREQ(sprite_cache.entries[0].sprite_id, "sprite.single");
+    EXPECT_TRUE(sprite_cache.entries[0].loaded);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.direction_count, 1);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.animation_frame_count, 1);
+    ASSERT_NE(sprite_cache.entries[0].sprite.base_textures, nullptr);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.base_textures[0].width, 2);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.base_textures[0].height, 2);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_sprite_cache_free(&sprite_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsModelAssets)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_model");
+    std::filesystem::create_directories(dir / "models");
+    write_text(dir / "models" / "triangle.obj",
+               R"obj(o warmup_triangle
+v 0 0 0
+v 1 0 0
+v 0 1 0
+vn 0 0 1
+f 1//1 2//1 3//1
+)obj");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Model", "id": "test.warmup_model", "version": "0.1.0" },
+  "world": { "name": "world.warmup_model", "kind": "fixed_screen" },
+  "assets": {
+    "models": [{ "id": "model.triangle", "path": "asset://models/triangle.obj" }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    struct ModelAssetCapture
+    {
+        std::vector<std::string> ids;
+    } model_capture{};
+    auto collect_model_asset = [](void *userdata, const slayer3d_game_data_model_asset *model) -> bool {
+        auto *capture = static_cast<ModelAssetCapture *>(userdata);
+        if (capture != nullptr && model != nullptr && model->id != nullptr)
+            capture->ids.emplace_back(model->id);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_model_asset(runtime, collect_model_asset, &model_capture));
+    EXPECT_NE(std::find(model_capture.ids.begin(), model_capture.ids.end(), "model.triangle"), model_capture.ids.end());
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_model_cache model_cache{};
+    slayer3d_game_data_model_cache_init(&model_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&queue, runtime, assets, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.triangle"));
+
+    for (int attempt = 0; attempt < 100 && model_cache.count == 0; ++attempt)
+    {
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
+                                                            &model_cache, nullptr, assets, 1);
+        if (model_cache.count == 0)
+            SDL_Delay(1);
+    }
+
+    ASSERT_EQ(model_cache.count, 1);
+    EXPECT_STREQ(model_cache.entries[0].model_id, "model.triangle");
+    EXPECT_TRUE(model_cache.entries[0].loaded);
+    EXPECT_GE(model_cache.entries[0].model.mesh_count, 1);
+    ASSERT_NE(model_cache.entries[0].model.meshes, nullptr);
+    EXPECT_GT(model_cache.entries[0].model.meshes[0].vertex_count, 0);
+    EXPECT_GT(model_cache.entries[0].model.meshes[0].index_count, 0);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_model_cache_free(&model_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsFontAssets)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_font");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Font", "id": "test.warmup_font", "version": "0.1.0" },
+  "world": { "name": "world.warmup_font", "kind": "fixed_screen" },
+  "assets": {
+    "fonts": [{ "id": "font.hud", "builtin": "inter", "size": 24 }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    struct FontAssetCapture
+    {
+        std::vector<std::string> ids;
+    } font_capture{};
+    auto collect_font_asset = [](void *userdata, const slayer3d_game_data_font_asset *font) -> bool {
+        auto *capture = static_cast<FontAssetCapture *>(userdata);
+        if (capture != nullptr && font != nullptr && font->id != nullptr)
+            capture->ids.emplace_back(font->id);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_font_asset(runtime, collect_font_asset, &font_capture));
+    EXPECT_NE(std::find(font_capture.ids.begin(), font_capture.ids.end(), "font.hud"), font_capture.ids.end());
+
+    slayer3d_game_data_font_cache font_cache{};
+    slayer3d_game_data_font_cache_init(&font_cache, SLAYER3D_MEDIA_DIR);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_font(&queue, "font.hud"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_font(&queue, "font.hud"));
+
+    (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, &font_cache, nullptr, nullptr,
+                                                        nullptr, nullptr, nullptr, 1);
+
+    ASSERT_EQ(font_cache.count, 1);
+    ASSERT_NE(font_cache.fonts[0].atlas_pixels, nullptr);
+    EXPECT_GT(font_cache.fonts[0].atlas_w, 0);
+    EXPECT_GT(font_cache.fonts[0].atlas_h, 0);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 1);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_font_cache_free(&font_cache);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupMaterializesAudioFiles)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_audio");
+    const std::filesystem::path user_root = dir / "user";
+    const std::filesystem::path cache_root = dir / "cache";
+    write_text(dir / "audio" / "hit.wav", "hit bytes");
+    write_text(dir / "audio" / "title.ogg", "music bytes");
+    write_text(dir / "audio" / "wind.ogg", "ambient bytes");
+    const std::string game_json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Audio", "id": "test.warmup_audio", "version": "0.1.0" },
+  "storage": {
+    "organization": "Blue Sentinel Security",
+    "application": "Warmup Audio Test",
+    "user_root_override": ")json") +
+                                  user_root.generic_string() +
+                                  R"json(",
+    "cache_root_override": ")json" +
+                                  cache_root.generic_string() +
+                                  R"json("
+  },
+  "world": { "name": "world.warmup_audio", "kind": "fixed_screen" },
+  "assets": {
+    "sounds": [{ "id": "sound.hit", "path": "asset://audio/hit.wav", "volume": 0.5 }],
+    "music": [{ "id": "music.title", "path": "asset://audio/title.ogg", "loop": false }],
+    "ambient": [{ "id": "ambient.wind", "ambient_id": 2, "path": "asset://audio/wind.ogg" }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json";
+    write_text(dir / "warmup.game.json", game_json.c_str());
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    struct AudioAssetCapture
+    {
+        std::vector<std::string> paths;
+    } audio_capture{};
+    auto collect_sound = [](void *userdata, const slayer3d_game_data_sound_asset *sound) -> bool {
+        auto *capture = static_cast<AudioAssetCapture *>(userdata);
+        if (capture != nullptr && sound != nullptr && sound->path != nullptr)
+            capture->paths.emplace_back(sound->path);
+        return true;
+    };
+    auto collect_music = [](void *userdata, const slayer3d_game_data_music_asset *music) -> bool {
+        auto *capture = static_cast<AudioAssetCapture *>(userdata);
+        if (capture != nullptr && music != nullptr && music->path != nullptr)
+            capture->paths.emplace_back(music->path);
+        return true;
+    };
+    auto collect_ambient = [](void *userdata, const slayer3d_game_data_ambient_asset *ambient) -> bool {
+        auto *capture = static_cast<AudioAssetCapture *>(userdata);
+        if (capture != nullptr && ambient != nullptr && ambient->path != nullptr)
+            capture->paths.emplace_back(ambient->path);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_sound_asset(runtime, collect_sound, &audio_capture));
+    EXPECT_TRUE(slayer3d_game_data_for_each_music_asset(runtime, collect_music, &audio_capture));
+    EXPECT_TRUE(slayer3d_game_data_for_each_ambient_asset(runtime, collect_ambient, &audio_capture));
+    EXPECT_EQ(audio_capture.paths.size(), 3u);
+
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/hit.wav"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/hit.wav"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/title.ogg"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/wind.ogg"));
+
+    for (int attempt = 0; attempt < 10; ++attempt)
+    {
+        slayer3d_game_data_asset_warmup_stats stats{};
+        slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+        if (stats.ready == 3)
+            break;
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
+                                                            nullptr, nullptr, nullptr, 1);
+    }
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 3);
+    EXPECT_EQ(stats.ready, 3);
+    EXPECT_EQ(stats.failed, 0);
+    EXPECT_GE(stats.service_jobs, 3);
+
+    char materialized_path[4096]{};
+    ASSERT_TRUE(slayer3d_game_data_prepare_audio_file(runtime, "asset://audio/hit.wav", materialized_path,
+                                                      sizeof(materialized_path)));
+    const std::filesystem::path materialized(materialized_path);
+    EXPECT_TRUE(std::filesystem::exists(materialized));
+    EXPECT_EQ(materialized.parent_path().filename().string(), "audio");
+
+    std::error_code ec;
+    EXPECT_TRUE(std::filesystem::equivalent(materialized.parent_path().parent_path(), cache_root, ec));
+
+    std::ifstream in(materialized, std::ios::binary);
+    const std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(contents, "hit bytes");
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupBuildsMeshPrimitives)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_mesh_primitive");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Mesh Primitive", "id": "test.warmup_mesh_primitive", "version": "0.1.0" },
+  "world": { "name": "world.warmup_mesh_primitive", "kind": "fixed_screen" },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_render_primitive primitive{};
+    primitive.type = SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE;
+    primitive.mesh_primitive = SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE;
+    primitive.draw_mode = SLAYER3D_GAME_DATA_RENDER_DRAW_SOLID;
+    primitive.size = {1.0f, 2.0f, 3.0f};
+    primitive.slices = 8;
+    primitive.rings = 4;
+    primitive.tube_segments = 6;
+
+    slayer3d_game_data_mesh_primitive_cache mesh_cache{};
+    slayer3d_game_data_mesh_primitive_cache_init(&mesh_cache);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_mesh_primitive(&queue, &primitive));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_mesh_primitive(&queue, &primitive));
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 1);
+    EXPECT_EQ(stats.queued, 1);
+
+    EXPECT_EQ(slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
+                                                            nullptr, &mesh_cache, nullptr, 1),
+              1);
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+    ASSERT_EQ(mesh_cache.count, 1);
+    EXPECT_EQ(mesh_cache.misses, 1);
+    EXPECT_TRUE(mesh_cache.entries[0].loaded);
+    EXPECT_GT(mesh_cache.entries[0].mesh.vertex_count, 0);
+    EXPECT_GT(mesh_cache.entries[0].mesh.index_count, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_mesh_primitive_cache_free(&mesh_cache);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, DataGameRuntimePublishesAssetWarmupStatsToSceneState)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_publish");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Publish", "id": "test.warmup_publish", "version": "0.1.0" },
+  "world": { "name": "world.warmup_publish", "kind": "fixed_screen" },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.data_asset_path = "asset://warmup.game.json";
+    desc.mount_assets = mount_test_directory_assets;
+    const std::string root = dir.string();
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+
+    char error[512]{};
+    slayer3d_data_game_runtime *managed = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &managed, error, sizeof(error))) << error;
+    ASSERT_NE(managed, nullptr);
+
+    ASSERT_TRUE(slayer3d_data_game_runtime_publish_asset_warmup_stats(managed, "editor.assets"));
+    slayer3d_game_data_runtime *runtime = slayer3d_data_game_runtime_data(managed);
+    ASSERT_NE(runtime, nullptr);
+    const slayer3d_properties *state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(state, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.total", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.pending", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.canceled", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.completed", -1), 0);
+    EXPECT_GE(slayer3d_properties_get_int(state, "editor.assets.worker_threads", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.service_calls", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.service_jobs", -1), 0);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.progress", 0.0f), 1.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.elapsed_ms", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.service_last_ms", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.service_total_ms", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.service_max_ms", -1.0f), 0.0f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(state, "editor.assets.active", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(state, "editor.assets.complete", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(state, "editor.assets.status", ""), "idle");
+
+    slayer3d_data_game_runtime_destroy(managed);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
 }
 
 TEST(GameDataRuntime, ExposesAuthoredPongPresentationData)
@@ -17260,6 +18081,186 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    struct ModelAssetCapture
+    {
+        std::vector<std::string> ids;
+    } model_capture{};
+    auto collect_model_asset = [](void *userdata, const slayer3d_game_data_model_asset *model) -> bool {
+        auto *capture = static_cast<ModelAssetCapture *>(userdata);
+        if (capture != nullptr && model != nullptr && model->id != nullptr)
+            capture->ids.emplace_back(model->id);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_model_asset(runtime, collect_model_asset, &model_capture));
+    EXPECT_NE(std::find(model_capture.ids.begin(), model_capture.ids.end(), "model.editor_shell.simple_robot"),
+              model_capture.ids.end());
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int palette_game_object_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.game_object");
+    ASSERT_GE(palette_game_object_signal, 0);
+    slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
+
+    auto visible_palette_text = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> values;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (capture == nullptr || text == nullptr || text->name == nullptr)
+                return true;
+            const std::string name = text->name;
+            if (name.rfind("ui.editor_shell.palette.", 0) != 0)
+                return true;
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) || !visible ||
+                resolved.text == nullptr)
+            {
+                return true;
+            }
+            capture->values.emplace_back(resolved.text);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.values;
+    };
+    auto contains_text = [](const std::vector<std::string> &values, const char *expected) {
+        return std::find(values.begin(), values.end(), expected) != values.end();
+    };
+
+    std::vector<std::string> labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Game Objects"));
+    EXPECT_TRUE(contains_text(labels, "Player Start"));
+    EXPECT_TRUE(contains_text(labels, "Simple Robot"));
+    EXPECT_FALSE(contains_text(labels, "Loading"));
+    EXPECT_FALSE(contains_text(labels, "Ready"));
+    EXPECT_FALSE(contains_text(labels, "Failed"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.pending", true);
+    labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Loading"));
+    EXPECT_FALSE(contains_text(labels, "Ready"));
+    EXPECT_FALSE(contains_text(labels, "Failed"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.pending", false);
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.ready", true);
+    labels = visible_palette_text();
+    EXPECT_FALSE(contains_text(labels, "Loading"));
+    EXPECT_TRUE(contains_text(labels, "Ready"));
+    EXPECT_FALSE(contains_text(labels, "Failed"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.ready", false);
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.failed", true);
+    labels = visible_palette_text();
+    EXPECT_FALSE(contains_text(labels, "Loading"));
+    EXPECT_FALSE(contains_text(labels, "Ready"));
+    EXPECT_TRUE(contains_text(labels, "Failed"));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
+TEST(GameDataRuntime, EditorShellDojoShowsAssetWarmupDiagnosticsWhenActiveOrFailed)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto visible_warmup_text = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> values;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (capture == nullptr || text == nullptr || text->name == nullptr)
+                return true;
+            const std::string name = text->name;
+            if (name.rfind("ui.editor_shell.asset_warmup.", 0) != 0)
+                return true;
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            slayer3d_game_data_ui_metrics metrics{};
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, &metrics, &resolved, &visible) ||
+                !visible || resolved.text == nullptr)
+            {
+                return true;
+            }
+            capture->values.emplace_back(resolved.text);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.values;
+    };
+    auto contains_text = [](const std::vector<std::string> &values, const char *expected) {
+        return std::find(values.begin(), values.end(), expected) != values.end();
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(visible_warmup_text().empty());
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.active", true);
+    slayer3d_properties_set_string(scene_state, "asset_warmup.status", "loading");
+    slayer3d_properties_set_int(scene_state, "asset_warmup.pending", 5);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready", 2);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.failed", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.queued", 3);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.loading", 1);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready_for_finalize", 1);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.service_jobs", 4);
+
+    std::vector<std::string> labels = visible_warmup_text();
+    EXPECT_TRUE(contains_text(labels, "Assets: loading  pending 5 / ready 2 / failed 0"));
+    EXPECT_TRUE(contains_text(labels, "Queue 3  loading 1  finalize 1  jobs 4"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.active", false);
+    slayer3d_properties_set_string(scene_state, "asset_warmup.status", "failed");
+    slayer3d_properties_set_int(scene_state, "asset_warmup.pending", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready", 4);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.failed", 1);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.queued", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.loading", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready_for_finalize", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.service_jobs", 0);
+
+    labels = visible_warmup_text();
+    EXPECT_TRUE(contains_text(labels, "Assets: failed  pending 0 / ready 4 / failed 1"));
+    EXPECT_TRUE(contains_text(labels, "Queue 0  loading 0  finalize 0  jobs 0"));
+
+    slayer3d_properties_set_int(scene_state, "asset_warmup.failed", 0);
+    EXPECT_TRUE(visible_warmup_text().empty());
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -17331,9 +18332,65 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
         EXPECT_TRUE(slayer3d_game_data_for_each_ui_rect(runtime, collect, &capture));
         return capture.names;
     };
+    auto visible_texture_status_labels = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> names;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (text == nullptr || text->name == nullptr)
+                return true;
+            const std::string name = text->name;
+            if (name.rfind("ui.editor_shell.texture_viewer.", 0) != 0 ||
+                (name.find(".loading") == std::string::npos && name.find(".failed") == std::string::npos))
+            {
+                return true;
+            }
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) || !visible)
+                return true;
+            capture->names.emplace_back(resolved.name);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.names;
+    };
 
-    const slayer3d_properties *scene_state = slayer3d_game_data_scene_state(runtime);
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
     ASSERT_NE(scene_state, nullptr);
+    slayer3d_input_manager *input = slayer3d_game_session_get_input(session);
+    ASSERT_NE(input, nullptr);
+    int input_tick = 1;
+    auto click_texture_viewer = [&](float x, float y) {
+        SDL_Event motion{};
+        motion.type = SDL_EVENT_MOUSE_MOTION;
+        motion.motion.x = x;
+        motion.motion.y = y;
+        slayer3d_input_process_event(input, &motion);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event down{};
+        down.type = SDL_EVENT_MOUSE_BUTTON_DOWN;
+        down.button.button = SDL_BUTTON_LEFT;
+        down.button.x = x;
+        down.button.y = y;
+        slayer3d_input_process_event(input, &down);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+
+        SDL_Event up{};
+        up.type = SDL_EVENT_MOUSE_BUTTON_UP;
+        up.button.button = SDL_BUTTON_LEFT;
+        up.button.x = x;
+        up.button.y = y;
+        slayer3d_input_process_event(input, &up);
+        slayer3d_input_update(input, input_tick++);
+        ASSERT_TRUE(slayer3d_game_data_update_active_editor_tooling(runtime));
+    };
     emit_signal("signal.editor.palette.material");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.mode", ""), "paint");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.mode", ""), "paint");
@@ -17355,6 +18412,37 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
               scroll_rects.end());
     EXPECT_NE(std::find(scroll_rects.begin(), scroll_rects.end(), "ui.editor_shell.texture_viewer.scroll.thumb"),
               scroll_rects.end());
+    EXPECT_TRUE(visible_texture_status_labels().empty());
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.ui_image.image.editor_shell.texture.wall_metal.pending",
+                                 true);
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.ui_image.image.editor_shell.texture.lava.failed", true);
+    std::vector<std::string> status_labels = visible_texture_status_labels();
+    EXPECT_NE(
+        std::find(status_labels.begin(), status_labels.end(), "ui.editor_shell.texture_viewer.wall_metal.loading"),
+        status_labels.end());
+    EXPECT_NE(std::find(status_labels.begin(), status_labels.end(), "ui.editor_shell.texture_viewer.lava.failed"),
+              status_labels.end());
+
+    click_texture_viewer(1185.0f, 237.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
+                 "mat.editor.texture.rock_floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", ""),
+                 "mat.editor.texture.rock_floor");
+
+    click_texture_viewer(1089.0f, 237.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
+                 "mat.editor.texture.rock_floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", ""),
+                 "mat.editor.texture.rock_floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "texture loading");
+
+    click_texture_viewer(1089.0f, 457.0f);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.material.cursor", ""),
+                 "mat.editor.texture.rock_floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.material", ""),
+                 "mat.editor.texture.rock_floor");
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.tool.last_action", ""), "texture unavailable");
 
     emit_signal("signal.editor.texture.paint.mode.brush");
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.texture.paint.mode", ""), "brush");
@@ -17365,6 +18453,7 @@ TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
     EXPECT_TRUE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", false));
     thumbnails = visible_thumbnail_names();
     EXPECT_TRUE(thumbnails.empty());
+    EXPECT_TRUE(visible_texture_status_labels().empty());
     emit_signal("signal.editor.texture.viewer.toggle");
     EXPECT_FALSE(slayer3d_properties_get_bool(scene_state, "editor.texture.viewer.collapsed", true));
     thumbnails = visible_thumbnail_names();
@@ -20723,6 +21812,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.modal"));
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.simple_robot.cell"));
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.selected"));
     slayer3d_signal_emit(bus, palette_close_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
@@ -21135,6 +22225,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(modal_text, "Game Objects"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Player Start"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Simple Robot"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Selected: player_start"));
     slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");

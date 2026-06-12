@@ -23,6 +23,10 @@ extern "C"
     bool slayer3d_game_data_get_font_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                            slayer3d_game_data_font_asset *out_font);
 
+    /** @brief Iterate authored font asset descriptors from `assets.fonts`. */
+    bool slayer3d_game_data_for_each_font_asset(const slayer3d_game_data_runtime *runtime,
+                                                slayer3d_game_data_font_asset_fn callback, void *userdata);
+
     /** @brief Read an image asset descriptor by id from `assets.images`. */
     bool slayer3d_game_data_get_image_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                             slayer3d_game_data_image_asset *out_image);
@@ -31,17 +35,33 @@ extern "C"
     bool slayer3d_game_data_get_model_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                             slayer3d_game_data_model_asset *out_model);
 
+    /** @brief Iterate authored 3D model asset descriptors from `assets.models`. */
+    bool slayer3d_game_data_for_each_model_asset(const slayer3d_game_data_runtime *runtime,
+                                                 slayer3d_game_data_model_asset_fn callback, void *userdata);
+
     /** @brief Read a sound-effect asset descriptor by id from `assets.sounds`. */
     bool slayer3d_game_data_get_sound_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                             slayer3d_game_data_sound_asset *out_sound);
+
+    /** @brief Iterate authored sound-effect asset descriptors from `assets.sounds`. */
+    bool slayer3d_game_data_for_each_sound_asset(const slayer3d_game_data_runtime *runtime,
+                                                 slayer3d_game_data_sound_asset_fn callback, void *userdata);
 
     /** @brief Read a music asset descriptor by id from `assets.music`. */
     bool slayer3d_game_data_get_music_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                             slayer3d_game_data_music_asset *out_music);
 
+    /** @brief Iterate authored music asset descriptors from `assets.music`. */
+    bool slayer3d_game_data_for_each_music_asset(const slayer3d_game_data_runtime *runtime,
+                                                 slayer3d_game_data_music_asset_fn callback, void *userdata);
+
     /** @brief Read an ambient-zone asset descriptor by id from `assets.ambient`. */
     bool slayer3d_game_data_get_ambient_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                               slayer3d_game_data_ambient_asset *out_ambient);
+
+    /** @brief Iterate authored ambient-zone asset descriptors from `assets.ambient`. */
+    bool slayer3d_game_data_for_each_ambient_asset(const slayer3d_game_data_runtime *runtime,
+                                                   slayer3d_game_data_ambient_asset_fn callback, void *userdata);
 
     /** @brief Read a sprite asset descriptor by id from `assets.sprites`. */
     bool slayer3d_game_data_get_sprite_asset(const slayer3d_game_data_runtime *runtime, const char *id,

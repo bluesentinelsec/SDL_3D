@@ -5,7 +5,6 @@
 
 #include "slayer3d/game_presentation.h"
 
-#include <SDL3/SDL_error.h>
 #include <SDL3/SDL_log.h>
 #include <SDL3/SDL_stdinc.h>
 
@@ -18,7 +17,6 @@
 #include "game_data_internal.h"
 #include "game_presentation_internal.h"
 #include "render_context_internal.h"
-#include "texture_internal.h"
 
 typedef struct scene_world_viewport
 {
@@ -128,31 +126,96 @@ static bool apply_world_lights(const slayer3d_game_data_runtime *runtime, slayer
     return ok;
 }
 
-typedef struct preload_scene_assets_context
+typedef struct queue_scene_assets_context
 {
-    const slayer3d_game_data_runtime *runtime;
-    slayer3d_game_data_image_cache *image_cache;
-    slayer3d_render_context *renderer;
-    slayer3d_asset_resolver *assets;
-} preload_scene_assets_context;
+    slayer3d_game_data_asset_warmup_queue *queue;
+} queue_scene_assets_context;
 
-static bool preload_scene_ui_image(void *userdata, const slayer3d_game_data_ui_image *image)
+static bool queue_scene_ui_image(void *userdata, const slayer3d_game_data_ui_image *image)
 {
-    preload_scene_assets_context *context = (preload_scene_assets_context *)userdata;
-    if (context == NULL || context->runtime == NULL || context->image_cache == NULL || image == NULL ||
-        image->image == NULL || image->image[0] == '\0')
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || image == NULL || image->image == NULL || image->image[0] == '\0')
     {
         return true;
     }
-    (void)slayer3d_game_data_find_or_load_image_entry(context->runtime, context->image_cache, image->image);
+    (void)slayer3d_game_data_asset_warmup_request_ui_image(context->queue, image->image);
     return true;
 }
 
-static bool preload_brush_world_material_textures(void *userdata,
-                                                  const slayer3d_game_data_brush_world_instance *instance)
+static void queue_skybox_image(slayer3d_game_data_asset_warmup_queue *queue, const char *image_id)
 {
-    preload_scene_assets_context *context = (preload_scene_assets_context *)userdata;
-    if (context == NULL || context->renderer == NULL || instance == NULL || instance->world == NULL ||
+    if (queue == NULL || image_id == NULL || image_id[0] == '\0')
+        return;
+    (void)slayer3d_game_data_asset_warmup_request_ui_image(queue, image_id);
+}
+
+static void queue_active_scene_skybox_images(const slayer3d_game_data_runtime *runtime,
+                                             slayer3d_game_data_asset_warmup_queue *queue)
+{
+    slayer3d_game_data_scene_skybox skybox;
+    if (runtime == NULL || queue == NULL || !slayer3d_game_data_get_active_scene_skybox(runtime, &skybox))
+        return;
+
+    queue_skybox_image(queue, skybox.pos_x);
+    queue_skybox_image(queue, skybox.neg_x);
+    queue_skybox_image(queue, skybox.pos_y);
+    queue_skybox_image(queue, skybox.neg_y);
+    queue_skybox_image(queue, skybox.pos_z);
+    queue_skybox_image(queue, skybox.neg_z);
+}
+
+static bool queue_font_asset(void *userdata, const slayer3d_game_data_font_asset *font)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || font == NULL || font->id == NULL || font->id[0] == '\0')
+        return true;
+    (void)slayer3d_game_data_asset_warmup_request_font(context->queue, font->id);
+    return true;
+}
+
+static bool queue_model_browser_asset(void *userdata, const slayer3d_game_data_model_asset *model)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || model == NULL || model->id == NULL || model->id[0] == '\0')
+        return true;
+    (void)slayer3d_game_data_asset_warmup_request_model(context->queue, model->id);
+    return true;
+}
+
+static bool queue_sound_asset(void *userdata, const slayer3d_game_data_sound_asset *sound)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || sound == NULL || sound->path == NULL || sound->path[0] == '\0')
+        return true;
+    (void)slayer3d_game_data_asset_warmup_request_audio_file(context->queue, sound->path);
+    return true;
+}
+
+static bool queue_music_asset(void *userdata, const slayer3d_game_data_music_asset *music)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || music == NULL || music->path == NULL || music->path[0] == '\0')
+        return true;
+    (void)slayer3d_game_data_asset_warmup_request_audio_file(context->queue, music->path);
+    return true;
+}
+
+static bool queue_ambient_asset(void *userdata, const slayer3d_game_data_ambient_asset *ambient)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || ambient == NULL || ambient->path == NULL ||
+        ambient->path[0] == '\0')
+    {
+        return true;
+    }
+    (void)slayer3d_game_data_asset_warmup_request_audio_file(context->queue, ambient->path);
+    return true;
+}
+
+static bool queue_brush_world_material_textures(void *userdata, const slayer3d_game_data_brush_world_instance *instance)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || instance == NULL || instance->world == NULL ||
         instance->world->materials == NULL)
     {
         return true;
@@ -164,37 +227,63 @@ static bool preload_brush_world_material_textures(void *userdata,
         const char *texture_path = instance->world->materials[i].texture;
         if (texture_path == NULL || texture_path[0] == '\0')
             continue;
-        const slayer3d_texture2d *texture = NULL;
-        if (!slayer3d_texture_cache_get_or_load_asset(&context->renderer->texture_cache, context->assets, source_path,
-                                                      texture_path, &texture))
-        {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to preload brush material texture %s: %s", texture_path,
-                        SDL_GetError());
-        }
+        (void)slayer3d_game_data_asset_warmup_request_texture(context->queue, source_path, texture_path);
     }
     return true;
 }
 
-static void preload_active_scene_assets(const slayer3d_game_data_frame_desc *frame)
+static bool queue_render_primitive_assets(void *userdata, const slayer3d_game_data_render_primitive *primitive)
 {
-    if (frame == NULL || frame->runtime == NULL || frame->renderer == NULL || frame->image_cache == NULL)
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || primitive == NULL)
+        return true;
+    if (primitive->texture_image != NULL && primitive->texture_image[0] != '\0')
+        (void)slayer3d_game_data_asset_warmup_request_ui_image(context->queue, primitive->texture_image);
+    if (primitive->sprite_asset != NULL && primitive->sprite_asset[0] != '\0')
+        (void)slayer3d_game_data_asset_warmup_request_sprite(context->queue, primitive->sprite_asset);
+    if (primitive->model_asset != NULL && primitive->model_asset[0] != '\0')
+        (void)slayer3d_game_data_asset_warmup_request_model(context->queue, primitive->model_asset);
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE &&
+        primitive->draw_mode != SLAYER3D_GAME_DATA_RENDER_DRAW_WIRE)
+    {
+        (void)slayer3d_game_data_asset_warmup_request_mesh_primitive(context->queue, primitive);
+    }
+    return true;
+}
+
+static void queue_active_scene_assets(const slayer3d_game_data_frame_desc *frame)
+{
+    if (frame == NULL || frame->runtime == NULL || frame->asset_warmup == NULL)
         return;
 
     const char *active_scene = slayer3d_game_data_active_scene(frame->runtime);
-    if (active_scene != NULL && frame->image_cache->preloaded_scene != NULL &&
-        SDL_strcmp(frame->image_cache->preloaded_scene, active_scene) == 0)
+    if (active_scene != NULL && frame->asset_warmup->requested_scene != NULL &&
+        SDL_strcmp(frame->asset_warmup->requested_scene, active_scene) == 0)
         return;
 
-    preload_scene_assets_context context;
+    if (active_scene != NULL || frame->asset_warmup->requested_scene != NULL)
+        (void)slayer3d_game_data_asset_warmup_queue_cancel_pending(frame->asset_warmup);
+
+    queue_scene_assets_context context;
     SDL_zero(context);
-    context.runtime = frame->runtime;
-    context.image_cache = frame->image_cache;
-    context.renderer = frame->renderer;
-    context.assets = frame->image_cache->assets;
-    (void)slayer3d_game_data_for_each_ui_image(frame->runtime, preload_scene_ui_image, &context);
-    (void)slayer3d_game_data_for_each_brush_world_instance(frame->runtime, preload_brush_world_material_textures,
+    context.queue = frame->asset_warmup;
+    (void)slayer3d_game_data_for_each_font_asset(frame->runtime, queue_font_asset, &context);
+    (void)slayer3d_game_data_for_each_ui_image(frame->runtime, queue_scene_ui_image, &context);
+    queue_active_scene_skybox_images(frame->runtime, frame->asset_warmup);
+    (void)slayer3d_game_data_for_each_model_asset(frame->runtime, queue_model_browser_asset, &context);
+    (void)slayer3d_game_data_for_each_sound_asset(frame->runtime, queue_sound_asset, &context);
+    (void)slayer3d_game_data_for_each_music_asset(frame->runtime, queue_music_asset, &context);
+    (void)slayer3d_game_data_for_each_ambient_asset(frame->runtime, queue_ambient_asset, &context);
+    (void)slayer3d_game_data_for_each_brush_world_instance(frame->runtime, queue_brush_world_material_textures,
                                                            &context);
-    frame->image_cache->preloaded_scene = active_scene;
+    (void)slayer3d_game_data_for_each_render_primitive(frame->runtime, queue_render_primitive_assets, &context);
+
+    char *requested_scene = active_scene != NULL ? SDL_strdup(active_scene) : NULL;
+    if (active_scene == NULL || requested_scene != NULL)
+    {
+        SDL_free(frame->asset_warmup->requested_scene);
+        frame->asset_warmup->requested_scene = requested_scene;
+    }
 }
 
 static bool run_frame_hook(const slayer3d_game_data_frame_desc *frame, slayer3d_game_data_frame_hook hook)
@@ -346,6 +435,11 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
     {
         if (context->sprite_cache == NULL)
             return true;
+        if (!slayer3d_game_data_primitive_asset_ready(context, SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE,
+                                                      primitive->sprite_asset))
+        {
+            return true;
+        }
         slayer3d_game_data_sprite_cache_entry *entry = slayer3d_game_data_find_or_load_sprite_entry(
             context->runtime, context->sprite_cache, primitive->sprite_asset);
         if (entry == NULL)
@@ -377,6 +471,11 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
     {
         if (context->model_cache == NULL)
             return true;
+        if (!slayer3d_game_data_primitive_asset_ready(context, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL,
+                                                      primitive->model_asset))
+        {
+            return true;
+        }
         slayer3d_game_data_model_cache_entry *entry =
             slayer3d_game_data_find_or_load_model_entry(context->runtime, context->model_cache, primitive->model_asset);
         if (entry == NULL)
@@ -456,8 +555,9 @@ static bool draw_render_primitives_evaluated_with_cache(
     const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
     const slayer3d_game_data_render_eval *eval, slayer3d_game_data_image_cache *image_cache,
     slayer3d_game_data_sprite_cache *sprite_cache, slayer3d_game_data_model_cache *model_cache,
-    slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache, const slayer3d_camera3d *camera,
-    bool draw_world_space, bool draw_view_space)
+    slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
+    const slayer3d_game_data_asset_warmup_queue *asset_warmup, const slayer3d_camera3d *camera, bool draw_world_space,
+    bool draw_view_space)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -470,6 +570,7 @@ static bool draw_render_primitives_evaluated_with_cache(
     context.sprite_cache = sprite_cache;
     context.model_cache = model_cache;
     context.mesh_primitive_cache = mesh_primitive_cache;
+    context.asset_warmup = asset_warmup;
     context.camera = camera;
     context.eval = eval;
     context.draw_world_space = draw_world_space;
@@ -482,13 +583,27 @@ static bool draw_render_primitives_evaluated_with_cache(
 }
 
 static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
-                                     slayer3d_game_data_image_cache *image_cache)
+                                     slayer3d_game_data_image_cache *image_cache,
+                                     const slayer3d_game_data_asset_warmup_queue *asset_warmup)
 {
     slayer3d_game_data_scene_skybox skybox_desc;
     if (runtime == NULL || renderer == NULL || image_cache == NULL)
         return true;
     if (!slayer3d_game_data_get_active_scene_skybox(runtime, &skybox_desc))
         return true;
+
+    const char *face_images[] = {skybox_desc.pos_x, skybox_desc.neg_x, skybox_desc.pos_y,
+                                 skybox_desc.neg_y, skybox_desc.pos_z, skybox_desc.neg_z};
+    for (int i = 0; i < 6; ++i)
+    {
+        slayer3d_game_data_asset_warmup_state warmup_state;
+        if (slayer3d_game_data_asset_warmup_request_state(asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL,
+                                                          face_images[i], &warmup_state) &&
+            warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+        {
+            return true;
+        }
+    }
 
     slayer3d_game_data_image_cache_entry *pos_x =
         slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, skybox_desc.pos_x);
@@ -516,16 +631,16 @@ static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, 
 bool slayer3d_game_data_draw_render_primitives(const slayer3d_game_data_runtime *runtime,
                                                slayer3d_render_context *renderer)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL, NULL, true,
-                                                       true);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                                                       true, true);
 }
 
 bool slayer3d_game_data_draw_render_primitives_evaluated(const slayer3d_game_data_runtime *runtime,
                                                          slayer3d_render_context *renderer,
                                                          const slayer3d_game_data_render_eval *eval)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL, NULL, true,
-                                                       true);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL, NULL, NULL,
+                                                       true, true);
 }
 
 static slayer3d_camera3d game_data_viewmodel_camera(const slayer3d_camera3d *scene_camera)
@@ -681,12 +796,22 @@ static bool draw_editor_debug_label_primitive(void *userdata,
 
 static bool draw_active_editor_debug_labels(const slayer3d_game_data_runtime *runtime,
                                             slayer3d_render_context *renderer,
-                                            slayer3d_game_data_font_cache *font_cache, const slayer3d_camera3d *camera)
+                                            slayer3d_game_data_font_cache *font_cache,
+                                            const slayer3d_game_data_asset_warmup_queue *asset_warmup,
+                                            const slayer3d_camera3d *camera)
 {
     if (runtime == NULL || renderer == NULL || font_cache == NULL || camera == NULL)
         return false;
 
     const char *font_id = editor_debug_label_font_id(runtime);
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    if (slayer3d_game_data_asset_warmup_request_state(asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL, font_id,
+                                                      &warmup_state) &&
+        warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return true;
+    }
+
     slayer3d_font *font = slayer3d_game_data_find_or_load_font(runtime, font_cache, font_id);
     if (font == NULL)
         return true;
@@ -744,7 +869,7 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
     if (slayer3d_begin_mode_3d(frame->renderer, *camera))
     {
         ok = run_frame_hook(frame, frame->before_world_3d) && ok;
-        ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache) && ok;
+        ok = draw_active_scene_skybox(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup) && ok;
         ok = slayer3d_game_data_draw_sector_levels_with_assets(
                  frame->runtime, frame->renderer, frame->image_cache != NULL ? frame->image_cache->assets : NULL,
                  camera) &&
@@ -757,15 +882,17 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
             ok = slayer3d_game_data_draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache,
                                                             true, false) &&
                  ok;
-        ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
-                                                         frame->image_cache, frame->sprite_cache, frame->model_cache,
-                                                         frame->mesh_primitive_cache, camera, true, false) &&
+        ok = draw_render_primitives_evaluated_with_cache(
+                 frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
+                 frame->model_cache, frame->mesh_primitive_cache, frame->asset_warmup, camera, true, false) &&
              ok;
         ok = slayer3d_game_data_draw_active_editor_debug_primitives(frame->runtime, frame->renderer) && ok;
         ok = run_frame_hook(frame, frame->after_world_3d) && ok;
         slayer3d_end_mode_3d(frame->renderer);
         if (frame->font_cache != NULL)
-            ok = draw_active_editor_debug_labels(frame->runtime, frame->renderer, frame->font_cache, camera) && ok;
+            ok = draw_active_editor_debug_labels(frame->runtime, frame->renderer, frame->font_cache,
+                                                 frame->asset_warmup, camera) &&
+                 ok;
     }
     else
     {
@@ -777,9 +904,10 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
         const slayer3d_camera3d viewmodel_camera = game_data_viewmodel_camera(camera);
         if (slayer3d_begin_mode_3d(frame->renderer, viewmodel_camera))
         {
-            ok = draw_render_primitives_evaluated_with_cache(
-                     frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
-                     frame->model_cache, frame->mesh_primitive_cache, &viewmodel_camera, false, true) &&
+            ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
+                                                             frame->image_cache, frame->sprite_cache,
+                                                             frame->model_cache, frame->mesh_primitive_cache,
+                                                             frame->asset_warmup, &viewmodel_camera, false, true) &&
                  ok;
             if (frame->particle_cache != NULL)
                 ok = slayer3d_game_data_draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache,
@@ -841,7 +969,20 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
         return false;
 
     bool ok = true;
-    preload_active_scene_assets(frame);
+    queue_active_scene_assets(frame);
+    if (frame->asset_warmup != NULL)
+    {
+        slayer3d_asset_resolver *assets = NULL;
+        if (frame->image_cache != NULL)
+            assets = frame->image_cache->assets;
+        else if (frame->sprite_cache != NULL)
+            assets = frame->sprite_cache->assets;
+        else if (frame->model_cache != NULL)
+            assets = frame->model_cache->assets;
+        (void)slayer3d_game_data_asset_warmup_queue_service(frame->asset_warmup, frame->runtime, frame->renderer,
+                                                            frame->font_cache, frame->image_cache, frame->sprite_cache,
+                                                            frame->model_cache, frame->mesh_primitive_cache, assets, 0);
+    }
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;
     slayer3d_game_data_model_cache_begin_pose_frame(frame->model_cache);
@@ -860,13 +1001,13 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
     ok = run_frame_hook(frame, frame->before_ui) && ok;
     ok = slayer3d_game_data_draw_ui_rects(frame->runtime, frame->renderer, frame->metrics, frame->render_eval) && ok;
     if (frame->image_cache != NULL)
-        ok = slayer3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->metrics,
-                                               frame->render_eval) &&
+        ok = slayer3d_game_data_draw_ui_images(frame->runtime, frame->renderer, frame->image_cache, frame->asset_warmup,
+                                               frame->metrics, frame->render_eval) &&
              ok;
     if (frame->font_cache != NULL)
     {
-        ok = slayer3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->metrics,
-                                             frame->pulse_phase) &&
+        ok = slayer3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->asset_warmup,
+                                             frame->metrics, frame->pulse_phase) &&
              ok;
     }
     if (frame->app_flow != NULL)

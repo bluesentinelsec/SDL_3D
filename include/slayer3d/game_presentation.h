@@ -13,6 +13,8 @@
 #ifndef SLAYER3D_GAME_PRESENTATION_H
 #define SLAYER3D_GAME_PRESENTATION_H
 
+#include <SDL3/SDL_stdinc.h>
+
 #include <stdbool.h>
 
 #include "slayer3d/asset.h"
@@ -74,8 +76,102 @@ extern "C"
         int count;                                     /**< Number of cached images. */
         int capacity;                                  /**< Allocated cache slots. */
         slayer3d_asset_resolver *assets;               /**< Resolver used for lazy image loads; not owned. */
-        const char *preloaded_scene;                   /**< Runtime-owned active scene most recently preloaded. */
     } slayer3d_game_data_image_cache;
+
+    /** @brief Asset kinds that can be requested through the presentation warmup queue. */
+    typedef enum slayer3d_game_data_asset_warmup_kind
+    {
+        /** @brief Authored UI/image asset id. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE = 1,
+        /** @brief Texture path resolved relative to an optional source path. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE = 2,
+        /** @brief Authored sprite asset id. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE = 3,
+        /** @brief Authored model asset id. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL = 4,
+        /** @brief Authored or filesystem audio file path. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE = 5,
+        /** @brief Authored font asset id. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT = 6,
+        /** @brief Procedural mesh generated from a render.mesh_primitive descriptor. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_MESH_PRIMITIVE = 7,
+    } slayer3d_game_data_asset_warmup_kind;
+
+    /** @brief Current state of one presentation asset warmup request. */
+    typedef enum slayer3d_game_data_asset_warmup_state
+    {
+        /** @brief Request is queued and has not been serviced yet. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED = 0,
+        /** @brief Request is being prepared by the warmup service or a worker. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING = 1,
+        /** @brief Request was prepared off-thread and is waiting for main-thread finalization. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE = 2,
+        /** @brief Request was serviced successfully. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_READY = 3,
+        /** @brief Request was serviced and failed. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED = 4,
+        /** @brief Request was deprioritized before completion. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED = 5,
+    } slayer3d_game_data_asset_warmup_state;
+
+    /** @brief One queued presentation asset warmup request. */
+    typedef struct slayer3d_game_data_asset_warmup_entry
+    {
+        slayer3d_game_data_asset_warmup_kind kind;   /**< Asset kind. */
+        slayer3d_game_data_asset_warmup_state state; /**< Current request state. */
+        char *source_path;                           /**< Optional owned source path for relative texture requests. */
+        char *id;                                    /**< Owned asset id or texture path. */
+        void *prepared;                              /**< Private prepared payload for main-thread finalization. */
+        unsigned int generation;                     /**< Monotonic token used to ignore stale worker completions. */
+        slayer3d_game_data_render_primitive mesh_primitive; /**< Private descriptor for mesh primitive requests. */
+    } slayer3d_game_data_asset_warmup_entry;
+
+    /**
+     * @brief Budgeted queue for presentation asset warmup.
+     *
+     * Requests are deduplicated by kind/source/id. Workers may prepare CPU-only
+     * texture data, while renderer-owned cache insertion remains on the main
+     * presentation path. Platforms without worker support continue to service
+     * requests incrementally on the render thread.
+     */
+    typedef struct slayer3d_game_data_asset_warmup_queue
+    {
+        slayer3d_game_data_asset_warmup_entry *entries; /**< Owned request entries. */
+        int count;                                      /**< Number of requests. */
+        int capacity;                                   /**< Allocated request slots. */
+        char *requested_scene;                          /**< Owned active scene most recently enumerated. */
+        int max_jobs_per_frame;                         /**< Default service budget; <= 0 uses one job. */
+        void *worker_state;                             /**< Private worker-thread state. */
+        int service_calls;                              /**< Diagnostic count of warmup service drain calls. */
+        int service_jobs;                               /**< Diagnostic count of warmup jobs completed by service. */
+        float service_last_ms;                          /**< Diagnostic duration of the most recent service call. */
+        float service_total_ms;                         /**< Diagnostic cumulative service time. */
+        float service_max_ms;                           /**< Diagnostic maximum single service duration. */
+        Uint64 first_request_counter;                   /**< Diagnostic timestamp for first request. */
+        Uint64 last_activity_counter;                   /**< Diagnostic timestamp for latest state change. */
+    } slayer3d_game_data_asset_warmup_queue;
+
+    /** @brief Snapshot counts for a presentation asset warmup queue. */
+    typedef struct slayer3d_game_data_asset_warmup_stats
+    {
+        int queued;             /**< Requests waiting to be serviced. */
+        int loading;            /**< Requests currently being prepared or finalized. */
+        int ready_for_finalize; /**< Requests prepared off-thread and waiting for main-thread finalization. */
+        int pending;            /**< Requests not yet completed: queued + loading + ready_for_finalize. */
+        int ready;              /**< Requests serviced successfully. */
+        int failed;             /**< Requests serviced unsuccessfully. */
+        int canceled;           /**< Requests deprioritized before completion. */
+        int completed;          /**< Requests no longer pending: ready + failed + canceled. */
+        int total;              /**< Total requests tracked by the queue. */
+        int worker_threads;     /**< Active worker threads preparing CPU-side asset payloads. */
+        int service_calls;      /**< Warmup service drain calls. */
+        int service_jobs;       /**< Jobs completed by warmup service calls. */
+        float progress;         /**< Completed/total in [0, 1], or 1 when total is zero. */
+        float elapsed_ms;       /**< Milliseconds since first request until completion or now. */
+        float service_last_ms;  /**< Milliseconds spent in the most recent service call. */
+        float service_total_ms; /**< Cumulative milliseconds spent in warmup service calls. */
+        float service_max_ms;   /**< Maximum milliseconds spent in one service call. */
+    } slayer3d_game_data_asset_warmup_stats;
 
     /**
      * @brief Scene transition flow driven by authored scene transition data.
@@ -118,7 +214,7 @@ extern "C"
     /** @brief One cached sprite asset referenced by authored render.sprite data. */
     typedef struct slayer3d_game_data_sprite_cache_entry
     {
-        const char *sprite_id;                /**< Runtime-owned sprite asset id. */
+        const char *sprite_id;                /**< Cache-owned sprite asset id. */
         slayer3d_sprite_asset_runtime sprite; /**< Loaded sprite runtime. */
         bool loaded;                          /**< True once the sprite owns loaded textures. */
     } slayer3d_game_data_sprite_cache_entry;
@@ -141,7 +237,7 @@ extern "C"
     /** @brief One cached model asset referenced by authored render.model data. */
     typedef struct slayer3d_game_data_model_cache_entry
     {
-        const char *model_id; /**< Runtime-owned model asset id. */
+        const char *model_id; /**< Cache-owned model asset id. */
         slayer3d_model model; /**< Loaded model runtime. */
         bool loaded;          /**< True once the model owns loaded meshes/materials. */
     } slayer3d_game_data_model_cache_entry;
@@ -356,16 +452,17 @@ extern "C"
         slayer3d_game_data_sprite_cache *sprite_cache;     /**< Sprite cache used by authored render.sprite data. */
         slayer3d_game_data_model_cache *model_cache;       /**< Model cache used by authored render.model data. */
         slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache; /**< Cache for authored procedural meshes. */
-        const slayer3d_game_data_app_flow *app_flow;       /**< Optional app flow whose transitions are drawn. */
-        const slayer3d_game_data_ui_metrics *metrics;      /**< Optional UI metrics. */
-        const slayer3d_game_data_render_eval *render_eval; /**< Optional primitive effect evaluation inputs. */
-        const slayer3d_camera3d *fallback_camera;          /**< Optional camera used when no active camera resolves. */
-        float pulse_phase;                                 /**< Normalized UI pulse phase. */
-        slayer3d_game_data_frame_hook before_world_3d;     /**< Optional hook inside the 3D pass before data draws. */
-        slayer3d_game_data_frame_hook after_world_3d;      /**< Optional hook inside the 3D pass after data draws. */
-        slayer3d_game_data_frame_hook before_ui;           /**< Optional hook before authored UI and transitions. */
-        slayer3d_game_data_frame_hook after_ui;            /**< Optional hook after authored UI and transitions. */
-        void *userdata;                                    /**< User pointer passed to hooks. */
+        slayer3d_game_data_asset_warmup_queue *asset_warmup; /**< Optional budgeted presentation asset warmup queue. */
+        const slayer3d_game_data_app_flow *app_flow;         /**< Optional app flow whose transitions are drawn. */
+        const slayer3d_game_data_ui_metrics *metrics;        /**< Optional UI metrics. */
+        const slayer3d_game_data_render_eval *render_eval;   /**< Optional primitive effect evaluation inputs. */
+        const slayer3d_camera3d *fallback_camera;      /**< Optional camera used when no active camera resolves. */
+        float pulse_phase;                             /**< Normalized UI pulse phase. */
+        slayer3d_game_data_frame_hook before_world_3d; /**< Optional hook inside the 3D pass before data draws. */
+        slayer3d_game_data_frame_hook after_world_3d;  /**< Optional hook inside the 3D pass after data draws. */
+        slayer3d_game_data_frame_hook before_ui;       /**< Optional hook before authored UI and transitions. */
+        slayer3d_game_data_frame_hook after_ui;        /**< Optional hook after authored UI and transitions. */
+        void *userdata;                                /**< User pointer passed to hooks. */
     };
 
     /**
@@ -397,6 +494,96 @@ extern "C"
      * Safe to call with NULL or an already-freed cache.
      */
     void slayer3d_game_data_image_cache_free(slayer3d_game_data_image_cache *cache);
+
+    /** @brief Initialize a presentation asset warmup queue. */
+    void slayer3d_game_data_asset_warmup_queue_init(slayer3d_game_data_asset_warmup_queue *queue,
+                                                    int max_jobs_per_frame);
+
+    /** @brief Free all entries owned by a presentation asset warmup queue. */
+    void slayer3d_game_data_asset_warmup_queue_free(slayer3d_game_data_asset_warmup_queue *queue);
+
+    /**
+     * @brief Start background CPU warmup workers for CPU-safe asset requests when supported.
+     *
+     * The queue falls back to synchronous budgeted service when this returns
+     * false. @p runtime may be NULL for texture-only warmup; direct UI image,
+     * sprite, and model warmup require it. @p runtime and @p assets are only
+     * read by workers; callers must keep them alive until the queue is stopped
+     * or freed.
+     */
+    bool slayer3d_game_data_asset_warmup_queue_start_workers(slayer3d_game_data_asset_warmup_queue *queue,
+                                                             const slayer3d_game_data_runtime *runtime,
+                                                             slayer3d_asset_resolver *assets, int worker_count);
+
+    /** @brief Stop and join any background warmup workers owned by the queue. */
+    void slayer3d_game_data_asset_warmup_queue_stop_workers(slayer3d_game_data_asset_warmup_queue *queue);
+
+    /**
+     * @brief Cancel queued or in-flight warmup requests that have not completed.
+     *
+     * Ready and failed entries remain available for diagnostics and
+     * deduplication. A later matching request revives a canceled entry and
+     * queues it again.
+     *
+     * @return Number of entries moved to the canceled state.
+     */
+    int slayer3d_game_data_asset_warmup_queue_cancel_pending(slayer3d_game_data_asset_warmup_queue *queue);
+
+    /** @brief Queue a UI/image asset id for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_warmup_queue *queue,
+                                                          const char *image_id);
+
+    /** @brief Queue a font asset id for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_font(slayer3d_game_data_asset_warmup_queue *queue,
+                                                      const char *font_id);
+
+    /** @brief Queue a texture path for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_texture(slayer3d_game_data_asset_warmup_queue *queue,
+                                                         const char *source_path, const char *texture_path);
+
+    /** @brief Queue a sprite asset id for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_sprite(slayer3d_game_data_asset_warmup_queue *queue,
+                                                        const char *sprite_id);
+
+    /** @brief Queue a model asset id for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_model(slayer3d_game_data_asset_warmup_queue *queue,
+                                                       const char *model_id);
+
+    /** @brief Queue an audio file path for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_audio_file(slayer3d_game_data_asset_warmup_queue *queue,
+                                                            const char *audio_path);
+
+    /** @brief Queue a cacheable procedural mesh primitive for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_mesh_primitive(slayer3d_game_data_asset_warmup_queue *queue,
+                                                                const slayer3d_game_data_render_primitive *primitive);
+
+    /** @brief Read queue counts by state. */
+    void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_warmup_queue *queue,
+                                                     slayer3d_game_data_asset_warmup_stats *out_stats);
+
+    /**
+     * @brief Query one queued warmup request state.
+     *
+     * @return true when a matching request exists and @p out_state was written.
+     */
+    bool slayer3d_game_data_asset_warmup_request_state(const slayer3d_game_data_asset_warmup_queue *queue,
+                                                       slayer3d_game_data_asset_warmup_kind kind,
+                                                       const char *source_path, const char *id,
+                                                       slayer3d_game_data_asset_warmup_state *out_state);
+
+    /**
+     * @brief Service queued warmup requests within a bounded job budget.
+     *
+     * Passing @p max_jobs <= 0 uses queue->max_jobs_per_frame, or one job when
+     * the queue does not define a positive default. The return value is the
+     * number of queued requests serviced during this call.
+     */
+    int slayer3d_game_data_asset_warmup_queue_service(
+        slayer3d_game_data_asset_warmup_queue *queue, const slayer3d_game_data_runtime *runtime,
+        slayer3d_render_context *renderer, slayer3d_game_data_font_cache *font_cache,
+        slayer3d_game_data_image_cache *image_cache, slayer3d_game_data_sprite_cache *sprite_cache,
+        slayer3d_game_data_model_cache *model_cache, slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
+        slayer3d_asset_resolver *assets, int max_jobs);
 
     /**
      * @brief Draw authored render primitives for the active scene.
@@ -554,23 +741,31 @@ extern "C"
     /**
      * @brief Draw authored UI text for the active scene.
      *
-     * Built-in font assets are loaded on demand through @p font_cache. Text is
-     * drawn on SLAYER3D's overlay path, after world rendering. @p pulse_phase is a
-     * normalized phase used by UI items with `pulse_alpha`.
+     * Built-in font assets are loaded through @p font_cache. Text is drawn on
+     * SLAYER3D's overlay path, after world rendering. When @p asset_warmup has a
+     * matching pending or failed font request, matching text is skipped so the
+     * draw path does not synchronously load a font that is already queued for
+     * warmup. @p pulse_phase is a normalized phase used by UI items with
+     * `pulse_alpha`.
      */
     bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                          slayer3d_game_data_font_cache *font_cache,
+                                         const slayer3d_game_data_asset_warmup_queue *asset_warmup,
                                          const slayer3d_game_data_ui_metrics *metrics, float pulse_phase);
 
     /**
      * @brief Draw authored UI images for the active scene.
      *
      * Images are loaded lazily through @p image_cache and drawn on SLAYER3D's
-     * overlay path after world rendering. @p render_eval supplies the current
-     * presentation time for authored image effects such as `melt`.
+     * overlay path after world rendering. When @p asset_warmup has a matching
+     * pending or failed UI image request, the draw is skipped so authored
+     * placeholders can remain visible without blocking on a synchronous lazy
+     * load. @p render_eval supplies the current presentation time for authored
+     * image effects such as `melt`.
      */
     bool slayer3d_game_data_draw_ui_images(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                            slayer3d_game_data_image_cache *image_cache,
+                                           const slayer3d_game_data_asset_warmup_queue *asset_warmup,
                                            const slayer3d_game_data_ui_metrics *metrics,
                                            const slayer3d_game_data_render_eval *render_eval);
 

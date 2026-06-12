@@ -554,11 +554,31 @@ bool slayer3d_game_data_append_sphere_draw_batch(primitive_draw_context *context
     return true;
 }
 
+bool slayer3d_game_data_primitive_asset_ready(const primitive_draw_context *context,
+                                              slayer3d_game_data_asset_warmup_kind kind, const char *id)
+{
+    if (context == NULL || id == NULL || id[0] == '\0')
+        return true;
+
+    slayer3d_game_data_asset_warmup_state state;
+    if (slayer3d_game_data_asset_warmup_request_state(context->asset_warmup, kind, NULL, id, &state) &&
+        state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return false;
+    }
+    return true;
+}
+
 const slayer3d_texture2d *slayer3d_game_data_primitive_texture(primitive_draw_context *context,
                                                                const slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL || primitive->texture_image == NULL || context->image_cache == NULL)
         return NULL;
+    if (!slayer3d_game_data_primitive_asset_ready(context, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
+                                                  primitive->texture_image))
+    {
+        return NULL;
+    }
     slayer3d_game_data_image_cache_entry *entry =
         slayer3d_game_data_find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
     return entry != NULL ? &entry->texture : NULL;
@@ -647,6 +667,64 @@ static void mesh_primitive_cache_entry_set_key(slayer3d_game_data_mesh_primitive
     entry->slices = primitive->slices;
     entry->rings = primitive->rings;
     entry->tube_segments = primitive->tube_segments;
+}
+
+static Uint32 mesh_primitive_key_float_bits(float value)
+{
+    Uint32 bits = 0;
+    SDL_memcpy(&bits, &value, sizeof(bits));
+    return bits;
+}
+
+bool slayer3d_game_data_mesh_primitive_cacheable(const slayer3d_game_data_render_primitive *primitive)
+{
+    if (primitive == NULL || primitive->type != SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE)
+        return false;
+    switch (primitive->mesh_primitive)
+    {
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_SPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CAPSULE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CYLINDER:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CONE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TORUS:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PYRAMID:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_WEDGE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_PLANE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_DISC:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_HEMISPHERE:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ROUNDED_BOX:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_TUBE_SEGMENT:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_BILLBOARD_PLANE:
+        return true;
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_ARROW:
+    case SLAYER3D_GAME_DATA_MESH_PRIMITIVE_INVALID:
+    default:
+        return false;
+    }
+}
+
+bool slayer3d_game_data_mesh_primitive_warmup_key(const slayer3d_game_data_render_primitive *primitive, char *buffer,
+                                                  int buffer_size)
+{
+    if (!slayer3d_game_data_mesh_primitive_cacheable(primitive) || buffer == NULL || buffer_size <= 0)
+        return false;
+
+    const int written = SDL_snprintf(
+        buffer, (size_t)buffer_size, "mesh:%d:%08x:%08x:%08x:%08x:%08x:%08x:%08x:%08x:%08x:%08x:%08x:%d:%d:%d",
+        (int)primitive->mesh_primitive, (unsigned int)mesh_primitive_key_float_bits(primitive->size.x),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->size.y),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->size.z),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->radius),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->radius_top),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->radius_bottom),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->height),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->major_radius),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->minor_radius),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->bevel_radius),
+        (unsigned int)mesh_primitive_key_float_bits(primitive->arc_angle), primitive->slices, primitive->rings,
+        primitive->tube_segments);
+    return written > 0 && written < buffer_size;
 }
 
 static bool build_cube_mesh(const slayer3d_game_data_render_primitive *primitive, slayer3d_mesh *mesh)
@@ -1177,8 +1255,8 @@ static bool build_mesh_primitive_cache_entry(slayer3d_game_data_mesh_primitive_c
     return ok;
 }
 
-static const slayer3d_mesh *find_or_build_mesh_primitive(slayer3d_game_data_mesh_primitive_cache *cache,
-                                                         const slayer3d_game_data_render_primitive *primitive)
+const slayer3d_mesh *slayer3d_game_data_find_or_build_mesh_primitive(
+    slayer3d_game_data_mesh_primitive_cache *cache, const slayer3d_game_data_render_primitive *primitive)
 {
     if (cache == NULL || primitive == NULL)
         return NULL;
@@ -1207,7 +1285,19 @@ static bool draw_mesh_primitive_solid(primitive_draw_context *context,
     if (context == NULL || primitive == NULL)
         return false;
     const slayer3d_texture2d *texture = slayer3d_game_data_primitive_texture(context, primitive);
-    const slayer3d_mesh *cached_mesh = find_or_build_mesh_primitive(context->mesh_primitive_cache, primitive);
+    char warmup_key[256];
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    if (slayer3d_game_data_mesh_primitive_warmup_key(primitive, warmup_key, (int)sizeof(warmup_key)) &&
+        slayer3d_game_data_asset_warmup_request_state(
+            context->asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_MESH_PRIMITIVE, NULL, warmup_key, &warmup_state) &&
+        (warmup_state == SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED ||
+         warmup_state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING ||
+         warmup_state == SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE))
+    {
+        return true;
+    }
+    const slayer3d_mesh *cached_mesh =
+        slayer3d_game_data_find_or_build_mesh_primitive(context->mesh_primitive_cache, primitive);
     if (cached_mesh != NULL)
         return slayer3d_draw_static_mesh(context->renderer, cached_mesh, cached_mesh->uvs != NULL ? texture : NULL,
                                          primitive->color);

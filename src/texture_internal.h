@@ -19,5 +19,10 @@ bool slayer3d_texture_cache_get_or_load(slayer3d_texture_cache_entry **cache, co
 bool slayer3d_texture_cache_get_or_load_asset(slayer3d_texture_cache_entry **cache,
                                               const slayer3d_asset_resolver *assets, const char *source_path,
                                               const char *texture_path, const slayer3d_texture2d **out_texture);
+bool slayer3d_texture_cache_prepare_asset(const slayer3d_asset_resolver *assets, const char *source_path,
+                                          const char *texture_path, char **out_resolved_path,
+                                          slayer3d_texture2d *out_texture);
+bool slayer3d_texture_cache_insert_prepared(slayer3d_texture_cache_entry **cache, char *resolved_path,
+                                            slayer3d_texture2d *texture, const slayer3d_texture2d **out_texture);
 
 #endif

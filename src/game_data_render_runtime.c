@@ -101,6 +101,34 @@ bool slayer3d_game_data_get_font_asset(const slayer3d_game_data_runtime *runtime
     return true;
 }
 
+bool slayer3d_game_data_for_each_font_asset(const slayer3d_game_data_runtime *runtime,
+                                            slayer3d_game_data_font_asset_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *fonts = obj_get(obj_get(runtime_root(runtime), "assets"), "fonts");
+    for (size_t i = 0; yyjson_is_arr(fonts) && i < yyjson_arr_size(fonts); ++i)
+    {
+        yyjson_val *font_json = yyjson_arr_get(fonts, i);
+        slayer3d_game_data_font_asset font;
+        SDL_zero(font);
+        font.builtin_id = SLAYER3D_BUILTIN_FONT_INTER;
+        font.size = 16.0f;
+        font.id = json_string(font_json, "id", NULL);
+        font.path = json_string(font_json, "path", NULL);
+        font.size = json_float(font_json, "size", font.size);
+        const char *builtin = json_string(font_json, "builtin", NULL);
+        font.builtin = builtin != NULL;
+        font.builtin_id = parse_builtin_font(builtin, font.builtin_id);
+        if (font.id == NULL || (!font.builtin && font.path == NULL))
+            continue;
+        if (!callback(userdata, &font))
+            return true;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_get_image_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                         slayer3d_game_data_image_asset *out_image)
 {
@@ -136,6 +164,28 @@ bool slayer3d_game_data_get_model_asset(const slayer3d_game_data_runtime *runtim
     return out_model->id != NULL && out_model->path != NULL;
 }
 
+bool slayer3d_game_data_for_each_model_asset(const slayer3d_game_data_runtime *runtime,
+                                             slayer3d_game_data_model_asset_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *models = obj_get(obj_get(runtime_root(runtime), "assets"), "models");
+    for (size_t i = 0; yyjson_is_arr(models) && i < yyjson_arr_size(models); ++i)
+    {
+        yyjson_val *model_json = yyjson_arr_get(models, i);
+        slayer3d_game_data_model_asset model;
+        SDL_zero(model);
+        model.id = json_string(model_json, "id", NULL);
+        model.path = json_string(model_json, "path", NULL);
+        if (model.id == NULL || model.path == NULL)
+            continue;
+        if (!callback(userdata, &model))
+            return true;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_get_sound_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                         slayer3d_game_data_sound_asset *out_sound)
 {
@@ -162,6 +212,35 @@ bool slayer3d_game_data_get_sound_asset(const slayer3d_game_data_runtime *runtim
     return out_sound->id != NULL && out_sound->path != NULL;
 }
 
+bool slayer3d_game_data_for_each_sound_asset(const slayer3d_game_data_runtime *runtime,
+                                             slayer3d_game_data_sound_asset_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *sounds = obj_get(obj_get(runtime_root(runtime), "assets"), "sounds");
+    for (size_t i = 0; yyjson_is_arr(sounds) && i < yyjson_arr_size(sounds); ++i)
+    {
+        yyjson_val *sound_json = yyjson_arr_get(sounds, i);
+        slayer3d_game_data_sound_asset sound;
+        SDL_zero(sound);
+        sound.volume = 1.0f;
+        sound.pitch = 1.0f;
+        sound.bus = SLAYER3D_AUDIO_BUS_SOUND_EFFECTS;
+        sound.id = json_string(sound_json, "id", NULL);
+        sound.path = json_string(sound_json, "path", NULL);
+        sound.volume = json_float(sound_json, "volume", sound.volume);
+        sound.pitch = json_float(sound_json, "pitch", sound.pitch);
+        sound.pan = json_float(sound_json, "pan", sound.pan);
+        sound.bus = parse_audio_bus(json_string(sound_json, "bus", NULL), sound.bus);
+        if (sound.id == NULL || sound.path == NULL)
+            continue;
+        if (!callback(userdata, &sound))
+            return true;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_get_music_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                         slayer3d_game_data_music_asset *out_music)
 {
@@ -183,6 +262,32 @@ bool slayer3d_game_data_get_music_asset(const slayer3d_game_data_runtime *runtim
     out_music->volume = json_float(music, "volume", out_music->volume);
     out_music->loop = json_bool(music, "loop", out_music->loop);
     return out_music->id != NULL && out_music->path != NULL;
+}
+
+bool slayer3d_game_data_for_each_music_asset(const slayer3d_game_data_runtime *runtime,
+                                             slayer3d_game_data_music_asset_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *music_assets = obj_get(obj_get(runtime_root(runtime), "assets"), "music");
+    for (size_t i = 0; yyjson_is_arr(music_assets) && i < yyjson_arr_size(music_assets); ++i)
+    {
+        yyjson_val *music_json = yyjson_arr_get(music_assets, i);
+        slayer3d_game_data_music_asset music;
+        SDL_zero(music);
+        music.volume = 1.0f;
+        music.loop = true;
+        music.id = json_string(music_json, "id", NULL);
+        music.path = json_string(music_json, "path", NULL);
+        music.volume = json_float(music_json, "volume", music.volume);
+        music.loop = json_bool(music_json, "loop", music.loop);
+        if (music.id == NULL || music.path == NULL)
+            continue;
+        if (!callback(userdata, &music))
+            return true;
+    }
+    return true;
 }
 
 bool slayer3d_game_data_get_ambient_asset(const slayer3d_game_data_runtime *runtime, const char *id,
@@ -207,6 +312,34 @@ bool slayer3d_game_data_get_ambient_asset(const slayer3d_game_data_runtime *runt
     out_ambient->volume = json_float(ambient, "volume", out_ambient->volume);
     out_ambient->loop = json_bool(ambient, "loop", out_ambient->loop);
     return out_ambient->id != NULL && out_ambient->ambient_id >= 0 && out_ambient->path != NULL;
+}
+
+bool slayer3d_game_data_for_each_ambient_asset(const slayer3d_game_data_runtime *runtime,
+                                               slayer3d_game_data_ambient_asset_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *ambient_assets = obj_get(obj_get(runtime_root(runtime), "assets"), "ambient");
+    for (size_t i = 0; yyjson_is_arr(ambient_assets) && i < yyjson_arr_size(ambient_assets); ++i)
+    {
+        yyjson_val *ambient_json = yyjson_arr_get(ambient_assets, i);
+        slayer3d_game_data_ambient_asset ambient;
+        SDL_zero(ambient);
+        ambient.ambient_id = -1;
+        ambient.volume = 1.0f;
+        ambient.loop = true;
+        ambient.id = json_string(ambient_json, "id", NULL);
+        ambient.ambient_id = json_int(ambient_json, "ambient_id", ambient.ambient_id);
+        ambient.path = json_string(ambient_json, "path", NULL);
+        ambient.volume = json_float(ambient_json, "volume", ambient.volume);
+        ambient.loop = json_bool(ambient_json, "loop", ambient.loop);
+        if (ambient.id == NULL || ambient.ambient_id < 0 || ambient.path == NULL)
+            continue;
+        if (!callback(userdata, &ambient))
+            return true;
+    }
+    return true;
 }
 
 bool slayer3d_game_data_get_sprite_asset(const slayer3d_game_data_runtime *runtime, const char *id,

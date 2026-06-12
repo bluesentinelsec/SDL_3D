@@ -36,7 +36,8 @@ function(slayer3d_add_test target_name source_file test_label)
         ${target_name}
         PRIVATE
             SLAYER3D_TEST_ASSETS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets"
-            SLAYER3D_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media"
+            $<$<BOOL:${EMSCRIPTEN}>:SLAYER3D_MEDIA_DIR="/media">
+            $<$<NOT:$<BOOL:${EMSCRIPTEN}>>:SLAYER3D_MEDIA_DIR="${CMAKE_SOURCE_DIR}/media">
     )
 
     slayer3d_enable_sanitizers(${target_name})
@@ -234,6 +235,7 @@ else()
         slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/demos" "/demos")
         slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/tests/assets/game_data"
                                              "/game_data")
+        slayer3d_target_preload_asset_directory(slayer3d_game_data_test "${CMAKE_SOURCE_DIR}/media" "/media")
     else()
         target_compile_definitions(
             slayer3d_game_data_test
