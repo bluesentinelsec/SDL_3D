@@ -195,7 +195,8 @@ static void bump_warmup_entry_generation(slayer3d_game_data_asset_warmup_entry *
 }
 
 static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
-                                 slayer3d_game_data_asset_warmup_kind kind, const char *source_path, const char *id)
+                                 slayer3d_game_data_asset_warmup_kind kind, const char *source_path, const char *id,
+                                 const slayer3d_game_data_render_primitive *mesh_primitive)
 {
     if (queue == NULL || id == NULL || id[0] == '\0')
         return false;
@@ -211,6 +212,8 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
                 free_warmup_entry_prepared(&queue->entries[i]);
                 bump_warmup_entry_generation(&queue->entries[i]);
                 queue->entries[i].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED;
+                if (mesh_primitive != NULL)
+                    queue->entries[i].mesh_primitive = *mesh_primitive;
                 record_warmup_activity(queue, now_counter);
                 queue_signal_workers(queue);
             }
@@ -230,6 +233,8 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
     entry->kind = kind;
     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED;
     entry->generation = 1;
+    if (mesh_primitive != NULL)
+        entry->mesh_primitive = *mesh_primitive;
     if (source_path != NULL && source_path[0] != '\0')
     {
         entry->source_path = SDL_strdup(source_path);
@@ -708,34 +713,48 @@ int slayer3d_game_data_asset_warmup_queue_cancel_pending(slayer3d_game_data_asse
 bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_warmup_queue *queue,
                                                       const char *image_id)
 {
-    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL, image_id);
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL, image_id, NULL);
 }
 
 bool slayer3d_game_data_asset_warmup_request_font(slayer3d_game_data_asset_warmup_queue *queue, const char *font_id)
 {
-    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL, font_id);
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL, font_id, NULL);
 }
 
 bool slayer3d_game_data_asset_warmup_request_texture(slayer3d_game_data_asset_warmup_queue *queue,
                                                      const char *source_path, const char *texture_path)
 {
-    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE, source_path, texture_path);
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE, source_path, texture_path, NULL);
 }
 
 bool slayer3d_game_data_asset_warmup_request_sprite(slayer3d_game_data_asset_warmup_queue *queue, const char *sprite_id)
 {
-    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE, NULL, sprite_id);
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE, NULL, sprite_id, NULL);
 }
 
 bool slayer3d_game_data_asset_warmup_request_model(slayer3d_game_data_asset_warmup_queue *queue, const char *model_id)
 {
-    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL, NULL, model_id);
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL, NULL, model_id, NULL);
 }
 
 bool slayer3d_game_data_asset_warmup_request_audio_file(slayer3d_game_data_asset_warmup_queue *queue,
                                                         const char *audio_path)
 {
-    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE, NULL, audio_path);
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE, NULL, audio_path, NULL);
+}
+
+bool slayer3d_game_data_asset_warmup_request_mesh_primitive(slayer3d_game_data_asset_warmup_queue *queue,
+                                                            const slayer3d_game_data_render_primitive *primitive)
+{
+    if (queue == NULL || primitive == NULL)
+        return false;
+    if (!slayer3d_game_data_mesh_primitive_cacheable(primitive))
+        return true;
+
+    char key[256];
+    if (!slayer3d_game_data_mesh_primitive_warmup_key(primitive, key, (int)sizeof(key)))
+        return false;
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_MESH_PRIMITIVE, NULL, key, primitive);
 }
 
 void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_warmup_queue *queue,
@@ -815,7 +834,9 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
                                  const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                  slayer3d_game_data_font_cache *font_cache, slayer3d_game_data_image_cache *image_cache,
                                  slayer3d_game_data_sprite_cache *sprite_cache,
-                                 slayer3d_game_data_model_cache *model_cache, slayer3d_asset_resolver *assets)
+                                 slayer3d_game_data_model_cache *model_cache,
+                                 slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
+                                 slayer3d_asset_resolver *assets)
 {
     if (entry == NULL || entry->id == NULL)
         return false;
@@ -837,6 +858,8 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
         return slayer3d_game_data_find_or_load_sprite_entry(runtime, sprite_cache, entry->id) != NULL;
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL:
         return slayer3d_game_data_find_or_load_model_entry(runtime, model_cache, entry->id) != NULL;
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_MESH_PRIMITIVE:
+        return slayer3d_game_data_find_or_build_mesh_primitive(mesh_primitive_cache, &entry->mesh_primitive) != NULL;
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE: {
         char resolved_path[4096];
         return slayer3d_game_data_prepare_audio_file((slayer3d_game_data_runtime *)runtime, entry->id, resolved_path,
@@ -927,6 +950,8 @@ static const char *warmup_kind_name(slayer3d_game_data_asset_warmup_kind kind)
         return "audio";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT:
         return "font";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_MESH_PRIMITIVE:
+        return "mesh primitive";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE:
     default:
         return "image";
@@ -937,7 +962,8 @@ int slayer3d_game_data_asset_warmup_queue_service(
     slayer3d_game_data_asset_warmup_queue *queue, const slayer3d_game_data_runtime *runtime,
     slayer3d_render_context *renderer, slayer3d_game_data_font_cache *font_cache,
     slayer3d_game_data_image_cache *image_cache, slayer3d_game_data_sprite_cache *sprite_cache,
-    slayer3d_game_data_model_cache *model_cache, slayer3d_asset_resolver *assets, int max_jobs)
+    slayer3d_game_data_model_cache *model_cache, slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
+    slayer3d_asset_resolver *assets, int max_jobs)
 {
     if (queue == NULL || runtime == NULL)
         return 0;
@@ -972,6 +998,7 @@ int slayer3d_game_data_asset_warmup_queue_service(
                 if (copy_warmup_entry_request(entry, &work_entry.source_path, &work_entry.id))
                 {
                     work_entry.generation = entry->generation;
+                    work_entry.mesh_primitive = entry->mesh_primitive;
                     prepared = entry->prepared;
                     entry->prepared = NULL;
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
@@ -994,6 +1021,7 @@ int slayer3d_game_data_asset_warmup_queue_service(
             if (copy_warmup_entry_request(entry, &work_entry.source_path, &work_entry.id))
             {
                 work_entry.generation = entry->generation;
+                work_entry.mesh_primitive = entry->mesh_primitive;
                 entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
                 record_warmup_activity(queue, warmup_now_counter());
                 service_mode = SERVICE_SYNC;
@@ -1014,7 +1042,7 @@ int slayer3d_game_data_asset_warmup_queue_service(
                             ? finalize_prepared_warmup_entry(&work_entry, runtime, renderer, font_cache, image_cache,
                                                              sprite_cache, model_cache, prepared)
                             : service_warmup_entry(&work_entry, runtime, renderer, font_cache, image_cache,
-                                                   sprite_cache, model_cache, assets);
+                                                   sprite_cache, model_cache, mesh_primitive_cache, assets);
 
         queue_lock(queue);
         if (work_index >= 0 && work_index < queue->count &&

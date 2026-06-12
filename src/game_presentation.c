@@ -243,6 +243,11 @@ static bool queue_render_primitive_assets(void *userdata, const slayer3d_game_da
         (void)slayer3d_game_data_asset_warmup_request_sprite(context->queue, primitive->sprite_asset);
     if (primitive->model_asset != NULL && primitive->model_asset[0] != '\0')
         (void)slayer3d_game_data_asset_warmup_request_model(context->queue, primitive->model_asset);
+    if (primitive->type == SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE &&
+        primitive->draw_mode != SLAYER3D_GAME_DATA_RENDER_DRAW_WIRE)
+    {
+        (void)slayer3d_game_data_asset_warmup_request_mesh_primitive(context->queue, primitive);
+    }
     return true;
 }
 
@@ -976,7 +981,7 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
             assets = frame->model_cache->assets;
         (void)slayer3d_game_data_asset_warmup_queue_service(frame->asset_warmup, frame->runtime, frame->renderer,
                                                             frame->font_cache, frame->image_cache, frame->sprite_cache,
-                                                            frame->model_cache, assets, 0);
+                                                            frame->model_cache, frame->mesh_primitive_cache, assets, 0);
     }
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;

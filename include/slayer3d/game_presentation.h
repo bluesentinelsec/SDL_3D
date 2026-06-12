@@ -93,6 +93,8 @@ extern "C"
         SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE = 5,
         /** @brief Authored font asset id. */
         SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT = 6,
+        /** @brief Procedural mesh generated from a render.mesh_primitive descriptor. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_MESH_PRIMITIVE = 7,
     } slayer3d_game_data_asset_warmup_kind;
 
     /** @brief Current state of one presentation asset warmup request. */
@@ -121,6 +123,7 @@ extern "C"
         char *id;                                    /**< Owned asset id or texture path. */
         void *prepared;                              /**< Private prepared payload for main-thread finalization. */
         unsigned int generation;                     /**< Monotonic token used to ignore stale worker completions. */
+        slayer3d_game_data_render_primitive mesh_primitive; /**< Private descriptor for mesh primitive requests. */
     } slayer3d_game_data_asset_warmup_entry;
 
     /**
@@ -550,6 +553,10 @@ extern "C"
     bool slayer3d_game_data_asset_warmup_request_audio_file(slayer3d_game_data_asset_warmup_queue *queue,
                                                             const char *audio_path);
 
+    /** @brief Queue a cacheable procedural mesh primitive for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_mesh_primitive(slayer3d_game_data_asset_warmup_queue *queue,
+                                                                const slayer3d_game_data_render_primitive *primitive);
+
     /** @brief Read queue counts by state. */
     void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_warmup_queue *queue,
                                                      slayer3d_game_data_asset_warmup_stats *out_stats);
@@ -575,7 +582,8 @@ extern "C"
         slayer3d_game_data_asset_warmup_queue *queue, const slayer3d_game_data_runtime *runtime,
         slayer3d_render_context *renderer, slayer3d_game_data_font_cache *font_cache,
         slayer3d_game_data_image_cache *image_cache, slayer3d_game_data_sprite_cache *sprite_cache,
-        slayer3d_game_data_model_cache *model_cache, slayer3d_asset_resolver *assets, int max_jobs);
+        slayer3d_game_data_model_cache *model_cache, slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
+        slayer3d_asset_resolver *assets, int max_jobs);
 
     /**
      * @brief Draw authored render primitives for the active scene.

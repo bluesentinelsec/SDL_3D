@@ -83,13 +83,14 @@ audio frame updates, and presentation.
 The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
 to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
 scene fonts, UI images, skybox images, brush material textures, render sprite
-assets, render model assets, and render primitive texture images once per scene
-activation. It also queues authored sound, music, and ambient audio file paths
-so resolver-backed audio can be materialized into the runtime cache before first
-playback. When the active scene changes, unfinished requests from the previous
-activation are canceled so the current scene's assets take priority. Requests
-are deduplicated and then serviced with a small
-per-frame budget instead of blocking startup on the full scene asset set.
+assets, render model assets, render primitive texture images, and cacheable
+procedural mesh primitives once per scene activation. It also queues authored
+sound, music, and ambient audio file paths so resolver-backed audio can be
+materialized into the runtime cache before first playback. When the active scene
+changes, unfinished requests from the previous activation are canceled so the
+current scene's assets take priority. Requests are deduplicated and then
+serviced with a small per-frame budget instead of blocking startup on the full
+scene asset set.
 
 On native SDL targets, the managed runtime also starts a background warmup worker
 for CPU-only texture, UI image, authored sprite, and authored model preparation.
@@ -119,7 +120,10 @@ selection actions are ignored until the thumbnail is available.
 Render primitives that reference warmed image, sprite, or model assets also
 avoid forcing synchronous lazy loads while those requests are pending or failed.
 Texture-backed geometry draws untextured until its image is available; sprites
-and models skip drawing until ready.
+and models skip drawing until ready. Solid procedural mesh primitives also use
+the warmup queue to populate the generated mesh cache ahead of first draw; if a
+matching mesh warmup request is still pending, solid mesh drawing waits for the
+budgeted warmup service instead of building the mesh on the draw path.
 
 Authored font assets use the same per-asset state shape under
 `asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text

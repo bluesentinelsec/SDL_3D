@@ -3626,7 +3626,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueDeduplicatesRequests)
     EXPECT_EQ(queue.max_jobs_per_frame, 3);
 
     EXPECT_EQ(slayer3d_game_data_asset_warmup_queue_service(&queue, nullptr, nullptr, nullptr, nullptr, nullptr,
-                                                            nullptr, nullptr, 0),
+                                                            nullptr, nullptr, nullptr, 0),
               0);
     slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
     EXPECT_EQ(stats.total, 5);
@@ -3810,7 +3810,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
     for (int attempt = 0; attempt < 100 && image_cache.count == 0; ++attempt)
     {
         (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &image_cache, nullptr,
-                                                            nullptr, assets, 1);
+                                                            nullptr, nullptr, assets, 1);
         if (image_cache.count == 0)
             SDL_Delay(1);
     }
@@ -3906,7 +3906,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteBackedUiImages)
     for (int attempt = 0; attempt < 100 && image_cache.count == 0; ++attempt)
     {
         (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &image_cache, nullptr,
-                                                            nullptr, assets, 1);
+                                                            nullptr, nullptr, assets, 1);
         if (image_cache.count == 0)
             SDL_Delay(1);
     }
@@ -3994,7 +3994,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteAssets)
     for (int attempt = 0; attempt < 100 && sprite_cache.count == 0; ++attempt)
     {
         (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, &sprite_cache,
-                                                            nullptr, assets, 1);
+                                                            nullptr, nullptr, assets, 1);
         if (sprite_cache.count == 0)
             SDL_Delay(1);
     }
@@ -4085,7 +4085,7 @@ f 1//1 2//1 3//1
     for (int attempt = 0; attempt < 100 && model_cache.count == 0; ++attempt)
     {
         (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
-                                                            &model_cache, assets, 1);
+                                                            &model_cache, nullptr, assets, 1);
         if (model_cache.count == 0)
             SDL_Delay(1);
     }
@@ -4160,7 +4160,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsFontAssets)
     ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_font(&queue, "font.hud"));
 
     (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, &font_cache, nullptr, nullptr,
-                                                        nullptr, nullptr, 1);
+                                                        nullptr, nullptr, nullptr, 1);
 
     ASSERT_EQ(font_cache.count, 1);
     ASSERT_NE(font_cache.fonts[0].atlas_pixels, nullptr);
@@ -4266,7 +4266,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupMaterializesAudioFiles)
         if (stats.ready == 3)
             break;
         (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
-                                                            nullptr, nullptr, 1);
+                                                            nullptr, nullptr, nullptr, 1);
     }
 
     slayer3d_game_data_asset_warmup_stats stats{};
@@ -4291,6 +4291,71 @@ TEST(GameDataRuntime, PresentationAssetWarmupMaterializesAudioFiles)
     EXPECT_EQ(contents, "hit bytes");
 
     slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupBuildsMeshPrimitives)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_mesh_primitive");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Mesh Primitive", "id": "test.warmup_mesh_primitive", "version": "0.1.0" },
+  "world": { "name": "world.warmup_mesh_primitive", "kind": "fixed_screen" },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_game_data_render_primitive primitive{};
+    primitive.type = SLAYER3D_GAME_DATA_RENDER_MESH_PRIMITIVE;
+    primitive.mesh_primitive = SLAYER3D_GAME_DATA_MESH_PRIMITIVE_CUBE;
+    primitive.draw_mode = SLAYER3D_GAME_DATA_RENDER_DRAW_SOLID;
+    primitive.size = {1.0f, 2.0f, 3.0f};
+    primitive.slices = 8;
+    primitive.rings = 4;
+    primitive.tube_segments = 6;
+
+    slayer3d_game_data_mesh_primitive_cache mesh_cache{};
+    slayer3d_game_data_mesh_primitive_cache_init(&mesh_cache);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_mesh_primitive(&queue, &primitive));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_mesh_primitive(&queue, &primitive));
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 1);
+    EXPECT_EQ(stats.queued, 1);
+
+    EXPECT_EQ(slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
+                                                            nullptr, &mesh_cache, nullptr, 1),
+              1);
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+    ASSERT_EQ(mesh_cache.count, 1);
+    EXPECT_EQ(mesh_cache.misses, 1);
+    EXPECT_TRUE(mesh_cache.entries[0].loaded);
+    EXPECT_GT(mesh_cache.entries[0].mesh.vertex_count, 0);
+    EXPECT_GT(mesh_cache.entries[0].mesh.index_count, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_mesh_primitive_cache_free(&mesh_cache);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);

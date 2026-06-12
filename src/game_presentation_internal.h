@@ -87,6 +87,14 @@ bool slayer3d_game_data_append_sphere_draw_batch(primitive_draw_context *context
 bool slayer3d_game_data_primitive_asset_ready(const primitive_draw_context *context,
                                               slayer3d_game_data_asset_warmup_kind kind, const char *id);
 
+bool slayer3d_game_data_mesh_primitive_cacheable(const slayer3d_game_data_render_primitive *primitive);
+
+bool slayer3d_game_data_mesh_primitive_warmup_key(const slayer3d_game_data_render_primitive *primitive, char *buffer,
+                                                  int buffer_size);
+
+const slayer3d_mesh *slayer3d_game_data_find_or_build_mesh_primitive(
+    slayer3d_game_data_mesh_primitive_cache *cache, const slayer3d_game_data_render_primitive *primitive);
+
 const slayer3d_texture2d *slayer3d_game_data_primitive_texture(primitive_draw_context *context,
                                                                const slayer3d_game_data_render_primitive *primitive);
 
