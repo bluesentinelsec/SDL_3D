@@ -54,6 +54,12 @@ typedef struct asset_warmup_worker_state
     slayer3d_game_data_asset_warmup_queue *queue;
 } asset_warmup_worker_state;
 
+#if defined(__EMSCRIPTEN__) && (defined(__GNUC__) || defined(__clang__))
+#define SLAYER3D_ASSET_WARMUP_MAYBE_UNUSED __attribute__((unused))
+#else
+#define SLAYER3D_ASSET_WARMUP_MAYBE_UNUSED
+#endif
+
 static const char *warmup_kind_name(slayer3d_game_data_asset_warmup_kind kind);
 
 static Uint64 warmup_now_counter(void)
@@ -489,7 +495,7 @@ static bool prepare_worker_request(asset_warmup_worker_state *worker_state, slay
     }
 }
 
-static int SDLCALL warmup_worker_main(void *userdata)
+static int SDLCALL warmup_worker_main(void *userdata) SLAYER3D_ASSET_WARMUP_MAYBE_UNUSED
 {
     asset_warmup_worker_state *worker_state = (asset_warmup_worker_state *)userdata;
     if (worker_state == NULL || worker_state->queue == NULL || worker_state->mutex == NULL ||
