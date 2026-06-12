@@ -1104,6 +1104,60 @@
         }
       },
       {
+        "id": "ui.editor_shell.asset_warmup.panel",
+        "type": "panel",
+        "x": 930,
+        "y": 534,
+        "w": 338,
+        "h": 58,
+        "layer": 120,
+        "visible_if": {
+          "type": "any",
+          "conditions": [
+            { "type": "scene_state.compare", "key": "asset_warmup.active", "op": "==", "value": true, "default": false },
+            { "type": "scene_state.compare", "key": "asset_warmup.failed", "op": ">", "value": 0, "default": 0 }
+          ]
+        },
+        "children": [
+          {
+            "id": "ui.editor_shell.asset_warmup.status",
+            "type": "label",
+            "x": 10,
+            "y": 7,
+            "w": 318,
+            "h": 18,
+            "format": "Assets: %s  pending %s / ready %s / failed %s",
+            "bindings": [
+              { "type": "scene_state", "key": "asset_warmup.status", "default": "idle" },
+              { "type": "scene_state", "key": "asset_warmup.pending", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.ready", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.failed", "default": 0 }
+            ],
+            "text_scale": 0.4,
+            "align": "left",
+            "layer": 121
+          },
+          {
+            "id": "ui.editor_shell.asset_warmup.jobs",
+            "type": "label",
+            "x": 10,
+            "y": 29,
+            "w": 318,
+            "h": 18,
+            "format": "Queue %s  loading %s  finalize %s  jobs %s",
+            "bindings": [
+              { "type": "scene_state", "key": "asset_warmup.queued", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.loading", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.ready_for_finalize", "default": 0 },
+              { "type": "scene_state", "key": "asset_warmup.service_jobs", "default": 0 }
+            ],
+            "text_scale": 0.4,
+            "align": "left",
+            "layer": 121
+          }
+        ]
+      },
+      {
         "id": "ui.editor_shell.console.panel",
         "type": "panel",
         "x": 0,

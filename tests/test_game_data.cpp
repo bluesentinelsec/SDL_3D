@@ -17929,6 +17929,88 @@ TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoShowsAssetWarmupDiagnosticsWhenActiveOrFailed)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    auto visible_warmup_text = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> values;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (capture == nullptr || text == nullptr || text->name == nullptr)
+                return true;
+            const std::string name = text->name;
+            if (name.rfind("ui.editor_shell.asset_warmup.", 0) != 0)
+                return true;
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            slayer3d_game_data_ui_metrics metrics{};
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, &metrics, &resolved, &visible) ||
+                !visible || resolved.text == nullptr)
+            {
+                return true;
+            }
+            capture->values.emplace_back(resolved.text);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.values;
+    };
+    auto contains_text = [](const std::vector<std::string> &values, const char *expected) {
+        return std::find(values.begin(), values.end(), expected) != values.end();
+    };
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_TRUE(visible_warmup_text().empty());
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.active", true);
+    slayer3d_properties_set_string(scene_state, "asset_warmup.status", "loading");
+    slayer3d_properties_set_int(scene_state, "asset_warmup.pending", 5);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready", 2);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.failed", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.queued", 3);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.loading", 1);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready_for_finalize", 1);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.service_jobs", 4);
+
+    std::vector<std::string> labels = visible_warmup_text();
+    EXPECT_TRUE(contains_text(labels, "Assets: loading  pending 5 / ready 2 / failed 0"));
+    EXPECT_TRUE(contains_text(labels, "Queue 3  loading 1  finalize 1  jobs 4"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.active", false);
+    slayer3d_properties_set_string(scene_state, "asset_warmup.status", "failed");
+    slayer3d_properties_set_int(scene_state, "asset_warmup.pending", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready", 4);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.failed", 1);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.queued", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.loading", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.ready_for_finalize", 0);
+    slayer3d_properties_set_int(scene_state, "asset_warmup.service_jobs", 0);
+
+    labels = visible_warmup_text();
+    EXPECT_TRUE(contains_text(labels, "Assets: failed  pending 0 / ready 4 / failed 1"));
+    EXPECT_TRUE(contains_text(labels, "Queue 0  loading 0  finalize 0  jobs 0"));
+
+    slayer3d_properties_set_int(scene_state, "asset_warmup.failed", 0);
+    EXPECT_TRUE(visible_warmup_text().empty());
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();

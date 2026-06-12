@@ -117,6 +117,11 @@ Editor actor/model browsers can bind to those keys to show progressive model
 availability while CPU mesh decoding and render-thread finalization complete in
 the background.
 
+The editor shell includes a compact asset warmup diagnostics panel that appears
+while warmup is active or when failures are present. It is authored entirely in
+scene UI and binds to the aggregate `asset_warmup` fields, making queue depth,
+loading/finalization counts, and service activity visible during startup.
+
 ## Network Packet Loops
 
 The runtime network helpers are game-agnostic. Callers provide session names
