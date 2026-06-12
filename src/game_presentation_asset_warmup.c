@@ -54,12 +54,6 @@ typedef struct asset_warmup_worker_state
     slayer3d_game_data_asset_warmup_queue *queue;
 } asset_warmup_worker_state;
 
-#if defined(__EMSCRIPTEN__) && (defined(__GNUC__) || defined(__clang__))
-#define SLAYER3D_ASSET_WARMUP_MAYBE_UNUSED __attribute__((unused))
-#else
-#define SLAYER3D_ASSET_WARMUP_MAYBE_UNUSED
-#endif
-
 static const char *warmup_kind_name(slayer3d_game_data_asset_warmup_kind kind);
 
 static Uint64 warmup_now_counter(void)
@@ -268,6 +262,11 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
 static bool worker_can_prepare_entry(const asset_warmup_worker_state *worker_state,
                                      const slayer3d_game_data_asset_warmup_entry *entry)
 {
+#ifdef __EMSCRIPTEN__
+    (void)worker_state;
+    (void)entry;
+    return false;
+#else
     if (worker_state == NULL || entry == NULL || entry->id == NULL)
         return false;
     if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE)
@@ -284,8 +283,10 @@ static bool worker_can_prepare_entry(const asset_warmup_worker_state *worker_sta
         worker_state->assets != NULL)
         return true;
     return false;
+#endif
 }
 
+#ifndef __EMSCRIPTEN__
 static int find_queued_worker_index(const asset_warmup_worker_state *worker_state)
 {
     const slayer3d_game_data_asset_warmup_queue *queue = worker_state != NULL ? worker_state->queue : NULL;
@@ -315,6 +316,7 @@ static int find_loading_worker_index(const slayer3d_game_data_asset_warmup_queue
     }
     return -1;
 }
+#endif
 
 static bool copy_warmup_entry_request(const slayer3d_game_data_asset_warmup_entry *entry, char **out_source_path,
                                       char **out_id)
@@ -339,6 +341,7 @@ static bool copy_warmup_entry_request(const slayer3d_game_data_asset_warmup_entr
     return true;
 }
 
+#ifndef __EMSCRIPTEN__
 static bool prepare_texture_request(asset_warmup_worker_state *worker_state, const char *source_path, const char *id,
                                     asset_warmup_prepared_texture **out_prepared)
 {
@@ -495,7 +498,7 @@ static bool prepare_worker_request(asset_warmup_worker_state *worker_state, slay
     }
 }
 
-static int SDLCALL warmup_worker_main(void *userdata) SLAYER3D_ASSET_WARMUP_MAYBE_UNUSED
+static int SDLCALL warmup_worker_main(void *userdata)
 {
     asset_warmup_worker_state *worker_state = (asset_warmup_worker_state *)userdata;
     if (worker_state == NULL || worker_state->queue == NULL || worker_state->mutex == NULL ||
@@ -584,6 +587,7 @@ static int SDLCALL warmup_worker_main(void *userdata) SLAYER3D_ASSET_WARMUP_MAYB
 
     return 0;
 }
+#endif
 
 void slayer3d_game_data_asset_warmup_queue_init(slayer3d_game_data_asset_warmup_queue *queue, int max_jobs_per_frame)
 {
