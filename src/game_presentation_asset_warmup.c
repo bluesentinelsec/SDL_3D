@@ -727,6 +727,12 @@ bool slayer3d_game_data_asset_warmup_request_model(slayer3d_game_data_asset_warm
     return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL, NULL, model_id);
 }
 
+bool slayer3d_game_data_asset_warmup_request_audio_file(slayer3d_game_data_asset_warmup_queue *queue,
+                                                        const char *audio_path)
+{
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE, NULL, audio_path);
+}
+
 void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_warmup_queue *queue,
                                                  slayer3d_game_data_asset_warmup_stats *out_stats)
 {
@@ -824,6 +830,11 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
         return slayer3d_game_data_find_or_load_sprite_entry(runtime, sprite_cache, entry->id) != NULL;
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL:
         return slayer3d_game_data_find_or_load_model_entry(runtime, model_cache, entry->id) != NULL;
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE: {
+        char resolved_path[4096];
+        return slayer3d_game_data_prepare_audio_file((slayer3d_game_data_runtime *)runtime, entry->id, resolved_path,
+                                                     (int)sizeof(resolved_path));
+    }
     default:
         return false;
     }
@@ -903,6 +914,8 @@ static const char *warmup_kind_name(slayer3d_game_data_asset_warmup_kind kind)
         return "model";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE:
         return "sprite";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE:
+        return "audio";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE:
     default:
         return "image";

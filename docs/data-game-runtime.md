@@ -83,7 +83,9 @@ audio frame updates, and presentation.
 The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
 to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
 scene UI images, brush material textures, render sprite assets, and render model
-assets once per scene activation. When the active scene changes, unfinished
+assets once per scene activation. It also queues authored sound, music, and
+ambient audio file paths so resolver-backed audio can be materialized into the
+runtime cache before first playback. When the active scene changes, unfinished
 requests from the previous activation are canceled so the current scene's assets
 take priority. Requests are deduplicated and then serviced with a small
 per-frame budget instead of blocking startup on the full scene asset set.
@@ -93,7 +95,9 @@ for CPU-only texture, UI image, authored sprite, and authored model preparation.
 The worker reads and decodes those assets, then the frame warmup service
 publishes the prepared assets into the render texture, UI image, sprite, and
 model caches on the main presentation path. Web builds and platforms where
-worker creation fails fall back to the same budgeted service path.
+worker creation fails fall back to the same budgeted service path. Audio
+materialization currently runs on the budgeted main service path because it
+updates the runtime-owned audio materialization cache.
 
 The managed runtime publishes warmup progress to scene state each render under
 the `asset_warmup` prefix. Data-authored UI can bind to `asset_warmup.total`,

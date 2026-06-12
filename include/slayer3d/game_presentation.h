@@ -89,6 +89,8 @@ extern "C"
         SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE = 3,
         /** @brief Authored model asset id. */
         SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL = 4,
+        /** @brief Authored or filesystem audio file path. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE = 5,
     } slayer3d_game_data_asset_warmup_kind;
 
     /** @brief Current state of one presentation asset warmup request. */
@@ -537,6 +539,10 @@ extern "C"
     /** @brief Queue a model asset id for warmup, deduplicating existing requests. */
     bool slayer3d_game_data_asset_warmup_request_model(slayer3d_game_data_asset_warmup_queue *queue,
                                                        const char *model_id);
+
+    /** @brief Queue an audio file path for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_audio_file(slayer3d_game_data_asset_warmup_queue *queue,
+                                                            const char *audio_path);
 
     /** @brief Read queue counts by state. */
     void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_warmup_queue *queue,

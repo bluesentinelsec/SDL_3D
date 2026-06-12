@@ -4111,6 +4111,122 @@ f 1//1 2//1 3//1
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, PresentationAssetWarmupMaterializesAudioFiles)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_audio");
+    const std::filesystem::path user_root = dir / "user";
+    const std::filesystem::path cache_root = dir / "cache";
+    write_text(dir / "audio" / "hit.wav", "hit bytes");
+    write_text(dir / "audio" / "title.ogg", "music bytes");
+    write_text(dir / "audio" / "wind.ogg", "ambient bytes");
+    const std::string game_json = std::string(R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Audio", "id": "test.warmup_audio", "version": "0.1.0" },
+  "storage": {
+    "organization": "Blue Sentinel Security",
+    "application": "Warmup Audio Test",
+    "user_root_override": ")json") +
+                                  user_root.generic_string() +
+                                  R"json(",
+    "cache_root_override": ")json" +
+                                  cache_root.generic_string() +
+                                  R"json("
+  },
+  "world": { "name": "world.warmup_audio", "kind": "fixed_screen" },
+  "assets": {
+    "sounds": [{ "id": "sound.hit", "path": "asset://audio/hit.wav", "volume": 0.5 }],
+    "music": [{ "id": "music.title", "path": "asset://audio/title.ogg", "loop": false }],
+    "ambient": [{ "id": "ambient.wind", "ambient_id": 2, "path": "asset://audio/wind.ogg" }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json";
+    write_text(dir / "warmup.game.json", game_json.c_str());
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    struct AudioAssetCapture
+    {
+        std::vector<std::string> paths;
+    } audio_capture{};
+    auto collect_sound = [](void *userdata, const slayer3d_game_data_sound_asset *sound) -> bool {
+        auto *capture = static_cast<AudioAssetCapture *>(userdata);
+        if (capture != nullptr && sound != nullptr && sound->path != nullptr)
+            capture->paths.emplace_back(sound->path);
+        return true;
+    };
+    auto collect_music = [](void *userdata, const slayer3d_game_data_music_asset *music) -> bool {
+        auto *capture = static_cast<AudioAssetCapture *>(userdata);
+        if (capture != nullptr && music != nullptr && music->path != nullptr)
+            capture->paths.emplace_back(music->path);
+        return true;
+    };
+    auto collect_ambient = [](void *userdata, const slayer3d_game_data_ambient_asset *ambient) -> bool {
+        auto *capture = static_cast<AudioAssetCapture *>(userdata);
+        if (capture != nullptr && ambient != nullptr && ambient->path != nullptr)
+            capture->paths.emplace_back(ambient->path);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_sound_asset(runtime, collect_sound, &audio_capture));
+    EXPECT_TRUE(slayer3d_game_data_for_each_music_asset(runtime, collect_music, &audio_capture));
+    EXPECT_TRUE(slayer3d_game_data_for_each_ambient_asset(runtime, collect_ambient, &audio_capture));
+    EXPECT_EQ(audio_capture.paths.size(), 3u);
+
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/hit.wav"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/hit.wav"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/title.ogg"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_audio_file(&queue, "asset://audio/wind.ogg"));
+
+    for (int attempt = 0; attempt < 10; ++attempt)
+    {
+        slayer3d_game_data_asset_warmup_stats stats{};
+        slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+        if (stats.ready == 3)
+            break;
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
+                                                            nullptr, 1);
+    }
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 3);
+    EXPECT_EQ(stats.ready, 3);
+    EXPECT_EQ(stats.failed, 0);
+    EXPECT_GE(stats.service_jobs, 3);
+
+    char materialized_path[4096]{};
+    ASSERT_TRUE(slayer3d_game_data_prepare_audio_file(runtime, "asset://audio/hit.wav", materialized_path,
+                                                      sizeof(materialized_path)));
+    const std::filesystem::path materialized(materialized_path);
+    EXPECT_TRUE(std::filesystem::exists(materialized));
+    EXPECT_EQ(materialized.parent_path().filename().string(), "audio");
+
+    std::error_code ec;
+    EXPECT_TRUE(std::filesystem::equivalent(materialized.parent_path().parent_path(), cache_root, ec));
+
+    std::ifstream in(materialized, std::ios::binary);
+    const std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    EXPECT_EQ(contents, "hit bytes");
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, DataGameRuntimePublishesAssetWarmupStatsToSceneState)
 {
     const std::filesystem::path dir = unique_test_dir("presentation_warmup_publish");

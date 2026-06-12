@@ -47,7 +47,9 @@ then appends `cache`.
 Game-data audio actions materialize resolver-backed audio assets into
 `cache://audio`. Hosts that need to preload or inspect the resolved path can use
 `slayer3d_game_data_prepare_audio_file()`, which applies the same cache policy as
-`audio.play_sfx` and `audio.play_music`.
+`audio.play_sfx` and `audio.play_music`. The presentation asset warmup queue also
+uses this path for authored sound, music, and ambient assets so first playback can
+reuse already materialized files when warmup has completed.
 
 Lua game scripts can use the same safe roots through the gameplay API:
 
