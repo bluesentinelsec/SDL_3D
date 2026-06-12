@@ -31,6 +31,10 @@ extern "C"
     bool slayer3d_game_data_get_model_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                             slayer3d_game_data_model_asset *out_model);
 
+    /** @brief Iterate authored 3D model asset descriptors from `assets.models`. */
+    bool slayer3d_game_data_for_each_model_asset(const slayer3d_game_data_runtime *runtime,
+                                                 slayer3d_game_data_model_asset_fn callback, void *userdata);
+
     /** @brief Read a sound-effect asset descriptor by id from `assets.sounds`. */
     bool slayer3d_game_data_get_sound_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                             slayer3d_game_data_sound_asset *out_sound);

@@ -1396,6 +1396,170 @@
         "layer": 130
 },
 {
+        "id": "ui.editor_shell.palette.game_object.simple_robot.cell",
+        "type": "panel",
+        "x": 724,
+        "y": 236,
+        "w": 132,
+        "h": 132,
+        "color": [
+                38,
+                44,
+                54,
+                235
+        ],
+        "border_color": [
+                95,
+                115,
+                145,
+                230
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.preview.body",
+        "type": "panel",
+        "x": 775,
+        "y": 272,
+        "w": 30,
+        "h": 48,
+        "color": [
+                112,
+                178,
+                255,
+                245
+        ],
+        "border_color": [
+                170,
+                214,
+                255,
+                255
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.preview.head",
+        "type": "panel",
+        "x": 770,
+        "y": 252,
+        "w": 40,
+        "h": 26,
+        "color": [
+                135,
+                198,
+                255,
+                255
+        ],
+        "border_color": [
+                190,
+                228,
+                255,
+                255
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        },
+        "layer": 130
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.ready_badge",
+        "type": "panel",
+        "x": 743,
+        "y": 251,
+        "w": 16,
+        "h": 16,
+        "color": [
+                64,
+                235,
+                150,
+                245
+        ],
+        "border_color": [
+                172,
+                255,
+                210,
+                255
+        ],
+        "border_thickness": 1,
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.ready",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
+        },
+        "layer": 131
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.selected",
+        "type": "panel",
+        "x": 720,
+        "y": 232,
+        "w": 140,
+        "h": 140,
+        "color": [
+                0,
+                0,
+                0,
+                0
+        ],
+        "border_color": [
+                95,
+                255,
+                210,
+                255
+        ],
+        "border_thickness": 3,
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.game_object.cursor",
+                                "op": "==",
+                                "value": "simple_robot",
+                                "default": "player_start"
+                        }
+                ]
+        },
+        "layer": 130
+},
+{
         "id": "ui.editor_shell.title",
         "type": "label",
         "x": 954.4,
@@ -1865,6 +2029,142 @@
                 "key": "editor.palette.active",
                 "op": "==",
                 "value": "game_object"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.label",
+        "type": "label",
+        "x": 725.0,
+        "y": 334,
+        "w": 130,
+        "h": 21,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Simple Robot",
+        "text_color": [
+                230,
+                238,
+                248,
+                245
+        ],
+        "text_scale": 0.55,
+        "align": "center",
+        "visible_if": {
+                "type": "scene_state.compare",
+                "key": "editor.palette.active",
+                "op": "==",
+                "value": "game_object"
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.loading",
+        "type": "label",
+        "x": 725.0,
+        "y": 316,
+        "w": 130,
+        "h": 18,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Loading",
+        "text_color": [
+                255,
+                226,
+                118,
+                255
+        ],
+        "text_scale": 0.45,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.pending",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.ready",
+        "type": "label",
+        "x": 725.0,
+        "y": 316,
+        "w": 130,
+        "h": 18,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Ready",
+        "text_color": [
+                130,
+                255,
+                190,
+                255
+        ],
+        "text_scale": 0.45,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.ready",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
+        }
+},
+{
+        "id": "ui.editor_shell.palette.game_object.simple_robot.failed",
+        "type": "label",
+        "x": 725.0,
+        "y": 316,
+        "w": 130,
+        "h": 18,
+        "layer": 141,
+        "font": "font.editor_shell.ui",
+        "text": "Failed",
+        "text_color": [
+                255,
+                100,
+                90,
+                255
+        ],
+        "text_scale": 0.45,
+        "align": "center",
+        "visible_if": {
+                "type": "all",
+                "conditions": [
+                        {
+                                "type": "scene_state.compare",
+                                "key": "editor.palette.active",
+                                "op": "==",
+                                "value": "game_object"
+                        },
+                        {
+                                "type": "scene_state.compare",
+                                "key": "asset_warmup.model.model.editor_shell.simple_robot.failed",
+                                "op": "==",
+                                "value": true,
+                                "default": false
+                        }
+                ]
         }
 },
 {

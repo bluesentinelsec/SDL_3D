@@ -136,6 +136,28 @@ bool slayer3d_game_data_get_model_asset(const slayer3d_game_data_runtime *runtim
     return out_model->id != NULL && out_model->path != NULL;
 }
 
+bool slayer3d_game_data_for_each_model_asset(const slayer3d_game_data_runtime *runtime,
+                                             slayer3d_game_data_model_asset_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *models = obj_get(obj_get(runtime_root(runtime), "assets"), "models");
+    for (size_t i = 0; yyjson_is_arr(models) && i < yyjson_arr_size(models); ++i)
+    {
+        yyjson_val *model_json = yyjson_arr_get(models, i);
+        slayer3d_game_data_model_asset model;
+        SDL_zero(model);
+        model.id = json_string(model_json, "id", NULL);
+        model.path = json_string(model_json, "path", NULL);
+        if (model.id == NULL || model.path == NULL)
+            continue;
+        if (!callback(userdata, &model))
+            return true;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_get_sound_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                         slayer3d_game_data_sound_asset *out_sound)
 {

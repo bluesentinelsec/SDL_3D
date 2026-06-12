@@ -52,6 +52,9 @@ extern "C"
         const char *path;
     } slayer3d_game_data_model_asset;
 
+    /** @brief Callback for authored 3D model asset descriptors. */
+    typedef bool (*slayer3d_game_data_model_asset_fn)(void *userdata, const slayer3d_game_data_model_asset *model);
+
     /** @brief Authored scene skybox descriptor using six image asset ids. */
     typedef struct slayer3d_game_data_scene_skybox
     {

@@ -4058,6 +4058,19 @@ f 1//1 2//1 3//1
                                              sizeof(error)))
         << error;
 
+    struct ModelAssetCapture
+    {
+        std::vector<std::string> ids;
+    } model_capture{};
+    auto collect_model_asset = [](void *userdata, const slayer3d_game_data_model_asset *model) -> bool {
+        auto *capture = static_cast<ModelAssetCapture *>(userdata);
+        if (capture != nullptr && model != nullptr && model->id != nullptr)
+            capture->ids.emplace_back(model->id);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_model_asset(runtime, collect_model_asset, &model_capture));
+    EXPECT_NE(std::find(model_capture.ids.begin(), model_capture.ids.end(), "model.triangle"), model_capture.ids.end());
+
     slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
     ASSERT_NE(assets, nullptr);
     ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
@@ -17818,6 +17831,104 @@ TEST(GameDataRuntime, EditorShellDojoTexturePaintModePreviewsAndCommitsFromViewp
     slayer3d_game_session_destroy(session);
 }
 
+TEST(GameDataRuntime, EditorShellDojoGameObjectPaletteShowsModelWarmupState)
+{
+    const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
+    ASSERT_TRUE(std::filesystem::exists(dojo_path)) << dojo_path;
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file(dojo_path.string().c_str(), session, &runtime, error, sizeof(error)))
+        << error;
+
+    struct ModelAssetCapture
+    {
+        std::vector<std::string> ids;
+    } model_capture{};
+    auto collect_model_asset = [](void *userdata, const slayer3d_game_data_model_asset *model) -> bool {
+        auto *capture = static_cast<ModelAssetCapture *>(userdata);
+        if (capture != nullptr && model != nullptr && model->id != nullptr)
+            capture->ids.emplace_back(model->id);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_model_asset(runtime, collect_model_asset, &model_capture));
+    EXPECT_NE(std::find(model_capture.ids.begin(), model_capture.ids.end(), "model.editor_shell.simple_robot"),
+              model_capture.ids.end());
+
+    slayer3d_signal_bus *bus = slayer3d_game_session_get_signal_bus(session);
+    ASSERT_NE(bus, nullptr);
+    const int palette_game_object_signal = slayer3d_game_data_find_signal(runtime, "signal.editor.palette.game_object");
+    ASSERT_GE(palette_game_object_signal, 0);
+    slayer3d_signal_emit(bus, palette_game_object_signal, nullptr);
+
+    slayer3d_properties *scene_state = slayer3d_game_data_mutable_scene_state(runtime);
+    ASSERT_NE(scene_state, nullptr);
+    EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
+
+    auto visible_palette_text = [&]() {
+        struct Capture
+        {
+            slayer3d_game_data_runtime *runtime = nullptr;
+            std::vector<std::string> values;
+        } capture{runtime, {}};
+        auto collect = [](void *userdata, const slayer3d_game_data_ui_text *text) -> bool {
+            auto *capture = static_cast<Capture *>(userdata);
+            if (capture == nullptr || text == nullptr || text->name == nullptr)
+                return true;
+            const std::string name = text->name;
+            if (name.rfind("ui.editor_shell.palette.", 0) != 0)
+                return true;
+            slayer3d_game_data_ui_text resolved{};
+            bool visible = false;
+            if (!slayer3d_game_data_resolve_ui_text(capture->runtime, text, nullptr, &resolved, &visible) || !visible ||
+                resolved.text == nullptr)
+            {
+                return true;
+            }
+            capture->values.emplace_back(resolved.text);
+            return true;
+        };
+        EXPECT_TRUE(slayer3d_game_data_for_each_ui_text(runtime, collect, &capture));
+        return capture.values;
+    };
+    auto contains_text = [](const std::vector<std::string> &values, const char *expected) {
+        return std::find(values.begin(), values.end(), expected) != values.end();
+    };
+
+    std::vector<std::string> labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Game Objects"));
+    EXPECT_TRUE(contains_text(labels, "Player Start"));
+    EXPECT_TRUE(contains_text(labels, "Simple Robot"));
+    EXPECT_FALSE(contains_text(labels, "Loading"));
+    EXPECT_FALSE(contains_text(labels, "Ready"));
+    EXPECT_FALSE(contains_text(labels, "Failed"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.pending", true);
+    labels = visible_palette_text();
+    EXPECT_TRUE(contains_text(labels, "Loading"));
+    EXPECT_FALSE(contains_text(labels, "Ready"));
+    EXPECT_FALSE(contains_text(labels, "Failed"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.pending", false);
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.ready", true);
+    labels = visible_palette_text();
+    EXPECT_FALSE(contains_text(labels, "Loading"));
+    EXPECT_TRUE(contains_text(labels, "Ready"));
+    EXPECT_FALSE(contains_text(labels, "Failed"));
+
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.ready", false);
+    slayer3d_properties_set_bool(scene_state, "asset_warmup.model.model.editor_shell.simple_robot.failed", true);
+    labels = visible_palette_text();
+    EXPECT_FALSE(contains_text(labels, "Loading"));
+    EXPECT_FALSE(contains_text(labels, "Ready"));
+    EXPECT_TRUE(contains_text(labels, "Failed"));
+
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+}
+
 TEST(GameDataRuntime, EditorShellDojoTextureViewerShowsThumbnailsAndModes)
 {
     const std::filesystem::path dojo_path = editor_shell_dojo_data_path();
@@ -21369,6 +21480,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "game_object");
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.modal"));
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.cell"));
+    EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.simple_robot.cell"));
     EXPECT_TRUE(visible_ui_rect("ui.editor_shell.palette.game_object.player.selected"));
     slayer3d_signal_emit(bus, palette_close_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");
@@ -21781,6 +21893,7 @@ TEST(GameDataRuntime, EditorShellDojoCreatesBlockoutPrefabTools)
     std::vector<std::string> modal_text = visible_ui_text("ui.editor_shell.palette.");
     EXPECT_TRUE(contains_ui_text(modal_text, "Game Objects"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Player Start"));
+    EXPECT_TRUE(contains_ui_text(modal_text, "Simple Robot"));
     EXPECT_TRUE(contains_ui_text(modal_text, "Selected: player_start"));
     slayer3d_signal_emit(bus, palette_accept_signal, nullptr);
     EXPECT_STREQ(slayer3d_properties_get_string(scene_state, "editor.palette.active", ""), "");

@@ -111,6 +111,12 @@ of forcing a synchronous lazy load. Editor texture swatches backed by pending or
 failed warmup thumbnails remain visible with status text, but their selection
 actions are ignored until the thumbnail is available.
 
+Authored model assets use the same per-asset state shape under
+`asset_warmup.model.<model_id>.status`, `pending`, `ready`, and `failed`.
+Editor actor/model browsers can bind to those keys to show progressive model
+availability while CPU mesh decoding and render-thread finalization complete in
+the background.
+
 ## Network Packet Loops
 
 The runtime network helpers are game-agnostic. Callers provide session names

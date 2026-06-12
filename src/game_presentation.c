@@ -142,6 +142,15 @@ static bool queue_scene_ui_image(void *userdata, const slayer3d_game_data_ui_ima
     return true;
 }
 
+static bool queue_model_browser_asset(void *userdata, const slayer3d_game_data_model_asset *model)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || model == NULL || model->id == NULL || model->id[0] == '\0')
+        return true;
+    (void)slayer3d_game_data_asset_warmup_request_model(context->queue, model->id);
+    return true;
+}
+
 static bool queue_brush_world_material_textures(void *userdata, const slayer3d_game_data_brush_world_instance *instance)
 {
     queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
@@ -193,6 +202,7 @@ static void queue_active_scene_assets(const slayer3d_game_data_frame_desc *frame
     SDL_zero(context);
     context.queue = frame->asset_warmup;
     (void)slayer3d_game_data_for_each_ui_image(frame->runtime, queue_scene_ui_image, &context);
+    (void)slayer3d_game_data_for_each_model_asset(frame->runtime, queue_model_browser_asset, &context);
     (void)slayer3d_game_data_for_each_brush_world_instance(frame->runtime, queue_brush_world_material_textures,
                                                            &context);
     (void)slayer3d_game_data_for_each_render_primitive(frame->runtime, queue_render_primitive_assets, &context);

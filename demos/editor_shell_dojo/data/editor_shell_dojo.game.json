@@ -2323,6 +2323,9 @@
     ]
   },
   "assets": {
+    "models": [
+      { "id": "model.editor_shell.simple_robot", "path": "asset://models/simple_robot.obj" }
+    ],
     "images": [
       { "id": "image.editor_shell.skybox.px", "path": "asset://skyboxes/sky_17/px.png" },
       { "id": "image.editor_shell.skybox.nx", "path": "asset://skyboxes/sky_17/nx.png" },
