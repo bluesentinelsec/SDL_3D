@@ -1194,7 +1194,14 @@ bool slayer3d_data_game_runtime_publish_asset_warmup_stats(slayer3d_data_game_ru
     data_game_set_warmup_int(state, prefix, "failed", stats.failed);
     data_game_set_warmup_int(state, prefix, "canceled", stats.canceled);
     data_game_set_warmup_int(state, prefix, "completed", stats.completed);
+    data_game_set_warmup_int(state, prefix, "worker_threads", stats.worker_threads);
+    data_game_set_warmup_int(state, prefix, "service_calls", stats.service_calls);
+    data_game_set_warmup_int(state, prefix, "service_jobs", stats.service_jobs);
     data_game_set_warmup_float(state, prefix, "progress", stats.progress);
+    data_game_set_warmup_float(state, prefix, "elapsed_ms", stats.elapsed_ms);
+    data_game_set_warmup_float(state, prefix, "service_last_ms", stats.service_last_ms);
+    data_game_set_warmup_float(state, prefix, "service_total_ms", stats.service_total_ms);
+    data_game_set_warmup_float(state, prefix, "service_max_ms", stats.service_max_ms);
     data_game_set_warmup_bool(state, prefix, "active", stats.pending > 0);
     data_game_set_warmup_bool(state, prefix, "complete", stats.pending == 0);
 

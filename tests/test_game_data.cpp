@@ -3702,6 +3702,12 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueReportsDetailedStats)
     EXPECT_EQ(stats.canceled, 1);
     EXPECT_EQ(stats.completed, 3);
     EXPECT_FLOAT_EQ(stats.progress, 0.5f);
+    EXPECT_GE(stats.elapsed_ms, 0.0f);
+    EXPECT_EQ(stats.service_calls, 0);
+    EXPECT_EQ(stats.service_jobs, 0);
+    EXPECT_FLOAT_EQ(stats.service_last_ms, 0.0f);
+    EXPECT_FLOAT_EQ(stats.service_total_ms, 0.0f);
+    EXPECT_FLOAT_EQ(stats.service_max_ms, 0.0f);
 
     slayer3d_game_data_asset_warmup_queue_free(&queue);
 }
@@ -3819,6 +3825,12 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
     slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
     EXPECT_EQ(stats.ready, 1);
     EXPECT_EQ(stats.failed, 0);
+    EXPECT_GE(stats.service_calls, 1);
+    EXPECT_GE(stats.service_jobs, 1);
+    EXPECT_GE(stats.elapsed_ms, 0.0f);
+    EXPECT_GE(stats.service_last_ms, 0.0f);
+    EXPECT_GE(stats.service_total_ms, stats.service_last_ms);
+    EXPECT_GE(stats.service_max_ms, stats.service_last_ms);
 
     slayer3d_game_data_asset_warmup_queue_free(&queue);
     slayer3d_game_data_image_cache_free(&image_cache);
@@ -4128,7 +4140,14 @@ TEST(GameDataRuntime, DataGameRuntimePublishesAssetWarmupStatsToSceneState)
     EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.pending", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.canceled", -1), 0);
     EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.completed", -1), 0);
+    EXPECT_GE(slayer3d_properties_get_int(state, "editor.assets.worker_threads", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.service_calls", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.service_jobs", -1), 0);
     EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.progress", 0.0f), 1.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.elapsed_ms", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.service_last_ms", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.service_total_ms", -1.0f), 0.0f);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.service_max_ms", -1.0f), 0.0f);
     EXPECT_FALSE(slayer3d_properties_get_bool(state, "editor.assets.active", true));
     EXPECT_TRUE(slayer3d_properties_get_bool(state, "editor.assets.complete", false));
     EXPECT_STREQ(slayer3d_properties_get_string(state, "editor.assets.status", ""), "idle");

@@ -10,6 +10,7 @@
 #include <SDL3/SDL_mutex.h>
 #include <SDL3/SDL_stdinc.h>
 #include <SDL3/SDL_thread.h>
+#include <SDL3/SDL_timer.h>
 
 #include "game_presentation_internal.h"
 #include "render_context_internal.h"
@@ -54,6 +55,28 @@ typedef struct asset_warmup_worker_state
 } asset_warmup_worker_state;
 
 static const char *warmup_kind_name(slayer3d_game_data_asset_warmup_kind kind);
+
+static Uint64 warmup_now_counter(void)
+{
+    return SDL_GetPerformanceCounter();
+}
+
+static float warmup_elapsed_ms(Uint64 start_counter, Uint64 end_counter)
+{
+    const Uint64 frequency = SDL_GetPerformanceFrequency();
+    if (frequency == 0 || start_counter == 0 || end_counter < start_counter)
+        return 0.0f;
+    return (float)(((double)(end_counter - start_counter) * 1000.0) / (double)frequency);
+}
+
+static void record_warmup_activity(slayer3d_game_data_asset_warmup_queue *queue, Uint64 counter)
+{
+    if (queue == NULL || counter == 0)
+        return;
+    if (queue->first_request_counter == 0)
+        queue->first_request_counter = counter;
+    queue->last_activity_counter = counter;
+}
 
 static void free_prepared_texture(asset_warmup_prepared_texture *prepared)
 {
@@ -177,6 +200,7 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
     if (queue == NULL || id == NULL || id[0] == '\0')
         return false;
 
+    const Uint64 now_counter = warmup_now_counter();
     queue_lock(queue);
     for (int i = 0; i < queue->count; ++i)
     {
@@ -187,6 +211,7 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
                 free_warmup_entry_prepared(&queue->entries[i]);
                 bump_warmup_entry_generation(&queue->entries[i]);
                 queue->entries[i].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED;
+                record_warmup_activity(queue, now_counter);
                 queue_signal_workers(queue);
             }
             queue_unlock(queue);
@@ -222,6 +247,7 @@ static bool request_warmup_asset(slayer3d_game_data_asset_warmup_queue *queue,
         queue_unlock(queue);
         return SDL_OutOfMemory();
     }
+    record_warmup_activity(queue, now_counter);
     queue->count++;
     queue_signal_workers(queue);
     queue_unlock(queue);
@@ -484,9 +510,13 @@ static int SDLCALL warmup_worker_main(void *userdata)
                     kind = entry->kind;
                     generation = entry->generation;
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+                    record_warmup_activity(worker_state->queue, warmup_now_counter());
                 }
                 else
+                {
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+                    record_warmup_activity(worker_state->queue, warmup_now_counter());
+                }
                 break;
             }
             SDL_WaitCondition(worker_state->condition, worker_state->mutex);
@@ -517,10 +547,12 @@ static int SDLCALL warmup_worker_main(void *userdata)
                 entry->prepared = prepared;
                 prepared = NULL;
                 entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE;
+                record_warmup_activity(worker_state->queue, warmup_now_counter());
             }
             else
             {
                 entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+                record_warmup_activity(worker_state->queue, warmup_now_counter());
             }
         }
         SDL_UnlockMutex(worker_state->mutex);
@@ -651,6 +683,7 @@ int slayer3d_game_data_asset_warmup_queue_cancel_pending(slayer3d_game_data_asse
         return 0;
 
     int canceled = 0;
+    const Uint64 now_counter = warmup_now_counter();
     queue_lock(queue);
     for (int i = 0; i < queue->count; ++i)
     {
@@ -665,6 +698,7 @@ int slayer3d_game_data_asset_warmup_queue_cancel_pending(slayer3d_game_data_asse
         free_warmup_entry_prepared(entry);
         bump_warmup_entry_generation(entry);
         entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_CANCELED;
+        record_warmup_activity(queue, now_counter);
         canceled++;
     }
     queue_unlock(queue);
@@ -703,6 +737,13 @@ void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_
         return;
     queue_lock((slayer3d_game_data_asset_warmup_queue *)queue);
     out_stats->total = queue->count;
+    asset_warmup_worker_state *worker_state = queue_worker_state(queue);
+    out_stats->worker_threads = worker_state != NULL ? worker_state->thread_count : 0;
+    out_stats->service_calls = queue->service_calls;
+    out_stats->service_jobs = queue->service_jobs;
+    out_stats->service_last_ms = queue->service_last_ms;
+    out_stats->service_total_ms = queue->service_total_ms;
+    out_stats->service_max_ms = queue->service_max_ms;
     for (int i = 0; i < queue->count; ++i)
     {
         switch (queue->entries[i].state)
@@ -731,6 +772,8 @@ void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_
     out_stats->pending = out_stats->queued + out_stats->loading + out_stats->ready_for_finalize;
     out_stats->completed = out_stats->ready + out_stats->failed + out_stats->canceled;
     out_stats->progress = out_stats->total > 0 ? (float)out_stats->completed / (float)out_stats->total : 1.0f;
+    const Uint64 elapsed_end_counter = out_stats->pending > 0 ? warmup_now_counter() : queue->last_activity_counter;
+    out_stats->elapsed_ms = warmup_elapsed_ms(queue->first_request_counter, elapsed_end_counter);
     queue_unlock((slayer3d_game_data_asset_warmup_queue *)queue);
 }
 
@@ -881,6 +924,7 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
     if (budget <= 0)
         budget = 1;
 
+    const Uint64 service_start_counter = warmup_now_counter();
     int serviced = 0;
     while (serviced < budget)
     {
@@ -909,11 +953,13 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
                     prepared = entry->prepared;
                     entry->prepared = NULL;
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+                    record_warmup_activity(queue, warmup_now_counter());
                     service_mode = SERVICE_FINALIZE;
                 }
                 else
                 {
                     entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+                    record_warmup_activity(queue, warmup_now_counter());
                 }
                 break;
             }
@@ -927,11 +973,13 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
             {
                 work_entry.generation = entry->generation;
                 entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+                record_warmup_activity(queue, warmup_now_counter());
                 service_mode = SERVICE_SYNC;
             }
             else
             {
                 entry->state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+                record_warmup_activity(queue, warmup_now_counter());
             }
             break;
         }
@@ -954,6 +1002,7 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
         {
             queue->entries[work_index].state =
                 ok ? SLAYER3D_GAME_DATA_ASSET_WARMUP_READY : SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+            record_warmup_activity(queue, warmup_now_counter());
         }
         queue_unlock(queue);
         if (!ok)
@@ -967,6 +1016,18 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
         SDL_free(work_entry.source_path);
         SDL_free(work_entry.id);
         serviced++;
+    }
+    if (serviced > 0)
+    {
+        const float service_ms = warmup_elapsed_ms(service_start_counter, warmup_now_counter());
+        queue_lock(queue);
+        queue->service_calls++;
+        queue->service_jobs += serviced;
+        queue->service_last_ms = service_ms;
+        queue->service_total_ms += service_ms;
+        if (service_ms > queue->service_max_ms)
+            queue->service_max_ms = service_ms;
+        queue_unlock(queue);
     }
     return serviced;
 }

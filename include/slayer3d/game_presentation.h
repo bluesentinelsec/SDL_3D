@@ -13,6 +13,8 @@
 #ifndef SLAYER3D_GAME_PRESENTATION_H
 #define SLAYER3D_GAME_PRESENTATION_H
 
+#include <SDL3/SDL_stdinc.h>
+
 #include <stdbool.h>
 
 #include "slayer3d/asset.h"
@@ -133,6 +135,13 @@ extern "C"
         char *requested_scene;                          /**< Owned active scene most recently enumerated. */
         int max_jobs_per_frame;                         /**< Default service budget; <= 0 uses one job. */
         void *worker_state;                             /**< Private worker-thread state. */
+        int service_calls;                              /**< Diagnostic count of warmup service drain calls. */
+        int service_jobs;                               /**< Diagnostic count of warmup jobs completed by service. */
+        float service_last_ms;                          /**< Diagnostic duration of the most recent service call. */
+        float service_total_ms;                         /**< Diagnostic cumulative service time. */
+        float service_max_ms;                           /**< Diagnostic maximum single service duration. */
+        Uint64 first_request_counter;                   /**< Diagnostic timestamp for first request. */
+        Uint64 last_activity_counter;                   /**< Diagnostic timestamp for latest state change. */
     } slayer3d_game_data_asset_warmup_queue;
 
     /** @brief Snapshot counts for a presentation asset warmup queue. */
@@ -147,7 +156,14 @@ extern "C"
         int canceled;           /**< Requests deprioritized before completion. */
         int completed;          /**< Requests no longer pending: ready + failed + canceled. */
         int total;              /**< Total requests tracked by the queue. */
+        int worker_threads;     /**< Active worker threads preparing CPU-side asset payloads. */
+        int service_calls;      /**< Warmup service drain calls. */
+        int service_jobs;       /**< Jobs completed by warmup service calls. */
         float progress;         /**< Completed/total in [0, 1], or 1 when total is zero. */
+        float elapsed_ms;       /**< Milliseconds since first request until completion or now. */
+        float service_last_ms;  /**< Milliseconds spent in the most recent service call. */
+        float service_total_ms; /**< Cumulative milliseconds spent in warmup service calls. */
+        float service_max_ms;   /**< Maximum milliseconds spent in one service call. */
     } slayer3d_game_data_asset_warmup_stats;
 
     /**

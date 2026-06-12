@@ -98,8 +98,10 @@ worker creation fails fall back to the same budgeted service path.
 The managed runtime publishes warmup progress to scene state each render under
 the `asset_warmup` prefix. Data-authored UI can bind to `asset_warmup.total`,
 `queued`, `loading`, `ready_for_finalize`, `pending`, `ready`, `failed`,
-`canceled`, `completed`, `progress`, `active`, `complete`, and `status`. Hosts
-that need a different namespace can call
+`canceled`, `completed`, `worker_threads`, `service_calls`, `service_jobs`,
+`progress`, `elapsed_ms`, `service_last_ms`, `service_total_ms`,
+`service_max_ms`, `active`, `complete`, and `status`. Hosts that need a
+different namespace can call
 `slayer3d_data_game_runtime_publish_asset_warmup_stats()` with a custom prefix.
 For active-scene UI images, the same publisher also writes
 `asset_warmup.ui_image.<image_id>.status`, `pending`, `ready`, and `failed`
