@@ -58,6 +58,39 @@ static bool editor_hit_is_texture_viewer(const slayer3d_ui_layout_hit_region *hi
     return editor_hit_id_has_prefix(hit, "ui.editor_shell.texture_viewer.");
 }
 
+static bool editor_texture_select_action_is_blocked(slayer3d_game_data_runtime *runtime, const char *action)
+{
+    static const char *prefix = "editor.texture.select.";
+    if (runtime == NULL || runtime->scene_state == NULL || action == NULL ||
+        SDL_strncmp(action, prefix, SDL_strlen(prefix)) != 0)
+    {
+        return false;
+    }
+
+    const char *texture_id = action + SDL_strlen(prefix);
+    if (texture_id[0] == '\0')
+        return false;
+
+    char pending_key[160];
+    char failed_key[160];
+    SDL_snprintf(pending_key, sizeof(pending_key), "asset_warmup.ui_image.image.editor_shell.texture.%s.pending",
+                 texture_id);
+    SDL_snprintf(failed_key, sizeof(failed_key), "asset_warmup.ui_image.image.editor_shell.texture.%s.failed",
+                 texture_id);
+
+    if (slayer3d_properties_get_bool(runtime->scene_state, pending_key, false))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture loading");
+        return true;
+    }
+    if (slayer3d_properties_get_bool(runtime->scene_state, failed_key, false))
+    {
+        slayer3d_properties_set_string(runtime->scene_state, "editor.tool.last_action", "texture unavailable");
+        return true;
+    }
+    return false;
+}
+
 static const char *editor_mode_for_tool_action(const char *action)
 {
     if (SDL_strcmp(action, "editor.tool.select") == 0)
@@ -253,7 +286,7 @@ bool editor_handle_tool_mode_buttons(slayer3d_game_data_runtime *runtime, yyjson
     {
         if (out_consumed != NULL)
             *out_consumed = true;
-        if (clicked && hit->action[0] != '\0')
+        if (clicked && hit->action[0] != '\0' && !editor_texture_select_action_is_blocked(runtime, hit->action))
             (void)editor_apply_tool_action(runtime, hit->action);
         slayer3d_ui_layout_destroy(layout);
         return true;

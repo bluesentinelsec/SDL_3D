@@ -107,7 +107,9 @@ For active-scene UI images, the same publisher also writes
 `asset_warmup.ui_image.<image_id>.status`, `pending`, `ready`, and `failed`
 fields so authored texture browsers can show per-thumbnail loading or failure
 states. UI image drawing skips matching pending/failed warmup requests instead
-of forcing a synchronous lazy load.
+of forcing a synchronous lazy load. Editor texture swatches backed by pending or
+failed warmup thumbnails remain visible with status text, but their selection
+actions are ignored until the thumbnail is available.
 
 ## Network Packet Loops
 
