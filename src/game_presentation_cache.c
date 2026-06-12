@@ -424,9 +424,6 @@ slayer3d_game_data_model_cache_entry *slayer3d_game_data_find_or_load_model_entr
             return cache->entries[i].loaded ? &cache->entries[i] : NULL;
     }
 
-    if (!ensure_model_cache_capacity(cache, cache->count + 1))
-        return NULL;
-
     slayer3d_game_data_model_asset asset;
     if (!slayer3d_game_data_get_model_asset(runtime, model_id, &asset))
         return NULL;
@@ -442,18 +439,51 @@ slayer3d_game_data_model_cache_entry *slayer3d_game_data_find_or_load_model_entr
         return NULL;
     }
 
-    slayer3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
-    SDL_zero(*entry);
-    entry->model_id = model_id;
-    entry->loaded = slayer3d_load_model_from_file(filesystem_path, &entry->model);
+    slayer3d_model model;
+    SDL_zero(model);
+    const bool loaded = slayer3d_load_model_from_file(filesystem_path, &model);
     slayer3d_asset_resolver_free_path(filesystem_path);
-    if (!entry->loaded)
+    if (!loaded)
     {
         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load model asset %s: %s", model_id, SDL_GetError());
-        SDL_zero(entry);
         return NULL;
     }
 
+    slayer3d_game_data_model_cache_entry *entry =
+        slayer3d_game_data_model_cache_insert_prepared(cache, model_id, &model);
+    if (entry == NULL)
+        slayer3d_free_model(&model);
+    return entry;
+}
+
+slayer3d_game_data_model_cache_entry *slayer3d_game_data_model_cache_insert_prepared(
+    slayer3d_game_data_model_cache *cache, const char *model_id, slayer3d_model *model)
+{
+    if (cache == NULL || model_id == NULL || model == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].model_id != NULL && SDL_strcmp(cache->entries[i].model_id, model_id) == 0)
+        {
+            if (cache->entries[i].loaded)
+            {
+                slayer3d_free_model(model);
+                return &cache->entries[i];
+            }
+            return NULL;
+        }
+    }
+
+    if (!ensure_model_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    slayer3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
+    SDL_zero(*entry);
+    entry->model_id = model_id;
+    entry->model = *model;
+    SDL_zero(*model);
+    entry->loaded = true;
     ++cache->count;
     return entry;
 }

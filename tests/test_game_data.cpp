@@ -3848,6 +3848,83 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteAssets)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsModelAssets)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_model");
+    std::filesystem::create_directories(dir / "models");
+    write_text(dir / "models" / "triangle.obj",
+               R"obj(o warmup_triangle
+v 0 0 0
+v 1 0 0
+v 0 1 0
+vn 0 0 1
+f 1//1 2//1 3//1
+)obj");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Model", "id": "test.warmup_model", "version": "0.1.0" },
+  "world": { "name": "world.warmup_model", "kind": "fixed_screen" },
+  "assets": {
+    "models": [{ "id": "model.triangle", "path": "asset://models/triangle.obj" }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_model_cache model_cache{};
+    slayer3d_game_data_model_cache_init(&model_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&queue, runtime, assets, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.triangle"));
+
+    for (int attempt = 0; attempt < 100 && model_cache.count == 0; ++attempt)
+    {
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, &model_cache,
+                                                            assets, 1);
+        if (model_cache.count == 0)
+            SDL_Delay(1);
+    }
+
+    ASSERT_EQ(model_cache.count, 1);
+    EXPECT_STREQ(model_cache.entries[0].model_id, "model.triangle");
+    EXPECT_TRUE(model_cache.entries[0].loaded);
+    EXPECT_GE(model_cache.entries[0].model.mesh_count, 1);
+    ASSERT_NE(model_cache.entries[0].model.meshes, nullptr);
+    EXPECT_GT(model_cache.entries[0].model.meshes[0].vertex_count, 0);
+    EXPECT_GT(model_cache.entries[0].model.meshes[0].index_count, 0);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_model_cache_free(&model_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, DataGameRuntimePublishesAssetWarmupStatsToSceneState)
 {
     const std::filesystem::path dir = unique_test_dir("presentation_warmup_publish");

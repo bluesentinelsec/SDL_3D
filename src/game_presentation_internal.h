@@ -48,6 +48,9 @@ slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_sprite_cache_insert_pr
 slayer3d_game_data_model_cache_entry *slayer3d_game_data_find_or_load_model_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_model_cache *cache, const char *model_id);
 
+slayer3d_game_data_model_cache_entry *slayer3d_game_data_model_cache_insert_prepared(
+    slayer3d_game_data_model_cache *cache, const char *model_id, slayer3d_model *model);
+
 bool slayer3d_game_data_draw_particles_filtered(const slayer3d_game_data_runtime *runtime,
                                                 slayer3d_render_context *renderer,
                                                 slayer3d_game_data_particle_cache *cache, bool draw_world_space,
