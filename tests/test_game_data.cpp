@@ -3625,9 +3625,9 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueDeduplicatesRequests)
     EXPECT_EQ(stats.canceled, 0);
     EXPECT_EQ(queue.max_jobs_per_frame, 3);
 
-    EXPECT_EQ(
-        slayer3d_game_data_asset_warmup_queue_service(&queue, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, 0),
-        0);
+    EXPECT_EQ(slayer3d_game_data_asset_warmup_queue_service(&queue, nullptr, nullptr, nullptr, nullptr, nullptr,
+                                                            nullptr, nullptr, 0),
+              0);
     slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
     EXPECT_EQ(stats.total, 5);
     EXPECT_EQ(stats.queued, 5);
@@ -3809,8 +3809,8 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
 
     for (int attempt = 0; attempt < 100 && image_cache.count == 0; ++attempt)
     {
-        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, &image_cache, nullptr, nullptr,
-                                                            assets, 1);
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &image_cache, nullptr,
+                                                            nullptr, assets, 1);
         if (image_cache.count == 0)
             SDL_Delay(1);
     }
@@ -3905,8 +3905,8 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteBackedUiImages)
 
     for (int attempt = 0; attempt < 100 && image_cache.count == 0; ++attempt)
     {
-        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, &image_cache, nullptr, nullptr,
-                                                            assets, 1);
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &image_cache, nullptr,
+                                                            nullptr, assets, 1);
         if (image_cache.count == 0)
             SDL_Delay(1);
     }
@@ -3993,8 +3993,8 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteAssets)
 
     for (int attempt = 0; attempt < 100 && sprite_cache.count == 0; ++attempt)
     {
-        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &sprite_cache, nullptr,
-                                                            assets, 1);
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, &sprite_cache,
+                                                            nullptr, assets, 1);
         if (sprite_cache.count == 0)
             SDL_Delay(1);
     }
@@ -4084,8 +4084,8 @@ f 1//1 2//1 3//1
 
     for (int attempt = 0; attempt < 100 && model_cache.count == 0; ++attempt)
     {
-        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, &model_cache,
-                                                            assets, 1);
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
+                                                            &model_cache, assets, 1);
         if (model_cache.count == 0)
             SDL_Delay(1);
     }
@@ -4106,6 +4106,75 @@ f 1//1 2//1 3//1
     slayer3d_game_data_asset_warmup_queue_free(&queue);
     slayer3d_game_data_model_cache_free(&model_cache);
     slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsFontAssets)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_font");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Font", "id": "test.warmup_font", "version": "0.1.0" },
+  "world": { "name": "world.warmup_font", "kind": "fixed_screen" },
+  "assets": {
+    "fonts": [{ "id": "font.hud", "builtin": "inter", "size": 24 }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    struct FontAssetCapture
+    {
+        std::vector<std::string> ids;
+    } font_capture{};
+    auto collect_font_asset = [](void *userdata, const slayer3d_game_data_font_asset *font) -> bool {
+        auto *capture = static_cast<FontAssetCapture *>(userdata);
+        if (capture != nullptr && font != nullptr && font->id != nullptr)
+            capture->ids.emplace_back(font->id);
+        return true;
+    };
+    EXPECT_TRUE(slayer3d_game_data_for_each_font_asset(runtime, collect_font_asset, &font_capture));
+    EXPECT_NE(std::find(font_capture.ids.begin(), font_capture.ids.end(), "font.hud"), font_capture.ids.end());
+
+    slayer3d_game_data_font_cache font_cache{};
+    slayer3d_game_data_font_cache_init(&font_cache, SLAYER3D_MEDIA_DIR);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_font(&queue, "font.hud"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_font(&queue, "font.hud"));
+
+    (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, &font_cache, nullptr, nullptr,
+                                                        nullptr, nullptr, 1);
+
+    ASSERT_EQ(font_cache.count, 1);
+    ASSERT_NE(font_cache.fonts[0].atlas_pixels, nullptr);
+    EXPECT_GT(font_cache.fonts[0].atlas_w, 0);
+    EXPECT_GT(font_cache.fonts[0].atlas_h, 0);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 1);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_font_cache_free(&font_cache);
     slayer3d_game_data_destroy(runtime);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
@@ -4197,7 +4266,7 @@ TEST(GameDataRuntime, PresentationAssetWarmupMaterializesAudioFiles)
         if (stats.ready == 3)
             break;
         (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, nullptr, nullptr,
-                                                            nullptr, 1);
+                                                            nullptr, nullptr, 1);
     }
 
     slayer3d_game_data_asset_warmup_stats stats{};

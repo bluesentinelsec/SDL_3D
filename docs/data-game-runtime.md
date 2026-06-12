@@ -82,8 +82,8 @@ audio frame updates, and presentation.
 
 The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
 to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
-scene UI images, brush material textures, render sprite assets, and render model
-assets once per scene activation. It also queues authored sound, music, and
+scene fonts, UI images, brush material textures, render sprite assets, and
+render model assets once per scene activation. It also queues authored sound, music, and
 ambient audio file paths so resolver-backed audio can be materialized into the
 runtime cache before first playback. When the active scene changes, unfinished
 requests from the previous activation are canceled so the current scene's assets
@@ -96,8 +96,8 @@ The worker reads and decodes those assets, then the frame warmup service
 publishes the prepared assets into the render texture, UI image, sprite, and
 model caches on the main presentation path. Web builds and platforms where
 worker creation fails fall back to the same budgeted service path. Audio
-materialization currently runs on the budgeted main service path because it
-updates the runtime-owned audio materialization cache.
+materialization and font loading currently run on the budgeted main service path
+because they update runtime-owned audio/font cache state.
 
 The managed runtime publishes warmup progress to scene state each render under
 the `asset_warmup` prefix. Data-authored UI can bind to `asset_warmup.total`,
@@ -114,6 +114,11 @@ states. UI image drawing skips matching pending/failed warmup requests instead
 of forcing a synchronous lazy load. Editor texture swatches backed by pending or
 failed warmup thumbnails remain visible with status text, but their selection
 actions are ignored until the thumbnail is available.
+
+Authored font assets use the same per-asset state shape under
+`asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text
+and editor debug labels skip matching pending/failed font requests instead of
+forcing synchronous font loads from the draw path.
 
 Authored model assets use the same per-asset state shape under
 `asset_warmup.model.<model_id>.status`, `pending`, `ready`, and `failed`.

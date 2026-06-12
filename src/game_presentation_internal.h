@@ -29,6 +29,9 @@ bool slayer3d_game_data_ensure_mesh_primitive_cache_capacity(slayer3d_game_data_
 slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_runtime *runtime,
                                                     slayer3d_game_data_font_cache *cache, const char *font_id);
 
+slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_font_cache *cache, const char *font_id,
+                                                             slayer3d_font *font);
+
 slayer3d_game_data_image_cache_entry *slayer3d_game_data_find_or_load_image_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_image_cache *cache, const char *image_id);
 

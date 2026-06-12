@@ -23,6 +23,10 @@ extern "C"
     bool slayer3d_game_data_get_font_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                            slayer3d_game_data_font_asset *out_font);
 
+    /** @brief Iterate authored font asset descriptors from `assets.fonts`. */
+    bool slayer3d_game_data_for_each_font_asset(const slayer3d_game_data_runtime *runtime,
+                                                slayer3d_game_data_font_asset_fn callback, void *userdata);
+
     /** @brief Read an image asset descriptor by id from `assets.images`. */
     bool slayer3d_game_data_get_image_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                             slayer3d_game_data_image_asset *out_image);

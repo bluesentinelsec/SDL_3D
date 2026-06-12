@@ -169,15 +169,43 @@ slayer3d_font *slayer3d_game_data_find_or_load_font(const slayer3d_game_data_run
     if (!slayer3d_game_data_get_font_asset(runtime, font_id, &font))
         return NULL;
 
-    slayer3d_font *slot = &cache->fonts[cache->count];
+    slayer3d_font prepared;
+    SDL_zero(prepared);
     bool loaded = false;
     if (font.builtin)
-        loaded = slayer3d_load_builtin_font(cache->media_dir, font.builtin_id, font.size, slot);
+        loaded = slayer3d_load_builtin_font(cache->media_dir, font.builtin_id, font.size, &prepared);
     else if (font.path != NULL)
-        loaded = slayer3d_load_font(font.path, font.size, slot);
+        loaded = slayer3d_load_font(font.path, font.size, &prepared);
     if (!loaded)
         return NULL;
 
+    slayer3d_font *cached = slayer3d_game_data_font_cache_insert_prepared(cache, font.id, &prepared);
+    if (cached == NULL)
+        slayer3d_free_font(&prepared);
+    return cached;
+}
+
+slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_font_cache *cache, const char *font_id,
+                                                             slayer3d_font *font)
+{
+    if (cache == NULL || font_id == NULL || font == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->font_ids[i] != NULL && SDL_strcmp(cache->font_ids[i], font_id) == 0)
+        {
+            slayer3d_free_font(font);
+            return &cache->fonts[i];
+        }
+    }
+
+    if (!ensure_font_cache_capacity(cache, cache->count + 1))
+        return NULL;
+
+    slayer3d_font *slot = &cache->fonts[cache->count];
+    *slot = *font;
+    SDL_zero(*font);
     cache->font_ids[cache->count] = font_id;
     cache->count++;
     return slot;

@@ -32,6 +32,9 @@ extern "C"
         float size;
     } slayer3d_game_data_font_asset;
 
+    /** @brief Callback for authored font asset descriptors. */
+    typedef bool (*slayer3d_game_data_font_asset_fn)(void *userdata, const slayer3d_game_data_font_asset *font);
+
     /** @brief Authored image asset descriptor. */
     typedef struct slayer3d_game_data_image_asset
     {

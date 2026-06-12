@@ -14,6 +14,7 @@ typedef struct ui_draw_context
     const slayer3d_game_data_runtime *runtime;
     slayer3d_render_context *renderer;
     slayer3d_game_data_font_cache *font_cache;
+    const slayer3d_game_data_asset_warmup_queue *asset_warmup;
     const slayer3d_game_data_ui_metrics *metrics;
     float pulse_phase;
     bool ok;
@@ -80,6 +81,14 @@ static bool draw_ui_text(void *userdata, const slayer3d_game_data_ui_text *text)
     char content[128];
     if (!slayer3d_game_data_format_ui_text(draw->runtime, &resolved, draw->metrics, content, sizeof(content)))
         return true;
+
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    if (slayer3d_game_data_asset_warmup_request_state(draw->asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL,
+                                                      resolved.font, &warmup_state) &&
+        warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return true;
+    }
 
     slayer3d_font *font = slayer3d_game_data_find_or_load_font(draw->runtime, draw->font_cache, resolved.font);
     if (font == NULL)
@@ -297,6 +306,7 @@ static bool draw_ui_rect(void *userdata, const slayer3d_game_data_ui_rect *rect)
 
 bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                      slayer3d_game_data_font_cache *font_cache,
+                                     const slayer3d_game_data_asset_warmup_queue *asset_warmup,
                                      const slayer3d_game_data_ui_metrics *metrics, float pulse_phase)
 {
     if (runtime == NULL || renderer == NULL || font_cache == NULL)
@@ -307,6 +317,7 @@ bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, 
     context.runtime = runtime;
     context.renderer = renderer;
     context.font_cache = font_cache;
+    context.asset_warmup = asset_warmup;
     context.metrics = metrics;
     context.pulse_phase = pulse_phase;
     context.ok = true;

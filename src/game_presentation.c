@@ -142,6 +142,15 @@ static bool queue_scene_ui_image(void *userdata, const slayer3d_game_data_ui_ima
     return true;
 }
 
+static bool queue_font_asset(void *userdata, const slayer3d_game_data_font_asset *font)
+{
+    queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
+    if (context == NULL || context->queue == NULL || font == NULL || font->id == NULL || font->id[0] == '\0')
+        return true;
+    (void)slayer3d_game_data_asset_warmup_request_font(context->queue, font->id);
+    return true;
+}
+
 static bool queue_model_browser_asset(void *userdata, const slayer3d_game_data_model_asset *model)
 {
     queue_scene_assets_context *context = (queue_scene_assets_context *)userdata;
@@ -231,6 +240,7 @@ static void queue_active_scene_assets(const slayer3d_game_data_frame_desc *frame
     queue_scene_assets_context context;
     SDL_zero(context);
     context.queue = frame->asset_warmup;
+    (void)slayer3d_game_data_for_each_font_asset(frame->runtime, queue_font_asset, &context);
     (void)slayer3d_game_data_for_each_ui_image(frame->runtime, queue_scene_ui_image, &context);
     (void)slayer3d_game_data_for_each_model_asset(frame->runtime, queue_model_browser_asset, &context);
     (void)slayer3d_game_data_for_each_sound_asset(frame->runtime, queue_sound_asset, &context);
@@ -732,12 +742,22 @@ static bool draw_editor_debug_label_primitive(void *userdata,
 
 static bool draw_active_editor_debug_labels(const slayer3d_game_data_runtime *runtime,
                                             slayer3d_render_context *renderer,
-                                            slayer3d_game_data_font_cache *font_cache, const slayer3d_camera3d *camera)
+                                            slayer3d_game_data_font_cache *font_cache,
+                                            const slayer3d_game_data_asset_warmup_queue *asset_warmup,
+                                            const slayer3d_camera3d *camera)
 {
     if (runtime == NULL || renderer == NULL || font_cache == NULL || camera == NULL)
         return false;
 
     const char *font_id = editor_debug_label_font_id(runtime);
+    slayer3d_game_data_asset_warmup_state warmup_state;
+    if (slayer3d_game_data_asset_warmup_request_state(asset_warmup, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL, font_id,
+                                                      &warmup_state) &&
+        warmup_state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return true;
+    }
+
     slayer3d_font *font = slayer3d_game_data_find_or_load_font(runtime, font_cache, font_id);
     if (font == NULL)
         return true;
@@ -816,7 +836,9 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
         ok = run_frame_hook(frame, frame->after_world_3d) && ok;
         slayer3d_end_mode_3d(frame->renderer);
         if (frame->font_cache != NULL)
-            ok = draw_active_editor_debug_labels(frame->runtime, frame->renderer, frame->font_cache, camera) && ok;
+            ok = draw_active_editor_debug_labels(frame->runtime, frame->renderer, frame->font_cache,
+                                                 frame->asset_warmup, camera) &&
+                 ok;
     }
     else
     {
@@ -903,8 +925,8 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
         else if (frame->model_cache != NULL)
             assets = frame->model_cache->assets;
         (void)slayer3d_game_data_asset_warmup_queue_service(frame->asset_warmup, frame->runtime, frame->renderer,
-                                                            frame->image_cache, frame->sprite_cache, frame->model_cache,
-                                                            assets, 0);
+                                                            frame->font_cache, frame->image_cache, frame->sprite_cache,
+                                                            frame->model_cache, assets, 0);
     }
     ok = apply_render_settings(frame->runtime, frame->renderer) && ok;
     ok = apply_world_lights(frame->runtime, frame->renderer, frame->render_eval) && ok;
@@ -929,8 +951,8 @@ bool slayer3d_game_data_draw_frame(const slayer3d_game_data_frame_desc *frame)
              ok;
     if (frame->font_cache != NULL)
     {
-        ok = slayer3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->metrics,
-                                             frame->pulse_phase) &&
+        ok = slayer3d_game_data_draw_ui_text(frame->runtime, frame->renderer, frame->font_cache, frame->asset_warmup,
+                                             frame->metrics, frame->pulse_phase) &&
              ok;
     }
     if (frame->app_flow != NULL)

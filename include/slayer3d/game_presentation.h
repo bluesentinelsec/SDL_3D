@@ -91,6 +91,8 @@ extern "C"
         SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL = 4,
         /** @brief Authored or filesystem audio file path. */
         SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE = 5,
+        /** @brief Authored font asset id. */
+        SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT = 6,
     } slayer3d_game_data_asset_warmup_kind;
 
     /** @brief Current state of one presentation asset warmup request. */
@@ -528,6 +530,10 @@ extern "C"
     bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_warmup_queue *queue,
                                                           const char *image_id);
 
+    /** @brief Queue a font asset id for warmup, deduplicating existing requests. */
+    bool slayer3d_game_data_asset_warmup_request_font(slayer3d_game_data_asset_warmup_queue *queue,
+                                                      const char *font_id);
+
     /** @brief Queue a texture path for warmup, deduplicating existing requests. */
     bool slayer3d_game_data_asset_warmup_request_texture(slayer3d_game_data_asset_warmup_queue *queue,
                                                          const char *source_path, const char *texture_path);
@@ -565,13 +571,11 @@ extern "C"
      * the queue does not define a positive default. The return value is the
      * number of queued requests serviced during this call.
      */
-    int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmup_queue *queue,
-                                                      const slayer3d_game_data_runtime *runtime,
-                                                      slayer3d_render_context *renderer,
-                                                      slayer3d_game_data_image_cache *image_cache,
-                                                      slayer3d_game_data_sprite_cache *sprite_cache,
-                                                      slayer3d_game_data_model_cache *model_cache,
-                                                      slayer3d_asset_resolver *assets, int max_jobs);
+    int slayer3d_game_data_asset_warmup_queue_service(
+        slayer3d_game_data_asset_warmup_queue *queue, const slayer3d_game_data_runtime *runtime,
+        slayer3d_render_context *renderer, slayer3d_game_data_font_cache *font_cache,
+        slayer3d_game_data_image_cache *image_cache, slayer3d_game_data_sprite_cache *sprite_cache,
+        slayer3d_game_data_model_cache *model_cache, slayer3d_asset_resolver *assets, int max_jobs);
 
     /**
      * @brief Draw authored render primitives for the active scene.
@@ -729,12 +733,16 @@ extern "C"
     /**
      * @brief Draw authored UI text for the active scene.
      *
-     * Built-in font assets are loaded on demand through @p font_cache. Text is
-     * drawn on SLAYER3D's overlay path, after world rendering. @p pulse_phase is a
-     * normalized phase used by UI items with `pulse_alpha`.
+     * Built-in font assets are loaded through @p font_cache. Text is drawn on
+     * SLAYER3D's overlay path, after world rendering. When @p asset_warmup has a
+     * matching pending or failed font request, matching text is skipped so the
+     * draw path does not synchronously load a font that is already queued for
+     * warmup. @p pulse_phase is a normalized phase used by UI items with
+     * `pulse_alpha`.
      */
     bool slayer3d_game_data_draw_ui_text(const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
                                          slayer3d_game_data_font_cache *font_cache,
+                                         const slayer3d_game_data_asset_warmup_queue *asset_warmup,
                                          const slayer3d_game_data_ui_metrics *metrics, float pulse_phase);
 
     /**

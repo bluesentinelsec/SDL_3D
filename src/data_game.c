@@ -161,6 +161,13 @@ typedef struct data_game_publish_ui_image_warmup_context
     const char *prefix;
 } data_game_publish_ui_image_warmup_context;
 
+typedef struct data_game_publish_font_warmup_context
+{
+    const slayer3d_game_data_asset_warmup_queue *queue;
+    slayer3d_properties *state;
+    const char *prefix;
+} data_game_publish_font_warmup_context;
+
 typedef struct data_game_publish_model_warmup_context
 {
     const slayer3d_game_data_asset_warmup_queue *queue;
@@ -199,6 +206,43 @@ static bool data_game_publish_ui_image_warmup(void *userdata, const slayer3d_gam
         data_game_set_warmup_bool(context->state, context->prefix, field,
                                   state == SLAYER3D_GAME_DATA_ASSET_WARMUP_READY);
     written = SDL_snprintf(field, sizeof(field), "ui_image.%s.failed", image->image);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_bool(context->state, context->prefix, field,
+                                  state == SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED);
+    return true;
+}
+
+static bool data_game_publish_font_warmup(void *userdata, const slayer3d_game_data_font_asset *font)
+{
+    data_game_publish_font_warmup_context *context = (data_game_publish_font_warmup_context *)userdata;
+    if (context == NULL || context->queue == NULL || context->state == NULL || font == NULL || font->id == NULL ||
+        font->id[0] == '\0')
+    {
+        return true;
+    }
+
+    slayer3d_game_data_asset_warmup_state state;
+    if (!slayer3d_game_data_asset_warmup_request_state(context->queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL,
+                                                       font->id, &state))
+    {
+        return true;
+    }
+
+    char field[128];
+    int written = SDL_snprintf(field, sizeof(field), "font.%s.status", font->id);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_string(context->state, context->prefix, field, data_game_warmup_state_name(state));
+    written = SDL_snprintf(field, sizeof(field), "font.%s.pending", font->id);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_bool(context->state, context->prefix, field,
+                                  state == SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED ||
+                                      state == SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING ||
+                                      state == SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE);
+    written = SDL_snprintf(field, sizeof(field), "font.%s.ready", font->id);
+    if (written > 0 && (size_t)written < sizeof(field))
+        data_game_set_warmup_bool(context->state, context->prefix, field,
+                                  state == SLAYER3D_GAME_DATA_ASSET_WARMUP_READY);
+    written = SDL_snprintf(field, sizeof(field), "font.%s.failed", font->id);
     if (written > 0 && (size_t)written < sizeof(field))
         data_game_set_warmup_bool(context->state, context->prefix, field,
                                   state == SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED);
@@ -1264,6 +1308,12 @@ bool slayer3d_data_game_runtime_publish_asset_warmup_stats(slayer3d_data_game_ru
     image_context.state = state;
     image_context.prefix = prefix;
     (void)slayer3d_game_data_for_each_ui_image(runtime->data, data_game_publish_ui_image_warmup, &image_context);
+    data_game_publish_font_warmup_context font_context;
+    SDL_zero(font_context);
+    font_context.queue = &runtime->asset_warmup;
+    font_context.state = state;
+    font_context.prefix = prefix;
+    (void)slayer3d_game_data_for_each_font_asset(runtime->data, data_game_publish_font_warmup, &font_context);
     data_game_publish_model_warmup_context model_context;
     SDL_zero(model_context);
     model_context.queue = &runtime->asset_warmup;

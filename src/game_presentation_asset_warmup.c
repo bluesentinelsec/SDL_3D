@@ -711,6 +711,11 @@ bool slayer3d_game_data_asset_warmup_request_ui_image(slayer3d_game_data_asset_w
     return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE, NULL, image_id);
 }
 
+bool slayer3d_game_data_asset_warmup_request_font(slayer3d_game_data_asset_warmup_queue *queue, const char *font_id)
+{
+    return request_warmup_asset(queue, SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT, NULL, font_id);
+}
+
 bool slayer3d_game_data_asset_warmup_request_texture(slayer3d_game_data_asset_warmup_queue *queue,
                                                      const char *source_path, const char *texture_path)
 {
@@ -808,7 +813,7 @@ bool slayer3d_game_data_asset_warmup_request_state(const slayer3d_game_data_asse
 
 static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
                                  const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
-                                 slayer3d_game_data_image_cache *image_cache,
+                                 slayer3d_game_data_font_cache *font_cache, slayer3d_game_data_image_cache *image_cache,
                                  slayer3d_game_data_sprite_cache *sprite_cache,
                                  slayer3d_game_data_model_cache *model_cache, slayer3d_asset_resolver *assets)
 {
@@ -817,6 +822,8 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
 
     switch (entry->kind)
     {
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT:
+        return slayer3d_game_data_find_or_load_font(runtime, font_cache, entry->id) != NULL;
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE:
         return slayer3d_game_data_find_or_load_image_entry(runtime, image_cache, entry->id) != NULL;
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_TEXTURE: {
@@ -842,10 +849,12 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
 
 static bool finalize_prepared_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
                                            const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
+                                           slayer3d_game_data_font_cache *font_cache,
                                            slayer3d_game_data_image_cache *image_cache,
                                            slayer3d_game_data_sprite_cache *sprite_cache,
                                            slayer3d_game_data_model_cache *model_cache, void *prepared_payload)
 {
+    (void)font_cache;
     if (entry == NULL || prepared_payload == NULL)
         return false;
 
@@ -916,19 +925,19 @@ static const char *warmup_kind_name(slayer3d_game_data_asset_warmup_kind kind)
         return "sprite";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_AUDIO_FILE:
         return "audio";
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_FONT:
+        return "font";
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE:
     default:
         return "image";
     }
 }
 
-int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmup_queue *queue,
-                                                  const slayer3d_game_data_runtime *runtime,
-                                                  slayer3d_render_context *renderer,
-                                                  slayer3d_game_data_image_cache *image_cache,
-                                                  slayer3d_game_data_sprite_cache *sprite_cache,
-                                                  slayer3d_game_data_model_cache *model_cache,
-                                                  slayer3d_asset_resolver *assets, int max_jobs)
+int slayer3d_game_data_asset_warmup_queue_service(
+    slayer3d_game_data_asset_warmup_queue *queue, const slayer3d_game_data_runtime *runtime,
+    slayer3d_render_context *renderer, slayer3d_game_data_font_cache *font_cache,
+    slayer3d_game_data_image_cache *image_cache, slayer3d_game_data_sprite_cache *sprite_cache,
+    slayer3d_game_data_model_cache *model_cache, slayer3d_asset_resolver *assets, int max_jobs)
 {
     if (queue == NULL || runtime == NULL)
         return 0;
@@ -1001,11 +1010,11 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
         if (service_mode == SERVICE_NONE)
             break;
 
-        const bool ok =
-            service_mode == SERVICE_FINALIZE
-                ? finalize_prepared_warmup_entry(&work_entry, runtime, renderer, image_cache, sprite_cache, model_cache,
-                                                 prepared)
-                : service_warmup_entry(&work_entry, runtime, renderer, image_cache, sprite_cache, model_cache, assets);
+        const bool ok = service_mode == SERVICE_FINALIZE
+                            ? finalize_prepared_warmup_entry(&work_entry, runtime, renderer, font_cache, image_cache,
+                                                             sprite_cache, model_cache, prepared)
+                            : service_warmup_entry(&work_entry, runtime, renderer, font_cache, image_cache,
+                                                   sprite_cache, model_cache, assets);
 
         queue_lock(queue);
         if (work_index >= 0 && work_index < queue->count &&

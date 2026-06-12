@@ -101,6 +101,34 @@ bool slayer3d_game_data_get_font_asset(const slayer3d_game_data_runtime *runtime
     return true;
 }
 
+bool slayer3d_game_data_for_each_font_asset(const slayer3d_game_data_runtime *runtime,
+                                            slayer3d_game_data_font_asset_fn callback, void *userdata)
+{
+    if (runtime == NULL || callback == NULL)
+        return false;
+
+    yyjson_val *fonts = obj_get(obj_get(runtime_root(runtime), "assets"), "fonts");
+    for (size_t i = 0; yyjson_is_arr(fonts) && i < yyjson_arr_size(fonts); ++i)
+    {
+        yyjson_val *font_json = yyjson_arr_get(fonts, i);
+        slayer3d_game_data_font_asset font;
+        SDL_zero(font);
+        font.builtin_id = SLAYER3D_BUILTIN_FONT_INTER;
+        font.size = 16.0f;
+        font.id = json_string(font_json, "id", NULL);
+        font.path = json_string(font_json, "path", NULL);
+        font.size = json_float(font_json, "size", font.size);
+        const char *builtin = json_string(font_json, "builtin", NULL);
+        font.builtin = builtin != NULL;
+        font.builtin_id = parse_builtin_font(builtin, font.builtin_id);
+        if (font.id == NULL || (!font.builtin && font.path == NULL))
+            continue;
+        if (!callback(userdata, &font))
+            return true;
+    }
+    return true;
+}
+
 bool slayer3d_game_data_get_image_asset(const slayer3d_game_data_runtime *runtime, const char *id,
                                         slayer3d_game_data_image_asset *out_image)
 {
