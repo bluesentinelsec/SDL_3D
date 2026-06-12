@@ -135,10 +135,15 @@ extern "C"
     /** @brief Snapshot counts for a presentation asset warmup queue. */
     typedef struct slayer3d_game_data_asset_warmup_stats
     {
-        int queued; /**< Requests waiting to be serviced. */
-        int ready;  /**< Requests serviced successfully. */
-        int failed; /**< Requests serviced unsuccessfully. */
-        int total;  /**< Total requests tracked by the queue. */
+        int queued;             /**< Requests waiting to be serviced. */
+        int loading;            /**< Requests currently being prepared or finalized. */
+        int ready_for_finalize; /**< Requests prepared off-thread and waiting for main-thread finalization. */
+        int pending;            /**< Requests not yet completed: queued + loading + ready_for_finalize. */
+        int ready;              /**< Requests serviced successfully. */
+        int failed;             /**< Requests serviced unsuccessfully. */
+        int completed;          /**< Requests no longer pending: ready + failed. */
+        int total;              /**< Total requests tracked by the queue. */
+        float progress;         /**< Completed/total in [0, 1], or 1 when total is zero. */
     } slayer3d_game_data_asset_warmup_stats;
 
     /**

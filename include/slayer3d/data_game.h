@@ -17,6 +17,7 @@
 #include "slayer3d/asset.h"
 #include "slayer3d/game.h"
 #include "slayer3d/game_data.h"
+#include "slayer3d/game_presentation.h"
 
 #ifdef __cplusplus
 extern "C"
@@ -134,6 +135,20 @@ extern "C"
 
     /** @brief Return the loaded game-data runtime, or NULL. */
     slayer3d_game_data_runtime *slayer3d_data_game_runtime_data(const slayer3d_data_game_runtime *runtime);
+
+    /** @brief Return a snapshot of the managed presentation asset warmup queue. */
+    bool slayer3d_data_game_runtime_asset_warmup_stats(const slayer3d_data_game_runtime *runtime,
+                                                       slayer3d_game_data_asset_warmup_stats *out_stats);
+
+    /**
+     * @brief Publish managed asset warmup stats into scene state for data-authored UI.
+     *
+     * Keys are written under @p prefix, or `asset_warmup` when @p prefix is NULL
+     * or empty. Published fields include `.total`, `.queued`, `.loading`,
+     * `.ready_for_finalize`, `.pending`, `.ready`, `.failed`, `.completed`,
+     * `.progress`, `.active`, `.complete`, and `.status`.
+     */
+    bool slayer3d_data_game_runtime_publish_asset_warmup_stats(slayer3d_data_game_runtime *runtime, const char *prefix);
 
     /**
      * @brief Refresh authored input profiles when device count changes.

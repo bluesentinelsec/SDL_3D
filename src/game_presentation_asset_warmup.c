@@ -537,14 +537,21 @@ void slayer3d_game_data_asset_warmup_queue_stats(const slayer3d_game_data_asset_
         case SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED:
             out_stats->failed++;
             break;
-        case SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED:
         case SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING:
+            out_stats->loading++;
+            break;
         case SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE:
+            out_stats->ready_for_finalize++;
+            break;
+        case SLAYER3D_GAME_DATA_ASSET_WARMUP_QUEUED:
         default:
             out_stats->queued++;
             break;
         }
     }
+    out_stats->pending = out_stats->queued + out_stats->loading + out_stats->ready_for_finalize;
+    out_stats->completed = out_stats->ready + out_stats->failed;
+    out_stats->progress = out_stats->total > 0 ? (float)out_stats->completed / (float)out_stats->total : 1.0f;
     queue_unlock((slayer3d_game_data_asset_warmup_queue *)queue);
 }
 

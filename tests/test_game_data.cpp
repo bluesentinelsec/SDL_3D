@@ -3657,6 +3657,38 @@ TEST(GameDataRuntime, PresentationAssetWarmupQueueStartsAndStopsWorkers)
     slayer3d_asset_resolver_destroy(assets);
 }
 
+TEST(GameDataRuntime, PresentationAssetWarmupQueueReportsDetailedStats)
+{
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 2);
+
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_ui_image(&queue, "image.queued"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/loading.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_texture(&queue, nullptr, "asset://textures/finalize.png"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.ready"));
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_model(&queue, "model.failed"));
+    ASSERT_EQ(queue.count, 5);
+
+    queue.entries[1].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_LOADING;
+    queue.entries[2].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY_FOR_FINALIZE;
+    queue.entries[3].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_READY;
+    queue.entries[4].state = SLAYER3D_GAME_DATA_ASSET_WARMUP_FAILED;
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.total, 5);
+    EXPECT_EQ(stats.queued, 1);
+    EXPECT_EQ(stats.loading, 1);
+    EXPECT_EQ(stats.ready_for_finalize, 1);
+    EXPECT_EQ(stats.pending, 3);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 1);
+    EXPECT_EQ(stats.completed, 2);
+    EXPECT_FLOAT_EQ(stats.progress, 0.4f);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+}
+
 TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
 {
     const std::filesystem::path dir = unique_test_dir("presentation_warmup_ui_image");
@@ -3726,6 +3758,57 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
     slayer3d_game_data_image_cache_free(&image_cache);
     slayer3d_asset_resolver_destroy(assets);
     slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, DataGameRuntimePublishesAssetWarmupStatsToSceneState)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_publish");
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Publish", "id": "test.warmup_publish", "version": "0.1.0" },
+  "world": { "name": "world.warmup_publish", "kind": "fixed_screen" },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+
+    slayer3d_data_game_runtime_desc desc{};
+    slayer3d_data_game_runtime_desc_init(&desc);
+    desc.session = session;
+    desc.data_asset_path = "asset://warmup.game.json";
+    desc.mount_assets = mount_test_directory_assets;
+    const std::string root = dir.string();
+    desc.mount_userdata = const_cast<char *>(root.c_str());
+
+    char error[512]{};
+    slayer3d_data_game_runtime *managed = nullptr;
+    ASSERT_TRUE(slayer3d_data_game_runtime_create(&desc, &managed, error, sizeof(error))) << error;
+    ASSERT_NE(managed, nullptr);
+
+    ASSERT_TRUE(slayer3d_data_game_runtime_publish_asset_warmup_stats(managed, "editor.assets"));
+    slayer3d_game_data_runtime *runtime = slayer3d_data_game_runtime_data(managed);
+    ASSERT_NE(runtime, nullptr);
+    const slayer3d_properties *state = slayer3d_game_data_scene_state(runtime);
+    ASSERT_NE(state, nullptr);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.total", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.pending", -1), 0);
+    EXPECT_EQ(slayer3d_properties_get_int(state, "editor.assets.completed", -1), 0);
+    EXPECT_FLOAT_EQ(slayer3d_properties_get_float(state, "editor.assets.progress", 0.0f), 1.0f);
+    EXPECT_FALSE(slayer3d_properties_get_bool(state, "editor.assets.active", true));
+    EXPECT_TRUE(slayer3d_properties_get_bool(state, "editor.assets.complete", false));
+    EXPECT_STREQ(slayer3d_properties_get_string(state, "editor.assets.status", ""), "idle");
+
+    slayer3d_data_game_runtime_destroy(managed);
     slayer3d_game_session_destroy(session);
     remove_test_dir(dir);
 }

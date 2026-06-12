@@ -96,6 +96,13 @@ the budgeted main-thread path until their loaders are split into worker-safe
 prepare/finalize phases. Web builds and platforms where worker creation fails
 fall back to the same budgeted service path.
 
+The managed runtime publishes warmup progress to scene state each render under
+the `asset_warmup` prefix. Data-authored UI can bind to `asset_warmup.total`,
+`queued`, `loading`, `ready_for_finalize`, `pending`, `ready`, `failed`,
+`completed`, `progress`, `active`, `complete`, and `status`. Hosts that need a
+different namespace can call
+`slayer3d_data_game_runtime_publish_asset_warmup_stats()` with a custom prefix.
+
 ## Network Packet Loops
 
 The runtime network helpers are game-agnostic. Callers provide session names
