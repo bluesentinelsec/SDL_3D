@@ -82,10 +82,10 @@ audio frame updates, and presentation.
 
 The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
 to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
-scene fonts, UI images, brush material textures, render sprite assets, and
-render model assets once per scene activation. It also queues authored sound, music, and
-ambient audio file paths so resolver-backed audio can be materialized into the
-runtime cache before first playback. When the active scene changes, unfinished
+scene fonts, UI images, skybox images, brush material textures, render sprite
+assets, and render model assets once per scene activation. It also queues authored sound,
+music, and ambient audio file paths so resolver-backed audio can be materialized
+into the runtime cache before first playback. When the active scene changes, unfinished
 requests from the previous activation are canceled so the current scene's assets
 take priority. Requests are deduplicated and then serviced with a small
 per-frame budget instead of blocking startup on the full scene asset set.
@@ -111,9 +111,10 @@ For active-scene UI images, the same publisher also writes
 `asset_warmup.ui_image.<image_id>.status`, `pending`, `ready`, and `failed`
 fields so authored texture browsers can show per-thumbnail loading or failure
 states. UI image drawing skips matching pending/failed warmup requests instead
-of forcing a synchronous lazy load. Editor texture swatches backed by pending or
-failed warmup thumbnails remain visible with status text, but their selection
-actions are ignored until the thumbnail is available.
+of forcing a synchronous lazy load. Active-scene skybox drawing also skips until
+all six queued skybox image faces are ready. Editor texture swatches backed by
+pending or failed warmup thumbnails remain visible with status text, but their
+selection actions are ignored until the thumbnail is available.
 
 Authored font assets use the same per-asset state shape under
 `asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text
