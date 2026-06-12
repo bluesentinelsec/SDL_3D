@@ -11,6 +11,7 @@ typedef struct primitive_draw_context
     slayer3d_game_data_sprite_cache *sprite_cache;
     slayer3d_game_data_model_cache *model_cache;
     slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache;
+    const slayer3d_game_data_asset_warmup_queue *asset_warmup;
     const slayer3d_camera3d *camera;
     const slayer3d_game_data_render_eval *eval;
     slayer3d_game_data_render_settings render_settings;
@@ -82,6 +83,9 @@ bool slayer3d_game_data_flush_sphere_draw_batch(primitive_draw_context *context)
 
 bool slayer3d_game_data_append_sphere_draw_batch(primitive_draw_context *context,
                                                  const slayer3d_game_data_render_primitive *primitive);
+
+bool slayer3d_game_data_primitive_asset_ready(const primitive_draw_context *context,
+                                              slayer3d_game_data_asset_warmup_kind kind, const char *id);
 
 const slayer3d_texture2d *slayer3d_game_data_primitive_texture(primitive_draw_context *context,
                                                                const slayer3d_game_data_render_primitive *primitive);

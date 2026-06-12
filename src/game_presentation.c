@@ -430,6 +430,11 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
     {
         if (context->sprite_cache == NULL)
             return true;
+        if (!slayer3d_game_data_primitive_asset_ready(context, SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE,
+                                                      primitive->sprite_asset))
+        {
+            return true;
+        }
         slayer3d_game_data_sprite_cache_entry *entry = slayer3d_game_data_find_or_load_sprite_entry(
             context->runtime, context->sprite_cache, primitive->sprite_asset);
         if (entry == NULL)
@@ -461,6 +466,11 @@ static bool draw_primitive(void *userdata, const slayer3d_game_data_render_primi
     {
         if (context->model_cache == NULL)
             return true;
+        if (!slayer3d_game_data_primitive_asset_ready(context, SLAYER3D_GAME_DATA_ASSET_WARMUP_MODEL,
+                                                      primitive->model_asset))
+        {
+            return true;
+        }
         slayer3d_game_data_model_cache_entry *entry =
             slayer3d_game_data_find_or_load_model_entry(context->runtime, context->model_cache, primitive->model_asset);
         if (entry == NULL)
@@ -540,8 +550,9 @@ static bool draw_render_primitives_evaluated_with_cache(
     const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
     const slayer3d_game_data_render_eval *eval, slayer3d_game_data_image_cache *image_cache,
     slayer3d_game_data_sprite_cache *sprite_cache, slayer3d_game_data_model_cache *model_cache,
-    slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache, const slayer3d_camera3d *camera,
-    bool draw_world_space, bool draw_view_space)
+    slayer3d_game_data_mesh_primitive_cache *mesh_primitive_cache,
+    const slayer3d_game_data_asset_warmup_queue *asset_warmup, const slayer3d_camera3d *camera, bool draw_world_space,
+    bool draw_view_space)
 {
     if (runtime == NULL || renderer == NULL)
         return false;
@@ -554,6 +565,7 @@ static bool draw_render_primitives_evaluated_with_cache(
     context.sprite_cache = sprite_cache;
     context.model_cache = model_cache;
     context.mesh_primitive_cache = mesh_primitive_cache;
+    context.asset_warmup = asset_warmup;
     context.camera = camera;
     context.eval = eval;
     context.draw_world_space = draw_world_space;
@@ -614,16 +626,16 @@ static bool draw_active_scene_skybox(const slayer3d_game_data_runtime *runtime, 
 bool slayer3d_game_data_draw_render_primitives(const slayer3d_game_data_runtime *runtime,
                                                slayer3d_render_context *renderer)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL, NULL, true,
-                                                       true);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, NULL, NULL, NULL, NULL, NULL, NULL, NULL,
+                                                       true, true);
 }
 
 bool slayer3d_game_data_draw_render_primitives_evaluated(const slayer3d_game_data_runtime *runtime,
                                                          slayer3d_render_context *renderer,
                                                          const slayer3d_game_data_render_eval *eval)
 {
-    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL, NULL, true,
-                                                       true);
+    return draw_render_primitives_evaluated_with_cache(runtime, renderer, eval, NULL, NULL, NULL, NULL, NULL, NULL,
+                                                       true, true);
 }
 
 static slayer3d_camera3d game_data_viewmodel_camera(const slayer3d_camera3d *scene_camera)
@@ -865,9 +877,9 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
             ok = slayer3d_game_data_draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache,
                                                             true, false) &&
                  ok;
-        ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
-                                                         frame->image_cache, frame->sprite_cache, frame->model_cache,
-                                                         frame->mesh_primitive_cache, camera, true, false) &&
+        ok = draw_render_primitives_evaluated_with_cache(
+                 frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
+                 frame->model_cache, frame->mesh_primitive_cache, frame->asset_warmup, camera, true, false) &&
              ok;
         ok = slayer3d_game_data_draw_active_editor_debug_primitives(frame->runtime, frame->renderer) && ok;
         ok = run_frame_hook(frame, frame->after_world_3d) && ok;
@@ -887,9 +899,10 @@ static bool draw_world_for_camera(const slayer3d_game_data_frame_desc *frame, co
         const slayer3d_camera3d viewmodel_camera = game_data_viewmodel_camera(camera);
         if (slayer3d_begin_mode_3d(frame->renderer, viewmodel_camera))
         {
-            ok = draw_render_primitives_evaluated_with_cache(
-                     frame->runtime, frame->renderer, frame->render_eval, frame->image_cache, frame->sprite_cache,
-                     frame->model_cache, frame->mesh_primitive_cache, &viewmodel_camera, false, true) &&
+            ok = draw_render_primitives_evaluated_with_cache(frame->runtime, frame->renderer, frame->render_eval,
+                                                             frame->image_cache, frame->sprite_cache,
+                                                             frame->model_cache, frame->mesh_primitive_cache,
+                                                             frame->asset_warmup, &viewmodel_camera, false, true) &&
                  ok;
             if (frame->particle_cache != NULL)
                 ok = slayer3d_game_data_draw_particles_filtered(frame->runtime, frame->renderer, frame->particle_cache,

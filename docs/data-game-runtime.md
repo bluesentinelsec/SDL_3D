@@ -83,11 +83,12 @@ audio frame updates, and presentation.
 The managed runtime owns a `slayer3d_game_data_asset_warmup_queue` and passes it
 to `slayer3d_game_data_draw_frame`. The presentation layer enumerates active
 scene fonts, UI images, skybox images, brush material textures, render sprite
-assets, and render model assets once per scene activation. It also queues authored sound,
-music, and ambient audio file paths so resolver-backed audio can be materialized
-into the runtime cache before first playback. When the active scene changes, unfinished
-requests from the previous activation are canceled so the current scene's assets
-take priority. Requests are deduplicated and then serviced with a small
+assets, render model assets, and render primitive texture images once per scene
+activation. It also queues authored sound, music, and ambient audio file paths
+so resolver-backed audio can be materialized into the runtime cache before first
+playback. When the active scene changes, unfinished requests from the previous
+activation are canceled so the current scene's assets take priority. Requests
+are deduplicated and then serviced with a small
 per-frame budget instead of blocking startup on the full scene asset set.
 
 On native SDL targets, the managed runtime also starts a background warmup worker
@@ -115,6 +116,10 @@ of forcing a synchronous lazy load. Active-scene skybox drawing also skips until
 all six queued skybox image faces are ready. Editor texture swatches backed by
 pending or failed warmup thumbnails remain visible with status text, but their
 selection actions are ignored until the thumbnail is available.
+Render primitives that reference warmed image, sprite, or model assets also
+avoid forcing synchronous lazy loads while those requests are pending or failed.
+Texture-backed geometry draws untextured until its image is available; sprites
+and models skip drawing until ready.
 
 Authored font assets use the same per-asset state shape under
 `asset_warmup.font.<font_id>.status`, `pending`, `ready`, and `failed`. UI text

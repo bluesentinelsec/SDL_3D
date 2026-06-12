@@ -554,11 +554,31 @@ bool slayer3d_game_data_append_sphere_draw_batch(primitive_draw_context *context
     return true;
 }
 
+bool slayer3d_game_data_primitive_asset_ready(const primitive_draw_context *context,
+                                              slayer3d_game_data_asset_warmup_kind kind, const char *id)
+{
+    if (context == NULL || id == NULL || id[0] == '\0')
+        return true;
+
+    slayer3d_game_data_asset_warmup_state state;
+    if (slayer3d_game_data_asset_warmup_request_state(context->asset_warmup, kind, NULL, id, &state) &&
+        state != SLAYER3D_GAME_DATA_ASSET_WARMUP_READY)
+    {
+        return false;
+    }
+    return true;
+}
+
 const slayer3d_texture2d *slayer3d_game_data_primitive_texture(primitive_draw_context *context,
                                                                const slayer3d_game_data_render_primitive *primitive)
 {
     if (context == NULL || primitive == NULL || primitive->texture_image == NULL || context->image_cache == NULL)
         return NULL;
+    if (!slayer3d_game_data_primitive_asset_ready(context, SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE,
+                                                  primitive->texture_image))
+    {
+        return NULL;
+    }
     slayer3d_game_data_image_cache_entry *entry =
         slayer3d_game_data_find_or_load_image_entry(context->runtime, context->image_cache, primitive->texture_image);
     return entry != NULL ? &entry->texture : NULL;
