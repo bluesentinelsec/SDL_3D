@@ -214,7 +214,7 @@ extern "C"
     /** @brief One cached sprite asset referenced by authored render.sprite data. */
     typedef struct slayer3d_game_data_sprite_cache_entry
     {
-        const char *sprite_id;                /**< Runtime-owned sprite asset id. */
+        const char *sprite_id;                /**< Cache-owned sprite asset id. */
         slayer3d_sprite_asset_runtime sprite; /**< Loaded sprite runtime. */
         bool loaded;                          /**< True once the sprite owns loaded textures. */
     } slayer3d_game_data_sprite_cache_entry;
@@ -237,7 +237,7 @@ extern "C"
     /** @brief One cached model asset referenced by authored render.model data. */
     typedef struct slayer3d_game_data_model_cache_entry
     {
-        const char *model_id; /**< Runtime-owned model asset id. */
+        const char *model_id; /**< Cache-owned model asset id. */
         slayer3d_model model; /**< Loaded model runtime. */
         bool loaded;          /**< True once the model owns loaded meshes/materials. */
     } slayer3d_game_data_model_cache_entry;

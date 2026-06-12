@@ -203,10 +203,14 @@ slayer3d_font *slayer3d_game_data_font_cache_insert_prepared(slayer3d_game_data_
     if (!ensure_font_cache_capacity(cache, cache->count + 1))
         return NULL;
 
+    char *owned_font_id = SDL_strdup(font_id);
+    if (owned_font_id == NULL)
+        return NULL;
+
     slayer3d_font *slot = &cache->fonts[cache->count];
     *slot = *font;
     SDL_zero(*font);
-    cache->font_ids[cache->count] = font_id;
+    cache->font_ids[cache->count] = owned_font_id;
     cache->count++;
     return slot;
 }
@@ -488,9 +492,13 @@ slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_sprite_cache_insert_pr
     if (!ensure_sprite_cache_capacity(cache, cache->count + 1))
         return NULL;
 
+    char *owned_sprite_id = SDL_strdup(sprite_id);
+    if (owned_sprite_id == NULL)
+        return NULL;
+
     slayer3d_game_data_sprite_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
-    entry->sprite_id = sprite_id;
+    entry->sprite_id = owned_sprite_id;
     entry->sprite = *sprite;
     SDL_zero(*sprite);
     entry->loaded = true;
@@ -564,9 +572,13 @@ slayer3d_game_data_model_cache_entry *slayer3d_game_data_model_cache_insert_prep
     if (!ensure_model_cache_capacity(cache, cache->count + 1))
         return NULL;
 
+    char *owned_model_id = SDL_strdup(model_id);
+    if (owned_model_id == NULL)
+        return NULL;
+
     slayer3d_game_data_model_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
-    entry->model_id = model_id;
+    entry->model_id = owned_model_id;
     entry->model = *model;
     SDL_zero(*model);
     entry->loaded = true;
