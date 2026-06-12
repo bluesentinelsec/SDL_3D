@@ -364,21 +364,49 @@ slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_find_or_load_sprite_en
             return cache->entries[i].loaded ? &cache->entries[i] : NULL;
     }
 
+    char error[256];
+    slayer3d_sprite_asset_runtime sprite;
+    SDL_zero(sprite);
+    if (!slayer3d_game_data_load_sprite_asset(runtime, sprite_id, &sprite, error, (int)sizeof(error)))
+    {
+        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load world sprite asset %s: %s", sprite_id, error);
+        return NULL;
+    }
+
+    slayer3d_game_data_sprite_cache_entry *entry =
+        slayer3d_game_data_sprite_cache_insert_prepared(cache, sprite_id, &sprite);
+    if (entry == NULL)
+        slayer3d_sprite_asset_free(&sprite);
+    return entry;
+}
+
+slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_sprite_cache_insert_prepared(
+    slayer3d_game_data_sprite_cache *cache, const char *sprite_id, slayer3d_sprite_asset_runtime *sprite)
+{
+    if (cache == NULL || sprite_id == NULL || sprite == NULL)
+        return NULL;
+
+    for (int i = 0; i < cache->count; ++i)
+    {
+        if (cache->entries[i].sprite_id != NULL && SDL_strcmp(cache->entries[i].sprite_id, sprite_id) == 0)
+        {
+            if (cache->entries[i].loaded)
+            {
+                slayer3d_sprite_asset_free(sprite);
+                return &cache->entries[i];
+            }
+            return NULL;
+        }
+    }
+
     if (!ensure_sprite_cache_capacity(cache, cache->count + 1))
         return NULL;
 
     slayer3d_game_data_sprite_cache_entry *entry = &cache->entries[cache->count];
     SDL_zero(*entry);
     entry->sprite_id = sprite_id;
-
-    char error[256];
-    if (!slayer3d_game_data_load_sprite_asset(runtime, sprite_id, &entry->sprite, error, (int)sizeof(error)))
-    {
-        SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "Failed to load world sprite asset %s: %s", sprite_id, error);
-        SDL_zero(entry);
-        return NULL;
-    }
-
+    entry->sprite = *sprite;
+    SDL_zero(*sprite);
     entry->loaded = true;
     ++cache->count;
     return entry;

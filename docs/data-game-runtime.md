@@ -88,11 +88,11 @@ with a small per-frame budget instead of blocking startup on the full scene
 asset set.
 
 On native SDL targets, the managed runtime also starts a background warmup worker
-for CPU-only texture and direct UI image preparation. The worker reads and
-decodes texture/image assets, then the frame warmup service publishes those
-prepared assets into the render texture and UI image caches on the main
-presentation path. Sprite-backed UI images, world sprites, and models still use
-the budgeted main-thread path until their loaders are split into worker-safe
+for CPU-only texture, direct UI image, and authored sprite preparation. The
+worker reads and decodes those assets, then the frame warmup service publishes
+the prepared assets into the render texture, UI image, and sprite caches on the
+main presentation path. Sprite-backed UI images and models still use the
+budgeted main-thread path until their loaders are split into worker-safe
 prepare/finalize phases. Web builds and platforms where worker creation fails
 fall back to the same budgeted service path.
 

@@ -42,6 +42,9 @@ slayer3d_game_data_image_cache_entry *slayer3d_game_data_image_cache_insert_prep
 slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_find_or_load_sprite_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_sprite_cache *cache, const char *sprite_id);
 
+slayer3d_game_data_sprite_cache_entry *slayer3d_game_data_sprite_cache_insert_prepared(
+    slayer3d_game_data_sprite_cache *cache, const char *sprite_id, slayer3d_sprite_asset_runtime *sprite);
+
 slayer3d_game_data_model_cache_entry *slayer3d_game_data_find_or_load_model_entry(
     const slayer3d_game_data_runtime *runtime, slayer3d_game_data_model_cache *cache, const char *model_id);
 

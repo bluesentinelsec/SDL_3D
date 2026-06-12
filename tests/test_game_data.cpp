@@ -3762,6 +3762,92 @@ TEST(GameDataRuntime, PresentationAssetWarmupLoadsDirectUiImages)
     remove_test_dir(dir);
 }
 
+TEST(GameDataRuntime, PresentationAssetWarmupLoadsSpriteAssets)
+{
+    const std::filesystem::path dir = unique_test_dir("presentation_warmup_sprite");
+    Uint8 pixels[] = {255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255};
+    slayer3d_image image{};
+    image.pixels = pixels;
+    image.width = 2;
+    image.height = 2;
+    std::filesystem::create_directories(dir / "sprites");
+    ASSERT_TRUE(slayer3d_save_image_png(&image, (dir / "sprites" / "single.png").string().c_str())) << SDL_GetError();
+    write_text(dir / "warmup.game.json",
+               R"json({
+  "schema": "slayer3d.game.v0",
+  "metadata": { "name": "Warmup Sprite", "id": "test.warmup_sprite", "version": "0.1.0" },
+  "world": { "name": "world.warmup_sprite", "kind": "fixed_screen" },
+  "assets": {
+    "sprites": [{
+      "id": "sprite.single",
+      "path": "asset://sprites/single.png",
+      "frame_width": 2,
+      "frame_height": 2,
+      "columns": 1,
+      "rows": 1,
+      "frame_count": 1,
+      "direction_count": 1,
+      "fps": 1.0
+    }]
+  },
+  "entities": [],
+  "scenes": { "initial": "scene.empty", "files": ["scenes/empty.scene.json"] }
+})json");
+    write_text(dir / "scenes" / "empty.scene.json",
+               R"json({
+  "schema": "slayer3d.scene.v0",
+  "name": "scene.empty"
+})json");
+
+    slayer3d_game_session *session = nullptr;
+    ASSERT_TRUE(slayer3d_game_session_create(nullptr, &session));
+    char error[512]{};
+    slayer3d_game_data_runtime *runtime = nullptr;
+    ASSERT_TRUE(slayer3d_game_data_load_file((dir / "warmup.game.json").string().c_str(), session, &runtime, error,
+                                             sizeof(error)))
+        << error;
+
+    slayer3d_asset_resolver *assets = slayer3d_asset_resolver_create();
+    ASSERT_NE(assets, nullptr);
+    ASSERT_TRUE(slayer3d_asset_resolver_mount_directory(assets, dir.string().c_str(), error, sizeof(error))) << error;
+
+    slayer3d_game_data_sprite_cache sprite_cache{};
+    slayer3d_game_data_sprite_cache_init(&sprite_cache, assets);
+    slayer3d_game_data_asset_warmup_queue queue{};
+    slayer3d_game_data_asset_warmup_queue_init(&queue, 1);
+    (void)slayer3d_game_data_asset_warmup_queue_start_workers(&queue, runtime, assets, 1);
+    ASSERT_TRUE(slayer3d_game_data_asset_warmup_request_sprite(&queue, "sprite.single"));
+
+    for (int attempt = 0; attempt < 100 && sprite_cache.count == 0; ++attempt)
+    {
+        (void)slayer3d_game_data_asset_warmup_queue_service(&queue, runtime, nullptr, nullptr, &sprite_cache, nullptr,
+                                                            assets, 1);
+        if (sprite_cache.count == 0)
+            SDL_Delay(1);
+    }
+
+    ASSERT_EQ(sprite_cache.count, 1);
+    EXPECT_STREQ(sprite_cache.entries[0].sprite_id, "sprite.single");
+    EXPECT_TRUE(sprite_cache.entries[0].loaded);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.direction_count, 1);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.animation_frame_count, 1);
+    ASSERT_NE(sprite_cache.entries[0].sprite.base_textures, nullptr);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.base_textures[0].width, 2);
+    EXPECT_EQ(sprite_cache.entries[0].sprite.base_textures[0].height, 2);
+
+    slayer3d_game_data_asset_warmup_stats stats{};
+    slayer3d_game_data_asset_warmup_queue_stats(&queue, &stats);
+    EXPECT_EQ(stats.ready, 1);
+    EXPECT_EQ(stats.failed, 0);
+
+    slayer3d_game_data_asset_warmup_queue_free(&queue);
+    slayer3d_game_data_sprite_cache_free(&sprite_cache);
+    slayer3d_asset_resolver_destroy(assets);
+    slayer3d_game_data_destroy(runtime);
+    slayer3d_game_session_destroy(session);
+    remove_test_dir(dir);
+}
+
 TEST(GameDataRuntime, DataGameRuntimePublishesAssetWarmupStatsToSceneState)
 {
     const std::filesystem::path dir = unique_test_dir("presentation_warmup_publish");

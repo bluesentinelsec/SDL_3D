@@ -26,6 +26,11 @@ typedef struct asset_warmup_prepared_image
     slayer3d_texture2d texture;
 } asset_warmup_prepared_image;
 
+typedef struct asset_warmup_prepared_sprite
+{
+    slayer3d_sprite_asset_runtime sprite;
+} asset_warmup_prepared_sprite;
+
 typedef struct asset_warmup_worker_state
 {
     SDL_Mutex *mutex;
@@ -37,6 +42,8 @@ typedef struct asset_warmup_worker_state
     slayer3d_asset_resolver *assets;
     slayer3d_game_data_asset_warmup_queue *queue;
 } asset_warmup_worker_state;
+
+static const char *warmup_kind_name(slayer3d_game_data_asset_warmup_kind kind);
 
 static void free_prepared_texture(asset_warmup_prepared_texture *prepared)
 {
@@ -55,6 +62,14 @@ static void free_prepared_image(asset_warmup_prepared_image *prepared)
     SDL_free(prepared);
 }
 
+static void free_prepared_sprite(asset_warmup_prepared_sprite *prepared)
+{
+    if (prepared == NULL)
+        return;
+    slayer3d_sprite_asset_free(&prepared->sprite);
+    SDL_free(prepared);
+}
+
 static void free_warmup_entry_prepared(slayer3d_game_data_asset_warmup_entry *entry)
 {
     if (entry == NULL || entry->prepared == NULL)
@@ -63,6 +78,8 @@ static void free_warmup_entry_prepared(slayer3d_game_data_asset_warmup_entry *en
         free_prepared_texture((asset_warmup_prepared_texture *)entry->prepared);
     else if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE)
         free_prepared_image((asset_warmup_prepared_image *)entry->prepared);
+    else if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE)
+        free_prepared_sprite((asset_warmup_prepared_sprite *)entry->prepared);
     entry->prepared = NULL;
 }
 
@@ -185,6 +202,8 @@ static bool worker_can_prepare_entry(const asset_warmup_worker_state *worker_sta
         return slayer3d_game_data_get_image_asset(worker_state->runtime, entry->id, &asset) && asset.path != NULL &&
                asset.sprite == NULL;
     }
+    if (entry->kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE && worker_state->runtime != NULL)
+        return true;
     return false;
 }
 
@@ -292,6 +311,31 @@ static bool prepare_image_request(asset_warmup_worker_state *worker_state, const
     return true;
 }
 
+static bool prepare_sprite_request(asset_warmup_worker_state *worker_state, const char *id,
+                                   asset_warmup_prepared_sprite **out_prepared)
+{
+    asset_warmup_prepared_sprite *prepared = NULL;
+    char error[256];
+
+    if (worker_state == NULL || worker_state->runtime == NULL || id == NULL || out_prepared == NULL)
+        return false;
+
+    *out_prepared = NULL;
+    prepared = (asset_warmup_prepared_sprite *)SDL_calloc(1, sizeof(*prepared));
+    if (prepared == NULL)
+        return SDL_OutOfMemory();
+
+    if (!slayer3d_game_data_load_sprite_asset(worker_state->runtime, id, &prepared->sprite, error, (int)sizeof(error)))
+    {
+        SDL_SetError("%s", error);
+        free_prepared_sprite(prepared);
+        return false;
+    }
+
+    *out_prepared = prepared;
+    return true;
+}
+
 static bool prepare_worker_request(asset_warmup_worker_state *worker_state, slayer3d_game_data_asset_warmup_kind kind,
                                    const char *source_path, const char *id, void **out_prepared)
 {
@@ -305,6 +349,8 @@ static bool prepare_worker_request(asset_warmup_worker_state *worker_state, slay
         return prepare_texture_request(worker_state, source_path, id, (asset_warmup_prepared_texture **)out_prepared);
     case SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE:
         return prepare_image_request(worker_state, id, (asset_warmup_prepared_image **)out_prepared);
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE:
+        return prepare_sprite_request(worker_state, id, (asset_warmup_prepared_sprite **)out_prepared);
     default:
         return false;
     }
@@ -377,8 +423,8 @@ static int SDLCALL warmup_worker_main(void *userdata)
 
         if (!prepared_ok)
         {
-            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to prepare %s asset %s: %s",
-                        kind == SLAYER3D_GAME_DATA_ASSET_WARMUP_UI_IMAGE ? "image" : "texture", id, SDL_GetError());
+            SDL_LogWarn(SDL_LOG_CATEGORY_APPLICATION, "Failed to prepare %s asset %s: %s", warmup_kind_name(kind), id,
+                        SDL_GetError());
         }
         slayer3d_game_data_asset_warmup_entry cleanup_entry;
         SDL_zero(cleanup_entry);
@@ -586,7 +632,8 @@ static bool service_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
 
 static bool finalize_prepared_warmup_entry(slayer3d_game_data_asset_warmup_entry *entry,
                                            const slayer3d_game_data_runtime *runtime, slayer3d_render_context *renderer,
-                                           slayer3d_game_data_image_cache *image_cache, void *prepared_payload)
+                                           slayer3d_game_data_image_cache *image_cache,
+                                           slayer3d_game_data_sprite_cache *sprite_cache, void *prepared_payload)
 {
     if (entry == NULL || prepared_payload == NULL)
         return false;
@@ -616,6 +663,17 @@ static bool finalize_prepared_warmup_entry(slayer3d_game_data_asset_warmup_entry
         asset_warmup_prepared_image *prepared = (asset_warmup_prepared_image *)prepared_payload;
         slayer3d_game_data_image_cache_entry *cache_entry =
             slayer3d_game_data_image_cache_insert_prepared_texture(image_cache, asset.id, &prepared->texture);
+        return cache_entry != NULL;
+    }
+    case SLAYER3D_GAME_DATA_ASSET_WARMUP_SPRITE: {
+        if (runtime == NULL || sprite_cache == NULL)
+            return false;
+        slayer3d_game_data_sprite_asset asset;
+        if (!slayer3d_game_data_get_sprite_asset(runtime, entry->id, &asset))
+            return false;
+        asset_warmup_prepared_sprite *prepared = (asset_warmup_prepared_sprite *)prepared_payload;
+        slayer3d_game_data_sprite_cache_entry *cache_entry =
+            slayer3d_game_data_sprite_cache_insert_prepared(sprite_cache, asset.id, &prepared->sprite);
         return cache_entry != NULL;
     }
     default:
@@ -713,7 +771,7 @@ int slayer3d_game_data_asset_warmup_queue_service(slayer3d_game_data_asset_warmu
 
         const bool ok =
             service_mode == SERVICE_FINALIZE
-                ? finalize_prepared_warmup_entry(&work_entry, runtime, renderer, image_cache, prepared)
+                ? finalize_prepared_warmup_entry(&work_entry, runtime, renderer, image_cache, sprite_cache, prepared)
                 : service_warmup_entry(&work_entry, runtime, renderer, image_cache, sprite_cache, model_cache, assets);
 
         queue_lock(queue);
