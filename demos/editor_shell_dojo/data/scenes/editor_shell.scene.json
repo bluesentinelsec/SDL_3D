@@ -1027,7 +1027,7 @@
             "text_scale": 0.46,
             "interactive": true,
             "action": "editor.texture.paint.mode.brush",
-            "selected_if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "brush", "default": "face" },
+            "selected_if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "brush", "default": "brush" },
             "layer": 121
           },
           {
@@ -1041,7 +1041,7 @@
             "text_scale": 0.46,
             "interactive": true,
             "action": "editor.texture.paint.mode.face",
-            "selected_if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "face", "default": "face" },
+            "selected_if": { "type": "scene_state.compare", "key": "editor.texture.paint.mode", "op": "==", "value": "face", "default": "brush" },
             "layer": 121
           },
           {
