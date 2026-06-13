@@ -23,6 +23,9 @@ extern "C"
 #define SLAYER3D_MAP_FORMAT_ID "slayer3d.map"
 #define SLAYER3D_MAP_FORMAT_VERSION 1
 
+    /** @brief Opaque parsed Slayer3D map document. */
+    typedef struct slayer3d_map_document slayer3d_map_document;
+
     /** @brief Map validation diagnostic severity. */
     typedef enum slayer3d_map_diagnostic_severity
     {
@@ -82,6 +85,96 @@ extern "C"
      */
     bool slayer3d_map_validate_file(const char *path, const slayer3d_map_validation_options *options,
                                     char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load and validate a Slayer3D map document from memory.
+     *
+     * The returned document owns a parsed copy of the JSON document and can be
+     * serialized or written back through the map APIs. Unknown fields and
+     * arbitrary project-specific property values are preserved by the parsed
+     * document.
+     *
+     * @param json UTF-8 JSON document.
+     * @param json_size Size of @p json in bytes.
+     * @param options Optional validation options and diagnostic callback.
+     * @param out_document Receives the loaded map document.
+     * @param error_buffer Optional buffer for the first fatal diagnostic.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the document was parsed, validated, and loaded.
+     */
+    bool slayer3d_map_load_json(const char *json, size_t json_size, const slayer3d_map_validation_options *options,
+                                slayer3d_map_document **out_document, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Load and validate a Slayer3D map document from disk.
+     *
+     * @param path Filesystem path to a `.slayermap.json` document.
+     * @param options Optional validation options and diagnostic callback.
+     * @param out_document Receives the loaded map document.
+     * @param error_buffer Optional buffer for the first fatal diagnostic.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when the file was read, parsed, validated, and loaded.
+     */
+    bool slayer3d_map_load_file(const char *path, const slayer3d_map_validation_options *options,
+                                slayer3d_map_document **out_document, char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Serialize a loaded map document to canonical pretty JSON.
+     *
+     * The returned UTF-8 string is null-terminated and must be released with
+     * slayer3d_map_free_string().
+     *
+     * @param document Loaded map document.
+     * @param out_json Receives the newly allocated JSON string.
+     * @param out_json_size Optional byte length excluding the null terminator.
+     * @param error_buffer Optional buffer for the first fatal diagnostic.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when serialization succeeds.
+     */
+    bool slayer3d_map_to_json(const slayer3d_map_document *document, char **out_json, size_t *out_json_size,
+                              char *error_buffer, int error_buffer_size);
+
+    /**
+     * @brief Write a loaded map document to a JSON file.
+     *
+     * @param document Loaded map document.
+     * @param path Filesystem path to write.
+     * @param error_buffer Optional buffer for the first fatal diagnostic.
+     * @param error_buffer_size Size of @p error_buffer in bytes.
+     * @return true when serialization and file write succeed.
+     */
+    bool slayer3d_map_write_file(const slayer3d_map_document *document, const char *path, char *error_buffer,
+                                 int error_buffer_size);
+
+    /** @brief Destroy a loaded map document. */
+    void slayer3d_map_destroy(slayer3d_map_document *document);
+
+    /** @brief Free a string returned by slayer3d_map_to_json(). */
+    void slayer3d_map_free_string(char *text);
+
+    /** @brief Return the validated format version for a loaded map. */
+    int slayer3d_map_get_version(const slayer3d_map_document *document);
+
+    /** @brief Return the source path used by slayer3d_map_load_file(), if any. */
+    const char *slayer3d_map_get_source_path(const slayer3d_map_document *document);
+
+    /** @brief Return optional metadata.id from a loaded map. */
+    const char *slayer3d_map_get_metadata_id(const slayer3d_map_document *document);
+
+    /** @brief Return optional metadata.name from a loaded map. */
+    const char *slayer3d_map_get_metadata_name(const slayer3d_map_document *document);
+
+    /** @brief Return the number of material entries in a loaded map. */
+    size_t slayer3d_map_get_material_count(const slayer3d_map_document *document);
+
+    /** @brief Return the number of brush entries in a loaded map. */
+    size_t slayer3d_map_get_brush_count(const slayer3d_map_document *document);
+
+    /** @brief Return the number of actor entries in a loaded map. */
+    size_t slayer3d_map_get_actor_count(const slayer3d_map_document *document);
+
+    /** @brief Return the number of connection entries in a loaded map. */
+    size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document);
 
 #ifdef __cplusplus
 }

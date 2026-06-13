@@ -6,6 +6,7 @@
 #include "slayer3d/map.h"
 
 #include <stdarg.h>
+#include <stdlib.h>
 
 #include <SDL3/SDL_iostream.h>
 #include <SDL3/SDL_stdinc.h>
@@ -13,6 +14,12 @@
 #include "yyjson.h"
 
 #define MAP_PATH_MAX 256
+
+struct slayer3d_map_document
+{
+    yyjson_doc *doc;
+    char *source_path;
+};
 
 typedef struct map_name_table
 {
@@ -32,6 +39,22 @@ typedef struct map_validation_context
     map_name_table object_ids;
     map_name_table connection_ids;
 } map_validation_context;
+
+static void map_clear_error(char *error_buffer, int error_buffer_size)
+{
+    if (error_buffer != NULL && error_buffer_size > 0)
+        error_buffer[0] = '\0';
+}
+
+static void map_set_error(char *error_buffer, int error_buffer_size, const char *format, ...)
+{
+    if (error_buffer == NULL || error_buffer_size <= 0)
+        return;
+    va_list args;
+    va_start(args, format);
+    SDL_vsnprintf(error_buffer, (size_t)error_buffer_size, format, args);
+    va_end(args);
+}
 
 static yyjson_val *map_obj_get(yyjson_val *object, const char *key)
 {
@@ -702,25 +725,12 @@ static bool map_validate_root(map_validation_context *ctx, yyjson_val *root)
            map_validate_properties(ctx, map_obj_get(root, "properties"), "$.properties");
 }
 
-bool slayer3d_map_validate_json(const char *json, size_t json_size, const slayer3d_map_validation_options *options,
-                                char *error_buffer, int error_buffer_size)
+static bool map_validate_document(yyjson_doc *doc, const slayer3d_map_validation_options *options, char *error_buffer,
+                                  int error_buffer_size)
 {
-    if (error_buffer != NULL && error_buffer_size > 0)
-        error_buffer[0] = '\0';
-    if (json == NULL || json_size == 0U)
-    {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "$: map JSON is empty");
-        return false;
-    }
-
-    yyjson_read_err read_error;
-    yyjson_doc *doc = yyjson_read_opts((char *)(void *)json, json_size, YYJSON_READ_NOFLAG, NULL, &read_error);
     if (doc == NULL)
     {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "$: failed to parse map JSON at byte %zu: %s",
-                         read_error.pos, read_error.msg != NULL ? read_error.msg : "unknown parse error");
+        map_set_error(error_buffer, error_buffer_size, "$: map JSON document is empty");
         return false;
     }
 
@@ -734,6 +744,36 @@ bool slayer3d_map_validate_json(const char *json, size_t json_size, const slayer
     map_name_table_destroy(&ctx.material_ids);
     map_name_table_destroy(&ctx.object_ids);
     map_name_table_destroy(&ctx.connection_ids);
+    return ok;
+}
+
+static yyjson_doc *map_parse_json(const char *json, size_t json_size, char *error_buffer, int error_buffer_size)
+{
+    if (json == NULL || json_size == 0U)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: map JSON is empty");
+        return NULL;
+    }
+
+    yyjson_read_err read_error;
+    yyjson_doc *doc = yyjson_read_opts((char *)(void *)json, json_size, YYJSON_READ_NOFLAG, NULL, &read_error);
+    if (doc == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: failed to parse map JSON at byte %zu: %s", read_error.pos,
+                      read_error.msg != NULL ? read_error.msg : "unknown parse error");
+        return NULL;
+    }
+    return doc;
+}
+
+bool slayer3d_map_validate_json(const char *json, size_t json_size, const slayer3d_map_validation_options *options,
+                                char *error_buffer, int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    yyjson_doc *doc = map_parse_json(json, json_size, error_buffer, error_buffer_size);
+    if (doc == NULL)
+        return false;
+    const bool ok = map_validate_document(doc, options, error_buffer, error_buffer_size);
     yyjson_doc_free(doc);
     return ok;
 }
@@ -741,12 +781,10 @@ bool slayer3d_map_validate_json(const char *json, size_t json_size, const slayer
 bool slayer3d_map_validate_file(const char *path, const slayer3d_map_validation_options *options, char *error_buffer,
                                 int error_buffer_size)
 {
-    if (error_buffer != NULL && error_buffer_size > 0)
-        error_buffer[0] = '\0';
+    map_clear_error(error_buffer, error_buffer_size);
     if (path == NULL || path[0] == '\0')
     {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "$: map path must be non-empty");
+        map_set_error(error_buffer, error_buffer_size, "$: map path must be non-empty");
         return false;
     }
 
@@ -754,12 +792,238 @@ bool slayer3d_map_validate_file(const char *path, const slayer3d_map_validation_
     char *json = (char *)SDL_LoadFile(path, &size);
     if (json == NULL)
     {
-        if (error_buffer != NULL && error_buffer_size > 0)
-            SDL_snprintf(error_buffer, (size_t)error_buffer_size, "%s: failed to read map file: %s", path,
-                         SDL_GetError());
+        map_set_error(error_buffer, error_buffer_size, "%s: failed to read map file: %s", path, SDL_GetError());
         return false;
     }
     const bool ok = slayer3d_map_validate_json(json, size, options, error_buffer, error_buffer_size);
     SDL_free(json);
     return ok;
+}
+
+bool slayer3d_map_load_json(const char *json, size_t json_size, const slayer3d_map_validation_options *options,
+                            slayer3d_map_document **out_document, char *error_buffer, int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_document == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output map document pointer is required");
+        return false;
+    }
+    *out_document = NULL;
+
+    yyjson_doc *doc = map_parse_json(json, json_size, error_buffer, error_buffer_size);
+    if (doc == NULL)
+        return false;
+    if (!map_validate_document(doc, options, error_buffer, error_buffer_size))
+    {
+        yyjson_doc_free(doc);
+        return false;
+    }
+
+    slayer3d_map_document *document = (slayer3d_map_document *)SDL_calloc(1, sizeof(*document));
+    if (document == NULL)
+    {
+        yyjson_doc_free(doc);
+        map_set_error(error_buffer, error_buffer_size, "$: failed to allocate map document");
+        return false;
+    }
+    document->doc = doc;
+    *out_document = document;
+    return true;
+}
+
+bool slayer3d_map_load_file(const char *path, const slayer3d_map_validation_options *options,
+                            slayer3d_map_document **out_document, char *error_buffer, int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_document == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output map document pointer is required");
+        return false;
+    }
+    *out_document = NULL;
+    if (path == NULL || path[0] == '\0')
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: map path must be non-empty");
+        return false;
+    }
+
+    size_t size = 0U;
+    char *json = (char *)SDL_LoadFile(path, &size);
+    if (json == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "%s: failed to read map file: %s", path, SDL_GetError());
+        return false;
+    }
+
+    slayer3d_map_document *document = NULL;
+    const bool ok = slayer3d_map_load_json(json, size, options, &document, error_buffer, error_buffer_size);
+    SDL_free(json);
+    if (!ok)
+        return false;
+
+    document->source_path = SDL_strdup(path);
+    if (document->source_path == NULL)
+    {
+        slayer3d_map_destroy(document);
+        map_set_error(error_buffer, error_buffer_size, "%s: failed to store map source path", path);
+        return false;
+    }
+
+    *out_document = document;
+    return true;
+}
+
+bool slayer3d_map_to_json(const slayer3d_map_document *document, char **out_json, size_t *out_json_size,
+                          char *error_buffer, int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (out_json == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: output JSON pointer is required");
+        return false;
+    }
+    *out_json = NULL;
+    if (out_json_size != NULL)
+        *out_json_size = 0U;
+    if (document == NULL || document->doc == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: map document is required");
+        return false;
+    }
+    if (!map_validate_document(document->doc, NULL, error_buffer, error_buffer_size))
+        return false;
+
+    yyjson_write_err write_error;
+    size_t json_size = 0U;
+    char *json = yyjson_write_opts(document->doc,
+                                   YYJSON_WRITE_PRETTY | YYJSON_WRITE_PRETTY_TWO_SPACES | YYJSON_WRITE_NEWLINE_AT_END,
+                                   NULL, &json_size, &write_error);
+    if (json == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: failed to serialize map JSON: %s",
+                      write_error.msg != NULL ? write_error.msg : "unknown write error");
+        return false;
+    }
+
+    *out_json = json;
+    if (out_json_size != NULL)
+        *out_json_size = json_size;
+    return true;
+}
+
+bool slayer3d_map_write_file(const slayer3d_map_document *document, const char *path, char *error_buffer,
+                             int error_buffer_size)
+{
+    map_clear_error(error_buffer, error_buffer_size);
+    if (path == NULL || path[0] == '\0')
+    {
+        map_set_error(error_buffer, error_buffer_size, "$: map path must be non-empty");
+        return false;
+    }
+
+    char *json = NULL;
+    size_t json_size = 0U;
+    if (!slayer3d_map_to_json(document, &json, &json_size, error_buffer, error_buffer_size))
+        return false;
+
+    SDL_IOStream *stream = SDL_IOFromFile(path, "wb");
+    if (stream == NULL)
+    {
+        map_set_error(error_buffer, error_buffer_size, "%s: failed to open map file for writing: %s", path,
+                      SDL_GetError());
+        slayer3d_map_free_string(json);
+        return false;
+    }
+
+    const bool wrote = SDL_WriteIO(stream, json, json_size) == json_size;
+    const bool closed = SDL_CloseIO(stream);
+    slayer3d_map_free_string(json);
+    if (!wrote)
+    {
+        map_set_error(error_buffer, error_buffer_size, "%s: failed to write map file: %s", path, SDL_GetError());
+        return false;
+    }
+    if (!closed)
+    {
+        map_set_error(error_buffer, error_buffer_size, "%s: failed to close map file after writing: %s", path,
+                      SDL_GetError());
+        return false;
+    }
+    return true;
+}
+
+void slayer3d_map_destroy(slayer3d_map_document *document)
+{
+    if (document == NULL)
+        return;
+    yyjson_doc_free(document->doc);
+    SDL_free(document->source_path);
+    SDL_free(document);
+}
+
+void slayer3d_map_free_string(char *text)
+{
+    free(text);
+}
+
+int slayer3d_map_get_version(const slayer3d_map_document *document)
+{
+    if (document == NULL || document->doc == NULL)
+        return 0;
+    yyjson_val *root = yyjson_doc_get_root(document->doc);
+    yyjson_val *version = map_obj_get(root, "version");
+    return yyjson_is_int(version) ? (int)yyjson_get_int(version) : 0;
+}
+
+const char *slayer3d_map_get_source_path(const slayer3d_map_document *document)
+{
+    return document != NULL ? document->source_path : NULL;
+}
+
+static const char *map_metadata_string(const slayer3d_map_document *document, const char *key)
+{
+    if (document == NULL || document->doc == NULL)
+        return NULL;
+    yyjson_val *root = yyjson_doc_get_root(document->doc);
+    return map_json_string(map_obj_get(root, "metadata"), key);
+}
+
+const char *slayer3d_map_get_metadata_id(const slayer3d_map_document *document)
+{
+    return map_metadata_string(document, "id");
+}
+
+const char *slayer3d_map_get_metadata_name(const slayer3d_map_document *document)
+{
+    return map_metadata_string(document, "name");
+}
+
+static size_t map_array_count(const slayer3d_map_document *document, const char *key)
+{
+    if (document == NULL || document->doc == NULL)
+        return 0U;
+    yyjson_val *root = yyjson_doc_get_root(document->doc);
+    yyjson_val *array = map_obj_get(root, key);
+    return yyjson_is_arr(array) ? yyjson_arr_size(array) : 0U;
+}
+
+size_t slayer3d_map_get_material_count(const slayer3d_map_document *document)
+{
+    return map_array_count(document, "materials");
+}
+
+size_t slayer3d_map_get_brush_count(const slayer3d_map_document *document)
+{
+    return map_array_count(document, "brushes");
+}
+
+size_t slayer3d_map_get_actor_count(const slayer3d_map_document *document)
+{
+    return map_array_count(document, "actors");
+}
+
+size_t slayer3d_map_get_connection_count(const slayer3d_map_document *document)
+{
+    return map_array_count(document, "connections");
 }

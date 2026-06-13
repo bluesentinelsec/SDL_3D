@@ -10,6 +10,25 @@ The initial format is JSON and should use the `.slayermap.json` extension. The
 schema is also published at
 [`docs/schemas/slayer3d-map.schema.json`](schemas/slayer3d-map.schema.json).
 
+## Engine API
+
+The public engine header [`include/slayer3d/map.h`](../include/slayer3d/map.h)
+provides the initial map I/O surface:
+
+- `slayer3d_map_validate_json()` and `slayer3d_map_validate_file()` validate
+  map documents without keeping a loaded handle.
+- `slayer3d_map_load_json()` and `slayer3d_map_load_file()` parse, validate,
+  and return an opaque `slayer3d_map_document`.
+- `slayer3d_map_to_json()` serializes a loaded document back to canonical
+  pretty JSON.
+- `slayer3d_map_write_file()` writes a loaded document to disk.
+- Query helpers expose basic metadata and top-level object counts while keeping
+  arbitrary project-specific JSON data preserved inside the document.
+
+The initial handle is intentionally JSON-preserving rather than a full C object
+model. Later slices can layer editor/game-specific materialization on top of
+the same load/save primitive without losing unknown fields.
+
 ## Versioning
 
 Every map has a stable format id and integer version:
@@ -230,4 +249,3 @@ an object outside the map, set `external: true` on that endpoint.
   }
 }
 ```
-

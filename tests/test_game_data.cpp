@@ -40212,6 +40212,174 @@ TEST(GameDataRuntime, SlayerMapWarnsOnAbsoluteAssetPaths)
     EXPECT_NE(std::string(error).find("project-relative path"), std::string::npos);
 }
 
+TEST(GameDataRuntime, SlayerMapLoadAndSerializePreservesArbitraryProperties)
+{
+    const char *map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": {
+    "id": "map.roundtrip",
+    "name": "Round Trip"
+  },
+  "materials": [
+    {
+      "id": "mat.gray",
+      "properties": {
+        "surface": {
+          "footstep": "metal",
+          "hardness": 3
+        }
+      }
+    }
+  ],
+  "brushes": [
+    {
+      "id": "brush.trigger_floor",
+      "geometry": { "kind": "box", "min": [0, 0, 0], "max": [2, 0.25, 2] },
+      "material": "mat.gray",
+      "properties": {
+        "trigger": {
+          "event": "room_entered",
+          "once": true
+        }
+      }
+    }
+  ],
+  "actors": [
+    {
+      "id": "actor.spawn.1",
+      "primitive": "capsule",
+      "properties": {
+        "spawn_table": ["grunt", "brute"],
+        "audio": { "cue": "ambush", "volume": 0.75 }
+      }
+    }
+  ],
+  "connections": [
+    {
+      "from": { "entity": "brush.trigger_floor", "event": "entered" },
+      "to": { "entity": "actor.spawn.1", "action": "spawn" },
+      "properties": { "delay": 0.5 }
+    }
+  ],
+  "editor": {
+    "inspector": { "collapsed": false }
+  },
+  "x_game_specific": {
+    "scripting": {
+      "audio_file": "audio/ambush.ogg",
+      "priority": 2
+    }
+  }
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_json(map_json, SDL_strlen(map_json), nullptr, &document, error, sizeof(error)))
+        << error;
+    ASSERT_NE(document, nullptr);
+    EXPECT_EQ(slayer3d_map_get_version(document), SLAYER3D_MAP_FORMAT_VERSION);
+    EXPECT_STREQ(slayer3d_map_get_metadata_id(document), "map.roundtrip");
+    EXPECT_STREQ(slayer3d_map_get_metadata_name(document), "Round Trip");
+    EXPECT_EQ(slayer3d_map_get_material_count(document), 1u);
+    EXPECT_EQ(slayer3d_map_get_brush_count(document), 1u);
+    EXPECT_EQ(slayer3d_map_get_actor_count(document), 1u);
+    EXPECT_EQ(slayer3d_map_get_connection_count(document), 1u);
+    EXPECT_EQ(slayer3d_map_get_source_path(document), nullptr);
+
+    char *serialized = nullptr;
+    size_t serialized_size = 0;
+    ASSERT_TRUE(slayer3d_map_to_json(document, &serialized, &serialized_size, error, sizeof(error))) << error;
+    ASSERT_NE(serialized, nullptr);
+    EXPECT_GT(serialized_size, 0u);
+    EXPECT_TRUE(slayer3d_map_validate_json(serialized, serialized_size, nullptr, error, sizeof(error))) << error;
+
+    yyjson_doc *roundtrip = yyjson_read(serialized, serialized_size, 0);
+    ASSERT_NE(roundtrip, nullptr);
+    yyjson_val *root = yyjson_doc_get_root(roundtrip);
+    yyjson_val *extension = yyjson_obj_get(root, "x_game_specific");
+    ASSERT_TRUE(yyjson_is_obj(extension));
+    yyjson_val *scripting = yyjson_obj_get(extension, "scripting");
+    ASSERT_TRUE(yyjson_is_obj(scripting));
+    EXPECT_STREQ(yyjson_get_str(yyjson_obj_get(scripting, "audio_file")), "audio/ambush.ogg");
+    EXPECT_EQ(yyjson_get_int(yyjson_obj_get(scripting, "priority")), 2);
+
+    yyjson_val *actors = yyjson_obj_get(root, "actors");
+    ASSERT_TRUE(yyjson_is_arr(actors));
+    yyjson_val *actor_properties = yyjson_obj_get(yyjson_arr_get(actors, 0), "properties");
+    ASSERT_TRUE(yyjson_is_obj(actor_properties));
+    yyjson_val *spawn_table = yyjson_obj_get(actor_properties, "spawn_table");
+    ASSERT_TRUE(yyjson_is_arr(spawn_table));
+    EXPECT_STREQ(yyjson_get_str(yyjson_arr_get(spawn_table, 1)), "brute");
+    yyjson_doc_free(roundtrip);
+
+    slayer3d_map_free_string(serialized);
+    slayer3d_map_destroy(document);
+}
+
+TEST(GameDataRuntime, SlayerMapLoadWriteAndReloadFile)
+{
+    const std::filesystem::path dir = unique_test_dir("slayermap_load_write_reload");
+    const std::filesystem::path source_path = dir / "source.slayermap.json";
+    const std::filesystem::path saved_path = dir / "saved.slayermap.json";
+    write_text(source_path,
+               R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "metadata": { "id": "map.file", "name": "File Round Trip" },
+  "brushes": [
+    {
+      "id": "brush.file",
+      "geometry": { "kind": "box", "min": [0, 0, 0], "max": [1, 1, 1] },
+      "properties": { "copied": true, "custom": { "value": 42 } }
+    }
+  ]
+})json");
+
+    char error[512]{};
+    slayer3d_map_document *document = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(source_path.string().c_str(), nullptr, &document, error, sizeof(error)))
+        << error;
+    ASSERT_NE(document, nullptr);
+    EXPECT_STREQ(slayer3d_map_get_source_path(document), source_path.string().c_str());
+    EXPECT_EQ(slayer3d_map_get_brush_count(document), 1u);
+
+    ASSERT_TRUE(slayer3d_map_write_file(document, saved_path.string().c_str(), error, sizeof(error))) << error;
+    slayer3d_map_destroy(document);
+
+    slayer3d_map_document *reloaded = nullptr;
+    ASSERT_TRUE(slayer3d_map_load_file(saved_path.string().c_str(), nullptr, &reloaded, error, sizeof(error))) << error;
+    EXPECT_STREQ(slayer3d_map_get_metadata_name(reloaded), "File Round Trip");
+
+    const std::string saved_text = read_text(saved_path);
+    EXPECT_NE(saved_text.find("\"custom\""), std::string::npos);
+    EXPECT_NE(saved_text.find("\"value\": 42"), std::string::npos);
+    slayer3d_map_destroy(reloaded);
+    remove_test_dir(dir);
+}
+
+TEST(GameDataRuntime, SlayerMapLoadRejectsInvalidDocuments)
+{
+    const char *bad_map_json = R"json({
+  "format": "slayer3d.map",
+  "version": 1,
+  "brushes": [
+    {
+      "id": "brush.bad",
+      "geometry": { "kind": "box", "min": [0, 0, 0], "max": [1, 1, 1] },
+      "material": "mat.missing"
+    }
+  ]
+})json";
+
+    char error[512]{};
+    slayer3d_map_document *document = reinterpret_cast<slayer3d_map_document *>(static_cast<uintptr_t>(1));
+    EXPECT_FALSE(
+        slayer3d_map_load_json(bad_map_json, SDL_strlen(bad_map_json), nullptr, &document, error, sizeof(error)));
+    EXPECT_EQ(document, nullptr);
+    EXPECT_NE(std::string(error).find("unknown material reference"), std::string::npos);
+}
+
 TEST(GameDataRuntime, RejectsLuaScriptManifestErrorsBeforeGameplay)
 {
     const char *bad_files[] = {
